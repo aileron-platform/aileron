@@ -1,0 +1,16 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aileron.fullname" . }}-keycloak
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.keycloak.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.keycloak.service.port }}
+      targetPort: http
+  selector:
+    {{- include "aileron.componentLabels" (dict "component" "keycloak" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+{{- end }}

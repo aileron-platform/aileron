@@ -1,0 +1,86 @@
+{{- if and .Values.keycloak.enabled .Values.postgres.enabled }}
+{{- $frontendURL := include "aileron.publicURL" (dict "template" .Values.publicRouting.frontendHost "Values" .Values) -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-keycloak-redirect-sync
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: keycloak-redirect-sync
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "keycloak-redirect-sync" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: keycloak-redirect-sync
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ include "aileron.fullname" . }}-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-password
+            - name: KEYCLOAK_DATABASE
+              value: {{ .Values.postgres.auth.keycloakDatabase | quote }}
+            - name: FRONTEND_URL
+              value: {{ $frontendURL | quote }}
+            - name: CLIENT_ID
+              value: "aileron-frontend"
+          command:
+            - sh
+            - -lc
+            - |
+              set -e
+              until pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+
+              # Skip if keycloak database or client table doesn't exist yet (first install)
+              if ! psql -v ON_ERROR_STOP=1 -d "$KEYCLOAK_DATABASE" -tAc "SELECT 1 FROM information_schema.tables WHERE table_name='client'" | grep -q 1; then
+                echo "==> keycloak schema not yet initialized, skipping redirect sync"
+                exit 0
+              fi
+
+              if ! psql -v ON_ERROR_STOP=1 -d "$KEYCLOAK_DATABASE" -tAc "SELECT 1 FROM client WHERE client_id='$CLIENT_ID'" | grep -q 1; then
+                echo "==> client $CLIENT_ID not yet present in DB, skipping"
+                exit 0
+              fi
+
+              echo "==> Syncing redirect URIs for client $CLIENT_ID to $FRONTEND_URL"
+              psql -v ON_ERROR_STOP=1 -d "$KEYCLOAK_DATABASE" \
+                -v client_id="$CLIENT_ID" \
+                -v frontend_url="$FRONTEND_URL" <<'SQL'
+              BEGIN;
+              DELETE FROM redirect_uris WHERE client_id IN (SELECT id FROM client WHERE client_id = :'client_id');
+              INSERT INTO redirect_uris (client_id, value)
+                SELECT id, :'frontend_url' || '/*' FROM client WHERE client_id = :'client_id';
+              INSERT INTO redirect_uris (client_id, value)
+                SELECT id, :'frontend_url' || '/callback' FROM client WHERE client_id = :'client_id';
+
+              DELETE FROM web_origins WHERE client_id IN (SELECT id FROM client WHERE client_id = :'client_id');
+              INSERT INTO web_origins (client_id, value)
+                SELECT id, :'frontend_url' FROM client WHERE client_id = :'client_id';
+              COMMIT;
+              SQL
+              echo "==> Done."
+{{- end }}

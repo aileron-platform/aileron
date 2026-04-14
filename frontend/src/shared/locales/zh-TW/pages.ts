@@ -1,0 +1,348 @@
+const pages = {
+  auth: {
+    login: {
+      title: '登入 Aileron',
+      description: '使用 Keycloak 單一登入。',
+      footer: {
+        noAccount: '還沒有帳號？',
+        register: '註冊',
+      },
+      error: {
+        title: '登入失敗',
+        keycloakFailed: 'Keycloak 登入失敗',
+      },
+      button: {
+        signIn: '使用 Keycloak 登入',
+        redirecting: '重定向到 Keycloak...',
+      },
+      hint: '點擊上方按鈕將重定向到 Keycloak 進行安全登入',
+    },
+    register: {
+      title: '註冊 Aileron',
+      description: '使用 Keycloak 創建新帳號。',
+      footer: {
+        hasAccount: '已有帳號？',
+        login: '登入',
+      },
+      error: {
+        title: '註冊失敗',
+        registerFailed: '註冊失敗',
+      },
+      button: {
+        register: '使用 Keycloak 註冊',
+        redirecting: '重定向到 Keycloak...',
+      },
+      hint: '點擊上方按鈕將重定向到 Keycloak 進行帳號註冊',
+    },
+    callback: {
+      loading: {
+        label: '正在完成認證...',
+        message: '請稍候，我們正在驗證您的身份...',
+      },
+      error: {
+        title: '認證失敗',
+        invalidCallback: '無效的回調：缺少 code 或 state 參數',
+        authFailed: '認證失敗',
+        backToLogin: '返回登入',
+        retry: '重試',
+      },
+    },
+  },
+  profile: {
+    title: '個人資料',
+    subtitle: '管理您的個人資訊和偏好設定',
+    actions: {
+      edit: '編輯資料',
+      save: '儲存變更',
+      saving: '儲存中...',
+    },
+    summary: {
+      about: '關於我',
+    },
+    sections: {
+      personalInfo: {
+        title: '個人資訊',
+        description: '更新您的個人資訊，這些資訊將會顯示在您的個人檔案中。',
+      },
+    },
+    fields: {
+      username: {
+        label: '使用者名稱',
+        cannotChange: '使用者名稱無法修改',
+      },
+      firstName: {
+        label: '名字',
+        placeholder: '輸入名字',
+      },
+      lastName: {
+        label: '姓氏',
+        placeholder: '輸入姓氏',
+      },
+      email: {
+        label: '電子郵件',
+        placeholder: '輸入電子郵件',
+        keycloakNote: '請至 Keycloak 修改',
+      },
+    },
+    errors: {
+      notLoggedIn: '請先登入',
+    },
+    status: {
+      loading: '個人資料載入中...',
+    },
+    notifications: {
+      loadFailed: '無法載入個人資料。',
+      saveFailed: '儲存個人資料時發生錯誤。',
+    },
+  },
+  settings: {
+    title: '系統設定',
+    subtitle: '管理應用程式設定與開發工具配置',
+    actions: {
+      resetDefaults: '重置預設',
+      save: '儲存設定',
+      saving: '儲存中...',
+      saveAll: '儲存所有設定',
+      syncWorkspace: '同步工作區設定',
+      syncing: '同步中...',
+    },
+    tabs: {
+      general: '一般',
+      ssh: 'SSH Keys',
+      claudeCode: 'Claude Code',
+      gemini: 'Gemini',
+      opencode: 'OpenCode',
+      codex: 'Codex',
+      git: 'Git',
+    },
+    sections: {
+      appearance: {
+        title: '外觀與語系',
+        description: '自訂主題、語言與時區',
+        theme: {
+          label: '主題模式',
+          description: '選擇您偏好的主題外觀',
+          options: {
+            light: '淺色模式',
+            dark: '深色模式',
+            system: '跟隨系統',
+          },
+        },
+        language: {
+          label: '語言設定',
+          description: '選擇應用程式介面語言',
+          options: {
+            zhTW: '繁體中文',
+            en: 'English',
+          },
+        },
+        timezone: {
+          label: '時區設定',
+          description: '設定顯示的時區',
+          options: {
+            utc: 'UTC',
+            taipei: '台北 (UTC+8)',
+            tokyo: '東京 (UTC+9)',
+            london: '倫敦 (UTC+0)',
+            losAngeles: '洛杉磯 (UTC-8)',
+          },
+        },
+      },
+      ssh: {
+        title: 'SSH Key 管理',
+        description: '管理您的 SSH 公私鑰對',
+        privateKey: {
+          label: 'Private Key',
+          placeholder: '-----BEGIN OPENSSH PRIVATE KEY-----',
+          actions: {
+            show: '顯示',
+            hide: '隱藏',
+            copy: '複製',
+          },
+        },
+        publicKey: {
+          label: 'Public Key',
+          placeholder: 'ssh-rsa AAAAB3NzaC1yc2E...',
+          copy: '複製',
+        },
+        generate: '產生新的 SSH Key Pair',
+      },
+      claudeCode: {
+        title: 'Claude Code 設定',
+        description: '配置認證方式與模型參數',
+        authMethod: {
+          label: '認證方式',
+          description: '選擇 Claude 的認證方式',
+          options: {
+            subscription: 'Subscription',
+            apikey: 'API Key',
+          },
+        },
+        subscription: {
+          title: 'Claude Subscription',
+          connectButton: 'Claude 訂閱認證',
+          disconnectButton: '取消認證',
+          authCodeLabel: 'Authentication Code',
+          authCodePlaceholder: '請輸入認證碼',
+          authCodeHint: '請在新視窗中完成認證，然後貼上取得的 Authentication Code',
+          connectedStatus: '✓ 已成功連接 Claude Subscription',
+          expiresAt: '過期時間',
+          status: {
+            connected: '已連接',
+            notConnected: '未連接',
+          },
+          account: '帳號',
+          description: '您的 Claude 訂閱將被 Aileron 代理用於執行開發任務。',
+          oauthWindow: {
+            openingTitle: '正在開啟認證視窗...',
+            openingDescription: '請在彈出的視窗中完成 Claude 認證',
+            openedTitle: '認證視窗已開啟',
+            openedDescription: '請在新視窗中完成認證，然後貼上取得的 Authentication Code',
+            failedTitle: '無法開啟認證視窗',
+            failedDescription: '請確保瀏覽器允許彈出視窗',
+          },
+          verifying: '正在驗證認證碼...',
+          pleaseWait: '請稍候',
+          saveButton: '儲存',
+          cancelButton: '取消',
+          success: {
+            title: '認證成功',
+            description: '已成功連接 Claude Subscription',
+            syncDescription: '認證成功！請點擊「同步設定」按鈕將設定同步到工作區。',
+          },
+          errors: {
+            emptyCode: '請輸入 Authentication Code',
+            loginRequired: '您需要先登入才能進行 OAuth 認證',
+            authFailed: '認證失敗',
+            sessionExpiredTitle: '認證失敗',
+            sessionExpiredDescription: '您的登入狀態已過期，請重新登入後再試',
+            unknown: '無法完成認證',
+          },
+          disconnect: {
+            loginRequiredTitle: '無法取消認證',
+            successTitle: '已取消認證',
+            successDescription: '認證資訊已清除',
+            failedTitle: '取消認證失敗',
+            failedDescription: '請稍後再試',
+          },
+        },
+        apikey: {
+          title: 'API Key 認證',
+          providerLabel: 'API 廠商',
+          providerPlaceholder: '選擇 API 廠商',
+          providerOptions: {
+            anthropic: 'Anthropic',
+            awsBedrock: 'AWS Bedrock',
+            googleVertexAi: 'Google Vertex AI',
+            other: '其他',
+          },
+          modelLabel: '模型',
+          modelPlaceholder: '例如：claude-sonnet-4-5-20250929（選填，留空使用預設）',
+          modelHelp: '若留空，將使用 Claude SDK 的預設模型',
+        },
+        environmentVariables: {
+          title: '環境變數',
+          description: '設定 API 金鑰和其他環境變數',
+          addButton: '新增變數',
+          keyLabel: '變數名稱',
+          valueLabel: '變數值',
+          keyPlaceholder: '例如：ANTHROPIC_API_KEY',
+          valuePlaceholder: '變數值',
+          emptyState: {
+            title: '尚未設定任何環境變數',
+            description: '點擊「新增變數」開始設定',
+          },
+          hints: {
+            loaded: '環境變數會在 Claude Code 執行時載入',
+            required: '變數名稱和值都不可為空',
+            naming: '建議使用大寫字母和底線命名變數',
+          },
+        },
+        authKey: {
+          label: 'Authentication Key',
+          placeholder: '請輸入您的 API 金鑰...',
+        },
+        model: {
+          label: '模型',
+          placeholder: '選擇模型',
+        },
+        provider: {
+          label: 'API 廠商',
+          placeholder: '選擇 API 廠商',
+        },
+      },
+      git: {
+        title: 'Git 設定',
+        description: '配置 Git 使用者資訊',
+        userName: {
+          label: 'Git 使用者名稱',
+          placeholder: '請輸入您的 Git 使用者名稱',
+        },
+        userEmail: {
+          label: 'Git 使用者信箱',
+          placeholder: '請輸入您的 Git 使用者信箱',
+        },
+      },
+    },
+    notifications: {
+      saved: {
+        title: '設定已保存',
+        description: '所有設定已成功保存',
+      },
+      loginRequired: {
+        title: '請先登入',
+        description: '請先登入',
+      },
+      saveLoginRequired: {
+        title: '無法儲存',
+        description: '請先登入',
+      },
+      loadFailed: {
+        title: '設定載入失敗',
+        description: '無法從伺服器載入使用者設定。',
+      },
+      saveFailed: {
+        title: '儲存設定失敗',
+        description: '更新設定時發生錯誤，請稍後再試。',
+      },
+      copied: {
+        title: '已複製',
+        description: '內容已複製到剪貼簿',
+      },
+      copyFailed: {
+        title: '複製失敗',
+        description: '無法將內容複製到剪貼簿',
+      },
+      generateKey: {
+        title: '產生 SSH Key',
+        progress: '正在產生 SSH Key Pair...',
+        successTitle: '產生成功',
+        failedTitle: '產生失敗',
+        failedDescription: '無法產生 SSH Key Pair',
+        description: 'SSH Key Pair 已成功產生並儲存',
+      },
+      syncSuccess: {
+        title: '同步成功',
+        description: '設定已成功同步到 {{count}} 個工作區',
+      },
+      syncPartial: {
+        title: '部分同步失敗',
+        description: '同步到 {{count}} 個工作區時部分設定失敗',
+      },
+      syncFailed: {
+        title: '同步失敗',
+        description: '無法同步設定到 {{count}} 個工作區',
+        loginRequired: '請先登入',
+      },
+      saveAndSyncSuccess: {
+        title: '儲存成功',
+        description: '設定已儲存並同步到工作區',
+      },
+    },
+    status: {
+      loading: '設定載入中...',
+    },
+  },
+};
+
+export default pages;

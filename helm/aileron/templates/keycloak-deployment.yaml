@@ -1,0 +1,86 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-keycloak
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.keycloak.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "keycloak" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "keycloak" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+        checksum/realm: {{ include (print $.Template.BasePath "/keycloak-realm-configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: keycloak
+          image: "{{ .Values.keycloak.image.repository }}:{{ .Values.keycloak.image.tag }}"
+          imagePullPolicy: {{ .Values.keycloak.image.pullPolicy }}
+          args:
+            - start-dev
+            - --import-realm
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://{{ include "aileron.fullname" . }}-postgres:5432/{{ .Values.postgres.auth.keycloakDatabase }}"
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-username
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-password
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: keycloak-admin-user
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: keycloak-admin-password
+            - name: KC_HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_KEYCLOAK_URL
+            {{- range $key, $value := .Values.keycloak.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.keycloak.resources | nindent 12 }}
+      volumes:
+        - name: realm-import
+          configMap:
+            name: {{ include "aileron.fullname" . }}-keycloak-realm
+{{- end }}

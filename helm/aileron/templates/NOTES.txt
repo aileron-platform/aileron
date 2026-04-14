@@ -1,0 +1,20 @@
+1. 安裝 chart:
+   helm install {{ .Release.Name }} {{ .Chart.Name }} --namespace {{ .Release.Namespace }} --create-namespace
+
+2. 主要服務:
+   Frontend:          {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.frontendHost "Values" .Values) }}
+   Workspace Manager: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.workspaceManagerHost "Values" .Values) }}
+   Keycloak:          {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.keycloakHost "Values" .Values) }}
+
+3. Workspace 公開路由模板:
+   - Runtime host pattern: {{ .Values.publicRouting.runtimeHostPattern }}
+   - Browser host pattern: {{ .Values.publicRouting.browserHostPattern }}
+   - Next.js host pattern: {{ .Values.publicRouting.nextjsHostPattern }}
+   - Runtime wildcard host: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.runtimeHostPattern "Values" .Values) }}
+   - Browser wildcard host: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.browserHostPattern "Values" .Values) }}
+   - Next.js wildcard host: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.nextjsHostPattern "Values" .Values) }}
+
+4. 路由責任說明:
+   - 固定服務 ingress 已由 chart 產生，不再依賴單一 host + path-based routing。
+   - workspace-runtime / workspace-browser / workspace-nextjs 會由 operator 建立動態 Service，因此 chart 另外輸出 `{{ include "aileron.fullname" . }}-workspace-routing` ConfigMap，供 ingress / gateway controller 依 host pattern 接到對應 backend。
+   - pod-to-pod 與 service-to-service 流量應持續使用 cluster internal Service DNS，不經 ingress。

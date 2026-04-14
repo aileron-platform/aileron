@@ -1,0 +1,27 @@
+{
+  "id": "deployment/troubleshooting",
+  "title": "Troubleshooting",
+  "description": "This page collects common issues and fixes encountered during deployment and runtime.",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/deployment/troubleshooting.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/troubleshooting",
+  "permalink": "/aileron/en/deployment/troubleshooting",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "sidebar_position": 6,
+    "title": "Troubleshooting"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Production Deployment",
+    "permalink": "/aileron/en/deployment/production"
+  },
+  "next": {
+    "title": "Architecture Overview",
+    "permalink": "/aileron/en/architecture/overview"
+  }
+}

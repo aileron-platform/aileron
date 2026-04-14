@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - v0.1.0-alpha
+    paths-ignore:
+      - "docs-site/**"
+      - ".gitignore"
+      - "README.md"
+  pull_request:
+    paths-ignore:
+      - "docs-site/**"
+      - ".gitignore"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  helm-template:
+    name: Helm Template
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Render default chart
+        run: helm template aileron helm/aileron > /tmp/helm-default.yaml
+
+      - name: Render RKE chart
+        run: helm template aileron helm/aileron -f helm/values-rke.yaml > /tmp/helm-rke.yaml
+
+  frontend-test:
+    name: Frontend Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run frontend container test
+        working-directory: frontend
+        run: docker compose -f docker-compose.test.yml run --build --rm frontend-test
+
+  workspace-manager-test:
+    name: Workspace Manager Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run workspace-manager container test
+        working-directory: workspace-manager
+        run: docker compose -f docker-compose.test.yml run --build --rm workspace-manager-test
+
+      - name: Cleanup workspace-manager test containers
+        if: always()
+        working-directory: workspace-manager
+        run: docker compose -f docker-compose.test.yml down -v --remove-orphans
+
+  workspace-runtime-test:
+    name: Workspace Runtime Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          else
+            echo "DOCKERHUB_USERNAME / DOCKERHUB_TOKEN 未設定，略過 Docker Hub login"
+          fi
+
+      - name: Run workspace-runtime container test
+        working-directory: workspace-runtime
+        run: docker compose -f docker-compose.test.yml run --build --rm workspace-runtime-test
+
+      - name: Cleanup workspace-runtime test containers
+        if: always()
+        working-directory: workspace-runtime
+        run: docker compose -f docker-compose.test.yml down -v --remove-orphans

@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-routing
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  ROUTING_MODE: "dynamic-workspace-subdomains"
+  PUBLIC_SCHEME: {{ .Values.publicRouting.scheme | quote }}
+  PUBLIC_BASE_DOMAIN: {{ .Values.publicRouting.baseDomain | quote }}
+  RUNTIME_HOST_PATTERN: {{ .Values.publicRouting.runtimeHostPattern | quote }}
+  BROWSER_HOST_PATTERN: {{ .Values.publicRouting.browserHostPattern | quote }}
+  NEXTJS_HOST_PATTERN: {{ .Values.publicRouting.nextjsHostPattern | quote }}
+  RUNTIME_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.runtimeHostPattern "Values" .Values) | quote }}
+  BROWSER_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.browserHostPattern "Values" .Values) | quote }}
+  NEXTJS_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.nextjsHostPattern "Values" .Values) | quote }}
+  RUNTIME_SERVICE_NAME_TEMPLATE: "workspace-runtime-{workspaceId}"
+  BROWSER_SERVICE_NAME_TEMPLATE: "workspace-browser-{workspaceId}"
+  NEXTJS_SERVICE_NAME_TEMPLATE: "workspace-nextjs-{workspaceId}"
+  RUNTIME_SERVICE_PORT: "3002"
+  BROWSER_SERVICE_PORT: "6080"
+  NEXTJS_SERVICE_PORT: "3003"
+  TARGET_NAMESPACE_SOURCE: "workspace.spec.targetNamespace"
+  INTERNAL_ROUTING_CONTRACT: "pod-to-pod 與 service-to-service 仍必須使用 cluster internal service DNS"
+  PUBLIC_ROUTING_CONTRACT: "ingress 或 gateway controller 必須依 host pattern 將對外流量導向對應 workspace service"

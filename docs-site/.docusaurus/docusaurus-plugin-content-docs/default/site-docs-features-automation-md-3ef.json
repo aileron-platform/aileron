@@ -1,0 +1,27 @@
+{
+  "id": "features/automation",
+  "title": "自動化任務",
+  "description": "概覽",
+  "source": "@site/docs/features/automation.md",
+  "sourceDirName": "features",
+  "slug": "/features/automation",
+  "permalink": "/aileron/features/automation",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3,
+    "title": "自動化任務"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Claude Code 整合",
+    "permalink": "/aileron/features/claude-integration"
+  },
+  "next": {
+    "title": "Manager API",
+    "permalink": "/aileron/api/manager-api"
+  }
+}

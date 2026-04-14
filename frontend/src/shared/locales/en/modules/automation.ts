@@ -1,0 +1,285 @@
+const automation = {
+  logs: {
+    createFailed: 'Failed to create scheduled task definition',
+    updateFailed: 'Failed to update scheduled task definition',
+  },
+  create: {
+    title: 'Create scheduled task definition',
+    subtitle: 'Register the workspace, command, and trigger Beat should dispatch',
+    actions: {
+      creating: 'Creating...',
+      submit: 'Create definition',
+    },
+  },
+  edit: {
+    title: 'Edit scheduled task definition',
+    subtitle: 'Update dispatch configuration, ownership, or runtime command',
+    actions: {
+      saving: 'Saving...',
+      submit: 'Save definition',
+    },
+  },
+  form: {
+    fields: {
+      name: {
+        label: 'Definition name',
+        placeholder: 'e.g. Daily workspace backup',
+      },
+      workspace: {
+        label: 'Target workspace',
+        placeholder: 'Select a workspace',
+        loading: 'Loading workspaces…',
+        empty: 'No workspaces available',
+        error: 'Unable to load workspaces',
+      },
+      description: {
+        label: 'Description',
+        placeholder: 'Describe what this scheduled task definition should run',
+      },
+      prompt: {
+        label: 'Prompt / command',
+        placeholder: 'Enter the prompt or slash command to execute in this schedule',
+        helper: 'Provide a custom prompt or quickly insert a standard slash command from the picker.',
+        selectCommand: 'Choose command',
+        commandsLoading: 'Loading slash commands…',
+        commandsEmpty: 'No slash commands are available for this workspace.',
+        commandsError: 'Unable to load slash commands. Please try again later.',
+      },
+      trigger: {
+        label: 'Trigger type',
+        placeholder: 'Select trigger type',
+      },
+      status: {
+        label: 'Status',
+        placeholder: 'Select status',
+      },
+      timezone: {
+        label: 'Time zone',
+        placeholder: 'Select time zone',
+      },
+      schedule: {
+        label: 'Job configuration',
+        placeholder: 'e.g. 0 9 * * *',
+        helper: 'Cron example: 0 9 * * * runs every day at 09:00.',
+        timezoneHelper: '⏰ All tasks use the system timezone. No need to configure individually.',
+      },
+      webhookApiKey: {
+        label: 'Webhook API Key',
+        regenerate: 'Regenerate',
+        helper: 'Use this API Key to trigger task execution via Webhook.',
+      },
+      tags: {
+        label: 'Tags',
+        placeholder: 'Press Enter to add a tag',
+        add: 'Add',
+        suggestionsLabel: 'Suggestions:',
+      },
+    },
+    timezone: {
+      taipei: 'GMT+8 Taipei (Asia/Taipei)',
+      utc: 'UTC',
+      losAngeles: 'GMT-8 Los Angeles (America/Los_Angeles)',
+      berlin: 'GMT+1 Berlin (Europe/Berlin)',
+    },
+    trigger: {
+      cron: 'Cron schedule',
+      manual: 'Manual trigger',
+      webhook: 'Webhook',
+    },
+    status: {
+      active: 'Active',
+      paused: 'Paused',
+      draft: 'Draft',
+    },
+    workspace: {
+      options: {
+        aileron: 'Aileron',
+        infraOperations: 'Infra Operations',
+        promptLibrary: 'Prompt Library',
+        mlLab: 'ML Lab',
+      },
+    },
+  },
+  slashDialog: {
+    title: 'Select slash command',
+    description: 'Browse frequently used commands and insert them into the prompt field.',
+    searchPlaceholder: 'Search commands by name, description, or tags…',
+    empty: 'No commands match the current filters',
+    scope: {
+      all: 'All',
+      project: 'Project',
+      user: 'User',
+    },
+  },
+  sidebar: {
+    title: 'Jobd task filters',
+    description: 'Quickly filter scheduled task definitions by status',
+    filters: {
+      all: 'All definitions',
+      active: 'Active',
+      paused: 'Paused',
+      failed: 'Failed',
+    },
+    summary: {
+      title: 'Execution summary',
+      successRate: 'Success rate',
+      averageDuration: 'Average duration',
+      running: 'Running',
+      queued: 'Queued',
+      seconds: '{{value}} seconds',
+    },
+  },
+  execution: {
+    status: {
+      queued: 'Queued',
+      waiting: 'Waiting',
+      running: 'Running',
+      success: 'Success',
+      failed: 'Failed',
+      cancelled: 'Cancelled',
+      timeout: 'Timeout',
+      unknown: 'Unknown',
+    },
+  },
+  dashboard: {
+    title: 'Jobr manager',
+    actions: {
+      refresh: 'Refresh',
+      create: 'New definition',
+    },
+    info: {
+      failureRate: '24h failure rate {{rate}}',
+      taskCount: '{{count}} scheduled task definitions',
+    },
+    metrics: {
+      active: {
+        title: 'Active definitions',
+        subtitle: 'Definitions currently dispatching to workers',
+      },
+      paused: {
+        title: 'Paused definitions',
+        subtitle: 'Definitions awaiting manual resume',
+      },
+      failed: {
+        title: 'Failed executions',
+        subtitle: 'Total number of failed executions across all tasks',
+      },
+      duration: {
+        title: 'Average execution duration',
+        subtitle: 'Average completion time for recent worker runs',
+      },
+    },
+    search: {
+      placeholder: 'Search by name, description, or owner',
+      submit: 'Search',
+    },
+    table: {
+      title: 'Jobd task definitions',
+      subtitle: 'Monitor definitions by workspace and trigger. Select a definition to inspect executions.',
+      headers: {
+        name: 'Name',
+        schedule: 'Job',
+        nextRun: 'Next run',
+        status: 'Status',
+        view: 'Executions',
+        actions: 'Manage',
+      },
+      status: {
+        active: 'Active',
+        paused: 'Paused',
+        failed: 'Failed',
+        draft: 'Draft',
+      },
+      viewTask: 'View executions',
+      edit: 'Edit definition',
+      runNow: 'Run now',
+      delete: 'Delete definition',
+      empty: 'No scheduled task definitions match the current filters.',
+      confirmDelete: 'Are you sure you want to delete “{{name}}”?',
+      nextRunLabel: 'Next: {{value}}',
+      lastRunLabel: 'Last: {{value}}',
+      noScheduled: 'Not scheduled',
+    },
+    upcoming: {
+      title: 'Upcoming executions',
+      subtitle: 'Monitor queued and running worker tasks',
+      none: 'No queued or running executions.',
+      recentTitle: 'Recently completed',
+    },
+    executionCard: {
+      trigger: 'Beat trigger: {{trigger}}',
+      duration: 'Duration: {{seconds}} seconds',
+      viewLogs: 'View logs',
+      viewSession: 'View conversation',
+      notStarted: 'Not started yet',
+    },
+    timeline: {
+      empty: 'No execution records.',
+    },
+    pagination: {
+      summary: 'Showing {{start}}–{{end}} of {{total}} items',
+      empty: 'No data available',
+      previous: 'Previous',
+      next: 'Next',
+      page: 'Page {{current}} / {{total}}',
+    },
+    dialogs: {
+      executionLog: {
+        description: 'Inspect logs and status details for this run.',
+        fields: {
+          executionId: 'Execution ID',
+          taskId: 'Task ID',
+          jobId: 'Job ID',
+          startedAt: 'Started at',
+          finishedAt: 'Finished at',
+          trigger: 'Trigger',
+          duration: 'Duration',
+        },
+        durationSeconds: '{{seconds}} seconds',
+        logs: {
+          title: 'Execution logs',
+          filters: {
+            all: 'All logs',
+            info: 'INFO',
+            error: 'ERROR',
+            warning: 'WARNING',
+            success: 'SUCCESS',
+          },
+          reload: 'Reload',
+          loading: 'Loading logs...',
+          empty: 'No logs yet',
+        },
+        mock: {
+          start: 'Jobd task ({{taskId}}) started. Trigger: {{trigger}}',
+          loadEnvironment: 'Loading execution environment...done',
+          failureDetected: 'Execution error detected, alert triggered.',
+          completed: 'Task completed. Results have been stored.',
+          running: 'Still running, please check back shortly...',
+          queued: 'Queued and waiting for an available worker...',
+        },
+      },
+    },
+    executionsDialog: {
+      title: 'Execution logs - {{name}}',
+      rangeTitle: 'Time range filter',
+      rangeSubtitle: 'Review execution history within a selected range',
+      tabs: {
+        all: 'All',
+        today: 'Today',
+        tomorrow: 'Tomorrow',
+        week: 'This week',
+        month: 'This month',
+        custom: 'Custom',
+      },
+      date: {
+        start: 'Start date',
+        end: 'End date',
+        to: 'to',
+        clear: 'Clear range',
+      },
+      empty: 'No execution records yet.',
+    },
+  },
+};
+
+export default automation;

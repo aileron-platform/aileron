@@ -1,0 +1,110 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.vite
+*.pyc
+
+workspace*.sh
+workspace-runtime/tests/mock_workspace/
+workspace-runtime/app/tests/mock_workspace/
+
+# AI Agent and OpenSpec Settings
+.gemini/
+.claude/
+.codex/
+.mcp.json
+openspec/
+AGENTS.md
+GEMINI.md
+CLAUDE.md
+docs/
+
+# Runtime and Temporary Files
+.services.pid
+tmp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Test databases
+*test*.db
+workspace-manager-tests.db
+
+# Additional Python cache patterns
+*.pyc
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE and editor files
+.vscode/settings.json
+
+# Data directories (runtime data, databases, workspaces)
+data/*
+!data/README.md
+!data/**/README.md
+workspace-runtime/claude_code_tools_test_messages.json
+workspace-runtime/complete_claude_code_tools_test.json
+workspace-runtime/complete_claude_tools_test_final.json
+workspace-runtime/test_agent_session_api.py
+.spectra/
+openspec/.vector-search.db*

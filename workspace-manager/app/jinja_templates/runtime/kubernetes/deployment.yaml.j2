@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-runtime-{{ workspace.id }}
+  labels:
+    app: workspace-runtime
+    workspace-id: "{{ workspace.id }}"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-runtime
+      workspace-id: "{{ workspace.id }}"
+  template:
+    metadata:
+      labels:
+        app: workspace-runtime
+        workspace-id: "{{ workspace.id }}"
+    spec:
+      containers:
+        - name: runtime
+          image: {{ image }}
+          env:
+{% for key, value in environment.items() %}            - name: {{ key }}
+              value: "{{ value }}"
+{% endfor %}          ports:
+            - containerPort: {{ ports.default_internal_port }}
+{% for extra_port in ports.additional %}            - containerPort: {{ extra_port.container_port }}
+{% endfor %}          volumeMounts:
+{% for mount in volumes %}            - name: {{ mount.name }}
+              mountPath: {{ mount.mount_path }}
+{% endfor %}
+      volumes:
+{% for mount in volumes %}        - name: {{ mount.name }}
+          persistentVolumeClaim:
+            claimName: {{ mount.claim }}
+{% endfor %}

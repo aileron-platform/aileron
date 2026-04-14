@@ -1,0 +1,23 @@
+{{- if .Values.workspaceManager.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.workspaceManager.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.workspaceManager.service.port }}
+      targetPort: http
+    - name: flower
+      port: {{ .Values.workspaceManager.service.flowerPort }}
+      targetPort: flower
+  selector:
+    {{- include "aileron.componentLabels" (dict "component" "workspace-manager" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+{{- end }}

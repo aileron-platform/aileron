@@ -1,0 +1,27 @@
+{
+  "id": "deployment/production",
+  "title": "生產環境部署",
+  "description": "本指南涵蓋將 Aileron 部署至生產環境時需要考量的安全性、可靠性與效能面向。",
+  "source": "@site/docs/deployment/production.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/production",
+  "permalink": "/aileron/deployment/production",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 5,
+  "frontMatter": {
+    "sidebar_position": 5,
+    "title": "生產環境部署"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Keycloak 認證配置",
+    "permalink": "/aileron/deployment/keycloak"
+  },
+  "next": {
+    "title": "故障排除",
+    "permalink": "/aileron/deployment/troubleshooting"
+  }
+}

@@ -1,0 +1,482 @@
+/**
+ * 全域樣式
+ * 
+ * 應用程式的全域 CSS 樣式
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* ========================================
+     Markdown Content Styles
+     統一的 Markdown 渲染樣式，用於所有 markdown 內容顯示
+     ======================================== */
+
+  /* 基礎樣式 */
+  .markdown-content {
+    @apply text-foreground leading-relaxed;
+  }
+
+  /* 標題樣式 */
+  .markdown-content > h1 {
+    @apply mt-0 mb-2 font-semibold;
+  }
+
+  .markdown-content > h2 {
+    @apply mt-4 mb-2 font-semibold;
+  }
+
+  .markdown-content > h3 {
+    @apply mt-3 mb-2 font-semibold;
+  }
+
+  .markdown-content > h4 {
+    @apply mt-3 mb-1 font-semibold;
+  }
+
+  .markdown-content > h5 {
+    @apply mt-2 mb-1 font-semibold;
+  }
+
+  .markdown-content > h6 {
+    @apply mt-2 mb-1 font-semibold;
+  }
+
+  /* 段落樣式 */
+  .markdown-content > p {
+    @apply mb-2;
+  }
+
+  /* 列表樣式 - 使用後代選擇器以支援嵌套列表 */
+  .markdown-content ul {
+    @apply mb-2 ml-5 list-disc;
+  }
+
+  .markdown-content ol {
+    @apply mb-2 ml-5 list-decimal;
+  }
+
+  .markdown-content li {
+    @apply mb-1;
+  }
+
+  /* 引用樣式 */
+  .markdown-content > blockquote {
+    @apply my-3;
+  }
+
+  /* 代碼塊樣式 */
+  .markdown-content > pre {
+    @apply my-3;
+  }
+
+  /* 表格樣式 */
+  .markdown-content > table {
+    @apply mb-4;
+  }
+
+  /* 其他塊級元素 */
+  .markdown-content > div {
+    @apply mb-2;
+  }
+
+  /* ========================================
+     變體：Compact（緊湊型）
+     用於空間有限的場景
+     ======================================== */
+  .markdown-content-compact {
+    @apply text-foreground leading-relaxed;
+  }
+
+  .markdown-content-compact > h1 {
+    @apply mt-0 mb-1 font-semibold;
+  }
+
+  .markdown-content-compact > h2 {
+    @apply mt-3 mb-1 font-semibold;
+  }
+
+  .markdown-content-compact > h3 {
+    @apply mt-2 mb-1 font-semibold;
+  }
+
+  .markdown-content-compact > h4,
+  .markdown-content-compact > h5,
+  .markdown-content-compact > h6 {
+    @apply mt-2 mb-1 font-semibold;
+  }
+
+  .markdown-content-compact > p {
+    @apply mb-1;
+  }
+
+  .markdown-content-compact ul,
+  .markdown-content-compact ol {
+    @apply mb-1 ml-4;
+  }
+
+  .markdown-content-compact ul {
+    @apply list-disc;
+  }
+
+  .markdown-content-compact ol {
+    @apply list-decimal;
+  }
+
+  .markdown-content-compact li {
+    @apply mb-0;
+  }
+
+  /* ========================================
+     變體：Detailed（詳細型）
+     用於文檔展示等需要更多空間的場景
+     ======================================== */
+  .markdown-content-detailed {
+    @apply text-foreground leading-relaxed;
+  }
+
+  .markdown-content-detailed > h1 {
+    @apply mt-0 mb-4 text-2xl font-bold;
+  }
+
+  .markdown-content-detailed > h2 {
+    @apply mt-6 mb-3 text-xl font-semibold;
+  }
+
+  .markdown-content-detailed > h3 {
+    @apply mt-4 mb-2 text-lg font-semibold;
+  }
+
+  .markdown-content-detailed > h4 {
+    @apply mt-3 mb-2 font-semibold;
+  }
+
+  .markdown-content-detailed > h5,
+  .markdown-content-detailed > h6 {
+    @apply mt-2 mb-1 font-semibold;
+  }
+
+  .markdown-content-detailed > p {
+    @apply mb-3;
+  }
+
+  .markdown-content-detailed ul,
+  .markdown-content-detailed ol {
+    @apply mb-3 ml-6;
+  }
+
+  .markdown-content-detailed ul {
+    @apply list-disc;
+  }
+
+  .markdown-content-detailed ol {
+    @apply list-decimal;
+  }
+
+  .markdown-content-detailed li {
+    @apply mb-1;
+  }
+
+  .markdown-content-detailed > blockquote {
+    @apply my-4 border-l-4 border-border pl-4 italic;
+  }
+
+  .markdown-content-detailed > pre {
+    @apply my-4 p-4 rounded-lg bg-muted overflow-x-auto;
+  }
+
+  .markdown-content-detailed code {
+    @apply text-sm font-mono;
+  }
+
+  .markdown-content-detailed > table {
+    @apply mb-4 w-full border-collapse;
+  }
+
+  /* ========================================
+     變體：Editor Preview（編輯器預覽）
+     用於 MarkdownEditor 的預覽模式
+     ======================================== */
+  .markdown-content-editor {
+    @apply text-foreground leading-relaxed;
+  }
+
+  .markdown-content-editor > h1 {
+    @apply mt-0 mb-2 font-semibold text-foreground;
+  }
+
+  .markdown-content-editor > h2 {
+    @apply mt-4 mb-2 font-semibold text-foreground;
+  }
+
+  .markdown-content-editor > h3 {
+    @apply mt-3 mb-2 font-semibold text-foreground;
+  }
+
+  .markdown-content-editor > h4 {
+    @apply mt-3 mb-1 font-semibold text-foreground;
+  }
+
+  .markdown-content-editor > h5,
+  .markdown-content-editor > h6 {
+    @apply mt-2 mb-1 font-semibold text-foreground;
+  }
+
+  .markdown-content-editor > p {
+    @apply mb-2 text-foreground;
+  }
+
+  .markdown-content-editor ul,
+  .markdown-content-editor ol {
+    @apply mb-2 ml-5;
+  }
+
+  .markdown-content-editor ul {
+    @apply list-disc;
+  }
+
+  .markdown-content-editor ol {
+    @apply list-decimal;
+  }
+
+  .markdown-content-editor li {
+    @apply mb-1 text-foreground;
+  }
+
+  .markdown-content-editor > blockquote {
+    @apply my-3;
+  }
+
+  .markdown-content-editor > pre {
+    @apply my-3;
+  }
+
+  .markdown-content-editor > table {
+    @apply mb-4;
+  }
+
+  .markdown-content-editor > div {
+    @apply mb-2;
+  }
+}
+
+@layer base {
+  :root {
+    /* ClaudeCode Dev Hub - Light Theme with Teal Primary */
+    --background: 0 0% 100%;
+    --foreground: 210 11% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 11% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 11% 15%;
+
+    /* Teal Primary Color System */
+    --primary: 180 70% 36%; /* deeper teal */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 180 72% 31%;
+    --primary-light: 180 52% 93%;
+
+    /* Soft Teal Secondary System */
+    --secondary: 180 15% 95%;
+    --secondary-foreground: 210 11% 15%;
+    --secondary-hover: 180 18% 91%;
+
+    --muted: 180 17% 96%;
+    --muted-foreground: 200 10% 43%;
+
+    --accent: 180 46% 93%;
+    --accent-foreground: 184 74% 18%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 180 14% 85%;
+    --input: 180 14% 85%;
+    --ring: 180 70% 36%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar System */
+    --sidebar-background: 180 16% 97%;
+    --sidebar-foreground: 210 11% 20%;
+    --sidebar-primary: 180 70% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 180 18% 92%;
+    --sidebar-accent-foreground: 210 11% 15%;
+    --sidebar-border: 180 14% 85%;
+    --sidebar-ring: 180 70% 36%;
+  }
+
+  .dark {
+    /* VSCode Dark Theme - 與 test-terminal 一致的配色 */
+    /* 主背景色使用 VSCode 的 #1e1e1e */
+    --background: 0 0% 11.76%;       /* 主背景 #1e1e1e */
+    --foreground: 0 0% 83%;          /* 主要文字 #d4d4d4 */
+
+    --card: 0 0% 11.76%;             /* 卡片背景 #1e1e1e (與主背景一致) */
+    --card-foreground: 0 0% 83%;     /* #d4d4d4 */
+
+    --popover: 0 0% 15%;             /* 彈出框背景 #252526 */
+    --popover-foreground: 0 0% 83%;  /* #d4d4d4 */
+
+    /* VSCode 藍色主題色 */
+    --primary: 207 100% 41%;         /* VSCode 藍 #007acc */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 207 86% 38%;    /* 懸停藍 #0e639c */
+
+    /* 次要色使用 VSCode 的深灰 */
+    --secondary: 0 0% 18%;           /* #2d2d30 */
+    --secondary-foreground: 0 0% 80%; /* #cccccc */
+    --secondary-hover: 0 0% 22%;     /* 懸停時稍亮 #37373d */
+
+    /* 靜音色 */
+    --muted: 0 0% 15%;               /* #252526 */
+    --muted-foreground: 0 0% 59%;    /* 中灰文字 #969696 */
+
+    /* 強調色 */
+    --accent: 0 0% 24%;              /* 輸入框背景 #3c3c3c */
+    --accent-foreground: 0 0% 80%;   /* #cccccc */
+
+    /* 危險色 - VSCode 紅色 */
+    --destructive: 0 73% 55%;        /* #dc3545 */
+    --destructive-foreground: 0 0% 100%;
+
+    /* 邊框和輸入框 */
+    --border: 0 0% 24%;              /* 邊框 #3e3e42 */
+    --input: 0 0% 24%;               /* 輸入框背景 #3c3c3c */
+    --ring: 207 100% 41%;            /* 藍色焦點環 #007acc */
+
+    /* Sidebar colors for dark mode */
+    --sidebar-background: 0 0% 18%;  /* 側邊欄背景 #2d2d30 */
+    --sidebar-foreground: 0 0% 80%;  /* #cccccc */
+    --sidebar-primary: 207 100% 41%; /* VSCode 藍 #007acc */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 22%;      /* 側邊欄強調 #37373d */
+    --sidebar-accent-foreground: 0 0% 80%;
+    --sidebar-border: 0 0% 24%;      /* 側邊欄邊框 #3e3e42 */
+    --sidebar-ring: 207 100% 41%;    /* VSCode 藍 #007acc */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  #root {
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* 移除所有元素的預設 outline，避免多選時出現藍色邊框 */
+  *:focus {
+    outline: none !important;
+  }
+
+  *:focus-visible {
+    outline: none !important;
+  }
+}
+
+/* 自定義滾動條 - VSCode 風格 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 5px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #424242;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
+
+/* 隱藏捲軸 */
+.scrollbar-none {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* 對話框動畫 */
+.dialog-container {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Markdown 列表項中的段落應該 inline 顯示 */
+li > p {
+  display: inline;
+  margin: 0;
+}
+
+/* XTerm Scrollbar Customization */
+.xterm-viewport::-webkit-scrollbar {
+  width: 6px;
+}
+
+.xterm-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background-color: rgba(107, 114, 128, 0.5); /* gray-500/50 */
+  border-radius: 9999px;
+}
+
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(107, 114, 128, 0.8); /* gray-500/80 */
+}

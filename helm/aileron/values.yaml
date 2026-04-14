@@ -1,0 +1,277 @@
+global:
+  imagePullSecrets: []
+  storageClass: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+  tls: []
+
+# Public routing 專供 browser / frontend / OIDC 等對外入口使用。
+# Pod-to-pod 與 service-to-service 仍必須使用 cluster internal Service DNS。
+publicRouting:
+  scheme: http
+  baseDomain: aileron.localhost
+  frontendHost: "aileron.{baseDomain}"
+  workspaceManagerHost: "workspace-manager.{baseDomain}"
+  keycloakHost: "keycloak.{baseDomain}"
+  runtimeHostPattern: "workspace-runtime-{workspaceId}.{baseDomain}"
+  browserHostPattern: "workspace-browser-{workspaceId}.{baseDomain}"
+  nextjsHostPattern: "workspace-nextjs-{workspaceId}.{baseDomain}"
+
+kubernetes:
+  enabled: true
+  provisioner: kubernetes
+  defaultNamespace: workspace-system
+  allowedNamespaces:
+    - workspace-system
+    - default
+  serviceType: ClusterIP
+  nodePort: null
+  nodeAddress: 127.0.0.1
+  pvcName: workspace-runtime-pvc
+  runtimeImage: ailerondocker/workspace-runtime:k8s-local
+  browserImage: ailerondocker/workspace-browser:k8s-local
+  nextjsImage: ailerondocker/workspace-nextjs:k8s-local
+  # 留空時預設只 watch Helm release 所在 namespace，避免多個 release 互相 reconcile。
+  watchNamespace: ""
+  workspaceDefaults:
+    runtime:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 2000m
+          memory: 4Gi
+    browser:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+    nextjs:
+      resources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+
+cilium:
+  enabled: false
+
+bootstrap:
+  defaultWorkspace:
+    enabled: false
+    id: default-workspace
+    ownerEmail: admin@aileron.com
+    gitUrl: ""
+    branch: main
+    targetNamespace: ""
+
+firewall:
+  defaults:
+    workspace:
+      allowedDomains:
+        - github.com
+        - api.github.com
+        - objects.githubusercontent.com
+        - raw.githubusercontent.com
+        - registry.npmjs.org
+        - npmjs.com
+        - pypi.org
+        - files.pythonhosted.org
+        - api.anthropic.com
+    browser:
+      allowedDomains:
+        - github.com
+        - google.com
+        - gstatic.com
+        - googleapis.com
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-ui
+    tag: k8s-local
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8082
+  resources: {}
+  env:
+    TZ: Asia/Taipei
+    NODE_ENV: production
+    DOCKER_ENV: "false"
+    VITE_KEYCLOAK_REALM: aileron
+    VITE_KEYCLOAK_CLIENT_ID: aileron-frontend
+    VITE_RUNTIME_PROVISIONER: kubernetes
+    VITE_WORKSPACE_K8S_ALLOWED_NAMESPACES: workspace-system,default
+    VITE_WORKSPACE_K8S_DEFAULT_NAMESPACE: workspace-system
+
+workspaceManager:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-manager
+    tag: k8s-local
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+  service:
+    type: ClusterIP
+    port: 3001
+    flowerPort: 5555
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  env:
+    TZ: Asia/Taipei
+    PORT: "3001"
+    HOST: 0.0.0.0
+    DEBUG: "false"
+    NODE_ENV: production
+    DEPLOYMENT_ENV: kubernetes
+    # 這裡保留 internal URL 給 cluster 內服務呼叫，不經 ingress。
+    WORKSPACE_RUNTIME_URL: http://workspace-runtime:3002
+    ACCESS_TOKEN_EXPIRE_MINUTES: "180"
+    REFRESH_TOKEN_EXPIRE_DAYS: "7"
+    SECRET_KEY: aileron-secret-key-change-in-production
+    CELERY_TASK_SERIALIZER: json
+    CELERY_RESULT_SERIALIZER: json
+    CELERY_ACCEPT_CONTENT: json
+    KEYCLOAK_REALM: aileron
+    KEYCLOAK_CLIENT_ID: aileron-frontend
+    KEYCLOAK_CLIENT_SECRET: ""
+    KEYCLOAK_JWKS_CACHE_TTL: "3600"
+  extraEnv: []
+
+workspaceOperator:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-operator
+    tag: k8s-local
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+  resources: {}
+  env:
+    LOG_LEVEL: info
+    WORKSPACE_CRD_GROUP: platform.aileron.io
+    WORKSPACE_CRD_VERSION: v1alpha1
+  rbac:
+    create: true
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 15-alpine
+    pullPolicy: IfNotPresent
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+  auth:
+    appDatabase: aileron
+    keycloakDatabase: keycloak
+    username: postgres
+    password: postgres
+  resources: {}
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  service:
+    port: 6379
+  persistence:
+    enabled: true
+    size: 5Gi
+    accessModes:
+      - ReadWriteOnce
+  resources: {}
+  args:
+    - redis-server
+    - --appendonly
+    - "yes"
+    - --maxmemory
+    - 256mb
+    - --maxmemory-policy
+    - allkeys-lru
+
+keycloak:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: 25.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  resources: {}
+  auth:
+    adminUser: admin
+    adminPassword: admin
+  env:
+    TZ: Asia/Taipei
+    KC_HOSTNAME_STRICT: "false"
+    KC_HOSTNAME_STRICT_HTTPS: "false"
+    KC_HTTP_ENABLED: "true"
+    KC_HTTPS_ENABLED: "false"
+    KC_PROXY_HEADERS: xforwarded
+    KC_HEALTH_ENABLED: "true"
+    KC_METRICS_ENABLED: "true"
+    KEYCLOAK_REALM: aileron
+
+service:
+  annotations: {}
+
+coturn:
+  enabled: true
+  image:
+    repository: coturn/coturn
+    tag: latest
+    pullPolicy: IfNotPresent
+  nodeSelector: {}
+  port: 3478
+  nodePort: 30478
+  # host: IP address reachable from pods (backend/neko side).
+  # For Docker Desktop k8s, use the node IP (192.168.65.3) — NOT localhost,
+  # because pods cannot reach localhost:nodePort (that's their own loopback).
+  host: "192.168.65.3"
+  # frontendHost: IP/hostname reachable from the user's browser (frontend side).
+  # 必須顯式設定；若 coturn.enabled=true 但未設定，Helm render 會直接失敗。
+  frontendHost: ""
+  # externalIp: relay candidates announced by coturn / browser NAT1TO1.
+  # 必須顯式設定；若 coturn.enabled=true 但未設定，Helm render 會直接失敗。
+  externalIp: ""
+  username: "aileron"
+  credential: "aileron-turn-secret"
+  realm: "aileron.localhost"
+  resources: {}

@@ -1,0 +1,27 @@
+{
+  "id": "features/openspec",
+  "title": "OpenSpec Workflows",
+  "description": "Overview",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/features/openspec.md",
+  "sourceDirName": "features",
+  "slug": "/features/openspec",
+  "permalink": "/aileron/en/features/openspec",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3,
+    "title": "OpenSpec Workflows"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Workspace Lifecycle",
+    "permalink": "/aileron/en/features/workspace-lifecycle"
+  },
+  "next": {
+    "title": "Claude Code Integration",
+    "permalink": "/aileron/en/features/claude-integration"
+  }
+}

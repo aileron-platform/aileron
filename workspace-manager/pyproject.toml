@@ -1,0 +1,230 @@
+[project]
+name = "aileron-workspace-manager"
+version = "1.0.0"
+description = "Aileron - Workspace Manager API 服務，負責工作區生命週期管理"
+authors = [
+    {name = "Aileron Team", email = "dev@aileron.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+keywords = ["fastapi", "python", "workspace", "manager", "ai", "claude", "team"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+]
+
+dependencies = [
+    # 核心框架
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic[email]>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    # 資料庫
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "alembic>=1.13.0",
+    # HTTP 客戶端和檔案處理
+    "aiohttp>=3.9.1",
+    "aiofiles>=23.2.0",
+    "httpx>=0.25.0",
+    "python-multipart>=0.0.6",
+    # 環境配置
+    "python-dotenv>=1.0.0",
+    # 快取和佇列
+    "redis[hiredis]>=5.0.0",
+    # 容器管理
+    "docker>=7.0.0",
+    "kubernetes>=30.1.0",
+    # 模板引擎和配置
+    "jinja2>=3.1.0",
+    "pyyaml>=6.0.0",
+    # Git 版本控制
+    "GitPython>=3.1.0",
+    # 任務調度
+    "celery[redis]>=5.3.0",
+    "flower>=2.0.1",
+    "kombu>=5.3.0",
+    "croniter>=1.3.0",
+    # 工具庫
+    "pyjwt>=2.8.0",
+    "python-jose[cryptography]>=3.3.0",
+    # Keycloak OAuth2/OIDC 整合
+    "python-keycloak>=4.0.0",
+    # Email 驗證依賴 (明確包含以避免 idna.uts46data 錯誤)
+    "email-validator>=2.0.0",
+    "idna>=3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "coverage>=7.3.0",
+    "pre-commit>=3.5.0",
+]
+
+test = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",
+    "factory-boy>=3.3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/aileron/workspace-manager"
+Repository = "https://github.com/aileron/workspace-manager.git"
+Documentation = "https://docs.aileron.com/workspace-manager"
+Issues = "https://github.com/aileron/workspace-manager/issues"
+
+[project.scripts]
+workspace-manager = "app.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "coverage>=7.3.0",
+    "pre-commit>=3.5.0",
+    "httpx>=0.25.0",
+    "factory-boy>=3.3.0",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | \.env
+  | build
+  | dist
+  | migrations
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+skip_gitignore = true
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "docker.*",
+    "celery.*",
+    "kombu.*",
+    "redis.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = [
+    "tests",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/tasks.py",
+    "*/main.py",
+    "*/__init__.py",
+    "*/routers/*",
+    "*/middleware/*",
+    "*/db/seed.py",
+    "*/db/database.py",
+    "*/core/logging.py",
+    "*/core/redis.py",
+    "*/core/file_management/*",
+    "*/config/settings.py",
+    "*/template_*_service.py",
+    "*/git_service.py",
+    "*/settings_service.py",
+    "*/script_template_engine.py",
+    "*/runtime_provision_service.py",
+    "*/runtime_sync_service.py",
+    "*/task_progress_service.py",
+    "*/i18n_service.py",
+    "*/utils/redis_subscriber.py",
+    "*/utils/pydantic.py",
+    "*/utils/string_utils.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]

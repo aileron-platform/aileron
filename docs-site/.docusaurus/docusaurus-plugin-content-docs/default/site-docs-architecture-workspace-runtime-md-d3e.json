@@ -1,0 +1,27 @@
+{
+  "id": "architecture/workspace-runtime",
+  "title": "Workspace Runtime",
+  "description": "概覽",
+  "source": "@site/docs/architecture/workspace-runtime.md",
+  "sourceDirName": "architecture",
+  "slug": "/architecture/workspace-runtime",
+  "permalink": "/aileron/architecture/workspace-runtime",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3,
+    "title": "Workspace Runtime"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Workspace Manager",
+    "permalink": "/aileron/architecture/workspace-manager"
+  },
+  "next": {
+    "title": "Workspace 生命週期",
+    "permalink": "/aileron/features/workspace-lifecycle"
+  }
+}

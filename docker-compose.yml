@@ -1,0 +1,425 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: aileron-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aileron
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init-sql:/docker-entrypoint-initdb.d
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for task queue and session management
+  redis:
+    image: redis:7-alpine
+    container_name: aileron-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # Keycloak Identity and Access Management (OAuth2/OIDC)
+  # ============================================================
+  #
+  # Keycloak 提供 OAuth2/OIDC 認證服務，支援：
+  # - 單一登入（SSO）
+  # - 標準 OAuth2 Authorization Code Flow with PKCE
+  # - JWT token 驗證（RS256）
+  # - 用戶角色和權限管理
+  #
+  # 訪問地址：
+  # - Admin Console: http://localhost:8080/admin (admin/admin)
+  # - Realm 設定: http://localhost:8080/realms/aileron
+  #
+  # 生產環境建議：
+  # - 使用獨立的 Keycloak 部署
+  # - 修改預設密碼
+  # - 啟用 HTTPS
+  # - 配置反向代理
+  # ============================================================
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.0
+    container_name: aileron-keycloak-dev
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Taipei}
+      - KC_HOSTNAME=localhost
+      - KC_HOSTNAME_PORT=8080
+      - KC_HOSTNAME_URL=http://localhost:8080
+      - KC_HOSTNAME_ADMIN_URL=http://localhost:8080
+      - KC_HOSTNAME_STRICT=false
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      - KC_HTTP_ENABLED=true
+      - KC_HTTPS_ENABLED=false
+      - KC_PROXY_HEADERS=xforwarded
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+      - KC_DB_USERNAME=postgres
+      - KC_DB_PASSWORD=postgres
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HEALTH_ENABLED=true
+      - KC_METRICS_ENABLED=true
+      # 生產環境應使用更強的密碼
+      # - KC_BOOTSTRAP_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    command: start-dev --import-realm
+    ports:
+      - "8080:8080"  # Keycloak HTTP port
+    volumes:
+      - ./data/keycloak:/opt/keycloak/data  # 持久化 Keycloak 數據
+      - ./keycloak-realm:/opt/keycloak/data/import  # Realm import JSON（首次啟動自動 provision）
+    networks:
+      aileron-network-dev:
+        aliases:
+          - localhost  # 讓其他容器可以透過 localhost 訪問 Keycloak
+          - keycloak   # 也可以使用 keycloak 作為 hostname
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 5 bash -c ':> /dev/tcp/0.0.0.0/8080' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Workspace Manager API (development - Mount 方式熱重載)
+  workspace-manager:
+    build:
+      context: ./workspace-manager
+      dockerfile: Dockerfile
+      target: development
+      args:
+        TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區，預設為 Asia/Taipei
+    image: ailerondocker/workspace-manager:dev
+    container_name: aileron-workspace-manager-dev
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Taipei}  # 系統時區設定
+      - PORT=3001
+      - NODE_ENV=development
+      - ENV=development
+      - REDIS_URL=redis://redis:6379
+      - DEBUG=true
+      - HOST=0.0.0.0
+      - WORKSPACE_RUNTIME_URL=http://workspace-runtime:3002
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DEPLOYMENT_ENV=docker
+      - DOCKER_NETWORK=aileron-network-dev
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aileron
+      - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
+      - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
+      - HOST_WORKSPACE_MANAGER_DIR=${HOST_WORKSPACE_MANAGER_DIR:-./workspace-manager}
+      - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      # JWT Authentication Configuration
+      - ACCESS_TOKEN_EXPIRE_MINUTES=180
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - SECRET_KEY=aileron-secret-key-change-in-production
+      # Celery Configuration (時區由 TZ 環境變數控制)
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      - CELERY_TASK_SERIALIZER=json
+      - CELERY_RESULT_SERIALIZER=json
+      - CELERY_ACCEPT_CONTENT=json
+      # Keycloak OAuth2/OIDC Configuration
+      - KEYCLOAK_SERVER_URL=http://aileron-keycloak-dev:8080
+      - KEYCLOAK_REALM=aileron
+      - KEYCLOAK_CLIENT_ID=aileron-frontend
+      - KEYCLOAK_CLIENT_SECRET=
+      - KEYCLOAK_JWKS_CACHE_TTL=3600
+    ports:
+      - "3001:3001"  # FastAPI
+      - "5555:5555"  # Celery Flower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace-manager:/workspace-manager  # Mount 整個專案目錄
+      - ./data/template-center:/data/template-center  # Template storage volume
+      - ./data/init-scripts:/data/init-scripts  # Init scripts storage volume
+      - ./data/workspace-data:/Users/chenshengyang/Documents/aileron/data/workspace-data  # Workspace data
+      - ./data/workspace-scripts:/Users/chenshengyang/Documents/aileron/data/workspace-scripts  # Workspace scripts
+      - ./data/claude-data:/Users/chenshengyang/Documents/aileron/data/claude-data  # Claude data
+    networks:
+      - aileron-network-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:3001/health\", timeout=5)' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Workspace Runtime (Development - 使用 workspace-runtime:dev 映像)
+  workspace-runtime:
+    build:
+      context: .
+      dockerfile: workspace-runtime/Dockerfile
+      target: development
+      args:
+        OPENSPEC_VERSION: ${WORKSPACE_RUNTIME_OPENSPEC_VERSION:-1.3.0}
+        CLAUDE_CLI_VERSION: ${WORKSPACE_RUNTIME_CLAUDE_CLI_VERSION:-stable}
+        GEMINI_VERSION: ${WORKSPACE_RUNTIME_GEMINI_VERSION:-latest}
+        AGENT_BROWSER_CLI_VERSION: ${WORKSPACE_RUNTIME_AGENT_BROWSER_CLI_VERSION:-0.23.0}
+        CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
+      additional_contexts:
+        codex-universal: docker-image://ailerondocker/codex-universal:custom
+    image: ailerondocker/workspace-runtime:dev
+    container_name: workspace-runtime-default-workspace
+    restart: unless-stopped
+    command: /workspace-runtime/start_services.sh
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - PORT=3002
+      - NODE_ENV=development
+      - ENV=development
+      - WORKSPACE_ID=default-workspace
+      - WORKSPACE_MANAGER_URL=http://workspace-manager:3001
+      - REDIS_URL=redis://redis:6379
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - DEPLOYMENT_ENV=docker
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aileron
+      # Internal API Token (用於內部服務認證)
+      - INTERNAL_API_TOKEN=dev-internal-token
+      # Redis 請求追蹤配置
+      - ENABLE_REDIS=true
+      - REDIS_MAX_CONNECTIONS=20
+      - REDIS_SOCKET_TIMEOUT=30
+      - REQUEST_TTL_SECONDS=3600
+      - CLEANUP_INTERVAL_SECONDS=300
+      - REDIS_RETRY_ATTEMPTS=3
+      - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
+      - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      - HOST_SSH_KEYS_DIR=${HOST_SSH_KEYS_DIR:-./data/ssh-keys}
+      # SSH Configuration
+      - SSH_PORT=22
+      - SSH_HOST_KEY_PATH=/etc/ssh/ssh_host_rsa_key
+      # Git Configuration
+      - GIT_USER_NAME=Developer
+      - GIT_USER_EMAIL=developer@workspace.local
+      # Java Configuration
+      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+      # VS Code Server Configuration
+      - VSCODE_SERVER_PORT=8080
+      # Terminal Service Configuration
+      - TERMINAL_PORT=3004
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - LOG_LEVEL=debug
+      - MAX_TABS_PER_WORKSPACE=10
+      - SESSION_TIMEOUT=300
+      - PTY_BUFFER_SIZE=1024
+      # Anthropic Claude API Configuration
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
+      # Keycloak OAuth2/OIDC Configuration
+      - KEYCLOAK_SERVER_URL=http://aileron-keycloak-dev:8080
+      - KEYCLOAK_REALM=aileron
+      - KEYCLOAK_CLIENT_ID=aileron-web
+      - KEYCLOAK_CLIENT_SECRET=
+      - KEYCLOAK_JWKS_CACHE_TTL=3600
+      - KEYCLOAK_JWKS_URL=http://aileron-keycloak-dev:8080/realms/aileron/protocol/openid-connect/certs
+      # Browser Container Discovery (與 workspace-manager 注入的環境變數一致)
+      - BROWSER_CONTAINER_NAME=workspace-browser-default-workspace
+      - BROWSER_CDP_URL=http://workspace-browser-default-workspace:9223
+      - BROWSER_WEBRTC_INTERNAL_URL=http://workspace-browser-default-workspace:6080
+      # Next.js Container Discovery (獨立 nextjs 容器)
+      - NEXTJS_CONTAINER_NAME=workspace-nextjs-default-workspace
+      - NEXTJS_INTERNAL_URL=http://workspace-nextjs-default-workspace:3003
+      - NEXTJS_API_URL=http://workspace-nextjs-default-workspace:3013
+    ports:
+      - "3002:3002"   # FastAPI (固定端口)
+      - "3004:3004"   # Terminal Service (固定端口)
+      - "2222:22"     # SSH
+      - "8080"        # VS Code Server (隨機端口)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace-runtime:/workspace-runtime  # Mount 整個專案目錄（包含 tests 目錄，用於整合測試）
+      - /workspace-runtime/.venv  # 阻擋 host (macOS) venv 蓋過容器內 Linux venv
+      - /workspace-runtime/web-preview/node_modules  # 避免 node_modules 被覆蓋
+      - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
+      - ./data/workspace-data/default-workspace:/workspace  # Workspace projects
+      - ./data/workspace-scripts/default-workspace:/scripts  # Scripts directory
+      - ./data/claude-data/default_workspace:/home/developer/.claude  # Claude session 持久化
+    networks:
+      - aileron-network-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Workspace Browser - neko WebRTC (for default-workspace)
+  workspace-browser:
+    build:
+      context: ./workspace-chrome
+      dockerfile: Dockerfile.webrtc
+    image: ailerondocker/workspace-chrome:dev
+    container_name: workspace-browser-default-workspace
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Taipei}
+      - WORKSPACE_ID=default-workspace
+      - CONTAINER_NAME=workspace-browser-default-workspace
+      - NEKO_SERVER_BIND=:6080
+      - NEKO_DESKTOP_SCREEN=1440x900@30
+      - NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko
+      - NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin
+      - NEKO_WEBRTC_ICELITE=1
+      - NEKO_WEBRTC_UDPMUX=52000
+      - NEKO_WEBRTC_NAT1TO1=127.0.0.1
+      - NEKO_SESSION_IMPLICIT_HOSTING=true
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    shm_size: '2gb'
+    ports:
+      - "6080:6080"     # neko HTTP + WebSocket signaling
+      - "9223:9223"     # CDP (socat relay → Chrome 9222)
+      - "52000:52000/udp"  # WebRTC media (UDPMUX single port)
+    volumes:
+      - ./data/workspace-data/default-workspace:/workspace
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:6080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Workspace Next.js Preview (for default-workspace)
+  workspace-nextjs:
+    build:
+      context: ./workspace-nextjs
+    image: ailerondocker/workspace-nextjs:dev
+    container_name: workspace-nextjs-default-workspace
+    restart: unless-stopped
+    environment:
+      - WORKSPACE_ID=default-workspace
+      - PORT=3003
+      - API_PORT=3013
+      - WORKSPACE_DIR=/workspace
+      - NODE_ENV=development
+    ports:
+      - "3003:3003"     # Next.js dev server
+      - "3013:3013"     # Management API
+    volumes:
+      - ./data/workspace-data/default-workspace:/workspace
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3013/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Frontend (Development - Mount 方式)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+      args:
+        VITE_WORKSPACE_MANAGER_URL: http://localhost:3001
+        TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區
+    image: ailerondocker/workspace-ui:dev
+    container_name: aileron-frontend-dev
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Taipei}  # 系統時區設定
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:3001/api/v1
+      - VITE_FRONTEND_PUBLIC_URL=http://localhost:8082
+      - DOCKER_ENV=true
+      # Keycloak OAuth2/OIDC Configuration
+      - VITE_KEYCLOAK_SERVER_URL=http://localhost:8080
+      - VITE_KEYCLOAK_REALM=aileron
+      - VITE_KEYCLOAK_CLIENT_ID=aileron-frontend
+      - VITE_RUNTIME_PROVISIONER=docker
+    ports:
+      - "8082:8082"  # Vite dev server port
+    volumes:
+      - ./frontend:/app  # Mount 整個專案目錄
+      - /app/node_modules  # 避免 node_modules 被覆蓋
+    networks:
+      - aileron-network-dev
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - workspace-manager
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8082/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Draw.io Service (本地化圖表編輯器)
+  drawio:
+    image: jgraph/drawio
+    container_name: aileron-drawio-dev
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-Asia/Taipei}
+      - DRAWIO_BASE_URL=http://drawio:8080
+      - DRAWIO_VIEWER_URL=http://drawio:8080
+    ports:
+      - "8083:8080"  # HTTP
+      - "8443:8443"  # HTTPS (optional)
+    networks:
+      - aileron-network-dev
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  aileron-network-dev:
+    name: aileron-network-dev
+    driver: bridge

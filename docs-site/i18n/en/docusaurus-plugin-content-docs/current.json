@@ -1,0 +1,26 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docsSidebar.category.快速開始": {
+    "message": "Quick Start",
+    "description": "The label for category 快速開始 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.部署": {
+    "message": "Deployment",
+    "description": "The label for category 部署 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.架構": {
+    "message": "Architecture",
+    "description": "The label for category 架構 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.功能": {
+    "message": "Features",
+    "description": "The label for category 功能 in sidebar docsSidebar"
+  },
+  "sidebar.docsSidebar.category.API 參考": {
+    "message": "API Reference",
+    "description": "The label for category API 參考 in sidebar docsSidebar"
+  }
+}

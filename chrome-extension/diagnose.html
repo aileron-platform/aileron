@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Chrome Extension 診斷工具</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+    h2 {
+      color: #555;
+      margin-top: 0;
+    }
+    .step {
+      background: #f9f9f9;
+      padding: 15px;
+      margin: 10px 0;
+      border-left: 4px solid #4CAF50;
+    }
+    .warning {
+      background: #fff3cd;
+      border-left-color: #ff9800;
+      color: #856404;
+    }
+    .code {
+      background: #272822;
+      color: #f8f8f2;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    a {
+      color: #4CAF50;
+      text-decoration: none;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    ol {
+      line-height: 1.8;
+    }
+    .highlight {
+      background: #ffeb3b;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Chrome Extension 連線問題診斷</h1>
+
+  <div class="section">
+    <h2>問題描述</h2>
+    <p>Extension 與 relay server 出現無限連線/斷線循環，server 端收到大量重複連接請求。</p>
+  </div>
+
+  <div class="section">
+    <h2>步驟 1: 檢查 Service Worker 實例</h2>
+    <div class="step">
+      <ol>
+        <li>開啟新分頁，進入: <a href="chrome://serviceworker-internals/" target="_blank">chrome://serviceworker-internals/</a></li>
+        <li>在頁面內按 <span class="highlight">Ctrl+F</span> (Mac: Cmd+F) 搜尋 <code>dev-browser</code> 或 <code>3002</code></li>
+        <li>檢查是否有<strong>多個 service worker</strong> 在運行</li>
+        <li>記錄下所有相關的 service worker 數量</li>
+      </ol>
+    </div>
+
+    <div class="step warning">
+      <strong>⚠️ 如果發現多個實例：</strong>
+      <ol>
+        <li>點擊每個 service worker 旁的 <strong>Unregister</strong> 按鈕</li>
+        <li>等待所有實例都被移除</li>
+        <li>繼續執行步驟 2</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>步驟 2: 完全重置 Extension</h2>
+    <div class="step">
+      <ol>
+        <li>開啟新分頁，進入: <a href="chrome://extensions/" target="_blank">chrome://extensions/</a></li>
+        <li>找到 <strong>dev-browser</strong> extension</li>
+        <li>點擊 <strong>移除</strong> 按鈕，完全移除 extension</li>
+        <li>關閉所有 Chrome 視窗</li>
+        <li>重新開啟 Chrome</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>步驟 3: 重新載入 Extension</h2>
+    <div class="step">
+      <ol>
+        <li>進入: <a href="chrome://extensions/" target="_blank">chrome://extensions/</a></li>
+        <li>開啟右上角的 <strong>開發人員模式</strong></li>
+        <li>點擊 <strong>載入未封裝項目</strong></li>
+        <li>選擇資料夾: <code>/Users/chenshengyang/Documents/aileron/chrome-extension/.output/chrome-mv3</code></li>
+        <li>確認只載入一次</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>步驟 4: 驗證連線</h2>
+    <div class="step">
+      <ol>
+        <li>點擊 extension icon 開啟 popup</li>
+        <li>確認顯示「已停用」+ 灰色圓點</li>
+        <li>點擊 toggle 啟用</li>
+        <li>應該看到「已啟用」+ 橘色閃爍圓點（連線中）</li>
+        <li>幾秒後變成綠色圓點（已連線）</li>
+        <li><strong>不應該再出現頻繁的斷線/重連</strong></li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>步驟 5: 查看 Service Worker 控制台</h2>
+    <div class="step">
+      <ol>
+        <li>在 <a href="chrome://extensions/" target="_blank">chrome://extensions/</a> 找到 dev-browser</li>
+        <li>點擊 <strong>service worker</strong> 連結（藍色文字）</li>
+        <li>查看 Console 輸出，應該只看到：
+          <div class="code">
+[background] Extension initializing at 2026-01-25T...
+ConnectionManager created with client ID: ext-xxxxxxxxx-xxxxx
+          </div>
+        </li>
+        <li>確認 <span class="highlight">client ID 只有一個</span>，且不會重複出現</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>步驟 6: 檢查 Server 日誌</h2>
+    <div class="step">
+      <p>在 terminal 執行：</p>
+      <div class="code">docker logs workspace-runtime-1 --tail 50 -f</div>
+      <p>應該只看到：</p>
+      <div class="code">
+[conn-xxxxxxx] Extension WebSocket connection initiated
+[conn-xxxxxxx] Accepting WebSocket...
+[conn-xxxxxxx] WebSocket accepted, registering extension...
+[relay] Extension connected (ws id: xxxxxxxxx)
+      </div>
+      <p><strong>不應該看到重複的連線或 "Extension Replaced" 訊息</strong></p>
+    </div>
+  </div>
+
+  <div class="section warning">
+    <h2>⚠️ 如果問題持續</h2>
+    <div class="step">
+      <p>請執行以下檢查並回報結果：</p>
+      <ol>
+        <li>確認 Chrome 版本 (chrome://version/)</li>
+        <li>檢查是否有其他 extension 或防毒軟體干擾 WebSocket 連線</li>
+        <li>嘗試在無痕模式下測試（記得允許 extension 在無痕模式運行）</li>
+        <li>提供 service worker console 的完整輸出</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 檢查清單</h2>
+    <div class="step">
+      <p>完成後請確認：</p>
+      <ul>
+        <li>✓ 只有一個 service worker 在運行</li>
+        <li>✓ Extension 已完全移除並重新載入</li>
+        <li>✓ Client ID 只有一個且不重複</li>
+        <li>✓ 連線穩定，無 "Extension Replaced" 錯誤</li>
+        <li>✓ Server 日誌正常，無大量重複連線</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

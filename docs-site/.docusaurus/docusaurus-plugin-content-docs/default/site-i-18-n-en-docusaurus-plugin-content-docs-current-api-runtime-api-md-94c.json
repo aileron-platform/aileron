@@ -1,0 +1,27 @@
+{
+  "id": "api/runtime-api",
+  "title": "Runtime API",
+  "description": "The Workspace Runtime API exposes per-workspace agent execution, file operations, OpenSpec workflow state, and real-time streaming capabilities. Today, the Claude Code-related APIs are the most complete, but the overall surface is expanding toward a broader multi-agent runtime model.",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/api/runtime-api.md",
+  "sourceDirName": "api",
+  "slug": "/api/runtime-api",
+  "permalink": "/aileron/en/api/runtime-api",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2,
+    "title": "Runtime API"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Manager API",
+    "permalink": "/aileron/en/api/manager-api"
+  },
+  "next": {
+    "title": "Open Source Acknowledgements",
+    "permalink": "/aileron/en/acknowledgements"
+  }
+}

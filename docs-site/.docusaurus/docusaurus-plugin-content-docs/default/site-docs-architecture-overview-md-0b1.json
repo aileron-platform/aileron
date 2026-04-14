@@ -1,0 +1,27 @@
+{
+  "id": "architecture/overview",
+  "title": "架構概覽",
+  "description": "Aileron 採用微服務架構，各服務職責明確、可獨立部署。",
+  "source": "@site/docs/architecture/overview.md",
+  "sourceDirName": "architecture",
+  "slug": "/architecture/overview",
+  "permalink": "/aileron/architecture/overview",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "title": "架構概覽"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "故障排除",
+    "permalink": "/aileron/deployment/troubleshooting"
+  },
+  "next": {
+    "title": "Workspace Manager",
+    "permalink": "/aileron/architecture/workspace-manager"
+  }
+}

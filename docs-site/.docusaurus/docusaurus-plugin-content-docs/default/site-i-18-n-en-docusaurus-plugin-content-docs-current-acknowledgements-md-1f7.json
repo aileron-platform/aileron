@@ -1,0 +1,23 @@
+{
+  "id": "acknowledgements",
+  "title": "Open Source Acknowledgements",
+  "description": "Aileron stands on the shoulders of many excellent open source projects. This page lists the third-party software actually used by Aileron and credits their upstream maintainers. Entries are grouped by the role they play inside Aileron, with links to the upstream project and license.",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/acknowledgements.md",
+  "sourceDirName": ".",
+  "slug": "/acknowledgements",
+  "permalink": "/aileron/en/acknowledgements",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 99,
+  "frontMatter": {
+    "sidebar_position": 99,
+    "title": "Open Source Acknowledgements"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Runtime API",
+    "permalink": "/aileron/en/api/runtime-api"
+  }
+}

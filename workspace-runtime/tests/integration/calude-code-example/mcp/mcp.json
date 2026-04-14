@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "type": "stdio",
+      "command": "npx",
+      "env": {
+        "AZURE_DEVOPS_PAT": "YOUR_AZURE_DEVOPS_PAT_HERE",
+        "AZURE_DEVOPS_ORG_URL": "https://dev.azure.com/YOUR_ORG",
+        "AZURE_DEVOPS_AUTH_METHOD": "pat",
+        "AZURE_DEVOPS_DEFAULT_PROJECT": "YOUR_PROJECT"
+      },
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/username/Desktop",
+        "/Users/username/Downloads"
+      ]
+    },
+    "api-server": {
+      "type": "sse",
+      "url": "${API_BASE_URL:-https://api.example.com}/mcp",
+      "headers": {
+        "Authorization": "Bearer ${API_KEY}"
+      }
+    }
+  }
+}

@@ -1,0 +1,633 @@
+/**
+ * GlobalNavigation - 全域導航列 (Header)
+ * 應用程式的全域導航列，保持相同的 UI
+ */
+
+import React from 'react';
+import { createLogger } from '@/shared/services/logger';
+
+const logger = createLogger('GlobalNavigation');
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
+import { apiClient } from '@/shared/api/apiClient';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuGroup,
+} from '../ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
+import {
+  Folder,
+  ChevronDown,
+  FolderPlus,
+  User,
+  Clock,
+  FileText,
+  Settings,
+  LogOut,
+  LogIn,
+  Maximize,
+  Minimize,
+} from 'lucide-react';
+import { useNavigation, ModuleType } from '../../../app/providers/NavigationProvider';
+import { useI18n } from '@/app/providers/I18nProvider';
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import type { OidcUserProfile } from '@/features/auth/types';
+import { useApp } from '@/app/providers/AppProvider';
+import { cn } from '@/shared/utils/cn';
+import { validateUserSettings } from '@/shared/services/userSettingsValidation';
+import { SettingsCheckDialog } from '@/shared/components/dialogs/SettingsCheckDialog';
+import type { UserSettings, UserSettingsResponse } from '@/shared/types/user';
+import type { SettingsValidationResult } from '@/shared/services/userSettingsValidation';
+import { ROUTES } from '@/shared/constants/routes';
+import { useToast } from '@/shared/components/ui/use-toast';
+
+interface WorkspaceOwner {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
+interface WorkspaceSummary {
+  id: string;
+  name: string;
+  description?: string | null;
+  owner?: WorkspaceOwner;
+  provisioner?: 'docker' | 'kubernetes';
+  targetNamespace?: string | null;
+  overallPhase?: string | null;
+  runtime?: string | null;
+  runtimeStatus?: string | null;
+}
+
+interface WorkspaceListResponse {
+  items?: WorkspaceSummary[];
+}
+
+export const GlobalNavigation: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { state, dispatch } = useNavigation();
+  const { t } = useI18n();
+  const { logout, user, isAuthenticated } = useAuth();
+  const { state: appState } = useApp();
+  const { toast } = useToast();
+
+  const [workspaces, setWorkspaces] = React.useState<WorkspaceSummary[]>([]);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = React.useState<boolean>(false);
+  const [hasWorkspaceError, setHasWorkspaceError] = React.useState<boolean>(false);
+
+  // 設定檢查相關狀態
+  const [showSettingsCheckDialog, setShowSettingsCheckDialog] = React.useState<boolean>(false);
+  const [validationResult, setValidationResult] = React.useState<SettingsValidationResult | null>(null);
+
+  // 提取用戶顯示名稱和電子郵件
+  const userDisplayName = React.useMemo(() => {
+    if (!user) return '使用者';
+    const oidcUser = user as OidcUserProfile;
+    return oidcUser.preferred_username || oidcUser.email || oidcUser.sub || '使用者';
+  }, [user]);
+
+  const userEmail = React.useMemo(() => {
+    if (!user) return '';
+    return (user as OidcUserProfile).email || '';
+  }, [user]);
+
+  // 生成用戶頭像縮寫
+  const userInitials = React.useMemo(() => {
+    const name = userDisplayName || 'U';
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }, [userDisplayName]);
+
+  // 全螢幕狀態 - 初始化時檢查當前是否在全螢幕模式
+  const [isFullscreen, setIsFullscreen] = React.useState<boolean>(() => !!document.fullscreenElement);
+
+  // 監聽全螢幕變化
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  // 切換全螢幕
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: t('navigation.fullscreen.error'),
+        description: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const selectedWorkspace = React.useMemo(() => {
+    return workspaces.find(workspace => workspace.id === state.selectedWorkspaceId) ?? null;
+  }, [state.selectedWorkspaceId, workspaces]);
+
+  const getProvisionerLabel = React.useCallback(
+    (provisioner?: WorkspaceSummary['provisioner']) => {
+      if (provisioner === 'kubernetes') {
+        return t('navigation.workspaceSelector.provisioners.kubernetes');
+      }
+      return t('navigation.workspaceSelector.provisioners.docker');
+    },
+    [t]
+  );
+
+  const getPhaseLabel = React.useCallback(
+    (phase?: string | null) => {
+      if (!phase) {
+        return t('navigation.workspaceSelector.phases.unknown');
+      }
+      const phaseKey = phase.toLowerCase();
+      const localized = t(`navigation.workspaceSelector.phases.${phaseKey}`);
+      return localized === `navigation.workspaceSelector.phases.${phaseKey}` ? phase : localized;
+    },
+    [t]
+  );
+
+  const getPhaseBadgeClassName = React.useCallback((phase?: string | null) => {
+    switch (phase?.toLowerCase()) {
+      case 'running':
+        return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700';
+      case 'starting':
+      case 'reconciling':
+      case 'pending':
+        return 'border-amber-500/20 bg-amber-500/10 text-amber-700';
+      case 'failed':
+      case 'error':
+        return 'border-destructive/20 bg-destructive/10 text-destructive';
+      case 'disabled':
+      case 'stopped':
+        return 'border-slate-500/20 bg-slate-500/10 text-slate-700';
+      default:
+        return 'border-primary/20 bg-primary/10 text-primary';
+    }
+  }, []);
+
+  const setActiveModule = (module: ModuleType) => {
+    dispatch({ type: 'SET_CURRENT_MODULE', payload: module });
+    // 根據模組導航到對應路由
+    switch (module) {
+      case 'workspace':
+        navigate(ROUTES.WORKSPACES);
+        break;
+      case 'template':
+        navigate(ROUTES.TEMPLATE_MANAGEMENT);
+        break;
+      case 'automation':
+        navigate(ROUTES.AUTOMATION);
+        break;
+      default:
+        navigate(ROUTES.WORKSPACES);
+    }
+  };
+
+  React.useEffect(() => {
+    const controller = new AbortController();
+    let isActive = true;
+
+    const fetchWorkspaces = async () => {
+      setIsLoadingWorkspaces(true);
+      setHasWorkspaceError(false);
+
+      try {
+        const data = await apiClient.get<WorkspaceListResponse>('/workspaces/?page=1&pageSize=50');
+        if (!isActive) {
+          return;
+        }
+
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setWorkspaces(items);
+        const currentSelected = state.selectedWorkspaceId;
+        if (currentSelected && items.some(item => item.id === currentSelected)) {
+          // 當前選中的工作區仍然存在，不需要更改
+          return;
+        }
+        // 如果當前選中的工作區不存在或為空，選擇第一個工作區
+        const newSelectedId = items.length > 0 ? items[0].id : null;
+        dispatch({ type: 'SET_SELECTED_WORKSPACE', payload: newSelectedId });
+      } catch (error) {
+        if (!isActive || controller.signal.aborted) {
+          return;
+        }
+        logger.error('Failed to load workspaces', { error });
+        setHasWorkspaceError(true);
+        setWorkspaces([]);
+        dispatch({ type: 'SET_SELECTED_WORKSPACE', payload: null });
+      } finally {
+        if (isActive) {
+          setIsLoadingWorkspaces(false);
+        }
+      }
+    };
+
+    void fetchWorkspaces();
+
+    return () => {
+      isActive = false;
+      controller.abort();
+    };
+  }, [dispatch, state.selectedWorkspaceId]);
+
+  const workspaceButtonLabel = React.useMemo(() => {
+    if (isLoadingWorkspaces) {
+      return t('common.loading');
+    }
+    if (hasWorkspaceError) {
+      return t('navigation.workspaceSelector.error');
+    }
+    if (selectedWorkspace) {
+      return selectedWorkspace.name;
+    }
+    if (workspaces.length === 0) {
+      return t('navigation.workspaceSelector.empty');
+    }
+    return t('navigation.workspaceSelector.selectLabel');
+  }, [hasWorkspaceError, isLoadingWorkspaces, selectedWorkspace, t, workspaces.length]);
+
+  const handleWorkspaceSelect = (workspaceId: string) => {
+    dispatch({ type: 'SET_SELECTED_WORKSPACE', payload: workspaceId });
+    navigate(ROUTES.WORKSPACES);
+  };
+
+  /**
+   * 檢查用戶設定是否完整
+   */
+  const checkUserSettings = async (): Promise<SettingsValidationResult | null> => {
+    try {
+      const userId = appState.user.id;
+      if (!userId) {
+        logger.error('User ID not found');
+        return null;
+      }
+
+      const response = await apiClient.get<UserSettingsResponse>(`/users/${userId}/settings`);
+      const settings: UserSettings = response.data;
+
+      return validateUserSettings(settings);
+    } catch (error) {
+      logger.error('Failed to check user settings', { error });
+      return null;
+    }
+  };
+
+  /**
+   * 處理新增工作區按鈕點擊
+   */
+  const handleCreateWorkspace = async () => {
+    logger.debug('handleCreateWorkspace called');
+
+    // 檢查用戶設定
+    const result = await checkUserSettings();
+    logger.debug('checkUserSettings result', { result });
+
+    if (!result) {
+      // 無法獲取設定，直接導航（降級處理）
+      navigate(ROUTES.WORKSPACE_WIZARD);
+      return;
+    }
+
+    setValidationResult(result);
+
+    if (!result.isValid) {
+      // 設定不完整，顯示對話框
+      setShowSettingsCheckDialog(true);
+    } else {
+      // 設定完整，直接導航
+      navigate(ROUTES.WORKSPACE_WIZARD);
+    }
+  };
+
+  /**
+   * 從對話框繼續建立工作區
+   */
+  const handleProceedFromDialog = () => {
+    navigate(ROUTES.WORKSPACE_WIZARD);
+  };
+
+  // 判斷是否應該顯示工作區選單
+  // 條件：在工作區模組時顯示，但在個人資料和系統設定頁面時隱藏
+  const shouldShowWorkspaceSelector = React.useMemo(() => {
+    const isProfilePage = location.pathname === ROUTES.PROFILE;
+    const isSettingsPage = location.pathname === ROUTES.SETTINGS;
+    return state.currentModule === 'workspace' && !isProfilePage && !isSettingsPage;
+  }, [state.currentModule, location.pathname]);
+
+  return (
+    <header className="h-10 border-b border-border/50 bg-gradient-to-r from-card to-card/95 backdrop-blur-md px-4 flex items-center justify-between shadow-sm">
+      <div className="flex items-center gap-3">
+        <h1 className="text-base font-bold cursor-pointer flex items-center gap-2 hover:opacity-80 transition-all duration-300 group" onClick={() => navigate(ROUTES.WORKSPACES)}>
+          <img src="/logo.png" alt="Aileron" className="h-4 w-4 group-hover:scale-110 transition-transform duration-300" />
+          <span className="relative bg-gradient-to-r from-primary to-gray-700 bg-clip-text text-transparent">
+            {t('navigation.brand.title')}
+            <div className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-primary to-gray-700 group-hover:w-full transition-all duration-300"></div>
+          </span>
+        </h1>
+
+        {/* 工作區選單 - 只在工作區模組時顯示 */}
+        {shouldShowWorkspaceSelector && (
+          <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-border/50">
+            <div className="flex items-center gap-1">
+              <Folder className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{t('navigation.workspaceSelector.label')}</span>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1 px-2"
+                  data-testid="workspace-selector-trigger"
+                  title={selectedWorkspace?.name || undefined}
+                >
+                  <span className="truncate max-w-32 text-xs">
+                    {workspaceButtonLabel}
+                  </span>
+                  <ChevronDown className="h-2.5 w-2.5 flex-shrink-0" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-72" align="start">
+                <DropdownMenuLabel>{t('navigation.workspaceSelector.selectLabel')}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {isLoadingWorkspaces ? (
+                  <DropdownMenuItem
+                    disabled
+                    data-testid="workspace-selector-loading"
+                    className="py-6 text-sm text-muted-foreground"
+                  >
+                    {t('common.loading')}
+                  </DropdownMenuItem>
+                ) : hasWorkspaceError ? (
+                  <DropdownMenuItem
+                    disabled
+                    data-testid="workspace-selector-error"
+                    className="py-4 text-sm text-destructive"
+                  >
+                    {t('navigation.workspaceSelector.error')}
+                  </DropdownMenuItem>
+                ) : workspaces.length === 0 ? (
+                  <DropdownMenuItem
+                    disabled
+                    data-testid="workspace-selector-empty"
+                    className="py-6 text-sm text-muted-foreground"
+                  >
+                    {t('navigation.workspaceSelector.empty')}
+                  </DropdownMenuItem>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto">
+                    {workspaces.map(workspace => {
+                      const isActive = workspace.id === state.selectedWorkspaceId;
+                      return (
+                        <DropdownMenuItem
+                          key={workspace.id}
+                          data-testid={`workspace-option-${workspace.id}`}
+                          onSelect={() => handleWorkspaceSelect(workspace.id)}
+                          className={cn(
+                            'flex w-full flex-col items-start gap-1 rounded-md px-3 py-2 text-left',
+                            workspace.id === state.selectedWorkspaceId && 'bg-accent text-accent-foreground'
+                          )}
+                        >
+                          <span className="flex items-center gap-2 text-sm font-medium">
+                            {workspace.name}
+                            {isActive && (
+                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                                {t('navigation.workspaceSelector.active')}
+                              </span>
+                            )}
+                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant="outline" className="text-[10px]">
+                              {getProvisionerLabel(workspace.provisioner)}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={cn('text-[10px]', getPhaseBadgeClassName(workspace.overallPhase ?? workspace.runtimeStatus))}
+                            >
+                              {getPhaseLabel(workspace.overallPhase ?? workspace.runtimeStatus)}
+                            </Badge>
+                            {workspace.targetNamespace && (
+                              <Badge variant="outline" className="text-[10px]">
+                                {t('navigation.workspaceSelector.namespace', {
+                                  name: workspace.targetNamespace,
+                                })}
+                              </Badge>
+                            )}
+                          </div>
+                          {workspace.description && (
+                            <span className="w-full truncate text-xs text-muted-foreground">
+                              {workspace.description}
+                            </span>
+                          )}
+                          {workspace.owner?.displayName && (
+                            <span className="text-xs text-muted-foreground">
+                              {t('navigation.workspaceSelector.owner', {
+                                name: workspace.owner.displayName,
+                              })}
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* 新增工作區按鈕 */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              title={t('navigation.workspaceSelector.newWorkspace')}
+              onClick={handleCreateWorkspace}
+            >
+              <FolderPlus className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Hub Navigation - 分為兩個群組 */}
+        <div className="flex items-center gap-2">
+          {/* 第一群組：Workspace, Automation & Dashboard */}
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
+            <Button
+              variant={state.currentModule === 'workspace' ? 'default' : 'ghost'}
+              size="sm"
+              className={`gap-1 transition-all duration-300 h-7 px-2 text-xs ${
+                state.currentModule === 'workspace'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveModule('workspace')}
+            >
+              <Folder className="h-3 w-3" />
+              {t('navigation.workspace')}
+            </Button>
+
+            <Button
+              variant={state.currentModule === 'automation' ? 'default' : 'ghost'}
+              size="sm"
+              className={`gap-1 transition-all duration-300 h-7 px-2 text-xs ${
+                state.currentModule === 'automation'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveModule('automation')}
+            >
+              <Clock className="h-3 w-3" />
+              {t('navigation.automation')}
+            </Button>
+          </div>
+
+          {/* 第二群組：Template Center */}
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
+            <Button
+              variant={state.currentModule === 'template' ? 'default' : 'ghost'}
+              size="sm"
+              className={`gap-1 transition-all duration-300 h-7 px-2 text-xs ${
+                state.currentModule === 'template'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveModule('template')}
+            >
+              <FileText className="h-3 w-3" />
+              {t('navigation.templateCenter')}
+            </Button>
+          </div>
+
+          {/* 全螢幕按鈕 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 transition-all duration-300 hover:bg-muted text-muted-foreground hover:text-foreground"
+            onClick={toggleFullscreen}
+            title={isFullscreen ? t('navigation.fullscreen.exit') : t('navigation.fullscreen.enter')}
+          >
+            {isFullscreen ? <Minimize className="h-3 w-3" /> : <Maximize className="h-3 w-3" />}
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isAuthenticated && user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-8 w-8 rounded-full hover:bg-primary/10 transition-all duration-300 group p-0" title={userDisplayName}>
+                  <Avatar className="h-6 w-6 ring-1 ring-transparent group-hover:ring-primary/30 transition-all duration-300">
+                    <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground group-hover:from-primary/90 group-hover:to-primary/70 transition-all duration-300 text-xs">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/20 to-primary/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10"></div>
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent className="w-60 bg-card/95 backdrop-blur-md border border-border/50 shadow-xl" align="end" forceMount>
+                <DropdownMenuLabel className="font-normal p-3">
+                  <div className="flex items-center space-x-2">
+                    <Avatar className="h-9 w-9 ring-2 ring-primary/20">
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-sm">
+                        {userInitials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col space-y-0.5">
+                      <p className="text-xs font-semibold leading-none text-foreground">{userDisplayName}</p>
+                      {userEmail && (
+                        <p className="text-[11px] leading-none text-muted-foreground">
+                          {userEmail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+
+                <DropdownMenuSeparator className="bg-border/50" />
+
+                <DropdownMenuGroup className="p-1.5">
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md hover:bg-primary/10 transition-colors duration-200 p-2"
+                    onClick={() => navigate(ROUTES.PROFILE)}
+                  >
+                    <User className="mr-2 h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-medium">{t('navigation.userMenu.profile')}</span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-md hover:bg-primary/10 transition-colors duration-200 p-2"
+                    onClick={() => navigate(ROUTES.SETTINGS)}
+                  >
+                    <Settings className="mr-2 h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-medium">{t('navigation.userMenu.settings')}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+
+                <DropdownMenuSeparator className="bg-border/50" />
+
+                <div className="p-1.5">
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive focus:text-destructive hover:bg-destructive/10 rounded-md transition-colors duration-200 p-2"
+                    onClick={async () => {
+                      try {
+                        await logout();
+                        navigate('/login');
+                      } catch (error) {
+                        logger.error('Logout failed', { error });
+                      }
+                    }}
+                  >
+                    <LogOut className="mr-2 h-3.5 w-3.5" />
+                    <span className="text-xs font-medium">{t('navigation.userMenu.logout')}</span>
+                  </DropdownMenuItem>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-3 text-xs font-medium hover:bg-primary/10 transition-all duration-300"
+              onClick={() => navigate('/login')}
+            >
+              <LogIn className="h-3 w-3 mr-1.5" />
+              {t('navigation.userMenu.login') || '登入'}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* 設定檢查對話框 */}
+      <SettingsCheckDialog
+        open={showSettingsCheckDialog}
+        onOpenChange={setShowSettingsCheckDialog}
+        validationResult={validationResult}
+        onProceed={handleProceedFromDialog}
+      />
+    </header>
+  );
+};
+
+export default GlobalNavigation;

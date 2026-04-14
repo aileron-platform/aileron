@@ -1,0 +1,22 @@
+# 開發環境 Dockerfile
+FROM node:20-alpine
+
+# 設定時區
+ARG TZ=Asia/Taipei
+ENV TZ=${TZ}
+
+# 設定工作目錄
+WORKDIR /app
+
+# 先安裝依賴，避免測試容器每次啟動都重新 npm ci
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+# 再複製專案內容
+COPY . .
+
+# 暴露端口 8082
+EXPOSE 8082
+
+# 預設啟動開發伺服器
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORKSPACE_ID="{{ workspace.id }}"
+WORKSPACE_NAME="{{ workspace.name }}"
+RUNTIME_PORT={{ ports.default_internal_port }}
+
+log() {
+  echo "[${WORKSPACE_ID}] $1"
+}
+
+log "初始化 Workspace Runtime (${WORKSPACE_NAME})"
+
+log "建立基本目錄結構"
+mkdir -p /workspace/src /workspace/docs /workspace/tests /workspace/config
+
+log "產生環境變數設定"
+cat <<'ENVVARS' > /workspace/config/.env
+{% for key, value in environment.items() %}{{ key }}="{{ value }}"
+{% endfor %}
+ENVVARS
+
+{% if git.url %}
+log "設定 Git 倉庫 {{ git.url }}"
+if [ ! -d "/workspace/src/.git" ]; then
+  git clone --branch "{{ git.branch }}" "{{ git.url }}" /workspace/src
+else
+  cd /workspace/src
+  git fetch origin "{{ git.branch }}"
+  git checkout "{{ git.branch }}"
+  git pull origin "{{ git.branch }}"
+fi
+{% endif %}
+
+log "完成 Workspace Runtime 初始化，準備啟動服務 (port: ${RUNTIME_PORT})"
+log "自訂設定腳本將在 start_services.sh 中執行 (/scripts/custom-setup.sh)"

@@ -1,0 +1,30 @@
+{{- if .Values.workspaceManager.enabled }}
+{{- $crNamespace := (default .Values.kubernetes.defaultNamespace .Values.kubernetes.watchNamespace) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  namespace: {{ $crNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["platform.aileron.io"]
+    resources: ["workspaces"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  namespace: {{ $crNamespace | quote }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceManager.serviceAccount "nameSuffix" "workspace-manager") }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+{{- end }}

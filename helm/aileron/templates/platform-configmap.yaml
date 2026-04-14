@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-platform-config
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  PUBLIC_SCHEME: {{ .Values.publicRouting.scheme | quote }}
+  PUBLIC_BASE_DOMAIN: {{ .Values.publicRouting.baseDomain | quote }}
+  PUBLIC_INGRESS_CLASS_NAME: {{ .Values.ingress.className | quote }}
+  PUBLIC_FRONTEND_HOST: {{ .Values.publicRouting.frontendHost | quote }}
+  PUBLIC_WORKSPACE_MANAGER_HOST: {{ .Values.publicRouting.workspaceManagerHost | quote }}
+  PUBLIC_KEYCLOAK_HOST: {{ .Values.publicRouting.keycloakHost | quote }}
+  PUBLIC_FRONTEND_URL: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.frontendHost "Values" .Values) | quote }}
+  PUBLIC_ALLOWED_ORIGINS: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.frontendHost "Values" .Values) | quote }}
+  PUBLIC_WORKSPACE_MANAGER_URL: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.workspaceManagerHost "Values" .Values) | quote }}
+  PUBLIC_WORKSPACE_MANAGER_API_URL: {{ printf "%s/api/v1" (include "aileron.publicURL" (dict "template" .Values.publicRouting.workspaceManagerHost "Values" .Values)) | quote }}
+  PUBLIC_KEYCLOAK_URL: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.keycloakHost "Values" .Values) | quote }}
+  PUBLIC_RUNTIME_HOST_PATTERN: {{ .Values.publicRouting.runtimeHostPattern | quote }}
+  PUBLIC_BROWSER_HOST_PATTERN: {{ .Values.publicRouting.browserHostPattern | quote }}
+  PUBLIC_NEXTJS_HOST_PATTERN: {{ .Values.publicRouting.nextjsHostPattern | quote }}
+  PUBLIC_RUNTIME_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.runtimeHostPattern "Values" .Values) | quote }}
+  PUBLIC_BROWSER_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.browserHostPattern "Values" .Values) | quote }}
+  PUBLIC_NEXTJS_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.nextjsHostPattern "Values" .Values) | quote }}
+  RUNTIME_PROVISIONER: {{ .Values.kubernetes.provisioner | quote }}
+  RUNTIME_K8S_NAMESPACE: {{ .Values.kubernetes.defaultNamespace | quote }}
+  RUNTIME_K8S_ALLOWED_NAMESPACES: {{ join "," .Values.kubernetes.allowedNamespaces | quote }}
+  RUNTIME_K8S_SERVICE_TYPE: {{ .Values.kubernetes.serviceType | quote }}
+  RUNTIME_K8S_NODE_ADDRESS: {{ .Values.kubernetes.nodeAddress | quote }}
+  RUNTIME_K8S_PVC_NAME: {{ .Values.kubernetes.pvcName | quote }}
+  RUNTIME_K8S_IMAGE: {{ .Values.kubernetes.runtimeImage | quote }}
+  RUNTIME_K8S_BROWSER_IMAGE: {{ .Values.kubernetes.browserImage | quote }}
+  RUNTIME_K8S_NEXTJS_IMAGE: {{ .Values.kubernetes.nextjsImage | quote }}
+  RUNTIME_K8S_RUNTIME_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.runtime.resources | toJson | quote }}
+  RUNTIME_K8S_BROWSER_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.browser.resources | toJson | quote }}
+  RUNTIME_K8S_NEXTJS_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.nextjs.resources | toJson | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED: {{ ternary "true" "false" .Values.bootstrap.defaultWorkspace.enabled | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_ID: {{ .Values.bootstrap.defaultWorkspace.id | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL: {{ .Values.bootstrap.defaultWorkspace.ownerEmail | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL: {{ .Values.bootstrap.defaultWorkspace.gitUrl | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH: {{ .Values.bootstrap.defaultWorkspace.branch | quote }}
+  BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE: {{ .Values.bootstrap.defaultWorkspace.targetNamespace | quote }}
+  {{- if .Values.kubernetes.nodePort }}
+  RUNTIME_K8S_NODE_PORT: {{ .Values.kubernetes.nodePort | quote }}
+  {{- end }}
+  WATCH_NAMESPACE: {{ default .Release.Namespace .Values.kubernetes.watchNamespace | quote }}
+  CILIUM_ENABLED: {{ ternary "true" "false" .Values.cilium.enabled | quote }}
+  FIREWALL_DEFAULTS_CONFIGMAP_NAME: {{ printf "%s-firewall-defaults" (include "aileron.fullname" .) | quote }}

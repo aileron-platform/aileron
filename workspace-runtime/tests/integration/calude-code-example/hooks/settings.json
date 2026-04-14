@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "*"
+          },
+          {
+            "type": "command",
+            "command": "echo \"test\""
+          }
+        ]
+      }
+    ]
+  }
+}

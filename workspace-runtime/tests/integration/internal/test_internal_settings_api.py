@@ -1,0 +1,270 @@
+"""Internal API 設定相關測試"""
+
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from app.modules.internal.dependencies import get_internal_service, verify_internal_token
+
+from .helpers import override_dependency
+
+
+class InternalServiceStub:
+    """可設定回傳結果的 InternalService stub"""
+
+    def __init__(self) -> None:
+        self.ssh_response: Dict[str, Any] = {}
+        self.ssh_error: Exception | None = None
+        self.firewall_response: Dict[str, Any] = {"status": "ok"}
+        self.claude_code_response: Dict[str, Any] = {}
+        self.claude_code_error: Exception | None = None
+        self.git_response: Dict[str, Any] = {}
+        self.git_error: Exception | None = None
+        self.setup_status: Dict[str, Any] = {}
+        self.setup_status_error: Exception | None = None
+
+    async def setup_ssh_keys(self, request):  # pragma: no cover - 參數僅用於型別
+        if self.ssh_error:
+            raise self.ssh_error
+        return self.ssh_response
+
+    async def apply_firewall_settings(self, request):
+        if isinstance(self.firewall_response, dict) and "status" in self.firewall_response:
+            return self.firewall_response
+        return {"status": "ok", **self.firewall_response}
+
+    async def setup_claude_code(self, request):  # pragma: no cover - 參數僅用於型別
+        if self.claude_code_error:
+            raise self.claude_code_error
+        return self.claude_code_response
+
+    async def setup_git_settings(self, request):  # pragma: no cover - 參數僅用於型別
+        if self.git_error:
+            raise self.git_error
+        return self.git_response
+
+    async def get_setup_status(self):  # pragma: no cover
+        if self.setup_status_error:
+            raise self.setup_status_error
+        return self.setup_status
+
+
+async def _allow_internal_token():  # pragma: no cover - 覆寫用
+    return None
+
+
+def test_in_001_sync_ssh_keys_success(client):
+    service = InternalServiceStub()
+    service.ssh_response = {
+        "privateKeyPath": "/home/dev/.ssh/id_rsa",
+        "publicKeyPath": "/home/dev/.ssh/id_rsa.pub",
+    }
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/ssh-keys",
+            json={"privateKey": "---BEGIN---", "publicKey": "ssh-rsa AAA"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["details"] == service.ssh_response
+
+
+def test_in_002_sync_ssh_keys_failure(client):
+    service = InternalServiceStub()
+    service.ssh_error = ValueError("INVALID_KEY")
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/ssh-keys",
+            json={"privateKey": "bad", "publicKey": "bad"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 500
+    assert "SSH Keys setup failed" in response.json()["detail"]
+
+
+def test_in_006_apply_firewall_success(client):
+    service = InternalServiceStub()
+    service.firewall_response = {"status": "ok", "appliedRules": ["allow 22"]}
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/firewall",
+            json={
+                "networkAccessEnabled": True,
+                "domainAccessMode": "specific",
+                "allowedDomains": ["example.com", "test.com"]
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["details"] == service.firewall_response
+
+
+def test_in_007_apply_firewall_failure(client):
+    service = InternalServiceStub()
+    service.firewall_response = {"status": "error", "message": "invalid domain configuration"}
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/firewall",
+            json={
+                "networkAccessEnabled": True,
+                "domainAccessMode": "specific",
+                "allowedDomains": []  # 空列表會導致錯誤
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 500
+    assert "invalid domain configuration" in response.json()["detail"]
+
+
+def test_in_008_internal_health_success(client):
+    with override_dependency(verify_internal_token, _allow_internal_token):
+        response = client.get(
+            "/api/v1/internal/health",
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["message"] == "Internal API is healthy"
+
+
+def test_in_009_internal_health_invalid_token(client):
+    response = client.get(
+        "/api/v1/internal/health",
+        headers={"Authorization": "Bearer wrong-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid internal API token"
+
+
+def test_in_010_sync_claude_code_success(client):
+    """測試 Claude Code 設定同步成功"""
+    service = InternalServiceStub()
+    service.claude_code_response = {
+        "configPath": "/home/dev/.claude/config.json",
+        "envUpdated": True,
+    }
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/claude-code",
+            json={
+                "apiKey": "test-api-key",
+                "defaultModel": "claude-3-sonnet"
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "Claude Code 設定已成功完成" in payload["message"]
+
+
+def test_in_011_sync_claude_code_failure(client):
+    """測試 Claude Code 設定同步失敗"""
+    service = InternalServiceStub()
+    service.claude_code_error = RuntimeError("Config write failed")
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/claude-code",
+            json={"apiKey": "test-key"},
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 500
+    assert "Claude Code setup failed" in response.json()["detail"]
+
+
+def test_in_012_sync_git_settings_success(client):
+    """測試 Git 設定同步成功"""
+    service = InternalServiceStub()
+    service.git_response = {
+        "userName": "Test User",
+        "userEmail": "test@example.com",
+    }
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/git",
+            json={
+                "userName": "Test User",
+                "userEmail": "test@example.com"
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "Git 全域設定已成功完成" in payload["message"]
+
+
+def test_in_013_sync_git_settings_failure(client):
+    """測試 Git 設定同步失敗"""
+    service = InternalServiceStub()
+    service.git_error = RuntimeError("Git config failed")
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/git",
+            json={
+                "userName": "Test User",
+                "userEmail": "test@example.com"
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 500
+    assert "Git settings setup failed" in response.json()["detail"]
+
+
+def test_in_014_get_workspace_setup_status_success(client):
+    """測試查詢 Workspace 設定狀態成功"""
+    service = InternalServiceStub()
+    service.setup_status = {
+        "ssh": {"status": "success", "message": "SSH Keys 已就緒"},
+        "git": {"status": "success", "message": "Git 使用者資訊已設定"},
+        "claudeCode": {"status": "pending", "message": "尚未同步 Claude Code 設定"},
+    }
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.get(
+            "/api/v1/internal/setup/status",
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "取得初始化狀態成功" in payload["message"]
+
+
+def test_in_015_get_workspace_setup_status_failure(client):
+    """測試查詢 Workspace 設定狀態失敗"""
+    service = InternalServiceStub()
+    service.setup_status_error = RuntimeError("Status check failed")
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.get(
+            "/api/v1/internal/setup/status",
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 500
+    assert "Failed to fetch setup status" in response.json()["detail"]

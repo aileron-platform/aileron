@@ -1,0 +1,2455 @@
+"""模板服務"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+import shutil
+import tempfile
+import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional, Tuple
+from uuid import uuid4
+
+from fastapi import UploadFile
+from sqlalchemy.orm import Session
+
+from app.config.settings import get_settings
+from app.db.models import Template as TemplateDB
+from app.models import (
+    BatchDeleteRequest,
+    BatchOperationResponse,
+    BatchOperationResult,
+    CopyFileRequest,
+    CreateFileRequest,
+    FileContentResponse,
+    FileNodeInfo,
+    FileOperationResponse,
+    FileSearchRequest,
+    FileSearchResponse,
+    FileSearchResult,
+    FileUploadResponse,
+    HooksConfigResponse,
+    HooksConfigUpdateRequest,
+    McpConfigResponse,
+    McpConfigUpdateRequest,
+    MoveFileRequest,
+    RenameFileRequest,
+    Template,
+    TemplateAuthor,
+    TemplateCreate,
+    TemplateFilesResponse,
+    TemplateListResponse,
+    TemplateUpdate,
+    UpdateFileContentRequest,
+    UploadedFileInfo,
+)
+from app.models.template_config import (
+    TemplateSubAgentListResponse,
+    TemplateSubAgentResponse,
+    TemplateSubAgentContent,
+    TemplateSubAgentCreateRequest,
+    TemplateSubAgentUpdateRequest,
+    TemplateSlashCommandListResponse,
+    TemplateSlashCommandResponse,
+    TemplateSlashCommandContent,
+    TemplateSlashCommandCreateRequest,
+    TemplateSlashCommandUpdateRequest,
+    TemplateSlashCommandFile,
+    TemplateSubAgentFile,
+)
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+
+class TemplateService:
+    """管理工作區範本與配置（資料庫 + 檔案系統）"""
+
+    MAX_FILE_SIZE_BYTES = 1024 * 1024  # SlashCommand/SubAgent 檔案限制 1MB
+    MAX_TEMPLATE_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 模板檔案限制 10MB
+    MAX_UPLOAD_FILES = 50  # 單次最多上傳 50 個檔案
+    ALLOWED_EXTENSIONS = {
+        '.md', '.txt', '.json', '.yaml', '.yml', '.py', '.js', '.ts',
+        '.jsx', '.tsx', '.css', '.scss', '.html', '.xml', '.sh',
+        '.dockerfile', '.gitignore', '.env.example', '.toml', '.ini',
+        '.cfg', '.conf', '.properties', '.sql', '.graphql', '.proto'
+    }
+
+    def __init__(self, db: Session) -> None:
+        self.db = db
+        self.storage_path = Path(settings.TEMPLATE_STORAGE_PATH)
+        # 確保儲存目錄存在
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        # 確保 plugins 目錄存在
+        (self.storage_path / "plugins").mkdir(parents=True, exist_ok=True)
+
+    def _get_template_dir(self, template_id: str) -> Path:
+        """取得模板目錄路徑（包含 plugins 前綴）"""
+        return self.storage_path / "plugins" / template_id
+
+    def _get_plugin_json_path(self, template_id: str) -> Path:
+        """取得 plugin.json 檔案路徑"""
+        return self._get_template_dir(template_id) / ".claude-plugin" / "plugin.json"
+
+    def _get_template(self, template_id: str) -> Optional[TemplateDB]:
+        """取得模板資料"""
+        return self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+
+    def _response_template_not_found(self, response_cls, *, include_list_data: bool = False):
+        """建立模板不存在的標準回應"""
+        payload = {"success": False, "error": "Template not found"}
+        if include_list_data:
+            payload["data"] = []
+        return response_cls(**payload)
+
+    def _validate_template_and_filename(self, template_id: str, response_cls, *, file_name: Optional[str] = None, include_list_data: bool = False):
+        """模板與檔名檢查，若失敗直接回傳對應回應"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return None, self._response_template_not_found(response_cls, include_list_data=include_list_data)
+
+        if file_name is not None and not self._validate_filename(file_name):
+            return None, response_cls(success=False, error="Invalid filename")
+
+        return db_template, None
+
+    def _ensure_directory(self, template_id: str, subdir: str) -> Tuple[Path, bool]:
+        """確保模板子目錄存在，回傳目錄路徑與是否新建"""
+        directory = self._get_template_dir(template_id) / subdir
+        created = False
+        if not directory.exists():
+            directory.mkdir(parents=True, exist_ok=True)
+            created = True
+        return directory, created
+
+    def _list_markdown_files(self, directory: Path, file_model_cls):
+        """列出指定目錄下的 Markdown 檔案資訊"""
+        files = []
+        for file_path in directory.glob("*.md"):
+            stat = file_path.stat()
+            files.append(
+                file_model_cls(
+                    file_name=file_path.name,
+                    size=stat.st_size,
+                    last_modified=datetime.fromtimestamp(stat.st_mtime),
+                )
+            )
+        return files
+
+    def _read_file_content(self, file_path: Path, content_model_cls):
+        """讀取檔案並建立內容模型"""
+        content = file_path.read_text(encoding="utf-8")
+        stat = file_path.stat()
+        return content_model_cls(
+            file_name=file_path.name,
+            content=content,
+            size=stat.st_size,
+            last_modified=datetime.fromtimestamp(stat.st_mtime),
+        )
+
+    def _write_file_with_stats(self, file_path: Path, content: str, content_model_cls):
+        """寫入檔案並回傳內容模型或錯誤訊息"""
+        if len(content.encode("utf-8")) > self.MAX_FILE_SIZE_BYTES:
+            return None, "File content too large (max 1MB)"
+
+        file_path.write_text(content, encoding="utf-8")
+        stat = file_path.stat()
+        return (
+            content_model_cls(
+                file_name=file_path.name,
+                content=content,
+                size=stat.st_size,
+                last_modified=datetime.fromtimestamp(stat.st_mtime),
+            ),
+            None,
+        )
+
+    def _create_template_structure(self, template_id: str, template_data: TemplateCreate) -> None:
+        """建立模板的標準目錄結構和初始檔案"""
+        template_dir = self._get_template_dir(template_id)
+        template_dir.mkdir(parents=True, exist_ok=True)
+
+        # 建立標準目錄
+        (template_dir / "commands").mkdir(exist_ok=True)
+        (template_dir / "agents").mkdir(exist_ok=True)
+        (template_dir / "scripts").mkdir(exist_ok=True)
+        (template_dir / "skills").mkdir(exist_ok=True)
+        (template_dir / "hooks").mkdir(exist_ok=True)
+        (template_dir / ".claude-plugin").mkdir(exist_ok=True)
+
+        # 建立 plugin.json
+        plugin_data = {
+            "id": template_id,  # 模板代號
+            "name": template_data.name,
+            "description": template_data.description or "",
+            "version": template_data.version or "1.0.0",
+            "author": {
+                "name": template_data.author.name,
+            },
+            "keywords": template_data.keywords or [],
+            "category": "general",
+            "commands": [],
+            "agents": []
+        }
+
+        # 添加可選的作者資訊
+        if template_data.author.email:
+            plugin_data["author"]["email"] = template_data.author.email
+        if template_data.author.url:
+            plugin_data["author"]["homepage"] = template_data.author.url
+
+        # 添加初始化指令
+        if template_data.init_commands:
+            plugin_data["initCommands"] = template_data.init_commands
+
+        self._get_plugin_json_path(template_id).write_text(
+            json.dumps(plugin_data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        # 建立 README.md
+        author_lines = [f"作者: {template_data.author.name}"]
+        if template_data.author.email:
+            author_lines.append(f"Email: {template_data.author.email}")
+        if template_data.author.url:
+            author_lines.append(f"URL: {template_data.author.url}")
+
+        keyword_line = ", ".join(template_data.keywords or [])
+
+        readme_parts = [
+            f"# {template_data.name}",
+            "",
+            template_data.description or "",
+            "",
+            "\n".join(author_lines),
+            "",
+            "## 版本",
+            template_data.version or "1.0.0",
+            "",
+            "## 關鍵字",
+            keyword_line,
+        ]
+        readme_content = "\n".join(part for part in readme_parts if part is not None)
+        (template_dir / "README.md").write_text(readme_content, encoding="utf-8")
+
+        # 建立 CLAUDE.md
+        claude_content = """# Claude 配置
+
+請在此編輯 Claude 的提示詞和配置。
+"""
+        (template_dir / "CLAUDE.md").write_text(claude_content, encoding="utf-8")
+
+        # 建立 mcp.json
+        mcp_config = {"mcpServers": {}}
+        (template_dir / "mcp.json").write_text(
+            json.dumps(mcp_config, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        # 建立 hooks/hooks.json
+        hooks_config = {"hooks": {}}
+        (template_dir / "hooks" / "hooks.json").write_text(
+            json.dumps(hooks_config, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        logger.info(f"已建立模板目錄結構: {template_dir}")
+
+    def _delete_template_structure(self, template_id: str) -> None:
+        """刪除模板的檔案系統目錄"""
+        template_dir = self._get_template_dir(template_id)
+        if template_dir.exists():
+            shutil.rmtree(template_dir)
+            logger.info(f"已刪除模板目錄: {template_dir}")
+
+    def _update_plugin_json(self, template_id: str) -> None:
+        """更新 plugin.json 中的 commands 和 agents 路徑"""
+        template_dir = self._get_template_dir(template_id)
+        plugin_file = self._get_plugin_json_path(template_id)
+
+        if not plugin_file.exists():
+            logger.warning(f"plugin.json 不存在: {plugin_file}")
+            return
+
+        try:
+            # 讀取現有的 plugin.json
+            plugin_data = json.loads(plugin_file.read_text(encoding="utf-8"))
+
+            # 掃描 commands 目錄
+            commands_dir = template_dir / "commands"
+            command_paths = []
+            if commands_dir.exists():
+                for item in commands_dir.rglob("*"):
+                    if item.is_file() and item.suffix == ".md":
+                        # 計算相對路徑
+                        rel_path = item.relative_to(template_dir)
+                        command_paths.append(f"./{rel_path.as_posix()}")
+
+            # 掃描 agents 目錄
+            agents_dir = template_dir / "agents"
+            agent_paths = []
+            if agents_dir.exists():
+                for item in agents_dir.rglob("*"):
+                    if item.is_file() and item.suffix == ".md":
+                        # 計算相對路徑
+                        rel_path = item.relative_to(template_dir)
+                        agent_paths.append(f"./{rel_path.as_posix()}")
+
+            # 更新 plugin.json
+            plugin_data["commands"] = sorted(command_paths)
+            plugin_data["agents"] = sorted(agent_paths)
+
+            # 寫回檔案
+            plugin_file.write_text(
+                json.dumps(plugin_data, indent=2, ensure_ascii=False),
+                encoding="utf-8"
+            )
+
+            logger.info(f"已更新 plugin.json: {len(command_paths)} commands, {len(agent_paths)} agents")
+
+        except Exception as e:
+            logger.error(f"更新 plugin.json 失敗: {e}")
+
+    def _db_to_pydantic(self, db_template: TemplateDB) -> Template:
+        """將資料庫模型轉換為 Pydantic 模型"""
+        # 讀取模板配置數據
+        mcp_servers = self._load_mcp_servers(db_template.id)
+        slash_commands = self._load_commands(db_template.id)
+        hooks = self._load_hooks(db_template.id)
+        sub_agents = self._load_agents(db_template.id)
+        output_styles = self._load_output_styles(db_template.id)
+        scripts = self._load_files(db_template.id)
+
+        # 讀取額外檔案內容
+        claude_md = self._load_claude_md(db_template.id)
+
+        author = TemplateAuthor(
+            name=db_template.author_name,
+            email=db_template.author_email,
+            url=db_template.author_url,
+        )
+
+        return Template(
+            id=db_template.id,
+            name=db_template.name,
+            description=db_template.description,
+            version=db_template.version,
+            author=author,
+            keywords=db_template.keywords or [],
+            categoryId=db_template.category,  # 映射 category -> categoryId
+            cliType=db_template.cli_type,
+            status=db_template.status,
+            documentation=None,  # 暫時設為 None
+            claudeMd=claude_md,
+            isActive=True,  # 暫時設為 True
+            storage_path=f"{settings.TEMPLATE_STORAGE_PATH}/{db_template.id}",
+            initCommands=db_template.init_commands,
+            created_at=db_template.created_at,
+            updated_at=db_template.updated_at,
+            mcpServers=mcp_servers,
+            slashCommands=slash_commands,
+            hooks=hooks,
+            subAgents=sub_agents,
+            outputStyles=output_styles,
+            scripts=scripts,
+        )
+
+    def list(
+        self,
+        category: Optional[str] = None,
+        cli_type: Optional[str] = None,
+        keywords: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        limit: int = 20,
+    ) -> TemplateListResponse:
+        """列出所有模板（支援篩選和分頁）"""
+        query = self.db.query(TemplateDB)
+
+        # 篩選條件
+        if category:
+            query = query.filter(TemplateDB.category == category)
+        if cli_type:
+            query = query.filter(TemplateDB.cli_type == cli_type)
+        if keywords:
+            # 關鍵字篩選（逗號分隔）
+            keyword_list = [t.strip() for t in keywords.split(",") if t.strip()]
+            for keyword in keyword_list:
+                query = query.filter(TemplateDB.keywords.contains([keyword]))
+        if search:
+            # 搜尋名稱或描述
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                (TemplateDB.name.ilike(search_pattern))
+                | (TemplateDB.description.ilike(search_pattern))
+            )
+
+        # 總數
+        total = query.count()
+
+        # 分頁
+        offset = (page - 1) * limit
+        db_templates = query.order_by(TemplateDB.created_at.desc()).offset(offset).limit(limit).all()
+
+        # 轉換為 Pydantic 模型
+        items = [self._db_to_pydantic(t) for t in db_templates]
+
+        total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+        return TemplateListResponse(
+            items=items, total=total, page=page, limit=limit, total_pages=total_pages
+        )
+
+    def get(self, template_id: str) -> Optional[Template]:
+        """取得單一模板"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+        return self._db_to_pydantic(db_template)
+
+    def create(self, payload: TemplateCreate) -> Template:
+        """建立新模板"""
+        # 使用 template_id 欄位作為模板代號
+        template_id = payload.template_id
+
+        # 檢查模板 ID 是否已存在
+        existing = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if existing:
+            raise ValueError(f"模板代號 '{template_id}' 已存在，請使用其他代號")
+
+        # 驗證模板代號格式（kebab-case，必須以字母開頭，只能英文）
+        if not re.match(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$', template_id):
+            raise ValueError("模板代號必須使用 kebab-case 格式（以小寫英文字母開頭，僅包含小寫英文、數字和連字號）")
+
+        # 建立資料庫記錄
+        db_template = TemplateDB(
+            id=template_id,
+            name=payload.name,
+            description=payload.description,
+            author_name=payload.author.name,
+            author_email=payload.author.email,
+            author_url=payload.author.url,
+            category=None,
+            version=payload.version or "1.0.0",
+            cli_type=payload.cli_type,
+            status=payload.status,
+            keywords=payload.keywords or [],
+            init_commands=payload.init_commands,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        self.db.add(db_template)
+        self.db.commit()
+        self.db.refresh(db_template)
+
+        # 建立檔案系統結構
+        try:
+            self._create_template_structure(template_id, payload)
+        except Exception as e:
+            # 如果檔案系統建立失敗，回滾資料庫
+            logger.error(f"建立模板檔案結構失敗: {e}")
+            self.db.delete(db_template)
+            self.db.commit()
+            raise
+
+        return self._db_to_pydantic(db_template)
+
+    def update(self, template_id: str, payload: TemplateUpdate) -> Optional[Template]:
+        """更新模板基本資訊"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        # 更新欄位
+        update_data = payload.model_dump(exclude_none=True, by_alias=False)
+        author_data = update_data.pop("author", None)
+
+        # 欄位名稱映射：API (camelCase) -> DB (snake_case)
+        field_mapping = {
+            "categoryId": "category",
+        }
+
+        for field, value in update_data.items():
+            # 使用映射後的欄位名稱
+            db_field = field_mapping.get(field, field)
+            setattr(db_template, db_field, value)
+
+        if author_data:
+            db_template.author_name = author_data.get("name", db_template.author_name)
+            db_template.author_email = author_data.get("email")
+            db_template.author_url = author_data.get("url")
+
+        db_template.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(db_template)
+
+        return self._db_to_pydantic(db_template)
+
+    def delete(self, template_id: str) -> bool:
+        """刪除模板（資料庫 + 檔案系統）"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return False
+
+        # 刪除資料庫記錄
+        self.db.delete(db_template)
+        self.db.commit()
+
+        # 刪除檔案系統目錄
+        try:
+            self._delete_template_structure(template_id)
+        except Exception as e:
+            logger.error(f"刪除模板檔案結構失敗: {e}")
+            # 即使檔案刪除失敗，資料庫已刪除，返回成功
+
+        return True
+
+    # ============ MCP 配置管理 ============
+
+    def get_mcp_config(self, template_id: str) -> Optional[McpConfigResponse]:
+        """取得模板的 MCP 配置"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        mcp_file = self._get_template_dir(template_id) / "mcp.json"
+        if not mcp_file.exists():
+            return McpConfigResponse(template_id=template_id, mcp_servers={})
+
+        try:
+            mcp_data = json.loads(mcp_file.read_text(encoding="utf-8"))
+            return McpConfigResponse(
+                template_id=template_id, mcp_servers=mcp_data.get("mcpServers", {})
+            )
+        except Exception as e:
+            logger.error(f"讀取 MCP 配置失敗: {e}")
+            return McpConfigResponse(template_id=template_id, mcp_servers={})
+
+    def update_mcp_config(
+        self, template_id: str, payload: McpConfigUpdateRequest
+    ) -> Optional[McpConfigResponse]:
+        """更新模板的 MCP 配置"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        mcp_file = self._get_template_dir(template_id) / "mcp.json"
+        try:
+            # 將 McpServerConfig 對象轉換為可序列化的字典，排除None值
+            mcp_servers_dict = {
+                name: config.model_dump(exclude_none=True) for name, config in payload.mcp_servers.items()
+            }
+            mcp_data = {"mcpServers": mcp_servers_dict}
+            mcp_file.write_text(
+                json.dumps(mcp_data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info(f"已更新模板 {template_id} 的 MCP 配置")
+            return McpConfigResponse(template_id=template_id, mcp_servers=payload.mcp_servers)
+        except Exception as e:
+            logger.error(f"更新 MCP 配置失敗: {e}")
+            raise
+
+    # ============ Hooks 配置管理 ============
+
+    def get_hooks_config(self, template_id: str) -> Optional[HooksConfigResponse]:
+        """取得模板的 Hooks 配置"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        hooks_file = self._get_template_dir(template_id) / "hooks" / "hooks.json"
+        if not hooks_file.exists():
+            return HooksConfigResponse(template_id=template_id, hooks={})
+
+        try:
+            hooks_data = json.loads(hooks_file.read_text(encoding="utf-8"))
+            return HooksConfigResponse(template_id=template_id, hooks=hooks_data.get("hooks", {}))
+        except Exception as e:
+            logger.error(f"讀取 Hooks 配置失敗: {e}")
+            return HooksConfigResponse(template_id=template_id, hooks={})
+
+    def update_hooks_config(
+        self, template_id: str, payload: HooksConfigUpdateRequest
+    ) -> Optional[HooksConfigResponse]:
+        """更新模板的 Hooks 配置"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        # 確保 hooks 目錄存在
+        hooks_dir = self._get_template_dir(template_id) / "hooks"
+        hooks_dir.mkdir(parents=True, exist_ok=True)
+
+        hooks_file = hooks_dir / "hooks.json"
+        try:
+            # 將 HookRule 對象轉換為可序列化的字典，排除None值
+            hooks_dict = {
+                event_name: [rule.model_dump(exclude_none=True) for rule in rules]
+                for event_name, rules in payload.hooks.items()
+            }
+            hooks_data = {"hooks": hooks_dict}
+            hooks_file.write_text(
+                json.dumps(hooks_data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+            logger.info(f"已更新模板 {template_id} 的 Hooks 配置")
+            return HooksConfigResponse(template_id=template_id, hooks=payload.hooks)
+        except Exception as e:
+            logger.error(f"更新 Hooks 配置失敗: {e}")
+            raise
+
+
+  # ============ 配置數據載入輔助方法 ============
+
+    def _load_mcp_servers(self, template_id: str) -> List[TemplateMcpServer]:
+        """載入 MCP 伺服器配置"""
+        from app.models.template import TemplateMcpServer
+
+        mcp_file = self._get_template_dir(template_id) / "mcp.json"
+        if not mcp_file.exists():
+            return []
+
+        try:
+            mcp_data = json.loads(mcp_file.read_text(encoding="utf-8"))
+            mcp_servers = []
+
+            for server_id, server_config in mcp_data.get("mcpServers", {}).items():
+                mcp_servers.append(TemplateMcpServer(
+                    id=server_id,
+                    name=server_id,
+                    type=server_config.get("type", "stdio"),
+                    command=server_config.get("command"),
+                    args=server_config.get("args"),
+                    url=server_config.get("url"),
+                    description=server_config.get("description"),
+                    env=server_config.get("env"),
+                    headers=server_config.get("headers"),
+                ))
+
+            return mcp_servers
+        except Exception as e:
+            logger.error(f"載入 MCP 伺服器配置失敗: {e}")
+            return []
+
+    def _load_commands(self, template_id: str) -> List[TemplateSlashCommand]:
+        """載入 Commands 配置（支援子目錄結構）"""
+        from app.models.template import TemplateSlashCommand
+
+        commands_dir = self._get_template_dir(template_id) / "commands"
+        if not commands_dir.exists():
+            return []
+
+        slash_commands = []
+        try:
+            # 使用 rglob 遞迴搜尋所有 .md 檔案（包含子目錄）
+            for file_path in commands_dir.rglob("*.md"):
+                # 計算相對於 commands_dir 的路徑，保留目錄結構
+                relative_path = file_path.relative_to(commands_dir)
+                # 移除 .md 副檔名，保留完整路徑（包含 namespace）
+                command_name = str(relative_path.with_suffix(''))
+                content = file_path.read_text(encoding="utf-8")
+
+                # 嘗試從 YAML front matter 中提取 description（與前端保持一致）
+                description = ""  # 預設為空，讓前端使用 descriptionFallback
+
+                # 檢查是否有 YAML front matter
+                if content.startswith('---\n'):
+                    # 找到 YAML front matter 結束位置
+                    front_matter_end = content.find('\n---', 4)
+                    if front_matter_end != -1:
+                        yaml_content = content[4:front_matter_end]
+                        # 尋找 description 欄位
+                        for line in yaml_content.split('\n'):
+                            line = line.strip()
+                            if line.startswith('description:'):
+                                # 提取 description 值
+                                desc_value = line[12:].strip()
+                                # 移除引號（如果有的話）
+                                if (desc_value.startswith('"') and desc_value.endswith('"')) or \
+                                   (desc_value.startswith("'") and desc_value.endswith("'")):
+                                    desc_value = desc_value[1:-1].strip()
+                                if desc_value:
+                                    description = desc_value
+                                break
+
+                slash_commands.append(TemplateSlashCommand(
+                    id=str(file_path),
+                    fileName=command_name,  # 使用完整的相對路徑作為 fileName（如 "namespace/command" 或 "command"）
+                    content=content,
+                    description=description,
+                ))
+
+            return slash_commands
+        except Exception as e:
+            logger.error(f"載入 Commands 配置失敗: {e}")
+            return []
+
+    def _load_hooks(self, template_id: str) -> List[TemplateHook]:
+        """載入 Hooks 配置"""
+        from app.models.template import TemplateHook
+
+        hooks_file = self._get_template_dir(template_id) / "hooks" / "hooks.json"
+        if not hooks_file.exists():
+            return []
+
+        try:
+            hooks_data = json.loads(hooks_file.read_text(encoding="utf-8"))
+            hooks = []
+
+            for event_name, hook_rules in hooks_data.get("hooks", {}).items():
+                for rule_index, rule in enumerate(hook_rules):
+                    # 為每個 hook execution 創建一個 TemplateHook
+                    for hook_index, hook_exec in enumerate(rule.get("hooks", [])):
+                        hooks.append(TemplateHook(
+                            id=f"{event_name}-{rule_index}-{hook_index}",
+                            name=f"{event_name} Hook - Rule {rule_index + 1}",
+                            event=event_name,
+                            matcher=rule.get("matcher", "*"),
+                            action=hook_exec.get("type", "command"),
+                            command=hook_exec.get("command"),
+                            timeout=hook_exec.get("timeout", 30),
+                        ))
+
+            return hooks
+        except Exception as e:
+            logger.error(f"載入 Hooks 配置失敗: {e}")
+            return []
+
+    def _load_agents(self, template_id: str) -> List[TemplateSubAgent]:
+        """載入 Agents 配置"""
+        from app.models.template import TemplateSubAgent
+
+        agents_dir = self._get_template_dir(template_id) / "agents"
+        if not agents_dir.exists():
+            return []
+
+        sub_agents = []
+        try:
+            for file_path in agents_dir.glob("*.md"):
+                content = file_path.read_text(encoding="utf-8")
+
+                # 嘗試從 YAML front matter 中提取 description（與前端保持一致）
+                description = ""  # 預設為空，讓前端使用 descriptionFallback
+
+                # 檢查是否有 YAML front matter
+                if content.startswith('---\n'):
+                    # 找到 YAML front matter 結束位置
+                    front_matter_end = content.find('\n---', 4)
+                    if front_matter_end != -1:
+                        yaml_content = content[4:front_matter_end]
+                        # 尋找 description 欄位
+                        for line in yaml_content.split('\n'):
+                            line = line.strip()
+                            if line.startswith('description:'):
+                                # 提取 description 值
+                                desc_value = line[12:].strip()
+                                # 移除引號（如果有的話）
+                                if (desc_value.startswith('"') and desc_value.endswith('"')) or \
+                                   (desc_value.startswith("'") and desc_value.endswith("'")):
+                                    desc_value = desc_value[1:-1].strip()
+                                if desc_value:
+                                    description = desc_value
+                                break
+
+                sub_agents.append(TemplateSubAgent(
+                    id=str(file_path),
+                    fileName=file_path.name,
+                    content=content,
+                    description=description,
+                ))
+
+            return sub_agents
+        except Exception as e:
+            logger.error(f"載入 Agents 配置失敗: {e}")
+            return []
+
+    def _load_output_styles(self, template_id: str) -> List[TemplateOutputStyle]:
+        """載入 Output Styles 配置"""
+        from app.models.template import TemplateOutputStyle
+
+        styles_dir = self._get_template_dir(template_id) / "output-styles"
+        if not styles_dir.exists():
+            return []
+
+        output_styles = []
+        try:
+            for file_path in styles_dir.glob("*.md"):
+                content = file_path.read_text(encoding="utf-8")
+
+                # 嘗試從 YAML front matter 中提取 description（與前端保持一致）
+                description = ""  # 預設為空，讓前端使用 descriptionFallback
+
+                # 檢查是否有 YAML front matter
+                if content.startswith('---\n'):
+                    # 找到 YAML front matter 結束位置
+                    front_matter_end = content.find('\n---', 4)
+                    if front_matter_end != -1:
+                        yaml_content = content[4:front_matter_end]
+                        # 解析 YAML 欄位
+                        for line in yaml_content.split('\n'):
+                            line = line.strip()
+                            if line.startswith('description:'):
+                                value = line[12:].strip()
+                                # 移除引號
+                                if (value.startswith('"') and value.endswith('"')) or \
+                                   (value.startswith("'") and value.endswith("'")):
+                                    value = value[1:-1].strip()
+                                if value:
+                                    description = value
+                                    break
+
+                output_styles.append(TemplateOutputStyle(
+                    id=str(file_path),
+                    fileName=file_path.name,
+                    content=content,
+                    description=description,
+                ))
+
+            return output_styles
+        except Exception as e:
+            logger.error(f"載入 Output Styles 配置失敗: {e}")
+            return []
+
+    def _load_files(self, template_id: str) -> List[TemplateFileNode]:
+        """載入檔案結構 (scripts 目錄)"""
+        from app.models.template import TemplateFileNode
+
+        files_dir = self._get_template_dir(template_id) / "scripts"
+        if not files_dir.exists():
+            return []
+
+        def build_file_tree(path: Path, parent_id: str = "root") -> List[TemplateFileNode]:
+            nodes = []
+            try:
+                for item in path.iterdir():
+                    node_id = f"{parent_id}/{item.name}"
+                    if item.is_file():
+                        nodes.append(TemplateFileNode(
+                            id=node_id,
+                            name=item.name,
+                            path=str(item.relative_to(files_dir)),
+                            type="file",
+                            size=item.stat().st_size,
+                            content=item.read_text(encoding="utf-8", errors="ignore") if item.stat().st_size < 1024 * 1024 else None,  # 限制 1MB
+                        ))
+                    elif item.is_dir():
+                        children = build_file_tree(item, node_id)
+                        nodes.append(TemplateFileNode(
+                            id=node_id,
+                            name=item.name,
+                            path=str(item.relative_to(files_dir)),
+                            type="directory",
+                            children=children,
+                        ))
+            except Exception as e:
+                logger.error(f"載入檔案節點失敗 {path}: {e}")
+
+            return nodes
+
+        return build_file_tree(files_dir)
+
+    def _load_claude_md(self, template_id: str) -> Optional[str]:
+        """載入 Claude.md 內容"""
+        claude_file = self._get_template_dir(template_id) / "CLAUDE.md"
+        if not claude_file.exists():
+            return None
+
+        try:
+            return claude_file.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error(f"載入 Claude.md 失敗: {e}")
+            return None
+
+    def update_claude_md(self, template_id: str, content: str) -> None:
+        """更新模板的 Claude.md 內容"""
+        # 檢查模板是否存在
+        template_dir = self._get_template_dir(template_id)
+        if not template_dir.exists():
+            raise ValueError(f"模板不存在: {template_id}")
+
+        # 寫入 CLAUDE.md 檔案
+        claude_file = template_dir / "CLAUDE.md"
+        try:
+            claude_file.write_text(content, encoding="utf-8")
+            logger.info(f"已更新 Claude.md: {claude_file}")
+        except Exception as e:
+            logger.error(f"更新 Claude.md 失敗: {e}")
+            raise ValueError(f"無法寫入 Claude.md 檔案: {str(e)}")
+
+    # ============ Commands 檔案管理 ============
+
+    def _normalize_file_name(self, file_name: str) -> str:
+        """標準化檔案名稱，自動補上 .md 副檔名（如果沒有）"""
+        if file_name.endswith(".md"):
+            return file_name
+        return f"{file_name}.md"
+
+    def _validate_filename(self, filename: str) -> bool:
+        """驗證檔案名稱是否合法"""
+        # 檢查是否為空或只有點號
+        if not filename or filename == '.' or filename == '..':
+            return False
+
+        # 檢查是否包含非法字符
+        illegal_chars = r'[<>:"/\\|?*\x00-\x1f]'
+        if re.search(illegal_chars, filename):
+            return False
+
+        # 檢查副檔名是否在允許列表中（轉換為小寫比較）
+        file_ext = Path(filename).suffix.lower()
+        if file_ext and file_ext not in self.ALLOWED_EXTENSIONS:
+            return False
+
+        return True
+
+    def get_slash_commands_files(self, template_id: str) -> TemplateSlashCommandListResponse:
+        """取得模板的 slash-commands 檔案列表"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSlashCommandListResponse,
+            include_list_data=True,
+        )
+        if error_response:
+            return error_response
+
+        commands_dir, created = self._ensure_directory(template_id, "commands")
+        if created:
+            return TemplateSlashCommandListResponse(
+                success=True,
+                data=[],
+                message="Commands directory created",
+            )
+
+        try:
+            files = self._list_markdown_files(commands_dir, TemplateSlashCommandFile)
+            return TemplateSlashCommandListResponse(
+                success=True,
+                data=files,
+                message=f"Found {len(files)} command files",
+            )
+        except Exception as e:
+            logger.error(f"讀取 slash-commands 檔案列表失敗: {e}")
+            return TemplateSlashCommandListResponse(
+                success=False,
+                data=[],
+                error=f"Failed to read commands directory: {str(e)}",
+            )
+
+    def get_slash_command_file_content(self, template_id: str, file_name: str) -> TemplateSlashCommandResponse:
+        """取得單個 slash-command 檔案內容"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSlashCommandResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        command_file = self._get_template_dir(template_id) / "commands" / file_name
+        if not command_file.exists():
+            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+
+        try:
+            content_model = self._read_file_content(command_file, TemplateSlashCommandContent)
+            return TemplateSlashCommandResponse(
+                success=True,
+                data=content_model,
+                message="Command file loaded successfully",
+            )
+        except Exception as e:
+            logger.error(f"讀取 slash-command 檔案內容失敗: {e}")
+            return TemplateSlashCommandResponse(
+                success=False,
+                error=f"Failed to read command file: {str(e)}",
+            )
+
+    def create_slash_command_file(self, template_id: str, request: TemplateSlashCommandCreateRequest) -> TemplateSlashCommandResponse:
+        """建立新的 slash-command 檔案（支援子目錄結構）"""
+        # 標準化檔案名稱（自動補上 .md）
+        normalized_file_name = self._normalize_file_name(request.file_name)
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSlashCommandResponse,
+            file_name=normalized_file_name,
+        )
+        if error_response:
+            return error_response
+
+        commands_dir, _ = self._ensure_directory(template_id, "commands")
+        command_file = commands_dir / normalized_file_name
+        if command_file.exists():
+            return TemplateSlashCommandResponse(success=False, error="Command file already exists")
+
+        try:
+            # 如果檔案名稱包含路徑，確保父目錄存在
+            if "/" in normalized_file_name:
+                command_file.parent.mkdir(parents=True, exist_ok=True)
+
+            content_model, error_message = self._write_file_with_stats(
+                command_file,
+                request.content,
+                TemplateSlashCommandContent,
+            )
+            if error_message:
+                return TemplateSlashCommandResponse(success=False, error=error_message)
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateSlashCommandResponse(
+                success=True,
+                data=content_model,
+                message="Command file created successfully",
+            )
+        except Exception as e:
+            logger.error(f"建立 slash-command 檔案失敗: {e}")
+            return TemplateSlashCommandResponse(
+                success=False,
+                error=f"Failed to create command file: {str(e)}",
+            )
+
+    def update_slash_command_file(self, template_id: str, file_name: str, request: TemplateSlashCommandUpdateRequest) -> TemplateSlashCommandResponse:
+        """更新現有的 slash-command 檔案"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSlashCommandResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        command_file = self._get_template_dir(template_id) / "commands" / file_name
+        if not command_file.exists():
+            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+
+        try:
+            content_model, error_message = self._write_file_with_stats(
+                command_file,
+                request.content,
+                TemplateSlashCommandContent,
+            )
+            if error_message:
+                return TemplateSlashCommandResponse(success=False, error=error_message)
+
+            return TemplateSlashCommandResponse(
+                success=True,
+                data=content_model,
+                message="Command file updated successfully",
+            )
+        except Exception as e:
+            logger.error(f"更新 slash-command 檔案失敗: {e}")
+            return TemplateSlashCommandResponse(
+                success=False,
+                error=f"Failed to update command file: {str(e)}",
+            )
+
+    def delete_slash_command_file(self, template_id: str, file_name: str) -> TemplateSlashCommandResponse:
+        """刪除 slash-command 檔案"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSlashCommandResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        command_file = self._get_template_dir(template_id) / "commands" / file_name
+        if not command_file.exists():
+            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+
+        try:
+            command_file.unlink()
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateSlashCommandResponse(
+                success=True,
+                message="Command file deleted successfully",
+            )
+        except Exception as e:
+            logger.error(f"刪除 slash-command 檔案失敗: {e}")
+            return TemplateSlashCommandResponse(
+                success=False,
+                error=f"Failed to delete command file: {str(e)}",
+            )
+
+    # ============ Agents 檔案管理 ============
+
+    def get_sub_agents_files(self, template_id: str) -> TemplateSubAgentListResponse:
+        """取得模板的 subagents 檔案列表"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSubAgentListResponse,
+            include_list_data=True,
+        )
+        if error_response:
+            return error_response
+
+        agents_dir, created = self._ensure_directory(template_id, "agents")
+        if created:
+            return TemplateSubAgentListResponse(
+                success=True,
+                data=[],
+                message="Agents directory created",
+            )
+
+        try:
+            files = self._list_markdown_files(agents_dir, TemplateSubAgentFile)
+            return TemplateSubAgentListResponse(
+                success=True,
+                data=files,
+                message=f"Found {len(files)} agent files",
+            )
+        except Exception as e:
+            logger.error(f"讀取 subagents 檔案列表失敗: {e}")
+            return TemplateSubAgentListResponse(
+                success=False,
+                data=[],
+                error=f"Failed to read agents directory: {str(e)}",
+            )
+
+    def get_sub_agent_file_content(self, template_id: str, file_name: str) -> TemplateSubAgentResponse:
+        """取得單個 subagent 檔案內容"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSubAgentResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        agent_file = self._get_template_dir(template_id) / "agents" / file_name
+        if not agent_file.exists():
+            return TemplateSubAgentResponse(success=False, error="Agent file not found")
+
+        try:
+            content_model = self._read_file_content(agent_file, TemplateSubAgentContent)
+            return TemplateSubAgentResponse(
+                success=True,
+                data=content_model,
+                message="Agent file loaded successfully",
+            )
+        except Exception as e:
+            logger.error(f"讀取 subagent 檔案內容失敗: {e}")
+            return TemplateSubAgentResponse(
+                success=False,
+                error=f"Failed to read agent file: {str(e)}",
+            )
+
+    def create_sub_agent_file(self, template_id: str, request: TemplateSubAgentCreateRequest) -> TemplateSubAgentResponse:
+        """建立新的 subagent 檔案"""
+        # 標準化檔案名稱（自動補上 .md）
+        normalized_file_name = self._normalize_file_name(request.file_name)
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSubAgentResponse,
+            file_name=normalized_file_name,
+        )
+        if error_response:
+            return error_response
+
+        agents_dir, _ = self._ensure_directory(template_id, "agents")
+        agent_file = agents_dir / normalized_file_name
+        if agent_file.exists():
+            return TemplateSubAgentResponse(success=False, error="Agent file already exists")
+
+        try:
+            content_model, error_message = self._write_file_with_stats(
+                agent_file,
+                request.content,
+                TemplateSubAgentContent,
+            )
+            if error_message:
+                return TemplateSubAgentResponse(success=False, error=error_message)
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateSubAgentResponse(
+                success=True,
+                data=content_model,
+                message="Agent file created successfully",
+            )
+        except Exception as e:
+            logger.error(f"建立 subagent 檔案失敗: {e}")
+            return TemplateSubAgentResponse(
+                success=False,
+                error=f"Failed to create agent file: {str(e)}",
+            )
+
+    def update_sub_agent_file(self, template_id: str, file_name: str, request: TemplateSubAgentUpdateRequest) -> TemplateSubAgentResponse:
+        """更新現有的 subagent 檔案"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSubAgentResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        agent_file = self._get_template_dir(template_id) / "agents" / file_name
+        if not agent_file.exists():
+            return TemplateSubAgentResponse(success=False, error="Agent file not found")
+
+        try:
+            content_model, error_message = self._write_file_with_stats(
+                agent_file,
+                request.content,
+                TemplateSubAgentContent,
+            )
+            if error_message:
+                return TemplateSubAgentResponse(success=False, error=error_message)
+
+            return TemplateSubAgentResponse(
+                success=True,
+                data=content_model,
+                message="Agent file updated successfully",
+            )
+        except Exception as e:
+            logger.error(f"更新 subagent 檔案失敗: {e}")
+            return TemplateSubAgentResponse(
+                success=False,
+                error=f"Failed to update agent file: {str(e)}",
+            )
+
+    def delete_sub_agent_file(self, template_id: str, file_name: str) -> TemplateSubAgentResponse:
+        """刪除 subagent 檔案"""
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateSubAgentResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        agent_file = self._get_template_dir(template_id) / "agents" / file_name
+        if not agent_file.exists():
+            return TemplateSubAgentResponse(success=False, error="Agent file not found")
+
+        try:
+            agent_file.unlink()
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateSubAgentResponse(
+                success=True,
+                message="Agent file deleted successfully",
+            )
+        except Exception as e:
+            logger.error(f"刪除 subagent 檔案失敗: {e}")
+            return TemplateSubAgentResponse(
+                success=False,
+                error=f"Failed to delete agent file: {str(e)}",
+            )
+
+    # ============ Output Styles 檔案管理 ============
+
+    def get_output_styles_files(self, template_id: str):
+        """取得模板的 output-styles 檔案列表"""
+        from app.models.template_config import TemplateOutputStyleListResponse, TemplateOutputStyleFile
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateOutputStyleListResponse,
+            include_list_data=True,
+        )
+        if error_response:
+            return error_response
+
+        styles_dir, created = self._ensure_directory(template_id, "output-styles")
+        if created:
+            return TemplateOutputStyleListResponse(
+                success=True,
+                data=[],
+                message="Output styles directory created",
+            )
+
+        try:
+            files = self._list_markdown_files(styles_dir, TemplateOutputStyleFile)
+            return TemplateOutputStyleListResponse(
+                success=True,
+                data=files,
+                message="Output styles files loaded successfully",
+            )
+        except Exception as e:
+            logger.error(f"取得 output styles 檔案列表失敗: {e}")
+            return TemplateOutputStyleListResponse(
+                success=False,
+                error=f"Failed to list output styles files: {str(e)}",
+            )
+
+    def get_output_style_file_content(self, template_id: str, file_name: str):
+        """取得單個 output style 檔案內容"""
+        from app.models.template_config import TemplateOutputStyleResponse, TemplateOutputStyleContent
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateOutputStyleResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        style_file = self._get_template_dir(template_id) / "output-styles" / file_name
+        if not style_file.exists():
+            return TemplateOutputStyleResponse(success=False, error="Output style file not found")
+
+        try:
+            content_model = self._read_file_content(style_file, TemplateOutputStyleContent)
+            return TemplateOutputStyleResponse(
+                success=True,
+                data=content_model,
+                message="Output style file loaded successfully",
+            )
+        except Exception as e:
+            logger.error(f"讀取 output style 檔案失敗: {e}")
+            return TemplateOutputStyleResponse(
+                success=False,
+                error=f"Failed to read output style file: {str(e)}",
+            )
+
+    def create_output_style_file(self, template_id: str, request):
+        """建立新的 output style 檔案"""
+        from app.models.template_config import TemplateOutputStyleResponse, TemplateOutputStyleContent
+
+        # 標準化檔案名稱（自動補上 .md）
+        normalized_file_name = self._normalize_file_name(request.file_name)
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateOutputStyleResponse,
+            file_name=normalized_file_name,
+        )
+        if error_response:
+            return error_response
+
+        styles_dir, _ = self._ensure_directory(template_id, "output-styles")
+        style_file = styles_dir / normalized_file_name
+        if style_file.exists():
+            return TemplateOutputStyleResponse(success=False, error="Output style file already exists")
+
+        try:
+            content_model, error_message = self._write_file_with_stats(
+                style_file,
+                request.content,
+                TemplateOutputStyleContent,
+            )
+            if error_message:
+                return TemplateOutputStyleResponse(success=False, error=error_message)
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateOutputStyleResponse(
+                success=True,
+                data=content_model,
+                message="Output style file created successfully",
+            )
+        except Exception as e:
+            logger.error(f"建立 output style 檔案失敗: {e}")
+            return TemplateOutputStyleResponse(
+                success=False,
+                error=f"Failed to create output style file: {str(e)}",
+            )
+
+    def update_output_style_file(self, template_id: str, file_name: str, request):
+        """更新現有的 output style 檔案"""
+        from app.models.template_config import TemplateOutputStyleResponse, TemplateOutputStyleContent
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateOutputStyleResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        style_file = self._get_template_dir(template_id) / "output-styles" / file_name
+        if not style_file.exists():
+            return TemplateOutputStyleResponse(success=False, error="Output style file not found")
+
+        try:
+            content_model, error_message = self._write_file_with_stats(
+                style_file,
+                request.content,
+                TemplateOutputStyleContent,
+            )
+            if error_message:
+                return TemplateOutputStyleResponse(success=False, error=error_message)
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateOutputStyleResponse(
+                success=True,
+                data=content_model,
+                message="Output style file updated successfully",
+            )
+        except Exception as e:
+            logger.error(f"更新 output style 檔案失敗: {e}")
+            return TemplateOutputStyleResponse(
+                success=False,
+                error=f"Failed to update output style file: {str(e)}",
+            )
+
+    def delete_output_style_file(self, template_id: str, file_name: str):
+        """刪除 output style 檔案"""
+        from app.models.template_config import TemplateOutputStyleResponse
+
+        _, error_response = self._validate_template_and_filename(
+            template_id,
+            TemplateOutputStyleResponse,
+            file_name=file_name,
+        )
+        if error_response:
+            return error_response
+
+        style_file = self._get_template_dir(template_id) / "output-styles" / file_name
+        if not style_file.exists():
+            return TemplateOutputStyleResponse(success=False, error="Output style file not found")
+
+        try:
+            style_file.unlink()
+
+            # 更新 plugin.json
+            self._update_plugin_json(template_id)
+
+            return TemplateOutputStyleResponse(
+                success=True,
+                message="Output style file deleted successfully",
+            )
+        except Exception as e:
+            logger.error(f"刪除 output style 檔案失敗: {e}")
+            return TemplateOutputStyleResponse(
+                success=False,
+                error=f"Failed to delete output style file: {str(e)}",
+            )
+
+    # ============ 檔案管理核心方法 ============
+
+    def get_template_files(
+        self,
+        template_id: str,
+        path: Optional[str] = None,
+        include_content: bool = False,
+        max_depth: int = -1,
+        base_path: str = "scripts"
+    ) -> TemplateFilesResponse:
+        """取得模板檔案樹"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return TemplateFilesResponse(
+                success=False,
+                error="Template not found"
+            )
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return TemplateFilesResponse(
+                success=False,
+                error="Invalid base_path. Must be 'scripts' or 'skills'"
+            )
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        if not files_dir.exists():
+            files_dir.mkdir(parents=True, exist_ok=True)
+            return TemplateFilesResponse(
+                success=True,
+                data=[],
+                total_files=0,
+                total_size=0,
+                message="Files directory created"
+            )
+
+        try:
+            # 建立檔案樹
+            target_path = files_dir / path if path else files_dir
+            if not target_path.exists():
+                return TemplateFilesResponse(
+                    success=False,
+                    error=f"Path not found: {path}"
+                )
+
+            file_tree, total_files, total_size = self._build_file_tree(
+                target_path,
+                files_dir,
+                include_content=include_content,
+                max_depth=max_depth,
+                current_depth=0
+            )
+
+            return TemplateFilesResponse(
+                success=True,
+                data=file_tree,
+                total_files=total_files,
+                total_size=total_size,
+                message=f"Found {total_files} files"
+            )
+        except Exception as e:
+            logger.error(f"取得檔案樹失敗: {e}")
+            return TemplateFilesResponse(
+                success=False,
+                error=f"Failed to get file tree: {str(e)}"
+            )
+
+    def _build_file_tree(
+        self,
+        path: Path,
+        base_path: Path,
+        include_content: bool = False,
+        max_depth: int = -1,
+        current_depth: int = 0
+    ) -> Tuple[List[FileNodeInfo], int, int]:
+        """遞迴建立檔案樹"""
+        nodes = []
+        total_files = 0
+        total_size = 0
+
+        if max_depth != -1 and current_depth >= max_depth:
+            return nodes, total_files, total_size
+
+        try:
+            items = sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+
+            for item in items:
+                relative_path = str(item.relative_to(base_path))
+                node_id = f"file-{relative_path.replace('/', '-')}"
+
+                if item.is_file():
+                    stat = item.stat()
+                    content = None
+                    if include_content and stat.st_size < self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                        try:
+                            content = item.read_text(encoding="utf-8")
+                        except:
+                            content = None
+
+                    nodes.append(FileNodeInfo(
+                        id=node_id,
+                        name=item.name,
+                        path=relative_path,
+                        type="file",
+                        size=stat.st_size,
+                        content=content,
+                        extension=item.suffix,
+                        created_at=datetime.fromtimestamp(stat.st_ctime),
+                        modified_at=datetime.fromtimestamp(stat.st_mtime)
+                    ))
+                    total_files += 1
+                    total_size += stat.st_size
+
+                elif item.is_dir():
+                    children, child_files, child_size = self._build_file_tree(
+                        item,
+                        base_path,
+                        include_content=include_content,
+                        max_depth=max_depth,
+                        current_depth=current_depth + 1
+                    )
+
+                    nodes.append(FileNodeInfo(
+                        id=node_id,
+                        name=item.name,
+                        path=relative_path,
+                        type="directory",
+                        children=children,
+                        created_at=datetime.fromtimestamp(item.stat().st_ctime),
+                        modified_at=datetime.fromtimestamp(item.stat().st_mtime)
+                    ))
+                    total_files += child_files
+                    total_size += child_size
+
+        except Exception as e:
+            logger.error(f"建立檔案樹失敗 {path}: {e}")
+
+        return nodes, total_files, total_size
+
+    def get_file_content(self, template_id: str, file_path: str, base_path: str = "scripts") -> FileContentResponse:
+        """取得檔案內容"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileContentResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileContentResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        full_path = self._get_template_dir(template_id) / base_path / file_path
+        if not full_path.exists() or not full_path.is_file():
+            return FileContentResponse(success=False, error="File not found")
+
+        # 安全檢查:確保路徑在模板目錄內
+        if not self._is_safe_path(full_path, self._get_template_dir(template_id) / base_path):
+            return FileContentResponse(success=False, error="Invalid file path")
+
+        try:
+            stat = full_path.stat()
+            if stat.st_size > self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                return FileContentResponse(
+                    success=False,
+                    error=f"File too large (max {self.MAX_TEMPLATE_FILE_SIZE_BYTES / 1024 / 1024}MB)"
+                )
+
+            content = full_path.read_text(encoding="utf-8")
+
+            return FileContentResponse(
+                success=True,
+                data=FileNodeInfo(
+                    id=f"file-{file_path.replace('/', '-')}",
+                    name=full_path.name,
+                    path=file_path,
+                    type="file",
+                    size=stat.st_size,
+                    content=content,
+                    extension=full_path.suffix,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime)
+                ),
+                message="File loaded successfully"
+            )
+        except Exception as e:
+            logger.error(f"讀取檔案失敗: {e}")
+            return FileContentResponse(
+                success=False,
+                error=f"Failed to read file: {str(e)}"
+            )
+
+    def create_file_or_directory(
+        self,
+        template_id: str,
+        request: CreateFileRequest,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """建立檔案或目錄"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        # 驗證路徑
+        if not self._validate_file_path(request.path):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        files_dir.mkdir(parents=True, exist_ok=True)
+
+        target_path = files_dir / request.path
+
+        # 安全檢查
+        if not self._is_safe_path(target_path, files_dir):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        if target_path.exists():
+            return FileOperationResponse(
+                success=False,
+                error=f"{'Directory' if request.type == 'directory' else 'File'} already exists"
+            )
+
+        try:
+            if request.type == "directory":
+                target_path.mkdir(parents=True, exist_ok=True)
+                return FileOperationResponse(
+                    success=True,
+                    data=FileNodeInfo(
+                        id=f"dir-{request.path.replace('/', '-')}",
+                        name=target_path.name,
+                        path=request.path,
+                        type="directory"
+                    ),
+                    message="Directory created successfully"
+                )
+            else:
+                # 確保父目錄存在
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # 檢查副檔名（轉換為小寫比較）
+                if target_path.suffix and target_path.suffix.lower() not in self.ALLOWED_EXTENSIONS:
+                    return FileOperationResponse(
+                        success=False,
+                        error=f"File extension {target_path.suffix} not allowed"
+                    )
+
+                # 檢查內容大小
+                content = request.content or ""
+                if len(content.encode("utf-8")) > self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                    return FileOperationResponse(
+                        success=False,
+                        error=f"File content too large (max {self.MAX_TEMPLATE_FILE_SIZE_BYTES / 1024 / 1024}MB)"
+                    )
+
+                target_path.write_text(content, encoding="utf-8")
+                stat = target_path.stat()
+
+                return FileOperationResponse(
+                    success=True,
+                    data=FileNodeInfo(
+                        id=f"file-{request.path.replace('/', '-')}",
+                        name=target_path.name,
+                        path=request.path,
+                        type="file",
+                        size=stat.st_size,
+                        content=content,
+                        extension=target_path.suffix
+                    ),
+                    message="File created successfully"
+                )
+        except Exception as e:
+            logger.error(f"建立檔案/目錄失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to create: {str(e)}"
+            )
+
+    def update_file_content(
+        self,
+        template_id: str,
+        request: UpdateFileContentRequest,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """更新檔案內容"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        full_path = self._get_template_dir(template_id) / base_path / request.path
+
+        if not full_path.exists() or not full_path.is_file():
+            return FileOperationResponse(success=False, error="File not found")
+
+        if not self._is_safe_path(full_path, self._get_template_dir(template_id) / base_path):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        try:
+            # 檢查內容大小
+            if len(request.content.encode("utf-8")) > self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                return FileOperationResponse(
+                    success=False,
+                    error=f"File content too large (max {self.MAX_TEMPLATE_FILE_SIZE_BYTES / 1024 / 1024}MB)"
+                )
+
+            full_path.write_text(request.content, encoding="utf-8")
+            stat = full_path.stat()
+
+            return FileOperationResponse(
+                success=True,
+                data=FileNodeInfo(
+                    id=f"file-{request.path.replace('/', '-')}",
+                    name=full_path.name,
+                    path=request.path,
+                    type="file",
+                    size=stat.st_size,
+                    content=request.content,
+                    extension=full_path.suffix,
+                    modified_at=datetime.fromtimestamp(stat.st_mtime)
+                ),
+                message="File updated successfully"
+            )
+        except Exception as e:
+            logger.error(f"更新檔案失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to update file: {str(e)}"
+            )
+
+    async def upload_files(
+        self,
+        template_id: str,
+        target_path: str,
+        files: List[UploadFile],
+        overwrite: bool = False,
+        base_path: str = "scripts"
+    ) -> FileUploadResponse:
+        """上傳檔案"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileUploadResponse(
+                success=False,
+                uploaded=[],
+                total=0,
+                succeeded=0,
+                failed=0,
+                message="Template not found"
+            )
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileUploadResponse(
+                success=False,
+                uploaded=[],
+                total=0,
+                succeeded=0,
+                failed=0,
+                message="Invalid base_path. Must be 'scripts' or 'skills'"
+            )
+
+        if len(files) > self.MAX_UPLOAD_FILES:
+            return FileUploadResponse(
+                success=False,
+                uploaded=[],
+                total=len(files),
+                succeeded=0,
+                failed=len(files),
+                message=f"Too many files (max {self.MAX_UPLOAD_FILES})"
+            )
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        files_dir.mkdir(parents=True, exist_ok=True)
+
+        target_dir = files_dir / target_path if target_path else files_dir
+        if not self._is_safe_path(target_dir, files_dir):
+            return FileUploadResponse(
+                success=False,
+                uploaded=[],
+                total=len(files),
+                succeeded=0,
+                failed=len(files),
+                message="Invalid target path"
+            )
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        results = []
+        succeeded = 0
+        failed = 0
+
+        for upload_file in files:
+            try:
+                # 驗證檔案名稱
+                if not self._validate_filename(upload_file.filename):
+                    results.append(UploadedFileInfo(
+                        filename=upload_file.filename,
+                        path="",
+                        size=0,
+                        success=False,
+                        error="Invalid filename"
+                    ))
+                    failed += 1
+                    continue
+
+                # 檢查副檔名（轉換為小寫比較）
+                file_ext = Path(upload_file.filename).suffix.lower()
+                if file_ext and file_ext not in self.ALLOWED_EXTENSIONS:
+                    results.append(UploadedFileInfo(
+                        filename=upload_file.filename,
+                        path="",
+                        size=0,
+                        success=False,
+                        error=f"File extension {file_ext} not allowed"
+                    ))
+                    failed += 1
+                    continue
+
+                file_path = target_dir / upload_file.filename
+
+                # 檢查是否已存在
+                if file_path.exists() and not overwrite:
+                    results.append(UploadedFileInfo(
+                        filename=upload_file.filename,
+                        path="",
+                        size=0,
+                        success=False,
+                        error="File already exists"
+                    ))
+                    failed += 1
+                    continue
+
+                # 讀取並檢查大小
+                content = await upload_file.read()
+                if len(content) > self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                    results.append(UploadedFileInfo(
+                        filename=upload_file.filename,
+                        path="",
+                        size=len(content),
+                        success=False,
+                        error=f"File too large (max {self.MAX_TEMPLATE_FILE_SIZE_BYTES / 1024 / 1024}MB)"
+                    ))
+                    failed += 1
+                    continue
+
+                # 寫入檔案
+                file_path.write_bytes(content)
+                relative_path = str(file_path.relative_to(files_dir))
+
+                results.append(UploadedFileInfo(
+                    filename=upload_file.filename,
+                    path=relative_path,
+                    size=len(content),
+                    success=True
+                ))
+                succeeded += 1
+
+            except Exception as e:
+                logger.error(f"上傳檔案失敗 {upload_file.filename}: {e}")
+                results.append(UploadedFileInfo(
+                    filename=upload_file.filename,
+                    path="",
+                    size=0,
+                    success=False,
+                    error=str(e)
+                ))
+                failed += 1
+
+        return FileUploadResponse(
+            success=failed == 0,
+            uploaded=results,
+            total=len(files),
+            succeeded=succeeded,
+            failed=failed,
+            message=f"Uploaded {succeeded}/{len(files)} files successfully"
+        )
+
+    def rename_file(
+        self,
+        template_id: str,
+        request: RenameFileRequest,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """重命名檔案或目錄"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        old_path = files_dir / request.old_path
+
+        if not old_path.exists():
+            return FileOperationResponse(success=False, error="File or directory not found")
+
+        if not self._is_safe_path(old_path, files_dir):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        # 驗證新名稱(不包含路徑分隔符)
+        if '/' in request.new_name or '\\' in request.new_name:
+            return FileOperationResponse(success=False, error="Invalid new name: cannot contain path separators")
+
+        # 檢查非法字符
+        illegal_chars = r'[<>:"|?*\x00-\x1f]'
+        if re.search(illegal_chars, request.new_name):
+            return FileOperationResponse(success=False, error="Invalid new name: contains illegal characters")
+
+        new_path = old_path.parent / request.new_name
+
+        if new_path.exists():
+            return FileOperationResponse(success=False, error="Target name already exists")
+
+        try:
+            old_path.rename(new_path)
+            relative_path = str(new_path.relative_to(files_dir))
+
+            return FileOperationResponse(
+                success=True,
+                data=FileNodeInfo(
+                    id=f"{'dir' if new_path.is_dir() else 'file'}-{relative_path.replace('/', '-')}",
+                    name=new_path.name,
+                    path=relative_path,
+                    type="directory" if new_path.is_dir() else "file"
+                ),
+                message="Renamed successfully"
+            )
+        except Exception as e:
+            logger.error(f"重命名失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to rename: {str(e)}"
+            )
+
+    def move_file(
+        self,
+        template_id: str,
+        request: MoveFileRequest,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """移動檔案或目錄"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        source_path = files_dir / request.source_path
+        target_path = files_dir / request.target_path
+
+        if not source_path.exists():
+            return FileOperationResponse(success=False, error="Source not found")
+
+        if not self._is_safe_path(source_path, files_dir) or not self._is_safe_path(target_path, files_dir):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        if target_path.exists() and not request.overwrite:
+            return FileOperationResponse(success=False, error="Target already exists")
+
+        try:
+            # 確保目標目錄存在
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 移動
+            shutil.move(str(source_path), str(target_path))
+            relative_path = str(target_path.relative_to(files_dir))
+
+            return FileOperationResponse(
+                success=True,
+                data=FileNodeInfo(
+                    id=f"{'dir' if target_path.is_dir() else 'file'}-{relative_path.replace('/', '-')}",
+                    name=target_path.name,
+                    path=relative_path,
+                    type="directory" if target_path.is_dir() else "file"
+                ),
+                message="Moved successfully"
+            )
+        except Exception as e:
+            logger.error(f"移動失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to move: {str(e)}"
+            )
+
+    def copy_file(
+        self,
+        template_id: str,
+        request: CopyFileRequest,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """複製檔案或目錄"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        source_path = files_dir / request.source_path
+        target_path = files_dir / request.target_path
+
+        if not source_path.exists():
+            return FileOperationResponse(success=False, error="Source not found")
+
+        if not self._is_safe_path(source_path, files_dir) or not self._is_safe_path(target_path, files_dir):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        if target_path.exists() and not request.overwrite:
+            return FileOperationResponse(success=False, error="Target already exists")
+
+        try:
+            # 確保目標目錄存在
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 複製
+            if source_path.is_dir():
+                shutil.copytree(str(source_path), str(target_path), dirs_exist_ok=request.overwrite)
+            else:
+                shutil.copy2(str(source_path), str(target_path))
+
+            relative_path = str(target_path.relative_to(files_dir))
+
+            return FileOperationResponse(
+                success=True,
+                data=FileNodeInfo(
+                    id=f"{'dir' if target_path.is_dir() else 'file'}-{relative_path.replace('/', '-')}",
+                    name=target_path.name,
+                    path=relative_path,
+                    type="directory" if target_path.is_dir() else "file"
+                ),
+                message="Copied successfully"
+            )
+        except Exception as e:
+            logger.error(f"複製失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to copy: {str(e)}"
+            )
+
+    def delete_file(
+        self,
+        template_id: str,
+        file_path: str,
+        recursive: bool = False,
+        base_path: str = "scripts"
+    ) -> FileOperationResponse:
+        """刪除檔案或目錄"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileOperationResponse(success=False, error="Template not found")
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return FileOperationResponse(success=False, error="Invalid base_path. Must be 'scripts' or 'skills'")
+
+        files_dir = self._get_template_dir(template_id) / base_path
+        target_path = files_dir / file_path
+
+        if not target_path.exists():
+            return FileOperationResponse(success=False, error="File or directory not found")
+
+        if not self._is_safe_path(target_path, files_dir):
+            return FileOperationResponse(success=False, error="Invalid file path")
+
+        try:
+            if target_path.is_dir():
+                if not recursive:
+                    return FileOperationResponse(
+                        success=False,
+                        error="Cannot delete directory without recursive flag"
+                    )
+                shutil.rmtree(target_path)
+            else:
+                target_path.unlink()
+
+            return FileOperationResponse(
+                success=True,
+                message="Deleted successfully"
+            )
+        except Exception as e:
+            logger.error(f"刪除失敗: {e}")
+            return FileOperationResponse(
+                success=False,
+                error=f"Failed to delete: {str(e)}"
+            )
+
+    def batch_delete_files(
+        self,
+        template_id: str,
+        request: BatchDeleteRequest,
+        base_path: str = "scripts"
+    ) -> BatchOperationResponse:
+        """批次刪除檔案"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return BatchOperationResponse(
+                success=False,
+                results=[],
+                total=0,
+                succeeded=0,
+                failed=0,
+                message="Template not found"
+            )
+
+        # 驗證 base_path
+        if base_path not in ["scripts", "skills"]:
+            return BatchOperationResponse(
+                success=False,
+                results=[],
+                total=0,
+                succeeded=0,
+                failed=0,
+                message="Invalid base_path. Must be 'scripts' or 'skills'"
+            )
+
+        results = []
+        succeeded = 0
+        failed = 0
+
+        for path in request.paths:
+            result = self.delete_file(template_id, path, request.recursive, base_path)
+            results.append(BatchOperationResult(
+                path=path,
+                success=result.success,
+                error=result.error
+            ))
+            if result.success:
+                succeeded += 1
+            else:
+                failed += 1
+
+        return BatchOperationResponse(
+            success=failed == 0,
+            results=results,
+            total=len(request.paths),
+            succeeded=succeeded,
+            failed=failed,
+            message=f"Deleted {succeeded}/{len(request.paths)} items successfully"
+        )
+
+    def search_files(
+        self,
+        template_id: str,
+        request: FileSearchRequest
+    ) -> FileSearchResponse:
+        """搜尋檔案"""
+        db_template = self._get_template(template_id)
+        if not db_template:
+            return FileSearchResponse(
+                success=False,
+                results=[],
+                total=0,
+                query=request.query,
+                error="Template not found"
+            )
+
+        files_dir = self._get_template_dir(template_id) / "scripts"
+        if not files_dir.exists():
+            return FileSearchResponse(
+                success=True,
+                results=[],
+                total=0,
+                query=request.query,
+                message="No files directory"
+            )
+
+        try:
+            results = []
+            query_lower = request.query.lower()
+
+            for item in files_dir.rglob("*"):
+                if len(results) >= request.max_results:
+                    break
+
+                relative_path = str(item.relative_to(files_dir))
+
+                # 檔案名稱匹配
+                name_match = query_lower in item.name.lower()
+
+                # 檔案類型篩選
+                if request.file_types and item.is_file():
+                    if item.suffix not in request.file_types:
+                        continue
+
+                content_matches = []
+                if request.search_content and item.is_file():
+                    try:
+                        if item.stat().st_size < self.MAX_TEMPLATE_FILE_SIZE_BYTES:
+                            content = item.read_text(encoding="utf-8")
+                            if query_lower in content.lower():
+                                # 提取匹配的行
+                                lines = content.split('\n')
+                                for i, line in enumerate(lines):
+                                    if query_lower in line.lower():
+                                        content_matches.append(f"Line {i+1}: {line.strip()[:100]}")
+                                        if len(content_matches) >= 3:
+                                            break
+                    except:
+                        pass
+
+                if name_match or content_matches:
+                    results.append(FileSearchResult(
+                        path=relative_path,
+                        name=item.name,
+                        type="directory" if item.is_dir() else "file",
+                        size=item.stat().st_size if item.is_file() else None,
+                        matches=content_matches if content_matches else None
+                    ))
+
+            return FileSearchResponse(
+                success=True,
+                results=results,
+                total=len(results),
+                query=request.query,
+                message=f"Found {len(results)} results"
+            )
+        except Exception as e:
+            logger.error(f"搜尋失敗: {e}")
+            return FileSearchResponse(
+                success=False,
+                results=[],
+                total=0,
+                query=request.query,
+                error=f"Search failed: {str(e)}"
+            )
+
+    # ============ 輔助方法 ============
+
+    def _validate_file_path(self, path: str) -> bool:
+        """驗證檔案路徑"""
+        if not path or path.startswith('/') or path.startswith('..'):
+            return False
+
+        # 檢查非法字符
+        illegal_chars = r'[<>:"|?*\x00-\x1f]'
+        if re.search(illegal_chars, path):
+            return False
+
+        return True
+
+    def _is_safe_path(self, path: Path, base_path: Path) -> bool:
+        """檢查路徑是否在基礎路徑內(防止路徑遍歷攻擊)"""
+        try:
+            path.resolve().relative_to(base_path.resolve())
+            return True
+        except ValueError:
+            return False
+
+    def export_template(self, template_id: str) -> Optional[Path]:
+        """
+        匯出模板為 ZIP 檔案
+
+        Args:
+            template_id: 模板 ID
+
+        Returns:
+            ZIP 檔案路徑，失敗返回 None
+        """
+        # 檢查模板是否存在
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            logger.error(f"模板不存在: {template_id}")
+            return None
+
+        # 模板目錄
+        template_dir = self._get_template_dir(template_id)
+        if not template_dir.exists():
+            logger.error(f"模板目錄不存在: {template_dir}")
+            return None
+
+        try:
+            # 建立臨時 ZIP 檔案
+            temp_dir = Path(tempfile.gettempdir())
+            zip_path = temp_dir / f"{template_id}.zip"
+
+            # 打包模板目錄
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # 遍歷模板目錄下的所有檔案
+                for file_path in template_dir.rglob('*'):
+                    if file_path.is_file():
+                        # 計算相對路徑（保留 template_id 作為根目錄）
+                        arcname = template_id / file_path.relative_to(template_dir)
+                        zipf.write(file_path, arcname)
+
+            logger.info(f"模板匯出成功: {template_id} -> {zip_path}")
+            return zip_path
+
+        except Exception as e:
+            logger.error(f"匯出模板失敗: {e}")
+            return None
+
+    def import_template(self, zip_file: UploadFile) -> Tuple[bool, str]:
+        """
+        匯入模板 ZIP 檔案
+
+        Args:
+            zip_file: 上傳的 ZIP 檔案
+
+        Returns:
+            (成功與否, 訊息)
+        """
+        temp_dir = None
+        try:
+            # 建立臨時目錄
+            temp_dir = Path(tempfile.mkdtemp())
+            zip_path = temp_dir / "upload.zip"
+
+            # 儲存上傳的檔案
+            with open(zip_path, 'wb') as f:
+                shutil.copyfileobj(zip_file.file, f)
+
+            # 解壓縮
+            extract_dir = temp_dir / "extracted"
+            extract_dir.mkdir()
+
+            with zipfile.ZipFile(zip_path, 'r') as zipf:
+                zipf.extractall(extract_dir)
+
+            # 尋找 template_id 子目錄
+            # ZIP 結構應該是: template_id/.claude-plugin/plugin.json, template_id/CLAUDE.md, ...
+            subdirs = [d for d in extract_dir.iterdir() if d.is_dir()]
+
+            if len(subdirs) == 0:
+                return False, "ZIP 檔案中沒有找到模板目錄"
+
+            if len(subdirs) > 1:
+                return False, "ZIP 檔案中包含多個目錄，請確保只有一個模板目錄"
+
+            template_dir = subdirs[0]
+            template_id = template_dir.name
+
+            # 驗證 template_id 格式
+            if not self._validate_template_id(template_id):
+                return False, f"無效的模板代號: {template_id}（必須是 kebab-case 格式）"
+
+            # 檢查 plugin.json 是否存在
+            plugin_file = template_dir / ".claude-plugin" / "plugin.json"
+            if not plugin_file.exists():
+                return False, f"模板目錄中缺少 .claude-plugin/plugin.json 檔案"
+
+            # 解析 plugin.json
+            try:
+                with open(plugin_file, 'r', encoding='utf-8') as f:
+                    plugin_data = json.load(f)
+            except Exception as e:
+                return False, f"無法解析 plugin.json: {str(e)}"
+
+            # 驗證必要欄位
+            required_fields = ['id', 'name', 'version', 'author']
+            for field in required_fields:
+                if field not in plugin_data:
+                    return False, f"plugin.json 缺少必要欄位: {field}"
+
+            # 檢查 ID 是否一致
+            if plugin_data['id'] != template_id:
+                return False, f"plugin.json 中的 id ({plugin_data['id']}) 與目錄名稱 ({template_id}) 不一致"
+
+            # 檢查模板是否已存在
+            existing_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+            if existing_template:
+                return False, f"模板代號 {template_id} 已存在，無法匯入"
+
+            # 複製模板目錄到 template-center/plugins
+            target_dir = Path(settings.TEMPLATE_STORAGE_PATH) / "plugins" / template_id
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+
+            shutil.copytree(template_dir, target_dir)
+
+            # 建立資料庫記錄
+            author_data = plugin_data.get('author', {})
+            if isinstance(author_data, str):
+                author_data = {'name': author_data}
+
+            db_template = TemplateDB(
+                id=template_id,
+                name=plugin_data.get('name', template_id),
+                description=plugin_data.get('description', ''),
+                author_name=author_data.get('name', 'Unknown'),
+                author_email=author_data.get('email'),
+                author_url=author_data.get('url'),
+                category=plugin_data.get('category'),
+                version=plugin_data.get('version', '1.0.0'),
+                cli_type=plugin_data.get('cli_type', 'ClaudeCode'),
+                status='draft',
+                keywords=plugin_data.get('keywords', []),
+                init_commands=plugin_data.get('initCommands', ''),
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+
+            self.db.add(db_template)
+            self.db.commit()
+
+            logger.info(f"模板匯入成功: {template_id}")
+            return True, f"模板 {template_id} 匯入成功"
+
+        except Exception as e:
+            logger.error(f"匯入模板失敗: {e}")
+            return False, f"匯入失敗: {str(e)}"
+
+        finally:
+            # 清理臨時目錄
+            if temp_dir and temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception as e:
+                    logger.warning(f"清理臨時目錄失敗: {e}")
+
+    def _validate_template_id(self, template_id: str) -> bool:
+        """驗證模板 ID 格式（kebab-case）"""
+        pattern = r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$'
+        return bool(re.match(pattern, template_id))
+
+
+__all__ = ["TemplateService"]

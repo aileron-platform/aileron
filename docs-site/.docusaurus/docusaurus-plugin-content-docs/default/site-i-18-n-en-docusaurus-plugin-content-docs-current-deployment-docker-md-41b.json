@@ -1,0 +1,27 @@
+{
+  "id": "deployment/docker",
+  "title": "Docker Mode",
+  "description": "When to Use",
+  "source": "@site/i18n/en/docusaurus-plugin-content-docs/current/deployment/docker.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/docker",
+  "permalink": "/aileron/en/deployment/docker",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "title": "Docker Mode"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Service URLs & Credentials",
+    "permalink": "/aileron/en/quick-start/services"
+  },
+  "next": {
+    "title": "Kubernetes Mode",
+    "permalink": "/aileron/en/deployment/kubernetes"
+  }
+}

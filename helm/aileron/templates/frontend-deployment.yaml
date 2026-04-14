@@ -1,0 +1,72 @@
+{{- if .Values.frontend.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-frontend
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "frontend" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "frontend" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8082
+          env:
+            - name: VITE_API_BASE_URL
+              value: "/api/v1"
+            - name: VITE_FRONTEND_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_FRONTEND_URL
+            - name: VITE_KEYCLOAK_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_KEYCLOAK_URL
+            {{- range $key, $value := .Values.frontend.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            - name: VITE_CILIUM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: CILIUM_ENABLED
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "aileron.fullname" . }}-frontend-nginx
+{{- end }}

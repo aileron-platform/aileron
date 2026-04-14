@@ -1,0 +1,47 @@
+{{- if .Values.coturn.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-coturn
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "coturn" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "coturn" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      hostNetwork: true
+      {{- with .Values.coturn.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: coturn
+          image: "{{ .Values.coturn.image.repository }}:{{ .Values.coturn.image.tag }}"
+          imagePullPolicy: {{ .Values.coturn.image.pullPolicy }}
+          args:
+            - "--listening-port={{ .Values.coturn.port }}"
+            - "--external-ip={{ include "aileron.coturnExternalIp" . }}"
+            - "--fingerprint"
+            - "--lt-cred-mech"
+            - "--user={{ .Values.coturn.username }}:{{ .Values.coturn.credential }}"
+            - "--realm={{ .Values.coturn.realm }}"
+            - "--no-cli"
+            - "--log-file=stdout"
+            - "--simple-log"
+          ports:
+            - name: turn-udp
+              containerPort: {{ .Values.coturn.port }}
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: {{ .Values.coturn.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.coturn.resources | nindent 12 }}
+{{- end }}

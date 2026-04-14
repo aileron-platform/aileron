@@ -1,0 +1,379 @@
+{
+  "entrypoints": [
+    "main"
+  ],
+  "origins": {
+    "237": [
+      237
+    ],
+    "436": [
+      436
+    ],
+    "17896441": [
+      869,
+      401
+    ],
+    "main": [
+      354,
+      869,
+      792
+    ],
+    "runtime~main": [
+      792,
+      869,
+      354
+    ],
+    "1a66d814": [
+      506
+    ],
+    "1f7744e5": [
+      910
+    ],
+    "2361cd63": [
+      161
+    ],
+    "41bf1b52": [
+      882
+    ],
+    "4beee3a1": [
+      41
+    ],
+    "5b44acae": [
+      652
+    ],
+    "5e95c892": [
+      647
+    ],
+    "7f85b4ba": [
+      304
+    ],
+    "901da7d8": [
+      987
+    ],
+    "92b35ae1": [
+      527
+    ],
+    "94ce73e1": [
+      264
+    ],
+    "a7bd4aaa": [
+      98
+    ],
+    "a94703ab": [
+      869,
+      48
+    ],
+    "aba21aa0": [
+      742
+    ],
+    "b0603427": [
+      483
+    ],
+    "bdf3bc98": [
+      606
+    ],
+    "c155144c": [
+      389
+    ],
+    "cf6a2575": [
+      104
+    ],
+    "d26541de": [
+      225
+    ],
+    "d9ea1e15": [
+      340
+    ],
+    "de22dc2e": [
+      514
+    ],
+    "e205e29b": [
+      751
+    ],
+    "e4880810": [
+      775
+    ],
+    "f79c1b84": [
+      499
+    ],
+    "styles": [
+      48,
+      354,
+      401,
+      792,
+      869
+    ]
+  },
+  "assets": {
+    "41": {
+      "js": [
+        {
+          "file": "assets/js/4beee3a1.a9bf0008.js",
+          "hash": "6350d4f13811f1e2",
+          "publicPath": "/aileron/en/assets/js/4beee3a1.a9bf0008.js"
+        }
+      ]
+    },
+    "48": {
+      "js": [
+        {
+          "file": "assets/js/a94703ab.c20fffa2.js",
+          "hash": "261b4ab5b3583a78",
+          "publicPath": "/aileron/en/assets/js/a94703ab.c20fffa2.js"
+        }
+      ]
+    },
+    "98": {
+      "js": [
+        {
+          "file": "assets/js/a7bd4aaa.4db20e84.js",
+          "hash": "38c92430b5926b94",
+          "publicPath": "/aileron/en/assets/js/a7bd4aaa.4db20e84.js"
+        }
+      ]
+    },
+    "104": {
+      "js": [
+        {
+          "file": "assets/js/cf6a2575.e125122a.js",
+          "hash": "28446d9726909103",
+          "publicPath": "/aileron/en/assets/js/cf6a2575.e125122a.js"
+        }
+      ]
+    },
+    "161": {
+      "js": [
+        {
+          "file": "assets/js/2361cd63.5eccfdd4.js",
+          "hash": "2d9c9c89df1fe804",
+          "publicPath": "/aileron/en/assets/js/2361cd63.5eccfdd4.js"
+        }
+      ]
+    },
+    "225": {
+      "js": [
+        {
+          "file": "assets/js/d26541de.f7b86daa.js",
+          "hash": "149c87fff927186d",
+          "publicPath": "/aileron/en/assets/js/d26541de.f7b86daa.js"
+        }
+      ]
+    },
+    "237": {
+      "js": [
+        {
+          "file": "assets/js/237.0e9a95ab.js",
+          "hash": "f6a8b81fa1adfafc",
+          "publicPath": "/aileron/en/assets/js/237.0e9a95ab.js"
+        }
+      ]
+    },
+    "264": {
+      "js": [
+        {
+          "file": "assets/js/94ce73e1.12f0ff38.js",
+          "hash": "2848e0457d022fd5",
+          "publicPath": "/aileron/en/assets/js/94ce73e1.12f0ff38.js"
+        }
+      ]
+    },
+    "304": {
+      "js": [
+        {
+          "file": "assets/js/7f85b4ba.573f257d.js",
+          "hash": "20127ae177e6be01",
+          "publicPath": "/aileron/en/assets/js/7f85b4ba.573f257d.js"
+        }
+      ]
+    },
+    "340": {
+      "js": [
+        {
+          "file": "assets/js/d9ea1e15.db22a388.js",
+          "hash": "a3f18853f0aac63e",
+          "publicPath": "/aileron/en/assets/js/d9ea1e15.db22a388.js"
+        }
+      ]
+    },
+    "354": {
+      "js": [
+        {
+          "file": "assets/js/runtime~main.e6ede5fe.js",
+          "hash": "2452613af03682ac",
+          "publicPath": "/aileron/en/assets/js/runtime~main.e6ede5fe.js"
+        }
+      ]
+    },
+    "389": {
+      "js": [
+        {
+          "file": "assets/js/c155144c.1a69f581.js",
+          "hash": "5b6f70057c7ed948",
+          "publicPath": "/aileron/en/assets/js/c155144c.1a69f581.js"
+        }
+      ]
+    },
+    "401": {
+      "js": [
+        {
+          "file": "assets/js/17896441.ba54113a.js",
+          "hash": "8d3eff242d6c85f9",
+          "publicPath": "/aileron/en/assets/js/17896441.ba54113a.js"
+        }
+      ]
+    },
+    "436": {
+      "js": [
+        {
+          "file": "assets/js/436.0847a0ea.js",
+          "hash": "b38a9b36ec73ba31",
+          "publicPath": "/aileron/en/assets/js/436.0847a0ea.js"
+        }
+      ]
+    },
+    "483": {
+      "js": [
+        {
+          "file": "assets/js/b0603427.743ad0cb.js",
+          "hash": "a671e58555d52239",
+          "publicPath": "/aileron/en/assets/js/b0603427.743ad0cb.js"
+        }
+      ]
+    },
+    "499": {
+      "js": [
+        {
+          "file": "assets/js/f79c1b84.2b6ade3b.js",
+          "hash": "1cf8c80170e7cad9",
+          "publicPath": "/aileron/en/assets/js/f79c1b84.2b6ade3b.js"
+        }
+      ]
+    },
+    "506": {
+      "js": [
+        {
+          "file": "assets/js/1a66d814.8513f830.js",
+          "hash": "105edd67ceb419f0",
+          "publicPath": "/aileron/en/assets/js/1a66d814.8513f830.js"
+        }
+      ]
+    },
+    "514": {
+      "js": [
+        {
+          "file": "assets/js/de22dc2e.5f92cb5b.js",
+          "hash": "6851a6aa6015de97",
+          "publicPath": "/aileron/en/assets/js/de22dc2e.5f92cb5b.js"
+        }
+      ]
+    },
+    "527": {
+      "js": [
+        {
+          "file": "assets/js/92b35ae1.f7c538bf.js",
+          "hash": "adb49d03cf17a55e",
+          "publicPath": "/aileron/en/assets/js/92b35ae1.f7c538bf.js"
+        }
+      ]
+    },
+    "606": {
+      "js": [
+        {
+          "file": "assets/js/bdf3bc98.248b2755.js",
+          "hash": "cf526a59ddb626d8",
+          "publicPath": "/aileron/en/assets/js/bdf3bc98.248b2755.js"
+        }
+      ]
+    },
+    "647": {
+      "js": [
+        {
+          "file": "assets/js/5e95c892.c93d255b.js",
+          "hash": "4f15e5b6d6b218b2",
+          "publicPath": "/aileron/en/assets/js/5e95c892.c93d255b.js"
+        }
+      ]
+    },
+    "652": {
+      "js": [
+        {
+          "file": "assets/js/5b44acae.873e3f52.js",
+          "hash": "b18dd3a1ff47e89c",
+          "publicPath": "/aileron/en/assets/js/5b44acae.873e3f52.js"
+        }
+      ]
+    },
+    "742": {
+      "js": [
+        {
+          "file": "assets/js/aba21aa0.92fca2c9.js",
+          "hash": "161fe10e2e89994b",
+          "publicPath": "/aileron/en/assets/js/aba21aa0.92fca2c9.js"
+        }
+      ]
+    },
+    "751": {
+      "js": [
+        {
+          "file": "assets/js/e205e29b.3a959704.js",
+          "hash": "13787bec98542587",
+          "publicPath": "/aileron/en/assets/js/e205e29b.3a959704.js"
+        }
+      ]
+    },
+    "775": {
+      "js": [
+        {
+          "file": "assets/js/e4880810.28b33650.js",
+          "hash": "f73ace35ade6e2f5",
+          "publicPath": "/aileron/en/assets/js/e4880810.28b33650.js"
+        }
+      ]
+    },
+    "792": {
+      "js": [
+        {
+          "file": "assets/js/main.e8937b62.js",
+          "hash": "80838404862518ee",
+          "publicPath": "/aileron/en/assets/js/main.e8937b62.js"
+        }
+      ]
+    },
+    "869": {
+      "css": [
+        {
+          "file": "assets/css/styles.528d2675.css",
+          "hash": "cd670242dc709491",
+          "publicPath": "/aileron/en/assets/css/styles.528d2675.css"
+        }
+      ]
+    },
+    "882": {
+      "js": [
+        {
+          "file": "assets/js/41bf1b52.f68a487f.js",
+          "hash": "95f38727472134eb",
+          "publicPath": "/aileron/en/assets/js/41bf1b52.f68a487f.js"
+        }
+      ]
+    },
+    "910": {
+      "js": [
+        {
+          "file": "assets/js/1f7744e5.1f748b0d.js",
+          "hash": "cd5adab492509951",
+          "publicPath": "/aileron/en/assets/js/1f7744e5.1f748b0d.js"
+        }
+      ]
+    },
+    "987": {
+      "js": [
+        {
+          "file": "assets/js/901da7d8.390e7bb3.js",
+          "hash": "5e7e218c2027ee99",
+          "publicPath": "/aileron/en/assets/js/901da7d8.390e7bb3.js"
+        }
+      ]
+    }
+  }
+}

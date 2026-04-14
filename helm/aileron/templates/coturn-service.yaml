@@ -1,0 +1,23 @@
+{{- if .Values.coturn.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aileron.fullname" . }}-coturn
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  type: NodePort
+  ports:
+    - name: turn-udp
+      port: {{ .Values.coturn.port }}
+      targetPort: turn-udp
+      protocol: UDP
+      nodePort: {{ .Values.coturn.nodePort }}
+    - name: turn-tcp
+      port: {{ .Values.coturn.port }}
+      targetPort: turn-tcp
+      protocol: TCP
+      nodePort: {{ .Values.coturn.nodePort }}
+  selector:
+    {{- include "aileron.componentLabels" (dict "component" "coturn" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+{{- end }}

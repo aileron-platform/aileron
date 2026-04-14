@@ -1,0 +1,46 @@
+FROM ghcr.io/m1k1o/neko/chromium:latest
+
+# ========== 安裝中文 Locale + CJK 字型 + Node.js（CDP proxy） ==========
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    locales \
+    fonts-noto-cjk \
+    chromium-l10n \
+    nodejs \
+    && sed -i '/zh_TW.UTF-8/s/^# //g' /etc/locale.gen \
+    && locale-gen zh_TW.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=zh_TW.UTF-8
+ENV LC_ALL=zh_TW.UTF-8
+ENV LANGUAGE=zh_TW:zh
+
+# ========== 覆寫 Chrome policy（啟用 DevTools 以支援 CDP） ==========
+COPY chromium-policy-override.json /etc/chromium/policies/managed/policies.json
+COPY --chown=neko preferences.json /home/neko/.config/chromium/Default/Preferences
+COPY --chown=neko ["aileron-logo.png", "/home/neko/.config/chromium/Default/Google Profile Picture.png"]
+
+# ========== 覆寫 Chromium 設定（加入 CDP on 127.0.0.1:9222） ==========
+COPY supervisord-chromium-cdp.conf /etc/neko/supervisord/chromium.conf
+
+# ========== 新增 CDP proxy（重寫 Host header，讓容器名稱連線可用） ==========
+RUN mkdir -p /opt/cdp-proxy
+COPY cdp-proxy.js /opt/cdp-proxy/cdp-proxy.js
+COPY supervisord-cdp-proxy-neko.conf /etc/neko/supervisord/cdp-relay.conf
+
+# ========== neko 設定 ==========
+ENV NEKO_SERVER_BIND=:6080
+ENV NEKO_DESKTOP_SCREEN=1440x900@30
+ENV NEKO_WEBRTC_ICELITE=1
+# supervisord 不繼承容器 env var，直接在 neko.yaml 寫入所有必要設定：
+# - implicit_hosting: 首位連線者自動取得 host 權
+# - icelite: 避免 Docker 容器內無法解析瀏覽器的 mDNS candidate（.local）
+# - udpmux/nat1to1: 由 docker-compose 或動態佈建覆寫（此為預設值）
+RUN sed -i 's/implicit_hosting: false/implicit_hosting: true/' /etc/neko/neko.yaml && \
+    printf '\nwebrtc:\n  icelite: true\n  udpmux: 52000\n  nat1to1:\n    - 127.0.0.1\n' >> /etc/neko/neko.yaml
+
+# 對外 Port: 6080 (neko HTTP+WS), 9223 (CDP relay → Chrome 9222)
+EXPOSE 6080 9223
+
+LABEL org.opencontainers.image.source=https://github.com/chengyang-code/aileron
+LABEL org.opencontainers.image.description="Aileron Workspace Chrome - neko WebRTC + CDP"
+LABEL org.opencontainers.image.licenses=MIT

@@ -1,0 +1,532 @@
+"""
+Client Browser Relay Service
+
+CDP Relay 服務核心邏輯，作為 Playwright 客戶端和 Chrome 擴展程式之間的橋接層
+"""
+
+import asyncio
+import json
+import logging
+from typing import Any, Optional
+
+from fastapi import WebSocket
+
+from .models import (
+    ConnectedTarget,
+    PlaywrightClient,
+    TargetInfo,
+)
+
+logger = logging.getLogger(__name__)
+
+
+class RelayService:
+    """CDP Relay 服務核心邏輯"""
+
+    def __init__(self) -> None:
+        # 已連接的 targets (sessionId -> ConnectedTarget)
+        self.connected_targets: dict[str, ConnectedTarget] = {}
+        # 命名頁面映射 (name -> sessionId)
+        self.named_pages: dict[str, str] = {}
+        # Playwright 客戶端連接 (clientId -> PlaywrightClient)
+        self.playwright_clients: dict[str, PlaywrightClient] = {}
+        # Playwright WebSocket 連接 (clientId -> WebSocket)
+        self.playwright_websockets: dict[str, WebSocket] = {}
+        # Chrome 擴展 WebSocket 連接
+        self.extension_ws: Optional[WebSocket] = None
+        # 擴展請求的 pending futures
+        self.extension_pending_requests: dict[int, asyncio.Future] = {}
+        # 訊息 ID 計數器
+        self._message_id = 0
+        # 等待 target attached 的 futures (targetId -> asyncio.Future)
+        self._target_attachment_futures: dict[str, asyncio.Future] = {}
+        # 並發保護鎖：保護對共享狀態的訪問
+        self._lock = asyncio.Lock()
+
+    def _log(self, *args: Any) -> None:
+        """日誌輸出"""
+        logger.info("[relay] %s", " ".join(str(a) for a in args))
+
+    # ============================================================================
+    # Playwright 客戶端管理
+    # ============================================================================
+
+    async def register_playwright_client(self, client_id: str, ws: WebSocket) -> bool:
+        """註冊 Playwright 客戶端"""
+        async with self._lock:
+            if client_id in self.playwright_clients:
+                self._log(f"Rejecting duplicate client ID: {client_id}")
+                return False
+
+            self.playwright_clients[client_id] = PlaywrightClient(id=client_id)
+            self.playwright_websockets[client_id] = ws
+            self._log(f"Playwright client connected: {client_id}")
+            return True
+
+    async def unregister_playwright_client(self, client_id: str) -> None:
+        """取消註冊 Playwright 客戶端"""
+        async with self._lock:
+            self.playwright_clients.pop(client_id, None)
+            self.playwright_websockets.pop(client_id, None)
+            self._log(f"Playwright client disconnected: {client_id}")
+
+    async def send_to_playwright(
+        self, message: dict[str, Any], client_id: Optional[str] = None
+    ) -> None:
+        """發送訊息到 Playwright 客戶端"""
+        message_str = json.dumps(message)
+
+        if client_id:
+            ws = self.playwright_websockets.get(client_id)
+            if ws:
+                try:
+                    await ws.send_text(message_str)
+                except Exception as e:
+                    self._log(f"Error sending to client {client_id}: {e}")
+        else:
+            # 廣播到所有客戶端
+            for cid, ws in list(self.playwright_websockets.items()):
+                try:
+                    await ws.send_text(message_str)
+                except Exception as e:
+                    self._log(f"Error broadcasting to client {cid}: {e}")
+
+    async def send_attached_to_target(
+        self,
+        target: ConnectedTarget,
+        client_id: Optional[str] = None,
+        waiting_for_debugger: bool = False,
+    ) -> None:
+        """發送 Target.attachedToTarget 事件（帶去重）"""
+        event = {
+            "method": "Target.attachedToTarget",
+            "params": {
+                "sessionId": target.session_id,
+                "targetInfo": {
+                    "targetId": target.target_info.target_id,
+                    "type": target.target_info.type,
+                    "title": target.target_info.title,
+                    "url": target.target_info.url,
+                    "attached": True,
+                    "browserContextId": target.target_info.browser_context_id,
+                },
+                "waitingForDebugger": waiting_for_debugger,
+            },
+        }
+
+        async with self._lock:
+            if client_id:
+                client = self.playwright_clients.get(client_id)
+                if client and target.target_id not in client.known_targets:
+                    client.known_targets.add(target.target_id)
+                    await self.send_to_playwright(event, client_id)
+            else:
+                # 廣播到所有不知道這個 target 的客戶端
+                for cid, client in self.playwright_clients.items():
+                    if target.target_id not in client.known_targets:
+                        client.known_targets.add(target.target_id)
+                        await self.send_to_playwright(event, cid)
+
+    # ============================================================================
+    # Chrome 擴展管理
+    # ============================================================================
+
+    async def register_extension(self, ws: WebSocket) -> None:
+        """註冊 Chrome 擴展連接"""
+        self._log(f"register_extension called, existing ws: {id(self.extension_ws) if self.extension_ws else 'None'}, new ws: {id(ws)}")
+
+        async with self._lock:
+            if self.extension_ws:
+                self._log(f"Closing existing extension connection (ws id: {id(self.extension_ws)})")
+                try:
+                    await self.extension_ws.close(code=4001, reason="Extension Replaced")
+                    self._log(f"Existing connection closed successfully")
+                except Exception as e:
+                    self._log(f"Error closing existing connection: {e}")
+
+                # 清理狀態
+                self.connected_targets.clear()
+                self.named_pages.clear()
+                for future in self.extension_pending_requests.values():
+                    future.set_exception(Exception("Extension connection replaced"))
+                self.extension_pending_requests.clear()
+
+            self.extension_ws = ws
+            self._log(f"Extension connected (ws id: {id(ws)})")
+
+    async def unregister_extension(self) -> None:
+        """取消註冊 Chrome 擴展"""
+        self._log("Extension disconnected")
+
+        async with self._lock:
+            # 拒絕所有 pending 請求
+            for future in self.extension_pending_requests.values():
+                if not future.done():
+                    future.set_exception(Exception("Extension connection closed"))
+            self.extension_pending_requests.clear()
+
+            self.extension_ws = None
+            self.connected_targets.clear()
+            self.named_pages.clear()
+
+            # 關閉所有 Playwright 客戶端
+            for client_id, ws in list(self.playwright_websockets.items()):
+                try:
+                    await ws.close(code=1000, reason="Extension disconnected")
+                except Exception:
+                    pass
+            self.playwright_clients.clear()
+            self.playwright_websockets.clear()
+
+    async def send_to_extension(
+        self,
+        method: str,
+        params: Optional[dict[str, Any]] = None,
+        timeout: float = 30.0,
+    ) -> Any:
+        """發送命令到擴展並等待回應"""
+        if not self.extension_ws:
+            raise Exception("Extension not connected")
+
+        async with self._lock:
+            self._message_id += 1
+            msg_id = self._message_id
+
+        message = {"id": msg_id, "method": method, "params": params or {}}
+        await self.extension_ws.send_text(json.dumps(message))
+
+        # 建立 future 等待回應
+        loop = asyncio.get_running_loop()
+        future: asyncio.Future = loop.create_future()
+
+        async with self._lock:
+            self.extension_pending_requests[msg_id] = future
+
+        try:
+            return await asyncio.wait_for(future, timeout=timeout)
+        except asyncio.TimeoutError:
+            async with self._lock:
+                self.extension_pending_requests.pop(msg_id, None)
+            raise Exception(f"Extension request timeout after {timeout}s: {method}")
+
+    def handle_extension_response(self, msg_id: int, result: Any, error: Optional[str]) -> None:
+        """處理擴展的回應"""
+        # 注意：這是同步方法，但修改了 extension_pending_requests
+        # 由於這是在 on_message 回調中調用的，且無法改為 async
+        # 我們需要確保操作是原子性的（dict.pop 是原子操作）
+        future = self.extension_pending_requests.pop(msg_id, None)
+        if not future:
+            self._log(f"Unexpected response with id: {msg_id}")
+            return
+
+        if error:
+            future.set_exception(Exception(error))
+        else:
+            future.set_result(result)
+
+    # ============================================================================
+    # CDP 命令路由
+    # ============================================================================
+
+    async def route_cdp_command(
+        self,
+        method: str,
+        params: Optional[dict[str, Any]] = None,
+        session_id: Optional[str] = None,
+    ) -> Any:
+        """路由 CDP 命令"""
+        params = params or {}
+
+        # 處理一些本地 CDP 命令
+        match method:
+            case "Browser.getVersion":
+                return {
+                    "protocolVersion": "1.3",
+                    "product": "Chrome/Extension-Bridge",
+                    "revision": "1.0.0",
+                    "userAgent": "client-browser-relay/1.0.0",
+                    "jsVersion": "V8",
+                }
+
+            case "Browser.setDownloadBehavior":
+                return {}
+
+            case "Target.setAutoAttach":
+                if session_id:
+                    # Forward to extension for child frames
+                    pass
+                else:
+                    return {}
+
+            case "Target.setDiscoverTargets":
+                return {}
+
+            case "Target.attachToBrowserTarget":
+                # Browser-level session - return a fake session
+                return {"sessionId": "browser"}
+
+            case "Target.detachFromTarget":
+                if session_id == "browser" or params.get("sessionId") == "browser":
+                    return {}
+                # Otherwise forward to extension
+
+            case "Target.attachToTarget":
+                target_id = params.get("targetId")
+                if not target_id:
+                    raise Exception("targetId is required for Target.attachToTarget")
+
+                async with self._lock:
+                    for target in self.connected_targets.values():
+                        if target.target_id == target_id:
+                            return {"sessionId": target.session_id}
+
+                raise Exception(f"Target {target_id} not found in connected targets")
+
+            case "Target.getTargetInfo":
+                target_id = params.get("targetId")
+
+                async with self._lock:
+                    if target_id:
+                        for target in self.connected_targets.values():
+                            if target.target_id == target_id:
+                                return {"targetInfo": self._target_info_to_dict(target.target_info)}
+
+                    if session_id:
+                        target = self.connected_targets.get(session_id)
+                        if target:
+                            return {"targetInfo": self._target_info_to_dict(target.target_info)}
+
+                    # Return first target if no specific one requested
+                    if self.connected_targets:
+                        first_target = next(iter(self.connected_targets.values()))
+                        return {"targetInfo": self._target_info_to_dict(first_target.target_info)}
+
+                return {"targetInfo": None}
+
+            case "Target.getTargets":
+                async with self._lock:
+                    return {
+                        "targetInfos": [
+                            {**self._target_info_to_dict(t.target_info), "attached": True}
+                            for t in self.connected_targets.values()
+                        ]
+                    }
+
+            case "Target.createTarget" | "Target.closeTarget":
+                # Forward to extension
+                return await self.send_to_extension(
+                    "forwardCDPCommand",
+                    {"method": method, "params": params},
+                )
+
+        # Forward all other commands to extension
+        return await self.send_to_extension(
+            "forwardCDPCommand",
+            {"sessionId": session_id, "method": method, "params": params},
+        )
+
+    def _target_info_to_dict(self, info: TargetInfo) -> dict[str, Any]:
+        """將 TargetInfo 轉換為字典"""
+        return {
+            "targetId": info.target_id,
+            "type": info.type,
+            "title": info.title,
+            "url": info.url,
+            "attached": info.attached,
+            "browserContextId": info.browser_context_id,
+        }
+
+    # ============================================================================
+    # Target 生命週期事件處理
+    # ============================================================================
+
+    async def handle_target_attached(
+        self, session_id: str, target_info_dict: dict[str, Any]
+    ) -> None:
+        """處理 Target.attachedToTarget 事件"""
+        target_info = TargetInfo(
+            target_id=target_info_dict.get("targetId", ""),
+            type=target_info_dict.get("type", "page"),
+            title=target_info_dict.get("title", ""),
+            url=target_info_dict.get("url", ""),
+            attached=True,
+            browser_context_id=target_info_dict.get("browserContextId", "default"),
+        )
+
+        target = ConnectedTarget(
+            session_id=session_id,
+            target_id=target_info.target_id,
+            target_info=target_info,
+        )
+
+        async with self._lock:
+            self.connected_targets[session_id] = target
+
+        self._log(f"Target attached: {target_info.url} ({session_id})")
+
+        # Resolve 等待該 target 的 future（如果存在）
+        future = self._target_attachment_futures.pop(target_info.target_id, None)
+        if future and not future.done():
+            future.set_result(session_id)
+
+        # 使用去重功能發送事件
+        await self.send_attached_to_target(target)
+
+    async def handle_target_detached(self, session_id: str) -> None:
+        """處理 Target.detachedFromTarget 事件"""
+        async with self._lock:
+            self.connected_targets.pop(session_id, None)
+
+            # 移除命名頁面映射
+            for name, sid in list(self.named_pages.items()):
+                if sid == session_id:
+                    del self.named_pages[name]
+                break
+
+        self._log(f"Target detached: {session_id}")
+
+        await self.send_to_playwright({
+            "method": "Target.detachedFromTarget",
+            "params": {"sessionId": session_id},
+        })
+
+    async def handle_target_info_changed(self, target_info_dict: dict[str, Any]) -> None:
+        """處理 Target.targetInfoChanged 事件"""
+        target_id = target_info_dict.get("targetId")
+
+        async with self._lock:
+            for target in self.connected_targets.values():
+                if target.target_id == target_id:
+                    target.target_info = TargetInfo(
+                        target_id=target_info_dict.get("targetId", ""),
+                        type=target_info_dict.get("type", "page"),
+                        title=target_info_dict.get("title", ""),
+                        url=target_info_dict.get("url", ""),
+                        attached=target_info_dict.get("attached", True),
+                        browser_context_id=target_info_dict.get("browserContextId", "default"),
+                    )
+                    break
+
+        await self.send_to_playwright({
+            "method": "Target.targetInfoChanged",
+            "params": {"targetInfo": target_info_dict},
+        })
+
+    # ============================================================================
+    # 命名頁面管理
+    # ============================================================================
+
+    def get_named_pages(self) -> list[str]:
+        """獲取所有命名頁面"""
+        return list(self.named_pages.keys())
+
+    async def get_or_create_named_page(
+        self, name: str, host: str, port: int
+    ) -> Optional[dict[str, Any]]:
+        """獲取或建立命名頁面"""
+        # 檢查頁面是否已存在（需要鎖保護）
+        async with self._lock:
+            existing_session_id = self.named_pages.get(name)
+            if existing_session_id:
+                target = self.connected_targets.get(existing_session_id)
+                if target:
+                    # 啟用該標籤頁
+                    await self.send_to_extension(
+                        "forwardCDPCommand",
+                        {
+                            "method": "Target.activateTarget",
+                            "params": {"targetId": target.target_id},
+                        },
+                    )
+                    return {
+                        "wsEndpoint": f"ws://{host}:{port}/api/v1/client-browser-relay/cdp",
+                        "name": name,
+                        "targetId": target.target_id,
+                        "url": target.target_info.url,
+                    }
+                # Session 不再有效，移除它
+                del self.named_pages[name]
+
+        # 建立新標籤頁（檢查 extension_ws 不需要鎖，因為它只是讀取）
+        if not self.extension_ws:
+            return None
+
+        result = await self.send_to_extension(
+            "forwardCDPCommand",
+            {"method": "Target.createTarget", "params": {"url": "about:blank"}},
+        )
+
+        target_id = result.get("targetId") if isinstance(result, dict) else None
+        if not target_id:
+            return None
+
+        # 使用 Future 等待 Target.attachedToTarget 事件
+        # 這比 asyncio.sleep(0.2) 更可靠，因為它會在事件發生時立即返回
+        future = asyncio.Future()
+        async with self._lock:
+            self._target_attachment_futures[target_id] = future
+
+        try:
+            # 等待 target 被附加，超時 2 秒
+            session_id = await asyncio.wait_for(future, timeout=2.0)
+
+            # 找到並命名新 target（需要鎖保護）
+            async with self._lock:
+                if target_id in self.connected_targets:
+                    self.named_pages[name] = session_id
+                    # 啟用該標籤頁
+                    await self.send_to_extension(
+                        "forwardCDPCommand",
+                        {
+                            "method": "Target.activateTarget",
+                            "params": {"targetId": target_id},
+                        },
+                    )
+                    target = self.connected_targets[session_id]
+                    return {
+                            "wsEndpoint": f"ws://{host}:{port}/api/v1/client-browser-relay/cdp",
+                            "name": name,
+                            "targetId": target.target_id,
+                            "url": target.target_info.url,
+                        }
+
+        except asyncio.TimeoutError:
+            # 超時：target 未在 2 秒內附加
+            self._log(f"Target {target_id} attachment timed out")
+        finally:
+            # 確保 future 被清理
+            async with self._lock:
+                self._target_attachment_futures.pop(target_id, None)
+
+        return None
+
+    async def delete_named_page(self, name: str) -> bool:
+        """刪除命名頁面（僅移除名稱，不關閉標籤頁）"""
+        async with self._lock:
+            return self.named_pages.pop(name, None) is not None
+
+    # ============================================================================
+    # 狀態查詢
+    # ============================================================================
+
+    def get_status(self, host: str, port: int) -> dict[str, Any]:
+        """獲取 Relay Server 狀態"""
+        return {
+            "wsEndpoint": f"ws://{host}:{port}/api/v1/client-browser-relay/cdp",
+            "extensionConnected": self.extension_ws is not None,
+            "mode": "extension",
+            "connectedTargetsCount": len(self.connected_targets),
+            "playwrightClientsCount": len(self.playwright_clients),
+        }
+
+
+# 全域單例實例
+_relay_service: Optional[RelayService] = None
+
+
+def get_relay_service() -> RelayService:
+    """獲取 RelayService 單例實例"""
+    global _relay_service
+    if _relay_service is None:
+        _relay_service = RelayService()
+    return _relay_service

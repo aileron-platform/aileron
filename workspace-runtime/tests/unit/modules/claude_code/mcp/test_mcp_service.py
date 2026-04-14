@@ -1,0 +1,623 @@
+"""MCP Service 單元測試"""
+
+from __future__ import annotations
+
+import json
+import pytest
+from pathlib import Path
+from unittest.mock import Mock, patch, MagicMock
+
+from app.modules.claude_code.mcp.service import McpService, McpServerEntry
+from app.modules.claude_code.mcp.models import (
+    McpServerConfig,
+    McpServerCreateRequest,
+    McpServerUpdateRequest,
+    McpTransportType,
+)
+from app.modules.claude_code.common import DocumentScope
+
+
+@pytest.fixture
+def mcp_service():
+    """MCP service fixture."""
+    return McpService()
+
+
+@pytest.fixture
+def tmp_workspace(tmp_path):
+    """創建臨時 workspace 目錄結構."""
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    project_root = workspace_root / ".claude"
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    return workspace_root, project_root
+
+
+class TestListServers:
+    """測試列出 MCP servers 功能."""
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_list_servers_all(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試列出所有 scope 的 MCP servers."""
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        # Act
+        result = mcp_service.list_servers(workspace_id, None)
+
+        # Assert
+        assert result is not None
+        assert result.workspaceId == workspace_id
+        assert len(result.scopes) >= 0
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_list_servers_project_only(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試只列出 project scope 的 MCP servers."""
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        # Act
+        result = mcp_service.list_servers(workspace_id, DocumentScope.PROJECT)
+
+        # Assert
+        assert result is not None
+        assert len(result.scopes) >= 0
+
+
+class TestGetScope:
+    """測試獲取特定 scope 的 MCP servers."""
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_get_scope_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試成功獲取 scope."""
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }
+
+        # Act
+        result = mcp_service.get_scope(workspace_id, DocumentScope.PROJECT)
+
+        # Assert
+        assert result is not None
+        assert result.workspaceId == workspace_id
+        assert result.scope == DocumentScope.PROJECT
+
+
+class TestCreateServers:
+    """測試創建 MCP servers."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_create_servers_success(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試成功創建 servers."""
+        # Arrange
+        workspace_id = "test-workspace"
+        scope = DocumentScope.PROJECT
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="test-command"
+        )
+        payload = McpServerCreateRequest(
+            mcpServers={
+                "test-server": server_config
+            }
+        )
+
+        # Act
+        result = mcp_service.create_servers(workspace_id, scope, payload)
+
+        # Assert
+        assert result is not None
+        assert mock_write_json.called
+
+
+class TestUpdateServer:
+    """測試更新 MCP server."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_update_server_success(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試成功更新 server."""
+        # Arrange
+        workspace_id = "test-workspace"
+        scope = DocumentScope.PROJECT
+        server_name = "test-server"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "old-command"
+                }
+            }
+        }
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="new-command"
+        )
+
+        update_request = McpServerUpdateRequest(
+            mcpServers={server_name: server_config}
+        )
+
+        # Act
+        result = mcp_service.update_server(workspace_id, scope, server_name, update_request)
+
+        # Assert
+        assert result is not None
+        assert mock_write_json.called
+
+
+class TestDeleteServer:
+    """測試刪除 MCP server."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_delete_server_success(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試成功刪除 server."""
+        # Arrange
+        workspace_id = "test-workspace"
+        scope = DocumentScope.PROJECT
+        server_name = "test-server"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }
+
+        # Act
+        result = mcp_service.delete_server(workspace_id, scope, server_name)
+
+        # Assert
+        assert result is not None
+        assert result.workspace_id == workspace_id
+        assert result.scope == scope
+        assert mock_write_json.called
+
+
+class TestExportServer:
+    """測試導出 MCP server."""
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_export_server_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試成功導出 server."""
+        # Arrange
+        workspace_id = "test-workspace"
+        scope = DocumentScope.PROJECT
+        server_name = "test-server"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }
+
+        # Act
+        result = mcp_service.export_server(workspace_id, scope, server_name)
+
+        # Assert
+        assert result is not None
+
+
+class TestToggleServerStatus:
+    """測試切換 MCP server 狀態."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_toggle_server_status_success(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試成功切換 server 狀態."""
+        # Arrange
+        workspace_id = "test-workspace"
+        scope = DocumentScope.PROJECT
+        server_name = "test-server"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }
+
+        # Act
+        result = mcp_service.toggle_server_status(workspace_id, scope, server_name, False)
+
+        # Assert
+        assert result is not None
+        assert mock_write_json.called
+
+
+class TestServiceInitialization:
+    """測試服務初始化."""
+
+    def test_service_init(self):
+        """測試服務初始化."""
+        # Act
+        service = McpService()
+
+        # Assert
+        assert service is not None
+
+
+class TestGetServer:
+    """測試獲取單一 MCP server."""
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_get_server_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試成功獲取單一 server."""
+        # Arrange
+        workspace_id = "test-workspace"
+        server_name = "test-server"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }
+
+        # Act
+        result = mcp_service.get_server(workspace_id, DocumentScope.PROJECT, server_name)
+
+        # Assert
+        assert result is not None
+        assert server_name in result.mcpServers
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_get_server_not_found(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
+        """測試獲取不存在的 server."""
+        from app.modules.claude_code.mcp.service import McpServerNotFoundError
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        # Act & Assert
+        with pytest.raises(McpServerNotFoundError):
+            mcp_service.get_server(workspace_id, DocumentScope.PROJECT, "nonexistent")
+
+
+class TestImportServers:
+    """測試匯入 MCP servers."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_import_servers_create_new(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試匯入新的 servers."""
+        from app.modules.claude_code.mcp.models import McpImportRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="test-command"
+        )
+        payload = McpImportRequest(
+            scope=DocumentScope.PROJECT,
+            mcpServers={"test-server": server_config},
+            overwrite=False
+        )
+
+        # Act
+        result = mcp_service.import_servers(workspace_id, payload)
+
+        # Assert
+        assert result is not None
+        assert "test-server" in result.created
+        assert len(result.updated) == 0
+        assert len(result.skipped) == 0
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_import_servers_overwrite(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試匯入並覆蓋現有 servers."""
+        from app.modules.claude_code.mcp.models import McpImportRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "old-command"
+                }
+            }
+        }
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="new-command"
+        )
+        payload = McpImportRequest(
+            scope=DocumentScope.PROJECT,
+            mcpServers={"test-server": server_config},
+            overwrite=True
+        )
+
+        # Act
+        result = mcp_service.import_servers(workspace_id, payload)
+
+        # Assert
+        assert result is not None
+        assert "test-server" in result.updated
+        assert len(result.created) == 0
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_import_servers_skip_existing(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試匯入時跳過現有 servers."""
+        from app.modules.claude_code.mcp.models import McpImportRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "old-command"
+                }
+            }
+        }
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="new-command"
+        )
+        payload = McpImportRequest(
+            scope=DocumentScope.PROJECT,
+            mcpServers={"test-server": server_config},
+            overwrite=False
+        )
+
+        # Act
+        result = mcp_service.import_servers(workspace_id, payload)
+
+        # Assert
+        assert result is not None
+        assert "test-server" in result.skipped
+        assert len(result.created) == 0
+        assert len(result.updated) == 0
+
+
+class TestImportServersFromFile:
+    """測試從檔案匯入 MCP servers."""
+
+    @patch("app.modules.claude_code.mcp.service.write_json_file")
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_import_from_file_success(
+        self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
+    ):
+        """測試從檔案成功匯入."""
+        from app.modules.claude_code.mcp.models import McpImportUploadRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        file_content = json.dumps({
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "test-command"
+                }
+            }
+        }).encode('utf-8')
+
+        payload = McpImportUploadRequest(
+            scope=DocumentScope.PROJECT,
+            file=file_content,
+            overwrite=False
+        )
+
+        # Act
+        result = mcp_service.import_servers_from_file(workspace_id, payload)
+
+        # Assert
+        assert result is not None
+        assert "test-server" in result.created
+
+    def test_import_from_file_invalid_json(self, mcp_service):
+        """測試匯入無效的 JSON 檔案."""
+        from app.modules.claude_code.mcp.models import McpImportUploadRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        file_content = b"invalid json{"
+
+        payload = McpImportUploadRequest(
+            scope=DocumentScope.PROJECT,
+            file=file_content,
+            overwrite=False
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="Invalid JSON format"):
+            mcp_service.import_servers_from_file(workspace_id, payload)
+
+    def test_import_from_file_missing_mcpservers(self, mcp_service):
+        """測試匯入缺少 mcpServers 欄位的檔案."""
+        from app.modules.claude_code.mcp.models import McpImportUploadRequest
+
+        # Arrange
+        workspace_id = "test-workspace"
+        file_content = json.dumps({"other": "data"}).encode('utf-8')
+
+        payload = McpImportUploadRequest(
+            scope=DocumentScope.PROJECT,
+            file=file_content,
+            overwrite=False
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="missing 'mcpServers' field"):
+            mcp_service.import_servers_from_file(workspace_id, payload)
+
+
+class TestErrorHandling:
+    """測試錯誤處理."""
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_create_duplicate_server(
+        self, mock_resolve, mock_read_json, mcp_service, tmp_path
+    ):
+        """測試創建重複的 server."""
+        from app.modules.claude_code.mcp.service import McpServerAlreadyExistsError
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {
+            "mcpServers": {
+                "test-server": {
+                    "type": "stdio",
+                    "command": "existing-command"
+                }
+            }
+        }
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="new-command"
+        )
+        payload = McpServerCreateRequest(
+            mcpServers={"test-server": server_config}
+        )
+
+        # Act & Assert
+        with pytest.raises(McpServerAlreadyExistsError):
+            mcp_service.create_servers(workspace_id, DocumentScope.PROJECT, payload)
+
+    @patch("app.modules.claude_code.mcp.service.read_json_file")
+    @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
+    def test_update_nonexistent_server(
+        self, mock_resolve, mock_read_json, mcp_service, tmp_path
+    ):
+        """測試更新不存在的 server."""
+        from app.modules.claude_code.mcp.service import McpServerNotFoundError
+
+        # Arrange
+        workspace_id = "test-workspace"
+        mock_resolve.return_value = tmp_path
+        mock_read_json.return_value = {"mcpServers": {}}
+
+        server_config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="new-command"
+        )
+
+        # Act & Assert
+        with pytest.raises(McpServerNotFoundError):
+            mcp_service.update_server(
+                workspace_id, DocumentScope.PROJECT, "nonexistent", server_config
+            )
+
+    def test_create_empty_payload(self, mcp_service):
+        """測試創建空的 payload."""
+        # Arrange
+        from pydantic import ValidationError
+
+        # Act & Assert - Pydantic 會在創建對象時就驗證
+        with pytest.raises(ValidationError):
+            payload = McpServerCreateRequest(mcpServers={})
+
+
+class TestMcpServerEntry:
+    """測試 McpServerEntry 資料類別."""
+
+    def test_to_runtime(self):
+        """測試轉換為 runtime 模型."""
+        # Arrange
+        config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="test-command"
+        )
+        entry = McpServerEntry(name="test-server", config=config)
+
+        # Act
+        runtime = entry.to_runtime(enabled=True)
+
+        # Assert
+        assert runtime.enabled is True
+        assert runtime.type == McpTransportType.STDIO
+        assert runtime.command == "test-command"
+
+    def test_to_storage(self):
+        """測試轉換為儲存格式."""
+        # Arrange
+        config = McpServerConfig(
+            type=McpTransportType.STDIO,
+            command="test-command"
+        )
+        entry = McpServerEntry(name="test-server", config=config)
+
+        # Act
+        storage = entry.to_storage()
+
+        # Assert
+        assert isinstance(storage, dict)
+        assert "type" in storage
+        assert "command" in storage

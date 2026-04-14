@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-firewall-defaults
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  firewall-defaults.yaml: |
+    workspace:
+      allowedDomains:
+{{ toYaml .Values.firewall.defaults.workspace.allowedDomains | indent 8 }}
+    browser:
+      allowedDomains:
+{{ toYaml .Values.firewall.defaults.browser.allowedDomains | indent 8 }}

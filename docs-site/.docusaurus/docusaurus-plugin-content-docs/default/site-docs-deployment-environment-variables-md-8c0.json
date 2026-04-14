@@ -1,0 +1,27 @@
+{
+  "id": "deployment/environment-variables",
+  "title": "環境變數參考",
+  "description": "本頁列出所有服務的環境變數。Docker 模式直接在 docker-compose.yml 設定，Kubernetes 模式透過 Helm values 或 ConfigMap 注入。",
+  "source": "@site/docs/deployment/environment-variables.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/environment-variables",
+  "permalink": "/aileron/deployment/environment-variables",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "sidebar_position": 3,
+    "title": "環境變數參考"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Kubernetes 模式",
+    "permalink": "/aileron/deployment/kubernetes"
+  },
+  "next": {
+    "title": "Keycloak 認證配置",
+    "permalink": "/aileron/deployment/keycloak"
+  }
+}

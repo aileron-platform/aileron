@@ -1,0 +1,207 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import { Input } from '@/shared/components/ui/input';
+import { ScrollArea } from '@/shared/components/ui/scroll-area';
+import { Badge } from '@/shared/components/ui/badge';
+import { cn } from '@/shared/utils/cn';
+import { SlashCommandItem, SlashCommandScope } from '@/shared/types/slashCommands';
+import { Command, FolderOpen, Search, User, Download, Puzzle } from 'lucide-react';
+import { useI18n } from '@/shared/hooks/useI18n';
+
+export interface SlashCommandPickerDialogLabels {
+  title?: string;
+  description?: string;
+  searchPlaceholder?: string;
+  empty?: string;
+  scope?: Record<SlashCommandScope | 'all', string>;
+}
+
+export interface SlashCommandPickerDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  commands: SlashCommandItem[];
+  onSelect: (command: SlashCommandItem) => void;
+  labels?: SlashCommandPickerDialogLabels;
+  availableScopes?: string[];
+}
+
+const scopeIcons: Record<SlashCommandScope | 'all', React.ComponentType<{ className?: string }>> = {
+  all: Command,
+  project: FolderOpen,
+  user: User,
+  plugin: Puzzle,
+};
+
+export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> = ({
+  open,
+  onOpenChange,
+  commands,
+  onSelect,
+  labels,
+  availableScopes,
+}) => {
+  const { t } = useI18n();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedScope, setSelectedScope] = useState<SlashCommandScope | 'all'>('all');
+
+  const scopeTabs = useMemo(() => {
+    const tabs: (SlashCommandScope | 'all')[] = ['all'];
+    if (!availableScopes || availableScopes.length === 0) {
+      return ['all', 'project', 'user', 'plugin'] as const;
+    }
+    const displayableScopes: SlashCommandScope[] = ['project', 'user', 'plugin'];
+    for (const s of displayableScopes) {
+      if (availableScopes.includes(s)) tabs.push(s);
+    }
+    return tabs;
+  }, [availableScopes]);
+
+  // 當可用 scopes 改變時，如果當前選中的 scope 不在新列表中，重置為 'all'
+  useEffect(() => {
+    if (!scopeTabs.includes(selectedScope)) {
+      setSelectedScope('all');
+    }
+  }, [scopeTabs, selectedScope]);
+
+  const defaultLabels: Required<SlashCommandPickerDialogLabels> = useMemo(() => ({
+    title: t('common.slashCommand.picker.title'),
+    description: t('common.slashCommand.picker.description'),
+    searchPlaceholder: t('common.slashCommand.picker.searchPlaceholder'),
+    empty: t('common.slashCommand.picker.empty'),
+    scope: {
+      all: t('common.slashCommand.picker.scope.all'),
+      project: t('common.slashCommand.picker.scope.project'),
+      user: t('common.slashCommand.picker.scope.user'),
+      plugin: t('common.slashCommand.picker.scope.plugin'),
+    },
+  }), [t]);
+
+  const filteredCommands = useMemo(() => {
+    const normalized = searchTerm.toLowerCase();
+    return commands.filter((command) => {
+      const scopeMatch = selectedScope === 'all' || command.scope === selectedScope;
+      if (!scopeMatch) {
+        return false;
+      }
+      if (!normalized) {
+        return true;
+      }
+      const displayName = command.displayName.toLowerCase();
+      const fileName = command.fileName.toLowerCase();
+      return (
+        displayName.includes(normalized) ||
+        fileName.includes(normalized) ||
+        command.description.toLowerCase().includes(normalized) ||
+        command.tags?.some((tag) => tag.toLowerCase().includes(normalized))
+      );
+    });
+  }, [commands, searchTerm, selectedScope]);
+
+  const resolvedLabels = useMemo(() => ({
+    ...defaultLabels,
+    ...labels,
+    scope: { ...defaultLabels.scope, ...labels?.scope },
+  }), [defaultLabels, labels]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl h-[80vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0 space-y-1">
+          <DialogTitle className="flex items-center gap-2">
+            <Command className="h-5 w-5 text-primary" />
+            {resolvedLabels.title}
+          </DialogTitle>
+          <DialogDescription>{resolvedLabels.description}</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <Tabs value={selectedScope} onValueChange={(value) => setSelectedScope(value as SlashCommandScope | 'all')}>
+            <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${scopeTabs.length}, minmax(0, 1fr))` }}>
+              {scopeTabs.map(scope => {
+                const Icon = scopeIcons[scope];
+                return (
+                  <TabsTrigger key={scope} value={scope} className="flex items-center gap-2">
+                    <Icon className="h-4 w-4" />
+                    {resolvedLabels.scope[scope]}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </Tabs>
+
+          <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={resolvedLabels.searchPlaceholder}
+              className="h-8 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 py-4">
+          <ScrollArea className="h-full rounded-md border border-border/60 bg-muted/20">
+            <div className="flex flex-col gap-3 p-4">
+              {filteredCommands.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">
+                  {resolvedLabels.empty}
+                </div>
+              ) : (
+                filteredCommands.map((command) => (
+                  <button
+                    key={command.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(command);
+                      onOpenChange(false);
+                    }}
+                    className={cn(
+                      'w-full rounded-xl border border-border bg-card/80 p-4 text-left shadow-sm transition-all duration-200',
+                      'hover:border-primary/60 hover:bg-primary/5'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm text-primary">/{command.displayName}</span>
+                          <Badge variant="secondary" className="text-xs capitalize">
+                            {command.category}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {command.description}
+                        </p>
+                        {command.tags && command.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {command.tags.slice(0, 4).map((tag) => (
+                              <Badge key={tag} variant="outline" className="text-[10px] capitalize">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground">
+                        <Download className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default SlashCommandPickerDialog;

@@ -1,0 +1,11 @@
+{{- if .Values.keycloak.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aileron.fullname" . }}-keycloak-realm
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+data:
+  aileron-realm.json: |
+{{ tpl (.Files.Get "files/keycloak/aileron-realm.json") . | indent 4 }}
+{{- end }}

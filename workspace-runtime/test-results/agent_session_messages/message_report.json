@@ -1,0 +1,63 @@
+{
+  "report_timestamp": "2026-04-09T12:43:53.913602",
+  "test_environment": "container",
+  "total_messages_recorded": 25,
+  "message_type_distribution": {
+    "create_message": 1,
+    "assistant_response": 1,
+    "streaming_chunk_1": 1,
+    "streaming_chunk_2": 1,
+    "streaming_chunk_3": 1,
+    "thinking_block": 1,
+    "tool_use": 2,
+    "tool_result": 2,
+    "permission_request": 2,
+    "permission_decision": 2,
+    "session_state_change": 4,
+    "task_complete": 1,
+    "conversation_message_1": 1,
+    "conversation_message_2": 1,
+    "conversation_message_3": 1,
+    "conversation_message_4": 1,
+    "error_message": 2
+  },
+  "summary": {
+    "total_tests": 12,
+    "test_status": "passed",
+    "test_module": "agent_session",
+    "test_file": "test_record_all_messages.py"
+  },
+  "message_categories": {
+    "conversation": [
+      "create_message",
+      "assistant_response",
+      "conversation_message_1",
+      "conversation_message_2",
+      "conversation_message_3",
+      "conversation_message_4"
+    ],
+    "streaming": [
+      "streaming_chunk_1",
+      "streaming_chunk_2",
+      "streaming_chunk_3"
+    ],
+    "tools": [
+      "tool_use",
+      "tool_result"
+    ],
+    "permissions": [
+      "permission_request",
+      "permission_decision"
+    ],
+    "state": [
+      "session_state_change",
+      "task_complete"
+    ],
+    "errors": [
+      "error_message"
+    ],
+    "thinking": [
+      "thinking_block"
+    ]
+  }
+}

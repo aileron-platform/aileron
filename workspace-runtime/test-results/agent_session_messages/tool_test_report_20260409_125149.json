@@ -1,0 +1,679 @@
+{
+  "metadata": {
+    "test_type": "comprehensive_tool_test",
+    "timestamp": "2026-04-09T12:51:49.828398",
+    "total_tools_tested": 13,
+    "successful_executions": 13,
+    "failed_executions": 0,
+    "total_duration_seconds": 10.025425
+  },
+  "tool_executions": [
+    {
+      "timestamp": "2026-04-09T12:51:39.803001",
+      "tool_name": "Glob",
+      "input_format": {
+        "parameters": {
+          "pattern": "**/*.py",
+          "path": "/workspace"
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str"
+        }
+      },
+      "output": {
+        "files_found": [
+          "/workspace/file1.py",
+          "/workspace/file2.py",
+          "/workspace/subdir/file3.py"
+        ],
+        "total_count": 3,
+        "pattern_used": "**/*.py"
+      },
+      "output_type": "dict",
+      "execution_time_ms": 45.2,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.804160",
+      "tool_name": "Glob",
+      "input_format": {
+        "parameters": {
+          "pattern": "**/*.{json,yml,yaml,toml}",
+          "path": "/workspace"
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str"
+        }
+      },
+      "output": {
+        "files_found": [
+          "/workspace/config.json",
+          "/workspace/docker-compose.yml",
+          "/workspace/pyproject.toml"
+        ],
+        "by_extension": {
+          "json": 1,
+          "yml": 1,
+          "toml": 1
+        },
+        "total_count": 3
+      },
+      "output_type": "dict",
+      "execution_time_ms": 52.1,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.804873",
+      "tool_name": "Read",
+      "input_format": {
+        "parameters": {
+          "file_path": "/workspace/README.md"
+        },
+        "parameter_types": {
+          "file_path": "str"
+        }
+      },
+      "output": {
+        "file_path": "/workspace/README.md",
+        "content": "# Project README\n\nThis is a test project...",
+        "file_size": 125,
+        "encoding": "utf-8",
+        "lines": 10
+      },
+      "output_type": "dict",
+      "execution_time_ms": 12.5,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.806171",
+      "tool_name": "Read",
+      "input_format": {
+        "parameters": {
+          "file_path": "/workspace/package.json"
+        },
+        "parameter_types": {
+          "file_path": "str"
+        }
+      },
+      "output": {
+        "file_path": "/workspace/package.json",
+        "content": "{\"name\": \"test\", \"version\": \"1.0.0\"}",
+        "file_size": 45,
+        "is_json": true,
+        "parsed_json": {
+          "name": "test",
+          "version": "1.0.0"
+        }
+      },
+      "output_type": "dict",
+      "execution_time_ms": 10.3,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.807070",
+      "tool_name": "Grep",
+      "input_format": {
+        "parameters": {
+          "pattern": "async def",
+          "path": "/workspace",
+          "type": "py"
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str",
+          "type": "str"
+        }
+      },
+      "output": {
+        "pattern": "async def",
+        "matches_found": 15,
+        "files_with_matches": 8,
+        "sample_matches": [
+          {
+            "file": "/workspace/app/services/auth.py",
+            "line_number": 42,
+            "content": "    async def authenticate(self, token: str):"
+          }
+        ]
+      },
+      "output_type": "dict",
+      "execution_time_ms": 156.7,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.807841",
+      "tool_name": "Grep",
+      "input_format": {
+        "parameters": {
+          "pattern": "class.*\\(.*\\):",
+          "path": "/workspace",
+          "type": "py",
+          "multiline": true
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str",
+          "type": "str",
+          "multiline": "bool"
+        }
+      },
+      "output": {
+        "pattern": "class.*\\(.*\\):",
+        "matches_found": 28,
+        "files_with_matches": 12,
+        "file_breakdown": {
+          "models.py": 5,
+          "services.py": 8,
+          "routers.py": 7,
+          "other": 8
+        }
+      },
+      "output_type": "dict",
+      "execution_time_ms": 234.5,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.808563",
+      "tool_name": "Bash",
+      "input_format": {
+        "parameters": {
+          "command": "pwd",
+          "description": "Get current working directory"
+        },
+        "parameter_types": {
+          "command": "str",
+          "description": "str"
+        }
+      },
+      "output": {
+        "command": "pwd",
+        "exit_code": 0,
+        "stdout": "/workspace",
+        "stderr": "",
+        "execution_time_ms": 5.2
+      },
+      "output_type": "dict",
+      "execution_time_ms": 5.2,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.809282",
+      "tool_name": "Bash",
+      "input_format": {
+        "parameters": {
+          "command": "find /workspace -name '*.py' | wc -l",
+          "description": "Count Python files"
+        },
+        "parameter_types": {
+          "command": "str",
+          "description": "str"
+        }
+      },
+      "output": {
+        "command": "find /workspace -name '*.py' | wc -l",
+        "exit_code": 0,
+        "stdout": "45",
+        "stderr": "",
+        "execution_time_ms": 145.8
+      },
+      "output_type": "dict",
+      "execution_time_ms": 145.8,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.810032",
+      "tool_name": "Write",
+      "input_format": {
+        "parameters": {
+          "file_path": "/tmp/test_file.txt",
+          "content": "Test content"
+        },
+        "parameter_types": {
+          "file_path": "str",
+          "content": "str"
+        }
+      },
+      "output": {
+        "file_path": "/tmp/test_file.txt",
+        "status": "created",
+        "file_size": 12,
+        "encoding": "utf-8",
+        "timestamp": "2026-04-09T12:51:39.810027"
+      },
+      "output_type": "dict",
+      "execution_time_ms": 8.5,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.810748",
+      "tool_name": "Write",
+      "input_format": {
+        "parameters": {
+          "file_path": "/tmp/test_data.json",
+          "content": "{\"key\": \"value\", \"number\": 42}"
+        },
+        "parameter_types": {
+          "file_path": "str",
+          "content": "str"
+        }
+      },
+      "output": {
+        "file_path": "/tmp/test_data.json",
+        "status": "created",
+        "file_size": 32,
+        "is_valid_json": true
+      },
+      "output_type": "dict",
+      "execution_time_ms": 7.2,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.811531",
+      "tool_name": "Edit",
+      "input_format": {
+        "parameters": {
+          "file_path": "/tmp/test_file.txt",
+          "old_string": "Test content",
+          "new_string": "Modified content"
+        },
+        "parameter_types": {
+          "file_path": "str",
+          "old_string": "str",
+          "new_string": "str"
+        }
+      },
+      "output": {
+        "file_path": "/tmp/test_file.txt",
+        "status": "modified",
+        "lines_changed": 1,
+        "old_content": "Test content",
+        "new_content": "Modified content"
+      },
+      "output_type": "dict",
+      "execution_time_ms": 6.8,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.812535",
+      "tool_name": "TodoWrite",
+      "input_format": {
+        "parameters": {
+          "todos": [
+            {
+              "content": "Test Glob tool",
+              "status": "completed",
+              "activeForm": "Testing Glob tool"
+            },
+            {
+              "content": "Test Read tool",
+              "status": "in_progress",
+              "activeForm": "Testing Read tool"
+            },
+            {
+              "content": "Test Write tool",
+              "status": "pending",
+              "activeForm": "Testing Write tool"
+            }
+          ]
+        },
+        "parameter_types": {
+          "todos": "list"
+        }
+      },
+      "output": {
+        "todos_created": 3,
+        "todos_by_status": {
+          "completed": 1,
+          "in_progress": 1,
+          "pending": 1
+        },
+        "timestamp": "2026-04-09T12:51:39.812525"
+      },
+      "output_type": "dict",
+      "execution_time_ms": 15.3,
+      "status": "success",
+      "error": null
+    },
+    {
+      "timestamp": "2026-04-09T12:51:39.813609",
+      "tool_name": "Task",
+      "input_format": {
+        "parameters": {
+          "subagent_type": "Explore",
+          "description": "Analyze project structure",
+          "prompt": "Analyze the /workspace project..."
+        },
+        "parameter_types": {
+          "subagent_type": "str",
+          "description": "str",
+          "prompt": "str"
+        }
+      },
+      "output": {
+        "task_id": "task_explore_001",
+        "agent_type": "Explore",
+        "status": "completed",
+        "findings": {
+          "total_files": 250,
+          "main_directories": 45,
+          "primary_language": "Python"
+        },
+        "execution_time_ms": 2500
+      },
+      "output_type": "dict",
+      "execution_time_ms": 2500,
+      "status": "success",
+      "error": null
+    }
+  ],
+  "tool_summary": {
+    "Glob": {
+      "executions": 2,
+      "successful": 2,
+      "failed": 0,
+      "average_time_ms": 48.650000000000006,
+      "total_time_ms": 97.30000000000001
+    },
+    "Read": {
+      "executions": 2,
+      "successful": 2,
+      "failed": 0,
+      "average_time_ms": 11.4,
+      "total_time_ms": 22.8
+    },
+    "Grep": {
+      "executions": 2,
+      "successful": 2,
+      "failed": 0,
+      "average_time_ms": 195.6,
+      "total_time_ms": 391.2
+    },
+    "Bash": {
+      "executions": 2,
+      "successful": 2,
+      "failed": 0,
+      "average_time_ms": 75.5,
+      "total_time_ms": 151.0
+    },
+    "Write": {
+      "executions": 2,
+      "successful": 2,
+      "failed": 0,
+      "average_time_ms": 7.85,
+      "total_time_ms": 15.7
+    },
+    "Edit": {
+      "executions": 1,
+      "successful": 1,
+      "failed": 0,
+      "average_time_ms": 6.8,
+      "total_time_ms": 6.8
+    },
+    "TodoWrite": {
+      "executions": 1,
+      "successful": 1,
+      "failed": 0,
+      "average_time_ms": 15.3,
+      "total_time_ms": 15.3
+    },
+    "Task": {
+      "executions": 1,
+      "successful": 1,
+      "failed": 0,
+      "average_time_ms": 2500.0,
+      "total_time_ms": 2500
+    }
+  },
+  "input_output_formats": {
+    "Glob": {
+      "input_format": {
+        "parameters": {
+          "pattern": "**/*.py",
+          "path": "/workspace"
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "pattern": "**/*.py",
+          "path": "/workspace"
+        },
+        {
+          "pattern": "**/*.{json,yml,yaml,toml}",
+          "path": "/workspace"
+        }
+      ],
+      "example_outputs": [
+        "<dict object>",
+        "<dict object>"
+      ]
+    },
+    "Read": {
+      "input_format": {
+        "parameters": {
+          "file_path": "/workspace/README.md"
+        },
+        "parameter_types": {
+          "file_path": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "file_path": "/workspace/README.md"
+        },
+        {
+          "file_path": "/workspace/package.json"
+        }
+      ],
+      "example_outputs": [
+        "<dict object>",
+        "<dict object>"
+      ]
+    },
+    "Grep": {
+      "input_format": {
+        "parameters": {
+          "pattern": "async def",
+          "path": "/workspace",
+          "type": "py"
+        },
+        "parameter_types": {
+          "pattern": "str",
+          "path": "str",
+          "type": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "pattern": "async def",
+          "path": "/workspace",
+          "type": "py"
+        },
+        {
+          "pattern": "class.*\\(.*\\):",
+          "path": "/workspace",
+          "type": "py",
+          "multiline": true
+        }
+      ],
+      "example_outputs": [
+        "<dict object>",
+        "<dict object>"
+      ]
+    },
+    "Bash": {
+      "input_format": {
+        "parameters": {
+          "command": "pwd",
+          "description": "Get current working directory"
+        },
+        "parameter_types": {
+          "command": "str",
+          "description": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "command": "pwd",
+          "description": "Get current working directory"
+        },
+        {
+          "command": "find /workspace -name '*.py' | wc -l",
+          "description": "Count Python files"
+        }
+      ],
+      "example_outputs": [
+        "<dict object>",
+        "<dict object>"
+      ]
+    },
+    "Write": {
+      "input_format": {
+        "parameters": {
+          "file_path": "/tmp/test_file.txt",
+          "content": "Test content"
+        },
+        "parameter_types": {
+          "file_path": "str",
+          "content": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "file_path": "/tmp/test_file.txt",
+          "content": "Test content"
+        },
+        {
+          "file_path": "/tmp/test_data.json",
+          "content": "{\"key\": \"value\", \"number\": 42}"
+        }
+      ],
+      "example_outputs": [
+        "<dict object>",
+        "<dict object>"
+      ]
+    },
+    "Edit": {
+      "input_format": {
+        "parameters": {
+          "file_path": "/tmp/test_file.txt",
+          "old_string": "Test content",
+          "new_string": "Modified content"
+        },
+        "parameter_types": {
+          "file_path": "str",
+          "old_string": "str",
+          "new_string": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "file_path": "/tmp/test_file.txt",
+          "old_string": "Test content",
+          "new_string": "Modified content"
+        }
+      ],
+      "example_outputs": [
+        "<dict object>"
+      ]
+    },
+    "TodoWrite": {
+      "input_format": {
+        "parameters": {
+          "todos": [
+            {
+              "content": "Test Glob tool",
+              "status": "completed",
+              "activeForm": "Testing Glob tool"
+            },
+            {
+              "content": "Test Read tool",
+              "status": "in_progress",
+              "activeForm": "Testing Read tool"
+            },
+            {
+              "content": "Test Write tool",
+              "status": "pending",
+              "activeForm": "Testing Write tool"
+            }
+          ]
+        },
+        "parameter_types": {
+          "todos": "list"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "todos": [
+            {
+              "content": "Test Glob tool",
+              "status": "completed",
+              "activeForm": "Testing Glob tool"
+            },
+            {
+              "content": "Test Read tool",
+              "status": "in_progress",
+              "activeForm": "Testing Read tool"
+            },
+            {
+              "content": "Test Write tool",
+              "status": "pending",
+              "activeForm": "Testing Write tool"
+            }
+          ]
+        }
+      ],
+      "example_outputs": [
+        "<dict object>"
+      ]
+    },
+    "Task": {
+      "input_format": {
+        "parameters": {
+          "subagent_type": "Explore",
+          "description": "Analyze project structure",
+          "prompt": "Analyze the /workspace project..."
+        },
+        "parameter_types": {
+          "subagent_type": "str",
+          "description": "str",
+          "prompt": "str"
+        }
+      },
+      "output_type": "dict",
+      "example_inputs": [
+        {
+          "subagent_type": "Explore",
+          "description": "Analyze project structure",
+          "prompt": "Analyze the /workspace project..."
+        }
+      ],
+      "example_outputs": [
+        "<dict object>"
+      ]
+    }
+  }
+}

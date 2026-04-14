@@ -1,0 +1,51 @@
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_workspace_manager
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  workspace-manager-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://test_user:test_password@postgres-test:5432/test_workspace_manager
+      - REDIS_URL=redis://redis-test:6379/0
+      - TESTING=true
+      - CILIUM_ENABLED=true
+      - PYTHONPATH=/workspace-manager
+    volumes:
+      - .:/workspace-manager
+    working_dir: /workspace-manager
+    command: >
+      sh -c "
+        uv sync --dev &&
+        uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=html -v
+      "

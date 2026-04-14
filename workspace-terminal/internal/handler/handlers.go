@@ -1,0 +1,234 @@
+package handler
+
+import (
+	"go.uber.org/zap"
+
+	"workspace-terminal/internal/model"
+	"workspace-terminal/internal/service"
+)
+
+// 處理建立 tab
+func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Message) {
+	// 提取參數
+	cols, ok := msg.Data["cols"].(float64)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "cols is required and must be a number")
+		return
+	}
+
+	rows, ok := msg.Data["rows"].(float64)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "rows is required and must be a number")
+		return
+	}
+
+	name, ok := msg.Data["name"].(string)
+	if !ok || name == "" {
+		name = "Terminal" // 默認名稱
+	}
+
+	workspacePath, ok := msg.Data["workspace_path"].(string)
+	if !ok || workspacePath == "" {
+		workspacePath = "/workspace" // 默認工作目錄
+	}
+
+	// 建立 tab
+	tab, err := h.terminalMgr.CreateTab(client.WorkspaceID, int(cols), int(rows), workspacePath)
+	if err != nil {
+		h.logger.Error("Failed to create tab", zap.Error(err))
+		h.sendError(client, "TAB_CREATION_FAILED", err.Error())
+		return
+	}
+
+	// 發送 tab_created 訊息
+	response := model.NewTabCreatedMessage(tab.TabID, tab.SessionID, name, tab.WorkspacePath, tab.Cols, tab.Rows)
+	h.broadcastToWorkspace(client.WorkspaceID, response)
+
+	// 啟動輸出監聽
+	go h.monitorTabOutput(client.WorkspaceID, tab)
+
+	h.logger.Info("Tab created",
+		zap.String("tab_id", tab.TabID),
+		zap.String("name", name),
+		zap.String("workspace_id", client.WorkspaceID))
+}
+
+// 處理關閉 tab
+func (h *WebSocketHandler) handleCloseTab(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	err := h.terminalMgr.CloseTab(client.WorkspaceID, msg.TabID)
+	if err != nil {
+		h.logger.Error("Failed to close tab", zap.Error(err))
+		h.sendError(client, "TAB_CLOSE_FAILED", err.Error())
+		return
+	}
+
+	// 發送 tab_closed 訊息
+	response := model.NewTabClosedMessage(msg.TabID, 0)
+	h.broadcastToWorkspace(client.WorkspaceID, response)
+
+	h.logger.Info("Tab closed",
+		zap.String("tab_id", msg.TabID),
+		zap.String("workspace_id", client.WorkspaceID))
+}
+
+// 處理切換 tab
+func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	err := h.terminalMgr.SwitchTab(client.WorkspaceID, msg.TabID)
+	if err != nil {
+		h.logger.Error("Failed to switch tab", zap.Error(err))
+		h.sendError(client, "TAB_SWITCH_FAILED", err.Error())
+		return
+	}
+
+	// 發送 tab_switched 訊息
+	response := model.NewTabSwitchedMessage(msg.TabID)
+	h.broadcastToWorkspace(client.WorkspaceID, response)
+
+	h.logger.Info("Tab switched",
+		zap.String("tab_id", msg.TabID),
+		zap.String("workspace_id", client.WorkspaceID))
+}
+
+// 處理輸入
+func (h *WebSocketHandler) handleInput(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	data, ok := msg.Data["data"].(string)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "data is required and must be a string")
+		return
+	}
+
+	tab, err := h.terminalMgr.GetTab(client.WorkspaceID, msg.TabID)
+	if err != nil {
+		h.sendError(client, "INVALID_TAB_ID", err.Error())
+		return
+	}
+
+	err = tab.SendInput([]byte(data))
+	if err != nil {
+		h.logger.Error("Failed to send input", zap.Error(err))
+		h.sendError(client, "INPUT_FAILED", err.Error())
+		return
+	}
+}
+
+// 處理調整大小
+func (h *WebSocketHandler) handleResize(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	cols, ok := msg.Data["cols"].(float64)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "cols is required and must be a number")
+		return
+	}
+
+	rows, ok := msg.Data["rows"].(float64)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "rows is required and must be a number")
+		return
+	}
+
+	tab, err := h.terminalMgr.GetTab(client.WorkspaceID, msg.TabID)
+	if err != nil {
+		h.sendError(client, "INVALID_TAB_ID", err.Error())
+		return
+	}
+
+	err = tab.Resize(int(cols), int(rows))
+	if err != nil {
+		h.logger.Error("Failed to resize terminal", zap.Error(err))
+		h.sendError(client, "RESIZE_FAILED", err.Error())
+		return
+	}
+
+	// 發送 resized 訊息
+	response := model.NewResizedMessage(msg.TabID, int(cols), int(rows))
+	h.broadcastToWorkspace(client.WorkspaceID, response)
+
+	h.logger.Info("Terminal resized",
+		zap.String("tab_id", msg.TabID),
+		zap.Int("cols", int(cols)),
+		zap.Int("rows", int(rows)))
+}
+
+// 處理列出 tabs
+func (h *WebSocketHandler) handleListTabs(client *model.Client, msg *model.Message) {
+	tabs, err := h.terminalMgr.ListTabs(client.WorkspaceID)
+	if err != nil {
+		h.logger.Error("Failed to list tabs", zap.Error(err))
+		h.sendError(client, "LIST_TABS_FAILED", err.Error())
+		return
+	}
+
+	// 構建 tabs 列表
+	tabsList := make([]map[string]interface{}, 0, len(tabs))
+	for _, tab := range tabs {
+		tabsList = append(tabsList, map[string]interface{}{
+			"tab_id":         tab.TabID,
+			"session_id":     tab.SessionID,
+			"cols":           tab.Cols,
+			"rows":           tab.Rows,
+			"cwd":            tab.WorkspacePath,
+			"created_at":     tab.CreatedAt.Unix(),
+			"last_active_at": tab.LastActiveAt.Unix(),
+		})
+	}
+
+	// 發送 tab_list 訊息
+	response := model.NewTabListMessage(tabsList)
+	h.sendMessage(client, response)
+}
+
+// 處理清除終端
+func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	tab, err := h.terminalMgr.GetTab(client.WorkspaceID, msg.TabID)
+	if err != nil {
+		h.sendError(client, "INVALID_TAB_ID", err.Error())
+		return
+	}
+
+	// 發送 clear 命令到終端
+	err = tab.SendInput([]byte("clear\n"))
+	if err != nil {
+		h.logger.Error("Failed to clear terminal", zap.Error(err))
+		h.sendError(client, "CLEAR_FAILED", err.Error())
+		return
+	}
+}
+
+// 監聽 tab 輸出
+func (h *WebSocketHandler) monitorTabOutput(workspaceID string, tab *service.TerminalTab) {
+	for data := range tab.OutputChan {
+		if data == nil {
+			continue
+		}
+		msg := model.NewOutputMessage(tab.TabID, data)
+		h.broadcastToWorkspace(workspaceID, msg)
+	}
+
+	h.logger.Info("Tab output monitor stopped",
+		zap.String("tab_id", tab.TabID),
+		zap.String("workspace_id", workspaceID))
+}

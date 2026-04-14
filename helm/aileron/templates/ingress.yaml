@@ -1,0 +1,51 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "aileron.fullname" . }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    - host: {{ include "aileron.publicHost" (dict "template" .Values.publicRouting.frontendHost "Values" .Values) | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "aileron.fullname" . }}-frontend
+                port:
+                  name: http
+    - host: {{ include "aileron.publicHost" (dict "template" .Values.publicRouting.workspaceManagerHost "Values" .Values) | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "aileron.fullname" . }}-workspace-manager
+                port:
+                  name: http
+    - host: {{ include "aileron.publicHost" (dict "template" .Values.publicRouting.keycloakHost "Values" .Values) | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "aileron.fullname" . }}-keycloak
+                port:
+                  name: http
+  {{- with .Values.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

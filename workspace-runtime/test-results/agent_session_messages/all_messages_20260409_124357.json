@@ -1,0 +1,274 @@
+[
+  {
+    "timestamp": "2026-04-09T12:43:53.901505",
+    "type": "create_message",
+    "data": {
+      "id": "msg-001",
+      "session_id": "test-session-123",
+      "task_id": "test-task-456",
+      "role": "user",
+      "content": "這是一個測試訊息",
+      "content_type": "text",
+      "created_at": "2026-04-09T12:43:53.901496"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.902824",
+    "type": "assistant_response",
+    "data": {
+      "id": "msg-002",
+      "session_id": "test-session-123",
+      "task_id": "test-task-456",
+      "role": "assistant",
+      "content": "你好！我是Claude助手。我已收到你的訊息，很樂意幫助你。",
+      "content_type": "text",
+      "created_at": "2026-04-09T12:43:53.902817"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.903697",
+    "type": "streaming_chunk_1",
+    "data": {
+      "chunk_index": 0,
+      "content": "這是一個",
+      "is_partial": true,
+      "timestamp": "2026-04-09T12:43:53.903692"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.903707",
+    "type": "streaming_chunk_2",
+    "data": {
+      "chunk_index": 1,
+      "content": "完整的",
+      "is_partial": true,
+      "timestamp": "2026-04-09T12:43:53.903701"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.903713",
+    "type": "streaming_chunk_3",
+    "data": {
+      "chunk_index": 2,
+      "content": "流式回應。",
+      "is_partial": false,
+      "timestamp": "2026-04-09T12:43:53.903710"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.904514",
+    "type": "thinking_block",
+    "data": {
+      "content": "用戶要求記錄agent_session的message。我需要建立合適的數據結構來表示這些message。",
+      "is_thinking": true,
+      "timestamp": "2026-04-09T12:43:53.904510"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.905546",
+    "type": "tool_use",
+    "data": {
+      "tool_use_id": "toolu_001",
+      "tool_name": "read_file",
+      "tool_input": {
+        "path": "/test/file.txt"
+      },
+      "timestamp": "2026-04-09T12:43:53.905540"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.905557",
+    "type": "tool_use",
+    "data": {
+      "tool_use_id": "toolu_002",
+      "tool_name": "write_file",
+      "tool_input": {
+        "path": "/test/output.json",
+        "content": "{}"
+      },
+      "timestamp": "2026-04-09T12:43:53.905554"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.906374",
+    "type": "tool_result",
+    "data": {
+      "tool_use_id": "toolu_001",
+      "result": "File content successfully read",
+      "is_error": false,
+      "timestamp": "2026-04-09T12:43:53.906367"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.906381",
+    "type": "tool_result",
+    "data": {
+      "tool_use_id": "toolu_002",
+      "result": "File successfully written",
+      "is_error": false,
+      "timestamp": "2026-04-09T12:43:53.906378"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.907208",
+    "type": "permission_request",
+    "data": {
+      "request_id": "perm_001",
+      "tool_name": "bash",
+      "action": "execute_command",
+      "params": {
+        "command": "ls -la /workspace"
+      },
+      "timeout": 30,
+      "timestamp": "2026-04-09T12:43:53.907203"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.907214",
+    "type": "permission_request",
+    "data": {
+      "request_id": "perm_002",
+      "tool_name": "write_file",
+      "action": "create_file",
+      "params": {
+        "path": "/workspace/test.py"
+      },
+      "timeout": 30,
+      "timestamp": "2026-04-09T12:43:53.907211"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.908034",
+    "type": "permission_decision",
+    "data": {
+      "request_id": "perm_001",
+      "decision": "approved",
+      "reason": "Command is safe",
+      "timestamp": "2026-04-09T12:43:53.908029"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.908042",
+    "type": "permission_decision",
+    "data": {
+      "request_id": "perm_002",
+      "decision": "approved",
+      "reason": "File creation is permitted",
+      "timestamp": "2026-04-09T12:43:53.908039"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.909155",
+    "type": "session_state_change",
+    "data": {
+      "new_state": "idle",
+      "message": "Session ready for input",
+      "timestamp": "2026-04-09T12:43:53.909148"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.909162",
+    "type": "session_state_change",
+    "data": {
+      "new_state": "processing",
+      "message": "Processing user prompt",
+      "timestamp": "2026-04-09T12:43:53.909159"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.909167",
+    "type": "session_state_change",
+    "data": {
+      "new_state": "executing_tools",
+      "message": "Executing tool calls",
+      "timestamp": "2026-04-09T12:43:53.909165"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.909190",
+    "type": "session_state_change",
+    "data": {
+      "new_state": "idle",
+      "message": "Task completed",
+      "timestamp": "2026-04-09T12:43:53.909170"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.910471",
+    "type": "task_complete",
+    "data": {
+      "task_id": "test-task-456",
+      "session_id": "test-session-123",
+      "status": "success",
+      "total_messages": 10,
+      "tools_used": 2,
+      "permissions_requested": 2,
+      "duration_seconds": 5.5,
+      "timestamp": "2026-04-09T12:43:53.910464"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.911956",
+    "type": "conversation_message_1",
+    "data": {
+      "message_id": "msg-000",
+      "role": "user",
+      "content": "請幫我寫一個Python函數",
+      "sequence": 0,
+      "timestamp": "2026-04-09T12:43:53.911950"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.911964",
+    "type": "conversation_message_2",
+    "data": {
+      "message_id": "msg-001",
+      "role": "assistant",
+      "content": "我會幫你寫一個Python函數。請告訴我你需要什麼功能。",
+      "sequence": 1,
+      "timestamp": "2026-04-09T12:43:53.911962"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.911969",
+    "type": "conversation_message_3",
+    "data": {
+      "message_id": "msg-002",
+      "role": "user",
+      "content": "一個計算階乘的函數",
+      "sequence": 2,
+      "timestamp": "2026-04-09T12:43:53.911967"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.911974",
+    "type": "conversation_message_4",
+    "data": {
+      "message_id": "msg-003",
+      "role": "assistant",
+      "content": "好的，這是一個計算階乘的函數...",
+      "sequence": 3,
+      "timestamp": "2026-04-09T12:43:53.911972"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.912834",
+    "type": "error_message",
+    "data": {
+      "error_type": "tool_error",
+      "error_message": "Command failed: permission denied",
+      "error_code": 403,
+      "timestamp": "2026-04-09T12:43:53.912829"
+    }
+  },
+  {
+    "timestamp": "2026-04-09T12:43:53.912840",
+    "type": "error_message",
+    "data": {
+      "error_type": "validation_error",
+      "error_message": "Invalid session ID format",
+      "error_code": 422,
+      "timestamp": "2026-04-09T12:43:53.912837"
+    }
+  }
+]

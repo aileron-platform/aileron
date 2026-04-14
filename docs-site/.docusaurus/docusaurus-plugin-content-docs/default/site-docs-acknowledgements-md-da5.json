@@ -1,0 +1,23 @@
+{
+  "id": "acknowledgements",
+  "title": "開源軟體致謝",
+  "description": "Aileron 由眾多優秀的開源專案堆疊而成，在此列出專案中實際使用到的開源軟體並致上謝意。",
+  "source": "@site/docs/acknowledgements.md",
+  "sourceDirName": ".",
+  "slug": "/acknowledgements",
+  "permalink": "/aileron/acknowledgements",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 99,
+  "frontMatter": {
+    "sidebar_position": 99,
+    "title": "開源軟體致謝"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Runtime API",
+    "permalink": "/aileron/api/runtime-api"
+  }
+}

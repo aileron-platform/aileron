@@ -1,0 +1,85 @@
+{
+  "analysis_info": {
+    "project": "agor-main",
+    "workspace_path": "/workspace",
+    "analysis_start": "2026-04-09T12:43:53.896880",
+    "analysis_end": "2026-04-09T12:43:53.897655",
+    "total_messages": 4
+  },
+  "messages": [
+    {
+      "timestamp": "2026-04-09T12:43:53.897391",
+      "type": "tech_analysis_start",
+      "role": "system",
+      "data": {
+        "analysis_type": "technology_stack",
+        "timestamp": "2026-04-09T12:43:53.897384"
+      }
+    },
+    {
+      "timestamp": "2026-04-09T12:43:53.897395",
+      "type": "frontend_stack",
+      "role": "system",
+      "data": {
+        "layer": "frontend",
+        "primary_language": "TypeScript",
+        "framework": "React",
+        "build_tool": "Vite",
+        "state_management": "Custom Context + Store",
+        "styling": "Tailwind CSS",
+        "testing": "Vitest/Jest",
+        "additional_tools": [
+          "Monaco Editor",
+          "Zustand",
+          "TanStack Query"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-04-09T12:43:53.897405",
+      "type": "backend_stack",
+      "role": "system",
+      "data": {
+        "layer": "backend",
+        "primary_language": "Python",
+        "framework": "FastAPI",
+        "orm": "SQLAlchemy",
+        "database": "PostgreSQL",
+        "cache": "Redis",
+        "container": "Docker",
+        "async_framework": "asyncio",
+        "testing": "Pytest"
+      }
+    },
+    {
+      "timestamp": "2026-04-09T12:43:53.897424",
+      "type": "infrastructure_stack",
+      "role": "system",
+      "data": {
+        "layer": "infrastructure",
+        "containerization": "Docker Compose",
+        "orchestration": "Docker",
+        "databases": [
+          "PostgreSQL 15",
+          "Redis 7"
+        ],
+        "ci_cd": "GitHub Actions",
+        "package_managers": [
+          "npm",
+          "uv"
+        ]
+      }
+    }
+  ],
+  "statistics": {
+    "system_messages": 4,
+    "user_messages": 0,
+    "assistant_messages": 0,
+    "message_types": {
+      "tech_analysis_start": 1,
+      "frontend_stack": 1,
+      "backend_stack": 1,
+      "infrastructure_stack": 1
+    }
+  }
+}

@@ -1,0 +1,135 @@
+{{- if .Values.workspaceOperator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-operator
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.workspaceOperator.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-operator" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "workspace-operator" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceOperator.serviceAccount "nameSuffix" "workspace-operator") }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: workspace-operator
+          image: "{{ .Values.workspaceOperator.image.repository }}:{{ .Values.workspaceOperator.image.tag }}"
+          imagePullPolicy: {{ .Values.workspaceOperator.image.pullPolicy }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PUBLIC_SCHEME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_SCHEME
+            - name: PUBLIC_BASE_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_BASE_DOMAIN
+            - name: PUBLIC_INGRESS_CLASS_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_INGRESS_CLASS_NAME
+            - name: PUBLIC_FRONTEND_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_FRONTEND_HOST
+            - name: PUBLIC_WORKSPACE_MANAGER_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_WORKSPACE_MANAGER_HOST
+            - name: PUBLIC_KEYCLOAK_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_KEYCLOAK_HOST
+            - name: PUBLIC_RUNTIME_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_RUNTIME_HOST_PATTERN
+            - name: PUBLIC_BROWSER_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_BROWSER_HOST_PATTERN
+            - name: PUBLIC_NEXTJS_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_NEXTJS_HOST_PATTERN
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: WATCH_NAMESPACE
+            - name: RUNTIME_K8S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NAMESPACE
+            - name: RUNTIME_K8S_ALLOWED_NAMESPACES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_ALLOWED_NAMESPACES
+            - name: FIREWALL_DEFAULTS_CONFIGMAP_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: FIREWALL_DEFAULTS_CONFIGMAP_NAME
+            - name: CILIUM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: CILIUM_ENABLED
+            - name: PLATFORM_MANAGER_URL
+              value: "http://{{ include "aileron.fullname" . }}-workspace-manager.{{ .Release.Namespace }}.svc.cluster.local:3001"
+            - name: PLATFORM_KEYCLOAK_URL
+              value: "http://{{ include "aileron.fullname" . }}-keycloak.{{ .Release.Namespace }}.svc.cluster.local:8080"
+            - name: PLATFORM_KEYCLOAK_REALM
+              value: {{ .Values.workspaceManager.env.KEYCLOAK_REALM | quote }}
+            - name: PLATFORM_KEYCLOAK_CLIENT_ID
+              value: {{ .Values.workspaceManager.env.KEYCLOAK_CLIENT_ID | quote }}
+            - name: PLATFORM_KEYCLOAK_CLIENT_SECRET
+              value: {{ .Values.workspaceManager.env.KEYCLOAK_CLIENT_SECRET | quote }}
+            - name: PLATFORM_REDIS_URL
+              value: "redis://{{ include "aileron.fullname" . }}-redis.{{ .Release.Namespace }}.svc.cluster.local:6379/0"
+            - name: PLATFORM_DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.auth.username }}:{{ .Values.postgres.auth.password }}@{{ include "aileron.fullname" . }}-postgres.{{ .Release.Namespace }}.svc.cluster.local:5432/{{ .Values.postgres.auth.appDatabase }}"
+            - name: PLATFORM_INTERNAL_API_TOKEN
+              value: "dev-internal-token"
+            {{- if .Values.coturn.enabled }}
+            - name: TURN_SERVER_URL
+              value: "turn:{{ include "aileron.coturnHost" . }}:{{ .Values.coturn.nodePort }}"
+            - name: TURN_SERVER_FRONTEND_URL
+              value: "turn:{{ include "aileron.coturnFrontendHost" . }}:{{ .Values.coturn.nodePort }}"
+            - name: TURN_SERVER_EXTERNAL_IP
+              value: {{ include "aileron.coturnExternalIp" . | quote }}
+            - name: TURN_SERVER_USERNAME
+              value: {{ .Values.coturn.username | quote }}
+            - name: TURN_SERVER_CREDENTIAL
+              value: {{ .Values.coturn.credential | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.workspaceOperator.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.workspaceOperator.resources | nindent 12 }}
+{{- end }}

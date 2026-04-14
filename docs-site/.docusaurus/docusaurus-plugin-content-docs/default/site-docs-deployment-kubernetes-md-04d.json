@@ -1,0 +1,27 @@
+{
+  "id": "deployment/kubernetes",
+  "title": "Kubernetes 模式",
+  "description": "適用情境",
+  "source": "@site/docs/deployment/kubernetes.md",
+  "sourceDirName": "deployment",
+  "slug": "/deployment/kubernetes",
+  "permalink": "/aileron/deployment/kubernetes",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "sidebar_position": 2,
+    "title": "Kubernetes 模式"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Docker 模式",
+    "permalink": "/aileron/deployment/docker"
+  },
+  "next": {
+    "title": "環境變數參考",
+    "permalink": "/aileron/deployment/environment-variables"
+  }
+}

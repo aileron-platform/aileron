@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aileron</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="popup">
+      <!-- Header -->
+      <div class="popup-header">
+        <div class="header-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <h1 class="popup-title">Aileron</h1>
+      </div>
+
+      <!-- Toggle Active State -->
+      <div class="menu-item">
+        <div class="item-content">
+          <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span class="item-text" id="status-text">已停用</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="active-toggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Glow Effect Setting -->
+      <div class="menu-item">
+        <div class="item-content">
+          <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <circle cx="12" cy="12" r="6"></circle>
+            <circle cx="12" cy="12" r="2"></circle>
+          </svg>
+          <span class="item-text">顯示光暈效果</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="glow-toggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Settings Section -->
+      <details class="menu-item settings-section">
+        <summary class="item-content">
+          <svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          <span class="item-text">連線設定</span>
+        </summary>
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="host-input">主機</label>
+            <input type="text" id="host-input" placeholder="localhost" />
+          </div>
+          <div class="form-group">
+            <label for="port-input">埠號</label>
+            <input type="number" id="port-input" placeholder="3002" min="1" max="65535" />
+          </div>
+          <div class="form-group">
+            <label for="path-input">路徑</label>
+            <input type="text" id="path-input" placeholder="/api/v1/client-browser-relay" />
+          </div>
+          <div class="form-actions">
+            <button type="button" id="save-config" class="btn btn-primary">儲存</button>
+            <button type="button" id="reset-config" class="btn btn-secondary">重設</button>
+          </div>
+        </div>
+      </details>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

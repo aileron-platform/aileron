@@ -1,0 +1,21 @@
+# Python virtual environments (may have platform-specific symlinks)
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Development tools
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/

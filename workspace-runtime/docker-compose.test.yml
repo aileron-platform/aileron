@@ -1,0 +1,124 @@
+services:
+  # PostgreSQL測試資料庫
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: workspace-runtime-postgres-test
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_workspace_runtime
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
+    ports:
+      - "5435:5432"
+    volumes:
+      # 初始化腳本（可選）
+      - ./tests/fixtures/test-db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_workspace_runtime"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # 使用tmpfs提升測試速度
+    tmpfs:
+      - /var/lib/postgresql/data
+    command: >
+      postgres
+        -c shared_buffers=128MB
+        -c max_connections=100
+        -c log_statement=all
+        -c log_duration=on
+        -c fsync=off
+        -c synchronous_commit=off
+        -c full_page_writes=off
+    networks:
+      - test-network
+
+  # Redis測試實例
+  redis-test:
+    image: redis:7-alpine
+    container_name: workspace-runtime-redis-test
+    ports:
+      - "6382:6379"
+    command: >
+      redis-server
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --save ""
+        --appendonly no
+        --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - test-network
+
+  # Workspace Runtime測試容器
+  workspace-runtime-test:
+    build:
+      # Dockerfile 內使用了 workspace-runtime/... 路徑，
+      # build context 必須指向 repo root 才能正確解析 COPY。
+      context: ..
+      dockerfile: workspace-runtime/Dockerfile
+      target: development
+      args:
+        OPENSPEC_VERSION: ${WORKSPACE_RUNTIME_OPENSPEC_VERSION:-1.3.0}
+        CLAUDE_CLI_VERSION: ${WORKSPACE_RUNTIME_CLAUDE_CLI_VERSION:-stable}
+        GEMINI_VERSION: ${WORKSPACE_RUNTIME_GEMINI_VERSION:-latest}
+        AGENT_BROWSER_CLI_VERSION: ${WORKSPACE_RUNTIME_AGENT_BROWSER_CLI_VERSION:-0.23.0}
+        CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
+      # workspace-runtime/Dockerfile 以 FROM codex-universal 起頭；
+      # 測試 compose 需和主開發 compose 一樣提供預建 base image。
+      additional_contexts:
+        codex-universal: docker-image://ailerondocker/codex-universal:custom
+    container_name: workspace-runtime-test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+    environment:
+      # 資料庫配置
+      DATABASE_URL: postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_workspace_runtime
+      # Redis配置
+      REDIS_URL: redis://redis-test:6379/0
+      # 測試環境標記
+      TESTING: "true"
+      PYTHONPATH: /app
+      # 日誌等級
+      LOG_LEVEL: DEBUG
+    volumes:
+      # 掛載代碼（開發模式）
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:rw
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./uv.lock:/app/uv.lock:ro
+      - ./README.md:/app/README.md:ro
+      # 測試結果輸出
+      - ./test-results:/app/test-results:rw
+      - ./htmlcov:/app/htmlcov:rw
+      # 測試工作區
+      - test_workspace:/workspace
+    working_dir: /app
+    networks:
+      - test-network
+    # 測試命令（可在運行時覆蓋）
+    command: >
+      sh -c "
+        echo '🔧 Installing dependencies...' &&
+        uv sync --all-extras &&
+        echo '🧪 Running tests...' &&
+        uv run pytest tests/ --cov=app --cov-report=term-missing --cov-report=html:htmlcov --cov-report=json:test-results/coverage.json --junit-xml=test-results/junit.xml -v --maxfail=5
+      "
+
+volumes:
+  test_workspace:
+    driver: local
+
+networks:
+  test-network:
+    name: workspace-runtime-test-network
+    driver: bridge

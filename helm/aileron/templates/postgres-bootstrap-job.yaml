@@ -1,0 +1,75 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aileron.fullname" . }}-postgres-bootstrap
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-bootstrap
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "postgres-bootstrap" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      volumes:
+        - name: init-sql
+          configMap:
+            name: {{ include "aileron.fullname" . }}-postgres-init
+      containers:
+        - name: postgres-bootstrap
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          env:
+            - name: PGHOST
+              value: {{ include "aileron.fullname" . }}-postgres
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "aileron.fullname" . }}-secrets
+                  key: postgres-password
+            - name: KEYCLOAK_DATABASE
+              value: {{ .Values.postgres.auth.keycloakDatabase | quote }}
+            - name: APP_DATABASE
+              value: {{ .Values.postgres.auth.appDatabase | quote }}
+          volumeMounts:
+            - name: init-sql
+              mountPath: /init-sql
+              readOnly: true
+          command:
+            - sh
+            - -lc
+            - |
+              set -e
+              until pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER"; do
+                echo "waiting for postgres..."
+                sleep 2
+              done
+
+              {{- if .Values.keycloak.enabled }}
+              echo "==> Creating keycloak database if not exists..."
+              psql -v ON_ERROR_STOP=1 -v KEYCLOAK_DATABASE="$KEYCLOAK_DATABASE" -d postgres <<'SQL'
+              SELECT format('CREATE DATABASE %I', :'KEYCLOAK_DATABASE')
+              WHERE NOT EXISTS (
+                SELECT 1 FROM pg_database WHERE datname = :'KEYCLOAK_DATABASE'
+              )\gexec
+              SQL
+              {{- end }}
+
+              echo "==> Running init schema on $APP_DATABASE..."
+              psql -v ON_ERROR_STOP=1 -d "$APP_DATABASE" -f /init-sql/001_init_schema.sql
+              echo "==> Bootstrap complete."
+{{- end }}

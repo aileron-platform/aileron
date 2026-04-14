@@ -1,0 +1,107 @@
+# 容器映像配置檔
+# 定義所有可用的容器映像選項，用於 Workspace 創建和容器管理
+
+version: "1.0"
+
+# 預設映像（與資料庫預設值保持一致）
+default_image: "universal"
+
+# 支援容器映像（Browser、Next.js 等輔助容器）
+browser_image: "ailerondocker/workspace-chrome:dev"
+nextjs_image: "ailerondocker/workspace-nextjs:dev"
+
+# 可用的容器映像列表
+images:
+  - id: "universal"
+    name: "標準容器映像"
+    description: "Aileron 標準執行環境，包含 Python、Node.js、Git、SSH、Claude Code 等完整工具鏈"
+    icon: "🌐"
+    image: "ailerondocker/workspace-runtime:dev"
+    tags:
+      - "universal"
+      - "python"
+      - "nodejs"
+      - "git"
+      - "ssh"
+      - "claude-code"
+    features:
+      - "Python 3.11+"
+      - "Node.js 20+"
+      - "Git 版本控制"
+      - "SSH 遠端存取"
+      - "Claude Code CLI"
+      - "Docker-in-Docker"
+      - "完整開發工具鏈"
+    recommended: true
+    active: true
+    sort_order: 1
+
+  # 未來可擴展的映像選項（目前註解掉）
+  # - id: "python-data-science"
+  #   name: "Python 資料科學"
+  #   description: "專為資料科學和機器學習優化的 Python 環境"
+  #   icon: "🐍"
+  #   image: "aileron-python-ds:latest"
+  #   tags:
+  #     - "python"
+  #     - "data-science"
+  #     - "ml"
+  #   features:
+  #     - "Python 3.11"
+  #     - "NumPy, Pandas, Scikit-learn"
+  #     - "Jupyter Notebook"
+  #     - "TensorFlow, PyTorch"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 2
+
+  # - id: "nodejs-fullstack"
+  #   name: "Node.js 全端開發"
+  #   description: "Node.js + TypeScript 全端開發環境"
+  #   icon: "🟢"
+  #   image: "aileron-nodejs:latest"
+  #   tags:
+  #     - "nodejs"
+  #     - "typescript"
+  #     - "fullstack"
+  #   features:
+  #     - "Node.js 20 LTS"
+  #     - "TypeScript 5+"
+  #     - "pnpm, yarn, npm"
+  #     - "React, Vue, Next.js"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 3
+
+  # - id: "go-microservices"
+  #   name: "Go 微服務"
+  #   description: "Go 語言微服務開發環境"
+  #   icon: "🔷"
+  #   image: "aileron-golang:latest"
+  #   tags:
+  #     - "golang"
+  #     - "microservices"
+  #   features:
+  #     - "Go 1.21+"
+  #     - "gRPC, Protocol Buffers"
+  #     - "Docker, Kubernetes"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 4
+
+  # - id: "rust-systems"
+  #   name: "Rust 系統程式"
+  #   description: "Rust 系統程式設計環境"
+  #   icon: "🦀"
+  #   image: "aileron-rust:latest"
+  #   tags:
+  #     - "rust"
+  #     - "systems"
+  #   features:
+  #     - "Rust 1.75+"
+  #     - "Cargo, Clippy"
+  #     - "WebAssembly 支援"
+  #   recommended: false
+  #   active: false
+  #   sort_order: 5
+

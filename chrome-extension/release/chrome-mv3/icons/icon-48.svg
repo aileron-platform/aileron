@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6366f1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#22d3ee;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="24" cy="24" r="19.2" fill="url(#bgGradient)"/>
+
+  <!-- AI symbol - stylized circuit/brain pattern -->
+  <g fill="white" transform="translate(4.800000000000001, 4.800000000000001)">
+    <!-- Center node -->
+    <circle cx="19.2" cy="19.2" r="3.072" fill="url(#accentGradient)"/>
+
+    <!-- Connection lines -->
+    <line x1="9.6" y1="9.6" x2="19.2" y2="19.2" stroke="white" stroke-width="0.96" stroke-linecap="round" opacity="0.9"/>
+    <line x1="28.799999999999997" y1="9.6" x2="19.2" y2="19.2" stroke="white" stroke-width="0.96" stroke-linecap="round" opacity="0.9"/>
+    <line x1="9.6" y1="28.799999999999997" x2="19.2" y2="19.2" stroke="white" stroke-width="0.96" stroke-linecap="round" opacity="0.9"/>
+    <line x1="28.799999999999997" y1="28.799999999999997" x2="19.2" y2="19.2" stroke="white" stroke-width="0.96" stroke-linecap="round" opacity="0.9"/>
+
+    <!-- Corner nodes -->
+    <circle cx="9.6" cy="9.6" r="2.304" fill="white"/>
+    <circle cx="28.799999999999997" cy="9.6" r="2.304" fill="white"/>
+    <circle cx="9.6" cy="28.799999999999997" r="2.304" fill="white"/>
+    <circle cx="28.799999999999997" cy="28.799999999999997" r="2.304" fill="white"/>
+
+    <!-- Side nodes -->
+    <circle cx="19.2" cy="5.76" r="1.728" fill="url(#accentGradient)"/>
+    <circle cx="19.2" cy="32.64" r="1.728" fill="url(#accentGradient)"/>
+    <circle cx="5.76" cy="19.2" r="1.728" fill="url(#accentGradient)"/>
+    <circle cx="32.64" cy="19.2" r="1.728" fill="url(#accentGradient)"/>
+
+    <!-- Additional connection lines to side nodes -->
+    <line x1="19.2" y1="5.76" x2="19.2" y2="16.128" stroke="white" stroke-width="0.72" stroke-linecap="round" opacity="0.7"/>
+    <line x1="19.2" y1="32.64" x2="19.2" y2="22.272" stroke="white" stroke-width="0.72" stroke-linecap="round" opacity="0.7"/>
+    <line x1="5.76" y1="19.2" x2="16.128" y2="19.2" stroke="white" stroke-width="0.72" stroke-linecap="round" opacity="0.7"/>
+    <line x1="32.64" y1="19.2" x2="22.272" y2="19.2" stroke="white" stroke-width="0.72" stroke-linecap="round" opacity="0.7"/>
+  </g>
+</svg>

@@ -1,0 +1,797 @@
+"""模板文件管理路由（Slash Commands、SubAgents、Output Styles、Claude.md、通用文件管理）"""
+
+import logging
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from sqlalchemy.orm import Session
+
+from app.config.settings import get_settings
+from app.core.openapi import build_responses
+from app.core.file_management import (
+    BatchOperationResponse,
+    FileContentResponse,
+    FileManagementException,
+    FileOperationResponse,
+    FileSearchRequest,
+    FileSearchResponse,
+    FileTreeResponse,
+    FileUploadResponse,
+)
+from app.db.database import get_db
+from app.modules.auth import get_current_user_id
+from app.models.template_config import (
+    TemplateOutputStyleCreateRequest,
+    TemplateOutputStyleListResponse,
+    TemplateOutputStyleResponse,
+    TemplateOutputStyleUpdateRequest,
+    TemplateSlashCommandCreateRequest,
+    TemplateSlashCommandListResponse,
+    TemplateSlashCommandResponse,
+    TemplateSlashCommandUpdateRequest,
+    TemplateSubAgentCreateRequest,
+    TemplateSubAgentListResponse,
+    TemplateSubAgentResponse,
+    TemplateSubAgentUpdateRequest,
+)
+from app.services.template_file_service import TemplateFileService
+from app.services.template_service import TemplateService
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
+    """取得模板服務實例"""
+    return TemplateService(db)
+
+
+def get_template_file_service(db: Session = Depends(get_db)) -> TemplateFileService:
+    """取得模板檔案服務實例"""
+    return TemplateFileService(db)
+
+
+# ============ SlashCommands 檔案管理 ============
+
+
+@router.get(
+    "/{template_id}/slash-commands",
+    response_model=TemplateSlashCommandListResponse,
+    summary="取得模板 SlashCommands 檔案列表",
+    responses=build_responses(401, 404, 500),
+)
+async def get_template_slash_commands_files(
+    request: Request,
+    template_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSlashCommandListResponse:
+    """取得指定模板的 commands 目錄下所有檔案列表"""
+    result = service.get_slash_commands_files(template_id)
+    translate = request.state.translate
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=translate("templates.not_found")
+            )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.get(
+    "/{template_id}/slash-commands/{file_name}",
+    response_model=TemplateSlashCommandResponse,
+    summary="取得 SlashCommand 檔案內容",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def get_template_slash_command_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSlashCommandResponse:
+    """取得指定模板中特定 slash-command 檔案的內容"""
+    result = service.get_slash_command_file_content(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.post(
+    "/{template_id}/slash-commands",
+    response_model=TemplateSlashCommandResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="新增 SlashCommand 檔案",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def create_template_slash_command_file(
+    request: Request,
+    template_id: str,
+    payload: TemplateSlashCommandCreateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSlashCommandResponse:
+    """在指定模板的 commands 目錄中新增新檔案"""
+    result = service.create_slash_command_file(template_id, payload)
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "already exists" in result.error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.put(
+    "/{template_id}/slash-commands/{file_name}",
+    response_model=TemplateSlashCommandResponse,
+    summary="更新 SlashCommand 檔案",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def update_template_slash_command_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    payload: TemplateSlashCommandUpdateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSlashCommandResponse:
+    """更新指定模板中的 slash-command 檔案內容"""
+    result = service.update_slash_command_file(template_id, file_name, payload)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.delete(
+    "/{template_id}/slash-commands/{file_name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="刪除 SlashCommand 檔案",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def delete_template_slash_command_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> None:
+    """刪除指定模板中的 slash-command 檔案"""
+    result = service.delete_slash_command_file(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+
+
+# ============ Claude.md 檔案管理 ============
+
+
+@router.get(
+    "/{template_id}/claude-md",
+    summary="取得 Claude.md 內容",
+    responses=build_responses(401, 404, 500),
+)
+async def get_template_claude_md(
+    request: Request,
+    template_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> dict:
+    """取得模板的 Claude.md 內容"""
+    try:
+        translate = request.state.translate
+        claude_md = service.get_claude_md(template_id)
+        if claude_md is None:
+            return {
+                "success": False,
+                "error": "Claude.md not found",
+                "message": translate("templates.claude_md_empty")
+            }
+        return {
+            "success": True,
+            "data": {
+                "content": claude_md
+            }
+        }
+    except Exception as e:
+        translate = request.state.translate
+        return {
+            "success": False,
+            "error": "Failed to load Claude.md",
+            "message": translate("templates.claude_md_load_failed", error=str(e))
+        }
+
+
+@router.put(
+    "/{template_id}/claude-md",
+    summary="更新 Claude.md 內容",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def update_template_claude_md(
+    request: Request,
+    template_id: str,
+    payload: dict,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> dict:
+    """更新模板的 Claude.md 內容"""
+    try:
+        translate = request.state.translate
+        content = payload.get("content", "")
+        if not content.strip():
+            return {
+                "success": False,
+                "error": "Content cannot be empty",
+                "message": translate("templates.claude_md_content_empty")
+            }
+
+        # 呼叫 service 方法實際保存檔案
+        service.update_claude_md(template_id, content)
+
+        return {
+            "success": True,
+            "data": {
+                "content": content
+            },
+            "message": translate("templates.claude_md_updated")
+        }
+    except ValueError as e:
+        translate = request.state.translate
+        return {
+            "success": False,
+            "error": "Invalid template or content",
+            "message": translate("templates.claude_md_update_failed", error=str(e))
+        }
+    except Exception as e:
+        translate = request.state.translate
+        return {
+            "success": False,
+            "error": "Failed to update Claude.md",
+            "message": translate("templates.claude_md_update_failed", error=str(e))
+        }
+
+
+# ============ SubAgents 檔案管理 ============
+
+
+@router.get(
+    "/{template_id}/subagents",
+    response_model=TemplateSubAgentListResponse,
+    summary="取得模板 SubAgents 檔案列表",
+    responses=build_responses(401, 404, 500),
+)
+async def get_template_sub_agents_files(
+    request: Request,
+    template_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSubAgentListResponse:
+    """取得指定模板的 agents 目錄下所有檔案列表"""
+    result = service.get_sub_agents_files(template_id)
+    translate = request.state.translate
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=translate("templates.not_found")
+            )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.get(
+    "/{template_id}/subagents/{file_name}",
+    response_model=TemplateSubAgentResponse,
+    summary="取得 SubAgent 檔案內容",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def get_template_sub_agent_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSubAgentResponse:
+    """取得指定模板中特定 subagent 檔案的內容"""
+    result = service.get_sub_agent_file_content(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.post(
+    "/{template_id}/subagents",
+    response_model=TemplateSubAgentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="新增 SubAgent 檔案",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def create_template_sub_agent_file(
+    request: Request,
+    template_id: str,
+    payload: TemplateSubAgentCreateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSubAgentResponse:
+    """在指定模板的 agents 目錄中新增新檔案"""
+    result = service.create_sub_agent_file(template_id, payload)
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "already exists" in result.error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.put(
+    "/{template_id}/subagents/{file_name}",
+    response_model=TemplateSubAgentResponse,
+    summary="更新 SubAgent 檔案",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def update_template_sub_agent_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    payload: TemplateSubAgentUpdateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateSubAgentResponse:
+    """更新指定模板中的 subagent 檔案內容"""
+    result = service.update_sub_agent_file(template_id, file_name, payload)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.delete(
+    "/{template_id}/subagents/{file_name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="刪除 SubAgent 檔案",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def delete_template_sub_agent_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> None:
+    """刪除指定模板中的 subagent 檔案"""
+    result = service.delete_sub_agent_file(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+
+
+# ============ OutputStyles 檔案管理 ============
+
+
+@router.get(
+    "/{template_id}/output-styles",
+    response_model=TemplateOutputStyleListResponse,
+    summary="取得模板 OutputStyles 檔案列表",
+    responses=build_responses(401, 404, 500),
+)
+async def get_template_output_styles_files(
+    request: Request,
+    template_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateOutputStyleListResponse:
+    """取得指定模板的 output-styles 目錄下所有檔案列表"""
+    result = service.get_output_styles_files(template_id)
+    translate = request.state.translate
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=translate("templates.not_found")
+            )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.get(
+    "/{template_id}/output-styles/{file_name}",
+    response_model=TemplateOutputStyleResponse,
+    summary="取得 OutputStyle 檔案內容",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def get_template_output_style_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateOutputStyleResponse:
+    """取得指定模板中特定 output-style 檔案的內容"""
+    result = service.get_output_style_file_content(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.post(
+    "/{template_id}/output-styles",
+    response_model=TemplateOutputStyleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="新增 OutputStyle 檔案",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def create_template_output_style_file(
+    request: Request,
+    template_id: str,
+    payload: TemplateOutputStyleCreateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateOutputStyleResponse:
+    """在指定模板的 output-styles 目錄中新增新檔案"""
+    result = service.create_output_style_file(template_id, payload)
+    if not result.success:
+        if "Template not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "already exists" in result.error:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.put(
+    "/{template_id}/output-styles/{file_name}",
+    response_model=TemplateOutputStyleResponse,
+    summary="更新 OutputStyle 檔案",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def update_template_output_style_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    payload: TemplateOutputStyleUpdateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> TemplateOutputStyleResponse:
+    """更新指定模板中的 output-style 檔案內容"""
+    result = service.update_output_style_file(template_id, file_name, payload)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        if "too large" in result.error:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+    return result
+
+
+@router.delete(
+    "/{template_id}/output-styles/{file_name}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="刪除 OutputStyle 檔案",
+    responses=build_responses(400, 401, 404, 500),
+)
+async def delete_template_output_style_file(
+    request: Request,
+    template_id: str,
+    file_name: str,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service)
+) -> None:
+    """刪除指定模板中的 output-style 檔案"""
+    result = service.delete_output_style_file(template_id, file_name)
+    if not result.success:
+        if "Template not found" in result.error or "not found" in result.error:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
+        if "Invalid filename" in result.error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+
+
+# ============ 通用檔案管理 API ============
+
+
+@router.get(
+    "/{template_id}/files/tree",
+    response_model=FileTreeResponse,
+    summary="取得檔案樹",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def get_file_tree(
+    request: Request,
+    template_id: str,
+    path: str = Query(default="/", description="目標路徑"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    include_hidden: bool = Query(default=False, description="是否包含隱藏檔"),
+    max_depth: Optional[int] = Query(default=None, ge=0, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileTreeResponse:
+    """取得檔案樹"""
+    try:
+        # 如果未提供 max_depth，使用設定檔中的預設值
+        if max_depth is None:
+            settings = get_settings()
+            max_depth = settings.FILE_TREE_MAX_DEPTH
+        return service.get_tree(template_id, path, scope, include_hidden, max_depth)
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.get(
+    "/{template_id}/files/content",
+    response_model=FileContentResponse,
+    summary="讀取檔案內容",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def read_file(
+    request: Request,
+    template_id: str,
+    path: str = Query(..., description="檔案路徑"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileContentResponse:
+    """讀取檔案內容"""
+    try:
+        return service.read_file(template_id, path, scope)
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files",
+    response_model=FileOperationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="建立檔案或目錄",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def create_entry(
+    request: Request,
+    template_id: str,
+    path: str = Query(..., description="路徑"),
+    entry_type: str = Query(..., pattern="^(file|directory)$", description="類型: file 或 directory"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    content: Optional[str] = Query(default="", description="檔案內容（僅檔案）"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileOperationResponse:
+    """建立檔案或目錄"""
+    try:
+        result = service.create_entry(template_id, path, entry_type, scope, content)
+        return FileOperationResponse(
+            success=True,
+            path=path,
+            scope=scope,
+            data=result
+        )
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.put(
+    "/{template_id}/files/content",
+    response_model=FileOperationResponse,
+    summary="寫入檔案內容",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def write_file(
+    request: Request,
+    template_id: str,
+    path: str = Query(..., description="檔案路徑"),
+    content: str = Query(..., description="檔案內容"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    expected_version_id: Optional[str] = Query(default=None, description="預期版本ID（衝突檢測）"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileOperationResponse:
+    """寫入檔案內容"""
+    try:
+        result = service.write_file(template_id, path, content, scope, expected_version_id)
+        return FileOperationResponse(
+            success=True,
+            path=path,
+            scope=scope,
+            data=result
+        )
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files/upload",
+    response_model=FileUploadResponse,
+    summary="上傳檔案",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def upload_files(
+    request: Request,
+    template_id: str,
+    target_path: str = Form(default="", description="目標目錄路徑"),
+    files: List[UploadFile] = File(..., description="要上傳的檔案"),
+    overwrite: bool = Form(default=False, description="是否覆蓋已存在的檔案"),
+    scope: str = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileUploadResponse:
+    """上傳單個或多個檔案到模板"""
+    try:
+        return await service.upload_files(template_id, target_path, files, overwrite, scope)
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.delete(
+    "/{template_id}/files",
+    response_model=FileOperationResponse,
+    summary="刪除檔案或目錄",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def delete_entry(
+    request: Request,
+    template_id: str,
+    path: str = Query(..., description="路徑"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    recursive: bool = Query(default=False, description="是否遞迴刪除目錄"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileOperationResponse:
+    """刪除檔案或目錄"""
+    try:
+        result = service.delete_entry(template_id, path, scope, recursive)
+        return FileOperationResponse(
+            success=True,
+            path=path,
+            scope=scope,
+            data=result
+        )
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files/copy",
+    response_model=FileOperationResponse,
+    summary="複製檔案或目錄",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def copy_entry(
+    request: Request,
+    template_id: str,
+    source_path: str = Query(..., description="來源路徑"),
+    dest_path: str = Query(..., description="目標路徑"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileOperationResponse:
+    """複製檔案或目錄"""
+    try:
+        result = service.copy_entry(template_id, source_path, dest_path, scope, overwrite)
+        return FileOperationResponse(
+            success=True,
+            path=dest_path,
+            scope=scope,
+            data=result
+        )
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files/move",
+    response_model=FileOperationResponse,
+    summary="移動檔案或目錄",
+    responses=build_responses(400, 401, 404, 409, 422, 500),
+)
+async def move_entry(
+    request: Request,
+    template_id: str,
+    source_path: str = Query(..., description="來源路徑"),
+    dest_path: str = Query(..., description="目標路徑"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileOperationResponse:
+    """移動檔案或目錄"""
+    try:
+        result = service.move_entry(template_id, source_path, dest_path, scope, overwrite)
+        return FileOperationResponse(
+            success=True,
+            path=dest_path,
+            scope=scope,
+            data=result
+        )
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files/batch-delete",
+    response_model=BatchOperationResponse,
+    summary="批次刪除",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def batch_delete(
+    request: Request,
+    template_id: str,
+    paths: list[str] = Query(..., description="路徑列表"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    recursive: bool = Query(default=False, description="是否遞迴刪除目錄"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> BatchOperationResponse:
+    """批次刪除"""
+    try:
+        return service.batch_delete(template_id, paths, scope, recursive)
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+@router.post(
+    "/{template_id}/files/search",
+    response_model=FileSearchResponse,
+    summary="搜尋檔案",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def search_files(
+    request: Request,
+    template_id: str,
+    payload: FileSearchRequest,
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateFileService = Depends(get_template_file_service)
+) -> FileSearchResponse:
+    """在模板中搜尋檔案"""
+    try:
+        return service.search_files(template_id, payload, scope)
+    except FileManagementException as e:
+        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+
+
+__all__ = ["router"]

@@ -1,0 +1,27 @@
+{
+  "id": "features/workspace-lifecycle",
+  "title": "Workspace 生命週期",
+  "description": "生命週期狀態",
+  "source": "@site/docs/features/workspace-lifecycle.md",
+  "sourceDirName": "features",
+  "slug": "/features/workspace-lifecycle",
+  "permalink": "/aileron/features/workspace-lifecycle",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "title": "Workspace 生命週期"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "Workspace Runtime",
+    "permalink": "/aileron/architecture/workspace-runtime"
+  },
+  "next": {
+    "title": "OpenSpec 工作流",
+    "permalink": "/aileron/features/openspec"
+  }
+}

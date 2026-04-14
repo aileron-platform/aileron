@@ -1,0 +1,233 @@
+{{- if .Values.workspaceManager.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-manager
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.workspaceManager.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-manager" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "workspace-manager" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/platform-config: {{ include (print $.Template.BasePath "/platform-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "aileron.serviceAccountName" (dict "root" . "serviceAccount" .Values.workspaceManager.serviceAccount "nameSuffix" "workspace-manager") }}
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      containers:
+        - name: workspace-manager
+          image: "{{ .Values.workspaceManager.image.repository }}:{{ .Values.workspaceManager.image.tag }}"
+          imagePullPolicy: {{ .Values.workspaceManager.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3001
+            - name: flower
+              containerPort: 5555
+          env:
+            - name: PUBLIC_SCHEME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_SCHEME
+            - name: PUBLIC_BASE_DOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_BASE_DOMAIN
+            - name: PUBLIC_FRONTEND_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_FRONTEND_HOST
+            - name: PUBLIC_WORKSPACE_MANAGER_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_WORKSPACE_MANAGER_HOST
+            - name: PUBLIC_KEYCLOAK_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_KEYCLOAK_HOST
+            - name: PUBLIC_RUNTIME_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_RUNTIME_HOST_PATTERN
+            - name: PUBLIC_BROWSER_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_BROWSER_HOST_PATTERN
+            - name: PUBLIC_NEXTJS_HOST_PATTERN
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_NEXTJS_HOST_PATTERN
+            - name: RUNTIME_PROVISIONER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_PROVISIONER
+            - name: RUNTIME_K8S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NAMESPACE
+            - name: RUNTIME_K8S_CR_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: WATCH_NAMESPACE
+            - name: RUNTIME_K8S_ALLOWED_NAMESPACES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_ALLOWED_NAMESPACES
+            - name: RUNTIME_K8S_SERVICE_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_SERVICE_TYPE
+            - name: RUNTIME_K8S_NODE_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NODE_ADDRESS
+            - name: RUNTIME_K8S_PVC_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_PVC_NAME
+            - name: RUNTIME_K8S_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_IMAGE
+            - name: RUNTIME_K8S_BROWSER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_BROWSER_IMAGE
+            - name: RUNTIME_K8S_NEXTJS_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NEXTJS_IMAGE
+            - name: RUNTIME_K8S_RUNTIME_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_RUNTIME_RESOURCES
+            - name: RUNTIME_K8S_BROWSER_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_BROWSER_RESOURCES
+            - name: RUNTIME_K8S_NEXTJS_RESOURCES
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NEXTJS_RESOURCES
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_ID
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_ID
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH
+            - name: BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE
+            - name: RUNTIME_K8S_NODE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: RUNTIME_K8S_NODE_PORT
+                  optional: true
+            - name: FIREWALL_DEFAULTS_CONFIGMAP_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: FIREWALL_DEFAULTS_CONFIGMAP_NAME
+            - name: CILIUM_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: CILIUM_ENABLED
+            - name: FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS
+              value: {{ join "," .Values.firewall.defaults.workspace.allowedDomains | quote }}
+            - name: FIREWALL_DEFAULTS_BROWSER_ALLOWED_DOMAINS
+              value: {{ join "," .Values.firewall.defaults.browser.allowedDomains | quote }}
+            - name: REDIS_URL
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
+            - name: CELERY_BROKER_URL
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/0"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://{{ include "aileron.fullname" . }}-redis:6379/1"
+            - name: DATABASE_URL
+              value: "postgresql://{{ .Values.postgres.auth.username }}:{{ .Values.postgres.auth.password }}@{{ include "aileron.fullname" . }}-postgres:5432/{{ .Values.postgres.auth.appDatabase }}"
+            - name: KEYCLOAK_SERVER_URL
+              value: "http://{{ include "aileron.fullname" . }}-keycloak:8080"
+            - name: KEYCLOAK_EXTERNAL_SERVER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_KEYCLOAK_URL
+            - name: FRONTEND_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_FRONTEND_URL
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: PUBLIC_ALLOWED_ORIGINS
+            {{- range $key, $value := .Values.workspaceManager.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with .Values.workspaceManager.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.workspaceManager.resources | nindent 12 }}
+{{- end }}

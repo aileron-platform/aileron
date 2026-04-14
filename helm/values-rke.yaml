@@ -1,0 +1,101 @@
+publicRouting:
+  scheme: http
+  baseDomain: apps.rke.soez.tw
+  frontendHost: "aileron.{baseDomain}"
+  workspaceManagerHost: "workspace-manager.{baseDomain}"
+  keycloakHost: "keycloak.{baseDomain}"
+  runtimeHostPattern: "workspace-runtime-{workspaceId}.{baseDomain}"
+  browserHostPattern: "workspace-browser-{workspaceId}.{baseDomain}"
+  nextjsHostPattern: "workspace-nextjs-{workspaceId}.{baseDomain}"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+kubernetes:
+  enabled: true
+  provisioner: kubernetes
+  defaultNamespace: aileron
+  allowedNamespaces:
+    - aileron
+    - default
+  serviceType: ClusterIP
+  nodeAddress: 192.168.50.241
+  pvcName: workspace-runtime-pvc
+  runtimeImage: ailerondocker/workspace-runtime:latest
+  browserImage: ailerondocker/workspace-chrome:latest
+  nextjsImage: ailerondocker/workspace-nextjs:latest
+
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-ui
+    tag: latest
+    pullPolicy: Always
+  env:
+    TZ: Asia/Taipei
+    NODE_ENV: production
+    DOCKER_ENV: "false"
+    VITE_KEYCLOAK_REALM: aileron
+    VITE_KEYCLOAK_CLIENT_ID: aileron-frontend
+    VITE_RUNTIME_PROVISIONER: kubernetes
+    VITE_WORKSPACE_K8S_ALLOWED_NAMESPACES: aileron,default
+    VITE_WORKSPACE_K8S_DEFAULT_NAMESPACE: aileron
+
+workspaceManager:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-manager
+    tag: latest
+    pullPolicy: Always
+  env:
+    TZ: Asia/Taipei
+    PORT: "3001"
+    HOST: 0.0.0.0
+    DEBUG: "false"
+    NODE_ENV: production
+    DEPLOYMENT_ENV: kubernetes
+    WORKSPACE_RUNTIME_URL: http://workspace-runtime:3002
+    ACCESS_TOKEN_EXPIRE_MINUTES: "180"
+    REFRESH_TOKEN_EXPIRE_DAYS: "7"
+    SECRET_KEY: aileron-secret-key-change-in-production
+    CELERY_TASK_SERIALIZER: json
+    CELERY_RESULT_SERIALIZER: json
+    CELERY_ACCEPT_CONTENT: json
+    KEYCLOAK_REALM: aileron
+    KEYCLOAK_CLIENT_ID: aileron-frontend
+    KEYCLOAK_CLIENT_SECRET: ""
+    KEYCLOAK_JWKS_CACHE_TTL: "3600"
+
+workspaceOperator:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ailerondocker/workspace-operator
+    tag: latest
+    pullPolicy: Always
+
+keycloak:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: quay.io/keycloak/keycloak
+    tag: 25.0.0
+    pullPolicy: IfNotPresent
+
+coturn:
+  enabled: true
+  nodeSelector:
+    role: turn
+  host: "192.168.50.241"
+  frontendHost: "192.168.50.241"
+  externalIp: "192.168.50.241"
+  username: "aileron"
+  credential: "aileron-turn-secret"
+  realm: "apps.rke.soez.tw"

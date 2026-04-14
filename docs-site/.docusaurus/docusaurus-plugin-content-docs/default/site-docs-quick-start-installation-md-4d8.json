@@ -1,0 +1,27 @@
+{
+  "id": "quick-start/installation",
+  "title": "安裝與啟動",
+  "description": "需求",
+  "source": "@site/docs/quick-start/installation.md",
+  "sourceDirName": "quick-start",
+  "slug": "/quick-start/installation",
+  "permalink": "/aileron/quick-start/installation",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 1,
+  "frontMatter": {
+    "sidebar_position": 1,
+    "title": "安裝與啟動"
+  },
+  "sidebar": "docsSidebar",
+  "previous": {
+    "title": "簡介",
+    "permalink": "/aileron/"
+  },
+  "next": {
+    "title": "服務位址與帳號",
+    "permalink": "/aileron/quick-start/services"
+  }
+}
