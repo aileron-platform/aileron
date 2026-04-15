@@ -90,10 +90,10 @@ class WorkspaceService:
         owner = self.db.get(db_models.User, payload.owner_id)
         if not owner:
             raise ValueError("Owner not found")
-        if payload.firewall is not None:
-            self._ensure_firewall_available()
 
         provisioner = self._resolve_workspace_provisioner()
+        if payload.firewall is not None:
+            self._ensure_firewall_available(provisioner=provisioner)
         target_namespace = self._resolve_target_namespace(
             provisioner=provisioner,
             target_namespace=payload.target_namespace,
@@ -210,7 +210,9 @@ class WorkspaceService:
             workspace.runtime_external_port = status.external_port
             workspace.runtime_last_seen = status.last_seen
         if "firewall" in data:
-            self._ensure_firewall_available()
+            self._ensure_firewall_available(
+                provisioner=data.get("provisioner", workspace.provisioner)
+            )
             firewall = FirewallConfig(**data.pop("firewall"))
             workspace.workspace_firewall_network_access_enabled = (
                 firewall.workspace.network_access_enabled
@@ -332,7 +334,7 @@ class WorkspaceService:
                 "effectiveAllowedDomains": self._effective_allowed_domains(
                     self.settings.FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS,
                     workspace.workspace_firewall_allowed_domains or [],
-                    enabled=self.settings.CILIUM_ENABLED,
+                    enabled=self._is_firewall_available_for_provisioner(workspace.provisioner),
                 ),
             },
             browser={
@@ -342,7 +344,7 @@ class WorkspaceService:
                 "effectiveAllowedDomains": self._effective_allowed_domains(
                     self.settings.FIREWALL_DEFAULTS_BROWSER_ALLOWED_DOMAINS,
                     workspace.browser_firewall_allowed_domains or [],
-                    enabled=self.settings.CILIUM_ENABLED,
+                    enabled=self._is_firewall_available_for_provisioner(workspace.provisioner),
                 ),
             },
         )
@@ -374,8 +376,10 @@ class WorkspaceService:
             port_mappings=port_mappings,
             runtime_status=runtime_status,
             components=components,
-            firewall_available=self.settings.CILIUM_ENABLED,
-            firewall_unavailable_reason=self._firewall_unavailable_reason(),
+            firewall_available=self._is_firewall_available_for_provisioner(workspace.provisioner),
+            firewall_unavailable_reason=self._firewall_unavailable_reason_for_provisioner(
+                workspace.provisioner
+            ),
             firewall=firewall,
             preferred_cli=workspace.preferred_cli,
             fallback_enabled=workspace.fallback_enabled,
@@ -385,6 +389,18 @@ class WorkspaceService:
             updated_at=workspace.updated_at,
             runtime_job=runtime_job,
         )
+
+    def _is_firewall_available_for_provisioner(self, provisioner: Optional[str]) -> bool:
+        if provisioner == "kubernetes":
+            return self.settings.CILIUM_ENABLED
+        return True
+
+    def _firewall_unavailable_reason_for_provisioner(
+        self, provisioner: Optional[str]
+    ) -> Optional[str]:
+        if self._is_firewall_available_for_provisioner(provisioner):
+            return None
+        return "CILIUM_NOT_ENABLED"
 
     def _resolve_target_namespace(
         self,
@@ -457,14 +473,11 @@ class WorkspaceService:
             error_message=job.error_message,
         )
 
-    def _ensure_firewall_available(self) -> None:
-        if not self.settings.CILIUM_ENABLED:
-            raise ValueError(self._firewall_unavailable_reason())
-
-    def _firewall_unavailable_reason(self) -> Optional[str]:
-        if self.settings.CILIUM_ENABLED:
-            return None
-        return "CILIUM_NOT_ENABLED"
+    def _ensure_firewall_available(self, *, provisioner: Optional[str]) -> None:
+        if not self._is_firewall_available_for_provisioner(provisioner):
+            raise ValueError(
+                self._firewall_unavailable_reason_for_provisioner(provisioner)
+            )
 
     def _to_components(self, workspace: db_models.Workspace) -> WorkspaceComponents:
         restart_metadata = self._collect_restart_metadata(workspace)

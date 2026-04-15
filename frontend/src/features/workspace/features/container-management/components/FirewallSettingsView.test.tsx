@@ -102,12 +102,14 @@ describe('FirewallSettingsView', () => {
     expect(screen.getByText('Browser Firewall')).toBeInTheDocument();
     expect(screen.getByText('registry.npmjs.org')).toBeInTheDocument();
     expect(screen.getByText('gstatic.com')).toBeInTheDocument();
+    expect(screen.getByText('Save')).toBeDisabled();
 
     const domainInputs = screen.getAllByPlaceholderText('Add domain');
     fireEvent.change(domainInputs[0], { target: { value: 'internal.example.com' } });
 
     const addButtons = screen.getAllByText('Add');
     fireEvent.click(addButtons[0]);
+    expect(screen.getByText('Save')).toBeEnabled();
     fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => {
@@ -128,7 +130,7 @@ describe('FirewallSettingsView', () => {
     });
   });
 
-  it('disables save actions when firewall is unavailable', async () => {
+  it('disables save actions only when the backend reports firewall unavailable', async () => {
     getMock.mockResolvedValue({
       firewallAvailable: false,
       firewallUnavailableReason: 'CILIUM_NOT_ENABLED',

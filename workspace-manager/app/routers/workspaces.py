@@ -25,6 +25,7 @@ from app.services.workspace_custom_resource_service import (
 )
 from app.services.runtime_sync_service import RuntimeSyncService
 from app.services.workspace_service import WorkspaceService
+from app.db.database import SessionLocal
 from app.services.workspace_lifecycle_service import (
     run_delete_workspace_task,
     run_restart_workspace_task,
@@ -233,8 +234,8 @@ async def update_workspace(
                 detail=request.state.translate("workspace.not_found")
             )
 
-        # 如果防火牆配置有變更，背景同步到 runtime
-        if firewall_changed and workspace.firewall:
+        # Docker workspace 的 firewall 透過 runtime internal API 套用。
+        if firewall_changed and workspace.firewall and workspace.provisioner == "docker":
             background_tasks.add_task(
                 _sync_firewall_to_runtime,
                 workspace_id,
@@ -253,16 +254,9 @@ async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
     """背景任務：同步防火牆設定到 workspace-runtime"""
     logger.info(f"開始背景同步防火牆設定 - workspace_id: {workspace_id}")
 
+    db = SessionLocal()
     try:
-        from app.config.settings import get_settings
-
-        if not get_settings().CILIUM_ENABLED:
-            logger.info(
-                "略過防火牆設定同步，因平台未啟用 Cilium - workspace_id: %s",
-                workspace_id,
-            )
-            return
-        sync_service = RuntimeSyncService()
+        sync_service = RuntimeSyncService(db)
         result = await sync_service.sync_firewall_to_runtime(workspace_id, firewall_config)
 
         if result.get("success"):
@@ -272,6 +266,8 @@ async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
 
     except Exception as e:
         logger.error(f"防火牆設定同步失敗 - workspace_id: {workspace_id}, error: {e}", exc_info=True)
+    finally:
+        db.close()
 
 
 @router.delete(

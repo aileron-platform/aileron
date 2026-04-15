@@ -436,6 +436,42 @@ class TestWorkspaceCreate:
         assert created_workspace.runtime_external_port == 43002
         assert result.runtime_status.external_port == 43002
 
+    def test_create_docker_workspace_accepts_firewall_when_cilium_disabled(
+        self, workspace_service, mock_db_session, user_factory
+    ):
+        owner = user_factory()
+        mock_db_session.get.return_value = owner
+        workspace_service.settings.CILIUM_ENABLED = False
+        workspace_service.settings.RUNTIME_PROVISIONER = "docker"
+
+        def mock_refresh(obj):
+            _apply_workspace_defaults(obj, owner=owner)
+
+        mock_db_session.refresh.side_effect = mock_refresh
+
+        create_request = WorkspaceCreateRequest(
+            owner_id=owner.id,
+            name="Docker Workspace",
+            git_url="https://github.com/test/repo.git",
+            runtime="docker",
+            env_vars=[],
+            port_mappings=[],
+            firewall=FirewallConfig(
+                workspace=FirewallRuleConfig(
+                    network_access_enabled=True,
+                    domain_access_mode="specific",
+                    allowed_domains=["example.com"],
+                ),
+                browser=FirewallRuleConfig(),
+            ),
+        )
+
+        result = workspace_service.create(create_request)
+
+        assert result is not None
+        created_workspace = mock_db_session.add.call_args[0][0]
+        assert created_workspace.workspace_firewall_allowed_domains == ["example.com"]
+
     def test_create_kubernetes_workspace_sets_default_namespace(
         self, workspace_service, mock_db_session, user_factory
     ):
@@ -1132,7 +1168,7 @@ class TestWorkspaceLifecycle:
         assert sample_workspace_db.browser_firewall_domain_access_mode == "specific"
         assert sample_workspace_db.browser_firewall_allowed_domains == []
 
-    def test_update_workspace_rejects_firewall_when_cilium_disabled(
+    def test_update_docker_workspace_accepts_firewall_when_cilium_disabled(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
         mock_db_session.get.return_value = sample_workspace_db
@@ -1149,13 +1185,43 @@ class TestWorkspaceLifecycle:
             )
         )
 
+        result = workspace_service.update("workspace-123", update_request)
+
+        assert result is not None
+        assert sample_workspace_db.workspace_firewall_allowed_domains == ["example.com"]
+
+    def test_update_kubernetes_workspace_rejects_firewall_when_cilium_disabled(
+        self, workspace_service, mock_db_session, sample_workspace_db
+    ):
+        mock_db_session.get.return_value = sample_workspace_db
+        sample_workspace_db.provisioner = "kubernetes"
+        workspace_service.settings.CILIUM_ENABLED = False
+
+        update_request = WorkspaceUpdateRequest(
+            firewall=FirewallConfig(
+                workspace=FirewallRuleConfig(
+                    network_access_enabled=True,
+                    domain_access_mode="specific",
+                    allowed_domains=["example.com"],
+                ),
+                browser=FirewallRuleConfig(),
+            )
+        )
+
         with pytest.raises(ValueError, match="CILIUM_NOT_ENABLED"):
             workspace_service.update("workspace-123", update_request)
 
-    def test_to_detail_returns_firewall_unavailable_when_cilium_disabled(
+    def test_to_detail_returns_firewall_available_for_docker_when_cilium_disabled(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
         workspace_service.settings.CILIUM_ENABLED = False
+        workspace_service.settings.FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS = [
+            "github.com",
+            "registry.npmjs.org",
+        ]
+        workspace_service.settings.FIREWALL_DEFAULTS_BROWSER_ALLOWED_DOMAINS = [
+            "google.com"
+        ]
         sample_workspace_db.workspace_firewall_allowed_domains = ["example.com"]
         sample_workspace_db.browser_firewall_allowed_domains = ["browser.example.com"]
         mock_db_session.get.return_value = sample_workspace_db
@@ -1163,10 +1229,40 @@ class TestWorkspaceLifecycle:
         result = workspace_service.get("workspace-123")
 
         assert result is not None
+        assert result.firewall_available is True
+        assert result.firewall_unavailable_reason is None
+        assert result.firewall.workspace.effective_allowed_domains == [
+            "github.com",
+            "registry.npmjs.org",
+            "example.com",
+        ]
+        assert result.firewall.browser.effective_allowed_domains == [
+            "google.com",
+            "browser.example.com",
+        ]
+
+    def test_to_detail_returns_firewall_unavailable_for_kubernetes_when_cilium_disabled(
+        self, workspace_service, mock_db_session, sample_workspace_db
+    ):
+        workspace_service.settings.CILIUM_ENABLED = False
+        sample_workspace_db.provisioner = "kubernetes"
+        sample_workspace_db.workspace_firewall_allowed_domains = ["example.com"]
+        sample_workspace_db.browser_firewall_allowed_domains = ["browser.example.com"]
+        mock_db_session.get.return_value = sample_workspace_db
+
+        with patch(
+            "app.services.workspace_service.WorkspaceCustomResourceService"
+        ) as mock_sync_service:
+            result = workspace_service.get("workspace-123")
+
+        assert result is not None
         assert result.firewall_available is False
         assert result.firewall_unavailable_reason == "CILIUM_NOT_ENABLED"
         assert result.firewall.workspace.effective_allowed_domains == []
         assert result.firewall.browser.effective_allowed_domains == []
+        mock_sync_service.return_value.sync_workspace_record_status.assert_called_once_with(
+            sample_workspace_db
+        )
 
     def test_to_detail_with_runtime_job(
         self, workspace_service, mock_db_session, sample_workspace_db
