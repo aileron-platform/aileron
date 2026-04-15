@@ -18,6 +18,7 @@ from app.config.settings import get_workspace_path
 from .models import (
     OpenSpecActionAvailability,
     OpenSpecActionContextSubview,
+    OpenSpecActionInputKind,
     OpenSpecActionGroup,
     OpenSpecActionItem,
     OpenSpecActionProfile,
@@ -25,6 +26,7 @@ from .models import (
     OpenSpecChangeSummary,
     OpenSpecNavigationChange,
     OpenSpecSpecDocument,
+    OpenSpecWorkspaceProfile,
     OpenSpecWorkspaceResponse,
     OpenSpecWorkspaceState,
 )
@@ -45,6 +47,8 @@ class OpenSpecActionDefinition:
     profile: OpenSpecActionProfile
     requires_change: bool
     supports_change_argument: bool
+    input_kind: OpenSpecActionInputKind
+    example_command: str | None
     draft_template: str
 
 
@@ -71,10 +75,11 @@ class OpenSpecService:
     ) -> OpenSpecWorkspaceResponse:
         cli_version = self._get_cli_version()
         cli_installed = cli_version is not None
-        initialized = (self._workspace_path / "openspec").is_dir()
+        initialized = self._is_initialized()
         active_changes = self._list_active_changes() if cli_installed and initialized else []
         navigation_changes = self._list_navigation_changes() if initialized else []
-        profile = OpenSpecActionProfile.CORE
+        profile = self._resolve_workspace_profile() if cli_installed else OpenSpecWorkspaceProfile.CORE
+        project_synced, missing_project_actions = self._resolve_project_sync_state(profile, cli_installed, initialized)
         translator = self._get_translator(translate, language)
         action_context = OpenSpecActionContext(
             subview=subview,
@@ -86,11 +91,17 @@ class OpenSpecService:
             cliVersion=cli_version,
             initialized=initialized,
             profile=profile,
-            projectSynced=True if initialized and cli_installed else None,
+            projectSynced=project_synced,
             activeChanges=active_changes,
         )
 
-        actions = self._build_actions(state, navigation_changes, action_context, translator)
+        actions = self._build_actions(
+            state,
+            navigation_changes,
+            action_context,
+            translator,
+            missing_project_actions=missing_project_actions,
+        )
         return OpenSpecWorkspaceResponse(
             workspaceId=workspace_id,
             state=state,
@@ -112,6 +123,8 @@ class OpenSpecService:
         navigation_changes: list[OpenSpecNavigationChange],
         action_context: OpenSpecActionContext,
         translate: TranslateFn,
+        *,
+        missing_project_actions: set[str],
     ) -> list[OpenSpecActionItem]:
         has_active_change = len(state.activeChanges) > 0
         current_change = state.activeChanges[0].name if has_active_change else None
@@ -130,6 +143,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.CORE,
                 requires_change=False,
                 supports_change_argument=False,
+                input_kind=OpenSpecActionInputKind.STRUCTURED,
+                example_command="/opsx:propose add-dark-mode",
                 draft_template="/opsx:propose ",
             ),
             self._action(
@@ -140,6 +155,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.CORE,
                 requires_change=False,
                 supports_change_argument=False,
+                input_kind=OpenSpecActionInputKind.NONE,
+                example_command="/opsx:explore auth strategy",
                 draft_template="/opsx:explore ",
             ),
             self._action(
@@ -150,6 +167,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.CORE,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:apply add-dark-mode",
                 draft_template=f"/opsx:apply {current_change}" if current_change else "/opsx:apply ",
             ),
             self._action(
@@ -160,6 +179,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.CORE,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:archive add-dark-mode",
                 draft_template=f"/opsx:archive {current_change}" if current_change else "/opsx:archive ",
             ),
             self._action(
@@ -170,6 +191,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=False,
                 supports_change_argument=False,
+                input_kind=OpenSpecActionInputKind.STRUCTURED,
+                example_command="/opsx:new add-dark-mode --schema spec-driven",
                 draft_template="/opsx:new ",
             ),
             self._action(
@@ -180,6 +203,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:continue add-dark-mode",
                 draft_template=f"/opsx:continue {current_change}" if current_change else "/opsx:continue ",
             ),
             self._action(
@@ -190,6 +215,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:ff add-dark-mode",
                 draft_template=f"/opsx:ff {current_change}" if current_change else "/opsx:ff ",
             ),
             self._action(
@@ -200,6 +227,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:verify add-dark-mode",
                 draft_template=f"/opsx:verify {current_change}" if current_change else "/opsx:verify ",
             ),
             self._action(
@@ -210,6 +239,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=True,
                 supports_change_argument=True,
+                input_kind=OpenSpecActionInputKind.CHANGE,
+                example_command="/opsx:sync add-dark-mode",
                 draft_template=f"/opsx:sync {current_change}" if current_change else "/opsx:sync ",
             ),
             self._action(
@@ -220,6 +251,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=False,
                 supports_change_argument=False,
+                input_kind=OpenSpecActionInputKind.STRUCTURED,
+                example_command="/opsx:bulk-archive add-dark-mode fix-login-redirect",
                 draft_template="/opsx:bulk-archive",
             ),
             self._action(
@@ -230,6 +263,8 @@ class OpenSpecService:
                 OpenSpecActionProfile.EXPANDED,
                 requires_change=False,
                 supports_change_argument=False,
+                input_kind=OpenSpecActionInputKind.NONE,
+                example_command="/opsx:onboard",
                 draft_template="/opsx:onboard",
             ),
         ]
@@ -243,6 +278,7 @@ class OpenSpecService:
                 action_context,
                 archive_target_change,
                 translate,
+                missing_project_actions=missing_project_actions,
             )
             draft_template = self._resolve_draft_template(
                 definition,
@@ -265,8 +301,18 @@ class OpenSpecService:
                         action_context,
                         archive_target_change,
                     ),
+                    recommendedReason=self._resolve_recommended_reason(
+                        definition.action_id,
+                        state,
+                        navigation_changes,
+                        action_context,
+                        archive_target_change,
+                        translate,
+                    ),
                     requiresChange=definition.requires_change,
                     supportsChangeArgument=definition.supports_change_argument,
+                    inputKind=definition.input_kind,
+                    exampleCommand=definition.example_command,
                     draftTemplate=draft_template,
                 )
             )
@@ -281,11 +327,17 @@ class OpenSpecService:
         action_context: OpenSpecActionContext,
         archive_target_change: str | None,
         translate: TranslateFn,
+        *,
+        missing_project_actions: set[str],
     ) -> tuple[OpenSpecActionAvailability, str | None]:
         if not state.cliInstalled:
             return OpenSpecActionAvailability.SETUP_REQUIRED, translate("openspec.actions.reason.cli_missing")
         if not state.initialized and action.action_id not in {"explore", "onboard"}:
             return OpenSpecActionAvailability.SETUP_REQUIRED, translate("openspec.actions.reason.not_initialized")
+        if action.profile == OpenSpecActionProfile.EXPANDED and state.profile == OpenSpecWorkspaceProfile.CORE:
+            return OpenSpecActionAvailability.HIDDEN, translate("openspec.actions.reason.expanded_hidden")
+        if action.action_id in missing_project_actions:
+            return OpenSpecActionAvailability.SYNC_REQUIRED, translate("openspec.actions.reason.project_not_synced")
         if action.action_id == "archive":
             return self._resolve_archive_availability(
                 action_context,
@@ -297,14 +349,45 @@ class OpenSpecService:
             return self._resolve_bulk_archive_availability(
                 action_context,
                 navigation_changes,
-                state.profile,
+                self._to_action_profile(state.profile),
                 translate,
             )
-        if action.profile == OpenSpecActionProfile.EXPANDED:
-            return OpenSpecActionAvailability.HIDDEN, translate("openspec.actions.reason.expanded_hidden")
         if action.requires_change and not state.activeChanges:
             return OpenSpecActionAvailability.BLOCKED, translate("openspec.actions.reason.no_active_change")
         return OpenSpecActionAvailability.ENABLED, None
+
+    def _resolve_recommended_reason(
+        self,
+        action_id: str,
+        state: OpenSpecWorkspaceState,
+        navigation_changes: list[OpenSpecNavigationChange],
+        action_context: OpenSpecActionContext,
+        archive_target_change: str | None,
+        translate: TranslateFn,
+    ) -> str | None:
+        if not self._is_recommended(action_id, state, navigation_changes, action_context, archive_target_change):
+            return None
+        if not state.cliInstalled:
+            return translate("openspec.actions.recommended.missing_cli")
+        if not state.initialized:
+            if action_id == "onboard":
+                return translate("openspec.actions.recommended.not_initialized_onboard")
+            return translate("openspec.actions.recommended.not_initialized_explore")
+        if action_context.subview == OpenSpecActionContextSubview.COMPLETE:
+            if action_id == "bulk-archive":
+                return translate("openspec.actions.recommended.complete_many")
+            if action_id == "archive":
+                return translate("openspec.actions.recommended.complete_one")
+        if state.activeChanges:
+            if action_id == "apply":
+                return translate("openspec.actions.recommended.in_progress_apply")
+            if action_id == "archive":
+                return translate("openspec.actions.recommended.in_progress_archive")
+        if action_id == "propose":
+            return translate("openspec.actions.recommended.no_active_change_propose")
+        if action_id == "explore":
+            return translate("openspec.actions.recommended.no_active_change_explore")
+        return None
 
     def _is_recommended(
         self,
@@ -380,6 +463,82 @@ class OpenSpecService:
         if profile == OpenSpecActionProfile.EXPANDED:
             return OpenSpecActionAvailability.ENABLED, None
         return OpenSpecActionAvailability.HIDDEN, translate("openspec.actions.reason.expanded_hidden")
+
+    def _resolve_workspace_profile(self) -> OpenSpecWorkspaceProfile:
+        raw_profile = (self._run_openspec(["config", "get", "profile"]) or "").strip().lower()
+        if raw_profile == OpenSpecWorkspaceProfile.CORE.value:
+            return OpenSpecWorkspaceProfile.CORE
+        if raw_profile == OpenSpecWorkspaceProfile.EXPANDED.value:
+            return OpenSpecWorkspaceProfile.EXPANDED
+        if raw_profile == OpenSpecWorkspaceProfile.CUSTOM.value:
+            return OpenSpecWorkspaceProfile.CUSTOM
+        workflows = self._get_config_workflows()
+        core_workflows = {"propose", "explore", "apply", "archive"}
+        if set(workflows) <= core_workflows:
+            return OpenSpecWorkspaceProfile.CORE
+        return OpenSpecWorkspaceProfile.CUSTOM
+
+    def _resolve_project_sync_state(
+        self,
+        profile: OpenSpecWorkspaceProfile,
+        cli_installed: bool,
+        initialized: bool,
+    ) -> tuple[bool | None, set[str]]:
+        if not cli_installed or not initialized:
+            return None, set()
+        expected = self._expected_project_command_ids(profile)
+        if not expected:
+            return None, set()
+        actual = self._list_project_command_ids()
+        missing = expected.difference(actual)
+        return len(missing) == 0, missing
+
+    def _expected_project_command_ids(self, profile: OpenSpecWorkspaceProfile) -> set[str]:
+        if profile == OpenSpecWorkspaceProfile.CORE:
+            return {"propose", "explore", "apply", "archive"}
+
+        workflows = set(self._get_config_workflows())
+        valid_actions = {
+            "propose",
+            "explore",
+            "apply",
+            "archive",
+            "new",
+            "continue",
+            "ff",
+            "verify",
+            "sync",
+            "bulk-archive",
+            "onboard",
+        }
+        return workflows.intersection(valid_actions)
+
+    def _list_project_command_ids(self) -> set[str]:
+        commands_dir = self._workspace_path / ".claude" / "commands" / "opsx"
+        if not commands_dir.is_dir():
+            return set()
+        return {
+            file_path.stem
+            for file_path in commands_dir.glob("*.md")
+            if file_path.is_file()
+        }
+
+    def _get_config_workflows(self) -> list[str]:
+        payload = self._run_openspec(["config", "get", "workflows"])
+        if not payload:
+            return []
+        try:
+            workflows = json.loads(payload)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(workflows, list):
+            return []
+        return [str(item) for item in workflows]
+
+    def _to_action_profile(self, profile: OpenSpecWorkspaceProfile) -> OpenSpecActionProfile:
+        if profile == OpenSpecWorkspaceProfile.CORE:
+            return OpenSpecActionProfile.CORE
+        return OpenSpecActionProfile.EXPANDED
 
     def _resolve_archive_target_change(
         self,
@@ -468,6 +627,10 @@ class OpenSpecService:
                 )
             )
         return summaries
+
+    def _is_initialized(self) -> bool:
+        openspec_dir = self._workspace_path / "openspec"
+        return openspec_dir.is_dir() or (openspec_dir / "config.yaml").is_file()
 
     def _get_cli_version(self) -> str | None:
         if shutil.which("openspec") is None:
@@ -594,6 +757,8 @@ class OpenSpecService:
         *,
         requires_change: bool,
         supports_change_argument: bool,
+        input_kind: OpenSpecActionInputKind,
+        example_command: str | None,
         draft_template: str,
     ) -> OpenSpecActionDefinition:
         return OpenSpecActionDefinition(
@@ -604,6 +769,8 @@ class OpenSpecService:
             profile=profile,
             requires_change=requires_change,
             supports_change_argument=supports_change_argument,
+            input_kind=input_kind,
+            example_command=example_command,
             draft_template=draft_template,
         )
 

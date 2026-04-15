@@ -325,19 +325,29 @@ export const OpenSpecSidebar: React.FC = () => {
               </div>
 
               {sidebarRecommendedAction ? (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <span className="uppercase tracking-wide">
-                    {t('workspace.openspec.sidebar.recommendedTitle')}
-                  </span>
-                  <span className="truncate text-foreground">
-                    {sidebarRecommendedAction.title}
-                  </span>
-                  <span
-                    className="max-w-[140px] shrink truncate font-mono text-[10px]"
-                    title={sidebarRecommendedAction.draftTemplate.trim()}
-                  >
-                    {recommendedCommandPreview}
-                  </span>
+                <div className="mt-1.5 space-y-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <span className="uppercase tracking-wide">
+                      {t('workspace.openspec.sidebar.recommendedTitle')}
+                    </span>
+                    <span className="truncate text-foreground">
+                      {sidebarRecommendedAction.title}
+                    </span>
+                    <span
+                      className="max-w-[140px] shrink truncate font-mono text-[10px]"
+                      title={sidebarRecommendedAction.draftTemplate.trim()}
+                    >
+                      {recommendedCommandPreview}
+                    </span>
+                  </div>
+                  {sidebarRecommendedAction.recommendedReason ? (
+                    <div className="rounded-md border border-border/60 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground">
+                      <span className="font-medium text-foreground">
+                        {t('workspace.openspec.sidebar.recommendedReasonLabel')}:
+                      </span>{' '}
+                      {sidebarRecommendedAction.recommendedReason}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

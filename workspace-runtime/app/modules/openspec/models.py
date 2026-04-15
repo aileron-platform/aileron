@@ -35,6 +35,22 @@ class OpenSpecActionProfile(str, Enum):
     EXPANDED = "expanded"
 
 
+class OpenSpecWorkspaceProfile(str, Enum):
+    """OpenSpec workspace 目前啟用的 workflow profile。"""
+
+    CORE = "core"
+    EXPANDED = "expanded"
+    CUSTOM = "custom"
+
+
+class OpenSpecActionInputKind(str, Enum):
+    """OpenSpec action 在 UI 需要的輸入型別。"""
+
+    NONE = "none"
+    CHANGE = "change"
+    STRUCTURED = "structured"
+
+
 class OpenSpecChangeStatus(str, Enum):
     """OpenSpec change 導覽狀態。"""
 
@@ -94,8 +110,11 @@ class OpenSpecActionItem(BaseModel):
     availability: OpenSpecActionAvailability = Field(description="可用性")
     reason: str | None = Field(default=None, description="狀態原因")
     recommended: bool = Field(default=False, description="是否推薦")
+    recommendedReason: str | None = Field(default=None, description="推薦原因")
     requiresChange: bool = Field(default=False, description="是否需要 change context")
     supportsChangeArgument: bool = Field(default=False, description="是否支援 change name 參數")
+    inputKind: OpenSpecActionInputKind = Field(default=OpenSpecActionInputKind.NONE, description="UI 輸入型別")
+    exampleCommand: str | None = Field(default=None, description="範例指令")
     draftTemplate: str = Field(description="插入 chat draft 的預設內容")
 
 
@@ -105,7 +124,7 @@ class OpenSpecWorkspaceState(BaseModel):
     cliInstalled: bool = Field(description="是否安裝 OpenSpec CLI")
     cliVersion: str | None = Field(default=None, description="OpenSpec CLI 版本")
     initialized: bool = Field(description="是否已初始化 openspec/")
-    profile: OpenSpecActionProfile = Field(description="目前 profile")
+    profile: OpenSpecWorkspaceProfile = Field(description="目前 profile")
     projectSynced: bool | None = Field(default=None, description="專案是否與 workflow 設定同步")
     activeChanges: list[OpenSpecChangeSummary] = Field(default_factory=list, description="進行中的 changes")
 

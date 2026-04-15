@@ -10,7 +10,9 @@ export type OpenSpecActionAvailability =
 
 export type OpenSpecActionGroup = 'start' | 'plan' | 'implement' | 'finalize' | 'learn';
 export type OpenSpecActionProfile = 'core' | 'expanded';
+export type OpenSpecWorkspaceProfile = 'core' | 'expanded' | 'custom';
 export type OpenSpecChangeStatus = 'in-progress' | 'complete' | 'archived';
+export type OpenSpecActionInputKind = 'none' | 'change' | 'structured';
 
 export interface OpenSpecChangeSummary {
   name: string;
@@ -29,8 +31,11 @@ export interface OpenSpecActionItem {
   availability: OpenSpecActionAvailability;
   reason?: string | null;
   recommended: boolean;
+  recommendedReason?: string | null;
   requiresChange: boolean;
   supportsChangeArgument: boolean;
+  inputKind: OpenSpecActionInputKind;
+  exampleCommand?: string | null;
   draftTemplate: string;
 }
 
@@ -56,7 +61,7 @@ export interface OpenSpecWorkspaceState {
   cliInstalled: boolean;
   cliVersion?: string | null;
   initialized: boolean;
-  profile: OpenSpecActionProfile;
+  profile: OpenSpecWorkspaceProfile;
   projectSynced?: boolean | null;
   activeChanges: OpenSpecChangeSummary[];
 }

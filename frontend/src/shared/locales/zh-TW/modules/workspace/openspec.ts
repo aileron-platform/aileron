@@ -20,6 +20,7 @@ const openspec = {
     currentFocusEmpty: '尚未選取特定 OpenSpec change 文件。',
     recommendedTitle: '建議下一步',
     recommendedEmpty: '目前沒有可推薦的 OpenSpec 動作。',
+    recommendedReasonLabel: '原因',
     openComposerActions: '在聊天中繼續',
     continueWithAction: '繼續：{{action}}',
     refresh: '重新整理 OpenSpec 導覽',

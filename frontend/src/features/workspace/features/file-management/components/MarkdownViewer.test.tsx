@@ -12,6 +12,7 @@ const {
   setOriginalContentMock,
   reloadCurrentFileMock,
   modifiedTabsMock,
+  setDraftMessageMock,
   tMock,
 } = vi.hoisted(() => ({
   openFileInTabMock: vi.fn(),
@@ -22,6 +23,7 @@ const {
   setOriginalContentMock: vi.fn(),
   reloadCurrentFileMock: vi.fn().mockResolvedValue({ success: true }),
   modifiedTabsMock: [] as string[],
+  setDraftMessageMock: vi.fn(),
   tMock: (key: string) =>
     ({
       'workspace.fileManagement.markdown.title': 'Markdown',
@@ -132,6 +134,53 @@ vi.mock('../../../providers/WorkspaceProvider', () => ({
       nodes: mockNodes,
     },
     openFileInTab: openFileInTabMock,
+    dispatch: vi.fn(),
+    state: {
+      rightChatCollapsed: false,
+    },
+  }),
+}));
+
+vi.mock('../../../components/ChatPanel/chatPanelStateContext', () => ({
+  useChatPanelStateContext: () => ([{}, { setDraftMessage: setDraftMessageMock }]),
+}));
+
+vi.mock('../../openspec/OpenSpecWorkspaceContext', () => ({
+  useOpenSpecWorkspace: () => ({
+    actions: [
+      {
+        id: 'apply',
+        title: 'Apply',
+        description: 'Implement the current change',
+        group: 'implement',
+        profile: 'core',
+        availability: 'enabled',
+        reason: null,
+        recommended: true,
+        recommendedReason: 'There is an active change with work ready to implement',
+        requiresChange: true,
+        supportsChangeArgument: true,
+        inputKind: 'change',
+        exampleCommand: '/opsx:apply demo',
+        draftTemplate: '/opsx:apply demo',
+      },
+      {
+        id: 'sync',
+        title: 'Sync',
+        description: 'Sync specs',
+        group: 'finalize',
+        profile: 'expanded',
+        availability: 'enabled',
+        reason: null,
+        recommended: false,
+        recommendedReason: null,
+        requiresChange: true,
+        supportsChangeArgument: true,
+        inputKind: 'change',
+        exampleCommand: '/opsx:sync demo',
+        draftTemplate: '/opsx:sync demo',
+      },
+    ],
   }),
 }));
 
@@ -144,6 +193,7 @@ describe('MarkdownViewer', () => {
     setOriginalContentMock.mockReset();
     reloadCurrentFileMock.mockReset();
     reloadCurrentFileMock.mockResolvedValue({ success: true });
+    setDraftMessageMock.mockReset();
     modifiedTabsMock.length = 0;
     saveFileContentMock.mockReset();
     saveFileContentMock.mockResolvedValue({ success: true, message: 'saved' });
@@ -433,5 +483,21 @@ describe('MarkdownViewer', () => {
     await user.click(screen.getAllByRole('button', { name: '隱藏目錄' })[1]);
 
     expect(screen.queryByPlaceholderText('搜尋 Requirement 或 Scenario')).not.toBeInTheDocument();
+  });
+
+  it('renders contextual OpenSpec actions and inserts the focused change draft', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MarkdownViewer
+        content={`## 1. Navigation\n\n- [ ] 1.1 Add OpenSpec menu`}
+        fileName="tasks.md"
+        filePath="/openspec/changes/demo/tasks.md"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(setDraftMessageMock).toHaveBeenCalledWith('/opsx:apply demo');
   });
 });

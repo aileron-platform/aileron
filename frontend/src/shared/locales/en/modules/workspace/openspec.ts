@@ -20,6 +20,7 @@ const openspec = {
     currentFocusEmpty: 'No specific OpenSpec change document is selected yet.',
     recommendedTitle: 'Recommended Next Step',
     recommendedEmpty: 'No OpenSpec actions are currently recommended.',
+    recommendedReasonLabel: 'Reason',
     openComposerActions: 'Continue in chat',
     continueWithAction: 'Continue: {{action}}',
     refresh: 'Refresh OpenSpec navigation',

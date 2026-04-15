@@ -32,9 +32,15 @@ const slugify = (value: string): string =>
 
 export const getOpenSpecDocumentKind = (
   filePath?: string,
-): 'tasks' | 'spec' | null => {
+): 'proposal' | 'design' | 'tasks' | 'spec' | null => {
   if (!filePath?.startsWith('/openspec/')) {
     return null;
+  }
+  if (filePath.endsWith('/proposal.md')) {
+    return 'proposal';
+  }
+  if (filePath.endsWith('/design.md')) {
+    return 'design';
   }
   if (filePath.endsWith('/tasks.md')) {
     return 'tasks';
@@ -130,4 +136,3 @@ export const parseOpenSpecSpecOutline = (content: string): ParsedSpecRequirement
 
   return requirements;
 };
-

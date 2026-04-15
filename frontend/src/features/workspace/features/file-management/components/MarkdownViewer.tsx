@@ -35,6 +35,7 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
+import { useChatPanelStateContext } from '../../../components/ChatPanel/chatPanelStateContext';
 import { createLogger } from '@/shared/services/logger';
 import {
   classifyMarkdownHref,
@@ -46,6 +47,7 @@ import {
   parseOpenSpecTasks,
   toggleOpenSpecTask,
 } from '../../openspec/utils/openSpecMarkdown';
+import { useOpenSpecWorkspace } from '../../openspec/OpenSpecWorkspaceContext';
 
 const logger = createLogger('MarkdownViewer');
 
@@ -116,7 +118,10 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
 }) => {
   const { t } = useI18n();
   const { toast } = useToast();
-  const { workspace, fileEditor, fileTreeActions, fileTreeState, openFileInTab } = useWorkspace();
+  const workspaceContext = useWorkspace();
+  const { workspace, fileEditor, fileTreeActions, fileTreeState, openFileInTab } = workspaceContext;
+  const [, chatUiActions] = useChatPanelStateContext();
+  const { actions: openSpecActions } = useOpenSpecWorkspace();
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -136,6 +141,27 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const activeTab = workspace.openTabs.find((tab) => tab.id === workspace.activeTabId);
   const isModified = activeTab ? fileEditor.modifiedTabs.includes(activeTab.id) : false;
   const openSpecKind = getOpenSpecDocumentKind(filePath);
+  const focusedOpenSpecChange = useMemo(() => {
+    if (!filePath?.startsWith('/openspec/changes/')) {
+      return null;
+    }
+    const segments = filePath.split('/').filter(Boolean);
+    return segments[2] || null;
+  }, [filePath]);
+  const contextualOpenSpecActions = useMemo(() => {
+    if (!openSpecKind) {
+      return [];
+    }
+    const mapping: Record<NonNullable<typeof openSpecKind>, string[]> = {
+      proposal: ['continue', 'ff'],
+      design: ['continue', 'ff'],
+      tasks: ['apply', 'verify'],
+      spec: ['sync', 'archive'],
+    };
+    return openSpecActions
+      .filter((action) => mapping[openSpecKind].includes(action.id))
+      .filter((action) => ['enabled', 'blocked', 'setup_required', 'sync_required'].includes(action.availability));
+  }, [openSpecActions, openSpecKind]);
 
   const taskSummary = useMemo(() => countTasks(content), [content]);
   const specOutline = useMemo(() => parseOpenSpecSpecOutline(content), [content]);
@@ -416,6 +442,22 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       block: 'center',
     });
   }, [taskSummary.sections]);
+
+  const handleOpenSpecContextAction = useCallback((draftTemplate: string) => {
+    const trimmed = draftTemplate.trim();
+    if (!trimmed) {
+      return;
+    }
+    const command = trimmed.split(/\s+/)[0];
+    const nextDraft = focusedOpenSpecChange && /^(\/opsx:(apply|continue|ff|verify|sync|archive))$/.test(command)
+      ? `${command} ${focusedOpenSpecChange}`
+      : trimmed;
+
+    chatUiActions.setDraftMessage(nextDraft);
+    if (workspaceContext.dispatch && workspaceContext.state?.rightChatCollapsed) {
+      workspaceContext.dispatch({ type: 'SET_RIGHT_CHAT_COLLAPSED', payload: false });
+    }
+  }, [chatUiActions, focusedOpenSpecChange, workspaceContext]);
 
   const openWorkspaceLink = useCallback(
     (href?: string | null) => {
@@ -1038,6 +1080,23 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
           )}
         </div>
       </div>
+
+      {contextualOpenSpecActions.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary/5 px-3 py-2">
+          {contextualOpenSpecActions.map((action) => (
+            <Button
+              key={action.id}
+              variant={action.availability === 'enabled' ? 'default' : 'outline'}
+              size="sm"
+              disabled={action.availability !== 'enabled'}
+              title={action.reason ?? action.recommendedReason ?? action.description}
+              onClick={() => handleOpenSpecContextAction(action.draftTemplate)}
+            >
+              {action.title}
+            </Button>
+          ))}
+        </div>
+      ) : null}
 
       {/* 預覽/編輯區域 */}
       <div className="flex-1 overflow-auto bg-background">

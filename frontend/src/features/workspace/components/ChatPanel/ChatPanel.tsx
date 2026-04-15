@@ -37,7 +37,6 @@ import type { AgentMessage } from './agentSessionTypes';
 import type { AskUserQuestionSubmitHandler } from './AgentContentBlockRenderer';
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
 import { slashCommandApi } from './slashCommandApi';
-import type { OpenSpecActionItem } from './openSpecApi';
 import { normalizeAgentType, getAgentToolConfig } from '../../features/agent-settings/utils';
 import { useOpenSpecWorkspace } from '../../features/openspec/OpenSpecWorkspaceContext';
 import { buildSessionResultPreviewPayload } from './previewPayload';
@@ -95,7 +94,12 @@ export const ChatPanel: React.FC = () => {
   const cliType = workspaceRuntime.cliType || 'claude-code';
   const agentType = normalizeAgentType(workspaceRuntime.cliType);
   const agentConfig = useMemo(() => getAgentToolConfig(agentType), [agentType]);
-  const { actions: openSpecActions, state: openSpecState } = useOpenSpecWorkspace();
+  const {
+    actions: openSpecActions,
+    state: openSpecState,
+    changes: openSpecChanges,
+    focusChangeName: openSpecFocusChangeName,
+  } = useOpenSpecWorkspace();
 
   const resolveDecisionOption = useCallback((
     allow: boolean,
@@ -442,29 +446,11 @@ export const ChatPanel: React.FC = () => {
     setPermissionMode(mode);
   }, []);
 
-  const deriveOpenSpecContextChange = useCallback(() => {
-    const selectedPath = workspaceState.openspec.selectedPath;
-    if (!selectedPath?.startsWith('/openspec/changes/')) {
-      return null;
-    }
-
-    const segments = selectedPath.split('/').filter(Boolean);
-    return segments[2] || null;
-  }, [workspaceState.openspec.selectedPath]);
-
-  const handleOpenSpecActionSelect = useCallback((action: OpenSpecActionItem) => {
-    const contextChange = deriveOpenSpecContextChange();
-    let nextDraft = action.draftTemplate;
-
-    if (contextChange && action.supportsChangeArgument) {
-      const command = action.draftTemplate.trim().split(/\s+/)[0];
-      nextDraft = `${command} ${contextChange}`;
-    }
-
+  const handleOpenSpecActionSelect = useCallback((nextDraft: string) => {
     const trimmed = uiState.draftMessage.trimEnd();
     const nextValue = trimmed.length > 0 ? `${trimmed} ${nextDraft.trim()}` : nextDraft.trim();
     uiActions.setDraftMessage(nextValue);
-  }, [deriveOpenSpecContextChange, uiActions, uiState.draftMessage]);
+  }, [uiActions, uiState.draftMessage]);
 
   // Queue handlers
   const handleDeleteQueuedMessage = useCallback(async (messageId: string) => {
@@ -741,6 +727,8 @@ export const ChatPanel: React.FC = () => {
         open={uiState.isOpenSpecDialogOpen}
         onOpenChange={(open) => (open ? uiActions.openOpenSpecDialog() : uiActions.closeOpenSpecDialog())}
         actions={openSpecActions}
+        changes={openSpecChanges}
+        focusedChangeName={openSpecFocusChangeName}
         state={openSpecState}
         onSelect={handleOpenSpecActionSelect}
       />
