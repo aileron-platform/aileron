@@ -547,7 +547,8 @@ class InternalService:
             template_content = template_path.read_text()
             template = Template(template_content)
 
-            # 渲染腳本
+            # Docker enforcement happens inside the runtime container by rendering
+            # and executing an iptables script for the workspace runtime scope.
             script_content = template.render(
                 firewall={
                     "network_access_enabled": request.network_access_enabled,

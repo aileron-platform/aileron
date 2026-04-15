@@ -461,7 +461,51 @@ class TestFirewallSynchronization:
         assert result["type"] == "firewall"
         assert result["success"] is True
         assert result["workspace_id"] == "workspace-123"
+        assert result["enforced_scopes"] == ["workspace"]
+        assert result["unenforced_scopes"] == []
         mock_client.post.assert_called_once()
+
+    async def test_sync_firewall_reports_browser_scope_as_unenforced_for_docker_runtime(
+        self, sync_service
+    ):
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "message": "Firewall updated"}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post.return_value = mock_response
+
+        firewall_changes = {
+            "workspace": {
+                "networkAccessEnabled": True,
+                "domainAccessMode": "specific",
+                "allowedDomains": ["example.com"],
+            },
+            "browser": {
+                "networkAccessEnabled": False,
+                "domainAccessMode": "all",
+                "allowedDomains": ["browser.example.com"],
+            },
+        }
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await sync_service._sync_firewall(
+                "http://localhost:8080",
+                firewall_changes,
+                "workspace-123",
+            )
+
+        assert result["success"] is True
+        assert result["enforced_scopes"] == ["workspace"]
+        assert result["unenforced_scopes"] == ["browser"]
+        call_kwargs = mock_client.post.call_args[1]
+        assert call_kwargs["json"] == {
+            "networkAccessEnabled": True,
+            "domainAccessMode": "specific",
+            "allowedDomains": ["example.com"],
+        }
 
     async def test_sync_firewall_to_runtime_not_running(
         self, sync_service, firewall_changes

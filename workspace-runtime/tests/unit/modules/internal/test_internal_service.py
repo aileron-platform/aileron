@@ -763,6 +763,15 @@ class TestCheckGitStatus:
 class TestApplyFirewallSettings:
     """測試套用防火牆設定"""
 
+    @staticmethod
+    def _load_firewall_template() -> str:
+        return (
+            Path(__file__).resolve().parents[4]
+            / "app"
+            / "jinja_templates"
+            / "firewall.sh.j2"
+        ).read_text(encoding="utf-8")
+
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_success(self, internal_service):
         """測試成功套用防火牆設定"""
@@ -787,6 +796,60 @@ class TestApplyFirewallSettings:
                         # Assert
                         assert result["status"] == "success"
                         mock_run.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_apply_firewall_settings_renders_blocking_rules_when_network_disabled(
+        self, internal_service
+    ):
+        template_content = self._load_firewall_template()
+
+        with patch.object(Path, "exists", return_value=True):
+            with patch.object(Path, "read_text", return_value=template_content):
+                with patch.object(Path, "write_text") as mock_write_text:
+                    with patch.object(Path, "chmod"):
+                        with patch("subprocess.run") as mock_run:
+                            mock_run.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+
+                            request = FirewallConfigRequest(
+                                network_access_enabled=False,
+                                domain_access_mode="all",
+                                allowed_domains=[],
+                            )
+
+                            result = await internal_service.apply_firewall_settings(request)
+
+        assert result["status"] == "success"
+        rendered_script = mock_write_text.call_args.args[0]
+        assert "iptables -P OUTPUT DROP" in rendered_script
+        assert "iptables -A OUTPUT -p udp --dport 53 -j ACCEPT" in rendered_script
+        assert "log \"網路存取已關閉" in rendered_script
+
+    @pytest.mark.asyncio
+    async def test_apply_firewall_settings_renders_allowlist_rules_for_specific_domains(
+        self, internal_service
+    ):
+        template_content = self._load_firewall_template()
+
+        with patch.object(Path, "exists", return_value=True):
+            with patch.object(Path, "read_text", return_value=template_content):
+                with patch.object(Path, "write_text") as mock_write_text:
+                    with patch.object(Path, "chmod"):
+                        with patch("subprocess.run") as mock_run:
+                            mock_run.return_value = MagicMock(returncode=0, stdout="Success", stderr="")
+
+                            request = FirewallConfigRequest(
+                                network_access_enabled=True,
+                                domain_access_mode="specific",
+                                allowed_domains=["example.com"],
+                            )
+
+                            result = await internal_service.apply_firewall_settings(request)
+
+        assert result["status"] == "success"
+        rendered_script = mock_write_text.call_args.args[0]
+        assert "iptables -P OUTPUT DROP" in rendered_script
+        assert "DOMAIN_IPS=$(dig +short example.com A example.com AAAA" in rendered_script
+        assert 'iptables -A OUTPUT -d "$IP" -j ACCEPT' in rendered_script
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_script_failure(self, internal_service):

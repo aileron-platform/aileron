@@ -263,7 +263,12 @@ class RuntimeSyncService:
         url = f"{runtime_url}/internal/settings/firewall"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
+        # Docker runtime enforcement currently applies to the workspace runtime
+        # container only. The manager may persist a browser firewall group for API
+        # consistency, but that scope does not yet have a dedicated Docker-side
+        # enforcement channel here.
         workspace_firewall = firewall_data.get("workspace", firewall_data)
+        unenforced_scopes = ["browser"] if "browser" in firewall_data else []
 
         payload = {
             "networkAccessEnabled": workspace_firewall.get("networkAccessEnabled", True),
@@ -283,7 +288,9 @@ class RuntimeSyncService:
                 "workspace_id": workspace_id,
                 "runtime_url": runtime_url,
                 "success": True,
-                "response": result
+                "response": result,
+                "enforced_scopes": ["workspace"],
+                "unenforced_scopes": unenforced_scopes,
             }
 
         except Exception as e:

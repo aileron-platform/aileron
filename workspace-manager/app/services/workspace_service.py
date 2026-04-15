@@ -326,6 +326,11 @@ class WorkspaceService:
             nextjs_api_internal_port=workspace.nextjs_api_internal_port,
             nextjs_api_external_port=workspace.nextjs_api_external_port,
         )
+        # Keep both firewall groups in the API response because the manager stores a
+        # symmetric configuration surface across provisioners. Verified enforcement
+        # still differs by provisioner: Docker currently enforces the workspace
+        # runtime scope through workspace-runtime, while Kubernetes delegates both
+        # groups through the custom resource / policy-controller path.
         firewall = FirewallConfig(
             workspace={
                 "networkAccessEnabled": workspace.workspace_firewall_network_access_enabled,
