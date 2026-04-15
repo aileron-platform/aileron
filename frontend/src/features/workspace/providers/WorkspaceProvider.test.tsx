@@ -10,6 +10,12 @@ import {
   saveWorkspaceLayoutPreferences,
 } from '../utils/workspaceLayoutStorage';
 
+const { workspaceRuntimeMockState } = vi.hoisted(() => ({
+  workspaceRuntimeMockState: {
+    runtimeBaseUrl: null as string | null,
+  },
+}));
+
 const loadFileTreeMock = vi.fn();
 const saveFileContentMock = vi.fn();
 const readFileContentMock = vi.fn();
@@ -17,7 +23,7 @@ const readFileContentMock = vi.fn();
 vi.mock('../hooks/useWorkspaceRuntime', () => ({
   useWorkspaceRuntime: (workspaceId?: string) => ({
     workspaceId: workspaceId ?? null,
-    runtimeBaseUrl: null,
+    runtimeBaseUrl: workspaceRuntimeMockState.runtimeBaseUrl,
     terminalExternalUrl: null,
     cliType: null,
     runtimeStatus: null,
@@ -132,6 +138,7 @@ describe('WorkspaceProvider layout persistence', () => {
   beforeEach(() => {
     clearAllWorkspaceLayoutPreferences();
     clearAllWorkspaceTabs();
+    workspaceRuntimeMockState.runtimeBaseUrl = null;
     loadFileTreeMock.mockReset();
     saveFileContentMock.mockReset();
     readFileContentMock.mockReset();
@@ -415,5 +422,30 @@ describe('WorkspaceProvider layout persistence', () => {
     expect(loadWorkspaceTabs('ws-tabs', 'openspec')?.activeTabId).toBe(
       '/openspec/changes/demo/tasks.md'
     );
+  });
+
+  it('reloads the file tree when switching workspaces even if the runtime base URL is unchanged', async () => {
+    workspaceRuntimeMockState.runtimeBaseUrl = 'http://shared-runtime';
+
+    const view = render(
+      <WorkspaceProvider workspaceId="ws-a">
+        <LayoutProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    await waitFor(() => {
+      expect(loadFileTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    view.rerender(
+      <WorkspaceProvider workspaceId="ws-b">
+        <LayoutProbe />
+      </WorkspaceProvider>
+    );
+
+    await waitFor(() => {
+      expect(loadFileTreeMock).toHaveBeenCalledTimes(2);
+    });
   });
 });

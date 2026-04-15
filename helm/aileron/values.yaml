@@ -37,9 +37,9 @@ kubernetes:
   nodePort: null
   nodeAddress: 127.0.0.1
   pvcName: workspace-runtime-pvc
-  runtimeImage: ailerondocker/workspace-runtime:k8s-local
-  browserImage: ailerondocker/workspace-browser:k8s-local
-  nextjsImage: ailerondocker/workspace-nextjs:k8s-local
+  runtimeImage: ailerondocker/workspace-runtime:latest
+  browserImage: ailerondocker/workspace-browser:latest
+  nextjsImage: ailerondocker/workspace-nextjs:latest
   # 留空時預設只 watch Helm release 所在 namespace，避免多個 release 互相 reconcile。
   watchNamespace: ""
   workspaceDefaults:
@@ -105,7 +105,7 @@ frontend:
   replicaCount: 1
   image:
     repository: ailerondocker/workspace-ui
-    tag: k8s-local
+    tag: latest
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -126,7 +126,7 @@ workspaceManager:
   replicaCount: 1
   image:
     repository: ailerondocker/workspace-manager
-    tag: k8s-local
+    tag: latest
     pullPolicy: IfNotPresent
   serviceAccount:
     create: true
@@ -168,7 +168,7 @@ workspaceOperator:
   replicaCount: 1
   image:
     repository: ailerondocker/workspace-operator
-    tag: k8s-local
+    tag: latest
     pullPolicy: IfNotPresent
   serviceAccount:
     create: true

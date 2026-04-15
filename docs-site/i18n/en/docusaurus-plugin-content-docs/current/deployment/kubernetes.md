@@ -318,14 +318,14 @@ spec:
   provisioner: kubernetes
   runtime:
     imageKey: default
-    image: ailerondocker/workspace-runtime:k8s-local
+    image: ailerondocker/workspace-runtime:latest
     resources: {}
   browser:
     enabled: true
-    image: ailerondocker/workspace-browser:k8s-local
+    image: ailerondocker/workspace-browser:latest
   nextjs:
     enabled: true
-    image: ailerondocker/workspace-nextjs:k8s-local
+    image: ailerondocker/workspace-nextjs:latest
   workspacePath: /workspace
   targetNamespace: workspace-system
   git:
@@ -387,9 +387,9 @@ spec:
 | `kubernetes.nodePort` | `RUNTIME_K8S_NODE_PORT` | _(empty)_ | NodePort |
 | `kubernetes.nodeAddress` | `RUNTIME_K8S_NODE_ADDRESS` | `127.0.0.1` | Node address |
 | `kubernetes.pvcName` | `RUNTIME_K8S_PVC_NAME` | `workspace-runtime-pvc` | PVC name |
-| `kubernetes.runtimeImage` | `RUNTIME_K8S_IMAGE` | `ailerondocker/workspace-runtime:k8s-local` | Runtime image |
-| `kubernetes.browserImage` | `RUNTIME_K8S_BROWSER_IMAGE` | `ailerondocker/workspace-browser:k8s-local` | Browser image |
-| `kubernetes.nextjsImage` | `RUNTIME_K8S_NEXTJS_IMAGE` | `ailerondocker/workspace-nextjs:k8s-local` | Next.js image |
+| `kubernetes.runtimeImage` | `RUNTIME_K8S_IMAGE` | `ailerondocker/workspace-runtime:latest` | Runtime image |
+| `kubernetes.browserImage` | `RUNTIME_K8S_BROWSER_IMAGE` | `ailerondocker/workspace-browser:latest` | Browser image |
+| `kubernetes.nextjsImage` | `RUNTIME_K8S_NEXTJS_IMAGE` | `ailerondocker/workspace-nextjs:latest` | Next.js image |
 | `kubernetes.watchNamespace` | `WATCH_NAMESPACE` | _(empty, all namespaces)_ | Operator watch namespace |
 
 ### Overriding Namespace and Allowlist
@@ -694,11 +694,11 @@ cilium:
 | Value | Default |
 |-------|---------|
 | `frontend.image.repository` | `ailerondocker/workspace-ui` |
-| `frontend.image.tag` | `k8s-local` |
+| `frontend.image.tag` | `latest` |
 | `workspaceManager.image.repository` | `ailerondocker/workspace-manager` |
-| `workspaceManager.image.tag` | `k8s-local` |
+| `workspaceManager.image.tag` | `latest` |
 | `workspaceOperator.image.repository` | `ailerondocker/workspace-operator` |
-| `workspaceOperator.image.tag` | `k8s-local` |
+| `workspaceOperator.image.tag` | `latest` |
 
 ### Credentials
 

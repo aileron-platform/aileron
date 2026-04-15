@@ -5,7 +5,7 @@
  * fileTreeState / fileTreeActions 介面，方便過渡階段維持相容性。
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createLogger } from '@/shared/services/logger';
 
@@ -131,6 +131,11 @@ export function useWorkspaceFileTreeAdapter(
   const [pendingAction, setPendingAction] = useState<PendingFileAction | null>(null);
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const workspaceIdentity = useMemo(
+    () => `${workspaceId ?? 'pending-workspace'}::${runtimeBaseUrl ?? ''}`,
+    [runtimeBaseUrl, workspaceId]
+  );
+  const previousWorkspaceIdentityRef = useRef<string | null>(null);
 
   const runtimeReady = Boolean(runtimeBaseUrl && runtimeBaseUrl.length > 0);
 
@@ -161,6 +166,24 @@ export function useWorkspaceFileTreeAdapter(
 
     await refreshVersionControlQueries(queryClient, workspaceId, options);
   }, [queryClient, workspaceId]);
+
+  const resetWorkspaceTreeState = useCallback(() => {
+    manager.state.resetState();
+    setPendingAction(null);
+    setDraggedNode(null);
+    setDropTarget(null);
+  }, [manager.state]);
+
+  useEffect(() => {
+    const previousWorkspaceIdentity = previousWorkspaceIdentityRef.current;
+    previousWorkspaceIdentityRef.current = workspaceIdentity;
+
+    if (previousWorkspaceIdentity === null || previousWorkspaceIdentity === workspaceIdentity) {
+      return;
+    }
+
+    resetWorkspaceTreeState();
+  }, [resetWorkspaceTreeState, workspaceIdentity]);
 
   const selectFile = useCallback((filePath: string) => {
     manager.state.selectNode(ensureLeadingSlash(filePath));

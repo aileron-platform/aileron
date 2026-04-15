@@ -106,6 +106,7 @@ export interface UseFileTreeStateReturn {
   updateNode: (path: string, updates: Partial<FileTreeNode>) => void;
   removeNode: (path: string) => void;
   addNode: (parentPath: string | null, node: FileTreeNode) => void;
+  resetState: () => void;
 
   // 選擇操作
   selectNode: (path: string) => void;
@@ -244,6 +245,18 @@ export function useFileTreeState(
       };
       return addToTree(prevNodes);
     });
+  }, []);
+
+  const resetState = useCallback(() => {
+    setNodes([]);
+    setSelectedId(null);
+    setSelectedIds(new Set());
+    setLastSelectedId(null);
+    setExpandedIds(new Set());
+    setLoading(false);
+    setError(null);
+    setSearchQuery('');
+    setContextMenu(null);
   }, []);
 
   // 選擇操作
@@ -407,6 +420,7 @@ export function useFileTreeState(
     updateNode,
     removeNode,
     addNode,
+    resetState,
 
     // 選擇操作
     selectNode,
@@ -437,4 +451,3 @@ export function useFileTreeState(
     closeContextMenu,
   };
 }
-

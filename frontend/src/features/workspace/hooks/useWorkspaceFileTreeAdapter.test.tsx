@@ -9,10 +9,12 @@ const {
   refreshVersionControlQueriesMock,
   managerLoadTreeMock,
   managerStateMock,
+  managerResetStateMock,
 } = vi.hoisted(() => ({
   saveFileContentMock: vi.fn().mockResolvedValue({ path: '/docs/guide.md' }),
   refreshVersionControlQueriesMock: vi.fn().mockResolvedValue(undefined),
   managerLoadTreeMock: vi.fn().mockResolvedValue(undefined),
+  managerResetStateMock: vi.fn(),
   managerStateMock: {
     nodes: [],
     expandedIds: new Set<string>(),
@@ -22,6 +24,7 @@ const {
     isLoading: false,
     error: null as string | null,
     setError: vi.fn(),
+    resetState: vi.fn(),
     selectNode: vi.fn(),
     selectNodeWithModifier: vi.fn(),
     clearSelection: vi.fn(),
@@ -75,6 +78,8 @@ describe('useWorkspaceFileTreeAdapter', () => {
     refreshVersionControlQueriesMock.mockClear();
     managerLoadTreeMock.mockClear();
     managerStateMock.setError.mockClear();
+    managerResetStateMock.mockClear();
+    managerStateMock.resetState = managerResetStateMock;
   });
 
   it('refreshes version-control queries after saving a file successfully', async () => {
@@ -94,5 +99,33 @@ describe('useWorkspaceFileTreeAdapter', () => {
 
     expect(saveFileContentMock).toHaveBeenCalledWith('http://runtime', '/docs/guide.md', '# updated');
     expect(refreshVersionControlQueriesMock).toHaveBeenCalledWith(queryClient, 'ws-save', undefined);
+  });
+
+  it('resets workspace-scoped tree state when the workspace identity changes', async () => {
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { rerender } = renderHook(
+      ({ workspaceId, runtimeBaseUrl }: { workspaceId: string; runtimeBaseUrl: string }) =>
+        useWorkspaceFileTreeAdapter({ workspaceId, runtimeBaseUrl }),
+      {
+        wrapper,
+        initialProps: {
+          workspaceId: 'ws-a',
+          runtimeBaseUrl: 'http://runtime-a',
+        },
+      }
+    );
+
+    expect(managerResetStateMock).not.toHaveBeenCalled();
+
+    rerender({
+      workspaceId: 'ws-b',
+      runtimeBaseUrl: 'http://runtime-b',
+    });
+
+    expect(managerResetStateMock).toHaveBeenCalledTimes(1);
   });
 });

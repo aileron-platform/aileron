@@ -30,9 +30,9 @@ def mock_settings(tmp_path: Path):
     settings.RUNTIME_SCRIPT_ROOT = str(tmp_path)
     settings.RUNTIME_K8S_NAMESPACE = "workspace-system"
     settings.RUNTIME_K8S_CR_NAMESPACE = "aileron"
-    settings.RUNTIME_K8S_IMAGE = "ailerondocker/workspace-runtime:k8s-local"
-    settings.RUNTIME_K8S_BROWSER_IMAGE = "ailerondocker/workspace-browser:k8s-local"
-    settings.RUNTIME_K8S_NEXTJS_IMAGE = "ailerondocker/workspace-nextjs:k8s-local"
+    settings.RUNTIME_K8S_IMAGE = "ailerondocker/workspace-runtime:latest"
+    settings.RUNTIME_K8S_BROWSER_IMAGE = "ailerondocker/workspace-browser:latest"
+    settings.RUNTIME_K8S_NEXTJS_IMAGE = "ailerondocker/workspace-nextjs:latest"
     settings.RUNTIME_K8S_RUNTIME_RESOURCES = {
         "requests": {"cpu": "500m", "memory": "2Gi"},
         "limits": {"cpu": "2000m", "memory": "4Gi"},
@@ -92,13 +92,13 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
     assert manifest["metadata"]["namespace"] == "aileron"
     assert manifest["spec"]["workspaceId"] == "workspace-123"
     assert manifest["spec"]["targetNamespace"] == "team-a"
-    assert manifest["spec"]["runtime"]["image"] == "ailerondocker/workspace-runtime:k8s-local"
+    assert manifest["spec"]["runtime"]["image"] == "ailerondocker/workspace-runtime:latest"
     assert manifest["spec"]["runtime"]["imageKey"] == "universal"
     assert manifest["spec"]["runtime"]["resources"]["requests"]["cpu"] == "500m"
     assert manifest["spec"]["runtime"]["resources"]["limits"]["memory"] == "4Gi"
-    assert manifest["spec"]["browser"]["image"] == "ailerondocker/workspace-browser:k8s-local"
+    assert manifest["spec"]["browser"]["image"] == "ailerondocker/workspace-browser:latest"
     assert manifest["spec"]["browser"]["resources"]["limits"]["memory"] == "2Gi"
-    assert manifest["spec"]["nextjs"]["image"] == "ailerondocker/workspace-nextjs:k8s-local"
+    assert manifest["spec"]["nextjs"]["image"] == "ailerondocker/workspace-nextjs:latest"
     assert manifest["spec"]["nextjs"]["resources"]["requests"]["memory"] == "1Gi"
     assert manifest["spec"]["firewall"]["workspace"]["allowedDomains"] == ["example.com"]
     assert manifest["spec"]["firewall"]["browser"]["allowedDomains"] == [

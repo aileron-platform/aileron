@@ -9,7 +9,7 @@
  * 提供完整的檔案樹管理功能
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useMemo, useRef } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useFileTreeManager');
@@ -17,6 +17,16 @@ import { useFileTreeState, type UseFileTreeStateOptions } from './useFileTreeSta
 import { useFileOperations, type UseFileOperationsOptions } from './useFileOperations';
 import { useFileEditor, type UseFileEditorOptions } from './useFileEditor';
 import type { FileTreeApiConfig, FileTreeNode } from '../types';
+
+const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
+  JSON.stringify({
+    type: apiConfig.type,
+    workspaceId: apiConfig.workspaceId ?? null,
+    templateId: apiConfig.templateId ?? null,
+    scope: apiConfig.scope ?? null,
+    collection: apiConfig.collection ?? null,
+    baseUrl: apiConfig.baseUrl ?? null,
+  });
 
 export interface UseFileTreeManagerOptions {
   /** API 配置 */
@@ -62,9 +72,21 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
   // 狀態管理
   const state = useFileTreeState(stateOptions);
+  const apiConfigKey = useMemo(() => buildApiConfigKey(apiConfig), [apiConfig]);
+  const latestLoadIdRef = useRef(0);
+  const activeApiConfigKeyRef = useRef(apiConfigKey);
+
+  useEffect(() => {
+    activeApiConfigKeyRef.current = apiConfigKey;
+    latestLoadIdRef.current += 1;
+  }, [apiConfigKey]);
 
   // 載入檔案樹 - 需要在 operations 之前定義
   const loadTree = useCallback(async () => {
+    const requestId = latestLoadIdRef.current + 1;
+    latestLoadIdRef.current = requestId;
+    const requestApiConfigKey = apiConfigKey;
+
     logger.debug('loadTree: 開始載入檔案樹');
     state.setLoading(true);
     state.setError(null);
@@ -73,6 +95,20 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
       const adapter = new (await import('../services/fileTreeAdapter')).FileTreeApiAdapter(apiConfig);
       logger.debug('loadTree: 調用 adapter.getTree()');
       const nodes = await adapter.getTree();
+
+      if (
+        latestLoadIdRef.current !== requestId ||
+        activeApiConfigKeyRef.current !== requestApiConfigKey
+      ) {
+        logger.debug('loadTree: 忽略過期的檔案樹回應', {
+          requestId,
+          requestApiConfigKey,
+          latestLoadId: latestLoadIdRef.current,
+          activeApiConfigKey: activeApiConfigKeyRef.current,
+        });
+        return;
+      }
+
       logger.debug('loadTree: 獲取到節點數量', { count: nodes.length });
       state.setNodes(nodes);
       logger.debug('loadTree: 已調用 state.setNodes()');
@@ -81,6 +117,19 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         onTreeLoaded(nodes);
       }
     } catch (error) {
+      if (
+        latestLoadIdRef.current !== requestId ||
+        activeApiConfigKeyRef.current !== requestApiConfigKey
+      ) {
+        logger.debug('loadTree: 忽略過期的檔案樹錯誤', {
+          requestId,
+          requestApiConfigKey,
+          latestLoadId: latestLoadIdRef.current,
+          activeApiConfigKey: activeApiConfigKeyRef.current,
+        });
+        return;
+      }
+
       logger.error('loadTree: 載入失敗', { error });
       const errorMessage = error instanceof Error ? error.message : '載入檔案樹失敗';
       state.setError(errorMessage);
@@ -88,11 +137,23 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         onError(error instanceof Error ? error : new Error(errorMessage));
       }
     } finally {
-      state.setLoading(false);
-      logger.debug('loadTree: 載入完成');
+      if (
+        latestLoadIdRef.current === requestId &&
+        activeApiConfigKeyRef.current === requestApiConfigKey
+      ) {
+        state.setLoading(false);
+        logger.debug('loadTree: 載入完成');
+      } else {
+        logger.debug('loadTree: 跳過過期請求的完成狀態更新', {
+          requestId,
+          requestApiConfigKey,
+          latestLoadId: latestLoadIdRef.current,
+          activeApiConfigKey: activeApiConfigKeyRef.current,
+        });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiConfig]);
+  }, [apiConfig, apiConfigKey, state]);
 
   // 檔案操作 - 在 loadTree 之後定義，這樣 onComplete 才能正確引用
   const operations = useFileOperations({
@@ -293,4 +354,3 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     renameFileAndUpdateTab,
   };
 }
-

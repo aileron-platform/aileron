@@ -62,8 +62,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
 
   const fileTreeActions = fileTreeAdapter.actions;
 
-  const hasTriggeredInitialTreeLoadRef = useRef(false);
-  const lastLoadedBaseUrlRef = useRef<string | null>(null);
+  const lastLoadedTreeIdentityRef = useRef<string | null>(null);
   const previousWorkspaceIdRef = useRef<string | null>(null);
   const hasLoadedInitialTabsRef = useRef(false);
   // 記錄最近一次已完成 layout restore 的 workspaceId。
@@ -222,26 +221,24 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   // 這可避免 OIDC callback 導頁後，runtime request 早於 auth context 完整就緒而送出未帶 Authorization 的請求。
   useEffect(() => {
     const baseUrl = workspaceRuntime.runtimeBaseUrl;
+    const currentWorkspaceId = workspaceRuntime.workspaceId;
     const isAuthReady = !isAuthLoading && isAuthenticated && Boolean(accessToken);
+    const treeIdentity =
+      currentWorkspaceId && baseUrl && isAuthReady
+        ? `${currentWorkspaceId}::${baseUrl}`
+        : null;
 
-    if (!baseUrl || !isAuthReady) {
-      hasTriggeredInitialTreeLoadRef.current = false;
-      if (!baseUrl) {
-        lastLoadedBaseUrlRef.current = null;
-      }
+    if (!treeIdentity) {
+      lastLoadedTreeIdentityRef.current = null;
       return;
     }
 
-    if (lastLoadedBaseUrlRef.current !== baseUrl) {
-      lastLoadedBaseUrlRef.current = baseUrl;
-      hasTriggeredInitialTreeLoadRef.current = false;
-    }
-
-    if (!hasTriggeredInitialTreeLoadRef.current) {
-      hasTriggeredInitialTreeLoadRef.current = true;
+    if (lastLoadedTreeIdentityRef.current !== treeIdentity) {
+      lastLoadedTreeIdentityRef.current = treeIdentity;
       void loadFileTree();
     }
   }, [
+    workspaceRuntime.workspaceId,
     workspaceRuntime.runtimeBaseUrl,
     loadFileTree,
     isAuthLoading,
