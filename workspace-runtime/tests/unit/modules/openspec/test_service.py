@@ -317,3 +317,43 @@ def test_workspace_state_marks_missing_project_command_files_as_sync_required(tm
     assert result.state.projectSynced is False
     assert action_map["propose"].availability == OpenSpecActionAvailability.SYNC_REQUIRED
     assert action_map["propose"].reason == "Project OpenSpec command files are out of sync with the active workflow profile"
+
+
+def test_workspace_state_treats_generated_openspec_skills_as_project_synced(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "openspec").mkdir()
+    skills_dir = tmp_path / ".claude" / "skills"
+    skills_dir.mkdir(parents=True)
+    for skill_name in (
+        "openspec-explore",
+        "openspec-new-change",
+        "openspec-continue-change",
+        "openspec-apply-change",
+        "openspec-ff-change",
+        "openspec-sync-specs",
+        "openspec-archive-change",
+        "openspec-bulk-archive-change",
+        "openspec-verify-change",
+        "openspec-onboard",
+    ):
+        (skills_dir / skill_name).mkdir()
+
+    service = OpenSpecService(workspace_path=tmp_path)
+    monkeypatch.setattr("app.modules.openspec.service.shutil.which", lambda _: "/usr/bin/openspec")
+    monkeypatch.setattr(
+        service,
+        "_run_openspec",
+        lambda args: (
+            "1.3.0" if args == ["--version"]
+            else "custom" if args == ["config", "get", "profile"]
+            else json.dumps(["explore", "new", "continue", "apply", "ff", "sync", "archive", "bulk-archive", "verify", "onboard"]) if args == ["config", "get", "workflows"]
+            else json.dumps({"changes": []})
+        ),
+    )
+
+    result = service.get_workspace_state("ws-1", language="en-US")
+
+    action_map = {action.id: action for action in result.actions}
+    assert result.state.projectSynced is True
+    assert action_map["new"].availability == OpenSpecActionAvailability.ENABLED
+    assert action_map["verify"].availability == OpenSpecActionAvailability.BLOCKED
+    assert action_map["verify"].reason != "Project OpenSpec command files are out of sync with the active workflow profile"

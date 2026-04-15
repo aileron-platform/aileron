@@ -36,6 +36,19 @@ logger = logging.getLogger(__name__)
 
 TranslateFn = Callable[[str], str]
 TASK_CHECKBOX_RE = re.compile(r"^\s*-\s\[(x|X| )\]\s.+$")
+PROJECT_SKILL_ACTION_MAP: dict[str, set[str]] = {
+    "propose": {"openspec-propose"},
+    "explore": {"openspec-explore"},
+    "apply": {"openspec-apply-change"},
+    "archive": {"openspec-archive-change"},
+    "new": {"openspec-new-change"},
+    "continue": {"openspec-continue-change"},
+    "ff": {"openspec-ff-change"},
+    "verify": {"openspec-verify-change"},
+    "sync": {"openspec-sync-specs"},
+    "bulk-archive": {"openspec-bulk-archive-change"},
+    "onboard": {"openspec-onboard"},
+}
 
 
 @dataclass(frozen=True)
@@ -515,13 +528,26 @@ class OpenSpecService:
 
     def _list_project_command_ids(self) -> set[str]:
         commands_dir = self._workspace_path / ".claude" / "commands" / "opsx"
-        if not commands_dir.is_dir():
-            return set()
-        return {
+        command_ids = {
             file_path.stem
             for file_path in commands_dir.glob("*.md")
             if file_path.is_file()
-        }
+        } if commands_dir.is_dir() else set()
+
+        skills_dir = self._workspace_path / ".claude" / "skills"
+        if skills_dir.is_dir():
+            skill_names = {
+                skill_path.name
+                for skill_path in skills_dir.iterdir()
+                if skill_path.is_dir() and skill_path.name.startswith("openspec-")
+            }
+            command_ids.update({
+                action_id
+                for action_id, expected_skill_names in PROJECT_SKILL_ACTION_MAP.items()
+                if expected_skill_names.intersection(skill_names)
+            })
+
+        return command_ids
 
     def _get_config_workflows(self) -> list[str]:
         payload = self._run_openspec(["config", "get", "workflows"])
