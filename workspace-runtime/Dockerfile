@@ -154,6 +154,8 @@ RUN echo '#!/bin/bash' > /etc/profile.d/fix-mise-path.sh && \
 
 ENV PYTHONPATH="/workspace-runtime:/workspace"
 ENV DISABLE_AUTOUPDATER=1
+ENV OPENSPEC_AUTO_INIT=1
+ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"
 
 # Stage 2: Development - 程式碼透過 volume mount 掛入
 FROM base AS development

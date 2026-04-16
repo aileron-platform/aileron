@@ -212,7 +212,33 @@ chown -R developer:developer /workspace 2>/dev/null || true
 echo ""
 
 # ============================================================================
-# 8. 安裝工作區依賴
+# 8. 初始化 OpenSpec
+# ============================================================================
+echo "🧭 檢查 OpenSpec 初始化狀態..."
+OPENSPEC_INIT_TOOLS="${OPENSPEC_INIT_TOOLS:-claude,codex,opencode,gemini}"
+if [ "${OPENSPEC_AUTO_INIT:-1}" = "1" ]; then
+    if command -v openspec >/dev/null 2>&1; then
+        if [ ! -d "/workspace/openspec" ]; then
+            echo "📋 執行 OpenSpec 初始化..."
+            if HOME=/home/developer XDG_CONFIG_HOME=/home/developer/.config su developer -s /bin/bash -c "export PATH=/home/developer/.local/bin:/home/developer/.npm-global/bin:/home/developer/.cargo/bin:\$PATH; cd /workspace && openspec init --tools ${OPENSPEC_INIT_TOOLS}"; then
+                echo "✅ OpenSpec 初始化完成"
+                chown -R developer:developer /workspace /home/developer/.config /home/developer/.claude /home/developer/.codex 2>/dev/null || true
+            else
+                echo "⚠️  OpenSpec 初始化失敗，略過自動初始化"
+            fi
+        else
+            echo "✅ OpenSpec 已初始化，跳過"
+        fi
+    else
+        echo "⚠️  找不到 openspec CLI，跳過自動初始化"
+    fi
+else
+    echo "⏭️  OPENSPEC_AUTO_INIT=0，跳過自動初始化"
+fi
+echo ""
+
+# ============================================================================
+# 9. 安裝工作區依賴
 # ============================================================================
 echo "📦 檢查並安裝工作區依賴..."
 if [ -d "/workspace" ] && [ -n "$(ls -A /workspace)" ]; then
@@ -234,7 +260,7 @@ echo "✅ 工作區依賴檢查完成"
 echo ""
 
 # ============================================================================
-# 9. 設定 SSH 密鑰
+# 10. 設定 SSH 密鑰
 # ============================================================================
 if [ -n "${SSH_PUBLIC_KEY:-}" ] && [ -n "${SSH_PRIVATE_KEY:-}" ]; then
     echo "🔑 設定 SSH 訪問..."
@@ -253,7 +279,7 @@ fi
 echo ""
 
 # ============================================================================
-# 10. 設定日誌目錄
+# 11. 設定日誌目錄
 # ============================================================================
 echo "📋 設定日誌目錄..."
 mkdir -p /var/log/supervisor
@@ -262,7 +288,7 @@ echo "✅ 日誌目錄設定完成"
 echo ""
 
 # ============================================================================
-# 11. 編譯 Terminal Service（如果需要）
+# 12. 編譯 Terminal Service（如果需要）
 # ============================================================================
 echo "🔧 檢查 Terminal Service 二進制文件..."
 if [ -f "/workspace-terminal/bin/terminal-service" ]; then
@@ -289,7 +315,7 @@ fi
 echo ""
 
 # ============================================================================
-# 12. 啟動 Supervisor
+# 13. 啟動 Supervisor
 # ============================================================================
 echo "🎯 啟動服務管理器..."
 
