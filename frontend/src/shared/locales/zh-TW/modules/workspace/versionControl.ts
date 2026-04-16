@@ -48,6 +48,14 @@ const versionControl = {
       tooltip: '重新整理版本控制狀態',
     },
   },
+  gitContext: {
+    label: '工作樹',
+    ariaLabel: '工作樹',
+    option: {
+      primary: '主要工作樹 · {{name}}',
+      worktree: '工作樹 · {{name}}',
+    },
+  },
   fileChanges: {
     loading: '載入中...',
     stagedTitle: '已暫存的變更',

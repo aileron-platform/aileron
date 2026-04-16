@@ -48,6 +48,14 @@ const versionControl = {
       tooltip: 'Refresh version control status',
     },
   },
+  gitContext: {
+    label: 'Worktree',
+    ariaLabel: 'Worktree',
+    option: {
+      primary: 'Primary worktree · {{name}}',
+      worktree: 'Worktree · {{name}}',
+    },
+  },
   fileChanges: {
     loading: 'Loading...',
     stagedTitle: 'Staged changes',

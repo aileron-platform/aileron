@@ -13,6 +13,8 @@ const { dispatchMock, workspaceStateMock } = vi.hoisted(() => ({
   },
 }));
 
+let currentLocale = 'zh-TW';
+
 vi.mock('../../../providers/WorkspaceProvider', () => ({
   useWorkspace: () => ({
     state: workspaceStateMock,
@@ -20,6 +22,26 @@ vi.mock('../../../providers/WorkspaceProvider', () => ({
     workspaceRuntime: {
       runtimeBaseUrl: 'http://runtime',
       workspaceId: 'ws-contexts',
+    },
+  }),
+}));
+
+vi.mock('@/shared/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string>) => {
+      const name = params?.name ?? '';
+      if (currentLocale === 'en') {
+        if (key === 'workspace.versionControl.gitContext.label') return 'Worktree';
+        if (key === 'workspace.versionControl.gitContext.ariaLabel') return 'Worktree';
+        if (key === 'workspace.versionControl.gitContext.option.primary') return `Primary worktree · ${name}`;
+        if (key === 'workspace.versionControl.gitContext.option.worktree') return `Worktree · ${name}`;
+      }
+
+      if (key === 'workspace.versionControl.gitContext.label') return '工作樹';
+      if (key === 'workspace.versionControl.gitContext.ariaLabel') return '工作樹';
+      if (key === 'workspace.versionControl.gitContext.option.primary') return `主要工作樹 · ${name}`;
+      if (key === 'workspace.versionControl.gitContext.option.worktree') return `工作樹 · ${name}`;
+      return key;
     },
   }),
 }));
@@ -61,6 +83,7 @@ describe('GitContextSelector', () => {
   beforeEach(() => {
     dispatchMock.mockClear();
     workspaceStateMock.versionControl.selectedGitContextId = null;
+    currentLocale = 'zh-TW';
   });
 
   it('selects the active Git context when no context is chosen yet', () => {
@@ -84,5 +107,15 @@ describe('GitContextSelector', () => {
       type: 'SET_SELECTED_GIT_CONTEXT',
       payload: 'worktree:feature-auth',
     });
+  });
+
+  it('renders English labels when locale is en', () => {
+    currentLocale = 'en';
+    render(<GitContextSelector />);
+
+    expect(screen.getByRole('combobox', { name: 'Worktree' })).toHaveValue('primary');
+    expect(screen.getByText('Worktree')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Primary worktree · main' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Worktree · feature-auth' })).toBeInTheDocument();
   });
 });
