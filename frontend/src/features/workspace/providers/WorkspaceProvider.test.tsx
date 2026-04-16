@@ -99,7 +99,7 @@ const LayoutProbe = () => {
 const getLayoutState = () => JSON.parse(screen.getByTestId('layout-state').textContent ?? '{}');
 
 const TabIsolationProbe = () => {
-  const { workspace, fileEditor, openFileInTab, state } = useWorkspace();
+  const { workspace, fileEditor, openFileInTab, state, dispatch } = useWorkspace();
 
   return (
     <div>
@@ -107,6 +107,7 @@ const TabIsolationProbe = () => {
         {JSON.stringify({
           currentFeature: state.currentFeature,
           tabScope: workspace.tabScope,
+          selectedGitContextId: state.versionControl.selectedGitContextId,
           openTabs: workspace.openTabs.map((tab) => tab.path),
           activeTabId: workspace.activeTabId,
           modifiedTabs: fileEditor.modifiedTabs,
@@ -120,6 +121,18 @@ const TabIsolationProbe = () => {
       </div>
       <button type="button" onClick={() => openFileInTab('/src/App.tsx', 'app', 'file-management')}>
         open-file-management-tab
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'SET_SELECTED_GIT_CONTEXT', payload: 'worktree:feature-auth' })}
+      >
+        switch-to-worktree
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'SET_SELECTED_GIT_CONTEXT', payload: 'primary' })}
+      >
+        switch-to-primary
       </button>
       <button
         type="button"
@@ -446,6 +459,61 @@ describe('WorkspaceProvider layout persistence', () => {
 
     await waitFor(() => {
       expect(loadFileTreeMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('restores file-management tabs separately for each git context', async () => {
+    workspaceRuntimeMockState.runtimeBaseUrl = 'http://shared-runtime';
+
+    render(
+      <WorkspaceProvider workspaceId="ws-context-tabs">
+        <TabIsolationProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    await waitFor(() => {
+      expect(loadFileTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-file-management-tab' }));
+
+    await waitFor(() => {
+      expect(loadWorkspaceTabs('ws-context-tabs', 'file-management', 'primary')?.openTabs.map((tab) => tab.path)).toEqual([
+        '/src/App.tsx',
+      ]);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'switch-to-worktree' }));
+
+    await waitFor(() => {
+      expect(getCurrentTabsState()).toMatchObject({
+        selectedGitContextId: 'worktree:feature-auth',
+        openTabs: [],
+        activeTabId: null,
+      });
+    });
+
+    await waitFor(() => {
+      expect(loadFileTreeMock).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-file-management-tab' }));
+
+    await waitFor(() => {
+      expect(loadWorkspaceTabs('ws-context-tabs', 'file-management', 'worktree:feature-auth')?.openTabs.map((tab) => tab.path)).toEqual([
+        '/src/App.tsx',
+      ]);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'switch-to-primary' }));
+
+    await waitFor(() => {
+      expect(getCurrentTabsState()).toMatchObject({
+        selectedGitContextId: 'primary',
+        openTabs: ['/src/App.tsx'],
+        activeTabId: '/src/App.tsx',
+      });
     });
   });
 });

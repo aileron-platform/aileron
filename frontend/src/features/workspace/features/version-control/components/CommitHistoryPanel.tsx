@@ -11,6 +11,7 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { GitCommit, User, Clock, Loader2 } from 'lucide-react';
 import { CommitFilesPanel } from './CommitFilesPanel';
+import { GitContextSelector } from './GitContextSelector';
 import type { VersionControlCommitSummary, VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -41,19 +42,20 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const commitListRef = useRef<HTMLDivElement>(null);
   const { t } = useI18n();
-  const { workspaceRuntime } = useWorkspace();
+  const { workspaceRuntime, state } = useWorkspace();
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl ?? '';
   const workspaceId = workspaceRuntime.workspaceId ?? '';
+  const selectedGitContextId = state.versionControl.selectedGitContextId;
 
   // React Query Infinite Query
   const commitsQuery = useCommitsInfiniteQuery(
-    { workspaceId, runtimeBaseUrl },
+    { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
     20 // pageSize
   );
 
   // Commit Files Query
   const filesQuery = useCommitFilesQuery(
-    { workspaceId, runtimeBaseUrl },
+    { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
     internalSelectedCommitId
   );
 
@@ -188,6 +190,7 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
 
   return (
     <div ref={containerRef} className="h-full flex flex-col">
+      <GitContextSelector />
       {/* 上方：Commit 歷史列表 */}
       <div className="min-h-0 overflow-hidden" style={{ height: `${panelHeight}%` }}>
         <div className="h-full flex flex-col">
@@ -295,4 +298,3 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
     </div>
   );
 };
-

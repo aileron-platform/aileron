@@ -50,6 +50,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
 
   // 使用 Workspace Runtime Hook
   const workspaceRuntime = useWorkspaceRuntime(workspaceId);
+  const selectedGitContextId = state.versionControl.selectedGitContextId;
+  const fileManagementContextId = selectedGitContextId ?? 'primary';
 
   // 使用路由同步 Hook
   useWorkspaceRouteSync(state, dispatch);
@@ -58,12 +60,14 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   const fileTreeAdapter = useWorkspaceFileTreeAdapter({
     workspaceId: workspaceRuntime.workspaceId ?? workspaceId,
     runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
+    contextId: fileManagementContextId,
   });
 
   const fileTreeActions = fileTreeAdapter.actions;
 
   const lastLoadedTreeIdentityRef = useRef<string | null>(null);
   const previousWorkspaceIdRef = useRef<string | null>(null);
+  const previousFileManagementContextIdRef = useRef<string | null>(null);
   const hasLoadedInitialTabsRef = useRef(false);
   // 記錄最近一次已完成 layout restore 的 workspaceId。
   // 1) 作為防抖寫入的 gate：只有與當前 workspaceId 相同時才允許寫入，避免切換瞬間用舊 state 污染新 workspace key
@@ -110,18 +114,22 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       hasLoadedInitialTabsRef.current = true;
 
       (['file-management', 'openspec'] as const).forEach((scope) => {
-        const savedTabs = loadWorkspaceTabs(currentWorkspaceId, scope);
+        const resolvedTabs = scope === 'file-management'
+          ? loadWorkspaceTabs(currentWorkspaceId, scope, fileManagementContextId)
+          : loadWorkspaceTabs(currentWorkspaceId, scope);
         dispatch({
           type: 'RESTORE_WORKSPACE_TABS',
           payload: {
             workspaceId: currentWorkspaceId,
             scope,
-            tabsState: savedTabs || undefined,
+            contextId: scope === 'file-management' ? fileManagementContextId : undefined,
+            tabsState: resolvedTabs || undefined,
           }
         });
       });
 
       previousWorkspaceIdRef.current = currentWorkspaceId;
+      previousFileManagementContextIdRef.current = fileManagementContextId;
     }
   }, [workspaceRuntime.workspaceId]);
 
@@ -133,14 +141,24 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     // 如果 workspace 改變（且不是初始化）
     if (currentWorkspaceId && previousWorkspaceId && currentWorkspaceId !== previousWorkspaceId) {
       (['file-management', 'openspec'] as const).forEach((scope) => {
-        dispatch({ type: 'SAVE_WORKSPACE_TABS', payload: { workspaceId: previousWorkspaceId, scope } });
+        dispatch({
+          type: 'SAVE_WORKSPACE_TABS',
+          payload: {
+            workspaceId: previousWorkspaceId,
+            scope,
+            contextId: scope === 'file-management' ? (previousFileManagementContextIdRef.current ?? 'primary') : undefined,
+          },
+        });
 
-        const savedTabs = loadWorkspaceTabs(currentWorkspaceId, scope);
+        const savedTabs = scope === 'file-management'
+          ? loadWorkspaceTabs(currentWorkspaceId, scope, fileManagementContextId)
+          : loadWorkspaceTabs(currentWorkspaceId, scope);
         dispatch({
           type: 'RESTORE_WORKSPACE_TABS',
           payload: {
             workspaceId: currentWorkspaceId,
             scope,
+            contextId: scope === 'file-management' ? fileManagementContextId : undefined,
             tabsState: savedTabs || undefined,
           }
         });
@@ -150,8 +168,47 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     // 更新 ref
     if (currentWorkspaceId) {
       previousWorkspaceIdRef.current = currentWorkspaceId;
+      previousFileManagementContextIdRef.current = fileManagementContextId;
     }
   }, [workspaceRuntime.workspaceId]);
+
+  useEffect(() => {
+    const currentWorkspaceId = workspaceRuntime.workspaceId;
+    if (!currentWorkspaceId) {
+      return;
+    }
+
+    const previousContextId = previousFileManagementContextIdRef.current;
+    if (previousContextId === null) {
+      previousFileManagementContextIdRef.current = fileManagementContextId;
+      return;
+    }
+
+    if (previousContextId === fileManagementContextId) {
+      return;
+    }
+
+    dispatch({
+      type: 'SAVE_WORKSPACE_TABS',
+      payload: {
+        workspaceId: currentWorkspaceId,
+        scope: 'file-management',
+        contextId: previousContextId,
+      },
+    });
+
+    const savedTabs = loadWorkspaceTabs(currentWorkspaceId, 'file-management', fileManagementContextId);
+    dispatch({
+      type: 'RESTORE_WORKSPACE_TABS',
+      payload: {
+        workspaceId: currentWorkspaceId,
+        scope: 'file-management',
+        contextId: fileManagementContextId,
+        tabsState: savedTabs || undefined,
+      },
+    });
+    previousFileManagementContextIdRef.current = fileManagementContextId;
+  }, [fileManagementContextId, workspaceRuntime.workspaceId]);
 
   // 載入 workspace 層級的 layout 偏好；workspace 切換時同時 flush 上一個 workspace 的最後狀態
   useEffect(() => {
@@ -225,7 +282,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     const isAuthReady = !isAuthLoading && isAuthenticated && Boolean(accessToken);
     const treeIdentity =
       currentWorkspaceId && baseUrl && isAuthReady
-        ? `${currentWorkspaceId}::${baseUrl}`
+        ? `${currentWorkspaceId}::${baseUrl}::${fileManagementContextId}`
         : null;
 
     if (!treeIdentity) {
@@ -244,6 +301,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     isAuthLoading,
     isAuthenticated,
     accessToken,
+    fileManagementContextId,
   ]);
 
   // 定期儲存當前 workspace 的 tabs 到 localStorage (防抖處理)
@@ -257,7 +315,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         activeTabId: state.fileManagement.activeTabId,
         modifiedTabs: state.fileManagement.modifiedTabs,
         originalContents: state.fileManagement.originalContents,
-      });
+      }, fileManagementContextId);
       saveWorkspaceTabs(currentWorkspaceId, 'openspec', {
         openTabs: state.openspec.openTabs,
         activeTabId: state.openspec.activeTabId,
@@ -273,6 +331,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     state.fileManagement.activeTabId,
     state.fileManagement.modifiedTabs,
     state.fileManagement.originalContents,
+    fileManagementContextId,
     state.openspec.openTabs,
     state.openspec.activeTabId,
     state.openspec.modifiedTabs,

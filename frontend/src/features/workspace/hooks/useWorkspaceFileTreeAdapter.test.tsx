@@ -89,7 +89,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     );
 
     const { result } = renderHook(
-      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-save', runtimeBaseUrl: 'http://runtime' }),
+      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-save', runtimeBaseUrl: 'http://runtime', contextId: 'worktree:feature-auth' }),
       { wrapper },
     );
 
@@ -97,8 +97,12 @@ describe('useWorkspaceFileTreeAdapter', () => {
       await result.current.actions.saveFileContent('/docs/guide.md', '# updated');
     });
 
-    expect(saveFileContentMock).toHaveBeenCalledWith('http://runtime', '/docs/guide.md', '# updated');
-    expect(refreshVersionControlQueriesMock).toHaveBeenCalledWith(queryClient, 'ws-save', undefined);
+    expect(saveFileContentMock).toHaveBeenCalledWith('http://runtime', '/docs/guide.md', '# updated', 'worktree:feature-auth');
+    expect(refreshVersionControlQueriesMock).toHaveBeenCalledWith(
+      queryClient,
+      'ws-save',
+      { contextId: 'worktree:feature-auth' },
+    );
   });
 
   it('resets workspace-scoped tree state when the workspace identity changes', async () => {
@@ -110,6 +114,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     const { rerender } = renderHook(
       ({ workspaceId, runtimeBaseUrl }: { workspaceId: string; runtimeBaseUrl: string }) =>
         useWorkspaceFileTreeAdapter({ workspaceId, runtimeBaseUrl }),
+        
       {
         wrapper,
         initialProps: {
@@ -124,6 +129,32 @@ describe('useWorkspaceFileTreeAdapter', () => {
     rerender({
       workspaceId: 'ws-b',
       runtimeBaseUrl: 'http://runtime-b',
+    });
+
+    expect(managerResetStateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resets workspace-scoped tree state when the git context changes', async () => {
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { rerender } = renderHook(
+      ({ contextId }: { contextId: string | null }) =>
+        useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a', contextId }),
+      {
+        wrapper,
+        initialProps: {
+          contextId: 'primary',
+        },
+      }
+    );
+
+    expect(managerResetStateMock).not.toHaveBeenCalled();
+
+    rerender({
+      contextId: 'worktree:feature-auth',
     });
 
     expect(managerResetStateMock).toHaveBeenCalledTimes(1);

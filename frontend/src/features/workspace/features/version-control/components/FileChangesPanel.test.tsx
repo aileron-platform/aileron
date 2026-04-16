@@ -1,17 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@/__tests__/utils/render';
+import { render, screen } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileChangesPanel } from './FileChangesPanel';
 
 const {
-  refreshVersionControlQueriesMock,
   onFileSelectMock,
   changesQueryMock,
   branchesQueryMock,
   statusQueryMock,
 } = vi.hoisted(() => ({
-  refreshVersionControlQueriesMock: vi.fn().mockResolvedValue(undefined),
   onFileSelectMock: vi.fn(),
   changesQueryMock: {
     data: {
@@ -40,6 +38,8 @@ vi.mock('@/shared/hooks/useI18n', () => ({
       ({
         'workspace.versionControl.actions.refresh.label': 'Refresh',
         'workspace.versionControl.actions.refresh.tooltip': 'Refresh version control status',
+        'workspace.versionControl.actions.menu.label': 'More actions',
+        'workspace.versionControl.actions.branch.label': 'Branch',
         'workspace.versionControl.actions.pull.label': 'Pull',
         'workspace.versionControl.actions.push.label': 'Push',
         'workspace.versionControl.fileChanges.stagedTitle': 'Staged changes',
@@ -56,6 +56,12 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 
 vi.mock('../../../providers/WorkspaceProvider', () => ({
   useWorkspace: () => ({
+    state: {
+      versionControl: {
+        selectedGitContextId: 'primary',
+      },
+    },
+    dispatch: vi.fn(),
     workspaceRuntime: {
       runtimeBaseUrl: 'http://runtime',
       workspaceId: 'ws-refresh',
@@ -64,6 +70,13 @@ vi.mock('../../../providers/WorkspaceProvider', () => ({
 }));
 
 vi.mock('../hooks/useVersionControlQueries', () => ({
+  useGitContextsQuery: () => ({
+    data: {
+      activeContextId: 'primary',
+      contexts: [{ id: 'primary', kind: 'primary', displayName: 'main', repoPath: '/workspace', detached: false, locked: false, prunable: false }],
+    },
+    isLoading: false,
+  }),
   useChangesQuery: () => changesQueryMock,
   useBranchesQuery: () => branchesQueryMock,
   useStatusQuery: () => statusQueryMock,
@@ -73,22 +86,12 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
   useDiscardMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock('../lib/queryClient', async () => {
-  const actual = await vi.importActual<typeof import('../lib/queryClient')>('../lib/queryClient');
-  return {
-    ...actual,
-    refreshVersionControlQueries: refreshVersionControlQueriesMock,
-  };
-});
-
 describe('FileChangesPanel', () => {
   beforeEach(() => {
-    refreshVersionControlQueriesMock.mockClear();
     onFileSelectMock.mockClear();
   });
 
-  it('triggers coordinated version-control refresh from the changes header', async () => {
-    const user = userEvent.setup();
+  it('renders branch and action controls in the changes header', () => {
     const queryClient = new QueryClient();
 
     render(
@@ -97,26 +100,13 @@ describe('FileChangesPanel', () => {
       </QueryClientProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Refresh' }));
-
-    expect(refreshVersionControlQueriesMock).toHaveBeenCalledTimes(1);
-    expect(refreshVersionControlQueriesMock).toHaveBeenCalledWith(
-      queryClient,
-      'ws-refresh',
-      { includeBranches: true },
-    );
+    expect(screen.getByText('Branch')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'main' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
   });
 
-  it('keeps unstaged files visible while refresh is in flight', async () => {
-    const user = userEvent.setup();
+  it('keeps unstaged files visible in the panel', () => {
     const queryClient = new QueryClient();
-
-    let resolveRefresh: (() => void) | null = null;
-    refreshVersionControlQueriesMock.mockImplementationOnce(
-      () => new Promise<void>((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -126,14 +116,33 @@ describe('FileChangesPanel', () => {
 
     expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0);
     expect(screen.getAllByText('draft.txt').length).toBeGreaterThan(0);
+  });
 
-    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+  it('clears selected file state when the branch changes', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
 
-    expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('draft.txt').length).toBeGreaterThan(0);
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
 
-    await act(async () => {
-      resolveRefresh?.();
-    });
+    await user.click(screen.getAllByText('notes.md')[0]);
+
+    expect(onFileSelectMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'notes.md' }),
+    );
+
+    branchesQueryMock.data = [{ name: 'feature-auth', displayName: 'feature-auth', isActive: true }];
+    statusQueryMock.data = { branch: 'feature-auth' };
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    expect(onFileSelectMock).toHaveBeenLastCalledWith(null);
   });
 });

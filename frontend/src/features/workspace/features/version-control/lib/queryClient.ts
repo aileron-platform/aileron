@@ -8,25 +8,38 @@ export const versionControlKeys = {
   detail: (id: string) => [...versionControlKeys.details(), id] as const,
 
   // Changes
-  changes: (workspaceId: string) => [...versionControlKeys.all, "changes", workspaceId] as const,
-  changesWithPage: (workspaceId: string, page: number) => [...versionControlKeys.changes(workspaceId), "page", page] as const,
+  changes: (workspaceId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "changes", workspaceId, contextId ?? "primary"] as const,
+  changesWithPage: (workspaceId: string, page: number, contextId?: string | null) =>
+    [...versionControlKeys.changes(workspaceId, contextId), "page", page] as const,
 
   // Branches
-  branches: (workspaceId: string) => [...versionControlKeys.all, "branches", workspaceId] as const,
-  branchesWithFilter: (workspaceId: string, includeRemote: boolean, search?: string) =>
-    [...versionControlKeys.branches(workspaceId), { includeRemote, search }] as const,
+  branches: (workspaceId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "branches", workspaceId, contextId ?? "primary"] as const,
+  branchesWithFilter: (workspaceId: string, includeRemote: boolean, search?: string, contextId?: string | null) =>
+    [...versionControlKeys.branches(workspaceId, contextId), { includeRemote, search }] as const,
 
   // Status
-  status: (workspaceId: string) => [...versionControlKeys.all, "status", workspaceId] as const,
+  status: (workspaceId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "status", workspaceId, contextId ?? "primary"] as const,
+
+  contexts: (workspaceId: string) => [...versionControlKeys.all, "contexts", workspaceId] as const,
 
   // Commits
-  commits: (workspaceId: string) => [...versionControlKeys.all, "commits", workspaceId] as const,
-  commitsList: (workspaceId: string, page: number, pageSize: number, branch?: string, search?: string) =>
-    [...versionControlKeys.commits(workspaceId), { page, pageSize, branch, search }] as const,
+  commits: (workspaceId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "commits", workspaceId, contextId ?? "primary"] as const,
+  commitsList: (
+    workspaceId: string,
+    page: number,
+    pageSize: number,
+    branch?: string,
+    search?: string,
+    contextId?: string | null,
+  ) => [...versionControlKeys.commits(workspaceId, contextId), { page, pageSize, branch, search }] as const,
 
   // Commit Files
-  commitFiles: (workspaceId: string, commitId: string) =>
-    [...versionControlKeys.all, "commits", workspaceId, "files", commitId] as const,
+  commitFiles: (workspaceId: string, commitId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "commits", workspaceId, contextId ?? "primary", "files", commitId] as const,
 };
 
 export function invalidateVersionControl(queryClient: QueryClient) {
@@ -40,6 +53,8 @@ export function prefetchVersionControl(queryClient: QueryClient, id: string) {
 interface RefreshVersionControlOptions {
   includeBranches?: boolean;
   includeCommits?: boolean;
+  includeContexts?: boolean;
+  contextId?: string | null;
 }
 
 type VersionControlQueryCategory = "changes" | "status" | "branches" | "commits";
@@ -48,17 +63,22 @@ const getWorkspaceQueryPrefixes = (
   workspaceId: string,
   options: RefreshVersionControlOptions,
 ): ReadonlyArray<readonly unknown[]> => {
+  const contextId = options.contextId ?? "primary";
   const prefixes: Array<readonly unknown[]> = [
-    versionControlKeys.changes(workspaceId),
-    versionControlKeys.status(workspaceId),
+    versionControlKeys.changes(workspaceId, contextId),
+    versionControlKeys.status(workspaceId, contextId),
   ];
 
   if (options.includeBranches) {
-    prefixes.push(versionControlKeys.branches(workspaceId));
+    prefixes.push(versionControlKeys.branches(workspaceId, contextId));
   }
 
   if (options.includeCommits) {
-    prefixes.push(versionControlKeys.commits(workspaceId));
+    prefixes.push(versionControlKeys.commits(workspaceId, contextId));
+  }
+
+  if (options.includeContexts) {
+    prefixes.push(versionControlKeys.contexts(workspaceId));
   }
 
   return prefixes;
@@ -68,7 +88,15 @@ const categorizeQueryKey = (
   queryKey: readonly unknown[],
   workspaceId: string,
 ): VersionControlQueryCategory | null => {
-  if (queryKey[0] !== "version-control" || queryKey[2] !== workspaceId) {
+  if (queryKey[0] !== "version-control") {
+    return null;
+  }
+
+  if (queryKey[1] === "contexts") {
+    return null;
+  }
+
+  if (queryKey[2] !== workspaceId) {
     return null;
   }
 
@@ -93,6 +121,14 @@ export async function refreshVersionControlQueries(
     .getQueryCache()
     .findAll({
       predicate: (query) => {
+        if (query.queryKey[0] !== "version-control") {
+          return false;
+        }
+
+        if (query.queryKey[1] === "contexts") {
+          return options.includeContexts === true && query.queryKey[2] === workspaceId;
+        }
+
         const category = categorizeQueryKey(query.queryKey, workspaceId);
         if (!category) return false;
         return allowedPrefixes.some((prefix) =>

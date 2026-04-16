@@ -38,6 +38,7 @@ interface UseAgentSessionOptions {
   workspaceId: string;
   cliType?: string | null;
   autoConnect?: boolean;
+  gitContextId?: string | null;
 }
 
 type StreamingSnapshot = {
@@ -273,7 +274,7 @@ const clearStreamingSnapshot = (sessionId: string) => {
  * 提供完整的 Agent Session 操作介面
  */
 export function useAgentSession(options: UseAgentSessionOptions) {
-  const { runtimeBaseUrl, workspaceId, cliType, autoConnect = true } = options;
+  const { runtimeBaseUrl, workspaceId, cliType, autoConnect = true, gitContextId } = options;
   const { state, store } = useAgentSessionStore();
   const { getAccessToken } = useAuth();
   const workspaceDefaultTool = resolveAgenticToolFromCliType(cliType);
@@ -530,6 +531,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               const newSession = await agentApi.sessions.createSession(runtimeBaseUrl, {
                 workspace_id: workspaceId,
                 agentic_tool: workspaceDefaultTool,
+                git_context_id: gitContextId ?? undefined,
               });
               upsertRealtimeSession(newSession);
               saveLastWsSeq(newSession.session_id, 0);
@@ -583,7 +585,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     };
 
     init();
-  }, [runtimeBaseUrl, workspaceId, workspaceDefaultTool, store, setRealtimeSessions, upsertRealtimeSession]);
+  }, [runtimeBaseUrl, workspaceId, workspaceDefaultTool, store, setRealtimeSessions, upsertRealtimeSession, gitContextId]);
 
   // Dispatch events from WebSocket to Dispatcher
   useEffect(() => {
@@ -1357,6 +1359,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           workspace_id: workspaceId,
           agentic_tool: resolvedTool,
           permission_config: resolvedPermissionConfig,
+          git_context_id: gitContextId ?? undefined,
         });
         upsertRealtimeSession(session);
         saveLastWsSeq(session.session_id, 0);
@@ -1376,7 +1379,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         throw error;
       }
     },
-    [runtimeBaseUrl, workspaceId, workspaceDefaultTool, state.selectedTool, store, upsertRealtimeSession]
+    [runtimeBaseUrl, workspaceId, workspaceDefaultTool, state.selectedTool, store, upsertRealtimeSession, gitContextId]
   );
 
   const sendMessage = useCallback(

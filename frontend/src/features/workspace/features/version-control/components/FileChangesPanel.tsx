@@ -20,7 +20,6 @@ const logger = createLogger('FileChangesPanel');
 import {
   Minus,
   Plus,
-  RefreshCw,
   ChevronDown,
   MoreHorizontal,
   ArrowDown,
@@ -31,6 +30,7 @@ import {
 import { ApiClient, ApiError } from '@/shared/api/apiClient';
 import { CommitForm } from './CommitForm';
 import { FileChangeItem } from './FileChangeItem';
+import { GitContextSelector } from './GitContextSelector';
 import type { VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -71,7 +71,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const [showBranchDropdown, setShowBranchDropdown] = useState(false);
   const [showActionMenu, setShowActionMenu] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // 分頁狀態
   const [untrackedPage, setUntrackedPage] = useState(1);
@@ -81,6 +80,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   const containerRef = useRef<HTMLDivElement>(null);
   const unstagedLoadMoreRef = useRef<HTMLDivElement>(null);
+  const previousViewIdentityRef = useRef<string | null>(null);
 
   // 使用 ref 避免 callback 依賴問題
   const stagedFilesRef = useRef<VersionControlFileChange[]>([]);
@@ -88,21 +88,22 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // ==================== Hooks ====================
 
   const { t } = useI18n();
-  const { workspaceRuntime } = useWorkspace();
+  const { workspaceRuntime, state } = useWorkspace();
   const queryClient = useQueryClient();
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl ?? '';
   const workspaceId = workspaceRuntime.workspaceId ?? '';
+  const selectedGitContextId = state.versionControl.selectedGitContextId;
 
   // React Query - 查詢
-  const changesQuery = useChangesQuery({ workspaceId, runtimeBaseUrl }, untrackedPage);
-  const branchesQuery = useBranchesQuery({ workspaceId, runtimeBaseUrl });
-  const statusQuery = useStatusQuery({ workspaceId, runtimeBaseUrl });
+  const changesQuery = useChangesQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId }, untrackedPage);
+  const branchesQuery = useBranchesQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const statusQuery = useStatusQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
 
   // React Query - 變更操作
-  const stageMutation = useStageMutation({ workspaceId, runtimeBaseUrl });
-  const unstageMutation = useUnstageMutation({ workspaceId, runtimeBaseUrl });
-  const commitMutation = useCommitMutation({ workspaceId, runtimeBaseUrl });
-  const discardMutation = useDiscardMutation({ workspaceId, runtimeBaseUrl });
+  const stageMutation = useStageMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const unstageMutation = useUnstageMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const commitMutation = useCommitMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const discardMutation = useDiscardMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
 
   // ==================== Computed Data ====================
 
@@ -185,25 +186,27 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     setUntrackedPage(1);
   }, []);
 
-  const handleRefreshVersionControl = useCallback(async () => {
-    if (!workspaceId) {
+  useEffect(() => {
+    resetPagination();
+  }, [resetPagination, selectedGitContextId]);
+
+  useEffect(() => {
+    const currentViewIdentity = `${selectedGitContextId ?? 'primary'}::${currentBranch}`;
+    const previousViewIdentity = previousViewIdentityRef.current;
+    previousViewIdentityRef.current = currentViewIdentity;
+
+    if (previousViewIdentity === null || previousViewIdentity === currentViewIdentity) {
       return;
     }
 
-    setShowActionMenu(false);
-    resetPagination();
-    setIsRefreshing(true);
-
-    try {
-      await refreshVersionControlQueries(queryClient, workspaceId, {
-        includeBranches: true,
-      });
-    } catch (error) {
-      logger.error('Version control refresh failed', { error });
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [queryClient, resetPagination, workspaceId]);
+    setSelectedStagedPath(null);
+    setSelectedUnstagedPath(null);
+    setSelectedStagedPaths(new Set());
+    setSelectedUnstagedPaths(new Set());
+    setLastSelectedStagedPath(null);
+    setLastSelectedUnstagedPath(null);
+    onFileSelect?.(null);
+  }, [currentBranch, onFileSelect, selectedGitContextId]);
 
   // 分支切換
   const handleBranchChange = useCallback(async (branch: string) => {
@@ -213,24 +216,28 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     try {
       // 使用 ApiClient 來確保請求攜帶 Authorization header
       const client = new ApiClient({ baseUrl: runtimeBaseUrl });
-      const path = `/api/v1/workspaces/${workspaceId}/version-control/branches/${encodeURIComponent(branch)}/checkout`;
+      const suffix = selectedGitContextId ? `?contextId=${encodeURIComponent(selectedGitContextId)}` : '';
+      const path = `/api/v1/workspaces/${workspaceId}/version-control/branches/${encodeURIComponent(branch)}/checkout${suffix}`;
 
       await client.post(path, { create: false, stashChanges: false });
       resetPagination();
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: true,
+        includeContexts: true,
+        contextId: selectedGitContextId,
       });
     } catch (err) {
       logger.error('Branch change error', { error: err });
     }
-  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, workspaceId]);
+  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, selectedGitContextId, workspaceId]);
 
   // Git 操作（Pull/Push）
   const handleGitAction = useCallback(async (action: 'pull' | 'push') => {
     setShowActionMenu(false);
     try {
       const client = new ApiClient({ baseUrl: runtimeBaseUrl });
-      const path = `/api/v1/workspaces/${workspaceId}/version-control/${action}`;
+      const suffix = selectedGitContextId ? `?contextId=${encodeURIComponent(selectedGitContextId)}` : '';
+      const path = `/api/v1/workspaces/${workspaceId}/version-control/${action}${suffix}`;
       const body = action === 'pull'
         ? { remote: 'origin', branch: currentBranch, rebase: true, autostash: true }
         : { remote: 'origin', branch: currentBranch, force: false };
@@ -240,11 +247,13 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: true,
         includeCommits: true,
+        includeContexts: true,
+        contextId: selectedGitContextId,
       });
     } catch (err) {
       logger.error(`Git ${action} error`, { error: err });
     }
-  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, workspaceId]);
+  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, selectedGitContextId, workspaceId]);
 
   // 處理檔案選擇（支援多選）
   const handleFileSelect = useCallback((
@@ -565,10 +574,16 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   return (
     <div ref={containerRef} className="h-full flex flex-col version-control-container">
+      <GitContextSelector />
       {/* Branch and Actions Header */}
       <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center justify-between flex-shrink-0">
         {/* Branch Selector */}
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+            <GitBranch className="h-3 w-3" />
+            {t('workspace.versionControl.actions.branch.label')}
+          </span>
+          <div className="relative">
           <button
             onClick={() => setShowBranchDropdown(!showBranchDropdown)}
             className="flex items-center gap-2 px-3 py-1 bg-background border border-border rounded-md hover:bg-muted/30 transition-colors"
@@ -579,43 +594,35 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
           </button>
 
           {/* Branch Dropdown */}
-          {showBranchDropdown && (
-            <div className="absolute top-full left-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg z-10">
-              <div className="py-1">
-                {branches.map((branch) => (
-                  <button
-                    key={branch.name}
-                    onClick={() => handleBranchChange(branch.name)}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 ${
-                      branch.name === currentBranch ? 'bg-primary/10 text-primary' : 'text-foreground'
-                    }`}
-                  >
-                    <GitBranch className="h-3 w-3" />
-                    {branch.displayName ?? branch.name}
-                  </button>
-                ))}
+            {showBranchDropdown && (
+              <div className="absolute top-full left-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg z-10">
+                <div className="py-1">
+                  {branches.map((branch) => (
+                    <button
+                      key={branch.name}
+                      onClick={() => handleBranchChange(branch.name)}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 ${
+                        branch.name === currentBranch ? 'bg-primary/10 text-primary' : 'text-foreground'
+                      }`}
+                    >
+                      <GitBranch className="h-3 w-3" />
+                      {branch.displayName ?? branch.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Actions Menu */}
         <div className="relative">
           <div className="flex items-center gap-1">
             <button
-              onClick={() => {
-                void handleRefreshVersionControl();
-              }}
-              className="p-1 hover:bg-muted/30 rounded transition-colors disabled:opacity-50"
-              title={t('workspace.versionControl.actions.refresh.tooltip')}
-              aria-label={t('workspace.versionControl.actions.refresh.label')}
-              disabled={isRefreshing}
-            >
-              <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <button
               onClick={() => setShowActionMenu(!showActionMenu)}
               className="p-1 hover:bg-muted/30 rounded transition-colors"
+              aria-label={t('workspace.versionControl.actions.menu.label')}
+              title={t('workspace.versionControl.actions.menu.label')}
             >
               <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
             </button>

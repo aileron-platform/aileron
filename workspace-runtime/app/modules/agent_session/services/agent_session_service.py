@@ -8,10 +8,13 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import get_settings
+from app.modules.version_control.utils import GitUtils
 from app.utils.datetime_utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -48,6 +51,7 @@ class AgentSessionService:
         session_repo: Optional[AgentSessionRepository] = None,
         task_repo: Optional[TaskRepository] = None,
         emitter: Optional[EventEmitter] = None,
+        git_utils: Optional[GitUtils] = None,
     ):
         """初始化 Service.
 
@@ -61,6 +65,8 @@ class AgentSessionService:
         self.session_repo = session_repo or AgentSessionRepository(db)
         self.task_repo = task_repo or TaskRepository(db)
         self.emitter = emitter or get_event_emitter()
+        workspace_root = Path(get_settings().WORKSPACE_PATH).resolve()
+        self.git_utils = git_utils or GitUtils(workspace_root)
 
     async def create_session(
         self,
@@ -76,6 +82,17 @@ class AgentSessionService:
         """
         session_id = str(uuid.uuid4())
         now = utcnow()
+        custom_context: Dict[str, Any] = {}
+
+        if data.git_context_id:
+            workspace_path = str(
+                self.git_utils.resolve_context_path(
+                    data.workspace_id,
+                    data.git_context_id,
+                )
+            )
+            custom_context["git_context_id"] = data.git_context_id
+            custom_context["workspace_path"] = workspace_path
 
         # 建立 data blob
         data_blob: Dict[str, Any] = {
@@ -83,6 +100,8 @@ class AgentSessionService:
             "message_count": 0,
             "contextFiles": data.context_files,
         }
+        if custom_context:
+            data_blob["custom_context"] = custom_context
 
         if data.title:
             data_blob["title"] = data.title

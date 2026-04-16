@@ -22,6 +22,7 @@ const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
   JSON.stringify({
     type: apiConfig.type,
     workspaceId: apiConfig.workspaceId ?? null,
+    contextId: apiConfig.contextId ?? null,
     templateId: apiConfig.templateId ?? null,
     scope: apiConfig.scope ?? null,
     collection: apiConfig.collection ?? null,

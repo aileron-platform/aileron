@@ -10,6 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.version_control.utils import VersionControlError
 from ..domain.enums import AgenticTool, AgentSessionStatus
 from ..schemas.agent_session import (
     ToolDecisionRequest,
@@ -75,7 +76,13 @@ async def create_session(
     # 剛建立的 agent_session，進而觸發 session_id FK violation。
     async with async_session_scope() as db:
         service = AgentSessionService(db)
-        session = await service.create_session(data)
+        try:
+            session = await service.create_session(data)
+        except VersionControlError as exc:
+            raise HTTPException(
+                status_code=exc.status_code,
+                detail=str(exc),
+            ) from exc
     return AgentSessionResponse.from_entity(session)
 
 

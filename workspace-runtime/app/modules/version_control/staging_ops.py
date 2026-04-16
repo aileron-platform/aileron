@@ -47,7 +47,13 @@ class StagingOperations:
         self._utils = utils
         self.cache = cache
 
-    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100) -> ChangesResponse:
+    def get_changes(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 100,
+        context_id: Optional[str] = None,
+    ) -> ChangesResponse:
         """取得檔案變更（優化版 - 支援快取 + 使用 Git 命令避免記憶體爆炸）
 
         Args:
@@ -60,12 +66,12 @@ class StagingOperations:
         """
         # 檢查快取
         if self.cache:
-            cached = self.cache.get(workspace_id, CacheKeys.CHANGES, page=page, page_size=page_size)
+            cached = self.cache.get(workspace_id, CacheKeys.CHANGES, page=page, page_size=page_size, context_id=context_id)
             if cached:
                 return ChangesResponse(**cached)
 
         # 計算結果
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         staged = [self._to_file_change(entry) for entry in self._utils.diff_index(repo, staged=True)]
         unstaged = [self._to_file_change(entry) for entry in self._utils.diff_index(repo, staged=False)]
 
@@ -140,12 +146,13 @@ class StagingOperations:
                 result.model_dump(),
                 ttl=CacheTTL.VERY_SHORT,  # 10 秒快取
                 page=page,
-                page_size=page_size
+                page_size=page_size,
+                context_id=context_id,
             )
 
         return result
 
-    def stage(self, workspace_id: str, payload: StageRequest) -> StageResponse:
+    def stage(self, workspace_id: str, payload: StageRequest, context_id: Optional[str] = None) -> StageResponse:
         """暫存檔案（優化版 - 使快取失效）
 
         Args:
@@ -158,7 +165,7 @@ class StagingOperations:
         Raises:
             VersionControlError: 暫存失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         normalized = self._utils.normalize_paths(repo, payload.paths)
         try:
             repo.index.add(normalized, write=True)
@@ -174,7 +181,7 @@ class StagingOperations:
         unstaged = [entry.path for entry in self._utils.diff_index(repo, staged=False)]
         return StageResponse(staged=staged, unstaged=unstaged)
 
-    def unstage(self, workspace_id: str, payload: UnstageRequest) -> UnstageResponse:
+    def unstage(self, workspace_id: str, payload: UnstageRequest, context_id: Optional[str] = None) -> UnstageResponse:
         """取消暫存檔案（優化版 - 批次處理 + 使快取失效）
 
         Args:
@@ -187,7 +194,7 @@ class StagingOperations:
         Raises:
             VersionControlError: 取消暫存失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         normalized = self._utils.normalize_paths(repo, payload.paths)
 
         # 優化：批次處理，一次 Git 命令
@@ -209,7 +216,7 @@ class StagingOperations:
         remaining = len(self._utils.diff_index(repo, staged=True))
         return UnstageResponse(unstaged=normalized, remainingStaged=remaining)
 
-    def discard(self, workspace_id: str, payload: DiscardRequest) -> DiscardResponse:
+    def discard(self, workspace_id: str, payload: DiscardRequest, context_id: Optional[str] = None) -> DiscardResponse:
         """放棄變更
 
         Args:
@@ -219,7 +226,7 @@ class StagingOperations:
         Returns:
             放棄回應
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         worktree = Path(repo.working_tree_dir or ".")
         normalized = self._utils.normalize_paths(repo, payload.paths)
         discarded: list[str] = []

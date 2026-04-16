@@ -78,7 +78,13 @@ async def test_execute_task_builds_messages_and_result(monkeypatch: pytest.Monke
     _patch_db_layer(monkeypatch, message_repo=message_repo, session_repo=session_repo)
 
     callbacks = FakeCallbacks()
-    session_repo.find_by_id = AsyncMock(return_value=SimpleNamespace(workspace_id="ws-1", sdk_session_id=None))
+    session_repo.find_by_id = AsyncMock(
+        return_value=SimpleNamespace(
+            workspace_id="ws-1",
+            sdk_session_id=None,
+            custom_context={"workspace_path": "/workspace/.worktrees/feature-auth"},
+        )
+    )
     workspace_service.get_workspace = AsyncMock(
         return_value=SimpleNamespace(
             acp_cli_args=["--foo"],
@@ -133,6 +139,7 @@ async def test_execute_task_builds_messages_and_result(monkeypatch: pytest.Monke
     assert result.was_stopped is True
     assert result.raw_sdk_response == {"stopReason": "cancelled"}
     connection_manager.get_or_create.assert_awaited_once()
+    assert connection_manager.get_or_create.await_args.kwargs["cwd"] == "/workspace/.worktrees/feature-auth"
     connection.client_impl.set_task_context.assert_called_once()
     connection.connection.prompt.assert_awaited_once()
     connection.client_impl.finalize_streaming.assert_awaited_once()

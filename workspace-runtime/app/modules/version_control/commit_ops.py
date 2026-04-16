@@ -49,7 +49,7 @@ class CommitOperations:
         self._utils = utils
         self.cache = cache
 
-    def commit(self, workspace_id: str, payload: CommitRequest) -> CommitResponse:
+    def commit(self, workspace_id: str, payload: CommitRequest, context_id: Optional[str] = None) -> CommitResponse:
         """建立提交
 
         Args:
@@ -62,7 +62,7 @@ class CommitOperations:
         Raises:
             VersionControlError: 提交失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         author = payload.author or CommitAuthor(name="Workspace Bot", email="workspace@example.com")
         actor = Actor(author.name, author.email)
 
@@ -119,6 +119,7 @@ class CommitOperations:
         page_size: int = 20,
         branch: Optional[str] = None,
         search: Optional[str] = None,
+        context_id: Optional[str] = None,
     ) -> CommitListResponse:
         """列出提交歷史
 
@@ -135,7 +136,7 @@ class CommitOperations:
         Raises:
             VersionControlError: 查詢失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         if branch:
             target = branch
         else:
@@ -215,7 +216,7 @@ class CommitOperations:
             )
         return CommitListResponse(page=page, pageSize=page_size, total=total, items=items)
 
-    def get_commit(self, workspace_id: str, commit_id: str) -> CommitDetailResponse:
+    def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitDetailResponse:
         """取得提交詳情
 
         Args:
@@ -228,7 +229,7 @@ class CommitOperations:
         Raises:
             VersionControlError: 提交不存在
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         try:
             commit = repo.commit(commit_id)
         except (ValueError, GitCommandError) as exc:
@@ -328,7 +329,7 @@ class CommitOperations:
         )
         return detail
 
-    def get_commit_files(self, workspace_id: str, commit_id: str) -> CommitFilesResponse:
+    def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitFilesResponse:
         """取得提交的檔案列表
 
         Args:
@@ -341,7 +342,7 @@ class CommitOperations:
         Raises:
             VersionControlError: 提交不存在
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         try:
             commit = repo.commit(commit_id)
         except (ValueError, GitCommandError) as exc:

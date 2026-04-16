@@ -15,8 +15,12 @@ const LEGACY_STORAGE_KEY_PREFIX = 'workspace_tabs_';
 
 export type WorkspaceTabsState = WorkspaceTabState;
 
-const getStorageKey = (workspaceId: string, scope: WorkspaceTabScope) =>
-  `${STORAGE_KEY_PREFIX}${scope}_${workspaceId}`;
+const normalizeContextId = (contextId?: string | null): string => encodeURIComponent(contextId ?? 'primary');
+
+const getStorageKey = (workspaceId: string, scope: WorkspaceTabScope, contextId?: string | null) =>
+  scope === 'file-management'
+    ? `${STORAGE_KEY_PREFIX}${scope}_${workspaceId}_ctx_${normalizeContextId(contextId)}`
+    : `${STORAGE_KEY_PREFIX}${scope}_${workspaceId}`;
 
 const getLegacyStorageKey = (workspaceId: string) => `${LEGACY_STORAGE_KEY_PREFIX}${workspaceId}`;
 
@@ -26,12 +30,13 @@ const getLegacyStorageKey = (workspaceId: string) => `${LEGACY_STORAGE_KEY_PREFI
 export const loadWorkspaceTabs = (
   workspaceId: string,
   scope: WorkspaceTabScope,
+  contextId?: string | null,
 ): WorkspaceTabsState | null => {
   try {
-    const key = getStorageKey(workspaceId, scope);
+    const key = getStorageKey(workspaceId, scope, contextId);
     let stored = localStorage.getItem(key);
 
-    if (!stored && scope === 'file-management') {
+    if (!stored && scope === 'file-management' && (!contextId || contextId === 'primary')) {
       const legacyKey = getLegacyStorageKey(workspaceId);
       stored = localStorage.getItem(legacyKey);
       if (stored) {
@@ -67,9 +72,10 @@ export const saveWorkspaceTabs = (
   workspaceId: string,
   scope: WorkspaceTabScope,
   state: WorkspaceTabsState,
+  contextId?: string | null,
 ): void => {
   try {
-    const key = getStorageKey(workspaceId, scope);
+    const key = getStorageKey(workspaceId, scope, contextId);
     const data = {
       version: STORAGE_VERSION,
       timestamp: Date.now(),
@@ -88,12 +94,24 @@ export const saveWorkspaceTabs = (
 export const clearWorkspaceTabs = (workspaceId: string, scope?: WorkspaceTabScope): void => {
   try {
     if (scope) {
-      localStorage.removeItem(getStorageKey(workspaceId, scope));
+      if (scope === 'file-management') {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(`${STORAGE_KEY_PREFIX}${scope}_${workspaceId}_ctx_`))
+          .forEach((key) => localStorage.removeItem(key));
+      } else {
+        localStorage.removeItem(getStorageKey(workspaceId, scope));
+      }
       return;
     }
 
     (['file-management', 'openspec'] as const).forEach((tabScope) => {
-      localStorage.removeItem(getStorageKey(workspaceId, tabScope));
+      if (tabScope === 'file-management') {
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith(`${STORAGE_KEY_PREFIX}${tabScope}_${workspaceId}_ctx_`))
+          .forEach((key) => localStorage.removeItem(key));
+      } else {
+        localStorage.removeItem(getStorageKey(workspaceId, tabScope));
+      }
     });
     localStorage.removeItem(getLegacyStorageKey(workspaceId));
   } catch (error) {
@@ -126,7 +144,8 @@ export const getStoredWorkspaceIds = (): string[] => {
     return keys
       .filter(key => key.startsWith(STORAGE_KEY_PREFIX))
       .map(key => key.replace(STORAGE_KEY_PREFIX, ''))
-      .map(key => key.replace(/^(file-management|openspec)_/, ''));
+      .map(key => key.replace(/^(file-management|openspec)_/, ''))
+      .map(key => key.replace(/_ctx_.+$/, ''));
   } catch (error) {
     logger.error('Failed to get stored workspace IDs', { error });
     return [];

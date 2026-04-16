@@ -15,6 +15,7 @@ from fastapi.responses import Response
 
 from app.config.settings import get_settings
 from app.core.openapi import build_responses
+from app.modules.version_control.utils import GitUtils, VersionControlError
 from .exceptions import (
     DirectoryNotEmptyException,
     FileAlreadyExistsException,
@@ -77,10 +78,32 @@ class ExtractArchiveOperation:
 _extract_operations: dict[str, ExtractArchiveOperation] = {}
 
 
-def get_new_file_service() -> FileService:
-    """取得新的檔案服務實例"""
-    service = get_file_service_sync()
-    return service
+def _resolve_file_service_root(context_id: str | None) -> Path:
+    settings = get_settings()
+    workspace_root = Path(settings.WORKSPACE_PATH).resolve()
+
+    if not context_id:
+        return workspace_root
+
+    utils = GitUtils(workspace_root.parent)
+    workspace_id = workspace_root.name
+
+    try:
+        return utils.resolve_context_path(workspace_id, context_id)
+    except VersionControlError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.error_code, "message": str(exc)},
+        ) from exc
+
+
+def get_new_file_service(
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
+) -> FileService:
+    if context_id is None:
+        service = get_file_service_sync()
+        return service
+    return FileService(root_path=_resolve_file_service_root(context_id))
 
 
 def _normalize_target_path(target_path: str) -> str:

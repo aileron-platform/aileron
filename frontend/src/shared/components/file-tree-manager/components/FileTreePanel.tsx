@@ -15,6 +15,7 @@ import { FileTreeNode } from './FileTreeNode';
 import { FileTreeEmpty } from './FileTreeEmpty';
 import { Plus, FolderPlus, Upload, RefreshCw, Trash2, X } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
 import type { FileTreeNode as FileTreeNodeType, SelectionModifier } from '../types';
 import type { UseFileTreeStateReturn } from '../hooks/useFileTreeState';
 import { cn } from '@/shared/utils/cn';
@@ -133,6 +134,7 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
 }) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isBottomStatusOpen, setIsBottomStatusOpen] = React.useState(false);
 
   // 調試：監控 state.nodes 變化
   React.useEffect(() => {
@@ -216,6 +218,11 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
   }, [state.isSearching, state.filteredNodes, state.nodes]);
 
   const isEmpty = nodesToRender.length === 0;
+  const bottomStatusLabel = bottomStatusText || `已選擇 ${state.selectedIds.size} 個項目`;
+
+  React.useEffect(() => {
+    setIsBottomStatusOpen(false);
+  }, [bottomStatusText]);
 
   return (
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
@@ -353,19 +360,36 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
       </div>
 
       {/* 底部狀態列 */}
-      {enableBottomStatusBar && state.selectedIds.size > 0 && (
-        <div className="h-8 px-3 border-t border-border bg-muted/30 flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            {bottomStatusText || `已選擇 ${state.selectedIds.size} 個項目`}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={state.clearSelection}
-          >
-            {bottomStatusClearText}
-          </Button>
+      {enableBottomStatusBar && (Boolean(bottomStatusText) || state.selectedIds.size > 0) && (
+        <div className="h-8 px-3 border-t border-border bg-muted/30 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <Popover open={isBottomStatusOpen} onOpenChange={setIsBottomStatusOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left hover:text-foreground"
+                title={bottomStatusLabel}
+              >
+                {bottomStatusLabel}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="top"
+              className="max-w-[min(32rem,calc(100vw-4rem))] break-all p-3 font-mono text-xs"
+            >
+              {bottomStatusLabel}
+            </PopoverContent>
+          </Popover>
+          {state.selectedIds.size > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={state.clearSelection}
+            >
+              {bottomStatusClearText}
+            </Button>
+          )}
         </div>
       )}
     </div>

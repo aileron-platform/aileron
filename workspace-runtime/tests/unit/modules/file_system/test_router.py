@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import importlib
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +33,7 @@ from app.modules.file_system.models import (
     UploadResponse,
 )
 from app.modules.file_system.router import (
+    _resolve_file_service_root,
     batch_delete_entries,
     batch_write_files,
     copy_entry,
@@ -46,6 +48,9 @@ from app.modules.file_system.router import (
     upload_files,
     write_file,
 )
+from app.modules.version_control.service import VersionControlError
+
+file_system_router_module = importlib.import_module("app.modules.file_system.router")
 
 
 class DummyFileService:
@@ -257,6 +262,52 @@ async def test_upload_files_rejects_zip_with_unsafe_entry(tmp_path: Path) -> Non
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail["code"] == "INVALID_ARCHIVE_ENTRY"
+
+
+def test_resolve_file_service_root_uses_git_context(monkeypatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    resolved_context_path = workspace_root / ".worktrees" / "feature-auth"
+    resolved_context_path.mkdir(parents=True)
+
+    class StubGitUtils:
+        def __init__(self, base_path: Path) -> None:
+            assert base_path == workspace_root.parent
+
+        def resolve_context_path(self, workspace_id: str, context_id: str) -> Path:
+            assert workspace_id == workspace_root.name
+            assert context_id == "worktree:feature-auth"
+            return resolved_context_path
+
+    monkeypatch.setattr(file_system_router_module, "get_settings", lambda: SimpleNamespace(WORKSPACE_PATH=str(workspace_root)))
+    monkeypatch.setattr(file_system_router_module, "GitUtils", StubGitUtils)
+
+    assert _resolve_file_service_root("worktree:feature-auth") == resolved_context_path
+
+
+def test_resolve_file_service_root_maps_invalid_context_to_http_error(monkeypatch, tmp_path: Path) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    class StubGitUtils:
+        def __init__(self, base_path: Path) -> None:
+            assert base_path == workspace_root.parent
+
+        def resolve_context_path(self, workspace_id: str, context_id: str) -> Path:
+            raise VersionControlError(
+                f"Unknown Git context: {context_id}",
+                404,
+                "VC_CONTEXT_NOT_FOUND",
+            )
+
+    monkeypatch.setattr(file_system_router_module, "get_settings", lambda: SimpleNamespace(WORKSPACE_PATH=str(workspace_root)))
+    monkeypatch.setattr(file_system_router_module, "GitUtils", StubGitUtils)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _resolve_file_service_root("missing")
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail["code"] == "VC_CONTEXT_NOT_FOUND"
 
 
 @pytest.mark.asyncio

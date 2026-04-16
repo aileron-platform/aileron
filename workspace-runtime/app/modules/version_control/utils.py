@@ -13,6 +13,8 @@ from typing import Iterable, Optional, TYPE_CHECKING
 
 from git import GitCommandError, InvalidGitRepositoryError, Repo
 
+from .models import GitContext, GitContextListResponse
+
 if TYPE_CHECKING:
     from .cache import GitCache
 
@@ -89,7 +91,117 @@ class GitUtils:
             )
         return path
 
-    def get_repo(self, workspace_id: str) -> Repo:
+    def list_contexts(self, workspace_id: str) -> GitContextListResponse:
+        """List Git contexts for the primary checkout and managed worktrees."""
+        workspace_root = self.workspace_path(workspace_id).resolve()
+        repo = self.get_repo(workspace_id)
+        contexts: list[GitContext] = []
+        active_context_id = "primary"
+        current_primary_branch, primary_detached = self.current_branch(repo)
+        primary_head_sha = repo.head.commit.hexsha if self.has_head(repo) else None
+        primary_head_ref = None if primary_detached else f"refs/heads/{current_primary_branch}"
+
+        try:
+            output = repo.git.worktree("list", "--porcelain")
+        except GitCommandError as exc:
+            raise VersionControlError(str(exc), error_code="VC_WORKTREE_LIST_FAILED") from exc
+
+        blocks = [block for block in output.split("\n\n") if block.strip()]
+        for block in blocks:
+            metadata: dict[str, str | bool] = {}
+            for line in block.splitlines():
+                if not line.strip():
+                    continue
+                key, _, value = line.partition(" ")
+                if key in {"detached", "locked"}:
+                    metadata[key] = True
+                elif key == "prunable":
+                    metadata[key] = bool(value.strip()) or True
+                else:
+                    metadata[key] = value.strip()
+
+            raw_path = str(metadata.get("worktree", "")).strip()
+            if not raw_path:
+                continue
+
+            repo_path = Path(raw_path).resolve()
+            if repo_path == workspace_root:
+                contexts.append(
+                    GitContext(
+                        id="primary",
+                        kind="primary",
+                        displayName=current_primary_branch or "primary",
+                        repoPath=str(repo_path),
+                        branch=current_primary_branch if current_primary_branch != "HEAD" else None,
+                        headRef=primary_head_ref,
+                        detached=primary_detached,
+                        headSha=primary_head_sha,
+                        locked=bool(metadata.get("locked", False)),
+                        prunable=bool(metadata.get("prunable", False)),
+                    )
+                )
+                continue
+
+            managed_root = workspace_root / ".worktrees"
+            if managed_root not in repo_path.parents:
+                continue
+
+            context_rel = repo_path.relative_to(managed_root).as_posix()
+            branch_ref = str(metadata.get("branch", "")).strip() or None
+            branch_name = branch_ref.split("refs/heads/", 1)[1] if branch_ref and branch_ref.startswith("refs/heads/") else branch_ref
+            detached = bool(metadata.get("detached", False))
+            contexts.append(
+                GitContext(
+                    id=f"worktree:{context_rel.replace('/', '--')}",
+                    kind="worktree",
+                    displayName=repo_path.name,
+                    repoPath=str(repo_path),
+                    branch=None if detached else branch_name,
+                    headRef=None if detached else branch_ref,
+                    detached=detached,
+                    headSha=str(metadata.get("HEAD", "")).strip() or None,
+                    locked=bool(metadata.get("locked", False)),
+                    prunable=bool(metadata.get("prunable", False)),
+                )
+            )
+
+        if not any(context.id == "primary" for context in contexts):
+            contexts.insert(
+                0,
+                GitContext(
+                    id="primary",
+                    kind="primary",
+                    displayName=current_primary_branch or "primary",
+                    repoPath=str(workspace_root),
+                    branch=current_primary_branch if current_primary_branch != "HEAD" else None,
+                    headRef=primary_head_ref,
+                    detached=primary_detached,
+                    headSha=primary_head_sha,
+                ),
+            )
+
+        contexts.sort(key=lambda item: (item.kind != "primary", item.displayName.lower()))
+        return GitContextListResponse(activeContextId=active_context_id, contexts=contexts)
+
+    def resolve_context_path(self, workspace_id: str, context_id: Optional[str] = None) -> Path:
+        """Resolve a Git context id to a repository path."""
+        if not context_id:
+            return self.workspace_path(workspace_id).resolve()
+
+        context_map = {
+            context.id: Path(context.repoPath).resolve()
+            for context in self.list_contexts(workspace_id).contexts
+        }
+        resolved = context_map.get(context_id)
+        if resolved is None:
+            raise VersionControlError(
+                f"Git context '{context_id}' not found",
+                status_code=404,
+                error_code="VC_CONTEXT_NOT_FOUND",
+            )
+        return resolved
+
+    def get_repo(self, workspace_id: str, context_id: Optional[str] = None) -> Repo:
         """取得 Git Repository
 
         Args:
@@ -101,7 +213,7 @@ class GitUtils:
         Raises:
             VersionControlError: 非 Git 倉庫
         """
-        path = self.workspace_path(workspace_id)
+        path = self.resolve_context_path(workspace_id, context_id)
         try:
             return Repo(path)
         except InvalidGitRepositoryError as exc:

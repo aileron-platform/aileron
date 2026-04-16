@@ -44,7 +44,7 @@ class RemoteOperations:
         self._utils = utils
         self.cache = cache
 
-    def push(self, workspace_id: str, payload: PushRequest) -> PushResponse:
+    def push(self, workspace_id: str, payload: PushRequest, context_id: Optional[str] = None) -> PushResponse:
         """推送到遠端
 
         Args:
@@ -57,7 +57,7 @@ class RemoteOperations:
         Raises:
             VersionControlError: 推送失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         branch, _ = self._utils.current_branch(repo)
         target_branch = payload.branch or branch
         self._utils.ensure_remote(repo, payload.remote)
@@ -83,7 +83,7 @@ class RemoteOperations:
             )
         return PushResponse(remote=payload.remote, branch=target_branch, updates=updates)
 
-    def pull(self, workspace_id: str, payload: PullRequest) -> PullResponse:
+    def pull(self, workspace_id: str, payload: PullRequest, context_id: Optional[str] = None) -> PullResponse:
         """從遠端拉取
 
         Args:
@@ -96,7 +96,7 @@ class RemoteOperations:
         Raises:
             VersionControlError: 拉取失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         branch, _ = self._utils.current_branch(repo)
         target_branch = payload.branch or branch
         self._utils.ensure_remote(repo, payload.remote)
@@ -139,7 +139,7 @@ class RemoteOperations:
             commits=list(reversed(commits)),
         )
 
-    def fetch(self, workspace_id: str, payload: FetchRequest) -> FetchResponse:
+    def fetch(self, workspace_id: str, payload: FetchRequest, context_id: Optional[str] = None) -> FetchResponse:
         """從遠端取得更新
 
         Args:
@@ -152,7 +152,7 @@ class RemoteOperations:
         Raises:
             VersionControlError: Fetch 失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         self._utils.ensure_remote(repo, payload.remote)
         remote = repo.remote(payload.remote)
 

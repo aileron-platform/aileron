@@ -92,3 +92,36 @@ def test_diff_index_and_ensure_remote(tmp_path: Path) -> None:
     GitUtils.ensure_remote(repo, "origin")
     with pytest.raises(VersionControlError):
         GitUtils.ensure_remote(repo, "upstream")
+
+
+def test_list_contexts_and_resolve_context_path(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "ws-1"
+    workspace_root.mkdir()
+    worktree_root = workspace_root / ".worktrees" / "feature-auth"
+    worktree_root.mkdir(parents=True)
+
+    utils = GitUtils(tmp_path)
+    repo = MagicMock()
+    repo.git.worktree.return_value = "\n".join([
+        f"worktree {workspace_root}",
+        "HEAD abcdef1234567890",
+        "branch refs/heads/main",
+        "",
+        f"worktree {worktree_root}",
+        "HEAD 1234567890abcdef",
+        "branch refs/heads/feature-auth",
+        "locked",
+        "prunable stale",
+        "",
+    ])
+    repo.head.commit.hexsha = "abcdef1234567890"
+    repo.active_branch.name = "main"
+
+    utils.get_repo = MagicMock(return_value=repo)  # type: ignore[method-assign]
+    contexts = utils.list_contexts("ws-1")
+
+    assert contexts.activeContextId == "primary"
+    assert [context.id for context in contexts.contexts] == ["primary", "worktree:feature-auth"]
+    assert contexts.contexts[1].locked is True
+    assert contexts.contexts[1].prunable is True
+    assert utils.resolve_context_path("ws-1", "worktree:feature-auth") == worktree_root.resolve()

@@ -24,6 +24,8 @@ from app.modules.version_control.models import (
     FetchRequest,
     FetchResponse,
     FileChange,
+    GitContext,
+    GitContextListResponse,
     PullRequest,
     PullResponse,
     PushRequest,
@@ -47,6 +49,7 @@ from app.modules.version_control.router import (
     get_commit_files,
     get_diff,
     get_status,
+    list_contexts,
     list_branches,
     list_commits,
     pull_changes,
@@ -65,19 +68,26 @@ class DummyGitService:
         if self.error:
             raise self.error
 
-    def get_status(self, workspace_id: str) -> VersionControlStatus:
+    def list_contexts(self, workspace_id: str) -> GitContextListResponse:
+        self._maybe_raise()
+        return GitContextListResponse(
+            activeContextId="primary",
+            contexts=[GitContext(id="primary", kind="primary", displayName="main", repoPath="/workspace", detached=False, locked=False, prunable=False)],
+        )
+
+    def get_status(self, workspace_id: str, context_id: str | None = None) -> VersionControlStatus:
         self._maybe_raise()
         return VersionControlStatus(branch="main")
 
-    def list_branches(self, workspace_id: str, include_remote: bool = True, search: str | None = None) -> BranchListResponse:
+    def list_branches(self, workspace_id: str, include_remote: bool = True, search: str | None = None, context_id: str | None = None) -> BranchListResponse:
         self._maybe_raise()
         return BranchListResponse(branches=[BranchInfo(name="main", displayName="main", isActive=True, isRemote=False)])
 
-    def checkout_branch(self, workspace_id: str, branch_name: str, payload: CheckoutRequest) -> CheckoutResponse:
+    def checkout_branch(self, workspace_id: str, branch_name: str, payload: CheckoutRequest, context_id: str | None = None) -> CheckoutResponse:
         self._maybe_raise()
         return CheckoutResponse(branch=branch_name, created=payload.create)
 
-    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100) -> ChangesResponse:
+    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100, context_id: str | None = None) -> ChangesResponse:
         self._maybe_raise()
         return ChangesResponse(
             staged=[FileChange(name="a.py", path="a.py", status="A", type="added")],
@@ -89,19 +99,19 @@ class DummyGitService:
             untrackedHasMore=False,
         )
 
-    def stage(self, workspace_id: str, payload: StageRequest) -> StageResponse:
+    def stage(self, workspace_id: str, payload: StageRequest, context_id: str | None = None) -> StageResponse:
         self._maybe_raise()
         return StageResponse(staged=payload.paths, unstaged=[])
 
-    def unstage(self, workspace_id: str, payload: UnstageRequest) -> UnstageResponse:
+    def unstage(self, workspace_id: str, payload: UnstageRequest, context_id: str | None = None) -> UnstageResponse:
         self._maybe_raise()
         return UnstageResponse(unstaged=payload.paths, remainingStaged=0)
 
-    def discard(self, workspace_id: str, payload: DiscardRequest) -> DiscardResponse:
+    def discard(self, workspace_id: str, payload: DiscardRequest, context_id: str | None = None) -> DiscardResponse:
         self._maybe_raise()
         return DiscardResponse(discarded=payload.paths)
 
-    def commit(self, workspace_id: str, payload: CommitRequest) -> CommitResponse:
+    def commit(self, workspace_id: str, payload: CommitRequest, context_id: str | None = None) -> CommitResponse:
         self._maybe_raise()
         return CommitResponse(
             commit={
@@ -114,7 +124,7 @@ class DummyGitService:
             }
         )
 
-    def list_commits(self, workspace_id: str, page: int = 1, page_size: int = 20, branch: str | None = None, search: str | None = None) -> CommitListResponse:
+    def list_commits(self, workspace_id: str, page: int = 1, page_size: int = 20, branch: str | None = None, search: str | None = None, context_id: str | None = None) -> CommitListResponse:
         self._maybe_raise()
         return CommitListResponse(
             page=page,
@@ -123,7 +133,7 @@ class DummyGitService:
             items=[CommitListItem(id="a" * 40, message="init", author="Test", email="test@example.com", timestamp=1, branch="main", additions=1, deletions=0, files=1)],
         )
 
-    def get_commit(self, workspace_id: str, commit_id: str) -> CommitDetailResponse:
+    def get_commit(self, workspace_id: str, commit_id: str, context_id: str | None = None) -> CommitDetailResponse:
         self._maybe_raise()
         return CommitDetailResponse(
             id=commit_id,
@@ -135,27 +145,27 @@ class DummyGitService:
             changes=[],
         )
 
-    def get_commit_files(self, workspace_id: str, commit_id: str) -> CommitFilesResponse:
+    def get_commit_files(self, workspace_id: str, commit_id: str, context_id: str | None = None) -> CommitFilesResponse:
         self._maybe_raise()
         return CommitFilesResponse(commitId=commit_id, files=[])
 
-    def push(self, workspace_id: str, payload: PushRequest) -> PushResponse:
+    def push(self, workspace_id: str, payload: PushRequest, context_id: str | None = None) -> PushResponse:
         self._maybe_raise()
         return PushResponse(remote=payload.remote, branch=payload.branch or "main", updates=[PushUpdate(ref="refs/heads/main", status="ok")])
 
-    def pull(self, workspace_id: str, payload: PullRequest) -> PullResponse:
+    def pull(self, workspace_id: str, payload: PullRequest, context_id: str | None = None) -> PullResponse:
         self._maybe_raise()
         return PullResponse(remote=payload.remote, branch=payload.branch or "main", fastForward=True, commits=[])
 
-    def fetch(self, workspace_id: str, payload: FetchRequest) -> FetchResponse:
+    def fetch(self, workspace_id: str, payload: FetchRequest, context_id: str | None = None) -> FetchResponse:
         self._maybe_raise()
         return FetchResponse(remote=payload.remote, fetchedRefs=["refs/heads/main"])
 
-    def diff(self, workspace_id: str, path: str, base: str | None = None, head: str | None = None, context: int = 3, include_metadata: bool = False) -> DiffResponse:
+    def diff(self, workspace_id: str, path: str, base: str | None = None, head: str | None = None, context: int = 3, include_metadata: bool = False, context_id: str | None = None) -> DiffResponse:
         self._maybe_raise()
         return DiffResponse(path=path, base=base or "HEAD", head=head or "WORKTREE", context=context, patch="@@ -1 +1 @@", metadata={"ok": True} if include_metadata else None)
 
-    def blob(self, workspace_id: str, path: str, revision: str | None = None) -> BlobResponse:
+    def blob(self, workspace_id: str, path: str, revision: str | None = None, context_id: str | None = None) -> BlobResponse:
         self._maybe_raise()
         return BlobResponse(path=path, revision=revision or "HEAD", content="ZmlsZQ==")
 
@@ -170,25 +180,26 @@ def test_handle_error_maps_exception() -> None:
 async def test_router_success_paths() -> None:
     service = DummyGitService()
 
-    assert (await get_status("ws", service)).branch == "main"
-    assert len((await list_branches("ws", True, None, service)).branches) == 1
-    assert (await checkout_branch(CheckoutRequest(create=True), "ws", "feature/x", service)).created is True
-    assert len((await get_changes("ws", "all", 1, 100, service)).staged) == 1
-    assert len((await get_changes("ws", "staged", 1, 100, service)).unstaged) == 0
-    assert len((await get_changes("ws", "unstaged", 1, 100, service)).staged) == 0
-    assert len((await get_changes("ws", "untracked", 1, 100, service)).untracked) == 1
-    assert (await stage_changes(StageRequest(paths=["a.py"]), "ws", service)).staged == ["a.py"]
-    assert (await unstage_changes(UnstageRequest(paths=["a.py"]), "ws", service)).unstaged == ["a.py"]
-    assert (await discard_changes(DiscardRequest(paths=["a.py"]), "ws", service)).discarded == ["a.py"]
-    assert (await create_commit(CommitRequest(message="msg"), "ws", service)).commit.message == "msg"
-    assert (await list_commits("ws", 1, 20, None, None, service)).total == 1
-    assert (await get_commit("ws", "c1", service)).id == "c1"
-    assert (await get_commit_files("ws", "c1", service)).commitId == "c1"
-    assert (await push_changes(PushRequest(), "ws", service)).remote == "origin"
-    assert (await pull_changes(PullRequest(), "ws", service)).fastForward is True
-    assert (await fetch_changes(FetchRequest(), "ws", service)).fetchedRefs == ["refs/heads/main"]
-    assert (await get_diff("ws", "a.py", None, None, 3, True, service)).metadata == {"ok": True}
-    assert (await get_blob("ws", "a.py", None, service)).revision == "HEAD"
+    assert (await list_contexts("ws", service)).activeContextId == "primary"
+    assert (await get_status("ws", None, service)).branch == "main"
+    assert len((await list_branches("ws", True, None, None, service)).branches) == 1
+    assert (await checkout_branch(CheckoutRequest(create=True), "ws", "feature/x", None, service)).created is True
+    assert len((await get_changes("ws", "all", 1, 100, None, service)).staged) == 1
+    assert len((await get_changes("ws", "staged", 1, 100, None, service)).unstaged) == 0
+    assert len((await get_changes("ws", "unstaged", 1, 100, None, service)).staged) == 0
+    assert len((await get_changes("ws", "untracked", 1, 100, None, service)).untracked) == 1
+    assert (await stage_changes(StageRequest(paths=["a.py"]), "ws", None, service)).staged == ["a.py"]
+    assert (await unstage_changes(UnstageRequest(paths=["a.py"]), "ws", None, service)).unstaged == ["a.py"]
+    assert (await discard_changes(DiscardRequest(paths=["a.py"]), "ws", None, service)).discarded == ["a.py"]
+    assert (await create_commit(CommitRequest(message="msg"), "ws", None, service)).commit.message == "msg"
+    assert (await list_commits("ws", 1, 20, None, None, None, service)).total == 1
+    assert (await get_commit("ws", "c1", None, service)).id == "c1"
+    assert (await get_commit_files("ws", "c1", None, service)).commitId == "c1"
+    assert (await push_changes(PushRequest(), "ws", None, service)).remote == "origin"
+    assert (await pull_changes(PullRequest(), "ws", None, service)).fastForward is True
+    assert (await fetch_changes(FetchRequest(), "ws", None, service)).fetchedRefs == ["refs/heads/main"]
+    assert (await get_diff("ws", "a.py", None, None, 3, True, None, service)).metadata == {"ok": True}
+    assert (await get_blob("ws", "a.py", None, None, service)).revision == "HEAD"
 
 
 @pytest.mark.asyncio
@@ -197,7 +208,7 @@ async def test_router_error_path_raises_http_exception() -> None:
     service.error = VersionControlError("bad", status_code=404, error_code="NOPE")
 
     with pytest.raises(HTTPException) as exc_info:
-        await get_status("ws", service)
+        await get_status("ws", None, service)
 
     assert exc_info.value.status_code == 404
 
@@ -206,8 +217,8 @@ async def test_router_error_path_raises_http_exception() -> None:
 async def test_list_branches_and_get_changes_forward_query_params() -> None:
     service = DummyGitService()
 
-    branches = await list_branches("ws", False, "feature", service)
-    changes = await get_changes("ws", "unknown", 2, 25, service)
+    branches = await list_branches("ws", False, "feature", None, service)
+    changes = await get_changes("ws", "unknown", 2, 25, None, service)
 
     assert len(branches.branches) == 1
     assert changes.untrackedPage == 2
@@ -218,21 +229,21 @@ async def test_list_branches_and_get_changes_forward_query_params() -> None:
 @pytest.mark.parametrize(
     ("call", "expected_status"),
     [
-        (lambda service: list_branches("ws", True, None, service), 422),
-        (lambda service: checkout_branch(CheckoutRequest(create=False), "ws", "main", service), 422),
-        (lambda service: get_changes("ws", "all", 1, 100, service), 422),
-        (lambda service: stage_changes(StageRequest(paths=["a.py"]), "ws", service), 422),
-        (lambda service: unstage_changes(UnstageRequest(paths=["a.py"]), "ws", service), 422),
-        (lambda service: discard_changes(DiscardRequest(paths=["a.py"]), "ws", service), 422),
-        (lambda service: create_commit(CommitRequest(message="msg"), "ws", service), 422),
-        (lambda service: list_commits("ws", 1, 20, None, None, service), 422),
-        (lambda service: get_commit("ws", "c1", service), 422),
-        (lambda service: get_commit_files("ws", "c1", service), 422),
-        (lambda service: push_changes(PushRequest(), "ws", service), 422),
-        (lambda service: pull_changes(PullRequest(), "ws", service), 422),
-        (lambda service: fetch_changes(FetchRequest(), "ws", service), 422),
-        (lambda service: get_diff("ws", "a.py", None, None, 3, False, service), 422),
-        (lambda service: get_blob("ws", "a.py", None, service), 422),
+        (lambda service: list_branches("ws", True, None, None, service), 422),
+        (lambda service: checkout_branch(CheckoutRequest(create=False), "ws", "main", None, service), 422),
+        (lambda service: get_changes("ws", "all", 1, 100, None, service), 422),
+        (lambda service: stage_changes(StageRequest(paths=["a.py"]), "ws", None, service), 422),
+        (lambda service: unstage_changes(UnstageRequest(paths=["a.py"]), "ws", None, service), 422),
+        (lambda service: discard_changes(DiscardRequest(paths=["a.py"]), "ws", None, service), 422),
+        (lambda service: create_commit(CommitRequest(message="msg"), "ws", None, service), 422),
+        (lambda service: list_commits("ws", 1, 20, None, None, None, service), 422),
+        (lambda service: get_commit("ws", "c1", None, service), 422),
+        (lambda service: get_commit_files("ws", "c1", None, service), 422),
+        (lambda service: push_changes(PushRequest(), "ws", None, service), 422),
+        (lambda service: pull_changes(PullRequest(), "ws", None, service), 422),
+        (lambda service: fetch_changes(FetchRequest(), "ws", None, service), 422),
+        (lambda service: get_diff("ws", "a.py", None, None, 3, False, None, service), 422),
+        (lambda service: get_blob("ws", "a.py", None, None, service), 422),
     ],
 )
 async def test_router_error_mapping_for_each_endpoint(call, expected_status: int) -> None:

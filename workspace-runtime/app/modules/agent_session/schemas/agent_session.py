@@ -54,6 +54,9 @@ class AgentSessionCreate(BaseModel):
     model_settings: Optional[ModelConfigCreate] = Field(None, alias="model_config")
     title: Optional[str] = None
     context_files: List[str] = Field(default_factory=list)
+    git_context_id: Optional[str] = None
+
+    model_config = {"populate_by_name": True}
 
 
 class AgentSessionUpdate(BaseModel):
@@ -188,6 +191,8 @@ class AgentSessionResponse(BaseModel):
     ready_for_prompt: bool = False
     archived: bool = False
     archived_reason: Optional[str] = None
+    git_context_id: Optional[str] = None
+    workspace_path: Optional[str] = None
 
     # Data blob 欄位
     agentic_tool_version: Optional[str] = None
@@ -252,6 +257,8 @@ class AgentSessionResponse(BaseModel):
             ready_for_prompt=entity.ready_for_prompt,
             archived=entity.archived,
             archived_reason=entity.archived_reason.value if entity.archived_reason else None,
+            git_context_id=entity.custom_context.get("git_context_id"),
+            workspace_path=entity.custom_context.get("workspace_path"),
             agentic_tool_version=entity.agentic_tool_version,
             sdk_session_id=entity.sdk_session_id,
             title=entity.title,

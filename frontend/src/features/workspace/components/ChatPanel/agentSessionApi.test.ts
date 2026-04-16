@@ -41,9 +41,15 @@ describe('agentSessionApi sessions', () => {
     const session = await agentSessionApi.createSession('http://runtime.test', {
       workspace_id: 'ws-1',
       agentic_tool: 'codex',
+      git_context_id: 'worktree:feature-auth',
     });
 
     expect(session.session_id).toBe('sess-k8s-1');
+    expect(postMock).toHaveBeenCalledWith('/api/v1/agent-sessions', {
+      workspace_id: 'ws-1',
+      agentic_tool: 'codex',
+      git_context_id: 'worktree:feature-auth',
+    });
   });
 
   it('查詢 session 列表時只使用 session_id', async () => {

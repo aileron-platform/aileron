@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import { ApiClient, ApiError } from '@/shared/api/apiClient';
 import { versionControlKeys, refreshVersionControlQueries } from '../lib/queryClient';
 import type {
+  GitContextListResponse,
   VersionControlChangesResponse,
   VersionControlBranch,
   VersionControlStatus,
@@ -20,6 +21,7 @@ import type {
 interface UseVersionControlOptions {
   workspaceId: string;
   runtimeBaseUrl: string;
+  contextId?: string | null;
 }
 
 /**
@@ -32,11 +34,13 @@ function createVersionControlClient(runtimeBaseUrl: string) {
 /**
  * 建立 fetch 函數（使用 ApiClient）
  */
-function createFetchFn(runtimeBaseUrl: string, workspaceId: string) {
+function createFetchFn(runtimeBaseUrl: string, workspaceId: string, contextId?: string | null) {
   const client = createVersionControlClient(runtimeBaseUrl);
 
   return async <T,>(path: string, init?: RequestInit): Promise<T> => {
-    const fullPath = `/api/v1/workspaces/${workspaceId}/version-control/${path}`;
+    const separator = path.includes('?') ? '&' : '?';
+    const contextSuffix = contextId ? `${separator}contextId=${encodeURIComponent(contextId)}` : '';
+    const fullPath = `/api/v1/workspaces/${workspaceId}/version-control/${path}${contextSuffix}`;
 
     // 根據 HTTP 方法選擇對應的 client 方法
     if (!init || !init.method || init.method === 'GET') {
@@ -71,11 +75,11 @@ function shouldRetryVersionControlQuery(failureCount: number, error: unknown): b
 /**
  * 使用 Changes Query
  */
-export function useChangesQuery({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions, page: number = 1) {
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+export function useChangesQuery({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions, page: number = 1) {
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
 
   return useQuery({
-    queryKey: versionControlKeys.changesWithPage(workspaceId, page),
+    queryKey: versionControlKeys.changesWithPage(workspaceId, page, contextId),
     queryFn: () => fetchVersionControl<VersionControlChangesResponse>(`changes?page=${page}&pageSize=100`),
     enabled: !!workspaceId && !!runtimeBaseUrl,
     retry: shouldRetryVersionControlQuery,
@@ -90,14 +94,14 @@ export function useChangesQuery({ workspaceId, runtimeBaseUrl }: UseVersionContr
  * 使用 Branches Query
  */
 export function useBranchesQuery(
-  { workspaceId, runtimeBaseUrl }: UseVersionControlOptions,
+  { workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions,
   includeRemote: boolean = true,
   search?: string
 ) {
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useQuery({
-    queryKey: versionControlKeys.branchesWithFilter(workspaceId, includeRemote, search),
+    queryKey: versionControlKeys.branchesWithFilter(workspaceId, includeRemote, search, contextId),
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('includeRemote', String(includeRemote));
@@ -113,12 +117,23 @@ export function useBranchesQuery(
 /**
  * 使用 Status Query
  */
-export function useStatusQuery({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions) {
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+export function useStatusQuery({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useQuery({
-    queryKey: versionControlKeys.status(workspaceId),
+    queryKey: versionControlKeys.status(workspaceId, contextId),
     queryFn: () => fetchVersionControl<VersionControlStatus>('status'),
+    enabled: !!workspaceId && !!runtimeBaseUrl,
+    retry: shouldRetryVersionControlQuery,
+  });
+}
+
+export function useGitContextsQuery({ workspaceId, runtimeBaseUrl }: Omit<UseVersionControlOptions, 'contextId'>) {
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+
+  return useQuery({
+    queryKey: versionControlKeys.contexts(workspaceId),
+    queryFn: () => fetchVersionControl<GitContextListResponse>('contexts'),
     enabled: !!workspaceId && !!runtimeBaseUrl,
     retry: shouldRetryVersionControlQuery,
   });
@@ -128,15 +143,15 @@ export function useStatusQuery({ workspaceId, runtimeBaseUrl }: UseVersionContro
  * 使用 Commits Infinite Query（無限滾動）
  */
 export function useCommitsInfiniteQuery(
-  { workspaceId, runtimeBaseUrl }: UseVersionControlOptions,
+  { workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions,
   pageSize: number = 20,
   branch?: string,
   search?: string
 ) {
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useInfiniteQuery({
-    queryKey: versionControlKeys.commitsList(workspaceId, 1, pageSize, branch, search),
+    queryKey: versionControlKeys.commitsList(workspaceId, 1, pageSize, branch, search, contextId),
     queryFn: ({ pageParam = 1 }) => {
       const params = new URLSearchParams();
       params.set('page', String(pageParam));
@@ -160,13 +175,13 @@ export function useCommitsInfiniteQuery(
  * 使用 Commit Files Query
  */
 export function useCommitFilesQuery(
-  { workspaceId, runtimeBaseUrl }: UseVersionControlOptions,
+  { workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions,
   commitId: string | null
 ) {
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useQuery({
-    queryKey: versionControlKeys.commitFiles(workspaceId, commitId ?? ''),
+    queryKey: versionControlKeys.commitFiles(workspaceId, commitId ?? '', contextId),
     queryFn: () => fetchVersionControl<VersionControlCommitFilesResponse>(`commits/${commitId}/files`),
     enabled: !!workspaceId && !!runtimeBaseUrl && !!commitId,
     select: (data) => data.files ?? [],
@@ -176,9 +191,9 @@ export function useCommitFilesQuery(
 /**
  * 使用 Stage Mutation（樂觀更新）
  */
-export function useStageMutation({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions) {
+export function useStageMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
   const queryClient = useQueryClient();
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
 
   return useMutation({
     mutationKey: ['versionControl', 'stage', workspaceId],
@@ -194,6 +209,8 @@ export function useStageMutation({ workspaceId, runtimeBaseUrl }: UseVersionCont
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
+        includeContexts: true,
+        contextId,
       });
     },
   });
@@ -202,9 +219,9 @@ export function useStageMutation({ workspaceId, runtimeBaseUrl }: UseVersionCont
 /**
  * 使用 Unstage Mutation（樂觀更新）
  */
-export function useUnstageMutation({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions) {
+export function useUnstageMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
   const queryClient = useQueryClient();
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
 
   return useMutation({
     mutationKey: ['versionControl', 'unstage', workspaceId],
@@ -220,6 +237,8 @@ export function useUnstageMutation({ workspaceId, runtimeBaseUrl }: UseVersionCo
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
+        includeContexts: true,
+        contextId,
       });
     },
   });
@@ -228,9 +247,9 @@ export function useUnstageMutation({ workspaceId, runtimeBaseUrl }: UseVersionCo
 /**
  * 使用 Commit Mutation
  */
-export function useCommitMutation({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions) {
+export function useCommitMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
   const queryClient = useQueryClient();
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
 
   return useMutation({
     mutationFn: async (message: string) => {
@@ -245,6 +264,8 @@ export function useCommitMutation({ workspaceId, runtimeBaseUrl }: UseVersionCon
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeCommits: true,
+        includeContexts: true,
+        contextId,
       });
     },
   });
@@ -253,9 +274,9 @@ export function useCommitMutation({ workspaceId, runtimeBaseUrl }: UseVersionCon
 /**
  * 使用 Discard Mutation
  */
-export function useDiscardMutation({ workspaceId, runtimeBaseUrl }: UseVersionControlOptions) {
+export function useDiscardMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
   const queryClient = useQueryClient();
-  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId);
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useMutation({
     mutationFn: async (paths: string[]) => {
@@ -268,6 +289,8 @@ export function useDiscardMutation({ workspaceId, runtimeBaseUrl }: UseVersionCo
     onSuccess: () => {
       return refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
+        includeContexts: true,
+        contextId,
       });
     },
   });

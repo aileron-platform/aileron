@@ -49,6 +49,7 @@ import { refreshVersionControlQueries } from '../features/version-control/lib/qu
 interface UseWorkspaceFileTreeAdapterOptions {
   workspaceId?: string;
   runtimeBaseUrl?: string | null;
+  contextId?: string | null;
 }
 
 interface WorkspaceFileTreeAdapterResult {
@@ -110,16 +111,17 @@ export function useWorkspaceFileTreeAdapter(
   options: UseWorkspaceFileTreeAdapterOptions
 ): WorkspaceFileTreeAdapterResult {
   const { t } = useI18n();
-  const { workspaceId, runtimeBaseUrl } = options;
+  const { workspaceId, runtimeBaseUrl, contextId } = options;
   const queryClient = useQueryClient();
 
   const apiConfig: FileTreeApiConfig = useMemo(
     () => ({
       type: 'workspace',
       workspaceId: workspaceId ?? 'pending-workspace',
+      contextId,
       baseUrl: runtimeBaseUrl ?? undefined,
     }),
-    [workspaceId, runtimeBaseUrl]
+    [contextId, workspaceId, runtimeBaseUrl]
   );
 
   const manager = useFileTreeManager({
@@ -132,8 +134,8 @@ export function useWorkspaceFileTreeAdapter(
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const workspaceIdentity = useMemo(
-    () => `${workspaceId ?? 'pending-workspace'}::${runtimeBaseUrl ?? ''}`,
-    [runtimeBaseUrl, workspaceId]
+    () => `${workspaceId ?? 'pending-workspace'}::${runtimeBaseUrl ?? ''}::${contextId ?? 'primary'}`,
+    [contextId, runtimeBaseUrl, workspaceId]
   );
   const previousWorkspaceIdentityRef = useRef<string | null>(null);
 
@@ -164,8 +166,8 @@ export function useWorkspaceFileTreeAdapter(
       return;
     }
 
-    await refreshVersionControlQueries(queryClient, workspaceId, options);
-  }, [queryClient, workspaceId]);
+    await refreshVersionControlQueries(queryClient, workspaceId, { ...options, contextId });
+  }, [contextId, queryClient, workspaceId]);
 
   const resetWorkspaceTreeState = useCallback(() => {
     manager.state.resetState();
@@ -249,7 +251,8 @@ export function useWorkspaceFileTreeAdapter(
         request.name,
         request.path || '/',
         'file',
-        request.content ?? ''
+        request.content ?? '',
+        contextId,
       );
       await refreshFileTree();
       await refreshVersionControl();
@@ -258,7 +261,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileCreateFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const createFolder = useCallback(async (request: CreateFileRequest): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -266,7 +269,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      await createFileOrFolder(runtimeBaseUrl!, request.name, request.path || '/', 'directory');
+      await createFileOrFolder(runtimeBaseUrl!, request.name, request.path || '/', 'directory', undefined, contextId);
       await refreshFileTree();
       await refreshVersionControl();
       return { success: true, message: t('common.fileOperations.success.folderCreated') };
@@ -274,7 +277,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.folderCreateFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const renameFile = useCallback(async (request: RenameFileRequest): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -282,7 +285,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const response = await renameRuntimeFile(runtimeBaseUrl!, request.oldPath, request.newPath);
+      const response = await renameRuntimeFile(runtimeBaseUrl!, request.oldPath, request.newPath, contextId);
       await refreshFileTree();
       await refreshVersionControl({ includeBranches: true });
       return mapOperationResponse({ success: true, data: response }, t('common.fileOperations.success.fileRenamed'));
@@ -290,7 +293,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileRenameFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const deleteFile = useCallback(async (request: DeleteFileRequest): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -298,7 +301,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const response = await deleteRuntimeFile(runtimeBaseUrl!, request.path, request.recursive);
+      const response = await deleteRuntimeFile(runtimeBaseUrl!, request.path, request.recursive, contextId);
       await refreshFileTree();
       await refreshVersionControl({ includeBranches: true });
       return mapOperationResponse({ success: true, data: response }, t('common.fileOperations.success.fileDeleted'));
@@ -306,7 +309,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileDeleteFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const deleteFiles = useCallback(async (paths: string[], options?: { recursive?: boolean }): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -318,7 +321,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const response = await batchDeleteFiles(runtimeBaseUrl!, paths, options?.recursive);
+      const response = await batchDeleteFiles(runtimeBaseUrl!, paths, options?.recursive, contextId);
       await refreshFileTree();
       await refreshVersionControl({ includeBranches: true });
       const hasFailures = response.failed.length > 0;
@@ -331,7 +334,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.batchDeleteFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const copyNode = useCallback(async (sourcePath: string, targetDirectory: string): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -358,7 +361,7 @@ export function useWorkspaceFileTreeAdapter(
     });
 
     try {
-      const data = await duplicateFile(runtimeBaseUrl!, sourcePath, targetDirectory);
+      const data = await duplicateFile(runtimeBaseUrl!, sourcePath, targetDirectory, contextId);
       await refreshFileTree();
       await refreshVersionControl();
       setPendingAction({
@@ -387,7 +390,7 @@ export function useWorkspaceFileTreeAdapter(
       clearPending(1500);
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const moveNode = useCallback(async (sourcePath: string, targetPath: string): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -395,7 +398,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const response = await moveRuntimeFile(runtimeBaseUrl!, sourcePath, targetPath);
+      const response = await moveRuntimeFile(runtimeBaseUrl!, sourcePath, targetPath, false, contextId);
       await refreshFileTree();
       await refreshVersionControl({ includeBranches: true });
       return mapOperationResponse({ success: true, data: response }, t('common.fileOperations.success.fileMoved'));
@@ -403,7 +406,7 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileMoveFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const uploadFiles = useCallback(async (request: UploadFileRequest): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -420,6 +423,7 @@ export function useWorkspaceFileTreeAdapter(
           archiveAction: request.archiveAction,
           keepArchive: request.keepArchive,
           conflictStrategy: request.conflictStrategy,
+          contextId,
         }
       );
       await refreshFileTree();
@@ -438,14 +442,14 @@ export function useWorkspaceFileTreeAdapter(
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileUploadFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshFileTree, refreshVersionControl, runtimeBaseUrl, t]);
 
   const downloadFile = useCallback(async (filePath: string): Promise<void> => {
     if (!ensureRuntimeReady()) {
       throw new Error(t('common.messages.workspaceRuntimeNotStarted'));
     }
     try {
-      const downloadUrl = await downloadRuntimeFile(runtimeBaseUrl!, filePath);
+      const downloadUrl = await downloadRuntimeFile(runtimeBaseUrl!, filePath, contextId);
       if (downloadUrl && typeof window !== 'undefined') {
         window.open(downloadUrl, '_blank', 'noopener');
       }
@@ -453,7 +457,7 @@ export function useWorkspaceFileTreeAdapter(
       logger.error('下載檔案失敗', { error });
       throw error;
     }
-  }, [ensureRuntimeReady, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, runtimeBaseUrl, t]);
 
   const downloadFiles = useCallback(async (filePaths: string[]): Promise<void> => {
     if (!ensureRuntimeReady()) {
@@ -470,7 +474,7 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const ticket = await batchDownloadFiles(runtimeBaseUrl!, filePaths, 'zip');
+      const ticket = await batchDownloadFiles(runtimeBaseUrl!, filePaths, 'zip', contextId);
       if (ticket.status === 'succeeded') {
         const downloadUrl = ticket.statusUrl.startsWith('http')
           ? ticket.statusUrl
@@ -485,14 +489,14 @@ export function useWorkspaceFileTreeAdapter(
       logger.error('批次下載檔案失敗', { error });
       throw error;
     }
-  }, [downloadFile, ensureRuntimeReady, runtimeBaseUrl, t]);
+  }, [contextId, downloadFile, ensureRuntimeReady, runtimeBaseUrl, t]);
 
   const readFileContent = useCallback(async (filePath: string): Promise<FileContent> => {
     if (!ensureRuntimeReady()) {
       throw new Error(t('common.messages.workspaceRuntimeNotStarted'));
     }
 
-    const data = await fetchFileContent(runtimeBaseUrl!, filePath);
+    const data = await fetchFileContent(runtimeBaseUrl!, filePath, contextId);
     return {
       content: data.content,
       encoding: data.encoding,
@@ -502,7 +506,7 @@ export function useWorkspaceFileTreeAdapter(
       contentHash: data.contentHash,
       language: data.language ?? null,
     };
-  }, [ensureRuntimeReady, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, runtimeBaseUrl, t]);
 
   const saveFile = useCallback(async (filePath: string, content: string): Promise<FileOperationResult> => {
     if (!ensureRuntimeReady()) {
@@ -510,14 +514,14 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const response = await saveFileContent(runtimeBaseUrl!, filePath, content);
+      const response = await saveFileContent(runtimeBaseUrl!, filePath, content, contextId);
       await refreshVersionControl();
       return mapOperationResponse({ success: true, data: response }, t('common.fileOperations.success.fileSaved'));
     } catch (error) {
       const message = error instanceof Error ? error.message : t('common.fileOperations.error.fileSaveFailed');
       return { success: false, message };
     }
-  }, [ensureRuntimeReady, refreshVersionControl, runtimeBaseUrl, t]);
+  }, [contextId, ensureRuntimeReady, refreshVersionControl, runtimeBaseUrl, t]);
 
   const state = useMemo<FileTreeState>(() => {
     const expandedIds = manager.state.expandedIds;

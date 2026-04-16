@@ -5,13 +5,15 @@
  */
 
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { GitBranch, History, ChevronLeft } from 'lucide-react';
+import { GitBranch, History, ChevronLeft, RefreshCw } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '../../providers/WorkspaceProvider';
 import { FileChangesPanel } from './components/FileChangesPanel';
 import { CommitHistoryPanel } from './components/CommitHistoryPanel';
 import { DiffViewer } from './components/DiffViewer';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
+import { useQueryClient } from '@tanstack/react-query';
+import { refreshVersionControlQueries } from './lib/queryClient';
 import type {
   VersionControlFileChange,
   VersionControlCommitSummary,
@@ -35,13 +37,35 @@ const VersionControlContext =
 
 // 版本控制側邊欄組件（第二欄）
 export const VersionControlSidebar: React.FC = () => {
-  const { state, workspace, dispatch } = useWorkspace();
+  const { state, workspace, workspaceRuntime, dispatch } = useWorkspace();
   const context = useContext(VersionControlContext);
   const { t } = useI18n();
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const workspaceId = workspaceRuntime.workspaceId ?? '';
+  const selectedGitContextId = state.versionControl.selectedGitContextId;
 
   const handleToggleCollapse = () => {
     dispatch({ type: 'TOGGLE_SECOND_COLUMN' });
   };
+
+  const handleRefresh = useCallback(async () => {
+    if (!workspaceId) {
+      return;
+    }
+
+    setIsRefreshing(true);
+    try {
+      await refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
+        includeCommits: true,
+        includeContexts: true,
+        contextId: selectedGitContextId,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [queryClient, selectedGitContextId, workspaceId]);
 
   if (!context) {
     return (
@@ -58,6 +82,19 @@ export const VersionControlSidebar: React.FC = () => {
             </div>
           )}
           <div className="flex items-center gap-1">
+            {!state.secondColumnCollapsed && workspace.versionControl?.subView === 'changes' && (
+              <button
+                onClick={() => {
+                  void handleRefresh();
+                }}
+                className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground transition-colors disabled:opacity-50"
+                title={t('workspace.versionControl.actions.refresh.tooltip')}
+                aria-label={t('workspace.versionControl.actions.refresh.label')}
+                disabled={isRefreshing}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              </button>
+            )}
             <button
               onClick={handleToggleCollapse}
               className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground"
@@ -105,6 +142,19 @@ export const VersionControlSidebar: React.FC = () => {
           </div>
         )}
         <div className="flex items-center gap-1">
+          {!state.secondColumnCollapsed && workspace.versionControl?.subView === 'changes' && (
+            <button
+              onClick={() => {
+                void handleRefresh();
+              }}
+              className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground transition-colors disabled:opacity-50"
+              title={t('workspace.versionControl.actions.refresh.tooltip')}
+              aria-label={t('workspace.versionControl.actions.refresh.label')}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
           <button
             onClick={handleToggleCollapse}
             className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground"

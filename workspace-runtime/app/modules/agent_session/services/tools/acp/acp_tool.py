@@ -136,7 +136,7 @@ class AcpTool(ITool):
         if workspace_info.acp_cli_args:
             args.extend(workspace_info.acp_cli_args)
         env_vars = {item.key: item.value for item in workspace_info.env_vars}
-        cwd = workspace_info.workspace_path
+        cwd = session.custom_context.get("workspace_path") or workspace_info.workspace_path
 
         connection = await self.connection_manager.get_or_create(
             session_id=session_id,

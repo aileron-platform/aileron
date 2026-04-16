@@ -43,7 +43,7 @@ class StatusOperations:
         self._utils = utils
         self.cache = cache
 
-    def get_status(self, workspace_id: str) -> VersionControlStatus:
+    def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
         """取得 Git 狀態
 
         Args:
@@ -52,7 +52,7 @@ class StatusOperations:
         Returns:
             版本控制狀態
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         branch, detached = self._utils.current_branch(repo)
         ahead, behind = self._utils.tracking_delta(repo)
         staged_entries = self._utils.diff_index(repo, staged=True)
@@ -82,7 +82,7 @@ class StatusOperations:
         )
 
     def list_branches(
-        self, workspace_id: str, include_remote: bool = True, search: Optional[str] = None
+        self, workspace_id: str, include_remote: bool = True, search: Optional[str] = None, context_id: Optional[str] = None
     ) -> BranchListResponse:
         """列出分支
 
@@ -94,7 +94,7 @@ class StatusOperations:
         Returns:
             分支列表回應
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         current_branch, detached = self._utils.current_branch(repo)
         query = search.lower() if search else None
         branches: list[BranchInfo] = []
@@ -171,7 +171,7 @@ class StatusOperations:
         return BranchListResponse(branches=branches)
 
     def checkout_branch(
-        self, workspace_id: str, branch_name: str, payload: CheckoutRequest
+        self, workspace_id: str, branch_name: str, payload: CheckoutRequest, context_id: Optional[str] = None
     ) -> CheckoutResponse:
         """切換分支
 
@@ -186,7 +186,7 @@ class StatusOperations:
         Raises:
             VersionControlError: 切換失敗
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         stashed = None
 
         if payload.stashChanges:

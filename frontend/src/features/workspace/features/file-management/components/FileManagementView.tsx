@@ -77,6 +77,7 @@ const getParentPath = (path: string): string => {
 export const FileManagementView: React.FC = () => {
   const {
     workspace,
+    state: workspaceState,
     workspaceRuntime,
     layout,
     toggleSecondColumn,
@@ -93,15 +94,17 @@ export const FileManagementView: React.FC = () => {
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [extractProgress, setExtractProgress] = useState<ExtractProgressState | null>(null);
+  const selectedGitContextId = workspaceState.versionControl.selectedGitContextId ?? 'primary';
 
   // 只有當 runtime 準備好時才創建 apiConfig
   const apiConfig: FileTreeApiConfig = useMemo(
     () => ({
       type: 'workspace',
       workspaceId: workspaceRuntime.workspaceId ?? 'pending-workspace',
+      contextId: selectedGitContextId,
       baseUrl: workspaceRuntime.runtimeBaseUrl || undefined,
     }),
-    [workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl]
+    [selectedGitContextId, workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl]
   );
 
   const manager = useFileTreeManager({
@@ -118,6 +121,7 @@ export const FileManagementView: React.FC = () => {
   });
 
   const { state: managerState, loadTree, operations } = manager;
+  const currentPath = managerState.selectedId ?? workspace.activeTabId ?? '/';
   const closeContextMenu = useCallback(() => {
     managerState.closeContextMenu();
   }, [managerState]);
@@ -156,7 +160,7 @@ export const FileManagementView: React.FC = () => {
       void loadTree();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+  }, [selectedGitContextId, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   const closeTabsForPaths = useCallback(
     (paths: string[]) => {
@@ -208,8 +212,11 @@ export const FileManagementView: React.FC = () => {
       return;
     }
 
-    await refreshVersionControlQueries(queryClient, workspaceRuntime.workspaceId, options);
-  }, [queryClient, workspaceRuntime.workspaceId]);
+    await refreshVersionControlQueries(queryClient, workspaceRuntime.workspaceId, {
+      ...options,
+      contextId: selectedGitContextId,
+    });
+  }, [queryClient, selectedGitContextId, workspaceRuntime.workspaceId]);
 
   const waitForExtractCompletion = useCallback(async (operationId: string) => {
     const baseUrl = requireRuntimeBaseUrl();
@@ -289,6 +296,7 @@ export const FileManagementView: React.FC = () => {
         archivePath: node.path,
         targetPath: getParentPath(node.path),
         conflictStrategy: 'rename',
+        contextId: selectedGitContextId,
       });
 
       setExtractProgress({
@@ -310,7 +318,7 @@ export const FileManagementView: React.FC = () => {
       });
       setExtractProgress(null);
     }
-  }, [ensureRuntimeReady, extractProgress, requireRuntimeBaseUrl, t, toast, waitForExtractCompletion]);
+  }, [ensureRuntimeReady, extractProgress, requireRuntimeBaseUrl, selectedGitContextId, t, toast, waitForExtractCompletion]);
 
   const getDirectoryNodeForPath = useCallback(
     (path?: string | null): FileTreeNode | undefined => {
@@ -542,7 +550,8 @@ export const FileManagementView: React.FC = () => {
         await duplicateFile(
           workspaceRuntime.runtimeBaseUrl!,
           clipboardItem.path,
-          targetDirectory
+          targetDirectory,
+          selectedGitContextId,
         );
         toast({
           title: t('workspace.fileManagement.tree.notifications.pasteSuccess'),
@@ -558,7 +567,7 @@ export const FileManagementView: React.FC = () => {
         });
       }
     },
-    [clipboardItem, ensureRuntimeReady, toast, t, workspaceRuntime.runtimeBaseUrl, loadTree, refreshVersionControl]
+    [clipboardItem, ensureRuntimeReady, toast, t, workspaceRuntime.runtimeBaseUrl, loadTree, refreshVersionControl, selectedGitContextId]
   );
 
 
@@ -933,9 +942,7 @@ export const FileManagementView: React.FC = () => {
               enableMultiSelectBar={true}
               enableBottomStatusBar={true}
               enableDragDrop={true}
-              bottomStatusText={t('workspace.fileManagement.tree.status.selected', {
-                count: managerState.selectedIds.size,
-              })}
+              bottomStatusText={currentPath}
               bottomStatusClearText={t('workspace.fileManagement.tree.status.clearSelection')}
             />
 

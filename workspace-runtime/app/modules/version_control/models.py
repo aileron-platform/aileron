@@ -13,6 +13,28 @@ class CommitAuthor(BaseModel):
     email: str = Field(description="作者電子郵件")
 
 
+class GitContext(BaseModel):
+    """Git context metadata for the primary checkout or a worktree."""
+
+    id: str = Field(description="Stable context identifier")
+    kind: Literal["primary", "worktree"] = Field(description="Context kind")
+    displayName: str = Field(description="Display label")
+    repoPath: str = Field(description="Repository path for this context")
+    branch: Optional[str] = Field(default=None, description="Current branch name when available")
+    headRef: Optional[str] = Field(default=None, description="Resolved HEAD ref when available")
+    detached: bool = Field(default=False, description="Whether HEAD is detached")
+    headSha: Optional[str] = Field(default=None, description="Current HEAD commit SHA")
+    locked: bool = Field(default=False, description="Whether the worktree is locked")
+    prunable: bool = Field(default=False, description="Whether the worktree is marked prunable")
+
+
+class GitContextListResponse(BaseModel):
+    """List of available Git contexts for a workspace."""
+
+    activeContextId: str = Field(description="Default active Git context identifier")
+    contexts: list[GitContext] = Field(description="Available Git contexts")
+
+
 class VersionControlStatus(BaseModel):
     """Git 狀態摘要"""
 
@@ -357,6 +379,8 @@ __all__ = [
     "FetchRequest",
     "FetchResponse",
     "FileChange",
+    "GitContext",
+    "GitContextListResponse",
     "PullCommitInfo",
     "PullRequest",
     "PullResponse",

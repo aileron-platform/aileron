@@ -229,6 +229,8 @@ export interface AgentSession {
   ready_for_prompt: boolean;
   archived: boolean;
   archived_reason?: string | null;
+  git_context_id?: string | null;
+  workspace_path?: string | null;
   // Data blob fields
   model?: string | null;
   context_window_limit?: number | null;
@@ -243,6 +245,7 @@ export interface SessionCreateRequest {
   model?: string | null;
   created_by?: string;
   permission_config?: PermissionConfig | null;
+  git_context_id?: string | null;
 }
 
 export interface SessionUpdateRequest {

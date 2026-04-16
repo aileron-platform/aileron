@@ -46,6 +46,8 @@ export interface FileTreeApiConfig {
   type: ApiEndpointType;
   /** Workspace ID（workspace 和 claude-code 使用） */
   workspaceId?: string;
+  /** Workspace Git context ID（workspace 使用） */
+  contextId?: string | null;
   /** Template ID（template 使用） */
   templateId?: string;
   /** 範圍識別（template 使用：'scripts' | 'skills'；claude-code 使用：'project' | 'user' | 'plugin'） */

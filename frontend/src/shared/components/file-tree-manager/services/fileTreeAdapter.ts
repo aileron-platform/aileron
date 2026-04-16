@@ -37,6 +37,16 @@ export class FileTreeApiAdapter {
     }
   }
 
+  private appendWorkspaceContext(url: string): string {
+    const contextId = this.config.contextId;
+    if (!contextId) {
+      return url;
+    }
+
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}contextId=${encodeURIComponent(contextId)}`;
+  }
+
   /**
    * 驗證配置
    */
@@ -253,7 +263,7 @@ export class FileTreeApiAdapter {
 
     // 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
     // 預設顯示隱藏檔案
-    const url = `/files/tree?path=/&includeHidden=true`;
+    const url = this.appendWorkspaceContext('/files/tree?path=/&includeHidden=true');
     logger.debug('getWorkspaceTree: 請求 URL', { url });
 
     const data = await this.client.get(url);
@@ -267,7 +277,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const url = `/files/content?path=${encodeURIComponent(path)}`;
+    const url = this.appendWorkspaceContext(`/files/content?path=${encodeURIComponent(path)}`);
     const data = await this.client.get(url);
     return data.content || '';
   }
@@ -278,7 +288,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const data = await this.client.post('/files', {
+    const data = await this.client.post(this.appendWorkspaceContext('/files'), {
       path: request.path,
       type: request.isDirectory ? 'directory' : 'file',
       content: request.isDirectory ? undefined : (request.content ?? ''),
@@ -293,7 +303,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const data = await this.client.put('/files/content', { path, content });
+    const data = await this.client.put(this.appendWorkspaceContext('/files/content'), { path, content });
 
     return data;
   }
@@ -304,7 +314,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const url = `/files?path=${encodeURIComponent(path)}&recursive=${recursive}`;
+    const url = this.appendWorkspaceContext(`/files?path=${encodeURIComponent(path)}&recursive=${recursive}`);
     const data = await this.client.delete(url);
 
     return data;
@@ -316,7 +326,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const data = await this.client.post('/files/batch-delete', {
+    const data = await this.client.post(this.appendWorkspaceContext('/files/batch-delete'), {
       paths: request.paths,
       recursive: request.recursive ?? true,
     });
@@ -330,7 +340,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const data = await this.client.post('/files/move', { sourcePath: oldPath, destPath: newPath });
+    const data = await this.client.post(this.appendWorkspaceContext('/files/move'), { sourcePath: oldPath, destPath: newPath });
 
     return data;
   }
@@ -341,7 +351,7 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    const data = await this.client.post('/files/move', { sourcePath, destPath: targetPath });
+    const data = await this.client.post(this.appendWorkspaceContext('/files/move'), { sourcePath, destPath: targetPath });
 
     return data;
   }
@@ -370,7 +380,7 @@ export class FileTreeApiAdapter {
     // 使用 POST /files/upload 端點（multipart 上傳）
     logger.debug('uploadWorkspaceFiles: 請求 URL: /files/upload');
 
-    const result: any = await this.client.post('/files/upload', formData);
+    const result: any = await this.client.post(this.appendWorkspaceContext('/files/upload'), formData);
     logger.debug('uploadWorkspaceFiles: 上傳成功', { result });
 
     // 將 multipart 上傳的結果轉換為 FileUploadResult 格式
@@ -418,7 +428,7 @@ export class FileTreeApiAdapter {
     }
 
     // 使用 ApiClient.getBlob 來確保請求攜帶 Authorization header
-    const path = `/files/download?path=${encodeURIComponent(options.path)}`;
+    const path = this.appendWorkspaceContext(`/files/download?path=${encodeURIComponent(options.path)}`);
     const blob = await this.client.getBlob(path);
 
     const downloadUrl = window.URL.createObjectURL(blob);

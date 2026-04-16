@@ -21,6 +21,7 @@ from .models import (
     DiscardResponse,
     FetchRequest,
     FetchResponse,
+    GitContextListResponse,
     PullRequest,
     PullResponse,
     PushRequest,
@@ -48,6 +49,22 @@ def _handle_error(exc: VersionControlError) -> HTTPException:
 
 
 @router.get(
+    "/contexts",
+    response_model=GitContextListResponse,
+    summary="取得 Git contexts",
+    responses=build_responses(401, 404, 500),
+)
+async def list_contexts(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    service: GitService = Depends(get_git_service),
+) -> GitContextListResponse:
+    try:
+        return service.list_contexts(workspace_id)
+    except VersionControlError as exc:
+        raise _handle_error(exc)
+
+
+@router.get(
     "/status",
     response_model=VersionControlStatus,
     summary="取得 Git 狀態",
@@ -55,10 +72,11 @@ def _handle_error(exc: VersionControlError) -> HTTPException:
 )
 async def get_status(
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> VersionControlStatus:
     try:
-        return service.get_status(workspace_id)
+        return service.get_status(workspace_id, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -73,10 +91,11 @@ async def list_branches(
     workspace_id: str = Path(..., description="Workspace ID"),
     include_remote: bool = Query(True, alias="includeRemote", description="是否包含遠端"),
     search: str | None = Query(None, description="名稱過濾"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> BranchListResponse:
     try:
-        return service.list_branches(workspace_id, include_remote=include_remote, search=search)
+        return service.list_branches(workspace_id, include_remote=include_remote, search=search, context_id=context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -91,10 +110,11 @@ async def checkout_branch(
     payload: CheckoutRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
     branch_name: str = Path(..., description="目標分支"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CheckoutResponse:
     try:
-        return service.checkout_branch(workspace_id, branch_name, payload)
+        return service.checkout_branch(workspace_id, branch_name, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -110,10 +130,11 @@ async def get_changes(
     scope: str = Query("all", description="過濾範圍"),
     page: int = Query(1, ge=1, description="頁碼(僅用於 untracked)"),
     page_size: int = Query(100, ge=1, le=500, alias="pageSize", description="每頁數量"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> ChangesResponse:
     try:
-        changes = service.get_changes(workspace_id, page=page, page_size=page_size)
+        changes = service.get_changes(workspace_id, page=page, page_size=page_size, context_id=context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
     scope_lower = scope.lower()
@@ -159,10 +180,11 @@ async def get_changes(
 async def stage_changes(
     payload: StageRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> StageResponse:
     try:
-        return service.stage(workspace_id, payload)
+        return service.stage(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -176,10 +198,11 @@ async def stage_changes(
 async def unstage_changes(
     payload: UnstageRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> UnstageResponse:
     try:
-        return service.unstage(workspace_id, payload)
+        return service.unstage(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -193,10 +216,11 @@ async def unstage_changes(
 async def discard_changes(
     payload: DiscardRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> DiscardResponse:
     try:
-        return service.discard(workspace_id, payload)
+        return service.discard(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -211,10 +235,11 @@ async def discard_changes(
 async def create_commit(
     payload: CommitRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitResponse:
     try:
-        return service.commit(workspace_id, payload)
+        return service.commit(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -231,10 +256,11 @@ async def list_commits(
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
     branch: str | None = Query(None, description="分支名稱"),
     search: str | None = Query(None, description="搜尋關鍵字"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitListResponse:
     try:
-        return service.list_commits(workspace_id, page=page, page_size=page_size, branch=branch, search=search)
+        return service.list_commits(workspace_id, page=page, page_size=page_size, branch=branch, search=search, context_id=context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -248,10 +274,11 @@ async def list_commits(
 async def get_commit(
     workspace_id: str = Path(..., description="Workspace ID"),
     commit_id: str = Path(..., description="提交 ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitDetailResponse:
     try:
-        return service.get_commit(workspace_id, commit_id)
+        return service.get_commit(workspace_id, commit_id, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -265,10 +292,11 @@ async def get_commit(
 async def get_commit_files(
     workspace_id: str = Path(..., description="Workspace ID"),
     commit_id: str = Path(..., description="提交 ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitFilesResponse:
     try:
-        return service.get_commit_files(workspace_id, commit_id)
+        return service.get_commit_files(workspace_id, commit_id, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -282,10 +310,11 @@ async def get_commit_files(
 async def push_changes(
     payload: PushRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> PushResponse:
     try:
-        return service.push(workspace_id, payload)
+        return service.push(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -299,10 +328,11 @@ async def push_changes(
 async def pull_changes(
     payload: PullRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> PullResponse:
     try:
-        return service.pull(workspace_id, payload)
+        return service.pull(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -316,10 +346,11 @@ async def pull_changes(
 async def fetch_changes(
     payload: FetchRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> FetchResponse:
     try:
-        return service.fetch(workspace_id, payload)
+        return service.fetch(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 
@@ -337,6 +368,7 @@ async def get_diff(
     head: str | None = Query(None, description="比較目標"),
     context: int = Query(3, ge=0, description="上下文行數"),
     include_metadata: bool = Query(False, alias="includeMetadata", description="是否包含中繼資料"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> DiffResponse:
     try:
@@ -347,6 +379,7 @@ async def get_diff(
             head=head,
             context=context,
             include_metadata=include_metadata,
+            context_id=context_id,
         )
     except VersionControlError as exc:
         raise _handle_error(exc)
@@ -362,10 +395,11 @@ async def get_blob(
     workspace_id: str = Path(..., description="Workspace ID"),
     path: str = Query(..., description="檔案路徑"),
     revision: str | None = Query(None, description="提交或引用"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> BlobResponse:
     try:
-        return service.blob(workspace_id, path=path, revision=revision)
+        return service.blob(workspace_id, path=path, revision=revision, context_id=context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 

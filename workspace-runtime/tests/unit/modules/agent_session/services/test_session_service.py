@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock
 
@@ -19,6 +20,7 @@ from app.modules.agent_session.schemas.agent_session import (
     AgentSessionUpdate,
 )
 from app.modules.agent_session.services.agent_session_service import AgentSessionService
+from app.modules.version_control.utils import VersionControlError
 
 
 class TestAgentSessionService:
@@ -34,6 +36,7 @@ class TestAgentSessionService:
         svc.emitter = AsyncMock()
         svc.emitter.emit_session_created = AsyncMock(return_value=1)
         svc.emitter.emit_session_patched = AsyncMock(return_value=1)
+        svc.git_utils = MagicMock()
         return svc
 
     def _session_entity(
@@ -196,6 +199,47 @@ class TestAgentSessionService:
         assert data_blob["model_config"]["thinkingMode"] == "auto"
         assert data_blob["model_config"]["manualThinkingTokens"] == 128
         assert data_blob["context_window_limit"] == 1000000
+
+    @pytest.mark.asyncio
+    async def test_create_session_persists_git_context_and_workspace_path(self, service) -> None:
+        model = MagicMock()
+        entity = self._session_entity(session_id="context-session")
+        service.session_repo.create = AsyncMock(return_value=model)
+        service.session_repo.to_entity = MagicMock(return_value=entity)
+        service.git_utils.resolve_context_path.return_value = Path("/workspace/.worktrees/feature-auth")
+
+        await service.create_session(
+            AgentSessionCreate(
+                workspace_id="ws-context",
+                git_context_id="worktree:feature-auth",
+            )
+        )
+
+        service.git_utils.resolve_context_path.assert_called_once_with(
+            "ws-context",
+            "worktree:feature-auth",
+        )
+        data_blob = json.loads(service.session_repo.create.await_args.args[0]["data"])
+        assert data_blob["custom_context"] == {
+            "git_context_id": "worktree:feature-auth",
+            "workspace_path": "/workspace/.worktrees/feature-auth",
+        }
+
+    @pytest.mark.asyncio
+    async def test_create_session_propagates_git_context_resolution_errors(self, service) -> None:
+        service.git_utils.resolve_context_path.side_effect = VersionControlError(
+            "Git context 'missing' not found",
+            status_code=404,
+            error_code="VC_CONTEXT_NOT_FOUND",
+        )
+
+        with pytest.raises(VersionControlError):
+            await service.create_session(
+                AgentSessionCreate(
+                    workspace_id="ws-context",
+                    git_context_id="missing",
+                )
+            )
 
     @pytest.mark.asyncio
     async def test_create_session_ignores_emitter_error_and_returns_entity(self, service) -> None:

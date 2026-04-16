@@ -39,6 +39,7 @@ export interface RuntimeUploadOptions {
   archiveAction?: 'store' | 'extract';
   keepArchive?: boolean;
   conflictStrategy?: 'rename' | 'overwrite' | 'reject';
+  contextId?: string | null;
 }
 
 export interface RuntimeUploadSummary extends RuntimeUploadResponse {
@@ -51,6 +52,7 @@ export interface RuntimeExtractArchiveRequest {
   archivePath: string;
   targetPath?: string;
   conflictStrategy?: 'rename' | 'overwrite' | 'reject';
+  contextId?: string | null;
 }
 
 export interface RuntimeExtractArchiveAcceptedResponse {
@@ -162,6 +164,20 @@ const getBaseName = (path: string): string => {
   return path.split('/').filter(Boolean).pop() ?? path;
 };
 
+const appendContextId = (params: URLSearchParams, contextId?: string | null): void => {
+  if (contextId) {
+    params.set('contextId', contextId);
+  }
+};
+
+const withContextId = (path: string, contextId?: string | null): string => {
+  if (!contextId) {
+    return path;
+  }
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}contextId=${encodeURIComponent(contextId)}`;
+};
+
 /**
  * 獲取預設工作區 ID
  */
@@ -216,12 +232,13 @@ export const fetchWorkspaceDetail = async (workspaceId: string): Promise<Workspa
 export const fetchFileTree = async (
   runtimeBaseUrl: string,
   path: string = '/',
-  options?: { includeHidden?: boolean }
+  options?: { includeHidden?: boolean; contextId?: string | null }
 ): Promise<FileNode[]> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
   params.set('path', path);
   params.set('includeHidden', String(options?.includeHidden ?? true));
+  appendContextId(params, options?.contextId);
 
   const data: RuntimeFileTreeResponse = await client.get(`/api/v1/files/tree?${params.toString()}`);
   return data.nodes?.map(node => mapRuntimeNodeToFileNode(node)) ?? [];
@@ -235,12 +252,13 @@ export const fetchNodeChildren = async (
   runtimeBaseUrl: string,
   nodePath: string,
   parentDepth: number,
-  options?: { includeHidden?: boolean }
+  options?: { includeHidden?: boolean; contextId?: string | null }
 ): Promise<FileNode[]> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
   params.set('path', nodePath);
   params.set('includeHidden', String(options?.includeHidden ?? true));
+  appendContextId(params, options?.contextId);
 
   const data: RuntimeFileTreeResponse = await client.get(`/api/v1/files/tree/children?${params.toString()}`);
   return data.nodes?.map(node => mapRuntimeNodeToFileNode(node, parentDepth)) ?? [];
@@ -251,11 +269,13 @@ export const fetchNodeChildren = async (
  */
 export const fetchFileContent = async (
   runtimeBaseUrl: string,
-  filePath: string
+  filePath: string,
+  contextId?: string | null
 ): Promise<RuntimeFileContentResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
   params.set('path', filePath);
+  appendContextId(params, contextId);
 
   return await client.get(`/api/v1/files/content?${params.toString()}`);
 };
@@ -266,10 +286,11 @@ export const fetchFileContent = async (
 export const saveFileContent = async (
   runtimeBaseUrl: string,
   filePath: string,
-  content: string
+  content: string,
+  contextId?: string | null
 ): Promise<RuntimeSaveFileResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.put('/api/v1/files/content', { path: filePath, content });
+  return await client.put(withContextId('/api/v1/files/content', contextId), { path: filePath, content });
 };
 
 /**
@@ -280,10 +301,11 @@ export const createFileOrFolder = async (
   name: string,
   parentPath: string,
   type: 'file' | 'directory',
-  content?: string
+  content?: string,
+  contextId?: string | null
 ): Promise<void> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  await client.post('/api/v1/files', {
+  await client.post(withContextId('/api/v1/files', contextId), {
     path: buildChildPath(parentPath, name),
     type,
     content: type === 'directory' ? undefined : content ?? '',
@@ -296,10 +318,11 @@ export const createFileOrFolder = async (
 export const renameFile = async (
   runtimeBaseUrl: string,
   oldPath: string,
-  newPath: string
+  newPath: string,
+  contextId?: string | null
 ): Promise<void> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  await client.post('/api/v1/files/move', {
+  await client.post(withContextId('/api/v1/files/move', contextId), {
     sourcePath: oldPath,
     destPath: newPath,
     overwrite: false,
@@ -312,7 +335,8 @@ export const renameFile = async (
 export const deleteFile = async (
   runtimeBaseUrl: string,
   path: string,
-  recursive?: boolean
+  recursive?: boolean,
+  contextId?: string | null
 ): Promise<RuntimeDeleteResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
@@ -320,6 +344,7 @@ export const deleteFile = async (
   if (recursive) {
     params.set('recursive', 'true');
   }
+  appendContextId(params, contextId);
 
   return await client.delete(`/api/v1/files?${params.toString()}`);
 };
@@ -330,10 +355,11 @@ export const deleteFile = async (
 export const batchDeleteFiles = async (
   runtimeBaseUrl: string,
   paths: string[],
-  recursive?: boolean
+  recursive?: boolean,
+  contextId?: string | null
 ): Promise<RuntimeBatchDeleteResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.post('/api/v1/files/batch-delete', { paths, recursive: recursive ?? true });
+  return await client.post(withContextId('/api/v1/files/batch-delete', contextId), { paths, recursive: recursive ?? true });
 };
 
 /**
@@ -342,11 +368,12 @@ export const batchDeleteFiles = async (
 export const duplicateFile = async (
   runtimeBaseUrl: string,
   sourcePath: string,
-  targetDirectory: string
+  targetDirectory: string,
+  contextId?: string | null
 ): Promise<RuntimeDuplicateResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   const destinationPath = buildChildPath(targetDirectory, getBaseName(sourcePath));
-  await client.post('/api/v1/files/copy', {
+  await client.post(withContextId('/api/v1/files/copy', contextId), {
     sourcePath,
     destPath: destinationPath,
     overwrite: false,
@@ -361,10 +388,11 @@ export const moveFile = async (
   runtimeBaseUrl: string,
   oldPath: string,
   newPath: string,
-  overwrite: boolean = false
+  overwrite: boolean = false,
+  contextId?: string | null
 ): Promise<void> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  await client.post('/api/v1/files/move', {
+  await client.post(withContextId('/api/v1/files/move', contextId), {
     sourcePath: oldPath,
     destPath: newPath,
     overwrite,
@@ -393,7 +421,10 @@ export const uploadFiles = async (
     formData.append('files', file);
   });
 
-  const result = await client.post<RuntimeUploadResponse>('/api/v1/files/upload', formData);
+  const result = await client.post<RuntimeUploadResponse>(
+    withContextId('/api/v1/files/upload', options?.contextId),
+    formData,
+  );
   const uploaded = Array.isArray(result.uploaded) ? result.uploaded : [];
   const extracted = Array.isArray(result.extracted) ? result.extracted : [];
 
@@ -435,7 +466,7 @@ export const startExtractArchive = async (
   request: RuntimeExtractArchiveRequest
 ): Promise<RuntimeExtractArchiveAcceptedResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.post('/api/v1/files/extract', {
+  return await client.post(withContextId('/api/v1/files/extract', request.contextId), {
     archivePath: request.archivePath,
     targetPath: request.targetPath,
     conflictStrategy: request.conflictStrategy ?? 'rename',
@@ -454,9 +485,16 @@ export const fetchExtractArchiveStatus = async (
  * 下載檔案
  * 返回下載 URL，前端可以使用 window.open 或 <a> 標籤觸發下載
  */
-export const downloadFile = async (runtimeBaseUrl: string, filePath: string): Promise<string> => {
+export const downloadFile = async (
+  runtimeBaseUrl: string,
+  filePath: string,
+  contextId?: string | null,
+): Promise<string> => {
   const url = new URL(buildRuntimeUrl(runtimeBaseUrl, 'files/download'));
   url.searchParams.set('path', filePath);
+  if (contextId) {
+    url.searchParams.set('contextId', contextId);
+  }
 
   // 直接返回下載 URL，讓瀏覽器處理下載
   return url.toString();
@@ -469,10 +507,11 @@ export const downloadFile = async (runtimeBaseUrl: string, filePath: string): Pr
 export const batchDownloadFiles = async (
   runtimeBaseUrl: string,
   paths: string[],
-  archiveFormat: 'zip' | 'tar' = 'zip'
+  archiveFormat: 'zip' | 'tar' = 'zip',
+  contextId?: string | null
 ): Promise<RuntimeArchiveTicketResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.post('/api/v1/files/batch-download', { paths, archiveFormat });
+  return await client.post(withContextId('/api/v1/files/batch-download', contextId), { paths, archiveFormat });
 };
 
 /**

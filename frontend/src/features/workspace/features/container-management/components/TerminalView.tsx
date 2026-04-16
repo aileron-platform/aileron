@@ -33,11 +33,13 @@ const logger = createLogger('TerminalView');
 
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useTerminalStream } from '@/features/workspace/realtime';
+import { useGitContextsQuery } from '@/features/workspace/features/version-control/hooks/useVersionControlQueries';
 import { TerminalTab } from './TerminalTab';
 import { TerminalLayoutSelector, TerminalLayoutType } from './TerminalLayoutSelector';
 import { LAYOUT_DEFINITIONS, LayoutNode, getPaneCount } from './LayoutDefinitions';
 import { TERMINAL_MAX_TABS } from '../config/terminalConfig';
 import { TerminalTabBar } from './TerminalTabBar';
+import { resolveDefaultTerminalWorkspacePath } from './terminalContext';
 import {
   TerminalContextMenu,
   ContextMenuState,
@@ -49,7 +51,7 @@ type PendingAssignQueue = number[];
 
 export const TerminalView: React.FC = () => {
   const { t } = useI18n();
-  const { workspaceRuntime } = useWorkspace();
+  const { workspaceRuntime, state: workspaceState } = useWorkspace();
   const {
     state: terminalState,
     connect,
@@ -64,6 +66,10 @@ export const TerminalView: React.FC = () => {
     renameTab,
   } = useTerminalStream();
   const { toast } = useToast();
+  const { data: gitContextsResponse } = useGitContextsQuery({
+    workspaceId: workspaceRuntime.workspaceId ?? '',
+    runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
+  });
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedText, setSelectedText] = useState('');
@@ -71,6 +77,13 @@ export const TerminalView: React.FC = () => {
     INITIAL_CONTEXT_MENU_STATE,
   );
   const [terminalSize, setTerminalSize] = useState({ cols: 0, rows: 0 });
+
+  const defaultWorkspacePath = useMemo(() => {
+    return resolveDefaultTerminalWorkspacePath(
+      gitContextsResponse?.contexts,
+      workspaceState.versionControl.selectedGitContextId,
+    );
+  }, [gitContextsResponse?.contexts, workspaceState.versionControl.selectedGitContextId]);
 
   // Layout State
   const [layout, setLayout] = useState<TerminalLayoutType>('single');
@@ -380,7 +393,7 @@ export const TerminalView: React.FC = () => {
       const request: PendingTabRequest = {
         paneIndex,
         name,
-        workspacePath: '/workspace',
+        workspacePath: defaultWorkspacePath,
       };
 
       // 標記期望掛載的 pane，等待 tab_created 時對應
@@ -392,7 +405,7 @@ export const TerminalView: React.FC = () => {
         pendingTabQueueRef.current.push(request);
         connect({ force: true });
       } else {
-        createTab(name, '/workspace');
+        createTab(name, request.workspacePath);
       }
 
       setActivePane(paneIndex);
@@ -407,6 +420,7 @@ export const TerminalView: React.FC = () => {
       menuLabels.maxLimitDescription,
       menuLabels.maxLimitTitle,
       setActivePane,
+      defaultWorkspacePath,
     ],
   );
 
@@ -460,7 +474,7 @@ export const TerminalView: React.FC = () => {
     const request: PendingTabRequest = {
       paneIndex: activePaneIndex,
       name: tabName,
-      workspacePath: '/workspace',
+      workspacePath: defaultWorkspacePath,
     };
 
     if (terminalState.status !== 'open') {
@@ -481,6 +495,7 @@ export const TerminalView: React.FC = () => {
     terminalState.status,
     connect,
     setPaneMapping,
+    defaultWorkspacePath,
   ]);
 
   const requestLayoutChange = useCallback(
@@ -597,9 +612,9 @@ export const TerminalView: React.FC = () => {
       terminalState.tabs.length === 0 &&
       pendingTabQueueRef.current.length === 0
     ) {
-      createTab(buildTerminalName(1), '/workspace');
+      createTab(buildTerminalName(1), defaultWorkspacePath);
     }
-  }, [terminalState.status, terminalState.tabs.length, createTab, buildTerminalName]);
+  }, [terminalState.status, terminalState.tabs.length, createTab, buildTerminalName, defaultWorkspacePath]);
 
   // Handle connection errors
   useEffect(() => {

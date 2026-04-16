@@ -14,6 +14,8 @@ from app.modules.version_control.models import (
     BranchInfo,
     ChangesResponse,
     FileChange,
+    GitContext,
+    GitContextListResponse,
 )
 
 from .helpers import override_dependency
@@ -36,7 +38,25 @@ class StubGitService:
         self.branches = []
         self.commits = []
 
-    def get_status(self, workspace_id: str) -> VersionControlStatus:
+    def list_contexts(self, workspace_id: str) -> GitContextListResponse:
+        return GitContextListResponse(
+            activeContextId="primary",
+            contexts=[
+                GitContext(
+                    id="primary",
+                    kind="primary",
+                    displayName="main",
+                    repoPath=str(self.workspace_path),
+                    branch=self.current_branch,
+                    detached=self.detached,
+                    headSha="abcdef1",
+                    locked=False,
+                    prunable=False,
+                )
+            ],
+        )
+
+    def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
         """取得 Git 狀態"""
         return VersionControlStatus(
             branch=self.current_branch,
@@ -50,7 +70,13 @@ class StubGitService:
             lastFetchedAt=None,
         )
 
-    def list_branches(self, workspace_id: str, include_remote: bool = False, search: Optional[str] = None) -> dict[str, Any]:
+    def list_branches(
+        self,
+        workspace_id: str,
+        include_remote: bool = False,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         """取得分支列表"""
         branches = self.branches.copy()
         if search:
@@ -58,7 +84,7 @@ class StubGitService:
 
         return {"branches": branches}
 
-    def checkout_branch(self, workspace_id: str, branch_name: str, payload) -> dict[str, Any]:
+    def checkout_branch(self, workspace_id: str, branch_name: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """切換分支"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -102,7 +128,13 @@ class StubGitService:
                 "stashedChanges": None
             }
 
-    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100) -> ChangesResponse:
+    def get_changes(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 100,
+        context_id: Optional[str] = None,
+    ) -> ChangesResponse:
         """取得變更列表"""
         staged_changes = [FileChange(
             name=path,
@@ -141,7 +173,7 @@ class StubGitService:
             untrackedHasMore=False
         )
 
-    def stage(self, workspace_id: str, payload) -> dict[str, Any]:
+    def stage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """暫存檔案"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -167,7 +199,7 @@ class StubGitService:
             "unstaged": []
         }
 
-    def unstage(self, workspace_id: str, payload) -> dict[str, Any]:
+    def unstage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """取消暫存"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -189,7 +221,7 @@ class StubGitService:
             "remainingStaged": len(self.staged_files)
         }
 
-    def discard(self, workspace_id: str, payload) -> dict[str, Any]:
+    def discard(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """丟棄變更"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -210,7 +242,7 @@ class StubGitService:
             "warnings": []
         }
 
-    def commit(self, workspace_id: str, payload) -> dict[str, Any]:
+    def commit(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """建立提交"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -246,8 +278,15 @@ class StubGitService:
             }
         }
 
-    def list_commits(self, workspace_id: str, page: int = 1, page_size: int = 20,
-                     branch: Optional[str] = None, search: Optional[str] = None) -> dict[str, Any]:
+    def list_commits(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        branch: Optional[str] = None,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         """提交列表"""
         start = (page - 1) * page_size
         end = start + page_size
@@ -274,7 +313,7 @@ class StubGitService:
             "items": items
         }
 
-    def get_commit(self, workspace_id: str, commit_id: str) -> dict[str, Any]:
+    def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         """取得提交詳細"""
         for commit in self.commits:
             if commit["id"] == commit_id:
@@ -289,7 +328,7 @@ class StubGitService:
                 }
         raise VersionControlError("Commit not found")
 
-    def get_commit_files(self, workspace_id: str, commit_id: str) -> dict[str, Any]:
+    def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         """取得提交檔案差異"""
         # 簡化實作
         return {
@@ -297,7 +336,7 @@ class StubGitService:
             "files": []
         }
 
-    def push(self, workspace_id: str, payload) -> dict[str, Any]:
+    def push(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """推送"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -311,7 +350,7 @@ class StubGitService:
             "updates": []
         }
 
-    def pull(self, workspace_id: str, payload) -> dict[str, Any]:
+    def pull(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """拉取"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -326,7 +365,7 @@ class StubGitService:
             "commits": []
         }
 
-    def fetch(self, workspace_id: str, payload) -> dict[str, Any]:
+    def fetch(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         """同步遠端引用"""
         # 處理 payload 可能是 Pydantic 模型或字典
         if hasattr(payload, 'model_dump'):
@@ -339,8 +378,16 @@ class StubGitService:
             "fetchedRefs": []
         }
 
-    def diff(self, workspace_id: str, path: str, base: Optional[str] = None,
-             head: Optional[str] = None, context: int = 3, include_metadata: bool = False) -> dict[str, Any]:
+    def diff(
+        self,
+        workspace_id: str,
+        path: str,
+        base: Optional[str] = None,
+        head: Optional[str] = None,
+        context: int = 3,
+        include_metadata: bool = False,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         """取得差異"""
         return {
             "path": path,
@@ -351,7 +398,13 @@ class StubGitService:
             "metadata": {"file": path} if include_metadata else None
         }
 
-    def blob(self, workspace_id: str, path: str, revision: Optional[str] = None) -> dict[str, Any]:
+    def blob(
+        self,
+        workspace_id: str,
+        path: str,
+        revision: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         """讀取檔案內容"""
         import base64
         content = base64.b64encode(b"file content").decode()

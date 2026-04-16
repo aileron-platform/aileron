@@ -45,6 +45,7 @@ class DiffOperations:
         head: Optional[str] = None,
         context: int = 3,
         include_metadata: bool = False,
+        context_id: Optional[str] = None,
     ) -> DiffResponse:
         """獲取檔案的差異內容
 
@@ -59,7 +60,7 @@ class DiffOperations:
         Returns:
             DiffResponse: 包含差異內容的回應
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         normalized = path.lstrip("/\\")
 
         if head in (None, "WORKTREE"):
@@ -89,7 +90,13 @@ class DiffOperations:
             metadata=metadata,
         )
 
-    def blob(self, workspace_id: str, path: str, revision: Optional[str] = None) -> BlobResponse:
+    def blob(
+        self,
+        workspace_id: str,
+        path: str,
+        revision: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> BlobResponse:
         """獲取檔案內容
 
         Args:
@@ -103,7 +110,7 @@ class DiffOperations:
         Raises:
             VersionControlError: 檔案不存在
         """
-        repo = self._utils.get_repo(workspace_id)
+        repo = self._utils.get_repo(workspace_id, context_id)
         normalized = path.lstrip("/\\")
         rev = revision or "HEAD"
 

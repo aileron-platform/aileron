@@ -23,6 +23,8 @@ vi.mock('@/shared/api/apiClient', () => ({
 }));
 
 import {
+  fetchFileContent,
+  fetchFileTree,
   fetchExtractArchiveStatus,
   resolveRuntimeBaseUrl,
   startExtractArchive,
@@ -105,6 +107,24 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     expect(formData.get('conflictStrategy')).toBe('rename');
   });
 
+  it('會把 contextId 帶到檔案樹與內容請求', async () => {
+    clientGetMock
+      .mockResolvedValueOnce({ nodes: [] })
+      .mockResolvedValueOnce({ content: 'hello' });
+
+    await fetchFileTree('http://runtime.local', '/', { contextId: 'worktree:feature-auth' });
+    await fetchFileContent('http://runtime.local', '/README.md', 'worktree:feature-auth');
+
+    expect(clientGetMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/files/tree?path=%2F&includeHidden=true&contextId=worktree%3Afeature-auth',
+    );
+    expect(clientGetMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/files/content?path=%2FREADME.md&contextId=worktree%3Afeature-auth',
+    );
+  });
+
   it('會啟動背景解壓並回傳 operation id', async () => {
     postMock.mockResolvedValue({
       operationId: 'extract-123',
@@ -116,10 +136,11 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     const result = await startExtractArchive('http://runtime.local', {
       archivePath: '/uploads/demo.zip',
       conflictStrategy: 'overwrite',
+      contextId: 'worktree:feature-auth',
     });
 
     const [url, body] = postMock.mock.calls[0] ?? [];
-    expect(url).toBe('/api/v1/files/extract');
+    expect(url).toBe('/api/v1/files/extract?contextId=worktree%3Afeature-auth');
     expect(body).toEqual({
       archivePath: '/uploads/demo.zip',
       targetPath: undefined,

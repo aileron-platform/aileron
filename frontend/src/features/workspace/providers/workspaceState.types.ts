@@ -67,7 +67,7 @@ export interface WorkspaceState {
   };
 
   // Workspace 層級的 tab 狀態持久化
-  workspaceTabsCache: Record<string, Partial<Record<WorkspaceTabScope, WorkspaceTabState>>>;
+  workspaceTabsCache: Record<string, Partial<Record<string, WorkspaceTabState>>>;
 
   // 檔案樹狀態
   fileTreeState: FileTreeState;
@@ -75,6 +75,7 @@ export interface WorkspaceState {
   versionControl: {
     subView: 'changes' | 'history';
     selectedCommit: string | null;
+    selectedGitContextId: string | null;
   };
 
   openspec: {
@@ -127,6 +128,7 @@ export type WorkspaceAction =
   | { type: 'SET_SECOND_COLUMN_WIDTH'; payload: number }
   | { type: 'SET_RIGHT_CHAT_WIDTH'; payload: number }
   | { type: 'SET_VERSION_CONTROL_SUB_VIEW'; payload: 'changes' | 'history' }
+  | { type: 'SET_SELECTED_GIT_CONTEXT'; payload: string | null }
   | { type: 'SET_OPENSPEC_SUB_VIEW'; payload: WorkspaceState['openspec']['subView'] }
   | { type: 'SET_OPENSPEC_SELECTED_PATH'; payload: string | null }
   | { type: 'SET_WORKSPACE_SETTINGS_SUB_VIEW'; payload: 'basic' | 'reset' }
@@ -170,15 +172,16 @@ export type WorkspaceAction =
   | { type: 'SET_PENDING_FILE_ACTION'; payload: import('../features/file-management/types').PendingFileAction | null }
   | { type: 'SET_DRAGGED_NODE'; payload: string | null }
   | { type: 'SET_DROP_TARGET'; payload: string | null }
-  | { type: 'SAVE_WORKSPACE_TABS'; payload: { workspaceId: string; scope: WorkspaceTabScope } }
+  | { type: 'SAVE_WORKSPACE_TABS'; payload: { workspaceId: string; scope: WorkspaceTabScope; contextId?: string | null } }
   | {
     type: 'RESTORE_WORKSPACE_TABS'; payload: {
       workspaceId: string;
       scope: WorkspaceTabScope;
+      contextId?: string | null;
       tabsState?: WorkspaceTabState;
     }
   }
-  | { type: 'CLEAR_WORKSPACE_TABS_CACHE'; payload: { workspaceId: string; scope?: WorkspaceTabScope } }
+  | { type: 'CLEAR_WORKSPACE_TABS_CACHE'; payload: { workspaceId: string; scope?: WorkspaceTabScope; contextId?: string | null } }
   | { type: 'RESTORE_LAYOUT_PREFERENCES'; payload: WorkspaceLayoutPreferences };
 
 // Workspace 佈局偏好（持久化至 localStorage）

@@ -24,6 +24,17 @@ const getTabStateForScope = (state: WorkspaceState, scope: WorkspaceTabScope): W
   };
 };
 
+const getWorkspaceTabsCacheScopeKey = (
+  scope: WorkspaceTabScope,
+  contextId?: string | null,
+): string => {
+  if (scope !== 'file-management') {
+    return scope;
+  }
+
+  return `${scope}:${contextId ?? 'primary'}`;
+};
+
 const updateTabStateForScope = (
   state: WorkspaceState,
   scope: WorkspaceTabScope,
@@ -166,6 +177,15 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         versionControl: {
           ...state.versionControl,
           subView: action.payload,
+        },
+      };
+
+    case 'SET_SELECTED_GIT_CONTEXT':
+      return {
+        ...state,
+        versionControl: {
+          ...state.versionControl,
+          selectedGitContextId: action.payload,
         },
       };
 
@@ -654,25 +674,27 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
       };
 
     case 'SAVE_WORKSPACE_TABS': {
-      const { workspaceId, scope } = action.payload;
+      const { workspaceId, scope, contextId } = action.payload;
       const tabState = getTabStateForScope(state, scope);
+      const scopeKey = getWorkspaceTabsCacheScopeKey(scope, contextId);
       return {
         ...state,
         workspaceTabsCache: {
           ...state.workspaceTabsCache,
           [workspaceId]: {
             ...state.workspaceTabsCache[workspaceId],
-            [scope]: tabState,
+            [scopeKey]: tabState,
           },
         },
       };
     }
 
     case 'RESTORE_WORKSPACE_TABS': {
-      const { workspaceId, tabsState, scope } = action.payload;
+      const { workspaceId, tabsState, scope, contextId } = action.payload;
+      const scopeKey = getWorkspaceTabsCacheScopeKey(scope, contextId);
 
       // 優先使用傳入的 tabsState，否則從 cache 中取
-      const tabsToRestore = tabsState || state.workspaceTabsCache[workspaceId]?.[scope];
+      const tabsToRestore = tabsState || state.workspaceTabsCache[workspaceId]?.[scopeKey];
 
       if (!tabsToRestore) {
         return updateTabStateForScope(state, scope, () => ({
@@ -689,7 +711,7 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
             ...state.workspaceTabsCache,
             [workspaceId]: {
               ...state.workspaceTabsCache[workspaceId],
-              [scope]: tabsState,
+              [scopeKey]: tabsState,
             },
         }
         : state.workspaceTabsCache;
@@ -703,7 +725,7 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
     }
 
     case 'CLEAR_WORKSPACE_TABS_CACHE': {
-      const { workspaceId, scope } = action.payload;
+      const { workspaceId, scope, contextId } = action.payload;
       if (!scope) {
         const { [workspaceId]: _, ...remainingCache } = state.workspaceTabsCache;
         return {
@@ -716,7 +738,8 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
       if (!workspaceCache) {
         return state;
       }
-      const { [scope]: _, ...remainingScopedCache } = workspaceCache;
+      const scopeKey = getWorkspaceTabsCacheScopeKey(scope, contextId);
+      const { [scopeKey]: _, ...remainingScopedCache } = workspaceCache;
       return {
         ...state,
         workspaceTabsCache: {

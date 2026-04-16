@@ -45,6 +45,7 @@ export const initialState: WorkspaceState = {
   versionControl: {
     subView: 'changes',
     selectedCommit: null,
+    selectedGitContextId: null,
   },
 
   openspec: {

@@ -10,6 +10,24 @@ export interface VersionControlStatus {
   lastFetchedAt?: string | null;
 }
 
+export interface GitContext {
+  id: string;
+  kind: 'primary' | 'worktree';
+  displayName: string;
+  repoPath: string;
+  branch?: string | null;
+  headRef?: string | null;
+  detached: boolean;
+  headSha?: string | null;
+  locked: boolean;
+  prunable: boolean;
+}
+
+export interface GitContextListResponse {
+  activeContextId: string;
+  contexts: GitContext[];
+}
+
 export interface VersionControlBranch {
   name: string;
   displayName?: string;

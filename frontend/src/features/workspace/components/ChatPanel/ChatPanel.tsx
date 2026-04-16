@@ -66,7 +66,8 @@ export const ChatPanel: React.FC = () => {
     runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
     workspaceId: workspaceRuntime.workspaceId || '',
     cliType: workspaceRuntime.cliType,
-    autoConnect: true
+    autoConnect: true,
+    gitContextId: workspaceState.versionControl.selectedGitContextId,
   });
 
   // 取得 store 用於直接操作 streaming 狀態

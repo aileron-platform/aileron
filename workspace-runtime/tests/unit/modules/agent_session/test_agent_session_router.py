@@ -18,6 +18,7 @@ from app.modules.agent_session.schemas.agent_session import (
     ToolResultRequest,
 )
 from app.modules.agent_session.services.execution_service import ExecutionServiceError
+from app.modules.version_control.utils import VersionControlError
 
 router_module = importlib.import_module("app.modules.agent_session.routers.agent_session_router")
 
@@ -36,14 +37,14 @@ async def test_session_crud_and_listing_routes(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         router_module.AgentSessionResponse,
         "from_entity",
-        classmethod(
-            lambda cls, entity: cls(
-                id=entity.id,
-                created_at=datetime.now(timezone.utc),
-                status="idle",
-                agentic_tool="claude-code",
-                workspace_id="ws-1",
-            )
+            classmethod(
+                lambda cls, entity: cls(
+                    session_id=entity.id,
+                    created_at=datetime.now(timezone.utc),
+                    status="idle",
+                    agentic_tool="claude-code",
+                    workspace_id="ws-1",
+                )
         ),
     )
     mock_db = AsyncMock()
@@ -85,6 +86,31 @@ async def test_session_crud_and_listing_routes(monkeypatch: pytest.MonkeyPatch) 
     with pytest.raises(HTTPException) as exc_archive:
         await router_module.archive_session("missing", "manual", service)
     assert exc_archive.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_session_maps_version_control_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AsyncMock()
+    service.create_session.side_effect = VersionControlError(
+        "Git context 'missing' not found",
+        status_code=404,
+        error_code="VC_CONTEXT_NOT_FOUND",
+    )
+    mock_db = AsyncMock()
+
+    @asynccontextmanager
+    async def fake_scope():
+        yield mock_db
+
+    monkeypatch.setattr(router_module, "async_session_scope", fake_scope)
+    monkeypatch.setattr(router_module, "AgentSessionService", lambda db: service)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await router_module.create_session(
+            AgentSessionCreate(workspace_id="ws-1", git_context_id="missing")
+        )
+
+    assert exc_info.value.status_code == 404
 
 
 @pytest.mark.asyncio

@@ -35,6 +35,7 @@ from .models import (
     DiscardResponse,
     FetchRequest,
     FetchResponse,
+    GitContextListResponse,
     PullRequest,
     PullResponse,
     PushRequest,
@@ -125,7 +126,11 @@ class GitService:
     # ------------------------------------------------------------------
     # 狀態與分支操作
     # ------------------------------------------------------------------
-    def get_status(self, workspace_id: str) -> VersionControlStatus:
+    def list_contexts(self, workspace_id: str) -> GitContextListResponse:
+        """List available Git contexts for a workspace."""
+        return self._utils.list_contexts(workspace_id)
+
+    def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
         """取得 Git 狀態
 
         Args:
@@ -134,10 +139,14 @@ class GitService:
         Returns:
             版本控制狀態
         """
-        return self._status_ops.get_status(workspace_id)
+        return self._status_ops.get_status(workspace_id, context_id)
 
     def list_branches(
-        self, workspace_id: str, include_remote: bool = True, search: Optional[str] = None
+        self,
+        workspace_id: str,
+        include_remote: bool = True,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
     ) -> BranchListResponse:
         """列出分支
 
@@ -149,10 +158,14 @@ class GitService:
         Returns:
             分支列表回應
         """
-        return self._status_ops.list_branches(workspace_id, include_remote, search)
+        return self._status_ops.list_branches(workspace_id, include_remote, search, context_id)
 
     def checkout_branch(
-        self, workspace_id: str, branch_name: str, payload: CheckoutRequest
+        self,
+        workspace_id: str,
+        branch_name: str,
+        payload: CheckoutRequest,
+        context_id: Optional[str] = None,
     ) -> CheckoutResponse:
         """切換分支
 
@@ -164,12 +177,18 @@ class GitService:
         Returns:
             切換回應
         """
-        return self._status_ops.checkout_branch(workspace_id, branch_name, payload)
+        return self._status_ops.checkout_branch(workspace_id, branch_name, payload, context_id)
 
     # ------------------------------------------------------------------
     # 變更與暫存操作
     # ------------------------------------------------------------------
-    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100) -> ChangesResponse:
+    def get_changes(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 100,
+        context_id: Optional[str] = None,
+    ) -> ChangesResponse:
         """取得檔案變更
 
         Args:
@@ -180,9 +199,9 @@ class GitService:
         Returns:
             變更回應
         """
-        return self._staging_ops.get_changes(workspace_id, page, page_size)
+        return self._staging_ops.get_changes(workspace_id, page, page_size, context_id)
 
-    def stage(self, workspace_id: str, payload: StageRequest) -> StageResponse:
+    def stage(self, workspace_id: str, payload: StageRequest, context_id: Optional[str] = None) -> StageResponse:
         """暫存檔案
 
         Args:
@@ -192,9 +211,9 @@ class GitService:
         Returns:
             暫存回應
         """
-        return self._staging_ops.stage(workspace_id, payload)
+        return self._staging_ops.stage(workspace_id, payload, context_id)
 
-    def unstage(self, workspace_id: str, payload: UnstageRequest) -> UnstageResponse:
+    def unstage(self, workspace_id: str, payload: UnstageRequest, context_id: Optional[str] = None) -> UnstageResponse:
         """取消暫存檔案
 
         Args:
@@ -204,9 +223,9 @@ class GitService:
         Returns:
             取消暫存回應
         """
-        return self._staging_ops.unstage(workspace_id, payload)
+        return self._staging_ops.unstage(workspace_id, payload, context_id)
 
-    def discard(self, workspace_id: str, payload: DiscardRequest) -> DiscardResponse:
+    def discard(self, workspace_id: str, payload: DiscardRequest, context_id: Optional[str] = None) -> DiscardResponse:
         """放棄變更
 
         Args:
@@ -216,12 +235,12 @@ class GitService:
         Returns:
             放棄回應
         """
-        return self._staging_ops.discard(workspace_id, payload)
+        return self._staging_ops.discard(workspace_id, payload, context_id)
 
     # ------------------------------------------------------------------
     # 提交與歷史操作
     # ------------------------------------------------------------------
-    def commit(self, workspace_id: str, payload: CommitRequest) -> CommitResponse:
+    def commit(self, workspace_id: str, payload: CommitRequest, context_id: Optional[str] = None) -> CommitResponse:
         """建立提交
 
         Args:
@@ -231,7 +250,7 @@ class GitService:
         Returns:
             提交回應
         """
-        return self._commit_ops.commit(workspace_id, payload)
+        return self._commit_ops.commit(workspace_id, payload, context_id)
 
     def list_commits(
         self,
@@ -240,6 +259,7 @@ class GitService:
         page_size: int = 20,
         branch: Optional[str] = None,
         search: Optional[str] = None,
+        context_id: Optional[str] = None,
     ) -> CommitListResponse:
         """列出提交歷史
 
@@ -253,9 +273,9 @@ class GitService:
         Returns:
             提交列表回應
         """
-        return self._commit_ops.list_commits(workspace_id, page, page_size, branch, search)
+        return self._commit_ops.list_commits(workspace_id, page, page_size, branch, search, context_id)
 
-    def get_commit(self, workspace_id: str, commit_id: str) -> CommitDetailResponse:
+    def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitDetailResponse:
         """取得提交詳情
 
         Args:
@@ -265,9 +285,9 @@ class GitService:
         Returns:
             提交詳情回應
         """
-        return self._commit_ops.get_commit(workspace_id, commit_id)
+        return self._commit_ops.get_commit(workspace_id, commit_id, context_id)
 
-    def get_commit_files(self, workspace_id: str, commit_id: str) -> CommitFilesResponse:
+    def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitFilesResponse:
         """取得提交的檔案列表
 
         Args:
@@ -277,12 +297,12 @@ class GitService:
         Returns:
             提交檔案回應
         """
-        return self._commit_ops.get_commit_files(workspace_id, commit_id)
+        return self._commit_ops.get_commit_files(workspace_id, commit_id, context_id)
 
     # ------------------------------------------------------------------
     # 遠端操作
     # ------------------------------------------------------------------
-    def push(self, workspace_id: str, payload: PushRequest) -> PushResponse:
+    def push(self, workspace_id: str, payload: PushRequest, context_id: Optional[str] = None) -> PushResponse:
         """推送到遠端
 
         Args:
@@ -292,9 +312,9 @@ class GitService:
         Returns:
             推送回應
         """
-        return self._remote_ops.push(workspace_id, payload)
+        return self._remote_ops.push(workspace_id, payload, context_id)
 
-    def pull(self, workspace_id: str, payload: PullRequest) -> PullResponse:
+    def pull(self, workspace_id: str, payload: PullRequest, context_id: Optional[str] = None) -> PullResponse:
         """從遠端拉取
 
         Args:
@@ -304,9 +324,9 @@ class GitService:
         Returns:
             拉取回應
         """
-        return self._remote_ops.pull(workspace_id, payload)
+        return self._remote_ops.pull(workspace_id, payload, context_id)
 
-    def fetch(self, workspace_id: str, payload: FetchRequest) -> FetchResponse:
+    def fetch(self, workspace_id: str, payload: FetchRequest, context_id: Optional[str] = None) -> FetchResponse:
         """從遠端取得更新
 
         Args:
@@ -316,7 +336,7 @@ class GitService:
         Returns:
             Fetch 回應
         """
-        return self._remote_ops.fetch(workspace_id, payload)
+        return self._remote_ops.fetch(workspace_id, payload, context_id)
 
     # ------------------------------------------------------------------
     # Diff 與內容操作
@@ -329,6 +349,7 @@ class GitService:
         head: Optional[str] = None,
         context: int = 3,
         include_metadata: bool = False,
+        context_id: Optional[str] = None,
     ) -> DiffResponse:
         """獲取檔案的差異內容
 
@@ -343,9 +364,15 @@ class GitService:
         Returns:
             Diff 回應
         """
-        return self._diff_ops.diff(workspace_id, path, base, head, context, include_metadata)
+        return self._diff_ops.diff(workspace_id, path, base, head, context, include_metadata, context_id)
 
-    def blob(self, workspace_id: str, path: str, revision: Optional[str] = None) -> BlobResponse:
+    def blob(
+        self,
+        workspace_id: str,
+        path: str,
+        revision: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> BlobResponse:
         """獲取檔案內容
 
         Args:
@@ -356,7 +383,7 @@ class GitService:
         Returns:
             Blob 回應
         """
-        return self._diff_ops.blob(workspace_id, path, revision)
+        return self._diff_ops.blob(workspace_id, path, revision, context_id)
 
 
 __all__ = ["GitService", "VersionControlError"]
