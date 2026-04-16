@@ -89,7 +89,7 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- if not .Values.coturn.enabled -}}
 {{- "" -}}
 {{- else -}}
-{{- required "coturn.frontendHost is required when coturn.enabled=true" .Values.coturn.frontendHost -}}
+{{- default (include "aileron.coturnHost" .) .Values.coturn.frontendHost -}}
 {{- end -}}
 {{- end -}}
 
@@ -97,6 +97,6 @@ storageClassName: {{ .Values.global.storageClass | quote }}
 {{- if not .Values.coturn.enabled -}}
 {{- "" -}}
 {{- else -}}
-{{- required "coturn.externalIp is required when coturn.enabled=true" .Values.coturn.externalIp -}}
+{{- default (include "aileron.coturnHost" .) .Values.coturn.externalIp -}}
 {{- end -}}
 {{- end -}}

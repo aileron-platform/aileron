@@ -266,10 +266,10 @@ coturn:
   # because pods cannot reach localhost:nodePort (that's their own loopback).
   host: "192.168.65.3"
   # frontendHost: IP/hostname reachable from the user's browser (frontend side).
-  # 必須顯式設定；若 coturn.enabled=true 但未設定，Helm render 會直接失敗。
+  # 留空時會回退到 coturn.host。
   frontendHost: ""
   # externalIp: relay candidates announced by coturn / browser NAT1TO1.
-  # 必須顯式設定；若 coturn.enabled=true 但未設定，Helm render 會直接失敗。
+  # 留空時會回退到 coturn.host。
   externalIp: ""
   username: "aileron"
   credential: "aileron-turn-secret"
