@@ -41,7 +41,7 @@ def test_create_default_workspace_creates_record_in_docker_mode(
         assert workspace is not None
         assert workspace.provisioner == "docker"
         assert workspace.runtime_external_url == "http://localhost:3002"
-        assert workspace.runtime_internal_url == "http://workspace-runtime:3002"
+        assert workspace.runtime_internal_url == "http://workspace-runtime-default-workspace:3002"
         assert workspace.nextjs_container_id == "workspace-nextjs-default-workspace"
         assert workspace.nextjs_internal_url == "http://workspace-nextjs-default-workspace:3003"
         assert workspace.web_preview_internal_url == workspace.nextjs_internal_url

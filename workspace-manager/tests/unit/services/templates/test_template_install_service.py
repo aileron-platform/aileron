@@ -427,7 +427,7 @@ class TestRuntimeAPICall:
             mock_client.return_value = mock_client_instance
 
             # Act & Assert
-            with pytest.raises(Exception, match="Failed to install template"):
+            with pytest.raises(Exception, match="安裝模板失敗"):
                 await install_service._call_runtime_install_api(
                     runtime_url,
                     workspace_id,
@@ -452,7 +452,7 @@ class TestRuntimeAPICall:
             mock_client.return_value = mock_client_instance
 
             # Act & Assert
-            with pytest.raises(Exception, match="Failed to connect to runtime"):
+            with pytest.raises(Exception, match="無法連線到 Workspace Runtime"):
                 await install_service._call_runtime_install_api(
                     runtime_url,
                     workspace_id,
@@ -503,27 +503,19 @@ class TestWorkspaceRetrieval:
 class TestRuntimeURL:
     """Runtime URL 測試"""
 
-    def test_get_runtime_url_external_in_dev(self, install_service, mock_workspace):
-        """測試：開發模式使用外部 URL"""
-        # Arrange
-        with patch('os.path.exists', return_value=False):  # 不在容器中
+    def test_get_runtime_url_prefers_internal_url(self, install_service, mock_workspace):
+        """測試：有 internal URL 時優先使用 internal URL"""
+        result = install_service._get_runtime_url(mock_workspace)
 
-            # Act
-            result = install_service._get_runtime_url(mock_workspace)
+        assert result == "http://runtime-internal:8080"
 
-            # Assert
-            assert result == "http://localhost:8080"
+    def test_get_runtime_url_falls_back_to_external_url(self, install_service, mock_workspace):
+        """測試：沒有 internal URL 時回退到 external URL"""
+        mock_workspace.runtime_internal_url = None
 
-    def test_get_runtime_url_internal_in_container(self, install_service, mock_workspace):
-        """測試：容器模式使用內部 URL"""
-        # Arrange
-        with patch('os.path.exists', return_value=True):  # 在容器中
+        result = install_service._get_runtime_url(mock_workspace)
 
-            # Act
-            result = install_service._get_runtime_url(mock_workspace)
-
-            # Assert
-            assert result == "http://runtime-internal:8080"
+        assert result == "http://localhost:8080"
 
     def test_get_runtime_url_no_url(self, install_service, mock_workspace):
         """測試：無 Runtime URL 拋出異常"""
@@ -531,11 +523,9 @@ class TestRuntimeURL:
         mock_workspace.runtime_internal_url = None
         mock_workspace.runtime_external_url = None
 
-        with patch('os.path.exists', return_value=False):
-
-            # Act & Assert
-            with pytest.raises(ValueError, match="has no runtime URL"):
-                install_service._get_runtime_url(mock_workspace)
+        # Act & Assert
+        with pytest.raises(ValueError, match="沒有可用的 runtime URL"):
+            install_service._get_runtime_url(mock_workspace)
 
 
 # ============================================================================

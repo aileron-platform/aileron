@@ -60,7 +60,13 @@ class StubGitService:
     def is_repository(self) -> bool:
         return self.is_repo
 
-    def list_branches(self, workspace_id: str, include_remote: bool = True, search: Optional[str] = None) -> dict[str, Any]:
+    def list_branches(
+        self,
+        workspace_id: str,
+        include_remote: bool = True,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         branches = self.branches.copy()
         if search:
             branches = [b for b in branches if search.lower() in b["name"].lower()]
@@ -68,7 +74,7 @@ class StubGitService:
             branches = [b for b in branches if not b["isRemote"]]
         return {"branches": branches}
 
-    def get_status(self, workspace_id: str) -> dict[str, Any]:
+    def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         if not self.is_repo:
             raise VersionControlError("Workspace is not a git repository", status_code=400, error_code="VC_REPOSITORY_NOT_INITIALIZED")
 
@@ -84,7 +90,13 @@ class StubGitService:
             "lastFetchedAt": None,
         }
 
-    def checkout_branch(self, workspace_id: str, branch_name: str, payload) -> dict[str, Any]:
+    def checkout_branch(
+        self,
+        workspace_id: str,
+        branch_name: str,
+        payload,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         create = getattr(payload, 'create', False)
         if create and branch_name not in [b["name"] for b in self.branches]:
             self.branches.append({
@@ -102,7 +114,13 @@ class StubGitService:
             raise VersionControlError("BRANCH_NOT_FOUND")
         return {"branch": branch_name, "created": created, "stashedChanges": None}
 
-    def get_changes(self, workspace_id: str, page: int = 1, page_size: int = 100):
+    def get_changes(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 100,
+        context_id: Optional[str] = None,
+    ):
         # 使用 ChangesResult 類別來保持一致性
         return ChangesResult(
             staged=[
@@ -149,7 +167,7 @@ class StubGitService:
             untracked_has_more=False,
         )
 
-    def stage(self, workspace_id: str, payload) -> dict[str, Any]:
+    def stage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         paths = getattr(payload, 'paths', [])
         staged = []
         for path in paths:
@@ -163,7 +181,7 @@ class StubGitService:
                 staged.append(path)
         return {"staged": staged, "unstaged": []}
 
-    def unstage(self, workspace_id: str, payload) -> dict[str, Any]:
+    def unstage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         paths = getattr(payload, 'paths', [])
         unstaged = []
         for path in paths:
@@ -173,7 +191,7 @@ class StubGitService:
                 unstaged.append(path)
         return {"unstaged": unstaged, "remainingStaged": len(self.staged_files)}
 
-    def discard(self, workspace_id: str, payload) -> dict[str, Any]:
+    def discard(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         paths = getattr(payload, 'paths', [])
         reset_mode = getattr(payload, 'resetMode', "mixed")
         discarded = []
@@ -183,7 +201,7 @@ class StubGitService:
                 discarded.append(path)
         return {"discarded": discarded, "warnings": []}
 
-    def commit(self, workspace_id: str, payload) -> dict[str, Any]:
+    def commit(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         message = getattr(payload, 'message', "")
         author_name = getattr(payload, 'authorName', "Test User")
         author_email = getattr(payload, 'authorEmail', "test@example.com")
@@ -213,7 +231,15 @@ class StubGitService:
 
         return {"commitId": commit_id, "commit": commit}
 
-    def list_commits(self, workspace_id: str, page: int = 1, page_size: int = 20, branch: Optional[str] = None, search: Optional[str] = None) -> dict[str, Any]:
+    def list_commits(
+        self,
+        workspace_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        branch: Optional[str] = None,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         start = (page - 1) * page_size
         end = start + page_size
         commits = self.commits[start:end][::-1]  # 最新的在前
@@ -240,7 +266,7 @@ class StubGitService:
             "items": formatted_commits,
         }
 
-    def get_commit(self, workspace_id: str, commit_id: str) -> dict[str, Any]:
+    def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         for commit in self.commits:
             if commit["id"] == commit_id:
                 # get_commit 需要不同的格式：author 是物件，timestamp 是字串
@@ -274,7 +300,7 @@ class StubGitService:
                 return result
         raise VersionControlError("COMMIT_NOT_FOUND", status_code=404)
 
-    def get_commit_files(self, workspace_id: str, commit_id: str) -> dict[str, Any]:
+    def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         # 找到原始 commit 資料來獲取檔案列表
         original_commit = None
         for commit in self.commits:
@@ -309,23 +335,32 @@ class StubGitService:
             "renamed": [],
         }
 
-    def push(self, workspace_id: str, payload) -> dict[str, Any]:
+    def push(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         remote = getattr(payload, 'remote', "origin")
         branch = getattr(payload, 'branch', self.current_branch)
         if self.current_branch != branch:
             raise VersionControlError("BRANCH_MISMATCH")
         return {"status": "success", "remote": remote, "branch": branch, "updates": [{"ref": branch, "status": "ok"}]}
 
-    def pull(self, workspace_id: str, payload) -> dict[str, Any]:
+    def pull(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         remote = getattr(payload, 'remote', "origin")
         branch = getattr(payload, 'branch', "main")
         return {"updated": True, "remote": remote, "branch": branch, "fastForward": True, "commits": []}
 
-    def fetch(self, workspace_id: str, payload) -> dict[str, Any]:
+    def fetch(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
         remote = getattr(payload, 'remote', "origin")
         return {"refsUpdated": True, "remote": remote, "fetchedRefs": []}
 
-    def diff(self, workspace_id: str, path: str, base: Optional[str] = None, head: Optional[str] = None, context: int = 3, include_metadata: bool = False) -> dict[str, Any]:
+    def diff(
+        self,
+        workspace_id: str,
+        path: str,
+        base: Optional[str] = None,
+        head: Optional[str] = None,
+        context: int = 3,
+        include_metadata: bool = False,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         # 生成差異內容
         patch_content = f"""--- {path}
 +++ {path}
@@ -342,7 +377,13 @@ class StubGitService:
             "metadata": {"file": path} if include_metadata else None,
         }
 
-    def blob(self, workspace_id: str, path: str, revision: Optional[str] = None) -> dict[str, Any]:
+    def blob(
+        self,
+        workspace_id: str,
+        path: str,
+        revision: Optional[str] = None,
+        context_id: Optional[str] = None,
+    ) -> dict[str, Any]:
         import base64
         content = "file content"
         return {
@@ -366,7 +407,7 @@ def test_vc_001_uninitialized_repository(client):
         def is_repository(self) -> bool:
             return False
 
-        def get_status(self, workspace_id: str) -> dict[str, Any]:
+        def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
             raise VersionControlError("Workspace is not a git repository", status_code=400, error_code="VC_REPOSITORY_NOT_INITIALIZED")
 
     service = NonRepoGitService(Path("/tmp/workspace"))
@@ -822,7 +863,7 @@ def test_vc_020_push_auth_failure(client):
     """VC-020 推送認證失敗"""
 
     class FailPushGitService(StubGitService):
-        def push(self, workspace_id: str, payload) -> dict[str, Any]:
+        def push(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
             raise VersionControlError("AUTHENTICATION_FAILED")
 
     service = FailPushGitService(Path("/tmp/workspace"))
@@ -859,7 +900,7 @@ def test_vc_022_pull_conflict(client):
     """VC-022 衝突情境"""
 
     class ConflictGitService(StubGitService):
-        def pull(self, workspace_id: str, payload) -> dict[str, Any]:
+        def pull(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
             raise VersionControlError("MERGE_CONFLICT")
 
     service = ConflictGitService(Path("/tmp/workspace"))
@@ -894,7 +935,7 @@ def test_vc_024_fetch_remote_unreachable(client):
     """VC-024 遠端不可達"""
 
     class TimeoutGitService(StubGitService):
-        def fetch(self, workspace_id: str, payload) -> dict[str, Any]:
+        def fetch(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
             raise TimeoutError("Connection timeout")
 
     service = TimeoutGitService(Path("/tmp/workspace"))
@@ -950,7 +991,13 @@ def test_vc_027_file_not_found(client):
     """VC-027 檔案不存在"""
 
     class NotFoundGitService(StubGitService):
-        def blob(self, workspace_id: str, path: str, revision: Optional[str] = None) -> dict[str, Any]:
+        def blob(
+            self,
+            workspace_id: str,
+            path: str,
+            revision: Optional[str] = None,
+            context_id: Optional[str] = None,
+        ) -> dict[str, Any]:
             raise VersionControlError("FILE_NOT_FOUND")
 
     service = NotFoundGitService(Path("/tmp/workspace"))

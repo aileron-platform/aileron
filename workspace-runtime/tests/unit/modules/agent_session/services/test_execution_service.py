@@ -13,6 +13,7 @@ from app.modules.agent_session.services.execution_service import (
     ExecutionServiceError,
     WebSocketStreamingCallbacks,
 )
+from app.modules.agent_session.services.task_service import TaskService
 from app.modules.agent_session.websocket.events import EventType
 
 
@@ -346,6 +347,7 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
     service = object.__new__(ExecutionService)
     service.emitter = AsyncMock()
     service._active_executions = {"task-1": Mock()}
+    service._publish_automation_completed = AsyncMock()
     cleanup_tool = AsyncMock()
     cleanup_tool.prompt_service = AsyncMock()
     cleanup_tool.prompt_service.cleanup_client = AsyncMock()
@@ -361,8 +363,25 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
     async def fake_scope():
         yield AsyncMock(commit=AsyncMock())
 
+    class FakeTaskService:
+        def __init__(self, db) -> None:
+            self._db = db
+
+        async def complete_task(self, *args, **kwargs):
+            return await task_service.complete_task(*args, **kwargs)
+
+        async def stop_task(self, *args, **kwargs):
+            return await task_service.stop_task(*args, **kwargs)
+
+        async def fail_task(self, *args, **kwargs):
+            return await task_service.fail_task(*args, **kwargs)
+
+        @staticmethod
+        def extract_token_usage(raw_sdk_response):
+            return TaskService.extract_token_usage(raw_sdk_response)
+
     monkeypatch.setattr("app.modules.agent_session.services.execution_service.async_session_scope", fake_scope)
-    monkeypatch.setattr("app.modules.agent_session.services.execution_service.TaskService", lambda db: task_service)
+    monkeypatch.setattr("app.modules.agent_session.services.execution_service.TaskService", FakeTaskService)
     monkeypatch.setattr("app.modules.agent_session.services.execution_service.AgentSessionService", lambda db: session_service)
     monkeypatch.setattr("app.modules.agent_session.services.execution_service.MessageService", lambda db: message_service)
     monkeypatch.setattr("app.modules.agent_session.services.execution_service.MessageRepository", lambda db: message_repo)

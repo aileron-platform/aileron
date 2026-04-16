@@ -21,6 +21,8 @@ def mock_db_session():
     session = MagicMock()
     session.query.return_value.filter.return_value.first.return_value = None
     session.query.return_value.all.return_value = []
+    session.query.return_value.order_by.return_value = session.query.return_value
+    session.query.return_value.limit.return_value = session.query.return_value
     session.add = MagicMock()
     session.commit = MagicMock()
     session.delete = MagicMock()
@@ -54,7 +56,7 @@ class TestUserList:
         """測試：成功列出所有用戶"""
         # Arrange
         users = [user_factory(username=f"user{i}") for i in range(3)]
-        mock_db_session.query.return_value.all.return_value = users
+        mock_db_session.query.return_value.order_by.return_value.all.return_value = users
 
         # Act
         result = user_service.list()
@@ -68,7 +70,7 @@ class TestUserList:
     ):
         """測試：空用戶列表"""
         # Arrange
-        mock_db_session.query.return_value.all.return_value = []
+        mock_db_session.query.return_value.order_by.return_value.all.return_value = []
 
         # Act
         result = user_service.list()
@@ -404,5 +406,4 @@ class TestUserProfile:
         # Assert
         assert result is not None
         assert sample_db_user.avatar_url == "https://example.com/new.jpg"
-
 
