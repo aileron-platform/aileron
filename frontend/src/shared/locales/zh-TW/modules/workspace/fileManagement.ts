@@ -47,6 +47,12 @@ const fileManagement = {
         tooltip: '重新整理檔案樹',
         loading: '載入中...',
       },
+      hidden: {
+        showLabel: '顯示隱藏檔',
+        hideLabel: '隱藏隱藏檔',
+        showTooltip: '顯示隱藏檔案與資料夾',
+        hideTooltip: '隱藏隱藏檔案與資料夾',
+      },
       selection: {
         selectAll: '全選',
         unselectAll: '取消全選',

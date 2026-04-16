@@ -113,6 +113,7 @@ export function useWorkspaceFileTreeAdapter(
   const { t } = useI18n();
   const { workspaceId, runtimeBaseUrl, contextId } = options;
   const queryClient = useQueryClient();
+  const [showHiddenEntries, setShowHiddenEntriesState] = useState(false);
 
   const apiConfig: FileTreeApiConfig = useMemo(
     () => ({
@@ -120,8 +121,9 @@ export function useWorkspaceFileTreeAdapter(
       workspaceId: workspaceId ?? 'pending-workspace',
       contextId,
       baseUrl: runtimeBaseUrl ?? undefined,
+      includeHidden: showHiddenEntries,
     }),
-    [contextId, workspaceId, runtimeBaseUrl]
+    [contextId, runtimeBaseUrl, showHiddenEntries, workspaceId]
   );
 
   const manager = useFileTreeManager({
@@ -134,10 +136,14 @@ export function useWorkspaceFileTreeAdapter(
   const [draggedNode, setDraggedNode] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const workspaceIdentity = useMemo(
-    () => `${workspaceId ?? 'pending-workspace'}::${runtimeBaseUrl ?? ''}::${contextId ?? 'primary'}`,
-    [contextId, runtimeBaseUrl, workspaceId]
+    () =>
+      `${workspaceId ?? 'pending-workspace'}::${runtimeBaseUrl ?? ''}::${contextId ?? 'primary'}::${
+        showHiddenEntries ? 'show-hidden' : 'hide-hidden'
+      }`,
+    [contextId, runtimeBaseUrl, showHiddenEntries, workspaceId]
   );
   const previousWorkspaceIdentityRef = useRef<string | null>(null);
+  const previousHiddenVisibilityRef = useRef(showHiddenEntries);
 
   const runtimeReady = Boolean(runtimeBaseUrl && runtimeBaseUrl.length > 0);
 
@@ -160,6 +166,14 @@ export function useWorkspaceFileTreeAdapter(
   const refreshFileTree = useCallback(async () => {
     await loadFileTree();
   }, [loadFileTree]);
+
+  const setShowHiddenEntries = useCallback(async (nextShowHiddenEntries: boolean) => {
+    setShowHiddenEntriesState(nextShowHiddenEntries);
+  }, []);
+
+  const toggleShowHiddenEntries = useCallback(async () => {
+    setShowHiddenEntriesState(current => !current);
+  }, []);
 
   const refreshVersionControl = useCallback(async (options?: { includeBranches?: boolean; includeCommits?: boolean }) => {
     if (!workspaceId) {
@@ -186,6 +200,20 @@ export function useWorkspaceFileTreeAdapter(
 
     resetWorkspaceTreeState();
   }, [resetWorkspaceTreeState, workspaceIdentity]);
+
+  useEffect(() => {
+    if (previousHiddenVisibilityRef.current === showHiddenEntries) {
+      return;
+    }
+
+    previousHiddenVisibilityRef.current = showHiddenEntries;
+
+    if (!runtimeReady) {
+      return;
+    }
+
+    void manager.loadTree();
+  }, [manager, runtimeReady, showHiddenEntries]);
 
   const selectFile = useCallback((filePath: string) => {
     manager.state.selectNode(ensureLeadingSlash(filePath));
@@ -536,12 +564,15 @@ export function useWorkspaceFileTreeAdapter(
       pendingAction,
       draggedNode,
       dropTarget,
+      showHiddenEntries,
     };
-  }, [draggedNode, dropTarget, manager.state.error, manager.state.expandedIds, manager.state.isLoading, manager.state.lastSelectedId, manager.state.nodes, manager.state.selectedId, manager.state.selectedIds, pendingAction]);
+  }, [draggedNode, dropTarget, manager.state.error, manager.state.expandedIds, manager.state.isLoading, manager.state.lastSelectedId, manager.state.nodes, manager.state.selectedId, manager.state.selectedIds, pendingAction, showHiddenEntries]);
 
   const actions = useMemo<FileTreeActions>(() => ({
     loadFileTree,
     refreshFileTree,
+    setShowHiddenEntries,
+    toggleShowHiddenEntries,
     selectFile,
     selectFileWithModifier,
     selectRange,
@@ -567,6 +598,8 @@ export function useWorkspaceFileTreeAdapter(
   }), [
     loadFileTree,
     refreshFileTree,
+    setShowHiddenEntries,
+    toggleShowHiddenEntries,
     selectFile,
     selectFileWithModifier,
     selectRange,

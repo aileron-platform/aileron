@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('FileManagementView');
-import { Folder, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Folder, Loader2, RefreshCw, FilePlus, FolderPlus, Upload } from 'lucide-react';
 import {
   FileTreePanel,
   StandardFileTreeLayout,
@@ -33,6 +33,7 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
+import { Button } from '@/shared/components/ui/button';
 import { isImageFile } from '../utils/fileTypeUtils';
 import {
   duplicateFile,
@@ -93,6 +94,7 @@ export const FileManagementView: React.FC = () => {
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/');
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [showHiddenEntries, setShowHiddenEntries] = useState(false);
   const [extractProgress, setExtractProgress] = useState<ExtractProgressState | null>(null);
   const selectedGitContextId = workspaceState.versionControl.selectedGitContextId ?? 'primary';
 
@@ -103,8 +105,9 @@ export const FileManagementView: React.FC = () => {
       workspaceId: workspaceRuntime.workspaceId ?? 'pending-workspace',
       contextId: selectedGitContextId,
       baseUrl: workspaceRuntime.runtimeBaseUrl || undefined,
+      includeHidden: showHiddenEntries,
     }),
-    [selectedGitContextId, workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl]
+    [selectedGitContextId, showHiddenEntries, workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl]
   );
 
   const manager = useFileTreeManager({
@@ -160,7 +163,7 @@ export const FileManagementView: React.FC = () => {
       void loadTree();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGitContextId, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+  }, [selectedGitContextId, showHiddenEntries, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   const closeTabsForPaths = useCallback(
     (paths: string[]) => {
@@ -617,6 +620,10 @@ export const FileManagementView: React.FC = () => {
     [ensureRuntimeReady, operations, refreshVersionControl, resolveUploadOptions, uploadTargetPath, t, toast]
   );
 
+  const handleToggleHiddenEntries = useCallback(() => {
+    setShowHiddenEntries(current => !current);
+  }, []);
+
   const handlePasteFiles = useCallback(
     async (files: File[]) => {
       if (!files.length) {
@@ -942,6 +949,66 @@ export const FileManagementView: React.FC = () => {
               enableMultiSelectBar={true}
               enableBottomStatusBar={true}
               enableDragDrop={true}
+              renderToolbar={() => (
+                <div className="flex w-full items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={handleToolbarCreateFile}
+                      disabled={managerState.isLoading}
+                      title={t('workspace.fileManagement.tree.actions.create.file')}
+                    >
+                      <FilePlus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={handleToolbarCreateFolder}
+                      disabled={managerState.isLoading}
+                      title={t('workspace.fileManagement.tree.actions.create.folder')}
+                    >
+                      <FolderPlus className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={() => handleUpload()}
+                      disabled={managerState.isLoading}
+                      title={t('workspace.fileManagement.tree.actions.create.upload')}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={handleToggleHiddenEntries}
+                      disabled={managerState.isLoading}
+                      title={t(
+                        showHiddenEntries
+                          ? 'workspace.fileManagement.tree.actions.hidden.hideTooltip'
+                          : 'workspace.fileManagement.tree.actions.hidden.showTooltip'
+                      )}
+                    >
+                      {showHiddenEntries ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={handleRefresh}
+                    disabled={managerState.isLoading}
+                    title={t('workspace.fileManagement.tree.actions.refresh.tooltip')}
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${managerState.isLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+              )}
               bottomStatusText={currentPath}
               bottomStatusClearText={t('workspace.fileManagement.tree.status.clearSelection')}
             />

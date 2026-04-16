@@ -56,6 +56,8 @@ export interface FileTreeApiConfig {
   collection?: 'skills' | 'scripts';
   /** 自定義 API 基礎 URL（可選，用於 workspace runtime 等） */
   baseUrl?: string;
+  /** 是否包含隱藏檔與隱藏資料夾 */
+  includeHidden?: boolean;
 }
 
 /**

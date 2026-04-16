@@ -27,6 +27,7 @@ const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
     scope: apiConfig.scope ?? null,
     collection: apiConfig.collection ?? null,
     baseUrl: apiConfig.baseUrl ?? null,
+    includeHidden: apiConfig.includeHidden ?? null,
   });
 
 export interface UseFileTreeManagerOptions {

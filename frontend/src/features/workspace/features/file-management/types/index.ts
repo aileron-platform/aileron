@@ -53,6 +53,7 @@ export interface FileTreeState {
   pendingAction: PendingFileAction | null;
   draggedNode: string | null; // 正在拖曳的節點路徑
   dropTarget: string | null; // 拖曳目標節點路徑
+  showHiddenEntries: boolean;
 }
 
 export interface FileOperationResult {
@@ -101,6 +102,8 @@ export interface FileContent {
 export interface FileTreeActions {
   loadFileTree: () => Promise<void>;
   refreshFileTree: () => Promise<void>;
+  setShowHiddenEntries: (showHiddenEntries: boolean) => Promise<void>;
+  toggleShowHiddenEntries: () => Promise<void>;
   selectFile: (filePath: string) => void;
   selectFileWithModifier: (filePath: string, modifier: SelectionModifier) => void;
   selectRange: (fromPath: string, toPath: string) => void;
@@ -186,14 +189,3 @@ export const FILE_ICONS = {
 } as const;
 
 export type FileIconType = typeof FILE_ICONS[keyof typeof FILE_ICONS];
-
-export interface FileTreeProps {
-  className?: string;
-  showHeader?: boolean;
-  showActions?: boolean;
-  onFileSelect?: (filePath: string) => void;
-  onFileDoubleClick?: (filePath: string) => void;
-  onContextMenu?: (filePath: string, event: React.MouseEvent) => void;
-  searchTerm?: string;
-  onCreateAction?: (action: FileCreationAction) => void;
-}

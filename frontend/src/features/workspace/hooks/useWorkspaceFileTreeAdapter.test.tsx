@@ -10,11 +10,13 @@ const {
   managerLoadTreeMock,
   managerStateMock,
   managerResetStateMock,
+  managerApiConfigSnapshots,
 } = vi.hoisted(() => ({
   saveFileContentMock: vi.fn().mockResolvedValue({ path: '/docs/guide.md' }),
   refreshVersionControlQueriesMock: vi.fn().mockResolvedValue(undefined),
   managerLoadTreeMock: vi.fn().mockResolvedValue(undefined),
   managerResetStateMock: vi.fn(),
+  managerApiConfigSnapshots: [] as Array<Record<string, unknown>>,
   managerStateMock: {
     nodes: [],
     expandedIds: new Set<string>(),
@@ -40,10 +42,13 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-tree-manager/hooks/useFileTreeManager', () => ({
-  useFileTreeManager: () => ({
+  useFileTreeManager: ({ apiConfig }: { apiConfig: Record<string, unknown> }) => {
+    managerApiConfigSnapshots.push(apiConfig);
+    return {
     state: managerStateMock,
     loadTree: managerLoadTreeMock,
-  }),
+    };
+  },
 }));
 
 vi.mock('../services/workspaceRuntimeApi', () => ({
@@ -80,6 +85,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     managerStateMock.setError.mockClear();
     managerResetStateMock.mockClear();
     managerStateMock.resetState = managerResetStateMock;
+    managerApiConfigSnapshots.length = 0;
   });
 
   it('refreshes version-control queries after saving a file successfully', async () => {
@@ -158,5 +164,44 @@ describe('useWorkspaceFileTreeAdapter', () => {
     });
 
     expect(managerResetStateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults workspace tree loads to hiding hidden entries', () => {
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a' }),
+      { wrapper }
+    );
+
+    expect(result.current.state.showHiddenEntries).toBe(false);
+    expect(managerApiConfigSnapshots.at(-1)?.includeHidden).toBe(false);
+  });
+
+  it('toggles hidden entry visibility and reloads the tree with includeHidden enabled', async () => {
+    const queryClient = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a' }),
+      { wrapper }
+    );
+
+    managerLoadTreeMock.mockClear();
+    managerResetStateMock.mockClear();
+
+    await act(async () => {
+      await result.current.actions.toggleShowHiddenEntries();
+    });
+
+    expect(result.current.state.showHiddenEntries).toBe(true);
+    expect(managerApiConfigSnapshots.at(-1)?.includeHidden).toBe(true);
+    expect(managerResetStateMock).toHaveBeenCalledTimes(1);
+    expect(managerLoadTreeMock).toHaveBeenCalledTimes(1);
   });
 });

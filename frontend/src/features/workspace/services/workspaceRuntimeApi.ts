@@ -237,7 +237,7 @@ export const fetchFileTree = async (
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
   params.set('path', path);
-  params.set('includeHidden', String(options?.includeHidden ?? true));
+  params.set('includeHidden', String(options?.includeHidden ?? false));
   appendContextId(params, options?.contextId);
 
   const data: RuntimeFileTreeResponse = await client.get(`/api/v1/files/tree?${params.toString()}`);
@@ -257,7 +257,7 @@ export const fetchNodeChildren = async (
   const client = createRuntimeClient(runtimeBaseUrl);
   const params = new URLSearchParams();
   params.set('path', nodePath);
-  params.set('includeHidden', String(options?.includeHidden ?? true));
+  params.set('includeHidden', String(options?.includeHidden ?? false));
   appendContextId(params, options?.contextId);
 
   const data: RuntimeFileTreeResponse = await client.get(`/api/v1/files/tree/children?${params.toString()}`);

@@ -47,6 +47,12 @@ const fileManagement = {
         tooltip: 'Refresh file tree',
         loading: 'Loading...',
       },
+      hidden: {
+        showLabel: 'Show hidden',
+        hideLabel: 'Hide hidden',
+        showTooltip: 'Show hidden files and folders',
+        hideTooltip: 'Hide hidden files and folders',
+      },
       selection: {
         selectAll: 'Select all',
         unselectAll: 'Deselect all',

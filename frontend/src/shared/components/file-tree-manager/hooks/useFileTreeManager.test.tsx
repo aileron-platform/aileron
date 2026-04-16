@@ -125,4 +125,68 @@ describe('useFileTreeManager', () => {
       expect(result.current.state.nodes.map((node) => node.path)).toEqual(['/b']);
     });
   });
+
+  it('treats includeHidden as part of the active workspace tree identity', async () => {
+    const deferredByVisibility = new Map<string, Deferred<FileTreeNode[]>>();
+
+    getTreeMock.mockImplementation(({ includeHidden }: { includeHidden?: boolean }) => {
+      const key = includeHidden ? 'show-hidden' : 'hide-hidden';
+      let deferred = deferredByVisibility.get(key);
+      if (!deferred) {
+        deferred = createDeferred<FileTreeNode[]>();
+        deferredByVisibility.set(key, deferred);
+      }
+      return deferred.promise;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ includeHidden }: { includeHidden: boolean }) =>
+        useFileTreeManager({
+          apiConfig: {
+            type: 'workspace',
+            workspaceId: 'ws-a',
+            baseUrl: 'http://runtime',
+            includeHidden,
+          },
+          autoLoad: false,
+        }),
+      {
+        initialProps: { includeHidden: false },
+      }
+    );
+
+    let loadHiddenOff!: Promise<void>;
+    await act(async () => {
+      loadHiddenOff = result.current.loadTree();
+    });
+
+    rerender({ includeHidden: true });
+
+    let loadHiddenOn!: Promise<void>;
+    await act(async () => {
+      loadHiddenOn = result.current.loadTree();
+    });
+
+    await act(async () => {
+      deferredByVisibility.get('show-hidden')?.resolve([
+        { id: 'hidden', name: '.env', path: '/.env', type: 'file' },
+      ]);
+      await loadHiddenOn;
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.nodes.map((node) => node.path)).toEqual(['/.env']);
+    });
+
+    await act(async () => {
+      deferredByVisibility.get('hide-hidden')?.resolve([
+        { id: 'visible', name: 'README.md', path: '/README.md', type: 'file' },
+      ]);
+      await loadHiddenOff;
+    });
+
+    await waitFor(() => {
+      expect(result.current.state.nodes.map((node) => node.path)).toEqual(['/.env']);
+    });
+  });
 });

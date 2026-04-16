@@ -25,6 +25,7 @@ vi.mock('@/shared/api/apiClient', () => ({
 import {
   fetchFileContent,
   fetchFileTree,
+  fetchNodeChildren,
   fetchExtractArchiveStatus,
   resolveRuntimeBaseUrl,
   startExtractArchive,
@@ -107,7 +108,7 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     expect(formData.get('conflictStrategy')).toBe('rename');
   });
 
-  it('會把 contextId 帶到檔案樹與內容請求', async () => {
+  it('會把 contextId 帶到檔案樹與內容請求，且預設隱藏 hidden entries', async () => {
     clientGetMock
       .mockResolvedValueOnce({ nodes: [] })
       .mockResolvedValueOnce({ content: 'hello' });
@@ -117,11 +118,24 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
 
     expect(clientGetMock).toHaveBeenNthCalledWith(
       1,
-      '/api/v1/files/tree?path=%2F&includeHidden=true&contextId=worktree%3Afeature-auth',
+      '/api/v1/files/tree?path=%2F&includeHidden=false&contextId=worktree%3Afeature-auth',
     );
     expect(clientGetMock).toHaveBeenNthCalledWith(
       2,
       '/api/v1/files/content?path=%2FREADME.md&contextId=worktree%3Afeature-auth',
+    );
+  });
+
+  it('會在子節點請求沿用 active hidden visibility setting', async () => {
+    clientGetMock.mockResolvedValue({ nodes: [] });
+
+    await fetchNodeChildren('http://runtime.local', '/project', 1, {
+      includeHidden: true,
+      contextId: 'worktree:feature-auth',
+    });
+
+    expect(clientGetMock).toHaveBeenCalledWith(
+      '/api/v1/files/tree/children?path=%2Fproject&includeHidden=true&contextId=worktree%3Afeature-auth',
     );
   });
 

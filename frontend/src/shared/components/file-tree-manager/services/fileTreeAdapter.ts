@@ -255,15 +255,16 @@ export class FileTreeApiAdapter {
 
   private async getWorkspaceTree(): Promise<FileTreeNode[]> {
     logger.debug('getWorkspaceTree: 開始獲取檔案樹');
-    const { baseUrl } = this.config;
+    const { baseUrl, includeHidden } = this.config;
     if (!baseUrl) {
       logger.error('getWorkspaceTree: baseUrl 未設置');
       throw new Error('Workspace runtime baseUrl is required');
     }
 
     // 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
-    // 預設顯示隱藏檔案
-    const url = this.appendWorkspaceContext('/files/tree?path=/&includeHidden=true');
+    const url = this.appendWorkspaceContext(
+      `/files/tree?path=/&includeHidden=${String(includeHidden ?? false)}`
+    );
     logger.debug('getWorkspaceTree: 請求 URL', { url });
 
     const data = await this.client.get(url);
