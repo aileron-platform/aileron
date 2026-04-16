@@ -23,6 +23,7 @@ from app.models import (
     WorkspaceListResponse,
     WorkspaceOwner,
     WorkspacePortMapping,
+    WorkspaceSystemPortMapping,
     WorkspaceResourceRequirements,
     WorkspaceRuntimeJobSummary,
     WorkspaceSummary,
@@ -92,6 +93,10 @@ class WorkspaceService:
             raise ValueError("Owner not found")
 
         provisioner = self._resolve_workspace_provisioner()
+        self._ensure_port_mappings_supported(
+            provisioner=provisioner,
+            port_mappings=payload.port_mappings,
+        )
         if payload.firewall is not None:
             self._ensure_firewall_available(provisioner=provisioner)
         target_namespace = self._resolve_target_namespace(
@@ -197,9 +202,18 @@ class WorkspaceService:
                 ),
             )
         if "portMappings" in data:
-            workspace.port_mappings = [
-                WorkspacePortMapping(**item).model_dump() for item in data.pop("portMappings", [])
+            next_provisioner = data.get("provisioner", workspace.provisioner)
+            incoming_port_mappings = [
+                WorkspacePortMapping(**item) for item in data["portMappings"] or []
             ]
+            self._ensure_port_mappings_supported(
+                provisioner=next_provisioner,
+                port_mappings=incoming_port_mappings,
+            )
+            workspace.port_mappings = [
+                mapping.model_dump() for mapping in incoming_port_mappings
+            ]
+            data.pop("portMappings", None)
         if "runtimeStatus" in data:
             status = RuntimeStatus(**data.pop("runtimeStatus"))
             workspace.runtime_status = status.status
@@ -355,6 +369,7 @@ class WorkspaceService:
         )
 
         env_vars = [WorkspaceEnvVar(**item) for item in workspace.env_vars or []]
+        system_port_mappings = self._build_system_port_mappings(workspace)
         port_mappings = [WorkspacePortMapping(**item) for item in workspace.port_mappings or []]
         components = self._to_components(workspace)
 
@@ -378,6 +393,7 @@ class WorkspaceService:
             setup_script=workspace.setup_script,
             env_vars=env_vars,
             runtime_resources=self._effective_runtime_resources(workspace),
+            system_port_mappings=system_port_mappings,
             port_mappings=port_mappings,
             runtime_status=runtime_status,
             components=components,
@@ -432,6 +448,80 @@ class WorkspaceService:
         if provisioner != "kubernetes":
             raise ValueError("runtimeResources is only supported for Kubernetes workspaces")
         return runtime_resources.model_dump(by_alias=True)
+
+    def _ensure_port_mappings_supported(
+        self,
+        *,
+        provisioner: str,
+        port_mappings: list[WorkspacePortMapping],
+    ) -> None:
+        if provisioner == "kubernetes" and port_mappings:
+            raise ValueError("portMappings is only supported for Docker workspaces")
+
+    def _build_system_port_mappings(
+        self,
+        workspace: db_models.Workspace,
+    ) -> list[WorkspaceSystemPortMapping]:
+        if workspace.provisioner != "docker":
+            return []
+
+        rows = [
+            (
+                "runtime",
+                workspace.runtime_internal_port,
+                workspace.runtime_external_port,
+                "tcp",
+                "Workspace runtime API",
+            ),
+            (
+                "terminal",
+                3004,
+                workspace.terminal_external_port,
+                "tcp",
+                "Workspace terminal websocket",
+            ),
+            (
+                "browser-webrtc",
+                workspace.browser_webrtc_internal_port,
+                workspace.browser_webrtc_external_port,
+                "tcp",
+                "Browser WebRTC signaling",
+            ),
+            (
+                "browser-cdp",
+                workspace.browser_cdp_internal_port,
+                workspace.browser_cdp_external_port,
+                "tcp",
+                "Browser CDP proxy",
+            ),
+            (
+                "nextjs",
+                workspace.nextjs_internal_port,
+                workspace.nextjs_external_port,
+                "tcp",
+                "Next.js preview",
+            ),
+            (
+                "nextjs-api",
+                workspace.nextjs_api_internal_port,
+                workspace.nextjs_api_external_port,
+                "tcp",
+                "Next.js management API",
+            ),
+        ]
+
+        return [
+            WorkspaceSystemPortMapping(
+                name=name,
+                container_port=container_port,
+                host_port=host_port,
+                protocol=protocol,
+                description=description,
+                editable=False,
+            )
+            for name, container_port, host_port, protocol, description in rows
+            if container_port
+        ]
 
     def _effective_runtime_resources(
         self,

@@ -220,6 +220,15 @@ class TestWorkspaceGet:
         assert result.components.browser.phase == "running"
         assert result.components.nextjs.phase == "stopped"
         assert result.runtime_resources is None
+        assert [item.name for item in result.system_port_mappings] == [
+            "runtime",
+            "terminal",
+            "browser-webrtc",
+            "browser-cdp",
+            "nextjs",
+            "nextjs-api",
+        ]
+        assert all(item.editable is False for item in result.system_port_mappings)
         assert result.firewall_available is True
         assert result.firewall.workspace.effective_allowed_domains == [
             "github.com",
@@ -534,6 +543,31 @@ class TestWorkspaceCreate:
         ):
             workspace_service.create(create_request)
 
+    def test_create_kubernetes_workspace_rejects_port_mappings(
+        self, workspace_service, mock_db_session, user_factory
+    ):
+        owner = user_factory()
+        mock_db_session.get.return_value = owner
+        workspace_service.settings.RUNTIME_PROVISIONER = "kubernetes"
+        workspace_service.settings.RUNTIME_K8S_NAMESPACE = "workspace-system"
+        workspace_service.settings.RUNTIME_K8S_ALLOWED_NAMESPACES = ["workspace-system"]
+
+        create_request = WorkspaceCreateRequest(
+            owner_id=owner.id,
+            name="K8s Workspace",
+            runtime="universal",
+            env_vars=[],
+            port_mappings=[
+                WorkspacePortMapping(container_port=3000, host_port=3100, protocol="tcp")
+            ],
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="portMappings is only supported for Docker workspaces",
+        ):
+            workspace_service.create(create_request)
+
     def test_create_kubernetes_workspace_persists_runtime_resources_override(
         self, workspace_service, mock_db_session, user_factory
     ):
@@ -724,6 +758,25 @@ class TestWorkspaceUpdate:
         with pytest.raises(
             ValueError,
             match="runtimeResources is only supported for Kubernetes workspaces",
+        ):
+            workspace_service.update("workspace-123", update_request)
+
+    def test_update_kubernetes_workspace_rejects_port_mappings(
+        self, workspace_service, mock_db_session, sample_workspace_db
+    ):
+        mock_db_session.get.return_value = sample_workspace_db
+        sample_workspace_db.provisioner = "kubernetes"
+        sample_workspace_db.target_namespace = "workspace-system"
+
+        update_request = WorkspaceUpdateRequest(
+            port_mappings=[
+                WorkspacePortMapping(container_port=3000, host_port=3100, protocol="tcp")
+            ]
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="portMappings is only supported for Docker workspaces",
         ):
             workspace_service.update("workspace-123", update_request)
 

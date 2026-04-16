@@ -191,13 +191,16 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
         envVars: state.runtimeConfig.envVars
           .filter((item) => item.key.trim())
           .map((item) => ({ key: item.key.trim(), value: item.value })),
-        portMappings: state.runtimeConfig.portMappings
-          .filter((item) => item.containerPort && item.hostPort)
-          .map((item) => ({
-            containerPort: Number(item.containerPort),
-            hostPort: Number(item.hostPort),
-            protocol: item.protocol,
-          })),
+        portMappings:
+          state.runtimeConfig.provisioner === 'docker'
+            ? state.runtimeConfig.portMappings
+                .filter((item) => item.containerPort && item.hostPort)
+                .map((item) => ({
+                  containerPort: Number(item.containerPort),
+                  hostPort: Number(item.hostPort),
+                  protocol: item.protocol,
+                }))
+            : [],
         cliType: state.basicInfo.cliType,
       };
 

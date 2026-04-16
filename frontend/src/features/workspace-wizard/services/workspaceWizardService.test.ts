@@ -50,4 +50,33 @@ describe('workspaceWizardService.createWorkspace', () => {
       cliType: 'claude-code',
     });
   });
+
+  it('omits port mappings when none are provided', async () => {
+    postMock.mockResolvedValue({ id: 'ws-456' });
+
+    await workspaceWizardService.createWorkspace({
+      name: 'K8s Workspace',
+      description: 'test',
+      gitUrl: 'https://github.com/example/repo.git',
+      branch: 'main',
+      runtime: 'universal',
+      targetNamespace: 'workspace-system',
+      setupScript: 'echo hello',
+      envVars: [{ key: 'NODE_ENV', value: 'development' }],
+      portMappings: [],
+      cliType: 'claude-code',
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/workspaces/', {
+      name: 'K8s Workspace',
+      description: 'test',
+      gitUrl: 'https://github.com/example/repo.git',
+      runtime: 'universal',
+      targetNamespace: 'workspace-system',
+      setupScript: 'echo hello',
+      envVars: [{ key: 'NODE_ENV', value: 'development' }],
+      branch: 'main',
+      cliType: 'claude-code',
+    });
+  });
 });

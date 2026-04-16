@@ -100,6 +100,7 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
     assert manifest["spec"]["browser"]["resources"]["limits"]["memory"] == "2Gi"
     assert manifest["spec"]["nextjs"]["image"] == "ailerondocker/workspace-nextjs:latest"
     assert manifest["spec"]["nextjs"]["resources"]["requests"]["memory"] == "1Gi"
+    assert "portMappings" not in manifest["spec"]
     assert manifest["spec"]["firewall"]["workspace"]["networkAccessEnabled"] is True
     assert manifest["spec"]["firewall"]["workspace"]["domainAccessMode"] == "specific"
     assert manifest["spec"]["firewall"]["workspace"]["allowedDomains"] == ["example.com"]

@@ -353,7 +353,6 @@ class WorkspaceCustomResourceService:
                 },
                 "workspacePath": workspace.workspace_path,
                 "envVars": workspace.env_vars or [],
-                "portMappings": workspace.port_mappings or [],
                 "operations": {},
                 "firewall": {
                     "workspace": {

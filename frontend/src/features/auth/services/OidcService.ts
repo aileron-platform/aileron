@@ -86,7 +86,7 @@ export class OidcService {
       logger.info('Redirecting to Keycloak for authentication');
 
       // Redirect to Keycloak
-      window.location.href = authUrl;
+      window.location.assign(authUrl);
     }).catch((error) => {
       logger.error('Failed to generate code challenge for login', { error });
     });
@@ -123,7 +123,7 @@ export class OidcService {
 
       const registrationUrl = `${this.config.authority}/protocol/openid-connect/registrations?${params.toString()}`;
       logger.info('Redirecting to Keycloak for registration');
-      window.location.href = registrationUrl;
+      window.location.assign(registrationUrl);
     }).catch((error) => {
       logger.error('Failed to generate code challenge for registration', { error });
     });

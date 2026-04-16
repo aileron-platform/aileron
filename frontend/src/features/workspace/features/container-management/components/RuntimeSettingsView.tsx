@@ -42,6 +42,16 @@ interface PortMapping {
   description: string;
 }
 
+interface SystemPortMapping {
+  id: number;
+  name: string;
+  containerPort: number;
+  hostPort: number | null;
+  protocol: string;
+  description: string;
+  editable: boolean;
+}
+
 interface RuntimeResourceField {
   cpu: string;
   memory: string;
@@ -58,6 +68,7 @@ interface RuntimeFormState {
   setupScript: string;
   envVars: EnvVar[];
   runtimeResources: RuntimeResourceFormState | null;
+  systemPortMappings: SystemPortMapping[];
   portMappings: PortMapping[];
 }
 
@@ -74,6 +85,15 @@ const mapResponseToFormState = (detail: WorkspaceDetailResponse): RuntimeFormSta
     hostPort: mapping.hostPort ?? null,
     protocol: mapping.protocol ?? 'tcp',
     description: mapping.description ?? '',
+  }));
+  const systemPortMappings = (detail.systemPortMappings ?? []).map((mapping, index) => ({
+    id: index + 1,
+    name: mapping.name ?? `system-${index + 1}`,
+    containerPort: mapping.containerPort ?? 0,
+    hostPort: mapping.hostPort ?? null,
+    protocol: mapping.protocol ?? 'tcp',
+    description: mapping.description ?? '',
+    editable: mapping.editable ?? false,
   }));
 
   return {
@@ -93,6 +113,7 @@ const mapResponseToFormState = (detail: WorkspaceDetailResponse): RuntimeFormSta
           },
         }
       : null,
+    systemPortMappings,
     portMappings,
   };
 };
@@ -304,14 +325,18 @@ export const RuntimeSettingsView: React.FC = () => {
         formState.provisioner === 'kubernetes' && formState.runtimeResources
           ? formState.runtimeResources
           : null,
-      portMappings: formState.portMappings.map(
-        ({ containerPort, hostPort, protocol, description }) => ({
-          containerPort,
-          hostPort,
-          protocol,
-          description: description.trim() === '' ? null : description,
-        })
-      ),
+      ...(formState.provisioner === 'docker'
+        ? {
+            portMappings: formState.portMappings.map(
+              ({ containerPort, hostPort, protocol, description }) => ({
+                containerPort,
+                hostPort,
+                protocol,
+                description: description.trim() === '' ? null : description,
+              })
+            ),
+          }
+        : {}),
     };
 
     try {
@@ -673,113 +698,159 @@ export const RuntimeSettingsView: React.FC = () => {
                 </Button>
               </div>
 
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Network className="h-4 w-4" />
-                  {t('workspace.containerManagement.runtime.portMappings.label')}
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                  {t('workspace.containerManagement.runtime.portMappings.description')}
-                </p>
+              {formState.provisioner === 'docker' ? (
+                <>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Network className="h-4 w-4" />
+                      System Ports
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      Default Docker ports managed by the platform.
+                    </p>
 
-                {formState.portMappings.map((portMapping) => (
-                  <div
-                    key={portMapping.id}
-                    className="grid grid-cols-12 items-end gap-2 rounded-lg border border-border p-3"
-                  >
-                    <div className="col-span-3">
-                      <Label className="text-xs text-muted-foreground">
-                        {t('workspace.containerManagement.runtime.portMappings.fields.containerPort.label')}
-                      </Label>
-                      <Input
-                        type="number"
-                        placeholder={t('workspace.containerManagement.runtime.portMappings.fields.containerPort.placeholder')}
-                        value={portMapping.containerPort}
-                        onChange={(e) =>
-                          updatePortMapping(portMapping.id, 'containerPort', e.target.value)
-                        }
-                        min={1}
-                        max={65535}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs text-muted-foreground">
-                        {t('workspace.containerManagement.runtime.portMappings.fields.hostPort.label')}
-                      </Label>
-                      <Input
-                        type="number"
-                        placeholder={t('workspace.containerManagement.runtime.portMappings.fields.hostPort.placeholder')}
-                        value={portMapping.hostPort ?? ''}
-                        onChange={(e) =>
-                          updatePortMapping(portMapping.id, 'hostPort', e.target.value)
-                        }
-                        min={1}
-                        max={65535}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-xs text-muted-foreground">
-                        {t('workspace.containerManagement.runtime.portMappings.fields.protocol.label')}
-                      </Label>
-                      <Select
-                        value={portMapping.protocol}
-                        onValueChange={(value) =>
-                          updatePortMapping(portMapping.id, 'protocol', value)
-                        }
+                    {formState.systemPortMappings.map((portMapping) => (
+                      <div
+                        key={portMapping.id}
+                        className="grid grid-cols-12 items-end gap-2 rounded-lg border border-border p-3 opacity-70"
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="tcp">
-                            {t('workspace.containerManagement.runtime.portMappings.fields.protocol.options.tcp')}
-                          </SelectItem>
-                          <SelectItem value="udp">
-                            {t('workspace.containerManagement.runtime.portMappings.fields.protocol.options.udp')}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs text-muted-foreground">
-                        {t('workspace.containerManagement.runtime.portMappings.fields.description.label')}
-                      </Label>
-                      <Input
-                        placeholder={t('workspace.containerManagement.runtime.portMappings.fields.description.placeholder')}
-                        value={portMapping.description || ''}
-                        onChange={(e) =>
-                          updatePortMapping(portMapping.id, 'description', e.target.value)
-                        }
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => removePortMapping(portMapping.id)}
-                        className="border-border text-muted-foreground hover:bg-muted"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-muted-foreground">Name</Label>
+                          <Input value={portMapping.name} disabled />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Container Port</Label>
+                          <Input type="number" value={portMapping.containerPort} disabled />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">Host Port</Label>
+                          <Input type="number" value={portMapping.hostPort ?? ''} disabled />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-muted-foreground">Protocol</Label>
+                          <Input value={portMapping.protocol} disabled />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-muted-foreground">Description</Label>
+                          <Input value={portMapping.description || ''} disabled />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
 
-              <Button
-                variant="outline"
-                onClick={addPortMapping}
-                className="w-full border-border text-muted-foreground hover:bg-muted"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t('workspace.containerManagement.runtime.portMappings.add')}
-              </Button>
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Network className="h-4 w-4" />
+                      {t('workspace.containerManagement.runtime.portMappings.label')}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t('workspace.containerManagement.runtime.portMappings.description')}
+                    </p>
 
-              <div className="space-y-1 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-                <p>{t('workspace.containerManagement.runtime.portMappings.hints.autoAssign')}</p>
-                <p>{t('workspace.containerManagement.runtime.portMappings.hints.defaultPort')}</p>
-                <p>{t('workspace.containerManagement.runtime.portMappings.hints.reservedPorts')}</p>
-              </div>
+                    {formState.portMappings.map((portMapping) => (
+                      <div
+                        key={portMapping.id}
+                        className="grid grid-cols-12 items-end gap-2 rounded-lg border border-border p-3"
+                      >
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.fields.containerPort.label')}
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder={t('workspace.containerManagement.runtime.portMappings.fields.containerPort.placeholder')}
+                            value={portMapping.containerPort}
+                            onChange={(e) =>
+                              updatePortMapping(portMapping.id, 'containerPort', e.target.value)
+                            }
+                            min={1}
+                            max={65535}
+                          />
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.fields.hostPort.label')}
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder={t('workspace.containerManagement.runtime.portMappings.fields.hostPort.placeholder')}
+                            value={portMapping.hostPort ?? ''}
+                            onChange={(e) =>
+                              updatePortMapping(portMapping.id, 'hostPort', e.target.value)
+                            }
+                            min={1}
+                            max={65535}
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.fields.protocol.label')}
+                          </Label>
+                          <Select
+                            value={portMapping.protocol}
+                            onValueChange={(value) =>
+                              updatePortMapping(portMapping.id, 'protocol', value)
+                            }
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="tcp">
+                                {t('workspace.containerManagement.runtime.portMappings.fields.protocol.options.tcp')}
+                              </SelectItem>
+                              <SelectItem value="udp">
+                                {t('workspace.containerManagement.runtime.portMappings.fields.protocol.options.udp')}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-3">
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.fields.description.label')}
+                          </Label>
+                          <Input
+                            placeholder={t('workspace.containerManagement.runtime.portMappings.fields.description.placeholder')}
+                            value={portMapping.description || ''}
+                            onChange={(e) =>
+                              updatePortMapping(portMapping.id, 'description', e.target.value)
+                            }
+                          />
+                        </div>
+                        <div className="col-span-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => removePortMapping(portMapping.id)}
+                            className="border-border text-muted-foreground hover:bg-muted"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={addPortMapping}
+                    className="w-full border-border text-muted-foreground hover:bg-muted"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t('workspace.containerManagement.runtime.portMappings.add')}
+                  </Button>
+
+                  <div className="space-y-1 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+                    <p>{t('workspace.containerManagement.runtime.portMappings.hints.autoAssign')}</p>
+                    <p>{t('workspace.containerManagement.runtime.portMappings.hints.defaultPort')}</p>
+                    <p>{t('workspace.containerManagement.runtime.portMappings.hints.reservedPorts')}</p>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  Workspace-level port exposure is not supported for Kubernetes workspaces.
+                </div>
+              )}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">

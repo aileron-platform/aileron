@@ -104,26 +104,6 @@ spec:
                         type: string
                       value:
                         type: string
-                portMappings:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - containerPort
-                      - protocol
-                    properties:
-                      containerPort:
-                        type: integer
-                        minimum: 1
-                        maximum: 65535
-                      hostPort:
-                        type: integer
-                        minimum: 1
-                        maximum: 65535
-                      protocol:
-                        type: string
-                      description:
-                        type: string
                 operations:
                   type: object
                   properties:

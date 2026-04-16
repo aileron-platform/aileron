@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OidcService } from './OidcService';
 import type { OidcConfig } from '../types';
 
@@ -19,15 +19,21 @@ describe('OidcService', () => {
     window.location.href = 'http://app.localtest.me/login';
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('在 crypto.subtle 可用時建立登入導向網址', async () => {
     const service = new OidcService(TEST_CONFIG);
-    const hrefSetter = vi.spyOn(window.location, 'href', 'set');
+    const assignSpy = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
 
     service.buildAuthorizationUrl();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {
+      expect(assignSpy).toHaveBeenCalledTimes(1);
+    });
 
-    expect(hrefSetter).toHaveBeenCalledTimes(1);
-    const redirectedUrl = hrefSetter.mock.calls[0]?.[0];
+    const redirectedUrl = assignSpy.mock.calls[0]?.[0];
     expect(redirectedUrl).toBeTruthy();
     const url = new URL(String(redirectedUrl));
 
@@ -45,14 +51,15 @@ describe('OidcService', () => {
       subtle: undefined,
     } as Crypto;
     vi.stubGlobal('crypto', fallbackCrypto);
-    const hrefSetter = vi.spyOn(window.location, 'href', 'set');
+    const assignSpy = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
 
     const service = new OidcService(TEST_CONFIG);
     service.buildAuthorizationUrl();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => {
+      expect(assignSpy).toHaveBeenCalledTimes(1);
+    });
 
-    expect(hrefSetter).toHaveBeenCalledTimes(1);
-    const redirectedUrl = hrefSetter.mock.calls[0]?.[0];
+    const redirectedUrl = assignSpy.mock.calls[0]?.[0];
     expect(redirectedUrl).toBeTruthy();
     const url = new URL(String(redirectedUrl));
     const codeChallenge = url.searchParams.get('code_challenge');
@@ -64,8 +71,6 @@ describe('OidcService', () => {
 
     const { codeVerifier } = JSON.parse(stateJson!);
     expect(codeVerifier).toHaveLength(64);
-
-    vi.unstubAllGlobals();
   });
 
   it('fallback 路徑會產生 RFC 7636 範例相符的 code challenge', async () => {

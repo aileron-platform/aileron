@@ -28,13 +28,6 @@ type WorkspaceEnvVar struct {
 	Value string `json:"value"`
 }
 
-type WorkspacePortMapping struct {
-	ContainerPort int32  `json:"containerPort"`
-	HostPort      *int32 `json:"hostPort,omitempty"`
-	Protocol      string `json:"protocol"`
-	Description   string `json:"description,omitempty"`
-}
-
 type WorkspaceOperationsSpec struct {
 	RestartWorkspaceAt *metav1.Time `json:"restartWorkspaceAt,omitempty"`
 	RestartRuntimeAt   *metav1.Time `json:"restartRuntimeAt,omitempty"`
@@ -64,7 +57,6 @@ type WorkspaceSpec struct {
 	Git             WorkspaceGitSpec               `json:"git,omitempty"`
 	WorkspacePath   string                         `json:"workspacePath"`
 	EnvVars         []WorkspaceEnvVar              `json:"envVars,omitempty"`
-	PortMappings    []WorkspacePortMapping         `json:"portMappings,omitempty"`
 	Operations      WorkspaceOperationsSpec        `json:"operations,omitempty"`
 	Firewall        WorkspaceFirewallSpec          `json:"firewall"`
 }

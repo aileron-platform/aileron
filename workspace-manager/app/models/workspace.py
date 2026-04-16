@@ -43,6 +43,15 @@ class WorkspacePortMapping(CamelModel):
     description: Optional[str] = None
 
 
+class WorkspaceSystemPortMapping(CamelModel):
+    name: str
+    container_port: int = Field(..., alias="containerPort")
+    host_port: Optional[int] = Field(None, alias="hostPort")
+    protocol: str
+    description: Optional[str] = None
+    editable: bool = False
+
+
 class WorkspaceResourceValues(CamelModel):
     cpu: str
     memory: str
@@ -168,6 +177,9 @@ class WorkspaceDetail(CamelModel):
     runtime_resources: Optional[WorkspaceResourceRequirements] = Field(
         None,
         alias="runtimeResources",
+    )
+    system_port_mappings: list[WorkspaceSystemPortMapping] = Field(
+        default_factory=list, alias="systemPortMappings"
     )
     port_mappings: list[WorkspacePortMapping] = Field(
         default_factory=list, alias="portMappings"

@@ -302,10 +302,19 @@ export interface WorkspaceDetailResponse {
   setupScript?: string | null;
   envVars?: Array<{ key: string; value: string }>;
   runtimeResources?: WorkspaceResourceRequirementsResponse | null;
+  systemPortMappings?: Array<{
+    name: string;
+    containerPort: number;
+    hostPort?: number | null;
+    protocol?: string;
+    description?: string | null;
+    editable?: boolean;
+  }>;
   portMappings?: Array<{
     containerPort: number;
     hostPort?: number | null;
     protocol?: string;
+    description?: string | null;
   }>;
   runtimeStatus?: WorkspaceRuntimeStatus;
   components?: WorkspaceComponentsResponse;

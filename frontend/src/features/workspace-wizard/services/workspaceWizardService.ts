@@ -64,7 +64,7 @@ export const workspaceWizardService = {
       targetNamespace: payload.targetNamespace,
       setupScript: payload.setupScript,
       envVars: payload.envVars,
-      portMappings: payload.portMappings,
+      ...(payload.portMappings.length > 0 ? { portMappings: payload.portMappings } : {}),
       // 使用用戶選擇的分支，如果沒有則使用預設值
       branch: payload.branch || DEFAULT_BRANCH,
       cliType: payload.cliType,
