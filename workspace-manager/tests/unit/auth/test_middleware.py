@@ -148,6 +148,29 @@ class TestJWTAuthenticationMiddleware:
             call_next.assert_called_once_with(request)
 
     @pytest.mark.asyncio
+    async def test_dispatch_internal_token(self, middleware, request_factory):
+        """測試有效 internal token 可作為內部服務認證。"""
+        with patch("app.modules.auth.middleware.get_keycloak_config") as mock_config:
+            mock_config.return_value = Mock(enabled=True)
+            middleware.config = mock_config.return_value
+
+            request = request_factory(
+                "/api/workspaces",
+                {"X-Internal-Token": "test-internal-token"},
+            )
+
+            call_next = AsyncMock(return_value=Mock())
+
+            response = await middleware.dispatch(request, call_next)
+
+            assert request.state.auth_enabled is True
+            assert request.state.auth_valid is True
+            assert request.state.auth_exempt is True
+            assert request.state.internal_authenticated is True
+            assert request.state.user_id is None
+            call_next.assert_called_once_with(request)
+
+    @pytest.mark.asyncio
     async def test_dispatch_valid_token(self, middleware, request_factory):
         """測試有效 token 的行為"""
         with patch("app.modules.auth.middleware.get_keycloak_config") as mock_config, \

@@ -103,3 +103,39 @@ jobs:
         if: always()
         working-directory: workspace-runtime
         run: docker compose -f docker-compose.test.yml down -v --remove-orphans
+
+  workspace-operator-test:
+    name: Workspace Operator Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run workspace-operator container test
+        working-directory: workspace-operator
+        run: make test-container
+
+      - name: Cleanup workspace-operator test containers
+        if: always()
+        working-directory: workspace-operator
+        run: make test-container-clean
+
+  workspace-terminal-test:
+    name: Workspace Terminal Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run workspace-terminal container test
+        working-directory: workspace-terminal
+        run: make test-container
+
+      - name: Cleanup workspace-terminal test containers
+        if: always()
+        working-directory: workspace-terminal
+        run: make test-container-clean

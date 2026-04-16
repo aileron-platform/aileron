@@ -162,7 +162,8 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
 
   const visibleActions = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
-    return actions.filter((action) => {
+    return actions
+      .filter((action) => {
       if (!showHidden && action.availability === 'hidden') {
         return false;
       }
@@ -184,7 +185,13 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
       return `${action.title} ${action.description} ${action.reason ?? ''}`
         .toLowerCase()
         .includes(normalized);
-    });
+      })
+      .sort((left, right) => {
+        if (left.recommended === right.recommended) {
+          return 0;
+        }
+        return left.recommended ? -1 : 1;
+      });
   }, [actions, searchTerm, selectedFilter, showHidden]);
 
   useEffect(() => {
@@ -326,19 +333,13 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
               {t('workspace.chat.dialogs.openspec.description')}
             </DialogDescription>
             {state ? (
-              <div className="flex flex-wrap items-center gap-2 pt-2 text-xs text-muted-foreground">
+              <div className="pt-2">
                 <Badge variant="secondary">{t(`workspace.chat.dialogs.openspec.profile.${state.profile}`)}</Badge>
-                <span>
-                  {state.initialized
-                    ? t('workspace.chat.dialogs.openspec.status.initialized')
-                    : t('workspace.chat.dialogs.openspec.status.notInitialized')}
-                </span>
                 {state.projectSynced === false ? (
-                  <Badge variant="outline" className="border-orange-200 bg-orange-50 text-orange-700">
-                    {t('workspace.chat.dialogs.openspec.syncRequired')}
-                  </Badge>
+                  <div className="mt-3 rounded-md border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+                    {t('workspace.chat.dialogs.openspec.syncWarning')}
+                  </div>
                 ) : null}
-                {state.cliVersion ? <span>{t('workspace.chat.dialogs.openspec.version', { version: state.cliVersion })}</span> : null}
               </div>
             ) : null}
           </DialogHeader>
@@ -430,25 +431,17 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
                                       <div className="space-y-2">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span className="font-mono text-sm text-primary">{action.draftTemplate.trim() || action.title}</span>
-                                          <Badge variant="secondary" className="text-xs capitalize">
-                                            {t(`workspace.chat.dialogs.openspec.profile.${action.profile}`)}
-                                          </Badge>
                                           <Badge variant="outline" className={cn('text-xs', availabilityTone[action.availability])}>
                                             {buildActionStatusLabel(action.availability, t)}
                                           </Badge>
-                                          {action.recommended ? (
-                                            <Badge variant="outline" className="text-xs">
-                                              {t('workspace.chat.dialogs.openspec.recommended')}
-                                            </Badge>
-                                          ) : null}
-                                          {action.availability === 'hidden' ? (
-                                            <Badge variant="outline" className="border-amber-200 bg-amber-50 text-xs text-amber-700">
-                                              {t('workspace.chat.dialogs.openspec.hiddenByProfile')}
-                                            </Badge>
-                                          ) : null}
                                         </div>
                                         <p className="text-sm font-medium text-foreground">{action.title}</p>
                                         <p className="text-sm text-muted-foreground">{action.description}</p>
+                                        {action.availability === 'hidden' ? (
+                                          <p className="text-xs text-muted-foreground">
+                                            {t('workspace.chat.dialogs.openspec.hiddenByProfile')}
+                                          </p>
+                                        ) : null}
                                         {action.reason ? (
                                           <p className={cn('text-xs', disabled ? 'text-muted-foreground' : 'text-amber-700')}>
                                             {action.reason}

@@ -31,6 +31,43 @@ def _create_workspace(session_factory, *, owner_id: str, provisioner: str) -> st
 
 
 @pytest.mark.integration
+def test_get_workspace_allows_internal_token(test_app):
+    client, session_factory = test_app
+
+    with session_factory() as session:
+        owner = db_models.User(
+            id="internal-owner",
+            username="internal-owner",
+            email="internal-owner@example.com",
+            keycloak_id="internal-owner-keycloak",
+        )
+        workspace = db_models.Workspace(
+            id="default-workspace",
+            owner_id=owner.id,
+            name="Default Workspace",
+            runtime="universal",
+            provisioner="docker",
+            runtime_status="running",
+            env_vars=[],
+            port_mappings=[],
+            workspace_firewall_allowed_domains=[],
+            browser_firewall_allowed_domains=[],
+            acp_cli_args=[],
+        )
+        session.add(owner)
+        session.add(workspace)
+        session.commit()
+
+    response = client.get(
+        "/api/v1/workspaces/default-workspace",
+        headers={"X-Internal-Token": "test-internal-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "default-workspace"
+
+
+@pytest.mark.integration
 def test_update_kubernetes_workspace_triggers_apply_custom_resource(
     authenticated_client,
     test_app,

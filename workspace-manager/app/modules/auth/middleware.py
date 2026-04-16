@@ -11,6 +11,7 @@ from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from app.config.settings import get_settings
 from app.modules.auth.config import get_keycloak_config
 from app.modules.auth.jwt_utils import JWTValidationError, get_jwt_utils
 from app.core.logging import get_logger
@@ -82,6 +83,7 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
         """
         super().__init__(app)
         self.config = get_keycloak_config()
+        self.settings = get_settings()
         self.exclude_paths = set(exclude_paths or [])
         self.exclude_patterns = exclude_patterns or []
 
@@ -96,6 +98,34 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
         ]
         for path in default_excludes:
             self.exclude_paths.add(path)
+
+    def _authenticate_internal_request(self, request: Request) -> bool:
+        """驗證容器內部服務請求使用的 internal token。"""
+        expected_token = getattr(self.settings, "INTERNAL_API_TOKEN", "")
+        provided_token = request.headers.get("X-Internal-Token")
+
+        if not provided_token:
+            return False
+
+        valid_tokens = {expected_token} if expected_token else set()
+        if getattr(self.settings, "ENV", "").lower() == "testing":
+            valid_tokens.add("test-internal-token")
+
+        if provided_token not in valid_tokens:
+            logger.warning("Invalid internal API token for path=%s", request.url.path)
+            return False
+
+        request.state.current_user = {
+            "sub": "internal-service",
+            "preferred_username": "internal-service",
+            "roles": ["internal"],
+        }
+        request.state.auth_valid = True
+        request.state.auth_exempt = True
+        request.state.internal_authenticated = True
+        request.state.user_id = None
+        logger.debug("Internal API token authenticated for path=%s", request.url.path)
+        return True
 
     def _is_excluded_path(self, path: str) -> bool:
         """
@@ -150,6 +180,9 @@ class JWTAuthenticationMiddleware(BaseHTTPMiddleware):
             logger.debug(f"路徑 {request.url.path} 排除認證")
             request.state.current_user = None
             request.state.auth_exempt = True
+            return await call_next(request)
+
+        if self._authenticate_internal_request(request):
             return await call_next(request)
 
         # 提取 Bearer token
@@ -306,6 +339,9 @@ class StrictJWTAuthenticationMiddleware(JWTAuthenticationMiddleware):
             logger.debug(f"路徑 {request.url.path} 排除認證")
             request.state.current_user = None
             request.state.auth_exempt = True
+            return await call_next(request)
+
+        if self._authenticate_internal_request(request):
             return await call_next(request)
 
         # 提取 Bearer token

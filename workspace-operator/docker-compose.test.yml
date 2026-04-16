@@ -1,0 +1,8 @@
+services:
+  workspace-operator-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    working_dir: /workspace-operator
+    command: go test -v ./...

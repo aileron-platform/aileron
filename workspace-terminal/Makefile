@@ -1,4 +1,4 @@
-.PHONY: build run test clean docker-build docker-up docker-down
+.PHONY: build run test test-container test-container-clean clean docker-build docker-up docker-down
 
 # 建構應用
 build:
@@ -11,6 +11,13 @@ run:
 # 執行測試
 test:
 	go test -v ./...
+
+# 使用容器執行測試
+test-container:
+	docker compose -f docker-compose.test.yml run --build --rm workspace-terminal-test
+
+test-container-clean:
+	docker compose -f docker-compose.test.yml down -v --remove-orphans
 
 # 執行測試（帶覆蓋率）
 test-coverage:
@@ -63,4 +70,3 @@ dev:
 install-tools:
 	go install github.com/cosmtrek/air@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-

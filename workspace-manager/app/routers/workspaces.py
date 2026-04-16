@@ -99,7 +99,10 @@ def _translate_runtime_log_message(
     return message
 
 
-def _require_current_user_id(request: Request) -> str:
+def _require_current_user_id(request: Request) -> str | None:
+    if getattr(request.state, "internal_authenticated", False):
+        return None
+
     current_user_id = getattr(request.state, "user_id", None)
     if not current_user_id:
         raise HTTPException(

@@ -219,6 +219,7 @@ const chat = {
       available: '可用',
       setupRequired: '需要設定',
       syncRequired: '需要更新',
+      syncWarning: '目前專案動作與啟用中的 OpenSpec profile 不同步，請先更新 workspace actions。',
       blocked: '受阻',
       hidden: '隱藏',
       usage: {

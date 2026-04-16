@@ -1,0 +1,7 @@
+services:
+  workspace-terminal-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ci
+    working_dir: /workspace-terminal
+    command: go test -v ./...

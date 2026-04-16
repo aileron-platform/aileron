@@ -219,6 +219,7 @@ const chat = {
       available: 'Available',
       setupRequired: 'Setup required',
       syncRequired: 'Update required',
+      syncWarning: 'Project actions are out of sync with the active OpenSpec profile. Update workspace actions first.',
       blocked: 'Blocked',
       hidden: 'Hidden',
       usage: {

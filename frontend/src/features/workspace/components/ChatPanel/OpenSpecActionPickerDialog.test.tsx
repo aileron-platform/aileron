@@ -13,6 +13,7 @@ const { tMock } = vi.hoisted(() => ({
       'workspace.chat.dialogs.openspec.empty': 'No OpenSpec actions match the current filters.',
       'workspace.chat.dialogs.openspec.recommended': 'Recommended',
       'workspace.chat.dialogs.openspec.version': `CLI version: ${String(params?.version ?? '')}`,
+      'workspace.chat.dialogs.openspec.syncWarning': 'Project actions are out of sync with the active OpenSpec profile. Update workspace actions first.',
       'workspace.chat.dialogs.openspec.profile.core': 'Core workflow',
       'workspace.chat.dialogs.openspec.profile.expanded': 'Expanded workflow',
       'workspace.chat.dialogs.openspec.profile.custom': 'Custom workflow',
@@ -195,7 +196,10 @@ describe('OpenSpecActionPickerDialog', () => {
     expect(screen.getByText('OpenSpec actions')).toBeInTheDocument();
     expect(screen.getAllByText('Apply').length).toBeGreaterThan(0);
     expect(screen.getByText('There is an active change with work ready to implement')).toBeInTheDocument();
-    expect(screen.getAllByText('Update required').length).toBeGreaterThan(0);
+    expect(screen.getByText('Custom workflow')).toBeInTheDocument();
+    expect(screen.getByText('Project actions are out of sync with the active OpenSpec profile. Update workspace actions first.')).toBeInTheDocument();
+    expect(screen.queryByText('Initialized')).not.toBeInTheDocument();
+    expect(screen.queryByText('CLI version: 1.3.0')).not.toBeInTheDocument();
   });
 
   it('can reveal hidden profile commands', async () => {
@@ -217,6 +221,39 @@ describe('OpenSpecActionPickerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Show hidden commands' }));
     expect(screen.getByText('New')).toBeInTheDocument();
     expect(screen.getByText('Hidden by profile')).toBeInTheDocument();
+  });
+
+  it('keeps only the availability badge on action cards and orders recommended actions first', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OpenSpecActionPickerDialog
+        open
+        onOpenChange={vi.fn()}
+        actions={englishActions}
+        changes={changes}
+        focusedChangeName="add-auth"
+        state={baseState}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const cardButtons = screen.getAllByRole('button').filter((button) => {
+      const label = button.textContent ?? '';
+      return ['Apply', 'Archive', 'Bulk Archive'].some((name) => label.includes(name));
+    });
+
+    expect(cardButtons[0]).toHaveTextContent('Apply');
+    expect(cardButtons[0]).not.toHaveTextContent('Recommended');
+    expect(screen.queryByText('Core workflow')).not.toBeInTheDocument();
+    expect(screen.queryByText('Expanded workflow')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Show hidden commands' }));
+
+    const newCard = screen.getAllByRole('button').find((button) => (button.textContent ?? '').includes('New'));
+    expect(newCard).toBeDefined();
+    expect(newCard).toHaveTextContent('Hidden by profile');
+    expect(newCard).not.toHaveTextContent('Recommended');
   });
 
   it('shows a compact expanded workflow entry for core workspaces', () => {

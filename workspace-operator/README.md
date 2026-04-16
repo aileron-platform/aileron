@@ -21,5 +21,6 @@ Planned additions:
 
 ```bash
 go test ./...
+make test-container
 go run ./cmd/main.go
 ```

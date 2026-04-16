@@ -47,6 +47,7 @@ docker compose down
 make build
 make run
 make test
+make test-container
 make docker-up
 make docker-down
 ```
