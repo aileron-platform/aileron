@@ -56,6 +56,7 @@ const workspaceSettings = {
         provisioner: 'Provisioner',
         namespace: 'Namespace',
         overallPhase: '整體狀態',
+        access: '存取權限',
       },
       namespaceFallback: '使用平台預設命名空間',
       notAvailable: '尚未提供',
@@ -87,6 +88,56 @@ const workspaceSettings = {
         lastRestartRequestedAt: '最後重啟請求時間',
       },
     },
+  },
+  access: {
+    header: {
+      title: '工作區權限',
+    },
+    status: {
+      loading: '載入工作區權限中...',
+      unavailable: '目前無法取得工作區權限資訊。',
+    },
+    notifications: {
+      loadFailed: '無法載入工作區權限。',
+      createFailed: '無法新增工作區分享權限。',
+      updateFailed: '無法更新工作區分享權限。',
+      deleteFailed: '無法移除工作區分享權限。',
+      userSearchFailed: '無法搜尋會員。',
+    },
+    currentAccess: {
+      title: '目前權限',
+      description: '顯示工作區擁有者與已授與的工作區權限。',
+      ownerLabel: '擁有者',
+      yourAccessLabel: '你的權限',
+      unknownOwner: '未知擁有者',
+    },
+    badges: {
+      owned: '擁有',
+      shared: '已分享 · {{role}}',
+    },
+    roles: {
+      owner: '擁有者',
+      viewer: '檢視者',
+      editor: '編輯者',
+      manager: '管理者',
+    },
+    sharing: {
+      title: '分享名單',
+      description: '新增、調整或移除其他成員的工作區存取權限。',
+      emailLabel: '會員 Email',
+      emailPlaceholder: '請輸入目標使用者 Email',
+      emailAutocompleteHint: '輸入時會自動顯示符合的會員 Email 建議。',
+      searchPlaceholder: '搜尋會員 Email...',
+      startTyping: '開始輸入以搜尋會員。',
+      searching: '搜尋會員中...',
+      noMatches: '找不到符合的會員。',
+      roleLabel: '角色',
+      addAction: '新增分享',
+      removeAction: '移除',
+      loading: '載入分享名單中...',
+      empty: '目前尚未分享給其他使用者。',
+    },
+    readOnlyNotice: '只有工作區擁有者或被授權為管理者的共享成員可以管理分享設定。',
   },
   reset: {
     header: {
@@ -161,6 +212,7 @@ const workspaceSettings = {
       },
     },
     delete: {
+      unknownWorkspaceName: '未知工作區',
       title: '刪除工作區',
       description: '永久刪除此工作區及其所有相關資料，包括設定檔、專案檔案和歷史記錄',
       trigger: '刪除工作區',

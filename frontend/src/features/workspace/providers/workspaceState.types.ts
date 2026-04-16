@@ -88,7 +88,7 @@ export interface WorkspaceState {
   };
 
   workspaceSettings: {
-    subView: 'basic' | 'reset';
+    subView: 'basic' | 'access' | 'reset';
   };
 
   containerManagement: {
@@ -131,7 +131,7 @@ export type WorkspaceAction =
   | { type: 'SET_SELECTED_GIT_CONTEXT'; payload: string | null }
   | { type: 'SET_OPENSPEC_SUB_VIEW'; payload: WorkspaceState['openspec']['subView'] }
   | { type: 'SET_OPENSPEC_SELECTED_PATH'; payload: string | null }
-  | { type: 'SET_WORKSPACE_SETTINGS_SUB_VIEW'; payload: 'basic' | 'reset' }
+  | { type: 'SET_WORKSPACE_SETTINGS_SUB_VIEW'; payload: 'basic' | 'access' | 'reset' }
   | { type: 'SET_CONTAINER_MANAGEMENT_SUB_VIEW'; payload: 'runtime' | 'firewall' | 'terminal' | 'browser' }
   | { type: 'SET_CLAUDE_CODE_SUB_VIEW'; payload: WorkspaceState['claudeCodeSettings']['subView'] }
   | { type: 'SET_AGENT_TOOL_SUB_VIEW'; payload: string }
@@ -201,6 +201,8 @@ export interface WorkspaceListResponse {
     id: string;
     name?: string;
     description?: string | null;
+    accessRole?: 'owner' | 'manager' | 'editor' | 'viewer';
+    accessSource?: 'owned' | 'shared';
     provisioner?: 'docker' | 'kubernetes';
     targetNamespace?: string | null;
     overallPhase?: string;
@@ -284,6 +286,8 @@ export interface WorkspaceDetailResponse {
   id: string;
   name?: string;
   description?: string | null;
+  accessRole?: 'owner' | 'manager' | 'editor' | 'viewer';
+  accessSource?: 'owned' | 'shared';
   owner?: {
     id: string;
     displayName: string;
@@ -340,6 +344,27 @@ export interface WorkspaceDetailResponse {
   createdAt?: string;
   updatedAt?: string;
   runtimeJob?: any;
+}
+
+export interface WorkspaceShareUserResponse {
+  id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  username?: string;
+  email?: string;
+}
+
+export interface WorkspaceShareResponse {
+  id: string;
+  user: WorkspaceShareUserResponse;
+  role: 'viewer' | 'editor' | 'manager';
+  grantedBy: WorkspaceShareUserResponse;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface WorkspaceShareListResponse {
+  items: WorkspaceShareResponse[];
 }
 
 export interface RuntimeFileTreeNode {

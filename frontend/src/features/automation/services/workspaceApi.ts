@@ -7,6 +7,8 @@ import { resolvePreferredWorkspaceUrl } from '@/features/workspace/services/work
 interface WorkspaceListItem {
   id: string;
   name: string;
+  accessRole?: 'owner' | 'manager' | 'editor' | 'viewer';
+  accessSource?: 'owned' | 'shared';
 }
 
 interface WorkspaceListResponse {
@@ -28,6 +30,8 @@ interface WorkspaceDetailResponse {
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  accessRole?: 'owner' | 'manager' | 'editor' | 'viewer';
+  accessSource?: 'owned' | 'shared';
 }
 
 const WORKSPACE_LIST_ENDPOINT = '/workspaces/?page=1&pageSize=50';
@@ -58,7 +62,12 @@ export const workspaceApi = {
     const items = Array.isArray(data.items) ? data.items : [];
 
     return items
-      .map(item => ({ id: item.id, name: item.name }))
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        accessRole: item.accessRole,
+        accessSource: item.accessSource,
+      }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
 

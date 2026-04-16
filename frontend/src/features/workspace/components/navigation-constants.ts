@@ -28,6 +28,7 @@ import {
   Brain,
   CheckCircle2,
   Archive,
+  Users,
 } from 'lucide-react';
 import type { AgentToolType, AgentToolConfig } from '../features/agent-settings/types';
 import { AGENT_TOOL_CONFIGS } from '../features/agent-settings/agentToolConfigs';
@@ -126,6 +127,12 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         id: 'basic',
         labelKey: 'workspace.navigation.sub.workspaceSettings.basic',
         icon: Settings,
+        parentId: 'workspace-settings',
+      },
+      {
+        id: 'access',
+        labelKey: 'workspace.navigation.sub.workspaceSettings.access',
+        icon: Users,
         parentId: 'workspace-settings',
       },
       {

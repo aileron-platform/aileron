@@ -3,4 +3,5 @@
  */
 
 export { WorkspaceBasicSettings } from './WorkspaceBasicSettings';
+export { WorkspaceAccessSettings } from './WorkspaceAccessSettings';
 export { WorkspaceResetSettings } from './WorkspaceResetSettings';

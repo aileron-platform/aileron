@@ -48,57 +48,57 @@ const LAYOUT_CONFIG: Record<
     icon: Square,
     labelKey: 'workspace.containerManagement.terminal.layout.options.single.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.single.description',
-    defaultLabel: 'Single',
-    defaultDescription: '1 pane',
+    defaultLabel: '單一窗格',
+    defaultDescription: '1 個窗格',
   },
   'split-horizontal': {
     icon: Columns,
     labelKey: 'workspace.containerManagement.terminal.layout.options.splitHorizontal.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.splitHorizontal.description',
-    defaultLabel: 'Split Horizontal',
-    defaultDescription: '2 side-by-side panes',
+    defaultLabel: '左右分割',
+    defaultDescription: '左右 2 個窗格',
   },
   'split-vertical': {
     icon: Rows,
     labelKey: 'workspace.containerManagement.terminal.layout.options.splitVertical.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.splitVertical.description',
-    defaultLabel: 'Split Vertical',
-    defaultDescription: '2 stacked panes',
+    defaultLabel: '上下分割',
+    defaultDescription: '上下 2 個窗格',
   },
   quad: {
     icon: LayoutGrid,
     labelKey: 'workspace.containerManagement.terminal.layout.options.quad.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.quad.description',
-    defaultLabel: 'Quad',
-    defaultDescription: '4 equal panes',
+    defaultLabel: '四分割',
+    defaultDescription: '4 個等分窗格',
   },
   'left-1-right-2': {
     icon: PanelLeft,
     labelKey: 'workspace.containerManagement.terminal.layout.options.leftOneRightTwo.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.leftOneRightTwo.description',
-    defaultLabel: 'Left 1 Right 2',
-    defaultDescription: '1 left pane, 2 right panes (top/bottom)',
+    defaultLabel: '左 1 右 2',
+    defaultDescription: '左側 1 個，右側上下 2 個',
   },
   'right-1-left-2': {
     icon: PanelRight,
     labelKey: 'workspace.containerManagement.terminal.layout.options.rightOneLeftTwo.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.rightOneLeftTwo.description',
-    defaultLabel: 'Right 1 Left 2',
-    defaultDescription: '2 left panes (top/bottom), 1 right pane',
+    defaultLabel: '右 1 左 2',
+    defaultDescription: '左側上下 2 個，右側 1 個',
   },
   'top-1-bottom-2': {
     icon: PanelTop,
     labelKey: 'workspace.containerManagement.terminal.layout.options.topOneBottomTwo.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.topOneBottomTwo.description',
-    defaultLabel: 'Top 1 Bottom 2',
-    defaultDescription: '1 top pane, 2 bottom panes (left/right)',
+    defaultLabel: '上 1 下 2',
+    defaultDescription: '上方 1 個，下方左右 2 個',
   },
   'bottom-1-top-2': {
     icon: PanelBottom,
     labelKey: 'workspace.containerManagement.terminal.layout.options.bottomOneTopTwo.label',
     descriptionKey: 'workspace.containerManagement.terminal.layout.options.bottomOneTopTwo.description',
-    defaultLabel: 'Bottom 1 Top 2',
-    defaultDescription: '2 top panes (left/right), 1 bottom pane',
+    defaultLabel: '下 1 上 2',
+    defaultDescription: '上方左右 2 個，下方 1 個',
   },
 };
 
@@ -135,7 +135,7 @@ export const TerminalLayoutSelector: React.FC<TerminalLayoutSelectorProps> = ({
           variant="ghost"
           size="icon"
           title={t('workspace.containerManagement.terminal.layout.changeTooltip', {
-            defaultValue: 'Change layout',
+            defaultValue: '切換佈局',
           })}
         >
           <Icon className="h-4 w-4" />

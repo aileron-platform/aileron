@@ -24,6 +24,7 @@ const navigation = {
     },
     workspaceSettings: {
       basic: 'Basic Settings',
+      access: 'Workspace Access',
       reset: 'Workspace Reset',
       },
       containerManagement: {

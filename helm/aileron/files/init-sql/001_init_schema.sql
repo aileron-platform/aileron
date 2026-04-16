@@ -257,6 +257,27 @@ COMMENT ON COLUMN workspaces.nextjs_external_port IS 'Next.js 主機映射端口
 COMMENT ON COLUMN workspaces.nextjs_api_internal_port IS 'Next.js 管理 API 內部端口（預設 3013）';
 COMMENT ON COLUMN workspaces.nextjs_api_external_port IS 'Next.js 管理 API 外部映射端口';
 
+-- Table: workspace_shares
+CREATE TABLE IF NOT EXISTS workspace_shares (
+    id varchar(64) PRIMARY KEY,
+    workspace_id varchar(64) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    shared_with_user_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role varchar(32) NOT NULL CHECK (role IN ('viewer', 'editor', 'manager')),
+    granted_by_user_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_shares_workspace_user_unique UNIQUE (workspace_id, shared_with_user_id)
+);
+
+COMMENT ON TABLE workspace_shares IS '工作區分享授權表';
+COMMENT ON COLUMN workspace_shares.id IS '分享授權唯一識別碼';
+COMMENT ON COLUMN workspace_shares.workspace_id IS '所屬工作區 ID';
+COMMENT ON COLUMN workspace_shares.shared_with_user_id IS '被分享的使用者 ID';
+COMMENT ON COLUMN workspace_shares.role IS '工作區分享角色（viewer / editor / manager）';
+COMMENT ON COLUMN workspace_shares.granted_by_user_id IS '授權分享的使用者 ID';
+COMMENT ON COLUMN workspace_shares.created_at IS '分享建立時間';
+COMMENT ON COLUMN workspace_shares.updated_at IS '分享最後更新時間';
+
 -- Table: template_features
 CREATE TABLE IF NOT EXISTS template_features (
     id varchar(64) PRIMARY KEY,
@@ -642,13 +663,19 @@ VALUES (
     'admin',
     'admin@aileron.com',
     '9cd556e6-6d41-41a0-9662-053f0f400a3b',
-    'System Administrator',
+    'Aileron Administrator',
     'https://avatars.githubusercontent.com/u/1?v=4',
     true,
     CURRENT_TIMESTAMP,
     CURRENT_TIMESTAMP
 )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+SET
+    username = EXCLUDED.username,
+    email = EXCLUDED.email,
+    display_name = 'Aileron Administrator',
+    is_active = EXCLUDED.is_active,
+    updated_at = CURRENT_TIMESTAMP;
 
 -- Default Team
 DO $$

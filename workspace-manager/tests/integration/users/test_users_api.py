@@ -312,6 +312,26 @@ class TestUsersAPI:
         ]
 
     @pytest.mark.integration
+    def test_user_016a_list_users_supports_query_filter(self, admin_client, create_user):
+        """US-016a 列出用戶支援 query 搜尋"""
+        client, admin = admin_client
+
+        create_user(username="search_alpha", email="alpha-search@example.com", display_name="Alpha Search")
+        create_user(username="search_beta", email="beta@example.com", display_name="Beta Search")
+
+        response = client.get("/api/v1/users", params={"query": "alpha-search", "limit": 8})
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total"] >= 1
+        assert all(
+            "alpha-search" in (
+                f'{item.get("email", "")} {item.get("username", "")} {item.get("display_name", "")}'
+            ).lower()
+            for item in data["items"]
+        )
+
+    @pytest.mark.integration
     def test_user_017_create_user_success(self, admin_client, test_data_factory):
         """US-017 建立用戶成功"""
         client, admin = admin_client

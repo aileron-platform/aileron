@@ -24,6 +24,7 @@ const navigation = {
     },
     workspaceSettings: {
       basic: '基本設定',
+      access: '工作區權限',
       reset: '工作區重置',
     },
     containerManagement: {

@@ -12,6 +12,10 @@ from app.models import (
     WorkspaceCreateRequest,
     WorkspaceDetail,
     WorkspaceListResponse,
+    WorkspaceShare,
+    WorkspaceShareCreateRequest,
+    WorkspaceShareListResponse,
+    WorkspaceShareUpdateRequest,
     WorkspaceUpdateRequest,
     WorkspaceRuntimeLogEntry,
 )
@@ -25,6 +29,7 @@ from app.services.workspace_custom_resource_service import (
 )
 from app.services.runtime_sync_service import RuntimeSyncService
 from app.services.workspace_service import WorkspaceService
+from app.services.workspace_service import WorkspaceAccessDeniedError
 from app.db.database import SessionLocal
 from app.services.workspace_lifecycle_service import (
     run_delete_workspace_task,
@@ -94,6 +99,16 @@ def _translate_runtime_log_message(
     return message
 
 
+def _require_current_user_id(request: Request) -> str:
+    current_user_id = getattr(request.state, "user_id", None)
+    if not current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=request.state.translate("auth.unauthenticated"),
+        )
+    return current_user_id
+
+
 @router.get(
     "/",
     response_model=WorkspaceListResponse,
@@ -108,17 +123,11 @@ def list_workspaces(
     search: Optional[str] = Query(None),
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceListResponse:
-    # 強制以 JWT 中的使用者 ID 過濾，防止越權存取其他使用者的工作區
-    current_user_id = getattr(request.state, "user_id", None)
-    if not current_user_id:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-        )
+    current_user_id = _require_current_user_id(request)
     return service.list(
         page=page,
         page_size=page_size,
-        owner_id=current_user_id,
+        current_user_id=current_user_id,
         status=status,
         search=search,
     )
@@ -138,13 +147,7 @@ def create_workspace(
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceDetail:
     try:
-        # 強制以 JWT 中的使用者 ID 作為 owner，避免 client 透過 payload 冒用其他使用者。
-        current_user_id = getattr(request.state, "user_id", None)
-        if not current_user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=request.state.translate("auth.unauthenticated")
-            )
+        current_user_id = _require_current_user_id(request)
         payload.owner_id = current_user_id
 
         workspace = service.create(payload)
@@ -168,13 +171,20 @@ def get_workspace(
     request: Request,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceDetail:
-    workspace = service.get(workspace_id)
-    if not workspace:
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found")
+            )
+        return workspace
+    except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found")
-        )
-    return workspace
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(
@@ -189,7 +199,22 @@ def get_workspace_runtime_logs(
     limit: int = Query(100, ge=1, le=500),
     stage: Optional[str] = Query(None),
     service: RuntimeProvisionService = Depends(get_runtime_provision_service),
+    workspace_service: WorkspaceService = Depends(get_workspace_service),
 ) -> list[WorkspaceRuntimeLogEntry]:
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = workspace_service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found")
+            )
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
+
     logs = service.get_runtime_logs(workspace_id, limit=limit, stage=stage)
     if not logs:
         return []
@@ -223,11 +248,16 @@ async def update_workspace(
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceDetail:
+    current_user_id = _require_current_user_id(request)
     try:
         # 只有 firewall 配置變更需要額外同步到 workspace-runtime，其餘欄位由 manager 自行持久化。
         firewall_changed = payload.firewall is not None
 
-        workspace = service.update(workspace_id, payload)
+        workspace = service.update(
+            workspace_id,
+            payload,
+            current_user_id=current_user_id,
+        )
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -246,6 +276,11 @@ async def update_workspace(
             background_tasks.add_task(run_apply_workspace_custom_resource_task, workspace.id)
 
         return workspace
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -301,19 +336,28 @@ def delete_workspace(
         HTTPException: 當 workspace 不存在時
     """
     # 檢查 workspace 是否存在
-    workspace = service.get(workspace_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
-        )
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+            )
 
-    # 標記為刪除中
-    if not service.mark_workspace_deleting(workspace_id):
+        if not service.mark_workspace_deleting(
+            workspace_id,
+            current_user_id=current_user_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=request.state.translate("workspace.deletion_failed")
+            )
+    except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("workspace.deletion_failed")
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
     # 加入背景任務
     background_tasks.add_task(run_delete_workspace_task, workspace_id)
@@ -355,19 +399,28 @@ def rebuild_workspace(
         HTTPException: 當 workspace 不存在時
     """
     # 檢查 workspace 是否存在
-    workspace = service.get(workspace_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
-        )
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+            )
 
-    # 標記為重啟中
-    if not service.mark_workspace_rebuilding(workspace_id):
+        if not service.mark_workspace_rebuilding(
+            workspace_id,
+            current_user_id=current_user_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=request.state.translate("workspace.restart_failed")
+            )
+    except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("workspace.restart_failed")
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
     # 加入背景任務
     background_tasks.add_task(run_restart_workspace_task, workspace_id)
@@ -409,29 +462,37 @@ def restart_browser(
         HTTPException: 當 workspace 不存在或沒有 Browser 容器時
     """
     # 檢查 workspace 是否存在
-    workspace = service.get(workspace_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
-        )
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+            )
 
-    # Docker 模式才需要檢查 Browser 容器是否存在
-    if (
-        workspace.provisioner != "kubernetes"
-        and not workspace.runtime_status.browser_container_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=request.state.translate("workspace.browser.not_found")
-        )
+        if (
+            workspace.provisioner != "kubernetes"
+            and not workspace.runtime_status.browser_container_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=request.state.translate("workspace.browser.not_found")
+            )
 
-    # 標記 Browser 為重啟中
-    if not service.mark_browser_restarting(workspace_id):
+        if not service.mark_browser_restarting(
+            workspace_id,
+            current_user_id=current_user_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=request.state.translate("workspace.browser.restart_failed")
+            )
+    except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("workspace.browser.restart_failed")
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
     # 加入背景任務
     background_tasks.add_task(run_restart_browser_task, workspace_id)
@@ -465,28 +526,37 @@ def restart_nextjs(
     Returns:
         dict: 包含訊息和 workspace ID
     """
-    workspace = service.get(workspace_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
-        )
+    current_user_id = _require_current_user_id(request)
+    try:
+        workspace = service.get(workspace_id, current_user_id=current_user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+            )
 
-    if (
-        workspace.provisioner != "kubernetes"
-        and not workspace.runtime_status.nextjs_container_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Next.js container not found for this workspace"
-        )
+        if (
+            workspace.provisioner != "kubernetes"
+            and not workspace.runtime_status.nextjs_container_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Next.js container not found for this workspace"
+            )
 
-    # 標記 Next.js 為重啟中
-    if not service.mark_nextjs_restarting(workspace_id):
+        if not service.mark_nextjs_restarting(
+            workspace_id,
+            current_user_id=current_user_id,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark Next.js container as restarting"
+            )
+    except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to mark Next.js container as restarting"
-        )
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        ) from exc
 
     background_tasks.add_task(run_restart_nextjs_task, workspace_id)
 
@@ -495,6 +565,121 @@ def restart_nextjs(
         "workspaceId": workspace_id,
         "status": "restarting"
     }
+
+
+@router.get(
+    "/{workspace_id}/shares",
+    response_model=WorkspaceShareListResponse,
+    summary="列出工作區分享名單",
+    responses=build_responses(401, 403, 404, 500),
+)
+def list_workspace_shares(
+    workspace_id: str,
+    request: Request,
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> WorkspaceShareListResponse:
+    current_user_id = _require_current_user_id(request)
+    try:
+        return service.list_shares(workspace_id, current_user_id=current_user_id)
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.post(
+    "/{workspace_id}/shares",
+    response_model=WorkspaceShare,
+    status_code=status.HTTP_201_CREATED,
+    summary="新增工作區分享",
+    responses=build_responses(400, 401, 403, 404, 500),
+)
+def create_workspace_share(
+    workspace_id: str,
+    payload: WorkspaceShareCreateRequest,
+    request: Request,
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> WorkspaceShare:
+    current_user_id = _require_current_user_id(request)
+    try:
+        return service.create_share(
+            workspace_id,
+            payload,
+            current_user_id=current_user_id,
+        )
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if detail in {"Workspace not found", "Target user not found"}
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.patch(
+    "/{workspace_id}/shares/{share_id}",
+    response_model=WorkspaceShare,
+    summary="更新工作區分享角色",
+    responses=build_responses(400, 401, 403, 404, 500),
+)
+def update_workspace_share(
+    workspace_id: str,
+    share_id: str,
+    payload: WorkspaceShareUpdateRequest,
+    request: Request,
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> WorkspaceShare:
+    current_user_id = _require_current_user_id(request)
+    try:
+        result = service.update_share(
+            workspace_id,
+            share_id,
+            payload,
+            current_user_id=current_user_id,
+        )
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace share not found",
+            )
+        return result
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/{workspace_id}/shares/{share_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="移除工作區分享",
+    responses=build_responses(401, 403, 404, 500),
+)
+def delete_workspace_share(
+    workspace_id: str,
+    share_id: str,
+    request: Request,
+    service: WorkspaceService = Depends(get_workspace_service),
+) -> None:
+    current_user_id = _require_current_user_id(request)
+    try:
+        deleted = service.delete_share(
+            workspace_id,
+            share_id,
+            current_user_id=current_user_id,
+        )
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace share not found",
+            )
+    except WorkspaceAccessDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
 
 __all__ = ["router"]

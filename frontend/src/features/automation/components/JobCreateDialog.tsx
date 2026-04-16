@@ -292,7 +292,12 @@ export const JobCreateDialog: React.FC = () => {
                       ) : (
                         workspaces.map(option => (
                           <SelectItem key={option.id} value={option.id}>
-                            {option.name}
+                            <div className="flex items-center gap-2">
+                              <span>{option.name}</span>
+                              <Badge variant="secondary" className="text-[10px] uppercase">
+                                {option.accessSource === 'shared' ? 'Shared' : 'Owned'}
+                              </Badge>
+                            </div>
                           </SelectItem>
                         ))
                       )}

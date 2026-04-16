@@ -30,14 +30,14 @@ const containerManagement = {
       },
     },
     resources: {
-      title: 'Runtime 資源配置',
-      description: '僅 Kubernetes workspace 可覆寫 runtime 的 CPU 與記憶體 requests / limits。',
+      title: '執行環境資源配置',
+      description: '僅 Kubernetes 工作區可覆寫執行環境的 CPU 與記憶體 requests / limits。',
       scope: 'workspace-browser 與 workspace-nextjs 仍使用 Helm chart 的平台預設資源。',
       requests: {
-        title: 'Requests',
+        title: '資源請求',
       },
       limits: {
-        title: 'Limits',
+        title: '資源上限',
       },
       fields: {
         cpu: 'CPU',
@@ -51,6 +51,17 @@ const containerManagement = {
       add: '新增環境變數',
     },
     portMappings: {
+      system: {
+        label: '系統連接埠',
+        description: '由平台管理的預設 Docker 連接埠。',
+        fields: {
+          name: '名稱',
+          containerPort: '容器連接埠',
+          hostPort: '主機連接埠',
+          protocol: '協定',
+          description: '描述',
+        },
+      },
       label: '端口映射配置',
       description: '配置容器端口映射，可以指定固定端口或使用動態分配',
       fields: {
@@ -75,6 +86,7 @@ const containerManagement = {
         },
       },
       add: '新增端口映射',
+      kubernetesUnsupported: 'Kubernetes 工作區目前不支援工作區層級的連接埠對外暴露設定。',
       hints: {
         autoAssign: '• 主機端口留空將自動分配可用端口',
         defaultPort: '• 容器端口 3002 為 Workspace Runtime 預設端口',

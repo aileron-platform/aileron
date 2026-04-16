@@ -8,17 +8,23 @@ const { getMock, putMock, toastMock, reloadMock, tMock } = vi.hoisted(() => ({
   putMock: vi.fn(),
   toastMock: vi.fn(),
   reloadMock: vi.fn(),
-  tMock: (key: string) =>
-    ({
+  tMock: (key: string, options?: Record<string, unknown>) => {
+    const translations = {
       'workspace.workspaceSettings.basic.metadata.provisioners.kubernetes': 'Kubernetes',
       'workspace.workspaceSettings.basic.metadata.provisioners.docker': 'Docker',
       'workspace.workspaceSettings.basic.metadata.phases.running': 'Running',
       'workspace.workspaceSettings.basic.metadata.phases.disabled': 'Disabled',
       'workspace.workspaceSettings.basic.metadata.notAvailable': 'Not Available',
+      'workspace.workspaceSettings.basic.metadata.fields.access': 'Access',
       'workspace.workspaceSettings.basic.components.runtime': 'Runtime',
       'workspace.workspaceSettings.basic.components.browser': 'Browser',
       'workspace.workspaceSettings.basic.components.nextjs': 'Next.js',
-    }[key] ?? key),
+      'workspace.workspaceSettings.access.badges.owned': 'Owned',
+      'workspace.workspaceSettings.access.badges.shared': `Shared · ${String(options?.role ?? '')}`,
+      'workspace.workspaceSettings.access.roles.viewer': 'viewer',
+    } as Record<string, string>;
+    return translations[key] ?? key;
+  },
 }));
 
 vi.mock('@/shared/api/apiClient', () => ({
@@ -97,4 +103,28 @@ describe('WorkspaceBasicSettings', () => {
     expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     expect(screen.getByText('Disabled')).toBeInTheDocument();
   });
+
+  it('shows read-only shared access state for viewer role', async () => {
+    getMock.mockResolvedValue({
+      id: 'ws-123',
+      name: 'Shared Workspace',
+      accessRole: 'viewer',
+      accessSource: 'shared',
+      owner: {
+        id: 'owner-1',
+        displayName: 'Workspace Owner',
+        email: 'owner@example.com',
+      },
+      cliType: 'claude-code',
+      provisioner: 'docker',
+      overallPhase: 'Running',
+      components: {},
+    });
+
+    render(<WorkspaceBasicSettings />);
+
+    expect(await screen.findByText('Shared · viewer')).toBeInTheDocument();
+    expect(screen.queryByText('Add share')).not.toBeInTheDocument();
+  });
+
 });

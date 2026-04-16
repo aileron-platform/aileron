@@ -158,6 +158,10 @@ export const WorkspaceBasicSettings: React.FC = () => {
     };
   }, [workspaceId, t]);
 
+  const accessRole = workspaceDetail?.accessRole ?? 'owner';
+  const accessSource = workspaceDetail?.accessSource ?? 'owned';
+  const canManageWorkspace = accessRole === 'owner' || accessRole === 'manager';
+
   const handleChange = (field: keyof WorkspaceFormState, value: string) => {
     setFormState((current) => (current ? { ...current, [field]: value } : current));
   };
@@ -217,6 +221,7 @@ export const WorkspaceBasicSettings: React.FC = () => {
     isLoading ||
     !formState ||
     !workspaceId ||
+    !canManageWorkspace ||
     !isDirty;
 
   const componentItems = useMemo<Array<{
@@ -286,6 +291,7 @@ export const WorkspaceBasicSettings: React.FC = () => {
                 <Input
                   id="workspaceName"
                   value={formState.name}
+                  disabled={!canManageWorkspace}
                   onChange={(e) => handleChange('name', e.target.value)}
                   placeholder={t('workspace.workspaceSettings.basic.fields.name.placeholder')}
                 />
@@ -301,6 +307,7 @@ export const WorkspaceBasicSettings: React.FC = () => {
                 <Textarea
                   id="description"
                   value={formState.description}
+                  disabled={!canManageWorkspace}
                   onChange={(e) => handleChange('description', e.target.value)}
                   placeholder={t('workspace.workspaceSettings.basic.fields.description.placeholder')}
                   rows={4}
@@ -394,6 +401,20 @@ export const WorkspaceBasicSettings: React.FC = () => {
                       className={`w-fit text-[11px] ${getPhaseBadgeClassName(workspaceDetail?.overallPhase)}`}
                     >
                       {getPhaseLabel(workspaceDetail?.overallPhase)}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">
+                      {t('workspace.workspaceSettings.basic.metadata.fields.access')}
+                    </p>
+                    <Badge variant="secondary" className="w-fit text-[11px] uppercase">
+                      {accessSource === 'shared'
+                        ? t('workspace.workspaceSettings.access.badges.shared', {
+                            role: accessRole
+                              ? t(`workspace.workspaceSettings.access.roles.${accessRole}`)
+                              : accessRole,
+                          })
+                        : t('workspace.workspaceSettings.access.badges.owned')}
                     </Badge>
                   </div>
                 </div>

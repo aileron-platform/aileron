@@ -108,16 +108,16 @@ export const TerminalView: React.FC = () => {
   const tabLabels = useMemo(
     () => ({
       add: t('workspace.containerManagement.terminal.tabs.add', {
-        defaultValue: 'Add terminal',
+        defaultValue: '新增終端機',
       }),
       empty: t('workspace.containerManagement.terminal.tabs.empty', {
-        defaultValue: 'No terminal',
+        defaultValue: '沒有終端機',
       }),
       newTooltip: t('workspace.containerManagement.terminal.tabs.new', {
-        defaultValue: 'New terminal',
+        defaultValue: '新增終端機',
       }),
       close: t('workspace.containerManagement.terminal.tabs.close', {
-        defaultValue: 'Close terminal',
+        defaultValue: '關閉終端機',
       }),
     }),
     [t],
@@ -126,54 +126,54 @@ export const TerminalView: React.FC = () => {
   const menuLabels = useMemo(
     () => ({
       actionsTitle: t('workspace.containerManagement.terminal.menus.actions', {
-        defaultValue: 'Actions',
+        defaultValue: '操作',
       }),
       switchTitle: t('workspace.containerManagement.terminal.menus.context.switch', {
-        defaultValue: 'Switch terminal',
+        defaultValue: '切換終端機',
       }),
       rename: t('workspace.containerManagement.terminal.menus.context.rename', {
-        defaultValue: 'Rename',
+        defaultValue: '重新命名',
       }),
       unassign: t('workspace.containerManagement.terminal.menus.context.unassign', {
-        defaultValue: 'Unassign',
+        defaultValue: '解除指派',
       }),
       renamePrompt: t('workspace.containerManagement.terminal.menus.context.renamePrompt', {
-        defaultValue: 'Enter a new terminal name',
+        defaultValue: '輸入新的終端機名稱',
       }),
       copy: t('workspace.containerManagement.terminal.actions.copy', {
-        defaultValue: 'Copy',
+        defaultValue: '複製',
       }),
       paste: t('workspace.containerManagement.terminal.actions.paste', {
-        defaultValue: 'Paste',
+        defaultValue: '貼上',
       }),
       restart: t('workspace.containerManagement.terminal.actions.restart', {
-        defaultValue: 'Restart terminal',
+        defaultValue: '重新啟動終端',
       }),
       fullscreenEnter: t(
         'workspace.containerManagement.terminal.actions.enterFullscreen',
-        { defaultValue: 'Fullscreen' },
+        { defaultValue: '全螢幕' },
       ),
       fullscreenExit: t(
         'workspace.containerManagement.terminal.actions.exitFullscreen',
-        { defaultValue: 'Exit fullscreen' },
+        { defaultValue: '退出全螢幕' },
       ),
       contextClear: t('workspace.containerManagement.terminal.menus.context.clear', {
-        defaultValue: 'Clear',
+        defaultValue: '清除',
       }),
       contextClose: t('workspace.containerManagement.terminal.menus.context.close', {
-        defaultValue: 'Close terminal',
+        defaultValue: '關閉終端機',
       }),
       active: t('workspace.containerManagement.terminal.tabs.active', {
-        defaultValue: 'Active',
+        defaultValue: '目前',
       }),
       maxLimitTitle: t('workspace.containerManagement.terminal.limits.max.title', {
-        defaultValue: 'Terminal limit reached',
+        defaultValue: '已達終端機上限',
       }),
       maxLimitDescription: t(
         'workspace.containerManagement.terminal.limits.max.description',
         {
           count: TERMINAL_MAX_TABS,
-          defaultValue: `You can open up to ${TERMINAL_MAX_TABS} terminals.`,
+          defaultValue: `最多可建立 ${TERMINAL_MAX_TABS} 個終端機。`,
         },
       ),
     }),
@@ -184,11 +184,11 @@ export const TerminalView: React.FC = () => {
     () => ({
       rows: t('workspace.containerManagement.terminal.footer.rows', {
         count: terminalSize.rows,
-        defaultValue: `Rows: ${terminalSize.rows}`,
+        defaultValue: `列: ${terminalSize.rows}`,
       }),
       cols: t('workspace.containerManagement.terminal.footer.columns', {
         count: terminalSize.cols,
-        defaultValue: `Cols: ${terminalSize.cols}`,
+        defaultValue: `行: ${terminalSize.cols}`,
       }),
       encoding: t('workspace.containerManagement.terminal.footer.encoding', {
         defaultValue: 'UTF-8',
@@ -196,7 +196,7 @@ export const TerminalView: React.FC = () => {
       selected: selectedText
         ? t('workspace.containerManagement.terminal.footer.selection', {
           count: selectedText.length,
-          defaultValue: `Selected: ${selectedText.length}`,
+          defaultValue: `選取 ${selectedText.length} 字元`,
         })
         : '',
     }),
@@ -207,7 +207,7 @@ export const TerminalView: React.FC = () => {
     (index: number) =>
       t('workspace.containerManagement.terminal.tabs.label', {
         index,
-        defaultValue: `Terminal ${index}`,
+        defaultValue: `終端機 ${index}`,
       }),
     [t],
   );
@@ -635,7 +635,7 @@ export const TerminalView: React.FC = () => {
       return {
         color: 'bg-gray-500',
         label: t('workspace.containerManagement.terminal.status.unassigned', {
-          defaultValue: 'Not assigned',
+          defaultValue: '未指派',
         }),
       };
     }
@@ -644,7 +644,7 @@ export const TerminalView: React.FC = () => {
       return {
         color: 'bg-sky-500',
         label: t('workspace.containerManagement.terminal.status.connecting', {
-          defaultValue: 'Connecting...',
+          defaultValue: '連線中...',
         }),
       };
     }
@@ -652,7 +652,7 @@ export const TerminalView: React.FC = () => {
       return {
         color: 'bg-amber-500',
         label: t('workspace.containerManagement.terminal.status.reconnecting', {
-          defaultValue: 'Reconnecting...',
+          defaultValue: '重新連線中...',
         }),
       };
     }
@@ -660,7 +660,7 @@ export const TerminalView: React.FC = () => {
       return {
         color: 'bg-emerald-500',
         label: t('workspace.containerManagement.terminal.status.connected', {
-          defaultValue: 'Connected',
+          defaultValue: '已連線',
         }),
       };
     }
@@ -670,7 +670,7 @@ export const TerminalView: React.FC = () => {
     return {
       color: 'bg-gray-400',
       label: t('workspace.containerManagement.terminal.status.disconnected', {
-        defaultValue: 'Disconnected',
+        defaultValue: '已中斷連線',
       }),
     };
   }, [terminalState.status, terminalState.error, t, activeTab]);
@@ -820,7 +820,7 @@ export const TerminalView: React.FC = () => {
     >
       <FeatureHeader
         title={t('workspace.containerManagement.terminal.header.title', {
-          defaultValue: 'Workspace Terminal',
+          defaultValue: '終端機',
         })}
         icon={Terminal}
         info={tabBar}

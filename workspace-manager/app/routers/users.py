@@ -1,6 +1,6 @@
 """使用者路由"""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core.openapi import build_responses
 from app.models import User, UserCreate, UserListResponse, UserUpdate, UserProfile, UserProfileResponse, UserProfileUpdate
@@ -17,9 +17,13 @@ router = APIRouter(prefix="/users", tags=["使用者"])
     summary="列出使用者",
     responses=build_responses(500),
 )
-async def list_users(service: UserService = Depends(get_user_service)) -> UserListResponse:
+async def list_users(
+    query: str | None = Query(default=None, description="使用 email、username 或 display name 搜尋"),
+    limit: int | None = Query(default=None, ge=1, le=50, description="限制回傳筆數"),
+    service: UserService = Depends(get_user_service),
+) -> UserListResponse:
     """取得使用者列表"""
-    return service.list()
+    return service.list(query=query, limit=limit)
 
 
 @router.post(

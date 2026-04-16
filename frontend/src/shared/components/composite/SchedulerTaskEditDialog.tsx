@@ -36,6 +36,7 @@ const logger = createLogger('SchedulerTaskEditDialog');
 export interface SchedulerWorkspaceSummary {
   id: string;
   name: string;
+  accessSource?: 'owned' | 'shared';
 }
 
 interface AutomationJobEditDialogProps {
@@ -204,7 +205,12 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
                   <SelectContent>
                     {workspaces.map(ws => (
                       <SelectItem key={ws.id} value={ws.id}>
-                        {ws.name}
+                        <div className="flex items-center gap-2">
+                          <span>{ws.name}</span>
+                          <Badge variant="secondary" className="text-[10px] uppercase">
+                            {ws.accessSource === 'shared' ? 'Shared' : 'Owned'}
+                          </Badge>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

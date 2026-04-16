@@ -77,7 +77,9 @@ describe('RuntimeSettingsView', () => {
       expect(getMock).toHaveBeenCalledWith('/workspaces/ws-123');
     });
 
-    expect(await screen.findByText('System Ports')).toBeInTheDocument();
+    expect(
+      await screen.findByText('workspace.containerManagement.runtime.portMappings.system.label')
+    ).toBeInTheDocument();
     expect(screen.getByDisplayValue('runtime')).toBeDisabled();
     expect(screen.getByDisplayValue('Workspace runtime API')).toBeDisabled();
     expect(screen.getByDisplayValue('Custom')).toBeInTheDocument();
@@ -105,8 +107,12 @@ describe('RuntimeSettingsView', () => {
     });
 
     expect(
-      await screen.findByText('Workspace-level port exposure is not supported for Kubernetes workspaces.')
+      await screen.findByText(
+        'workspace.containerManagement.runtime.portMappings.kubernetesUnsupported'
+      )
     ).toBeInTheDocument();
-    expect(screen.queryByText('System Ports')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('workspace.containerManagement.runtime.portMappings.system.label')
+    ).not.toBeInTheDocument();
   });
 });

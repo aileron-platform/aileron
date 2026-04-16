@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.config.settings import get_settings
 from app.db import models as db_models
@@ -17,6 +18,8 @@ from app.models import (
     RuntimeStatus,
     WorkspaceComponents,
     WorkspaceComponentStatus,
+    WorkspaceAccessRole,
+    WorkspaceAccessSource,
     WorkspaceCreateRequest,
     WorkspaceDetail,
     WorkspaceEnvVar,
@@ -27,10 +30,25 @@ from app.models import (
     WorkspaceResourceRequirements,
     WorkspaceRuntimeJobSummary,
     WorkspaceSummary,
+    WorkspaceShare,
+    WorkspaceShareCreateRequest,
+    WorkspaceShareListResponse,
+    WorkspaceShareUpdateRequest,
+    WorkspaceShareUser,
     WorkspaceUpdateRequest,
 )
 from app.utils.string_utils import snake_case
 from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
+
+
+class WorkspaceAccessDeniedError(PermissionError):
+    """使用者沒有工作區所需權限。"""
+
+
+@dataclass(frozen=True)
+class WorkspaceAccessContext:
+    access_role: WorkspaceAccessRole
+    access_source: WorkspaceAccessSource
 
 
 class WorkspaceService:
@@ -47,43 +65,105 @@ class WorkspaceService:
         *,
         page: int,
         page_size: int,
+        current_user_id: Optional[str] = None,
         owner_id: Optional[str] = None,
         status: Optional[str] = None,
         search: Optional[str] = None,
     ) -> WorkspaceListResponse:
-        query = select(db_models.Workspace).join(db_models.User)
+        if current_user_id:
+            share_alias = aliased(db_models.WorkspaceShare)
+            query = (
+                select(db_models.Workspace, share_alias.role)
+                .options(selectinload(db_models.Workspace.owner))
+                .outerjoin(
+                    share_alias,
+                    and_(
+                        share_alias.workspace_id == db_models.Workspace.id,
+                        share_alias.shared_with_user_id == current_user_id,
+                    ),
+                )
+                .where(
+                    or_(
+                        db_models.Workspace.owner_id == current_user_id,
+                        share_alias.id.is_not(None),
+                    )
+                )
+            )
+            if status:
+                query = query.where(db_models.Workspace.runtime_status == status)
+            if search:
+                like_pattern = f"%{search}%"
+                query = query.where(db_models.Workspace.name.ilike(like_pattern))
 
-        if owner_id:
-            query = query.where(db_models.Workspace.owner_id == owner_id)
-        if status:
-            query = query.where(db_models.Workspace.runtime_status == status)
-        if search:
-            like_pattern = f"%{search}%"
-            query = query.where(db_models.Workspace.name.ilike(like_pattern))
-
-        total = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
-
-        records = (
-            self.db.execute(
+            total = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
+            rows = self.db.execute(
                 query.order_by(db_models.Workspace.created_at.desc())
                 .offset((page - 1) * page_size)
                 .limit(page_size)
-            )
-            .scalars()
-            .all()
-        )
-        self._sync_kubernetes_workspace_records(records)
+            ).all()
 
-        items = [self._to_summary(workspace) for workspace in records]
+            records = [workspace for workspace, _ in rows]
+            self._sync_kubernetes_workspace_records(records)
+            items = [
+                self._to_summary(
+                    workspace,
+                    access_role=(
+                        "owner" if workspace.owner_id == current_user_id else share_role
+                    ),
+                    access_source=(
+                        "owned" if workspace.owner_id == current_user_id else "shared"
+                    ),
+                )
+                for workspace, share_role in rows
+            ]
+        else:
+            query = select(db_models.Workspace).options(selectinload(db_models.Workspace.owner))
+
+            if owner_id:
+                query = query.where(db_models.Workspace.owner_id == owner_id)
+            if status:
+                query = query.where(db_models.Workspace.runtime_status == status)
+            if search:
+                like_pattern = f"%{search}%"
+                query = query.where(db_models.Workspace.name.ilike(like_pattern))
+
+            total = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
+
+            records = (
+                self.db.execute(
+                    query.order_by(db_models.Workspace.created_at.desc())
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
+                .scalars()
+                .all()
+            )
+            self._sync_kubernetes_workspace_records(records)
+            items = [self._to_summary(workspace) for workspace in records]
+
         pagination = Pagination(page=page, page_size=page_size, total=total)
         return WorkspaceListResponse(items=items, pagination=pagination)
 
-    def get(self, workspace_id: str) -> Optional[WorkspaceDetail]:
+    def get(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> Optional[WorkspaceDetail]:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return None
+        access_context = self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="viewer",
+        )
         self._sync_kubernetes_workspace_record(workspace)
-        return self._to_detail(workspace)
+        return self._to_detail(
+            workspace,
+            access_role=access_context.access_role,
+            access_source=access_context.access_source,
+        )
 
     # -- 資料寫入 ---------------------------------------------------------
 
@@ -182,10 +262,21 @@ class WorkspaceService:
             return "kubernetes"
         return "docker"
 
-    def update(self, workspace_id: str, payload: WorkspaceUpdateRequest) -> Optional[WorkspaceDetail]:
+    def update(
+        self,
+        workspace_id: str,
+        payload: WorkspaceUpdateRequest,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> Optional[WorkspaceDetail]:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return None
+        access_context = self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
 
         data = payload.model_dump(exclude_unset=True, by_alias=True)
 
@@ -265,7 +356,133 @@ class WorkspaceService:
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(workspace)
-        return self._to_detail(workspace)
+        return self._to_detail(
+            workspace,
+            access_role=access_context.access_role,
+            access_source=access_context.access_source,
+        )
+
+    def list_shares(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: str,
+    ) -> WorkspaceShareListResponse:
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        if not workspace:
+            raise ValueError("Workspace not found")
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
+
+        rows = self.db.execute(
+            select(db_models.WorkspaceShare)
+            .options(
+                selectinload(db_models.WorkspaceShare.shared_with_user),
+                selectinload(db_models.WorkspaceShare.granted_by_user),
+            )
+            .where(db_models.WorkspaceShare.workspace_id == workspace_id)
+            .order_by(db_models.WorkspaceShare.created_at.asc())
+        ).scalars().all()
+        return WorkspaceShareListResponse(items=[self._to_share(row) for row in rows])
+
+    def create_share(
+        self,
+        workspace_id: str,
+        payload: WorkspaceShareCreateRequest,
+        *,
+        current_user_id: str,
+    ) -> WorkspaceShare:
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        if not workspace:
+            raise ValueError("Workspace not found")
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
+
+        normalized_email = payload.email.strip().lower()
+        target_user = self.db.scalar(
+            select(db_models.User).where(func.lower(db_models.User.email) == normalized_email)
+        )
+        if not target_user:
+            raise ValueError("Target user not found")
+        if target_user.id == workspace.owner_id:
+            raise ValueError("Cannot share a workspace with its owner")
+
+        existing_share = self.db.scalar(
+            select(db_models.WorkspaceShare).where(
+                db_models.WorkspaceShare.workspace_id == workspace_id,
+                db_models.WorkspaceShare.shared_with_user_id == target_user.id,
+            )
+        )
+        if existing_share:
+            raise ValueError("Workspace share already exists for this user")
+
+        share = db_models.WorkspaceShare(
+            id=str(uuid4()),
+            workspace_id=workspace_id,
+            shared_with_user_id=target_user.id,
+            role=payload.role,
+            granted_by_user_id=current_user_id,
+        )
+        self.db.add(share)
+        self.db.commit()
+        self.db.refresh(share)
+        return self._reload_share(share.id)
+
+    def update_share(
+        self,
+        workspace_id: str,
+        share_id: str,
+        payload: WorkspaceShareUpdateRequest,
+        *,
+        current_user_id: str,
+    ) -> Optional[WorkspaceShare]:
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        if not workspace:
+            raise ValueError("Workspace not found")
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
+
+        share = self.db.get(db_models.WorkspaceShare, share_id)
+        if not share or share.workspace_id != workspace_id:
+            return None
+
+        share.role = payload.role
+        share.updated_at = datetime.utcnow()
+        self.db.commit()
+        return self._reload_share(share.id)
+
+    def delete_share(
+        self,
+        workspace_id: str,
+        share_id: str,
+        *,
+        current_user_id: str,
+    ) -> bool:
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        if not workspace:
+            raise ValueError("Workspace not found")
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
+
+        share = self.db.get(db_models.WorkspaceShare, share_id)
+        if not share or share.workspace_id != workspace_id:
+            return False
+
+        self.db.delete(share)
+        self.db.commit()
+        return True
 
     # -- 轉換函式 ---------------------------------------------------------
 
@@ -278,7 +495,32 @@ class WorkspaceService:
             email=user.email,
         )
 
-    def _to_summary(self, workspace: db_models.Workspace) -> WorkspaceSummary:
+    def _to_share_user(self, user: db_models.User) -> WorkspaceShareUser:
+        return WorkspaceShareUser(
+            id=user.id,
+            display_name=user.display_name or user.username,
+            avatar_url=user.avatar_url,
+            username=user.username,
+            email=user.email,
+        )
+
+    def _to_share(self, share: db_models.WorkspaceShare) -> WorkspaceShare:
+        return WorkspaceShare(
+            id=share.id,
+            user=self._to_share_user(share.shared_with_user),
+            role=share.role,
+            granted_by=self._to_share_user(share.granted_by_user),
+            created_at=share.created_at,
+            updated_at=share.updated_at,
+        )
+
+    def _to_summary(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        access_role: WorkspaceAccessRole = "owner",
+        access_source: WorkspaceAccessSource = "owned",
+    ) -> WorkspaceSummary:
         owner = self._to_owner(workspace.owner)
         return WorkspaceSummary(
             id=workspace.id,
@@ -295,11 +537,19 @@ class WorkspaceService:
             runtime_status=workspace.runtime_status,
             runtime_external_url=workspace.runtime_external_url,
             runtime_last_seen=workspace.runtime_last_seen,
+            access_role=access_role,
+            access_source=access_source,
             created_at=workspace.created_at,
             updated_at=workspace.updated_at,
         )
 
-    def _to_detail(self, workspace: db_models.Workspace) -> WorkspaceDetail:
+    def _to_detail(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        access_role: WorkspaceAccessRole = "owner",
+        access_source: WorkspaceAccessSource = "owned",
+    ) -> WorkspaceDetail:
         owner = self._to_owner(workspace.owner)
         runtime_status = RuntimeStatus(
             status=workspace.runtime_status,
@@ -406,10 +656,75 @@ class WorkspaceService:
             fallback_enabled=workspace.fallback_enabled,
             workspace_path=workspace.workspace_path,
             acp_cli_args=workspace.acp_cli_args or [],
+            access_role=access_role,
+            access_source=access_source,
             created_at=workspace.created_at,
             updated_at=workspace.updated_at,
             runtime_job=runtime_job,
         )
+
+    def _reload_share(self, share_id: str) -> WorkspaceShare:
+        share = self.db.execute(
+            select(db_models.WorkspaceShare)
+            .options(
+                selectinload(db_models.WorkspaceShare.shared_with_user),
+                selectinload(db_models.WorkspaceShare.granted_by_user),
+            )
+            .where(db_models.WorkspaceShare.id == share_id)
+        ).scalar_one()
+        return self._to_share(share)
+
+    def _resolve_workspace_access_context(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        current_user_id: Optional[str],
+    ) -> Optional[WorkspaceAccessContext]:
+        if current_user_id is None or workspace.owner_id == current_user_id:
+            return WorkspaceAccessContext(
+                access_role="owner",
+                access_source="owned",
+            )
+
+        share = self.db.scalar(
+            select(db_models.WorkspaceShare).where(
+                db_models.WorkspaceShare.workspace_id == workspace.id,
+                db_models.WorkspaceShare.shared_with_user_id == current_user_id,
+            )
+        )
+        if not share:
+            return None
+
+        return WorkspaceAccessContext(
+            access_role=share.role,
+            access_source="shared",
+        )
+
+    def _require_workspace_access(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        current_user_id: Optional[str],
+        minimum_role: WorkspaceAccessRole,
+    ) -> WorkspaceAccessContext:
+        access_context = self._resolve_workspace_access_context(
+            workspace,
+            current_user_id=current_user_id,
+        )
+        if not access_context:
+            raise WorkspaceAccessDeniedError("Workspace access denied")
+        if self._role_rank(access_context.access_role) < self._role_rank(minimum_role):
+            raise WorkspaceAccessDeniedError("Workspace access denied")
+        return access_context
+
+    def _role_rank(self, role: WorkspaceAccessRole) -> int:
+        ranks: dict[WorkspaceAccessRole, int] = {
+            "viewer": 1,
+            "editor": 2,
+            "manager": 3,
+            "owner": 4,
+        }
+        return ranks[role]
 
     def _is_firewall_available_for_provisioner(self, provisioner: Optional[str]) -> bool:
         if provisioner == "kubernetes":
@@ -655,7 +970,12 @@ class WorkspaceService:
 
     # -- 生命週期管理 ------------------------------------------------------
 
-    def mark_workspace_deleting(self, workspace_id: str) -> bool:
+    def mark_workspace_deleting(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> bool:
         """標記 workspace 為刪除中狀態
 
         Args:
@@ -667,13 +987,23 @@ class WorkspaceService:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="owner",
+        )
 
         workspace.runtime_status = "deleting"
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         return True
 
-    def mark_workspace_rebuilding(self, workspace_id: str) -> bool:
+    def mark_workspace_rebuilding(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> bool:
         """標記 workspace 為重啟中狀態
 
         Args:
@@ -685,13 +1015,23 @@ class WorkspaceService:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
 
         workspace.runtime_status = "restarting"
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         return True
 
-    def mark_browser_restarting(self, workspace_id: str) -> bool:
+    def mark_browser_restarting(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> bool:
         """標記 Browser 容器為重啟中狀態
 
         Args:
@@ -703,17 +1043,32 @@ class WorkspaceService:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
 
         workspace.browser_status = "restarting"
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         return True
 
-    def mark_nextjs_restarting(self, workspace_id: str) -> bool:
+    def mark_nextjs_restarting(
+        self,
+        workspace_id: str,
+        *,
+        current_user_id: Optional[str] = None,
+    ) -> bool:
         """標記 Next.js 容器為重啟中狀態"""
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False
+        self._require_workspace_access(
+            workspace,
+            current_user_id=current_user_id,
+            minimum_role="manager",
+        )
 
         workspace.nextjs_status = "restarting"
         workspace.updated_at = datetime.utcnow()

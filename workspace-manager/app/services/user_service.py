@@ -8,6 +8,7 @@ from typing import Optional
 from uuid import uuid4
 
 from fastapi import Depends
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -46,9 +47,22 @@ class UserService:
             updated_at=db_user.updated_at,
         )
 
-    def list(self) -> UserListResponse:
+    def list(self, *, query: Optional[str] = None, limit: Optional[int] = None) -> UserListResponse:
         """列出所有使用者"""
-        db_users = self.db.query(DBUser).all()
+        db_query = self.db.query(DBUser)
+        if query:
+            pattern = f"%{query.strip()}%"
+            db_query = db_query.filter(
+                or_(
+                    DBUser.email.ilike(pattern),
+                    DBUser.username.ilike(pattern),
+                    DBUser.display_name.ilike(pattern),
+                )
+            )
+        db_query = db_query.order_by(DBUser.display_name.asc(), DBUser.username.asc())
+        if limit is not None:
+            db_query = db_query.limit(limit)
+        db_users = db_query.all()
         users = [self._db_user_to_user(db_user) for db_user in db_users]
         return UserListResponse(items=users, total=len(users))
 

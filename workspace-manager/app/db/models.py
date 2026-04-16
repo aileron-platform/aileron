@@ -14,6 +14,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +47,17 @@ class User(Base):
     )
     workspaces: Mapped[list["Workspace"]] = relationship(
         "Workspace", back_populates="owner", cascade="all, delete-orphan"
+    )
+    workspace_shares_received: Mapped[list["WorkspaceShare"]] = relationship(
+        "WorkspaceShare",
+        back_populates="shared_with_user",
+        cascade="all, delete-orphan",
+        foreign_keys="WorkspaceShare.shared_with_user_id",
+    )
+    workspace_shares_granted: Mapped[list["WorkspaceShare"]] = relationship(
+        "WorkspaceShare",
+        back_populates="granted_by_user",
+        foreign_keys="WorkspaceShare.granted_by_user_id",
     )
 
 
@@ -210,6 +222,12 @@ class Workspace(Base):
         cascade="all, delete-orphan",
         order_by="desc(WorkspaceRuntimeJob.scheduled_at)",
     )
+    shares: Mapped[list["WorkspaceShare"]] = relationship(
+        "WorkspaceShare",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        order_by="asc(WorkspaceShare.created_at)",
+    )
 
     __table_args__ = (
         CheckConstraint(
@@ -235,6 +253,54 @@ class Workspace(Base):
         CheckConstraint(
             "nextjs_status IN ('stopped', 'starting', 'running', 'error', 'restarting')",
             name="workspaces_nextjs_status_check",
+        ),
+    )
+
+
+class WorkspaceShare(Base):
+    """工作區分享授權"""
+
+    __tablename__ = "workspace_shares"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    shared_with_user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    granted_by_user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    workspace: Mapped[Workspace] = relationship("Workspace", back_populates="shares")
+    shared_with_user: Mapped[User] = relationship(
+        "User",
+        back_populates="workspace_shares_received",
+        foreign_keys=[shared_with_user_id],
+    )
+    granted_by_user: Mapped[User] = relationship(
+        "User",
+        back_populates="workspace_shares_granted",
+        foreign_keys=[granted_by_user_id],
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "shared_with_user_id",
+            name="workspace_shares_workspace_user_unique",
+        ),
+        CheckConstraint(
+            "role IN ('viewer', 'editor', 'manager')",
+            name="workspace_shares_role_check",
         ),
     )
 

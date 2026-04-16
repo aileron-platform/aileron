@@ -103,7 +103,7 @@ export const WorkspaceResetSettings: React.FC = () => {
         }
         logger.error('載入 workspace 失敗', { error, workspaceId });
         setWorkspaceDetail(null);
-        setWorkspaceName('Unknown Workspace');
+        setWorkspaceName(t('workspace.workspaceSettings.reset.delete.unknownWorkspaceName'));
       } finally {
         if (isActive) {
           setIsLoading(false);
@@ -116,7 +116,7 @@ export const WorkspaceResetSettings: React.FC = () => {
     return () => {
       isActive = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, t]);
 
   const getPhaseLabel = (phase?: string | null) => {
     if (!phase) {

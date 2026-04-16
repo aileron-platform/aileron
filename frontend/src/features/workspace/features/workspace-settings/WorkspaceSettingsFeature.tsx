@@ -8,6 +8,7 @@ import React from 'react';
 import { Settings } from 'lucide-react';
 import { useWorkspace } from '../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { WorkspaceAccessSettings } from './components/WorkspaceAccessSettings';
 import { WorkspaceBasicSettings } from './components/WorkspaceBasicSettings';
 import { WorkspaceResetSettings } from './components/WorkspaceResetSettings';
 
@@ -19,6 +20,8 @@ export const WorkspaceSettingsMainContent: React.FC = () => {
   switch (workspace.workspaceSettings.subView) {
     case 'basic':
       return <WorkspaceBasicSettings />;
+    case 'access':
+      return <WorkspaceAccessSettings />;
     case 'reset':
       return <WorkspaceResetSettings />;
     default:

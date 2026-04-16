@@ -703,10 +703,10 @@ export const RuntimeSettingsView: React.FC = () => {
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2">
                       <Network className="h-4 w-4" />
-                      System Ports
+                      {t('workspace.containerManagement.runtime.portMappings.system.label')}
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Default Docker ports managed by the platform.
+                      {t('workspace.containerManagement.runtime.portMappings.system.description')}
                     </p>
 
                     {formState.systemPortMappings.map((portMapping) => (
@@ -715,23 +715,33 @@ export const RuntimeSettingsView: React.FC = () => {
                         className="grid grid-cols-12 items-end gap-2 rounded-lg border border-border p-3 opacity-70"
                       >
                         <div className="col-span-2">
-                          <Label className="text-xs text-muted-foreground">Name</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.system.fields.name')}
+                          </Label>
                           <Input value={portMapping.name} disabled />
                         </div>
                         <div className="col-span-3">
-                          <Label className="text-xs text-muted-foreground">Container Port</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.system.fields.containerPort')}
+                          </Label>
                           <Input type="number" value={portMapping.containerPort} disabled />
                         </div>
                         <div className="col-span-3">
-                          <Label className="text-xs text-muted-foreground">Host Port</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.system.fields.hostPort')}
+                          </Label>
                           <Input type="number" value={portMapping.hostPort ?? ''} disabled />
                         </div>
                         <div className="col-span-2">
-                          <Label className="text-xs text-muted-foreground">Protocol</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.system.fields.protocol')}
+                          </Label>
                           <Input value={portMapping.protocol} disabled />
                         </div>
                         <div className="col-span-2">
-                          <Label className="text-xs text-muted-foreground">Description</Label>
+                          <Label className="text-xs text-muted-foreground">
+                            {t('workspace.containerManagement.runtime.portMappings.system.fields.description')}
+                          </Label>
                           <Input value={portMapping.description || ''} disabled />
                         </div>
                       </div>
@@ -848,7 +858,7 @@ export const RuntimeSettingsView: React.FC = () => {
                 </>
               ) : (
                 <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-                  Workspace-level port exposure is not supported for Kubernetes workspaces.
+                  {t('workspace.containerManagement.runtime.portMappings.kubernetesUnsupported')}
                 </div>
               )}
             </>

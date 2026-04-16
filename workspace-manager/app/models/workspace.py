@@ -15,6 +15,9 @@ BrowserStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarti
 NextjsStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
 ProvisionerType = Literal['docker', 'kubernetes']
 FirewallDomainAccessMode = Literal['all', 'specific']
+WorkspaceShareRole = Literal['viewer', 'editor', 'manager']
+WorkspaceAccessRole = Literal['owner', 'manager', 'editor', 'viewer']
+WorkspaceAccessSource = Literal['owned', 'shared']
 
 
 class Pagination(CamelModel):
@@ -24,6 +27,14 @@ class Pagination(CamelModel):
 
 
 class WorkspaceOwner(CamelModel):
+    id: str
+    display_name: str = Field(..., alias="displayName")
+    avatar_url: Optional[str] = Field(None, alias="avatarUrl")
+    username: Optional[str] = None
+    email: Optional[str] = None
+
+
+class WorkspaceShareUser(CamelModel):
     id: str
     display_name: str = Field(..., alias="displayName")
     avatar_url: Optional[str] = Field(None, alias="avatarUrl")
@@ -155,6 +166,8 @@ class WorkspaceSummary(CamelModel):
     runtime_status: str = Field(..., alias="runtimeStatus")
     runtime_external_url: Optional[str] = Field(None, alias="runtimeExternalUrl")
     runtime_last_seen: Optional[datetime] = Field(None, alias="runtimeLastSeen")
+    access_role: WorkspaceAccessRole = Field("owner", alias="accessRole")
+    access_source: WorkspaceAccessSource = Field("owned", alias="accessSource")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
 
@@ -195,6 +208,8 @@ class WorkspaceDetail(CamelModel):
     fallback_enabled: bool = Field(True, alias="fallbackEnabled")
     workspace_path: str = Field("/workspace", alias="workspacePath")
     acp_cli_args: list[str] = Field(default_factory=list, alias="acpCliArgs")
+    access_role: WorkspaceAccessRole = Field("owner", alias="accessRole")
+    access_source: WorkspaceAccessSource = Field("owned", alias="accessSource")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
     runtime_job: Optional["WorkspaceRuntimeJobSummary"] = Field(
@@ -221,6 +236,28 @@ class WorkspaceRuntimeJobSummary(CamelModel):
     started_at: Optional[datetime] = Field(None, alias="startedAt")
     finished_at: Optional[datetime] = Field(None, alias="finishedAt")
     error_message: Optional[str] = Field(None, alias="errorMessage")
+
+
+class WorkspaceShare(CamelModel):
+    id: str
+    user: WorkspaceShareUser
+    role: WorkspaceShareRole
+    granted_by: WorkspaceShareUser = Field(..., alias="grantedBy")
+    created_at: datetime = Field(..., alias="createdAt")
+    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+
+
+class WorkspaceShareListResponse(CamelModel):
+    items: list[WorkspaceShare]
+
+
+class WorkspaceShareCreateRequest(CamelModel):
+    email: str
+    role: WorkspaceShareRole
+
+
+class WorkspaceShareUpdateRequest(CamelModel):
+    role: WorkspaceShareRole
 
 
 class WorkspaceListResponse(CamelModel):
