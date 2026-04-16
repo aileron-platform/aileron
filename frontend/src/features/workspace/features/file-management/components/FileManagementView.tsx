@@ -79,6 +79,7 @@ export const FileManagementView: React.FC = () => {
   const {
     workspace,
     state: workspaceState,
+    dispatch,
     workspaceRuntime,
     layout,
     toggleSecondColumn,
@@ -94,9 +95,9 @@ export const FileManagementView: React.FC = () => {
   const [uploadTargetPath, setUploadTargetPath] = useState<string>('/');
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
-  const [showHiddenEntries, setShowHiddenEntries] = useState(false);
   const [extractProgress, setExtractProgress] = useState<ExtractProgressState | null>(null);
   const selectedGitContextId = workspaceState.versionControl.selectedGitContextId ?? 'primary';
+  const showHiddenEntries = workspaceState.fileTreeShowHiddenEntries;
 
   // 只有當 runtime 準備好時才創建 apiConfig
   const apiConfig: FileTreeApiConfig = useMemo(
@@ -621,8 +622,8 @@ export const FileManagementView: React.FC = () => {
   );
 
   const handleToggleHiddenEntries = useCallback(() => {
-    setShowHiddenEntries(current => !current);
-  }, []);
+    dispatch({ type: 'SET_FILE_TREE_SHOW_HIDDEN_ENTRIES', payload: !showHiddenEntries });
+  }, [dispatch, showHiddenEntries]);
 
   const handlePasteFiles = useCallback(
     async (files: File[]) => {

@@ -95,7 +95,12 @@ describe('useWorkspaceFileTreeAdapter', () => {
     );
 
     const { result } = renderHook(
-      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-save', runtimeBaseUrl: 'http://runtime', contextId: 'worktree:feature-auth' }),
+      () => useWorkspaceFileTreeAdapter({
+        workspaceId: 'ws-save',
+        runtimeBaseUrl: 'http://runtime',
+        contextId: 'worktree:feature-auth',
+        showHiddenEntries: false,
+      }),
       { wrapper },
     );
 
@@ -119,7 +124,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
 
     const { rerender } = renderHook(
       ({ workspaceId, runtimeBaseUrl }: { workspaceId: string; runtimeBaseUrl: string }) =>
-        useWorkspaceFileTreeAdapter({ workspaceId, runtimeBaseUrl }),
+        useWorkspaceFileTreeAdapter({ workspaceId, runtimeBaseUrl, showHiddenEntries: false }),
         
       {
         wrapper,
@@ -148,7 +153,12 @@ describe('useWorkspaceFileTreeAdapter', () => {
 
     const { rerender } = renderHook(
       ({ contextId }: { contextId: string | null }) =>
-        useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a', contextId }),
+        useWorkspaceFileTreeAdapter({
+          workspaceId: 'ws-a',
+          runtimeBaseUrl: 'http://runtime-a',
+          contextId,
+          showHiddenEntries: false,
+        }),
       {
         wrapper,
         initialProps: {
@@ -173,7 +183,11 @@ describe('useWorkspaceFileTreeAdapter', () => {
     );
 
     const { result } = renderHook(
-      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a' }),
+      () => useWorkspaceFileTreeAdapter({
+        workspaceId: 'ws-a',
+        runtimeBaseUrl: 'http://runtime-a',
+        showHiddenEntries: false,
+      }),
       { wrapper }
     );
 
@@ -187,9 +201,22 @@ describe('useWorkspaceFileTreeAdapter', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    const { result } = renderHook(
-      () => useWorkspaceFileTreeAdapter({ workspaceId: 'ws-a', runtimeBaseUrl: 'http://runtime-a' }),
-      { wrapper }
+    const onShowHiddenEntriesChange = vi.fn();
+
+    const { result, rerender } = renderHook(
+      ({ showHiddenEntries }: { showHiddenEntries: boolean }) =>
+        useWorkspaceFileTreeAdapter({
+          workspaceId: 'ws-a',
+          runtimeBaseUrl: 'http://runtime-a',
+          showHiddenEntries,
+          onShowHiddenEntriesChange,
+        }),
+      {
+        wrapper,
+        initialProps: {
+          showHiddenEntries: false,
+        },
+      }
     );
 
     managerLoadTreeMock.mockClear();
@@ -198,6 +225,10 @@ describe('useWorkspaceFileTreeAdapter', () => {
     await act(async () => {
       await result.current.actions.toggleShowHiddenEntries();
     });
+
+    expect(onShowHiddenEntriesChange).toHaveBeenCalledWith(true);
+
+    rerender({ showHiddenEntries: true });
 
     expect(result.current.state.showHiddenEntries).toBe(true);
     expect(managerApiConfigSnapshots.at(-1)?.includeHidden).toBe(true);

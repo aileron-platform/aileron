@@ -50,6 +50,8 @@ interface UseWorkspaceFileTreeAdapterOptions {
   workspaceId?: string;
   runtimeBaseUrl?: string | null;
   contextId?: string | null;
+  showHiddenEntries: boolean;
+  onShowHiddenEntriesChange?: (showHiddenEntries: boolean) => void;
 }
 
 interface WorkspaceFileTreeAdapterResult {
@@ -111,9 +113,8 @@ export function useWorkspaceFileTreeAdapter(
   options: UseWorkspaceFileTreeAdapterOptions
 ): WorkspaceFileTreeAdapterResult {
   const { t } = useI18n();
-  const { workspaceId, runtimeBaseUrl, contextId } = options;
+  const { workspaceId, runtimeBaseUrl, contextId, showHiddenEntries, onShowHiddenEntriesChange } = options;
   const queryClient = useQueryClient();
-  const [showHiddenEntries, setShowHiddenEntriesState] = useState(false);
 
   const apiConfig: FileTreeApiConfig = useMemo(
     () => ({
@@ -168,12 +169,12 @@ export function useWorkspaceFileTreeAdapter(
   }, [loadFileTree]);
 
   const setShowHiddenEntries = useCallback(async (nextShowHiddenEntries: boolean) => {
-    setShowHiddenEntriesState(nextShowHiddenEntries);
-  }, []);
+    onShowHiddenEntriesChange?.(nextShowHiddenEntries);
+  }, [onShowHiddenEntriesChange]);
 
   const toggleShowHiddenEntries = useCallback(async () => {
-    setShowHiddenEntriesState(current => !current);
-  }, []);
+    onShowHiddenEntriesChange?.(!showHiddenEntries);
+  }, [onShowHiddenEntriesChange, showHiddenEntries]);
 
   const refreshVersionControl = useCallback(async (options?: { includeBranches?: boolean; includeCommits?: boolean }) => {
     if (!workspaceId) {

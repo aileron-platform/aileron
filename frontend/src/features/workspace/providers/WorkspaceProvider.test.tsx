@@ -35,7 +35,7 @@ vi.mock('../hooks/useWorkspaceRuntime', () => ({
 }));
 
 vi.mock('../hooks/useWorkspaceFileTreeAdapter', () => ({
-  useWorkspaceFileTreeAdapter: () => ({
+  useWorkspaceFileTreeAdapter: ({ showHiddenEntries }: { showHiddenEntries: boolean }) => ({
     state: {
       nodes: [],
       selectedFile: null,
@@ -47,6 +47,7 @@ vi.mock('../hooks/useWorkspaceFileTreeAdapter', () => ({
       pendingAction: null,
       draggedNode: null,
       dropTarget: null,
+      showHiddenEntries,
     },
     actions: {
       loadFileTree: loadFileTreeMock,
@@ -71,14 +72,16 @@ const LayoutProbe = () => {
     <div>
       <div data-testid="layout-state">
         {JSON.stringify({
+          currentFeature: state.currentFeature,
           sidebarCollapsed: state.sidebarCollapsed,
           sidebarWidth: state.sidebarWidth,
           secondColumnCollapsed: state.secondColumnCollapsed,
           secondColumnWidth: state.secondColumnWidth,
-          rightChatCollapsed: state.rightChatCollapsed,
-          rightChatWidth: state.rightChatWidth,
-          expandedNavigationItems: state.expandedNavigationItems,
-        })}
+        rightChatCollapsed: state.rightChatCollapsed,
+        rightChatWidth: state.rightChatWidth,
+        expandedNavigationItems: state.expandedNavigationItems,
+        fileTreeShowHiddenEntries: state.fileTreeShowHiddenEntries,
+      })}
       </div>
       <button
         type="button"
@@ -91,6 +94,24 @@ const LayoutProbe = () => {
         onClick={() => dispatch({ type: 'SET_SIDEBAR_WIDTH', payload: 350 })}
       >
         widen-sidebar
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'SET_FILE_TREE_SHOW_HIDDEN_ENTRIES', payload: true })}
+      >
+        show-hidden-entries
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'version-control' })}
+      >
+        switch-to-version-control
+      </button>
+      <button
+        type="button"
+        onClick={() => dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'file-management' })}
+      >
+        switch-to-file-management
       </button>
     </div>
   );
@@ -167,6 +188,7 @@ describe('WorkspaceProvider layout persistence', () => {
       secondColumnWidth: 410,
       rightChatWidth: 520,
       expandedNavigationItems: ['claude-code', 'container-management'],
+      fileTreeShowHiddenEntries: true,
     });
 
     render(
@@ -185,6 +207,7 @@ describe('WorkspaceProvider layout persistence', () => {
         secondColumnWidth: 410,
         rightChatWidth: 520,
         expandedNavigationItems: ['claude-code', 'container-management'],
+        fileTreeShowHiddenEntries: true,
       });
     });
   });
@@ -199,6 +222,7 @@ describe('WorkspaceProvider layout persistence', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'collapse-sidebar' }));
     fireEvent.click(screen.getByRole('button', { name: 'widen-sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'show-hidden-entries' }));
 
     // 等防抖寫入完成（500ms），確認 localStorage 已經有資料
     await waitFor(
@@ -207,6 +231,7 @@ describe('WorkspaceProvider layout persistence', () => {
         expect(persisted).toMatchObject({
           sidebarCollapsed: true,
           sidebarWidth: 350,
+          fileTreeShowHiddenEntries: true,
         });
       },
       { timeout: 2000 }
@@ -225,7 +250,26 @@ describe('WorkspaceProvider layout persistence', () => {
       expect(getLayoutState()).toMatchObject({
         sidebarCollapsed: true,
         sidebarWidth: 350,
+        fileTreeShowHiddenEntries: true,
       });
+    });
+  });
+
+  it('keeps hidden-entry visibility when switching workspace pages inside the same provider', async () => {
+    render(
+      <WorkspaceProvider workspaceId="ws-navigation">
+        <LayoutProbe />
+      </WorkspaceProvider>,
+      { initialRoute: '/workspaces/file-management' }
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'show-hidden-entries' }));
+    fireEvent.click(screen.getByRole('button', { name: 'switch-to-version-control' }));
+    fireEvent.click(screen.getByRole('button', { name: 'switch-to-file-management' }));
+
+    expect(getLayoutState()).toMatchObject({
+      currentFeature: 'file-management',
+      fileTreeShowHiddenEntries: true,
     });
   });
 
@@ -238,6 +282,7 @@ describe('WorkspaceProvider layout persistence', () => {
       rightChatCollapsed: true,
       rightChatWidth: 520,
       expandedNavigationItems: ['claude-code', 'container-management'],
+      fileTreeShowHiddenEntries: true,
     });
 
     render(
@@ -256,6 +301,7 @@ describe('WorkspaceProvider layout persistence', () => {
         sidebarWidth: 360,
         rightChatCollapsed: true,
         rightChatWidth: 520,
+        fileTreeShowHiddenEntries: true,
       });
     });
 
@@ -268,6 +314,7 @@ describe('WorkspaceProvider layout persistence', () => {
       rightChatCollapsed: true,
       rightChatWidth: 520,
       expandedNavigationItems: ['claude-code', 'container-management'],
+      fileTreeShowHiddenEntries: true,
     });
   });
 
@@ -288,6 +335,7 @@ describe('WorkspaceProvider layout persistence', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'collapse-sidebar' }));
     fireEvent.click(screen.getByRole('button', { name: 'widen-sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'show-hidden-entries' }));
 
     await waitFor(() => {
       expect(getLayoutState()).toMatchObject({
@@ -338,6 +386,7 @@ describe('WorkspaceProvider layout persistence', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'collapse-sidebar' }));
     fireEvent.click(screen.getByRole('button', { name: 'widen-sidebar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'show-hidden-entries' }));
 
     // 防抖 effect 使用 setTimeout(500ms)，waitFor 預設 1s timeout 可涵蓋
     await waitFor(
@@ -347,6 +396,7 @@ describe('WorkspaceProvider layout persistence', () => {
         expect(persisted).toMatchObject({
           sidebarCollapsed: true,
           sidebarWidth: 350,
+          fileTreeShowHiddenEntries: true,
         });
       },
       { timeout: 2000 }

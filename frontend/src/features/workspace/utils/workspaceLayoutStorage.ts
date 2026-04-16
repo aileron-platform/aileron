@@ -30,7 +30,8 @@ const isValidLayoutPreferences = (value: unknown): value is WorkspaceLayoutPrefe
     && typeof candidate.secondColumnWidth === 'number'
     && typeof candidate.rightChatCollapsed === 'boolean'
     && typeof candidate.rightChatWidth === 'number'
-    && isStringArray(candidate.expandedNavigationItems);
+    && isStringArray(candidate.expandedNavigationItems)
+    && (candidate.fileTreeShowHiddenEntries === undefined || typeof candidate.fileTreeShowHiddenEntries === 'boolean');
 };
 
 export const getDefaultWorkspaceLayoutPreferences = (): WorkspaceLayoutPreferences => ({
@@ -41,6 +42,7 @@ export const getDefaultWorkspaceLayoutPreferences = (): WorkspaceLayoutPreferenc
   rightChatCollapsed: initialState.rightChatCollapsed,
   rightChatWidth: initialState.rightChatWidth,
   expandedNavigationItems: [...initialState.expandedNavigationItems],
+  fileTreeShowHiddenEntries: initialState.fileTreeShowHiddenEntries,
 });
 
 /**
@@ -63,9 +65,14 @@ export const loadWorkspaceLayoutPreferences = (workspaceId: string): WorkspaceLa
       return null;
     }
 
+    const defaults = getDefaultWorkspaceLayoutPreferences();
+
     return {
+      ...defaults,
       ...parsed.data,
       expandedNavigationItems: [...parsed.data.expandedNavigationItems],
+      fileTreeShowHiddenEntries:
+        parsed.data.fileTreeShowHiddenEntries ?? defaults.fileTreeShowHiddenEntries,
     };
   } catch (error) {
     logger.error(`Failed to load workspace layout for ${workspaceId}`, { error });

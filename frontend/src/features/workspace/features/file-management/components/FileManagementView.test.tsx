@@ -15,6 +15,8 @@ const {
   queryClientMock: {},
 }));
 
+const dispatchMock = vi.fn();
+
 vi.mock('@tanstack/react-query', async () => {
   const actual = await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query');
   return {
@@ -89,12 +91,15 @@ describe('FileManagementView', () => {
     useWorkspaceMock.mockReset();
     useFileTreeManagerMock.mockReset();
     useFileOperationsWithDialogMock.mockReset();
+    dispatchMock.mockReset();
 
     useWorkspaceMock.mockReturnValue({
       workspace: {
         openTabs: [],
       },
+      dispatch: dispatchMock,
       state: {
+        fileTreeShowHiddenEntries: false,
         versionControl: {
           selectedGitContextId: 'worktree:feature-auth',
         },
@@ -171,6 +176,43 @@ describe('FileManagementView', () => {
           workspaceId: 'ws-1',
           baseUrl: 'http://runtime.local',
           contextId: 'worktree:feature-auth',
+        }),
+      })
+    );
+  });
+
+  it('uses the workspace-level hidden-entry visibility in file tree requests', () => {
+    useWorkspaceMock.mockReturnValue({
+      workspace: {
+        openTabs: [],
+      },
+      dispatch: dispatchMock,
+      state: {
+        fileTreeShowHiddenEntries: true,
+        versionControl: {
+          selectedGitContextId: 'worktree:feature-auth',
+        },
+      },
+      workspaceRuntime: {
+        workspaceId: 'ws-1',
+        runtimeBaseUrl: 'http://runtime.local',
+        isLoading: false,
+        error: null,
+      },
+      layout: {
+        secondColumnCollapsed: false,
+      },
+      toggleSecondColumn: vi.fn(),
+      openFileInTab: vi.fn(),
+      closeTab: vi.fn(),
+    });
+
+    render(<FileManagementView />);
+
+    expect(useFileTreeManagerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiConfig: expect.objectContaining({
+          includeHidden: true,
         }),
       })
     );

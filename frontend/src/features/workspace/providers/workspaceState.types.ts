@@ -51,6 +51,7 @@ export interface WorkspaceState {
   rightChatCollapsed: boolean;
   rightChatWidth: number;
   chatExpanded: boolean;
+  fileTreeShowHiddenEntries: boolean;
 
   // 導航選單展開狀態
   expandedNavigationItems: string[];
@@ -127,6 +128,7 @@ export type WorkspaceAction =
   | { type: 'SET_SIDEBAR_WIDTH'; payload: number }
   | { type: 'SET_SECOND_COLUMN_WIDTH'; payload: number }
   | { type: 'SET_RIGHT_CHAT_WIDTH'; payload: number }
+  | { type: 'SET_FILE_TREE_SHOW_HIDDEN_ENTRIES'; payload: boolean }
   | { type: 'SET_VERSION_CONTROL_SUB_VIEW'; payload: 'changes' | 'history' }
   | { type: 'SET_SELECTED_GIT_CONTEXT'; payload: string | null }
   | { type: 'SET_OPENSPEC_SUB_VIEW'; payload: WorkspaceState['openspec']['subView'] }
@@ -193,6 +195,7 @@ export interface WorkspaceLayoutPreferences {
   rightChatCollapsed: boolean;
   rightChatWidth: number;
   expandedNavigationItems: string[];
+  fileTreeShowHiddenEntries: boolean;
 }
 
 // API Response 類型

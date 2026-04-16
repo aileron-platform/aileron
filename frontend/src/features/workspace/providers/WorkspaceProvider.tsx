@@ -34,13 +34,18 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   // 初始化 state 與 reducer
   const computedInitialState = useMemo(() => {
     const currentFeature = getFeatureFromPath(window.location.pathname);
+    const persistedLayoutPreferences = workspaceId
+      ? loadWorkspaceLayoutPreferences(workspaceId)
+      : null;
 
     return {
       ...initialState,
       currentFeature,
       layoutMode: getLayoutModeForFeature(currentFeature),
+      fileTreeShowHiddenEntries:
+        persistedLayoutPreferences?.fileTreeShowHiddenEntries ?? initialState.fileTreeShowHiddenEntries,
     };
-  }, []);
+  }, [workspaceId]);
 
   const [state, dispatch] = useReducer(workspaceReducer, computedInitialState);
   const stateRef = useRef(state);
@@ -61,6 +66,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     workspaceId: workspaceRuntime.workspaceId ?? workspaceId,
     runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
     contextId: fileManagementContextId,
+    showHiddenEntries: state.fileTreeShowHiddenEntries,
+    onShowHiddenEntriesChange: (showHiddenEntries) => {
+      dispatch({ type: 'SET_FILE_TREE_SHOW_HIDDEN_ENTRIES', payload: showHiddenEntries });
+    },
   });
 
   const fileTreeActions = fileTreeAdapter.actions;
@@ -228,6 +237,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         rightChatCollapsed: s.rightChatCollapsed,
         rightChatWidth: s.rightChatWidth,
         expandedNavigationItems: [...s.expandedNavigationItems],
+        fileTreeShowHiddenEntries: s.fileTreeShowHiddenEntries,
       });
     }
 
@@ -259,6 +269,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         rightChatCollapsed: state.rightChatCollapsed,
         rightChatWidth: state.rightChatWidth,
         expandedNavigationItems: [...state.expandedNavigationItems],
+        fileTreeShowHiddenEntries: state.fileTreeShowHiddenEntries,
       });
     }, 500);
 
@@ -272,6 +283,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     state.rightChatCollapsed,
     state.rightChatWidth,
     state.expandedNavigationItems,
+    state.fileTreeShowHiddenEntries,
   ]);
 
   // 當 runtimeBaseUrl 與 access token 都可用時自動載入檔案樹。
@@ -282,7 +294,9 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     const isAuthReady = !isAuthLoading && isAuthenticated && Boolean(accessToken);
     const treeIdentity =
       currentWorkspaceId && baseUrl && isAuthReady
-        ? `${currentWorkspaceId}::${baseUrl}::${fileManagementContextId}`
+        ? `${currentWorkspaceId}::${baseUrl}::${fileManagementContextId}::${
+            state.fileTreeShowHiddenEntries ? 'show-hidden' : 'hide-hidden'
+          }`
         : null;
 
     if (!treeIdentity) {
@@ -302,6 +316,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     isAuthenticated,
     accessToken,
     fileManagementContextId,
+    state.fileTreeShowHiddenEntries,
   ]);
 
   // 定期儲存當前 workspace 的 tabs 到 localStorage (防抖處理)

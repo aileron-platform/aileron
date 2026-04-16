@@ -171,6 +171,12 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         rightChatWidth: Math.max(360, Math.min(800, action.payload)),
       };
 
+    case 'SET_FILE_TREE_SHOW_HIDDEN_ENTRIES':
+      return {
+        ...state,
+        fileTreeShowHiddenEntries: action.payload,
+      };
+
     case 'SET_VERSION_CONTROL_SUB_VIEW':
       return {
         ...state,
@@ -759,6 +765,7 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         rightChatCollapsed: action.payload.rightChatCollapsed,
         rightChatWidth: action.payload.rightChatWidth,
         expandedNavigationItems: action.payload.expandedNavigationItems,
+        fileTreeShowHiddenEntries: action.payload.fileTreeShowHiddenEntries,
       };
 
     default:

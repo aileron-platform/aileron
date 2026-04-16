@@ -17,6 +17,7 @@ describe('workspaceLayoutStorage', () => {
       ...getDefaultWorkspaceLayoutPreferences(),
       sidebarCollapsed: true,
       sidebarWidth: 320,
+      fileTreeShowHiddenEntries: true,
     };
     const workspaceTwo = {
       ...getDefaultWorkspaceLayoutPreferences(),
@@ -29,6 +30,28 @@ describe('workspaceLayoutStorage', () => {
 
     expect(loadWorkspaceLayoutPreferences('ws-1')).toEqual(workspaceOne);
     expect(loadWorkspaceLayoutPreferences('ws-2')).toEqual(workspaceTwo);
+  });
+
+  it('falls back to the default hidden-entry visibility when reading older cached data', () => {
+    localStorage.setItem(
+      'workspace_layout_ws-legacy',
+      JSON.stringify({
+        version: '1',
+        data: {
+          sidebarCollapsed: false,
+          sidebarWidth: 240,
+          secondColumnCollapsed: false,
+          secondColumnWidth: 320,
+          rightChatCollapsed: false,
+          rightChatWidth: 400,
+          expandedNavigationItems: ['claude-code'],
+        },
+      })
+    );
+
+    expect(loadWorkspaceLayoutPreferences('ws-legacy')).toEqual(
+      getDefaultWorkspaceLayoutPreferences()
+    );
   });
 
   it('clears invalid persisted data and returns null', () => {
