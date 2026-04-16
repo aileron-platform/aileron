@@ -44,6 +44,12 @@ class TemplateInstallServiceStub:
             "/scripts/test-template",
             1024,
         )
+        self.skills_result: tuple[bool, InstallResults, str, int] = (
+            True,
+            InstallResults(created=["skills/demo.md"], updated=[], failed=[]),
+            "/workspace/.claude/skills",
+            128,
+        )
 
     async def install_slash_commands(
         self, workspace_id: str, request: Any
@@ -77,6 +83,11 @@ class TemplateInstallServiceStub:
         self, workspace_id: str, request: Any
     ) -> tuple[bool, InstallResults, str, int]:
         return self.scripts_result
+
+    async def install_skills(
+        self, workspace_id: str, request: Any
+    ) -> tuple[bool, InstallResults, str, int]:
+        return self.skills_result
 
     async def execute_init_commands(
         self, workspace_id: str, commands: str

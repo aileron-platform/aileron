@@ -123,11 +123,28 @@ class ScriptsInstallRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class SkillFileItem(BaseModel):
+    """Skill 檔案項目"""
+
+    path: str = Field(..., description="相對路徑")
+    content: str = Field(..., description="檔案內容")
+
+
+class SkillsInstallRequest(BaseModel):
+    """Skills 安裝請求"""
+
+    cliType: str = Field(..., alias="cliType", description="CLI 類型")
+    skills: List[SkillFileItem] = Field(..., description="技能檔案列表")
+
+    model_config = {"populate_by_name": True}
+
+
 class TemplateInstallRequest(BaseModel):
     """模板批次安裝請求"""
 
     templateId: str = Field(..., alias="templateId", description="模板 ID")
     templateName: str = Field(..., alias="templateName", description="模板名稱")
+    cliType: Optional[str] = Field(None, alias="cliType", description="CLI 類型")
     initCommands: Optional[str] = Field(
         None, alias="initCommands", description="初始化指令"
     )
@@ -150,6 +167,7 @@ class TemplateInstallRequest(BaseModel):
         None, description="Hooks"
     )
     scripts: Optional[List[ScriptFileItem]] = Field(None, description="Scripts")
+    skills: Optional[List[SkillFileItem]] = Field(None, description="Skills")
 
     model_config = {"populate_by_name": True}
 
@@ -243,6 +261,20 @@ class ScriptsInstallResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class SkillsInstallResponse(BaseModel):
+    """Skills 安裝回應"""
+
+    success: bool = Field(..., description="是否成功")
+    message: str = Field(..., description="訊息")
+    cliType: str = Field(..., alias="cliType", description="CLI 類型")
+    targetPath: str = Field(..., alias="targetPath", description="目標路徑")
+    results: InstallResults = Field(..., description="安裝結果")
+    totalFiles: int = Field(..., alias="totalFiles", description="總檔案數")
+    totalSize: int = Field(..., alias="totalSize", description="總大小（bytes）")
+
+    model_config = {"populate_by_name": True}
+
+
 class TemplateInstallItemResult(BaseModel):
     """單項安裝結果"""
 
@@ -265,6 +297,7 @@ class TemplateInstallResults(BaseModel):
     mcp: Optional[TemplateInstallItemResult] = Field(None)
     hooks: Optional[TemplateInstallItemResult] = Field(None)
     scripts: Optional[TemplateInstallItemResult] = Field(None)
+    skills: Optional[TemplateInstallItemResult] = Field(None)
 
     model_config = {"populate_by_name": True}
 
@@ -297,6 +330,8 @@ __all__ = [
     "HooksInstallRequest",
     "ScriptFileItem",
     "ScriptsInstallRequest",
+    "SkillFileItem",
+    "SkillsInstallRequest",
     "TemplateInstallRequest",
     # Response Models
     "InstallResults",
@@ -307,8 +342,8 @@ __all__ = [
     "McpInstallResponse",
     "HooksInstallResponse",
     "ScriptsInstallResponse",
+    "SkillsInstallResponse",
     "TemplateInstallItemResult",
     "TemplateInstallResults",
     "TemplateInstallResponse",
 ]
-

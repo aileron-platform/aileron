@@ -32,6 +32,7 @@ class TemplateInstallResults(BaseModel):
     mcp: Optional[TemplateInstallItemResult] = Field(default=None, alias="mcp")
     hooks: Optional[TemplateInstallItemResult] = Field(default=None, alias="hooks")
     scripts: Optional[TemplateInstallItemResult] = Field(default=None, alias="scripts")
+    skills: Optional[TemplateInstallItemResult] = Field(default=None, alias="skills")
 
     model_config = {"populate_by_name": True}
 
@@ -48,4 +49,3 @@ class TemplateInstallResponse(BaseModel):
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
     model_config = {"populate_by_name": True}
-

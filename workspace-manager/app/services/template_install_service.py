@@ -10,9 +10,24 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.db.models import Template as TemplateDB, Workspace
+from app.models.template import TemplateFileNode
 from app.services.template_service import TemplateService
 
 logger = logging.getLogger(__name__)
+
+
+def _flatten_template_file_nodes(nodes: list[TemplateFileNode]) -> list[TemplateFileNode]:
+    """將模板檔案樹展平成檔案節點列表。"""
+    flattened: list[TemplateFileNode] = []
+
+    for node in nodes:
+        if node.type == "file":
+            flattened.append(node)
+            continue
+        if node.children:
+            flattened.extend(_flatten_template_file_nodes(node.children))
+
+    return flattened
 
 
 class TemplateInstallError(Exception):
@@ -79,6 +94,7 @@ class TemplateInstallService:
         payload = {
             "templateId": template.id,
             "templateName": template.name,
+            "cliType": template.cli_type,
         }
 
         # 初始化指令
@@ -191,6 +207,20 @@ class TemplateInstallService:
 
             if scripts_list:
                 payload["scripts"] = scripts_list
+
+        # Skills
+        skills = _flatten_template_file_nodes(self.template_service.file_service.load_skills(template.id))
+        if skills:
+            skills_list = []
+            for skill in skills:
+                if skill.type == "file" and skill.content is not None:
+                    skills_list.append({
+                        "path": skill.path,
+                        "content": skill.content,
+                    })
+
+            if skills_list:
+                payload["skills"] = skills_list
 
         return payload
 

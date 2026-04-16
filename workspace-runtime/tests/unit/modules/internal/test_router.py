@@ -229,11 +229,18 @@ async def test_install_template_success_with_init_commands() -> None:
         "/workspace/scripts/demo",
         8,
     )
+    service.install_skills.return_value = (
+        True,
+        InstallResults(created=["skills/a.md"], updated=[], failed=[]),
+        "/workspace/.claude/skills",
+        5,
+    )
     service.execute_init_commands.return_value = (True, "done", "")
 
     template_req = TemplateInstallRequest(
         templateId="tpl-2",
         templateName="demo",
+        cliType="claude-code",
         initCommands="echo hi",
         claudeMd={"content": "# Claude"},
         slashCommands=[{"fileName": "a.md", "content": "# a"}],
@@ -242,6 +249,7 @@ async def test_install_template_success_with_init_commands() -> None:
         mcpServers={"svc": {"command": "node"}},
         hooks={"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "echo hi"}]}]},
         scripts=[{"path": "a.sh", "content": "echo hi", "executable": True}],
+        skills=[{"path": "skills/a.md", "content": "# a"}],
     )
 
     result = await install_template("ws", template_req, service)
@@ -250,6 +258,8 @@ async def test_install_template_success_with_init_commands() -> None:
     assert result.message == "模板安裝完成"
     assert result.results.hooks is not None
     assert result.results.hooks.success is True
+    assert result.results.skills is not None
+    assert result.results.skills.success is True
     assert service.execute_init_commands.await_count == 1
 
 
@@ -263,11 +273,13 @@ async def test_install_template_handles_section_exceptions() -> None:
     service.install_mcp_servers.side_effect = RuntimeError("mcp broken")
     service.install_hooks.side_effect = RuntimeError("hooks broken")
     service.install_scripts.side_effect = RuntimeError("scripts broken")
+    service.install_skills.side_effect = RuntimeError("skills broken")
     service.execute_init_commands.side_effect = RuntimeError("init broken")
 
     template_req = TemplateInstallRequest(
         templateId="tpl-3",
         templateName="demo",
+        cliType="claude-code",
         initCommands="echo hi",
         claudeMd={"content": "# Claude"},
         slashCommands=[{"fileName": "a.md", "content": "# a"}],
@@ -276,6 +288,7 @@ async def test_install_template_handles_section_exceptions() -> None:
         mcpServers={"svc": {"command": "node"}},
         hooks={"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "echo hi"}]}]},
         scripts=[{"path": "a.sh", "content": "echo hi", "executable": True}],
+        skills=[{"path": "skills/a.md", "content": "# a"}],
     )
 
     result = await install_template("ws", template_req, service)
@@ -288,4 +301,6 @@ async def test_install_template_handles_section_exceptions() -> None:
     assert result.results.mcp is not None
     assert result.results.hooks is not None
     assert result.results.scripts is not None
+    assert result.results.skills is not None
+    assert result.results.skills.error == "skills broken"
     assert service.execute_init_commands.await_count == 1

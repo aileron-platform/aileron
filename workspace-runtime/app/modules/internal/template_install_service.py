@@ -24,6 +24,8 @@ from app.modules.claude_code.claude_md.models import (
     ClaudeMdScope,
     ClaudeMdUpdateRequest,
 )
+from app.modules.cli_settings.skills.config import SkillTool, get_skill_config
+from app.config.settings import get_workspace_path
 
 from .template_install_models import (
     ClaudeMdInstallRequest,
@@ -31,6 +33,7 @@ from .template_install_models import (
     InstallResults,
     McpInstallRequest,
     OutputStyleInstallRequest,
+    SkillsInstallRequest,
     ScriptsInstallRequest,
     SlashCommandInstallRequest,
     SubagentInstallRequest,
@@ -401,6 +404,66 @@ class TemplateInstallService:
         target_path = str(template_dir)
 
         return success, results, target_path, total_size
+
+    # ============ Skills ============
+
+    async def install_skills(
+        self, workspace_id: str, request: SkillsInstallRequest
+    ) -> Tuple[bool, InstallResults, str, int]:
+        """安裝 Skills 到工作區 project scope。"""
+        results = InstallResults()
+        total_size = 0
+
+        cli_type = (request.cliType or "claude-code").strip().lower()
+        tool = self._resolve_skill_tool(cli_type)
+        config = get_skill_config(tool)
+        target_dir = Path(get_workspace_path()) / config.project_dot_dir / config.skill_dir_name
+        target_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+        for skill in request.skills:
+            try:
+                if ".." in skill.path or skill.path.startswith("/"):
+                    logger.warning("Invalid skill path: %s", skill.path)
+                    results.failed.append(skill.path)
+                    continue
+
+                file_path = target_dir / skill.path
+                is_new = not file_path.exists()
+                file_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+                file_path.write_text(skill.content, encoding="utf-8")
+                file_path.chmod(0o644)
+
+                total_size += len(skill.content.encode("utf-8"))
+                if is_new:
+                    results.created.append(skill.path)
+                else:
+                    results.updated.append(skill.path)
+
+                logger.info(
+                    "%s skill for %s: %s",
+                    "Created" if is_new else "Updated",
+                    cli_type,
+                    skill.path,
+                )
+            except Exception as e:
+                logger.error("Failed to install skill %s: %s", skill.path, e)
+                results.failed.append(skill.path)
+
+        success = len(results.failed) == 0
+        return success, results, str(target_dir), total_size
+
+    @staticmethod
+    def _resolve_skill_tool(cli_type: str) -> SkillTool:
+        normalized = cli_type.strip().lower()
+        if normalized == "claude-code":
+            return SkillTool.CLAUDE
+        if normalized == "codex":
+            return SkillTool.CODEX
+        if normalized == "gemini":
+            return SkillTool.GEMINI
+        if normalized == "opencode":
+            return SkillTool.OPENCODE
+        raise ValueError(f"Unsupported cli type for skills installation: {cli_type}")
 
     # ============ Init Commands ============
 

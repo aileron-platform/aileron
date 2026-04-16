@@ -22,6 +22,8 @@ from app.modules.internal.template_install_models import (
     HookActionInstall,
     ScriptsInstallRequest,
     ScriptFileItem,
+    SkillsInstallRequest,
+    SkillFileItem,
     InstallResults,
 )
 from app.modules.claude_code.common import DocumentScope
@@ -579,6 +581,50 @@ class TestScriptsInstallation:
 
         assert success is False
         assert len(results.failed) == 1
+
+
+class TestSkillsInstallation:
+    """Test skills installation"""
+
+    @pytest.mark.asyncio
+    async def test_install_codex_skills_to_project_scope(self, service):
+        """Test installing Codex skills into .agents/skills"""
+        request = SkillsInstallRequest(
+            cliType="codex",
+            skills=[
+                SkillFileItem(
+                    path="openspec-ff-change/SKILL.md",
+                    content="# Skill",
+                )
+            ],
+        )
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(service.scripts_base_dir.parent / "workspace")):
+            success, results, target_path, total_size = await service.install_skills(
+                "workspace-1", request
+            )
+
+        assert success is True
+        assert results.created == ["openspec-ff-change/SKILL.md"]
+        assert target_path.endswith("/workspace/.agents/skills")
+        assert total_size == len("# Skill".encode("utf-8"))
+        skill_file = Path(target_path) / "openspec-ff-change" / "SKILL.md"
+        assert skill_file.exists()
+        assert skill_file.read_text() == "# Skill"
+
+    @pytest.mark.asyncio
+    async def test_install_skills_rejects_path_traversal(self, service):
+        """Test that skill installation rejects invalid paths"""
+        request = SkillsInstallRequest(
+            cliType="claude-code",
+            skills=[SkillFileItem(path="../bad.md", content="bad")],
+        )
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(service.scripts_base_dir.parent / "workspace")):
+            success, results, _, _ = await service.install_skills("workspace-1", request)
+
+        assert success is False
+        assert results.failed == ["../bad.md"]
 
 
 class TestInitCommandsExecution:

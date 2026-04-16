@@ -188,7 +188,8 @@ class TestPayloadPreparation:
              patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
              patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
              patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files:
+             patch.object(install_service.template_service, '_load_files') as mock_files, \
+             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
 
             mock_claude_md.return_value = None
             mock_commands.return_value = []
@@ -197,6 +198,7 @@ class TestPayloadPreparation:
             mock_mcp.return_value = []
             mock_hooks.return_value = []
             mock_files.return_value = []
+            mock_skills.return_value = []
 
             # Act
             result = await install_service._prepare_install_payload(mock_template_db)
@@ -204,6 +206,7 @@ class TestPayloadPreparation:
             # Assert
             assert result["templateId"] == "test-template"
             assert result["templateName"] == "Test Template"
+            assert result["cliType"] == "claude-code"
             assert result["initCommands"] == ["echo 'Hello'"]
 
     @pytest.mark.asyncio
@@ -220,7 +223,8 @@ class TestPayloadPreparation:
              patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
              patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
              patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files:
+             patch.object(install_service.template_service, '_load_files') as mock_files, \
+             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
 
             mock_claude_md.return_value = "# Claude.md content"
             mock_commands.return_value = []
@@ -229,6 +233,7 @@ class TestPayloadPreparation:
             mock_mcp.return_value = []
             mock_hooks.return_value = []
             mock_files.return_value = []
+            mock_skills.return_value = []
 
             # Act
             result = await install_service._prepare_install_payload(mock_template_db)
@@ -255,7 +260,8 @@ class TestPayloadPreparation:
              patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
              patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
              patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files:
+             patch.object(install_service.template_service, '_load_files') as mock_files, \
+             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
 
             mock_claude_md.return_value = None
             mock_commands.return_value = [mock_command]
@@ -264,6 +270,7 @@ class TestPayloadPreparation:
             mock_mcp.return_value = []
             mock_hooks.return_value = []
             mock_files.return_value = []
+            mock_skills.return_value = []
 
             # Act
             result = await install_service._prepare_install_payload(mock_template_db)
@@ -297,7 +304,8 @@ class TestPayloadPreparation:
              patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
              patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
              patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files:
+             patch.object(install_service.template_service, '_load_files') as mock_files, \
+             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
 
             mock_claude_md.return_value = None
             mock_commands.return_value = []
@@ -306,6 +314,7 @@ class TestPayloadPreparation:
             mock_mcp.return_value = [mock_server]
             mock_hooks.return_value = []
             mock_files.return_value = []
+            mock_skills.return_value = []
 
             # Act
             result = await install_service._prepare_install_payload(mock_template_db)
@@ -315,6 +324,43 @@ class TestPayloadPreparation:
             assert "test-mcp" in result["mcpServers"]
             assert result["mcpServers"]["test-mcp"]["type"] == "stdio"
             assert result["mcpServers"]["test-mcp"]["command"] == "python"
+
+    @pytest.mark.asyncio
+    async def test_prepare_install_payload_with_skills(
+        self,
+        install_service,
+        mock_template_db
+    ):
+        """測試：準備含 Skills 的安裝資料"""
+        mock_skill = MagicMock()
+        mock_skill.type = "file"
+        mock_skill.path = "openspec-ff-change/SKILL.md"
+        mock_skill.content = "# Skill"
+
+        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
+             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
+             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
+             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
+             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
+             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
+             patch.object(install_service.template_service, '_load_files') as mock_files, \
+             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
+
+            mock_claude_md.return_value = None
+            mock_commands.return_value = []
+            mock_agents.return_value = []
+            mock_styles.return_value = []
+            mock_mcp.return_value = []
+            mock_hooks.return_value = []
+            mock_files.return_value = []
+            mock_skills.return_value = [mock_skill]
+
+            result = await install_service._prepare_install_payload(mock_template_db)
+
+            assert result["skills"] == [{
+                "path": "openspec-ff-change/SKILL.md",
+                "content": "# Skill",
+            }]
 
 
 # ============================================================================

@@ -30,6 +30,8 @@ from .template_install_models import (
     McpInstallResponse,
     OutputStyleInstallRequest,
     OutputStyleInstallResponse,
+    SkillsInstallRequest,
+    SkillsInstallResponse,
     ScriptsInstallRequest,
     ScriptsInstallResponse,
     SlashCommandInstallRequest,
@@ -483,10 +485,49 @@ async def install_scripts(
 
 
 @router.post(
+    "/workspaces/{workspace_id}/skills/install",
+    response_model=SkillsInstallResponse,
+    summary="安裝 Skills",
+    description="將模板的 Skills 複製到 workspace 對應 CLI 的 project scope 目錄"
+)
+async def install_skills(
+    workspace_id: str,
+    request: SkillsInstallRequest,
+    service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
+) -> SkillsInstallResponse:
+    """安裝 Skills 到 workspace project scope。"""
+    try:
+        success, results, target_path, total_size = await service.install_skills(
+            workspace_id, request
+        )
+
+        total = len(request.skills)
+        message = f"成功安裝 {total} 個 skills 到 {target_path}/"
+        if results.failed:
+            message = f"安裝 skills: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+
+        return SkillsInstallResponse(
+            success=success,
+            message=message,
+            cliType=request.cliType,
+            targetPath=target_path,
+            results=results,
+            totalFiles=total,
+            totalSize=total_size,
+        )
+    except Exception as e:
+        logger.error(f"Failed to install skills: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to install skills: {str(e)}"
+        )
+
+
+@router.post(
     "/workspaces/{workspace_id}/templates/install",
     response_model=TemplateInstallResponse,
     summary="批次安裝模板配置",
-    description="一次性安裝模板的所有配置（Claude.md, Slash Commands, Subagents, MCP, Hooks, Scripts）"
+    description="一次性安裝模板的所有配置（Claude.md, Slash Commands, Subagents, MCP, Hooks, Scripts, Skills）"
 )
 async def install_template(
     workspace_id: str,
@@ -671,6 +712,36 @@ async def install_template(
                 created=0,
                 updated=0,
                 failed=len(request.scripts),
+                error=str(e)
+            )
+            overall_success = False
+
+    # 安裝 Skills
+    if request.skills:
+        try:
+            from .template_install_models import SkillsInstallRequest as SkillsRequest
+            skills_request = SkillsRequest(
+                cliType=request.cliType or "claude-code",
+                skills=request.skills,
+            )
+            success, skills_results, _, _ = await service.install_skills(
+                workspace_id, skills_request
+            )
+            results.skills = TemplateInstallItemResult(
+                success=success,
+                created=len(skills_results.created),
+                updated=len(skills_results.updated),
+                failed=len(skills_results.failed)
+            )
+            if not success:
+                overall_success = False
+        except Exception as e:
+            logger.error(f"Failed to install skills in batch: {e}")
+            results.skills = TemplateInstallItemResult(
+                success=False,
+                created=0,
+                updated=0,
+                failed=len(request.skills),
                 error=str(e)
             )
             overall_success = False
