@@ -319,6 +319,111 @@ def test_workspace_state_marks_missing_project_command_files_as_sync_required(tm
     assert action_map["propose"].reason == "Project OpenSpec command files are out of sync with the active workflow profile"
 
 
+def test_get_customization_state_lists_project_files(tmp_path: Path, monkeypatch) -> None:
+    schemas_dir = tmp_path / "openspec" / "schemas" / "review-flow" / "templates"
+    schemas_dir.mkdir(parents=True)
+    (tmp_path / "openspec" / "config.yaml").write_text("schema: review-flow\n", encoding="utf-8")
+    (schemas_dir.parent / "schema.yaml").write_text("name: review-flow\n", encoding="utf-8")
+    (schemas_dir / "proposal.md").write_text("## Proposal\n", encoding="utf-8")
+
+    service = OpenSpecService(workspace_path=tmp_path)
+
+    def fake_run_json(args: list[str]):
+        if args == ["schemas", "--json"]:
+            return [{"name": "spec-driven", "source": "package"}]
+        if args == ["schema", "validate", "review-flow", "--json"]:
+            return {"name": "review-flow", "valid": True, "issues": []}
+        return None
+
+    monkeypatch.setattr(service, "_run_openspec_json", fake_run_json)
+
+    result = service.get_customization_state("ws-1")
+
+    assert result.workspaceId == "ws-1"
+    assert result.configPath == "/openspec/config.yaml"
+    assert result.configPresent is True
+    assert result.defaultSchema == "review-flow"
+    assert result.builtInSchemas == ["spec-driven"]
+    assert len(result.schemas) == 1
+    assert result.schemas[0].name == "review-flow"
+    assert result.schemas[0].schemaPath == "/openspec/schemas/review-flow/schema.yaml"
+    assert result.schemas[0].templateFiles[0].path == "/openspec/schemas/review-flow/templates/proposal.md"
+
+
+def test_validate_and_debug_customization_use_contextual_schema(tmp_path: Path, monkeypatch) -> None:
+    schema_dir = tmp_path / "openspec" / "schemas" / "review-flow"
+    (schema_dir / "templates").mkdir(parents=True)
+    (tmp_path / "openspec" / "config.yaml").write_text("schema: review-flow\n", encoding="utf-8")
+    (schema_dir / "schema.yaml").write_text("name: review-flow\n", encoding="utf-8")
+    (schema_dir / "templates" / "proposal.md").write_text("## Proposal\n", encoding="utf-8")
+
+    service = OpenSpecService(workspace_path=tmp_path)
+
+    def fake_run_json(args: list[str]):
+        if args == ["schema", "validate", "review-flow", "--json"]:
+            return {"name": "review-flow", "valid": False, "issues": ["Missing design.md template"]}
+        if args == ["schema", "which", "review-flow", "--json"]:
+            return {"name": "review-flow", "source": "project", "path": "/tmp/workspace/openspec/schemas/review-flow"}
+        return None
+
+    monkeypatch.setattr(service, "_run_openspec_json", fake_run_json)
+
+    validation = service.validate_customization(
+        "ws-1",
+        path="/openspec/schemas/review-flow/templates/proposal.md",
+    )
+    debug = service.debug_customization(
+        "ws-1",
+        path="/openspec/config.yaml",
+    )
+
+    assert validation.schemaName == "review-flow"
+    assert validation.valid is False
+    assert validation.diagnostics[0].message == "Missing design.md template"
+    assert debug.schemaName == "review-flow"
+    assert debug.resolvedName == "review-flow"
+    assert debug.source == "project"
+
+
+def test_init_customization_schema_raises_cli_error_from_json_payload(tmp_path: Path, monkeypatch) -> None:
+    service = OpenSpecService(workspace_path=tmp_path)
+
+    monkeypatch.setattr(
+        service,
+        "_run_openspec_json_checked",
+        lambda args: {
+            "created": False,
+            "error": "Schema 'review-flow' already exists",
+            "suggestion": "Use --force to overwrite",
+        },
+    )
+
+    try:
+        service.init_customization_schema("ws-1", name="review-flow")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert str(exc) == "Schema 'review-flow' already exists"
+
+
+def test_fork_customization_schema_raises_cli_error_from_json_payload(tmp_path: Path, monkeypatch) -> None:
+    service = OpenSpecService(workspace_path=tmp_path)
+
+    monkeypatch.setattr(
+        service,
+        "_run_openspec_json_checked",
+        lambda args: {
+            "forked": False,
+            "error": "Schema 'review-flow' already exists",
+        },
+    )
+
+    try:
+        service.fork_customization_schema("ws-1", source_schema="spec-driven", destination_schema="review-flow")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert str(exc) == "Schema 'review-flow' already exists"
+
+
 def test_workspace_state_treats_generated_openspec_skills_as_project_synced(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "openspec").mkdir()
     skills_dir = tmp_path / ".claude" / "skills"

@@ -65,6 +65,7 @@ class OpenSpecActionContextSubview(str, Enum):
     IN_PROGRESS = "in-progress"
     COMPLETE = "complete"
     ARCHIVED = "archived"
+    CUSTOMIZATION = "customization"
 
 
 class OpenSpecChangeSummary(BaseModel):
@@ -136,3 +137,128 @@ class OpenSpecWorkspaceResponse(BaseModel):
     state: OpenSpecWorkspaceState = Field(description="OpenSpec 狀態")
     actions: list[OpenSpecActionItem] = Field(default_factory=list, description="可用 actions")
     changes: list[OpenSpecNavigationChange] = Field(default_factory=list, description="OpenSpec 導覽 changes")
+
+
+class OpenSpecCustomizationFileKind(str, Enum):
+    """Customization 檔案種類。"""
+
+    CONFIG = "config"
+    SCHEMA = "schema"
+    TEMPLATE = "template"
+
+
+class OpenSpecCustomizationTemplateFile(BaseModel):
+    """Schema template 檔案摘要。"""
+
+    name: str = Field(description="Template 檔名")
+    path: str = Field(description="Template 路徑")
+
+
+class OpenSpecCustomizationSchema(BaseModel):
+    """Project-local schema 摘要。"""
+
+    name: str = Field(description="Schema 名稱")
+    path: str = Field(description="Schema 目錄路徑")
+    schemaPath: str = Field(description="schema.yaml 路徑")
+    isDefault: bool = Field(description="是否為目前 default schema")
+    isInvalid: bool = Field(description="Schema 是否驗證失敗")
+    templateFiles: list[OpenSpecCustomizationTemplateFile] = Field(default_factory=list, description="Template 檔案")
+
+
+class OpenSpecCustomizationStateResponse(BaseModel):
+    """Customization explorer 所需的聚合狀態。"""
+
+    workspaceId: str = Field(description="Workspace ID")
+    configPath: str = Field(description="config.yaml 路徑")
+    configPresent: bool = Field(description="config.yaml 是否存在")
+    defaultSchema: str | None = Field(default=None, description="目前 project default schema")
+    builtInSchemas: list[str] = Field(default_factory=list, description="可 fork 的 built-in schemas")
+    schemas: list[OpenSpecCustomizationSchema] = Field(default_factory=list, description="Project-local schemas")
+
+
+class OpenSpecCustomizationFileResponse(BaseModel):
+    """Customization 檔案內容。"""
+
+    workspaceId: str = Field(description="Workspace ID")
+    path: str = Field(description="檔案路徑")
+    name: str = Field(description="檔名")
+    kind: OpenSpecCustomizationFileKind = Field(description="檔案種類")
+    content: str = Field(description="檔案內容")
+    editable: bool = Field(description="是否可編輯")
+    language: str = Field(description="編輯器語言")
+    schemaName: str | None = Field(default=None, description="所屬 schema")
+    metadata: dict[str, object] = Field(default_factory=dict, description="附加 metadata")
+
+
+class OpenSpecCustomizationFileUpdateRequest(BaseModel):
+    """更新 customization 檔案內容。"""
+
+    content: str = Field(description="新的檔案內容")
+
+
+class OpenSpecCustomizationSchemaForkRequest(BaseModel):
+    """Fork schema 請求。"""
+
+    sourceSchema: str = Field(description="來源 schema")
+    destinationSchema: str = Field(description="目標 schema 名稱")
+
+
+class OpenSpecCustomizationSchemaCreateRequest(BaseModel):
+    """建立 schema 請求。"""
+
+    name: str = Field(description="Schema 名稱")
+    description: str | None = Field(default=None, description="Schema 描述")
+    artifacts: list[str] = Field(default_factory=list, description="Artifacts")
+
+
+class OpenSpecCustomizationActionResponse(BaseModel):
+    """Customization action 一般回應。"""
+
+    success: bool = Field(default=True, description="是否成功")
+    message: str = Field(description="訊息")
+    schemaName: str | None = Field(default=None, description="Schema 名稱")
+    path: str | None = Field(default=None, description="相關路徑")
+
+
+class OpenSpecCustomizationValidationRequest(BaseModel):
+    """Validation 請求。"""
+
+    path: str = Field(description="目前 context 路徑")
+
+
+class OpenSpecCustomizationDiagnostic(BaseModel):
+    """Validation diagnostics。"""
+
+    level: str = Field(description="等級")
+    message: str = Field(description="訊息")
+
+
+class OpenSpecCustomizationValidationResponse(BaseModel):
+    """Customization validation 結果。"""
+
+    workspaceId: str = Field(description="Workspace ID")
+    targetPath: str = Field(description="驗證來源 path")
+    schemaName: str | None = Field(default=None, description="驗證的 schema")
+    valid: bool = Field(description="是否通過")
+    diagnostics: list[OpenSpecCustomizationDiagnostic] = Field(default_factory=list, description="診斷結果")
+
+
+class OpenSpecCustomizationResolutionStep(BaseModel):
+    """Schema resolution step。"""
+
+    order: int = Field(description="順序")
+    label: str = Field(description="步驟名稱")
+    value: str | None = Field(default=None, description="該步驟值")
+    selected: bool = Field(default=False, description="是否為採用來源")
+
+
+class OpenSpecCustomizationDebugResponse(BaseModel):
+    """Customization debug / schema resolution 結果。"""
+
+    workspaceId: str = Field(description="Workspace ID")
+    targetPath: str = Field(description="來源 path")
+    schemaName: str | None = Field(default=None, description="推導出的 schema 名稱")
+    resolvedName: str | None = Field(default=None, description="最終 resolved schema")
+    source: str | None = Field(default=None, description="來源")
+    path: str | None = Field(default=None, description="resolved path")
+    resolutionOrder: list[OpenSpecCustomizationResolutionStep] = Field(default_factory=list, description="Resolution steps")

@@ -80,7 +80,7 @@ export interface WorkspaceState {
   };
 
   openspec: {
-    subView: 'in-progress' | 'complete' | 'archived';
+    subView: 'in-progress' | 'complete' | 'archived' | 'customization';
     selectedPath: string | null;
     openTabs: WorkspaceTab[];
     activeTabId: string | null;

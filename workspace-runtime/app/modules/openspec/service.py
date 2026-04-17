@@ -24,6 +24,16 @@ from .models import (
     OpenSpecActionProfile,
     OpenSpecChangeStatus,
     OpenSpecChangeSummary,
+    OpenSpecCustomizationActionResponse,
+    OpenSpecCustomizationDebugResponse,
+    OpenSpecCustomizationDiagnostic,
+    OpenSpecCustomizationFileKind,
+    OpenSpecCustomizationFileResponse,
+    OpenSpecCustomizationSchema,
+    OpenSpecCustomizationStateResponse,
+    OpenSpecCustomizationTemplateFile,
+    OpenSpecCustomizationValidationResponse,
+    OpenSpecCustomizationResolutionStep,
     OpenSpecNavigationChange,
     OpenSpecSpecDocument,
     OpenSpecWorkspaceProfile,
@@ -36,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 TranslateFn = Callable[[str], str]
 TASK_CHECKBOX_RE = re.compile(r"^\s*-\s\[(x|X| )\]\s.+$")
+DEFAULT_CONFIG_PATH = "/openspec/config.yaml"
 PROJECT_SKILL_ACTION_MAP: dict[str, set[str]] = {
     "propose": {"openspec-propose"},
     "explore": {"openspec-explore"},
@@ -69,6 +80,14 @@ class OpenSpecActionDefinition:
 class OpenSpecActionContext:
     subview: OpenSpecActionContextSubview | None = None
     focused_change_name: str | None = None
+
+
+@dataclass(frozen=True)
+class OpenSpecCustomizationTarget:
+    path: str
+    local_path: Path
+    kind: OpenSpecCustomizationFileKind
+    schema_name: str | None = None
 
 
 class OpenSpecService:
@@ -120,6 +139,169 @@ class OpenSpecService:
             state=state,
             actions=actions,
             changes=navigation_changes,
+        )
+
+    def get_customization_state(self, workspace_id: str) -> OpenSpecCustomizationStateResponse:
+        default_schema = self._read_project_default_schema()
+        return OpenSpecCustomizationStateResponse(
+            workspaceId=workspace_id,
+            configPath=DEFAULT_CONFIG_PATH,
+            configPresent=(self._workspace_path / "openspec" / "config.yaml").is_file(),
+            defaultSchema=default_schema,
+            builtInSchemas=self._list_built_in_schemas(),
+            schemas=self._list_project_schemas(default_schema),
+        )
+
+    def read_customization_file(self, workspace_id: str, path: str) -> OpenSpecCustomizationFileResponse:
+        target = self._resolve_customization_target(path)
+        content = ""
+        if target.local_path.is_file():
+            content = target.local_path.read_text(encoding="utf-8")
+
+        metadata: dict[str, object] = {}
+        if target.kind == OpenSpecCustomizationFileKind.CONFIG:
+            metadata["defaultSchema"] = self._read_project_default_schema()
+        elif target.kind == OpenSpecCustomizationFileKind.SCHEMA:
+            metadata["isDefault"] = target.schema_name == self._read_project_default_schema()
+            metadata["templateCount"] = len(list(target.local_path.parent.joinpath("templates").glob("*.md")))
+
+        return OpenSpecCustomizationFileResponse(
+            workspaceId=workspace_id,
+            path=target.path,
+            name=target.local_path.name,
+            kind=target.kind,
+            content=content,
+            editable=True,
+            language="yaml" if target.kind != OpenSpecCustomizationFileKind.TEMPLATE else "markdown",
+            schemaName=target.schema_name,
+            metadata=metadata,
+        )
+
+    def update_customization_file(
+        self,
+        workspace_id: str,
+        path: str,
+        content: str,
+    ) -> OpenSpecCustomizationActionResponse:
+        target = self._resolve_customization_target(path)
+        target.local_path.parent.mkdir(parents=True, exist_ok=True)
+        target.local_path.write_text(content, encoding="utf-8")
+        return OpenSpecCustomizationActionResponse(
+            success=True,
+            message="Customization file saved",
+            path=target.path,
+        )
+
+    def fork_customization_schema(
+        self,
+        workspace_id: str,
+        *,
+        source_schema: str,
+        destination_schema: str,
+    ) -> OpenSpecCustomizationActionResponse:
+        destination = destination_schema.strip()
+        if not destination:
+            raise ValueError("Destination schema is required")
+        payload = self._run_openspec_json_checked(["schema", "fork", source_schema, destination, "--json"])
+        if isinstance(payload, dict) and payload.get("forked") is False:
+            message = str(payload.get("error") or payload.get("suggestion") or "Failed to fork schema")
+            raise ValueError(message)
+        return OpenSpecCustomizationActionResponse(
+            success=True,
+            message="Schema forked",
+            schemaName=str(payload.get("destination") or destination) if isinstance(payload, dict) else destination,
+            path=f"/openspec/schemas/{str(payload.get('destination') or destination) if isinstance(payload, dict) else destination}",
+        )
+
+    def init_customization_schema(
+        self,
+        workspace_id: str,
+        *,
+        name: str,
+        description: str | None = None,
+        artifacts: list[str] | None = None,
+    ) -> OpenSpecCustomizationActionResponse:
+        schema_name = name.strip()
+        if not schema_name:
+            raise ValueError("Schema name is required")
+        args = ["schema", "init", schema_name, "--json", "--no-default"]
+        if description:
+            args.extend(["--description", description])
+        if artifacts:
+            args.extend(["--artifacts", ",".join(artifacts)])
+        payload = self._run_openspec_json_checked(args)
+        if isinstance(payload, dict) and payload.get("created") is False:
+            message = str(payload.get("error") or payload.get("suggestion") or "Failed to create schema")
+            raise ValueError(message)
+        return OpenSpecCustomizationActionResponse(
+            success=True,
+            message="Schema created",
+            schemaName=str(payload.get("schema") or schema_name) if isinstance(payload, dict) else schema_name,
+            path=f"/openspec/schemas/{str(payload.get('schema') or schema_name) if isinstance(payload, dict) else schema_name}",
+        )
+
+    def validate_customization(
+        self,
+        workspace_id: str,
+        *,
+        path: str,
+    ) -> OpenSpecCustomizationValidationResponse:
+        target = self._resolve_customization_target(path)
+        if target.kind == OpenSpecCustomizationFileKind.CONFIG:
+            return self._validate_project_config(workspace_id, target)
+        return self._validate_schema_context(workspace_id, target)
+
+    def debug_customization(
+        self,
+        workspace_id: str,
+        *,
+        path: str,
+    ) -> OpenSpecCustomizationDebugResponse:
+        target = self._resolve_customization_target(path)
+        if target.kind == OpenSpecCustomizationFileKind.CONFIG:
+            schema_name = self._read_project_default_schema()
+        else:
+            schema_name = target.schema_name
+
+        resolved_name: str | None = None
+        source: str | None = None
+        resolved_path: str | None = None
+        if schema_name:
+            payload = self._run_openspec_json(["schema", "which", schema_name, "--json"])
+            if isinstance(payload, dict):
+                resolved_name = str(payload.get("name")) if payload.get("name") else schema_name
+                source = str(payload.get("source")) if payload.get("source") else None
+                resolved_path = str(payload.get("path")) if payload.get("path") else None
+
+        requested_label = "config.yaml default schema" if target.kind == OpenSpecCustomizationFileKind.CONFIG else "selected schema"
+        resolution_order = [
+            OpenSpecCustomizationResolutionStep(
+                order=1,
+                label=requested_label,
+                value=schema_name,
+                selected=bool(schema_name),
+            ),
+            OpenSpecCustomizationResolutionStep(
+                order=2,
+                label="project-local schema",
+                value=schema_name if source == "project" else None,
+                selected=source == "project",
+            ),
+            OpenSpecCustomizationResolutionStep(
+                order=3,
+                label="built-in schema",
+                value=resolved_name if source == "package" else None,
+                selected=source == "package",
+            ),
+        ]
+        return OpenSpecCustomizationDebugResponse(
+            workspaceId=workspace_id,
+            targetPath=target.path,
+            schemaName=schema_name,
+            resolvedName=resolved_name,
+            source=source,
+            path=resolved_path,
+            resolutionOrder=resolution_order,
         )
 
     def log_cli_probe(self) -> None:
@@ -654,6 +836,172 @@ class OpenSpecService:
             )
         return summaries
 
+    def _list_built_in_schemas(self) -> list[str]:
+        payload = self._run_openspec_json(["schemas", "--json"])
+        if not isinstance(payload, list):
+            return []
+        schemas: list[str] = []
+        for item in payload:
+            if isinstance(item, dict) and isinstance(item.get("name"), str):
+                schemas.append(item["name"])
+        return schemas
+
+    def _list_project_schemas(self, default_schema: str | None) -> list[OpenSpecCustomizationSchema]:
+        schemas_root = self._workspace_path / "openspec" / "schemas"
+        if not schemas_root.is_dir():
+            return []
+
+        schemas: list[OpenSpecCustomizationSchema] = []
+        for schema_dir in sorted(
+            [item for item in schemas_root.iterdir() if item.is_dir()],
+            key=lambda item: item.name,
+        ):
+            schema_file = schema_dir / "schema.yaml"
+            if not schema_file.is_file():
+                continue
+            template_dir = schema_dir / "templates"
+            template_files = [
+                OpenSpecCustomizationTemplateFile(
+                    name=file_path.name,
+                    path=self._to_workspace_path(file_path),
+                )
+                for file_path in sorted(template_dir.glob("*.md"))
+            ] if template_dir.is_dir() else []
+            validation = self._run_openspec_json(["schema", "validate", schema_dir.name, "--json"])
+            is_invalid = isinstance(validation, dict) and validation.get("valid") is False
+            schemas.append(
+                OpenSpecCustomizationSchema(
+                    name=schema_dir.name,
+                    path=self._to_workspace_path(schema_dir),
+                    schemaPath=self._to_workspace_path(schema_file),
+                    isDefault=schema_dir.name == default_schema,
+                    isInvalid=is_invalid,
+                    templateFiles=template_files,
+                )
+            )
+        return schemas
+
+    def _read_project_default_schema(self) -> str | None:
+        config_path = self._workspace_path / "openspec" / "config.yaml"
+        if not config_path.is_file():
+            return None
+        try:
+            content = config_path.read_text(encoding="utf-8")
+        except OSError:
+            return None
+        match = re.search(r"(?m)^\s*schema:\s*([^\s#]+)\s*$", content)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    def _resolve_customization_target(self, path: str) -> OpenSpecCustomizationTarget:
+        normalized = path if path.startswith("/") else f"/{path}"
+        if normalized == DEFAULT_CONFIG_PATH:
+            return OpenSpecCustomizationTarget(
+                path=normalized,
+                local_path=self._workspace_path / "openspec" / "config.yaml",
+                kind=OpenSpecCustomizationFileKind.CONFIG,
+            )
+
+        match = re.match(r"^/openspec/schemas/([^/]+)/schema\.ya?ml$", normalized)
+        if match:
+            schema_name = match.group(1)
+            return OpenSpecCustomizationTarget(
+                path=normalized,
+                local_path=self._workspace_path / normalized.lstrip("/"),
+                kind=OpenSpecCustomizationFileKind.SCHEMA,
+                schema_name=schema_name,
+            )
+
+        match = re.match(r"^/openspec/schemas/([^/]+)/templates/([^/]+\.md)$", normalized)
+        if match:
+            schema_name = match.group(1)
+            return OpenSpecCustomizationTarget(
+                path=normalized,
+                local_path=self._workspace_path / normalized.lstrip("/"),
+                kind=OpenSpecCustomizationFileKind.TEMPLATE,
+                schema_name=schema_name,
+            )
+
+        raise ValueError(f"Unsupported customization path: {path}")
+
+    def _validate_schema_context(
+        self,
+        workspace_id: str,
+        target: OpenSpecCustomizationTarget,
+    ) -> OpenSpecCustomizationValidationResponse:
+        schema_name = target.schema_name
+        payload = self._run_openspec_json(["schema", "validate", schema_name or "", "--json"])
+        valid = bool(isinstance(payload, dict) and payload.get("valid") is True)
+        issues = payload.get("issues", []) if isinstance(payload, dict) else []
+        diagnostics = [
+            OpenSpecCustomizationDiagnostic(
+                level="error" if not valid else "info",
+                message=str(issue),
+            )
+            for issue in issues
+        ]
+        if valid and not diagnostics:
+            diagnostics.append(
+                OpenSpecCustomizationDiagnostic(level="info", message="Schema validation passed"),
+            )
+        return OpenSpecCustomizationValidationResponse(
+            workspaceId=workspace_id,
+            targetPath=target.path,
+            schemaName=schema_name,
+            valid=valid,
+            diagnostics=diagnostics,
+        )
+
+    def _validate_project_config(
+        self,
+        workspace_id: str,
+        target: OpenSpecCustomizationTarget,
+    ) -> OpenSpecCustomizationValidationResponse:
+        diagnostics: list[OpenSpecCustomizationDiagnostic] = []
+        default_schema = self._read_project_default_schema()
+        valid = True
+        if not target.local_path.is_file():
+            diagnostics.append(
+                OpenSpecCustomizationDiagnostic(
+                    level="warning",
+                    message="config.yaml does not exist yet",
+                )
+            )
+            valid = False
+        if not default_schema:
+            diagnostics.append(
+                OpenSpecCustomizationDiagnostic(
+                    level="warning",
+                    message="No schema is configured in openspec/config.yaml",
+                )
+            )
+            valid = False
+        if default_schema:
+            payload = self._run_openspec_json(["schema", "which", default_schema, "--json"])
+            if isinstance(payload, dict) and payload.get("path"):
+                diagnostics.append(
+                    OpenSpecCustomizationDiagnostic(
+                        level="info",
+                        message=f"Default schema resolves to {payload.get('path')}",
+                    )
+                )
+            else:
+                diagnostics.append(
+                    OpenSpecCustomizationDiagnostic(
+                        level="error",
+                        message=f"Default schema '{default_schema}' could not be resolved",
+                    )
+                )
+                valid = False
+        return OpenSpecCustomizationValidationResponse(
+            workspaceId=workspace_id,
+            targetPath=target.path,
+            schemaName=default_schema,
+            valid=valid,
+            diagnostics=diagnostics,
+        )
+
     def _is_initialized(self) -> bool:
         openspec_dir = self._workspace_path / "openspec"
         return openspec_dir.is_dir() or (openspec_dir / "config.yaml").is_file()
@@ -679,6 +1027,55 @@ class OpenSpecService:
             logger.warning("OpenSpec command failed: %s", exc)
             return None
         return completed.stdout
+
+    def _run_openspec_checked(self, args: list[str]) -> str:
+        try:
+            completed = subprocess.run(
+                ["openspec", *args],
+                cwd=self._workspace_path,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except FileNotFoundError as exc:
+            raise ValueError("OpenSpec CLI is not available") from exc
+        except subprocess.CalledProcessError as exc:
+            message = exc.stderr.strip() or exc.stdout.strip() or "OpenSpec command failed"
+            raise ValueError(message) from exc
+        return completed.stdout
+
+    def _run_openspec_json(self, args: list[str]) -> Any:
+        try:
+            output = self._run_openspec_checked(args)
+        except ValueError:
+            return None
+        payload = self._extract_json_payload(output)
+        if payload is None:
+            return None
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError:
+            return None
+
+    def _run_openspec_json_checked(self, args: list[str]) -> Any:
+        output = self._run_openspec_checked(args)
+        payload = self._extract_json_payload(output)
+        if payload is None:
+            raise ValueError("OpenSpec command did not return valid JSON")
+        try:
+            return json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError("OpenSpec command returned invalid JSON") from exc
+
+    def _extract_json_payload(self, raw_output: str) -> str | None:
+        stripped = raw_output.strip()
+        if not stripped:
+            return None
+        for marker in ("{", "["):
+            index = stripped.find(marker)
+            if index != -1:
+                return stripped[index:]
+        return None
 
     def _list_navigation_changes(self) -> list[OpenSpecNavigationChange]:
         changes_dir = self._workspace_path / "openspec" / "changes"

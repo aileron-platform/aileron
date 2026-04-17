@@ -21,6 +21,7 @@ const navigation = {
       inProgress: '進行中',
       complete: '已完成',
       archived: '已封存',
+      customization: '自定流程',
     },
     workspaceSettings: {
       basic: '基本設定',

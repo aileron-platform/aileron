@@ -21,6 +21,7 @@ const navigation = {
       inProgress: 'In Progress',
       complete: 'Complete',
       archived: 'Archived',
+      customization: 'Customization',
     },
     workspaceSettings: {
       basic: 'Basic Settings',

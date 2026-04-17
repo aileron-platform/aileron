@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   Archive,
   Users,
+  Wrench,
 } from 'lucide-react';
 import type { AgentToolType, AgentToolConfig } from '../features/agent-settings/types';
 import { AGENT_TOOL_CONFIGS } from '../features/agent-settings/agentToolConfigs';
@@ -112,6 +113,12 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         id: 'archived',
         labelKey: 'workspace.navigation.sub.openspec.archived',
         icon: Archive,
+        parentId: 'openspec',
+      },
+      {
+        id: 'customization',
+        labelKey: 'workspace.navigation.sub.openspec.customization',
+        icon: Wrench,
         parentId: 'openspec',
       },
     ],

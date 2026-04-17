@@ -93,6 +93,14 @@ const OpenSpecSidebar = React.lazy(() =>
   import('../features/openspec/components/OpenSpecSidebar'),
 );
 
+const OpenSpecCustomizationSidebar = React.lazy(() =>
+  import('../features/openspec/components/OpenSpecCustomizationSidebar'),
+);
+
+const OpenSpecCustomizationFeature = React.lazy(() =>
+  import('../features/openspec/components/OpenSpecCustomizationFeature'),
+);
+
 
 
 const SessionResultFeature = React.lazy(() =>
@@ -267,6 +275,19 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       );
     }
     if (state.currentFeature === 'openspec') {
+      if (state.openspec.subView === 'customization') {
+        return (
+          <React.Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                載入 OpenSpec 自定流程...
+              </div>
+            }
+          >
+            <OpenSpecCustomizationSidebar />
+          </React.Suspense>
+        );
+      }
       return (
         <React.Suspense
           fallback={
@@ -423,6 +444,19 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       );
     }
     if (state.currentFeature === 'openspec') {
+      if (state.openspec.subView === 'customization') {
+        return (
+          <React.Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                載入 OpenSpec 自定流程編輯器...
+              </div>
+            }
+          >
+            <OpenSpecCustomizationFeature />
+          </React.Suspense>
+        );
+      }
       return (
         <React.Suspense
           fallback={

@@ -10,6 +10,14 @@ from app.modules.openspec.models import (
     OpenSpecActionContextSubview,
     OpenSpecActionGroup,
     OpenSpecActionItem,
+    OpenSpecCustomizationActionResponse,
+    OpenSpecCustomizationDebugResponse,
+    OpenSpecCustomizationDiagnostic,
+    OpenSpecCustomizationFileKind,
+    OpenSpecCustomizationFileResponse,
+    OpenSpecCustomizationResolutionStep,
+    OpenSpecCustomizationStateResponse,
+    OpenSpecCustomizationValidationResponse,
     OpenSpecActionProfile,
     OpenSpecChangeStatus,
     OpenSpecNavigationChange,
@@ -81,6 +89,59 @@ class FakeOpenSpecService:
             ],
         )
 
+    def get_customization_state(self, workspace_id: str) -> OpenSpecCustomizationStateResponse:
+        return OpenSpecCustomizationStateResponse(
+            workspaceId=workspace_id,
+            configPath="/openspec/config.yaml",
+            configPresent=True,
+            defaultSchema="review-flow",
+            builtInSchemas=["spec-driven"],
+            schemas=[],
+        )
+
+    def read_customization_file(self, workspace_id: str, path: str) -> OpenSpecCustomizationFileResponse:
+        return OpenSpecCustomizationFileResponse(
+            workspaceId=workspace_id,
+            path=path,
+            name="config.yaml",
+            kind=OpenSpecCustomizationFileKind.CONFIG,
+            content="schema: review-flow\n",
+            editable=True,
+            language="yaml",
+            metadata={},
+        )
+
+    def update_customization_file(self, workspace_id: str, path: str, content: str) -> OpenSpecCustomizationActionResponse:
+        return OpenSpecCustomizationActionResponse(success=True, message="saved", path=path)
+
+    def fork_customization_schema(self, workspace_id: str, *, source_schema: str, destination_schema: str) -> OpenSpecCustomizationActionResponse:
+        return OpenSpecCustomizationActionResponse(success=True, message="forked", schemaName=destination_schema, path=f"/openspec/schemas/{destination_schema}")
+
+    def init_customization_schema(self, workspace_id: str, *, name: str, description: str | None = None, artifacts: list[str] | None = None) -> OpenSpecCustomizationActionResponse:
+        return OpenSpecCustomizationActionResponse(success=True, message="created", schemaName=name, path=f"/openspec/schemas/{name}")
+
+    def validate_customization(self, workspace_id: str, *, path: str) -> OpenSpecCustomizationValidationResponse:
+        return OpenSpecCustomizationValidationResponse(
+            workspaceId=workspace_id,
+            targetPath=path,
+            schemaName="review-flow",
+            valid=True,
+            diagnostics=[OpenSpecCustomizationDiagnostic(level="info", message="ok")],
+        )
+
+    def debug_customization(self, workspace_id: str, *, path: str) -> OpenSpecCustomizationDebugResponse:
+        return OpenSpecCustomizationDebugResponse(
+            workspaceId=workspace_id,
+            targetPath=path,
+            schemaName="review-flow",
+            resolvedName="review-flow",
+            source="project",
+            path="/openspec/schemas/review-flow",
+            resolutionOrder=[
+                OpenSpecCustomizationResolutionStep(order=1, label="selected schema", value="review-flow", selected=True),
+            ],
+        )
+
 
 def _translate_zh(key: str) -> str:
     translations = {
@@ -119,3 +180,92 @@ def test_openspec_router_returns_workspace_state() -> None:
     assert payload["changes"][0]["name"] == "add-auth"
     assert payload["changes"][0]["status"] == "in-progress"
     assert fake_service.last_context == (OpenSpecActionContextSubview.COMPLETE, "add-auth")
+
+
+def test_openspec_router_accepts_customization_subview() -> None:
+    app = FastAPI()
+    app.include_router(openspec_router_module.router, prefix="/api/v1")
+    fake_service = FakeOpenSpecService()
+    app.dependency_overrides[openspec_router_module.get_openspec_service] = lambda: fake_service
+
+    @app.middleware("http")
+    async def inject_i18n(request, call_next):
+        request.state.language = "zh-TW"
+        request.state.translate = _translate_zh
+        return await call_next(request)
+
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/openspec",
+        params={"subview": "customization"},
+    )
+
+    assert response.status_code == 200
+    assert fake_service.last_context == (OpenSpecActionContextSubview.CUSTOMIZATION, None)
+
+
+def test_openspec_customization_router_returns_state_and_file() -> None:
+    app = FastAPI()
+    app.include_router(openspec_router_module.router, prefix="/api/v1")
+    fake_service = FakeOpenSpecService()
+    app.dependency_overrides[openspec_router_module.get_openspec_service] = lambda: fake_service
+
+    client = TestClient(app)
+
+    state_response = client.get("/api/v1/workspaces/ws-1/openspec/customization")
+    file_response = client.get(
+        "/api/v1/workspaces/ws-1/openspec/customization/file",
+        params={"path": "/openspec/config.yaml"},
+    )
+
+    assert state_response.status_code == 200
+    assert state_response.json()["defaultSchema"] == "review-flow"
+    assert file_response.status_code == 200
+    assert file_response.json()["kind"] == "config"
+
+    update_response = client.put(
+        "/api/v1/workspaces/ws-1/openspec/customization/file",
+        params={"path": "/openspec/config.yaml"},
+        json={"content": "schema: rapid\n"},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["message"] == "saved"
+
+
+def test_openspec_customization_router_supports_validate_and_debug() -> None:
+    app = FastAPI()
+    app.include_router(openspec_router_module.router, prefix="/api/v1")
+    fake_service = FakeOpenSpecService()
+    app.dependency_overrides[openspec_router_module.get_openspec_service] = lambda: fake_service
+
+    client = TestClient(app)
+
+    validate_response = client.post(
+        "/api/v1/workspaces/ws-1/openspec/customization/validate",
+        json={"path": "/openspec/schemas/review-flow/schema.yaml"},
+    )
+    debug_response = client.get(
+        "/api/v1/workspaces/ws-1/openspec/customization/debug",
+        params={"path": "/openspec/schemas/review-flow/schema.yaml"},
+    )
+
+    assert validate_response.status_code == 200
+    assert validate_response.json()["valid"] is True
+    assert debug_response.status_code == 200
+    assert debug_response.json()["resolvedName"] == "review-flow"
+
+    fork_response = client.post(
+        "/api/v1/workspaces/ws-1/openspec/customization/schemas/fork",
+        json={"sourceSchema": "spec-driven", "destinationSchema": "review-flow-copy"},
+    )
+    create_response = client.post(
+        "/api/v1/workspaces/ws-1/openspec/customization/schemas",
+        json={"name": "new-flow", "description": "Manual QA workflow", "artifacts": ["proposal", "tasks"]},
+    )
+
+    assert fork_response.status_code == 200
+    assert fork_response.json()["schemaName"] == "review-flow-copy"
+    assert create_response.status_code == 200
+    assert create_response.json()["schemaName"] == "new-flow"

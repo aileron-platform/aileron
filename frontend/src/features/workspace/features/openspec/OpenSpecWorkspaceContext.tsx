@@ -5,6 +5,9 @@ import { useWorkspace } from '../../providers/WorkspaceProvider';
 import {
   openSpecApi,
   type OpenSpecActionItem,
+  type OpenSpecCustomizationDebugResult,
+  type OpenSpecCustomizationState,
+  type OpenSpecCustomizationValidationResult,
   type OpenSpecNavigationChange,
   type OpenSpecWorkspaceState,
 } from '../../components/ChatPanel/openSpecApi';
@@ -18,10 +21,19 @@ interface OpenSpecWorkspaceContextValue {
   state: OpenSpecWorkspaceState | null;
   actions: OpenSpecActionItem[];
   changes: OpenSpecNavigationChange[];
+  customization: OpenSpecCustomizationState | null;
+  customizationValidation: OpenSpecCustomizationValidationResult | null;
+  customizationDebug: OpenSpecCustomizationDebugResult | null;
   recommendedActions: OpenSpecActionItem[];
   isLoading: boolean;
+  isCustomizationLoading: boolean;
   focusChangeName: string | null;
   refresh: (options?: { reloadActiveDocument?: boolean }) => Promise<void>;
+  refreshCustomization: () => Promise<void>;
+  runCustomizationValidate: (path?: string | null) => Promise<OpenSpecCustomizationValidationResult | null>;
+  runCustomizationDebug: (path?: string | null) => Promise<OpenSpecCustomizationDebugResult | null>;
+  setCustomizationValidation: React.Dispatch<React.SetStateAction<OpenSpecCustomizationValidationResult | null>>;
+  setCustomizationDebug: React.Dispatch<React.SetStateAction<OpenSpecCustomizationDebugResult | null>>;
 }
 
 const OpenSpecWorkspaceContext = createContext<OpenSpecWorkspaceContextValue | null>(null);
@@ -41,7 +53,11 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
   const [state, setState] = useState<OpenSpecWorkspaceState | null>(null);
   const [actions, setActions] = useState<OpenSpecActionItem[]>([]);
   const [changes, setChanges] = useState<OpenSpecNavigationChange[]>([]);
+  const [customization, setCustomization] = useState<OpenSpecCustomizationState | null>(null);
+  const [customizationValidation, setCustomizationValidation] = useState<OpenSpecCustomizationValidationResult | null>(null);
+  const [customizationDebug, setCustomizationDebug] = useState<OpenSpecCustomizationDebugResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCustomizationLoading, setIsCustomizationLoading] = useState(false);
   const inFlightRefreshRef = useRef<Promise<void> | null>(null);
   const autoRefreshTimerRef = useRef<number | null>(null);
   const autoRefreshFollowUpTimerRef = useRef<number | null>(null);
@@ -140,9 +156,89 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
     await refreshPromise;
   }, [isAuthReady, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
+  const refreshCustomization = useCallback(async () => {
+    if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
+      setCustomization(null);
+      setIsCustomizationLoading(false);
+      return;
+    }
+
+    if (!isAuthReady) {
+      setIsCustomizationLoading(false);
+      return;
+    }
+
+    setIsCustomizationLoading(true);
+    try {
+      const result = await openSpecApi.getCustomizationState(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+      );
+      setCustomization(result);
+    } catch (error) {
+      logger.error('Failed to load OpenSpec customization state', { error });
+      setCustomization(null);
+    } finally {
+      setIsCustomizationLoading(false);
+    }
+  }, [isAuthReady, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
+  const runCustomizationValidate = useCallback(async (path?: string | null) => {
+    if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
+      return null;
+    }
+    const targetPath = path ?? openSpecTabStateRef.current.selectedPath;
+    if (!targetPath) {
+      return null;
+    }
+    try {
+      const result = await openSpecApi.validateCustomization(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        targetPath,
+      );
+      setCustomizationValidation(result);
+      return result;
+    } catch (error) {
+      logger.error('Failed to validate OpenSpec customization', { error, targetPath });
+      setCustomizationValidation(null);
+      return null;
+    }
+  }, [workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
+  const runCustomizationDebug = useCallback(async (path?: string | null) => {
+    if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
+      return null;
+    }
+    const targetPath = path ?? openSpecTabStateRef.current.selectedPath;
+    if (!targetPath) {
+      return null;
+    }
+    try {
+      const result = await openSpecApi.debugCustomization(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        targetPath,
+      );
+      setCustomizationDebug(result);
+      return result;
+    } catch (error) {
+      logger.error('Failed to debug OpenSpec customization', { error, targetPath });
+      setCustomizationDebug(null);
+      return null;
+    }
+  }, [workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
   useEffect(() => {
     void refresh();
   }, [isAuthReady, refresh, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
+  useEffect(() => {
+    if (workspaceState.openspec.subView !== 'customization') {
+      return;
+    }
+    void refreshCustomization();
+  }, [refreshCustomization, workspaceState.openspec.subView]);
 
   useEffect(() => {
     return () => {
@@ -214,11 +310,35 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
     state,
     actions,
     changes,
+    customization,
+    customizationValidation,
+    customizationDebug,
     recommendedActions,
     isLoading,
+    isCustomizationLoading,
     focusChangeName,
     refresh,
-  }), [actions, changes, focusChangeName, isLoading, recommendedActions, refresh, state]);
+    refreshCustomization,
+    runCustomizationValidate,
+    runCustomizationDebug,
+    setCustomizationValidation,
+    setCustomizationDebug,
+  }), [
+    actions,
+    changes,
+    customization,
+    customizationDebug,
+    customizationValidation,
+    focusChangeName,
+    isCustomizationLoading,
+    isLoading,
+    recommendedActions,
+    refresh,
+    refreshCustomization,
+    runCustomizationDebug,
+    runCustomizationValidate,
+    state,
+  ]);
 
   return (
     <OpenSpecWorkspaceContext.Provider value={value}>

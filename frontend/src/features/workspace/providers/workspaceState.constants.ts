@@ -108,7 +108,8 @@ export const getVersionControlSubView = (pathname: string): 'changes' | 'history
 // 根據路由路徑決定 OpenSpec 子視圖
 export const getOpenSpecSubView = (
   pathname: string,
-): 'in-progress' | 'complete' | 'archived' => {
+): 'in-progress' | 'complete' | 'archived' | 'customization' => {
+  if (pathname.includes('/customization')) return 'customization';
   if (pathname.includes('/archived')) return 'archived';
   if (pathname.includes('/complete')) return 'complete';
   return 'in-progress'; // 預設值
