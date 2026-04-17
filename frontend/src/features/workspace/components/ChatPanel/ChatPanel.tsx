@@ -429,9 +429,8 @@ export const ChatPanel: React.FC = () => {
 
   const handleSlashCommandSelect = useCallback(
     (command: SlashCommandItem) => {
-      // 添加型別防禦，處理 command 可能是字串的情況
-      const displayName = command?.displayName || (typeof command === 'string' ? command : String(command));
-      const slashCommand = `/${displayName}`;
+      const slashCommand = command?.invocation
+        || `/${command?.displayName || (typeof command === 'string' ? command : String(command))}`;
       const trimmed = uiState.draftMessage.trimEnd();
       const nextValue = trimmed.length > 0 ? `${trimmed} ${slashCommand}` : slashCommand;
       uiActions.setDraftMessage(nextValue);
@@ -530,7 +529,7 @@ export const ChatPanel: React.FC = () => {
     }
   }, [permissionMode]);
 
-  // 獲取 slash commands
+  // 獲取 slash commands 與 skills
   useEffect(() => {
     if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
       return;
@@ -538,14 +537,15 @@ export const ChatPanel: React.FC = () => {
 
     const loadSlashCommands = async () => {
       try {
-        const commands = await slashCommandApi.list(
+        const commands = await slashCommandApi.listPickerItems(
           workspaceRuntime.runtimeBaseUrl,
           workspaceRuntime.workspaceId!,
           agentConfig.apiPathPrefix,
+          agentConfig.availableScopes,
         );
         setSlashCommands(commands);
       } catch (error) {
-        logger.error('Failed to load slash commands', { error });
+        logger.error('Failed to load slash commands and skills', { error });
         setSlashCommands([]);
       }
     };
@@ -722,6 +722,22 @@ export const ChatPanel: React.FC = () => {
         commands={slashCommands}
         onSelect={handleSlashCommandSelect}
         availableScopes={agentConfig.availableScopes}
+        labels={{
+          title: t('workspace.chat.dialogs.slash.title'),
+          description: t('workspace.chat.dialogs.slash.description'),
+          searchPlaceholder: t('workspace.chat.dialogs.slash.searchPlaceholder'),
+          empty: t('workspace.chat.dialogs.slash.empty'),
+          scope: {
+            all: t('workspace.chat.dialogs.slash.scopes.all'),
+            project: t('workspace.chat.dialogs.slash.scopes.project'),
+            user: t('workspace.chat.dialogs.slash.scopes.user'),
+            plugin: t('workspace.chat.dialogs.slash.scopes.plugin'),
+          },
+          kind: {
+            'slash-command': t('workspace.chat.dialogs.slash.types.slashCommand'),
+            skill: t('workspace.chat.dialogs.slash.types.skill'),
+          },
+        }}
       />
 
       <OpenSpecActionPickerDialog

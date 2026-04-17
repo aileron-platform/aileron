@@ -12,7 +12,7 @@ import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Badge } from '@/shared/components/ui/badge';
 import { cn } from '@/shared/utils/cn';
 import { SlashCommandItem, SlashCommandScope } from '@/shared/types/slashCommands';
-import { Command, FolderOpen, Search, User, Download, Puzzle } from 'lucide-react';
+import { Command, FolderOpen, Search, User, Download, Puzzle, Sparkles } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 export interface SlashCommandPickerDialogLabels {
@@ -21,6 +21,7 @@ export interface SlashCommandPickerDialogLabels {
   searchPlaceholder?: string;
   empty?: string;
   scope?: Record<SlashCommandScope | 'all', string>;
+  kind?: Record<'slash-command' | 'skill', string>;
 }
 
 export interface SlashCommandPickerDialogProps {
@@ -81,6 +82,10 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
       user: t('common.slashCommand.picker.scope.user'),
       plugin: t('common.slashCommand.picker.scope.plugin'),
     },
+    kind: {
+      'slash-command': t('common.slashCommand.picker.kind.slash-command'),
+      skill: t('common.slashCommand.picker.kind.skill'),
+    },
   }), [t]);
 
   const filteredCommands = useMemo(() => {
@@ -108,6 +113,7 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
     ...defaultLabels,
     ...labels,
     scope: { ...defaultLabels.scope, ...labels?.scope },
+    kind: { ...defaultLabels.kind, ...labels?.kind },
   }), [defaultLabels, labels]);
 
   return (
@@ -172,6 +178,19 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
                       <div className="flex flex-col gap-2">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm text-primary">/{command.displayName}</span>
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                            {command.kind === 'skill' ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Sparkles className="h-3 w-3" />
+                                {resolvedLabels.kind.skill}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1">
+                                <Command className="h-3 w-3" />
+                                {resolvedLabels.kind['slash-command']}
+                              </span>
+                            )}
+                          </Badge>
                           <Badge variant="secondary" className="text-xs capitalize">
                             {command.category}
                           </Badge>

@@ -1,13 +1,17 @@
 export type SlashCommandScope = 'project' | 'user' | 'plugin';
+export type SlashCommandItemKind = 'slash-command' | 'skill';
 
 export interface SlashCommandItem {
   id: string;
   fileName: string;
   scope: SlashCommandScope;
+  kind: SlashCommandItemKind;
   namespace?: string;
+  pluginName?: string;
   displayName: string;
   category: string;
   description: string;
+  invocation: string;
   tags?: string[];
 }
 
@@ -39,3 +43,19 @@ export const buildSlashCommandCategory = (
   const trimmedNamespace = namespace?.trim();
   return trimmedNamespace && trimmedNamespace.length > 0 ? trimmedNamespace : scope;
 };
+
+export const buildSlashCommandInvocation = (displayName: string): string => `/${displayName}`;
+
+export const buildSkillDisplayName = (
+  skillName: string,
+  pluginName?: string | null,
+): string => {
+  const trimmedSkillName = skillName.trim();
+  const trimmedPluginName = pluginName?.trim();
+  return trimmedPluginName ? `${trimmedPluginName}:${trimmedSkillName}` : trimmedSkillName;
+};
+
+export const buildSkillInvocation = (
+  skillName: string,
+  pluginName?: string | null,
+): string => `/${buildSkillDisplayName(skillName, pluginName)}`;

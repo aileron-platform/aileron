@@ -279,6 +279,10 @@ const common = {
         user: 'Personal',
         plugin: 'Plugin',
       },
+      kind: {
+        'slash-command': 'Command',
+        skill: 'Skill',
+      },
     },
   },
 

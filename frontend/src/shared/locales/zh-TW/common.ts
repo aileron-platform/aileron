@@ -279,6 +279,10 @@ const common = {
         user: '個人',
         plugin: '外掛',
       },
+      kind: {
+        'slash-command': '指令',
+        skill: '技能',
+      },
     },
   },
 

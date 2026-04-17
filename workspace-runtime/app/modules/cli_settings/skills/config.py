@@ -61,9 +61,9 @@ def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:
         ),
         SkillTool.CODEX: SkillToolConfig(
             tool=SkillTool.CODEX,
-            project_dot_dir=".agents",
+            project_dot_dir=".codex",
             skill_dir_name="skills",
-            user_root=home / ".agents" / "skills",
+            user_root=home / ".codex" / "skills",
             supports_plugin=False,
             api_prefix="codex",
         ),

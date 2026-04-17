@@ -1,6 +1,12 @@
 import { ApiClient } from '@/shared/api/apiClient';
 import type { SlashCommandItem, SlashCommandScope } from '@/shared/types/slashCommands';
-import { buildSlashCommandCategory, buildSlashCommandDisplayName } from '@/shared/types/slashCommands';
+import {
+  buildSkillDisplayName,
+  buildSkillInvocation,
+  buildSlashCommandCategory,
+  buildSlashCommandDisplayName,
+  buildSlashCommandInvocation,
+} from '@/shared/types/slashCommands';
 
 /**
  * 創建帶認證的 Runtime API Client
@@ -29,6 +35,35 @@ interface SlashCommandCollectionResponse {
   scopes: SlashCommandScopeGroupResponse[];
 }
 
+interface SkillTreeNodeResponse {
+  id: string;
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  scope?: SlashCommandScope;
+  children?: SkillTreeNodeResponse[] | null;
+}
+
+interface SkillTreeResponse {
+  path: string;
+  scope?: SlashCommandScope;
+  nodes: SkillTreeNodeResponse[];
+  total: number;
+}
+
+interface SkillContentResponse {
+  path: string;
+  scope?: SlashCommandScope;
+  content: string;
+}
+
+interface PluginSkillResponse {
+  pluginName: string;
+  marketplaceName: string;
+  skillName: string;
+  skillPath: string;
+}
+
 const mapSummaryToItem = (
   scope: SlashCommandScope,
   summary: SlashCommandSummaryResponse,
@@ -46,14 +81,97 @@ const mapSummaryToItem = (
   return {
     id,
     fileName: summary.fileName,
+    kind: 'slash-command',
     namespace,
+    pluginName,
     displayName,
     category,
     scope,
     description: summary.description ?? '',
+    invocation: buildSlashCommandInvocation(displayName),
     tags: [],
   };
 };
+
+const parseSkillFrontMatter = (content: string): { name?: string; description?: string } => {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+  if (!match) {
+    return {};
+  }
+
+  const result: { name?: string; description?: string } = {};
+  for (const rawLine of match[1].split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const nameMatch = line.match(/^name:\s*(.+)$/);
+    if (nameMatch && !result.name) {
+      result.name = nameMatch[1].trim().replace(/^['"]|['"]$/g, '');
+      continue;
+    }
+
+    const descriptionMatch = line.match(/^description:\s*(.+)$/);
+    if (descriptionMatch && !result.description) {
+      result.description = descriptionMatch[1].trim().replace(/^['"]|['"]$/g, '');
+    }
+  }
+
+  return result;
+};
+
+const collectSkillFilePaths = (nodes: SkillTreeNodeResponse[]): { path: string; scope: SlashCommandScope }[] => {
+  const files: { path: string; scope: SlashCommandScope }[] = [];
+
+  const walk = (node: SkillTreeNodeResponse) => {
+    if (node.type === 'file' && node.name === 'SKILL.md' && node.scope) {
+      files.push({ path: node.path, scope: node.scope });
+      return;
+    }
+    node.children?.forEach(walk);
+  };
+
+  nodes.forEach(walk);
+  return files;
+};
+
+const mapSkillToItem = (
+  filePath: string,
+  scope: SlashCommandScope,
+  content: string,
+): SlashCommandItem => {
+  const metadata = parseSkillFrontMatter(content);
+  const segments = filePath.split('/').filter(Boolean);
+  const directoryName = segments.length >= 2 ? segments[segments.length - 2] : segments[0] || 'skill';
+  const skillName = metadata.name?.trim() || directoryName;
+
+  return {
+    id: `${scope}:skill:${skillName}`,
+    fileName: 'SKILL.md',
+    kind: 'skill',
+    scope,
+    displayName: buildSkillDisplayName(skillName),
+    category: scope,
+    description: metadata.description?.trim() || '',
+    invocation: buildSkillInvocation(skillName),
+    tags: [],
+  };
+};
+
+const mapPluginSkillToItem = (
+  scope: SlashCommandScope,
+  skill: PluginSkillResponse,
+): SlashCommandItem => ({
+  id: `${scope}:skill:${skill.pluginName}:${skill.skillName}`,
+  fileName: 'SKILL.md',
+  kind: 'skill',
+  scope,
+  pluginName: skill.pluginName,
+  displayName: buildSkillDisplayName(skill.skillName, skill.pluginName),
+  category: skill.pluginName,
+  description: '',
+  invocation: buildSkillInvocation(skill.skillName, skill.pluginName),
+  tags: [],
+});
 
 export const slashCommandApi = {
   async list(
@@ -69,6 +187,59 @@ export const slashCommandApi = {
       documents.map((document) => mapSummaryToItem(scope, document)),
     );
     return items.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  },
+
+  async listSkills(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    apiPrefix: string = 'claude-code',
+    availableScopes: string[] = ['project', 'user', 'plugin'],
+  ): Promise<SlashCommandItem[]> {
+    const client = createRuntimeClient(runtimeBaseUrl);
+    const scopes = (['project', 'user', 'plugin'] as const).filter((scope) => availableScopes.includes(scope));
+    const skillItems: SlashCommandItem[] = [];
+
+    for (const scope of scopes) {
+      if (scope === 'plugin') {
+        const pluginSkills = await client.get<PluginSkillResponse[]>(
+          `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/plugins`,
+        );
+        skillItems.push(...pluginSkills.map((skill) => mapPluginSkillToItem(scope, skill)));
+        continue;
+      }
+
+      const tree = await client.get<SkillTreeResponse>(
+        `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/tree?scope=${scope}&maxDepth=8`,
+      );
+      const skillFiles = collectSkillFilePaths(tree.nodes);
+      const contents = await Promise.all(
+        skillFiles.map(({ path }) =>
+          client.get<SkillContentResponse>(
+            `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/content?path=${encodeURIComponent(path)}&scope=${scope}`,
+          ),
+        ),
+      );
+
+      skillItems.push(
+        ...contents.map((response, index) => mapSkillToItem(skillFiles[index].path, scope, response.content)),
+      );
+    }
+
+    return skillItems.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  },
+
+  async listPickerItems(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    apiPrefix: string = 'claude-code',
+    availableScopes: string[] = ['project', 'user', 'plugin'],
+  ): Promise<SlashCommandItem[]> {
+    const [commands, skills] = await Promise.all([
+      this.list(runtimeBaseUrl, workspaceId, apiPrefix),
+      this.listSkills(runtimeBaseUrl, workspaceId, apiPrefix, availableScopes),
+    ]);
+
+    return [...commands, ...skills].sort((a, b) => a.displayName.localeCompare(b.displayName));
   },
 };
 
