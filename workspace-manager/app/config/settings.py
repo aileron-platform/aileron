@@ -96,15 +96,15 @@ class Settings(BaseSettings):
         default="workspace-runtime-pvc", description="Workspace PVC 名稱"
     )
     RUNTIME_K8S_IMAGE: str = Field(
-        default="ailerondocker/workspace-runtime:latest",
+        default="ailerondocker/workspace-runtime:latest-lite-amd64",
         description="Runtime 使用的容器映像",
     )
     RUNTIME_K8S_BROWSER_IMAGE: str = Field(
-        default="ailerondocker/workspace-chrome:latest",
+        default="ailerondocker/workspace-chrome:latest-amd64",
         description="Browser 使用的容器映像",
     )
     RUNTIME_K8S_NEXTJS_IMAGE: str = Field(
-        default="ailerondocker/workspace-nextjs:latest",
+        default="ailerondocker/workspace-nextjs:latest-amd64",
         description="Next.js 使用的容器映像",
     )
     RUNTIME_K8S_RUNTIME_RESOURCES: Annotated[dict, NoDecode] = Field(
