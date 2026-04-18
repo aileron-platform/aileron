@@ -63,6 +63,32 @@ workspace-runtime/
 
 ## Quick Start
 
+### Image Build
+
+`workspace-runtime` can now be built against two different base images:
+
+- `RUNTIME_BASE=universal`: existing `codex-universal`
+- `RUNTIME_BASE=lite`: slimmer `workspace-runtime/base-lite`
+
+Build commands:
+
+```bash
+# Build the slim base, then build workspace-runtime on top of it
+make build-runtime-base-lite
+make build-workspace-runtime RUNTIME_BASE=lite
+
+# Build the full universal base, then build workspace-runtime on top of it
+make build-codex-universal
+make build-workspace-runtime RUNTIME_BASE=universal
+```
+
+If you need custom tags:
+
+```bash
+make build-runtime-base-lite RUNTIME_BASE_LITE_TAG=mytag
+make build-workspace-runtime RUNTIME_BASE=lite RUNTIME_BASE_LITE_TAG=mytag IMAGE_TAG=mytag
+```
+
 ### Inside a Workspace Container
 
 ```dockerfile
@@ -140,6 +166,12 @@ pytest
 pytest tests/test_file_watcher.py -v
 pytest tests/test_websocket.py -v
 pytest tests/test_system_monitor.py -v
+```
+
+Container-based test workflow remains available through:
+
+```bash
+make test-all
 ```
 
 ## Security

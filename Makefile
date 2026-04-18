@@ -2,6 +2,8 @@
         test-runtime test-manager test-coverage test-setup test-teardown \
         test-status clean-test sync-init-schema \
         build-codex-universal push-codex-universal rebuild-codex-universal \
+        build-runtime-base-lite push-runtime-base-lite rebuild-runtime-base-lite \
+        build-runtime-base rebuild-runtime-base \
         build-workspace-ui push-workspace-ui rebuild-workspace-ui \
         build-workspace-chrome push-workspace-chrome rebuild-workspace-chrome \
         build-workspace-manager push-workspace-manager rebuild-workspace-manager \
@@ -24,13 +26,22 @@ REGISTRY ?= docker.io
 NAMESPACE ?= ailerondocker
 IMAGE_TAG ?= latest
 CODEX_UNIVERSAL_TAG ?= custom
+RUNTIME_BASE_LITE_TAG ?= custom
+RUNTIME_BASE ?= universal
 CODEX_UNIVERSAL_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/codex-universal:$(CODEX_UNIVERSAL_TAG)
+RUNTIME_BASE_LITE_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-runtime-base-lite:$(RUNTIME_BASE_LITE_TAG)
 WORKSPACE_UI_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-ui:$(IMAGE_TAG)
 WORKSPACE_CHROME_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-chrome:$(IMAGE_TAG)
 WORKSPACE_MANAGER_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-manager:$(IMAGE_TAG)
 WORKSPACE_RUNTIME_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-runtime:$(IMAGE_TAG)
 WORKSPACE_NEXTJS_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-nextjs:$(IMAGE_TAG)
 WORKSPACE_OPERATOR_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-operator:$(IMAGE_TAG)
+
+ifeq ($(RUNTIME_BASE),lite)
+WORKSPACE_RUNTIME_BASE_IMAGE ?= $(RUNTIME_BASE_LITE_IMAGE)
+else
+WORKSPACE_RUNTIME_BASE_IMAGE ?= $(CODEX_UNIVERSAL_IMAGE)
+endif
 
 help: ## 顯示幫助信息
 	@echo "$(CYAN)╔══════════════════════════════════════════════╗$(NC)"
@@ -146,7 +157,7 @@ sync-init-schema: ## 🔁 同步共用 init schema 到 Helm chart 內嵌副本
 build-codex-universal: ## 🏗️ 建置 codex-universal image
 	@echo "$(GREEN)🏗️ 建置 codex-universal image...$(NC)"
 	@echo "  Image: $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
-	@docker build -t $(CODEX_UNIVERSAL_IMAGE) -f codex-universal/Dockerfile codex-universal
+	@docker build -t $(CODEX_UNIVERSAL_IMAGE) -f workspace-runtime/codex-universal/Dockerfile workspace-runtime/codex-universal
 	@echo "$(GREEN)✅ codex-universal 建置完成$(NC)"
 
 push-codex-universal: ## 📤 推送 codex-universal image
@@ -157,6 +168,41 @@ push-codex-universal: ## 📤 推送 codex-universal image
 
 rebuild-codex-universal: build-codex-universal push-codex-universal ## 🔁 重建並推送 codex-universal image
 	@echo "$(GREEN)✅ codex-universal rebuild 完成$(NC)"
+
+build-runtime-base-lite: ## 🏗️ 建置 workspace-runtime base-lite image
+	@echo "$(GREEN)🏗️ 建置 workspace-runtime base-lite image...$(NC)"
+	@echo "  Image: $(CYAN)$(RUNTIME_BASE_LITE_IMAGE)$(NC)"
+	@docker build -t $(RUNTIME_BASE_LITE_IMAGE) -f workspace-runtime/base-lite/Dockerfile workspace-runtime/base-lite
+	@echo "$(GREEN)✅ workspace-runtime base-lite 建置完成$(NC)"
+
+push-runtime-base-lite: ## 📤 推送 workspace-runtime base-lite image
+	@echo "$(GREEN)📤 推送 workspace-runtime base-lite image...$(NC)"
+	@echo "  Image: $(CYAN)$(RUNTIME_BASE_LITE_IMAGE)$(NC)"
+	@docker push $(RUNTIME_BASE_LITE_IMAGE)
+	@echo "$(GREEN)✅ workspace-runtime base-lite 推送完成$(NC)"
+
+rebuild-runtime-base-lite: build-runtime-base-lite push-runtime-base-lite ## 🔁 重建並推送 workspace-runtime base-lite image
+	@echo "$(GREEN)✅ workspace-runtime base-lite rebuild 完成$(NC)"
+
+build-runtime-base: ## 🏗️ 依 RUNTIME_BASE 建置 workspace-runtime base image
+	@if [ "$(RUNTIME_BASE)" = "lite" ]; then \
+		$(MAKE) build-runtime-base-lite; \
+	elif [ "$(RUNTIME_BASE)" = "universal" ]; then \
+		$(MAKE) build-codex-universal; \
+	else \
+		echo "$(RED)❌ 不支援的 RUNTIME_BASE: $(RUNTIME_BASE)$(NC)"; \
+		exit 1; \
+	fi
+
+rebuild-runtime-base: ## 🔁 依 RUNTIME_BASE 重建並推送 workspace-runtime base image
+	@if [ "$(RUNTIME_BASE)" = "lite" ]; then \
+		$(MAKE) rebuild-runtime-base-lite; \
+	elif [ "$(RUNTIME_BASE)" = "universal" ]; then \
+		$(MAKE) rebuild-codex-universal; \
+	else \
+		echo "$(RED)❌ 不支援的 RUNTIME_BASE: $(RUNTIME_BASE)$(NC)"; \
+		exit 1; \
+	fi
 
 build-workspace-ui: ## 🏗️ 建置 workspace-ui image
 	@echo "$(GREEN)🏗️ 建置 workspace-ui image...$(NC)"
@@ -206,12 +252,13 @@ rebuild-workspace-manager: build-workspace-manager push-workspace-manager ## �
 build-workspace-runtime: ## 🏗️ 建置 workspace-runtime image
 	@echo "$(GREEN)🏗️ 建置 workspace-runtime image...$(NC)"
 	@echo "  Image: $(CYAN)$(WORKSPACE_RUNTIME_IMAGE)$(NC)"
-	@echo "  Base:  $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
+	@echo "  Base:  $(CYAN)$(WORKSPACE_RUNTIME_BASE_IMAGE)$(NC)"
+	@echo "  Flavor: $(CYAN)$(RUNTIME_BASE)$(NC)"
 	@docker build \
 		-t $(WORKSPACE_RUNTIME_IMAGE) \
 		-f workspace-runtime/Dockerfile \
 		--target production \
-		--build-context codex-universal=docker-image://$(CODEX_UNIVERSAL_IMAGE) \
+		--build-context runtime-base=docker-image://$(WORKSPACE_RUNTIME_BASE_IMAGE) \
 		.
 	@echo "$(GREEN)✅ workspace-runtime 建置完成$(NC)"
 
@@ -221,7 +268,7 @@ push-workspace-runtime: ## 📤 推送 workspace-runtime image
 	@docker push $(WORKSPACE_RUNTIME_IMAGE)
 	@echo "$(GREEN)✅ workspace-runtime 推送完成$(NC)"
 
-rebuild-workspace-runtime: rebuild-codex-universal build-workspace-runtime push-workspace-runtime ## 🔁 重建並推送 workspace-runtime image
+rebuild-workspace-runtime: rebuild-runtime-base build-workspace-runtime push-workspace-runtime ## 🔁 重建並推送 workspace-runtime image
 	@echo "$(GREEN)✅ workspace-runtime rebuild 完成$(NC)"
 
 build-workspace-nextjs: ## 🏗️ 建置 workspace-nextjs image

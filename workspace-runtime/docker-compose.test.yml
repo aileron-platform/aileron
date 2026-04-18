@@ -70,10 +70,10 @@ services:
         GEMINI_VERSION: ${WORKSPACE_RUNTIME_GEMINI_VERSION:-latest}
         AGENT_BROWSER_CLI_VERSION: ${WORKSPACE_RUNTIME_AGENT_BROWSER_CLI_VERSION:-0.23.0}
         CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
-      # workspace-runtime/Dockerfile 以 FROM codex-universal 起頭；
-      # 測試 compose 需和主開發 compose 一樣提供預建 base image。
+      # workspace-runtime/Dockerfile 以 FROM runtime-base 起頭；
+      # 測試 compose 需提供對應的預建 base image。
       additional_contexts:
-        codex-universal: docker-image://ailerondocker/codex-universal:custom
+        runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/codex-universal:custom}
     container_name: workspace-runtime-test
     depends_on:
       postgres-test:

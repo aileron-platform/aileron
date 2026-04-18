@@ -1,9 +1,9 @@
 # Multi-stage build for workspace-runtime
 # Stage 1: base → Stage 2: development / Stage 3: production
-# codex-universal 可由下列任一方式提供：
-#   1. docker buildx bake（自動從 codex-universal/Dockerfile 建置，推薦）
-#   2. 預先建置的映像：docker build --build-context codex-universal=docker-image://codex-universal:custom
-FROM codex-universal AS base
+# runtime-base 可由 build context 指向不同 base image，例如：
+#   1. codex-universal
+#   2. workspace-runtime/base-lite
+FROM runtime-base AS base
 
 USER root
 
@@ -28,15 +28,17 @@ RUN apt-get update && apt-get install -y --fix-missing \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# 安裝 Go（用於編譯 workspace-terminal）
+# 安裝 Go（部分 base image 已內建；缺少時才補裝，用於編譯 workspace-terminal）
 ENV GO_VERSION=1.23.4
-RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "amd64" ]; then GO_ARCH="amd64"; \
-    elif [ "$ARCH" = "arm64" ]; then GO_ARCH="arm64"; \
-    else GO_ARCH="amd64"; fi && \
-    wget -q https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
-    tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
-    rm go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
+RUN if ! command -v go >/dev/null 2>&1; then \
+        ARCH=$(dpkg --print-architecture) && \
+        if [ "$ARCH" = "amd64" ]; then GO_ARCH="amd64"; \
+        elif [ "$ARCH" = "arm64" ]; then GO_ARCH="arm64"; \
+        else GO_ARCH="amd64"; fi && \
+        wget -q https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
+        tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
+        rm go${GO_VERSION}.linux-${GO_ARCH}.tar.gz; \
+    fi
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
@@ -53,7 +55,7 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/s
     && sed -i 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' /etc/pam.d/sshd \
     && echo 'AllowUsers developer' >> /etc/ssh/sshd_config
 
-# codex-universal 已建立 developer 用戶（UID 1000），補充 SSH config
+# base image 已建立 developer 用戶（UID 1000），補充 SSH config
 RUN mkdir -p /home/developer/.ssh \
     && echo 'Host *' > /home/developer/.ssh/config \
     && echo '    StrictHostKeyChecking no' >> /home/developer/.ssh/config \
@@ -62,10 +64,10 @@ RUN mkdir -p /home/developer/.ssh \
     && chmod 700 /home/developer/.ssh \
     && chmod 600 /home/developer/.ssh/config
 
-# 加入 docker 群組（codex-universal 未預設）
+# 加入 docker 群組（部分 base image 未預設）
 RUN usermod -aG docker developer 2>/dev/null || true
 
-# 讓 developer 可存取 root 的 Rust 工具鏈（symlink cargo bin）
+# 讓 developer 可存取 root 的工具鏈（若 base image 提供）
 RUN mkdir -p /home/developer/.cargo && \
     chmod 755 /root/.cargo 2>/dev/null || true && \
     ln -sf /root/.cargo/bin /home/developer/.cargo/bin || true && \
@@ -122,10 +124,14 @@ EOF
 RUN chmod +x /usr/local/bin/install-npm-global.sh && \
     mkdir -p /home/developer/.agent-browser && \
     mkdir -p /home/developer/.config/opencode && \
-    chown -R developer:developer /home/developer/.agent-browser /home/developer/.config/opencode
+    mkdir -p /home/developer/.npm && \
+    mkdir -p /home/developer/.npm-global && \
+    chown -R developer:developer /home/developer/.agent-browser /home/developer/.config/opencode /home/developer/.npm /home/developer/.npm-global
 
 USER developer
-RUN mise use -g node@lts && \
+RUN if command -v mise >/dev/null 2>&1; then mise use -g node@lts; fi && \
+    npm config set cache /home/developer/.npm && \
+    npm config set prefix /home/developer/.npm-global && \
     npm config set fetch-retries 5 && \
     npm config set fetch-retry-factor 2 && \
     npm config set fetch-retry-mintimeout 10000 && \

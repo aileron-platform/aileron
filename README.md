@@ -106,6 +106,32 @@ docker compose up -d --build
 
 > The first build may take **5–10 minutes**.
 
+### Workspace Runtime Base Selection
+
+`workspace-runtime` now supports two base image options:
+
+- `RUNTIME_BASE=universal`: uses the existing full `codex-universal` base
+- `RUNTIME_BASE=lite`: uses the slimmer `workspace-runtime/base-lite` base
+
+Build the base image first, then build `workspace-runtime` with the desired flavor:
+
+```bash
+# Lite base
+make build-runtime-base-lite
+make build-workspace-runtime RUNTIME_BASE=lite
+
+# Full universal base
+make build-codex-universal
+make build-workspace-runtime RUNTIME_BASE=universal
+```
+
+You can also override tags while building:
+
+```bash
+make build-runtime-base-lite RUNTIME_BASE_LITE_TAG=mytag
+make build-workspace-runtime RUNTIME_BASE=lite RUNTIME_BASE_LITE_TAG=mytag IMAGE_TAG=mytag
+```
+
 ### Health Check
 
 ```bash
@@ -170,6 +196,8 @@ To expose the platform through public domains, configure:
 | Task | Command |
 |---|---|
 | Restart stack | `docker compose up -d --build` |
+| Build runtime with lite base | `make build-workspace-runtime RUNTIME_BASE=lite` |
+| Build runtime with universal base | `make build-workspace-runtime RUNTIME_BASE=universal` |
 | View manager logs | `docker compose logs -f workspace-manager` |
 | View runtime logs | `docker compose logs -f workspace-runtime` |
 | Stop services | `docker compose down` |

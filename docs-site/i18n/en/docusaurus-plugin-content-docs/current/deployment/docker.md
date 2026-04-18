@@ -75,6 +75,38 @@ docker compose up -d --build
 The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `docker compose up -d` for a fast boot.
 :::
 
+## Workspace Runtime Base Image Selection
+
+`workspace-runtime` supports two base image flavors:
+
+- `RUNTIME_BASE=universal`: the existing full `codex-universal` base
+- `RUNTIME_BASE=lite`: the slimmer `workspace-runtime/base-lite` base
+
+Build the selected base image first, then build `workspace-runtime`:
+
+```bash
+# Lite base
+make build-runtime-base-lite
+make build-workspace-runtime RUNTIME_BASE=lite
+
+# Full universal base
+make build-codex-universal
+make build-workspace-runtime RUNTIME_BASE=universal
+```
+
+If you want to change image tags during local builds:
+
+```bash
+make build-runtime-base-lite RUNTIME_BASE_LITE_TAG=mytag
+make build-workspace-runtime RUNTIME_BASE=lite RUNTIME_BASE_LITE_TAG=mytag IMAGE_TAG=mytag
+```
+
+Docker Compose can also be pointed at a specific prebuilt base image through `WORKSPACE_RUNTIME_BASE_IMAGE`:
+
+```bash
+WORKSPACE_RUNTIME_BASE_IMAGE=ailerondocker/workspace-runtime-base-lite:custom docker compose up -d --build
+```
+
 ## Verify Service Status
 
 ```bash
@@ -235,6 +267,12 @@ docker compose restart workspace-runtime
 
 # Rebuild a single service
 docker compose up -d --build workspace-runtime
+
+# Build workspace-runtime against the lite base
+make build-workspace-runtime RUNTIME_BASE=lite
+
+# Build workspace-runtime against the universal base
+make build-workspace-runtime RUNTIME_BASE=universal
 ```
 
 ## Cleanup
