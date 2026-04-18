@@ -16,8 +16,8 @@ vi.mock('@monaco-editor/react', () => ({
 
 const {
   refreshCustomizationMock,
-  runCustomizationValidateMock,
-  runCustomizationDebugMock,
+  openCustomizationValidationDialogMock,
+  openCustomizationDebugDialogMock,
   getCustomizationFileMock,
   updateCustomizationFileMock,
   forkCustomizationSchemaMock,
@@ -26,8 +26,8 @@ const {
   dispatchMock,
 } = vi.hoisted(() => ({
   refreshCustomizationMock: vi.fn(),
-  runCustomizationValidateMock: vi.fn(),
-  runCustomizationDebugMock: vi.fn(),
+  openCustomizationValidationDialogMock: vi.fn(),
+  openCustomizationDebugDialogMock: vi.fn(),
   getCustomizationFileMock: vi.fn(),
   updateCustomizationFileMock: vi.fn(),
   forkCustomizationSchemaMock: vi.fn(),
@@ -152,10 +152,14 @@ vi.mock('../OpenSpecWorkspaceContext', () => ({
         { order: 1, label: 'selected schema', value: 'review-flow', selected: true },
       ],
     },
+    customizationDialog: null,
     isCustomizationLoading: false,
     refreshCustomization: refreshCustomizationMock,
-    runCustomizationValidate: runCustomizationValidateMock,
-    runCustomizationDebug: runCustomizationDebugMock,
+    runCustomizationValidate: vi.fn(),
+    runCustomizationDebug: vi.fn(),
+    openCustomizationValidationDialog: openCustomizationValidationDialogMock,
+    openCustomizationDebugDialog: openCustomizationDebugDialogMock,
+    closeCustomizationDialog: vi.fn(),
   }),
 }));
 
@@ -199,7 +203,7 @@ describe('OpenSpecCustomization components', () => {
     expect(screen.getByText('review-flow')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Validate' }));
-    expect(runCustomizationValidateMock).toHaveBeenCalled();
+    expect(openCustomizationValidationDialogMock).toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Fork Schema' }));
     await user.type(screen.getByLabelText('目標 schema'), 'rapid');
@@ -252,6 +256,5 @@ describe('OpenSpecCustomization components', () => {
     expect(editor).toHaveValue('schema: review-flow\n');
     fireEvent.change(editor, { target: { value: 'schema: rapid\n' } });
     expect(screen.getByRole('button', { name: '儲存' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '收合 diagnostics' })).toBeInTheDocument();
   });
 });

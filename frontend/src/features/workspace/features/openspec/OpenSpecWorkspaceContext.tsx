@@ -32,6 +32,10 @@ interface OpenSpecWorkspaceContextValue {
   refreshCustomization: () => Promise<void>;
   runCustomizationValidate: (path?: string | null) => Promise<OpenSpecCustomizationValidationResult | null>;
   runCustomizationDebug: (path?: string | null) => Promise<OpenSpecCustomizationDebugResult | null>;
+  customizationDialog: 'validation' | 'debug' | null;
+  openCustomizationValidationDialog: (path?: string | null) => Promise<void>;
+  openCustomizationDebugDialog: (path?: string | null) => Promise<void>;
+  closeCustomizationDialog: () => void;
   setCustomizationValidation: React.Dispatch<React.SetStateAction<OpenSpecCustomizationValidationResult | null>>;
   setCustomizationDebug: React.Dispatch<React.SetStateAction<OpenSpecCustomizationDebugResult | null>>;
 }
@@ -56,6 +60,7 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
   const [customization, setCustomization] = useState<OpenSpecCustomizationState | null>(null);
   const [customizationValidation, setCustomizationValidation] = useState<OpenSpecCustomizationValidationResult | null>(null);
   const [customizationDebug, setCustomizationDebug] = useState<OpenSpecCustomizationDebugResult | null>(null);
+  const [customizationDialog, setCustomizationDialog] = useState<'validation' | 'debug' | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCustomizationLoading, setIsCustomizationLoading] = useState(false);
   const inFlightRefreshRef = useRef<Promise<void> | null>(null);
@@ -229,6 +234,24 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
     }
   }, [workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
+  const openCustomizationValidationDialog = useCallback(async (path?: string | null) => {
+    const result = await runCustomizationValidate(path);
+    if (result) {
+      setCustomizationDialog('validation');
+    }
+  }, [runCustomizationValidate]);
+
+  const openCustomizationDebugDialog = useCallback(async (path?: string | null) => {
+    const result = await runCustomizationDebug(path);
+    if (result) {
+      setCustomizationDialog('debug');
+    }
+  }, [runCustomizationDebug]);
+
+  const closeCustomizationDialog = useCallback(() => {
+    setCustomizationDialog(null);
+  }, []);
+
   useEffect(() => {
     void refresh();
   }, [isAuthReady, refresh, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
@@ -313,6 +336,7 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
     customization,
     customizationValidation,
     customizationDebug,
+    customizationDialog,
     recommendedActions,
     isLoading,
     isCustomizationLoading,
@@ -321,17 +345,24 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
     refreshCustomization,
     runCustomizationValidate,
     runCustomizationDebug,
+    openCustomizationValidationDialog,
+    openCustomizationDebugDialog,
+    closeCustomizationDialog,
     setCustomizationValidation,
     setCustomizationDebug,
   }), [
     actions,
     changes,
     customization,
+    customizationDialog,
     customizationDebug,
     customizationValidation,
+    closeCustomizationDialog,
     focusChangeName,
     isCustomizationLoading,
     isLoading,
+    openCustomizationDebugDialog,
+    openCustomizationValidationDialog,
     recommendedActions,
     refresh,
     refreshCustomization,

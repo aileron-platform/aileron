@@ -65,6 +65,11 @@ workspace-runtime/app/tests/mock_workspace/
 .codex/
 .mcp.json
 openspec/
+!frontend/src/features/workspace/features/openspec/
+!frontend/src/features/workspace/features/openspec/components/
+!frontend/src/features/workspace/features/openspec/components/OpenSpecCustomizationFeature.tsx
+!frontend/src/features/workspace/features/openspec/components/OpenSpecCustomizationSidebar.tsx
+!frontend/src/features/workspace/features/openspec/components/OpenSpecCustomizationFeature.test.tsx
 AGENTS.md
 GEMINI.md
 CLAUDE.md

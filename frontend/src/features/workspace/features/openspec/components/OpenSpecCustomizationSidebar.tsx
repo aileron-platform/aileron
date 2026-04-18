@@ -39,8 +39,8 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
     customization,
     isCustomizationLoading,
     refreshCustomization,
-    runCustomizationValidate,
-    runCustomizationDebug,
+    openCustomizationValidationDialog,
+    openCustomizationDebugDialog,
   } = useOpenSpecWorkspace();
   const isCollapsed = layout.secondColumnCollapsed;
   const [query, setQuery] = useState('');
@@ -239,7 +239,7 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => void runCustomizationValidate()}
+                onClick={() => void openCustomizationValidationDialog()}
                 disabled={!selectedPath}
                 aria-label={t('workspace.openspec.customization.actions.validate')}
                 title={t('workspace.openspec.customization.actions.validate')}
@@ -250,7 +250,7 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => void runCustomizationDebug()}
+                onClick={() => void openCustomizationDebugDialog()}
                 disabled={!selectedPath}
                 aria-label={t('workspace.openspec.customization.actions.debug')}
                 title={t('workspace.openspec.customization.actions.debug')}

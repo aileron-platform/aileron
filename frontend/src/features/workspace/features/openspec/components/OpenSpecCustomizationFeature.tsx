@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckSquare2, ChevronDown, ChevronUp, FileCode2, FileCog, FileText, Save, ShieldCheck } from 'lucide-react';
+import { FileCode2, FileCog, FileText, Save } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
-import { Separator } from '@/shared/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
@@ -57,17 +57,14 @@ const OpenSpecCustomizationFeature: React.FC = () => {
     customization,
     customizationValidation,
     customizationDebug,
-    refreshCustomization,
-    runCustomizationValidate,
-    runCustomizationDebug,
+    customizationDialog,
+    closeCustomizationDialog,
   } = useOpenSpecWorkspace();
   const [file, setFile] = useState<OpenSpecCustomizationFileResponse | null>(null);
   const [editorValue, setEditorValue] = useState('');
   const [isDirty, setIsDirty] = useState(false);
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [activePanel, setActivePanel] = useState<'validation' | 'debug'>('validation');
-  const [isDiagnosticsCollapsed, setIsDiagnosticsCollapsed] = useState(false);
   const selectedPath = state.openspec.selectedPath;
 
   useEffect(() => {
@@ -122,20 +119,6 @@ const OpenSpecCustomizationFeature: React.FC = () => {
   );
 
   const headerIcon = getFileIcon(file?.kind);
-  const validationMatches = customizationValidation?.targetPath === selectedPath;
-  const debugMatches = customizationDebug?.targetPath === selectedPath;
-  const hasValidation = Boolean(validationMatches && customizationValidation);
-  const hasDebug = Boolean(debugMatches && customizationDebug);
-
-  useEffect(() => {
-    if (hasValidation) {
-      setActivePanel('validation');
-      return;
-    }
-    if (hasDebug) {
-      setActivePanel('debug');
-    }
-  }, [hasDebug, hasValidation]);
 
   const handleSave = async () => {
     if (!file || !workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) {
@@ -151,7 +134,6 @@ const OpenSpecCustomizationFeature: React.FC = () => {
       );
       setFile((current) => (current ? { ...current, content: editorValue } : current));
       setIsDirty(false);
-      await refreshCustomization();
       toast({ title: t('workspace.openspec.customization.messages.saved'), description: result.message });
     } catch (error) {
       toast({
@@ -184,40 +166,18 @@ const OpenSpecCustomizationFeature: React.FC = () => {
                       </Badge>
                     ) : null}
                   </div>
-                  <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1 py-1">
+                  <div className="flex items-center gap-1">
                     <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => void runCustomizationValidate(selectedPath)}
-                      disabled={!selectedPath}
-                      aria-label={t('workspace.openspec.customization.actions.validate')}
-                      title={t('workspace.openspec.customization.actions.validate')}
-                    >
-                      <ShieldCheck className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => void runCustomizationDebug(selectedPath)}
-                      disabled={!selectedPath}
-                      aria-label={t('workspace.openspec.customization.actions.debug')}
-                      title={t('workspace.openspec.customization.actions.debug')}
-                    >
-                      <FileCode2 className="h-3.5 w-3.5" />
-                    </Button>
-                    <Separator orientation="vertical" className="mx-1 h-4" />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 px-2.5 text-xs"
                       onClick={() => void handleSave()}
                       disabled={!isDirty || isSaving}
                       aria-label={t('common.save')}
                       title={t('common.save')}
                     >
                       <Save className="h-3.5 w-3.5" />
+                      {t('common.save')}
                     </Button>
                   </div>
                 </div>
@@ -256,102 +216,6 @@ const OpenSpecCustomizationFeature: React.FC = () => {
                   }}
                 />
               </div>
-
-              <div className="border-t border-border bg-background">
-                <div className="flex min-h-9 items-center justify-between gap-2 border-b border-border px-2">
-                  <div className="flex min-w-0 items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className={cn(
-                      'h-7 gap-1.5 px-2 text-xs',
-                      activePanel === 'validation' && hasValidation && 'bg-accent text-accent-foreground',
-                    )}
-                    onClick={() => setActivePanel('validation')}
-                  >
-                    <CheckSquare2 className="h-3.5 w-3.5" />
-                    {t('workspace.openspec.customization.validationTitle')}
-                    {hasValidation ? (
-                      <Badge variant="outline" className="ml-1 h-4 px-1 text-[9px]">
-                        {customizationValidation?.diagnostics.length ?? 0}
-                      </Badge>
-                    ) : null}
-                  </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className={cn(
-                        'h-7 gap-1.5 px-2 text-xs',
-                        activePanel === 'debug' && hasDebug && 'bg-accent text-accent-foreground',
-                      )}
-                      onClick={() => setActivePanel('debug')}
-                    >
-                      <FileCode2 className="h-3.5 w-3.5" />
-                      {t('workspace.openspec.customization.debugTitle')}
-                      {hasDebug ? (
-                        <Badge variant="outline" className="ml-1 h-4 px-1 text-[9px]">
-                          {customizationDebug?.resolutionOrder.length ?? 0}
-                        </Badge>
-                      ) : null}
-                    </Button>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7"
-                    aria-label={isDiagnosticsCollapsed ? '展開 diagnostics' : '收合 diagnostics'}
-                    title={isDiagnosticsCollapsed ? '展開 diagnostics' : '收合 diagnostics'}
-                    onClick={() => setIsDiagnosticsCollapsed((current) => !current)}
-                  >
-                    {isDiagnosticsCollapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  </Button>
-                </div>
-
-                {!isDiagnosticsCollapsed ? (
-                <ScrollArea className="h-64">
-                  <div className="space-y-4 px-4 py-3">
-                  {activePanel === 'validation' && validationMatches && customizationValidation ? (
-                    <DiagnosticsList
-                      title={t('workspace.openspec.customization.validationTitle')}
-                      items={customizationValidation.diagnostics}
-                    />
-                  ) : null}
-                  {activePanel === 'debug' && debugMatches && customizationDebug ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('workspace.openspec.customization.debugTitle')}</h3>
-                        <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
-                          {customizationDebug.resolutionOrder.length}
-                        </Badge>
-                      </div>
-                      <div className="rounded-md border border-border bg-background px-3 py-3 text-sm">
-                        <p>{t('workspace.openspec.customization.debugResolvedName')}: {customizationDebug.resolvedName ?? '-'}</p>
-                        <p>{t('workspace.openspec.customization.debugSource')}: {customizationDebug.source ?? '-'}</p>
-                        <p>{t('workspace.openspec.customization.debugPath')}: {customizationDebug.path ?? '-'}</p>
-                      </div>
-                      <div className="space-y-1.5">
-                        {customizationDebug.resolutionOrder.map((step) => (
-                          <div key={`${step.order}-${step.label}`} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{step.order}. {step.label}</span>
-                              {step.selected ? <Badge variant="secondary">{t('workspace.openspec.customization.selectedStep')}</Badge> : null}
-                            </div>
-                            <p className="mt-1 text-muted-foreground">{step.value ?? '-'}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  {activePanel === 'validation' && !validationMatches ? (
-                    <p className="text-sm text-muted-foreground">{t('workspace.openspec.customization.diagnosticsPlaceholder')}</p>
-                  ) : null}
-                  {activePanel === 'debug' && !debugMatches ? (
-                    <p className="text-sm text-muted-foreground">{t('workspace.openspec.customization.diagnosticsPlaceholder')}</p>
-                  ) : null}
-                  </div>
-                </ScrollArea>
-                ) : null}
-              </div>
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -362,6 +226,62 @@ const OpenSpecCustomizationFeature: React.FC = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={customizationDialog === 'validation'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t('workspace.openspec.customization.validationTitle')}</DialogTitle>
+            <DialogDescription>{customizationValidation?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="pr-3">
+              {customizationValidation ? (
+                <DiagnosticsList
+                  title={t('workspace.openspec.customization.validationTitle')}
+                  items={customizationValidation.diagnostics}
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('workspace.openspec.customization.diagnosticsPlaceholder')}</p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={customizationDialog === 'debug'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{t('workspace.openspec.customization.debugTitle')}</DialogTitle>
+            <DialogDescription>{customizationDebug?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4 pr-3">
+              {customizationDebug ? (
+                <>
+                  <div className="rounded-md border border-border bg-background px-3 py-3 text-sm">
+                    <p>{t('workspace.openspec.customization.debugResolvedName')}: {customizationDebug.resolvedName ?? '-'}</p>
+                    <p>{t('workspace.openspec.customization.debugSource')}: {customizationDebug.source ?? '-'}</p>
+                    <p>{t('workspace.openspec.customization.debugPath')}: {customizationDebug.path ?? '-'}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {customizationDebug.resolutionOrder.map((step) => (
+                      <div key={`${step.order}-${step.label}`} className="rounded-md border border-border bg-background px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{step.order}. {step.label}</span>
+                          {step.selected ? <Badge variant="secondary">{t('workspace.openspec.customization.selectedStep')}</Badge> : null}
+                        </div>
+                        <p className="mt-1 text-muted-foreground">{step.value ?? '-'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">{t('workspace.openspec.customization.diagnosticsPlaceholder')}</p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
