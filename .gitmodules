@@ -1,0 +1,7 @@
+[submodule "codex-universal"]
+	path = codex-universal
+	url = git@github.com:aileron-platform/codex-universal.git
+
+[submodule "workspace-runtime/codex-universal"]
+	path = workspace-runtime/codex-universal
+	url = git@github.com:aileron-platform/codex-universal.git
