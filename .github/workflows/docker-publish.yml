@@ -1,0 +1,557 @@
+name: Publish Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - ".github/workflows/docker-publish.yml"
+      - ".github/docker-publish.md"
+      - ".gitmodules"
+      - "frontend/**"
+      - "workspace-chrome/**"
+      - "workspace-manager/**"
+      - "workspace-nextjs/**"
+      - "workspace-operator/**"
+      - "workspace-runtime/**"
+  workflow_dispatch:
+    inputs:
+      release_channel:
+        description: "要發布的 tag 類型"
+        required: true
+        default: "auto"
+        type: choice
+        options:
+          - auto
+          - dev
+          - latest
+          - both
+      scope:
+        description: "要發布的 image 範圍"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - base
+          - services
+          - runtime
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: docker.io
+  NAMESPACE: ailerondocker
+
+jobs:
+  resolve-config:
+    name: Resolve Publish Config
+    runs-on: ubuntu-latest
+    outputs:
+      publish_dev: ${{ steps.resolve.outputs.publish_dev }}
+      publish_latest: ${{ steps.resolve.outputs.publish_latest }}
+      scope: ${{ steps.resolve.outputs.scope }}
+      runtime_base_channel: ${{ steps.resolve.outputs.runtime_base_channel }}
+    steps:
+      - name: Resolve channel and scope
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          publish_dev=false
+          publish_latest=false
+          scope="all"
+          runtime_base_channel="dev"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            scope="${{ inputs.scope }}"
+            case "${{ inputs.release_channel }}" in
+              auto)
+                if [ "${{ github.ref_name }}" = "main" ]; then
+                  publish_latest=true
+                  runtime_base_channel="latest"
+                elif [ "${{ github.ref_name }}" = "develop" ]; then
+                  publish_dev=true
+                  runtime_base_channel="dev"
+                else
+                  publish_dev=true
+                  runtime_base_channel="dev"
+                fi
+                ;;
+              dev)
+                publish_dev=true
+                runtime_base_channel="dev"
+                ;;
+              latest)
+                publish_latest=true
+                runtime_base_channel="latest"
+                ;;
+              both)
+                publish_dev=true
+                publish_latest=true
+                runtime_base_channel="latest"
+                ;;
+              *)
+                echo "Unsupported release_channel: ${{ inputs.release_channel }}" >&2
+                exit 1
+                ;;
+            esac
+          else
+            if [ "${{ github.ref_name }}" = "main" ]; then
+              publish_latest=true
+              runtime_base_channel="latest"
+            elif [ "${{ github.ref_name }}" = "develop" ]; then
+              publish_dev=true
+              runtime_base_channel="dev"
+            else
+              echo "Unsupported push branch: ${{ github.ref_name }}" >&2
+              exit 1
+            fi
+          fi
+
+          echo "publish_dev=${publish_dev}" >> "${GITHUB_OUTPUT}"
+          echo "publish_latest=${publish_latest}" >> "${GITHUB_OUTPUT}"
+          echo "scope=${scope}" >> "${GITHUB_OUTPUT}"
+          echo "runtime_base_channel=${runtime_base_channel}" >> "${GITHUB_OUTPUT}"
+
+  publish-base-arch:
+    name: Publish Base Arch Images
+    runs-on: ubuntu-latest
+    needs: resolve-config
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'base' ||
+      needs.resolve-config.outputs.scope == 'runtime') &&
+      needs.resolve-config.outputs.publish_dev == 'true' ||
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'base' ||
+      needs.resolve-config.outputs.scope == 'runtime') &&
+      needs.resolve-config.outputs.publish_latest == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: codex-universal
+            context: workspace-runtime/codex-universal
+            file: workspace-runtime/codex-universal/Dockerfile
+          - name: workspace-runtime-base-lite
+            context: workspace-runtime/base-lite
+            file: workspace-runtime/base-lite/Dockerfile
+        platform:
+          - os: linux
+            arch: amd64
+            value: linux/amd64
+          - os: linux
+            arch: arm64
+            value: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image.name }}"
+          arch="${{ matrix.platform.arch }}"
+          tags=""
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            tags="${tags}${image}:dev-${arch}"$'\n'
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            tags="${tags}${image}:latest-${arch}"$'\n'
+          fi
+
+          {
+            echo "tags<<EOF"
+            printf "%s" "${tags}"
+            echo
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push base image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=base-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=base-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+  publish-base-manifest:
+    name: Publish Base Multi-Arch Tags
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-config
+      - publish-base-arch
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'base' ||
+      needs.resolve-config.outputs.scope == 'runtime') &&
+      (needs.resolve-config.outputs.publish_dev == 'true' ||
+      needs.resolve-config.outputs.publish_latest == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - codex-universal
+          - workspace-runtime-base-lite
+    steps:
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create manifest tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image }}"
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:dev" \
+              "${image}:dev-amd64" \
+              "${image}:dev-arm64"
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:latest" \
+              "${image}:latest-amd64" \
+              "${image}:latest-arm64"
+          fi
+
+  publish-service-arch:
+    name: Publish Service Arch Images
+    runs-on: ubuntu-latest
+    needs: resolve-config
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'services') &&
+      (needs.resolve-config.outputs.publish_dev == 'true' ||
+      needs.resolve-config.outputs.publish_latest == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - name: workspace-ui
+            context: frontend
+            file: frontend/Dockerfile
+            target: ""
+          - name: workspace-manager
+            context: workspace-manager
+            file: workspace-manager/Dockerfile
+            target: production
+          - name: workspace-chrome
+            context: workspace-chrome
+            file: workspace-chrome/Dockerfile.webrtc
+            target: ""
+          - name: workspace-nextjs
+            context: workspace-nextjs
+            file: workspace-nextjs/Dockerfile
+            target: ""
+          - name: workspace-operator
+            context: workspace-operator
+            file: workspace-operator/Dockerfile
+            target: ""
+        platform:
+          - os: linux
+            arch: amd64
+            value: linux/amd64
+          - os: linux
+            arch: arm64
+            value: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image.name }}"
+          arch="${{ matrix.platform.arch }}"
+          tags=""
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            tags="${tags}${image}:dev-${arch}"$'\n'
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            tags="${tags}${image}:latest-${arch}"$'\n'
+          fi
+
+          {
+            echo "tags<<EOF"
+            printf "%s" "${tags}"
+            echo
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push service image with target
+        if: ${{ matrix.image.target != '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
+          target: ${{ matrix.image.target }}
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+      - name: Build and push service image without target
+        if: ${{ matrix.image.target == '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.file }}
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+  publish-service-manifest:
+    name: Publish Service Multi-Arch Tags
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-config
+      - publish-service-arch
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'services') &&
+      (needs.resolve-config.outputs.publish_dev == 'true' ||
+      needs.resolve-config.outputs.publish_latest == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - workspace-ui
+          - workspace-manager
+          - workspace-chrome
+          - workspace-nextjs
+          - workspace-operator
+    steps:
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create manifest tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image }}"
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:dev" \
+              "${image}:dev-amd64" \
+              "${image}:dev-arm64"
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:latest" \
+              "${image}:latest-amd64" \
+              "${image}:latest-arm64"
+          fi
+
+  publish-runtime-arch:
+    name: Publish Runtime Arch Images
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-config
+      - publish-base-manifest
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'runtime') &&
+      (needs.resolve-config.outputs.publish_dev == 'true' ||
+      needs.resolve-config.outputs.publish_latest == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - name: codex
+            base_image: codex-universal
+          - name: lite
+            base_image: workspace-runtime-base-lite
+        platform:
+          - os: linux
+            arch: amd64
+            value: linux/amd64
+          - os: linux
+            arch: arm64
+            value: linux/arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Prepare runtime tags
+        id: tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/workspace-runtime"
+          flavor="${{ matrix.flavor.name }}"
+          arch="${{ matrix.platform.arch }}"
+          tags=""
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            tags="${tags}${image}:dev-${flavor}-${arch}"$'\n'
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            tags="${tags}${image}:latest-${flavor}-${arch}"$'\n'
+          fi
+
+          {
+            echo "tags<<EOF"
+            printf "%s" "${tags}"
+            echo
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: workspace-runtime/Dockerfile
+          target: production
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            GOARCH=${{ matrix.platform.arch }}
+          build-contexts: |
+            runtime-base=docker-image://${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.base_image }}:${{ needs.resolve-config.outputs.runtime_base_channel }}-${{ matrix.platform.arch }}
+          cache-from: type=gha,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+  publish-runtime-manifest:
+    name: Publish Runtime Multi-Arch Tags
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-config
+      - publish-runtime-arch
+    if: |
+      (needs.resolve-config.outputs.scope == 'all' ||
+      needs.resolve-config.outputs.scope == 'runtime') &&
+      (needs.resolve-config.outputs.publish_dev == 'true' ||
+      needs.resolve-config.outputs.publish_latest == 'true')
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - codex
+          - lite
+    steps:
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create runtime manifest tags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/workspace-runtime"
+          flavor="${{ matrix.flavor }}"
+
+          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:dev-${flavor}" \
+              "${image}:dev-${flavor}-amd64" \
+              "${image}:dev-${flavor}-arm64"
+          fi
+
+          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
+            docker buildx imagetools create \
+              -t "${image}:latest-${flavor}" \
+              "${image}:latest-${flavor}-amd64" \
+              "${image}:latest-${flavor}-arm64"
+          fi

@@ -37,9 +37,9 @@ kubernetes:
   nodePort: null
   nodeAddress: 127.0.0.1
   pvcName: workspace-runtime-pvc
-  runtimeImage: ailerondocker/workspace-runtime:latest
-  browserImage: ailerondocker/workspace-browser:latest
-  nextjsImage: ailerondocker/workspace-nextjs:latest
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
+  browserImage: ailerondocker/workspace-browser:latest-amd64
+  nextjsImage: ailerondocker/workspace-nextjs:latest-amd64
   # 留空時預設只 watch Helm release 所在 namespace，避免多個 release 互相 reconcile。
   watchNamespace: ""
   workspaceDefaults:

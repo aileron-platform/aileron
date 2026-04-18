@@ -7,8 +7,8 @@ version: "1.0"
 default_image: "universal"
 
 # 支援容器映像（Browser、Next.js 等輔助容器）
-browser_image: "ailerondocker/workspace-chrome:dev"
-nextjs_image: "ailerondocker/workspace-nextjs:dev"
+browser_image: "ailerondocker/workspace-chrome:dev-arm64"
+nextjs_image: "ailerondocker/workspace-nextjs:dev-arm64"
 
 # 可用的容器映像列表
 images:
@@ -16,7 +16,7 @@ images:
     name: "標準容器映像"
     description: "Aileron 標準執行環境，包含 Python、Node.js、Git、SSH、Claude Code 等完整工具鏈"
     icon: "🌐"
-    image: "ailerondocker/workspace-runtime:dev"
+    image: "ailerondocker/workspace-runtime:dev-lite-arm64"
     tags:
       - "universal"
       - "python"
@@ -104,4 +104,3 @@ images:
   #   recommended: false
   #   active: false
   #   sort_order: 5
-
