@@ -123,7 +123,7 @@ services:
       target: development
       args:
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區，預設為 Asia/Taipei
-    image: ailerondocker/workspace-manager:dev
+    image: ailerondocker/workspace-manager:dev-arm64
     container_name: aileron-workspace-manager-dev
     restart: unless-stopped
     environment:
@@ -185,7 +185,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # Workspace Runtime (Development - 使用 workspace-runtime:dev 映像)
+  # Workspace Runtime (Development - 使用 workspace-runtime:dev-lite-arm64 映像)
   workspace-runtime:
     build:
       context: .
@@ -198,8 +198,8 @@ services:
         AGENT_BROWSER_CLI_VERSION: ${WORKSPACE_RUNTIME_AGENT_BROWSER_CLI_VERSION:-0.23.0}
         CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
       additional_contexts:
-        runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/codex-universal:custom}
-    image: ailerondocker/workspace-runtime:dev
+        runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/workspace-runtime-base-lite:dev-arm64}
+    image: ailerondocker/workspace-runtime:dev-lite-arm64
     container_name: workspace-runtime-default-workspace
     restart: unless-stopped
     command: /workspace-runtime/start_services.sh
@@ -296,7 +296,7 @@ services:
     build:
       context: ./workspace-chrome
       dockerfile: Dockerfile.webrtc
-    image: ailerondocker/workspace-chrome:dev
+    image: ailerondocker/workspace-chrome:dev-arm64
     container_name: workspace-browser-default-workspace
     restart: unless-stopped
     environment:
@@ -338,7 +338,7 @@ services:
   workspace-nextjs:
     build:
       context: ./workspace-nextjs
-    image: ailerondocker/workspace-nextjs:dev
+    image: ailerondocker/workspace-nextjs:dev-arm64
     container_name: workspace-nextjs-default-workspace
     restart: unless-stopped
     environment:
@@ -368,7 +368,7 @@ services:
       args:
         VITE_WORKSPACE_MANAGER_URL: http://localhost:3001
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區
-    image: ailerondocker/workspace-ui:dev
+    image: ailerondocker/workspace-ui:dev-arm64
     container_name: aileron-frontend-dev
     restart: unless-stopped
     environment:
