@@ -138,9 +138,6 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - name: codex-universal
-            context: workspace-runtime/codex-universal
-            file: workspace-runtime/codex-universal/Dockerfile
           - name: workspace-runtime-base-lite
             context: workspace-runtime/base-lite
             file: workspace-runtime/base-lite/Dockerfile
@@ -223,7 +220,6 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - codex-universal
           - workspace-runtime-base-lite
     steps:
       - name: Setup Buildx
@@ -435,9 +431,10 @@ jobs:
       matrix:
         flavor:
           - name: codex
-            base_image: codex-universal
+            external_image: codex-universal
+            external_tag: latest
           - name: lite
-            base_image: workspace-runtime-base-lite
+            internal_image: workspace-runtime-base-lite
         platform:
           - os: linux
             arch: amd64
@@ -489,6 +486,22 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve runtime base image
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arch="${{ matrix.platform.arch }}"
+
+          if [ "${{ matrix.flavor.name }}" = "codex" ]; then
+            base_ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.external_image }}:${{ matrix.flavor.external_tag }}-${arch}"
+          else
+            base_ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.internal_image }}:${{ needs.resolve-config.outputs.runtime_base_channel }}-${arch}"
+          fi
+
+          echo "base_ref=${base_ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and push runtime image
         uses: docker/build-push-action@v6
         with:
@@ -501,7 +514,7 @@ jobs:
           build-args: |
             GOARCH=${{ matrix.platform.arch }}
           build-contexts: |
-            runtime-base=docker-image://${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.base_image }}:${{ needs.resolve-config.outputs.runtime_base_channel }}-${{ matrix.platform.arch }}
+            runtime-base=docker-image://${{ steps.base.outputs.base_ref }}
           cache-from: type=gha,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
           cache-to: type=gha,mode=max,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
           provenance: false

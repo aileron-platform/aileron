@@ -26,7 +26,7 @@ NC := \033[0m
 REGISTRY ?= docker.io
 NAMESPACE ?= ailerondocker
 IMAGE_TAG ?= latest
-CODEX_UNIVERSAL_TAG ?= custom
+CODEX_UNIVERSAL_TAG ?= latest
 RUNTIME_BASE_LITE_TAG ?= custom
 RUNTIME_BASE ?= universal
 CODEX_UNIVERSAL_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/codex-universal:$(CODEX_UNIVERSAL_TAG)
@@ -175,20 +175,18 @@ sync-init-schema: ## 🔁 同步共用 init schema 到 Helm chart 內嵌副本
 
 ##@ Image 建置
 
-build-codex-universal: ## 🏗️ 建置 codex-universal image
-	@echo "$(GREEN)🏗️ 建置 codex-universal image...$(NC)"
+build-codex-universal: ## 📥 從 Docker Hub 拉取 codex-universal image
+	@echo "$(GREEN)📥 拉取 codex-universal image...$(NC)"
 	@echo "  Image: $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
-	@docker build -t $(CODEX_UNIVERSAL_IMAGE) -f workspace-runtime/codex-universal/Dockerfile workspace-runtime/codex-universal
-	@echo "$(GREEN)✅ codex-universal 建置完成$(NC)"
+	@docker pull $(CODEX_UNIVERSAL_IMAGE)
+	@echo "$(GREEN)✅ codex-universal 拉取完成$(NC)"
 
-push-codex-universal: ## 📤 推送 codex-universal image
-	@echo "$(GREEN)📤 推送 codex-universal image...$(NC)"
-	@echo "  Image: $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
-	@docker push $(CODEX_UNIVERSAL_IMAGE)
-	@echo "$(GREEN)✅ codex-universal 推送完成$(NC)"
+push-codex-universal: ## ℹ️ codex-universal 由獨立 repo workflow 發布
+	@echo "$(YELLOW)ℹ️ codex-universal 已改由 aileron-platform/codex-universal 的 GitHub Actions 發布$(NC)"
+	@echo "$(YELLOW)ℹ️ 如需更新 image，請在該 repo 修改後合併到 main$(NC)"
 
-rebuild-codex-universal: build-codex-universal push-codex-universal ## 🔁 重建並推送 codex-universal image
-	@echo "$(GREEN)✅ codex-universal rebuild 完成$(NC)"
+rebuild-codex-universal: build-codex-universal push-codex-universal ## 🔁 重新同步 codex-universal image 狀態
+	@echo "$(GREEN)✅ codex-universal 狀態已同步$(NC)"
 
 build-runtime-base-lite: ## 🏗️ 建置 workspace-runtime base-lite image
 	@echo "$(GREEN)🏗️ 建置 workspace-runtime base-lite image...$(NC)"

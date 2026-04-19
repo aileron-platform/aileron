@@ -67,7 +67,7 @@ workspace-runtime/
 
 `workspace-runtime` can now be built against two different base images:
 
-- `RUNTIME_BASE=universal`: existing `codex-universal`
+- `RUNTIME_BASE=universal`: published `ailerondocker/codex-universal` image from Docker Hub
 - `RUNTIME_BASE=lite`: slimmer `workspace-runtime/base-lite`
 
 Build commands:
@@ -77,7 +77,7 @@ Build commands:
 make build-runtime-base-lite
 make build-workspace-runtime RUNTIME_BASE=lite
 
-# Build the full universal base, then build workspace-runtime on top of it
+# Pull the full universal base from Docker Hub, then build workspace-runtime on top of it
 make build-codex-universal
 make build-workspace-runtime RUNTIME_BASE=universal
 ```

@@ -135,17 +135,17 @@ python scripts/dev/docker/ops.py up --build
 
 `workspace-runtime` now supports two base image options:
 
-- `RUNTIME_BASE=universal`: uses the existing full `codex-universal` base
+- `RUNTIME_BASE=universal`: pulls the published `ailerondocker/codex-universal` base from Docker Hub
 - `RUNTIME_BASE=lite`: uses the slimmer `workspace-runtime/base-lite` base
 
-Build the base image first, then build `workspace-runtime` with the desired flavor:
+Pull or build the base image first, then build `workspace-runtime` with the desired flavor:
 
 ```bash
 # Lite base
 make build-runtime-base-lite
 make build-workspace-runtime RUNTIME_BASE=lite
 
-# Full universal base
+# Full universal base from Docker Hub
 make build-codex-universal
 make build-workspace-runtime RUNTIME_BASE=universal
 ```

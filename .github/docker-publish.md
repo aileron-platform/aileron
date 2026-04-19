@@ -42,7 +42,6 @@
 
 Base image：
 
-- `ailerondocker/codex-universal`
 - `ailerondocker/workspace-runtime-base-lite`
 
 一般服務：
@@ -84,7 +83,7 @@ Runtime：
 ## 注意事項
 
 - `workspace-runtime` 會依 flavor 引用不同 base image：
-  - `codex` -> `codex-universal`
+  - `codex` -> 直接從 Docker Hub 拉取 `ailerondocker/codex-universal`
   - `lite` -> `workspace-runtime-base-lite`
 - workflow 目前只負責發布 image，不會自動修改 `docker-compose.yml`、Helm values 或程式內的預設 image tag。
-- `codex-universal` 來源為 `workspace-runtime/codex-universal` submodule，workflow checkout 時會一併抓取 submodule。
+- `codex-universal` 由 `aileron-platform/codex-universal` repository 的獨立 workflow 負責建置與發布。
