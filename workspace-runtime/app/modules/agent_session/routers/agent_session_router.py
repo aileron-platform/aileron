@@ -453,20 +453,26 @@ async def delete_queued_message(
         HTTPException: 訊息不存在或非 queued 狀態
     """
     from ..services.message_service import MessageService
+    from ..domain.enums import MessageStatus
     from ..websocket.events import get_event_emitter, EventType, WebSocketEvent
 
     message_service = MessageService(db)
     emitter = get_event_emitter()
 
-    # 先取得訊息資訊（用於事件通知）
-    queued_messages = await message_service.get_queued_messages(session_id)
-    target_message = None
-    for msg in queued_messages:
-        if msg.id == message_id:
-            target_message = msg
-            break
+    target_message = await message_service.get_message(message_id)
+    if not target_message or target_message.session_id != session_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Queued message not found: {message_id}",
+        )
 
-    if not target_message:
+    if target_message.status == MessageStatus.DISPATCHING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Queued message is already being processed: {message_id}",
+        )
+
+    if target_message.status != MessageStatus.QUEUED:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Queued message not found: {message_id}",
@@ -530,6 +536,7 @@ async def get_queued_messages(
                 "queue_position": msg.queue_position,
                 "content_preview": msg.content_preview,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "status": msg.status.value if msg.status else None,
             }
             for msg in messages
         ],

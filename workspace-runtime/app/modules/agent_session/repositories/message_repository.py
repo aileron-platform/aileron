@@ -10,7 +10,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select, and_, func, delete
+from sqlalchemy import select, and_, func, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..domain.entities import Message
@@ -366,6 +366,30 @@ class MessageRepository(BaseRepository[AgentMessageModel]):
         queued = await self.find_queued(session_id)
         return queued[0] if queued else None
 
+    async def claim_next_queued(self, session_id: str) -> Optional[AgentMessageModel]:
+        """Claim 下一個 queued message 並標記為 dispatching."""
+        next_queued = await self.get_next_queued(session_id)
+        if not next_queued:
+            return None
+
+        stmt = (
+            update(AgentMessageModel)
+            .where(
+                and_(
+                    AgentMessageModel.message_id == next_queued.message_id,
+                    AgentMessageModel.status == MessageStatus.QUEUED.value,
+                )
+            )
+            .values(status=MessageStatus.DISPATCHING.value)
+        )
+        result = await self.db.execute(stmt)
+        await self.db.flush()
+        if result.rowcount != 1:
+            return None
+
+        next_queued.status = MessageStatus.DISPATCHING.value
+        return next_queued
+
     async def delete_queued(self, message_id: str) -> bool:
         """刪除 queued message.
 
@@ -385,6 +409,35 @@ class MessageRepository(BaseRepository[AgentMessageModel]):
         result = await self.db.execute(stmt)
         await self.db.flush()
 
+        return result.rowcount > 0
+
+    async def delete_dispatching(self, message_id: str) -> bool:
+        """刪除 dispatching message."""
+        stmt = delete(AgentMessageModel).where(
+            and_(
+                AgentMessageModel.message_id == message_id,
+                AgentMessageModel.status == MessageStatus.DISPATCHING.value,
+            )
+        )
+
+        result = await self.db.execute(stmt)
+        await self.db.flush()
+        return result.rowcount > 0
+
+    async def restore_dispatching(self, message_id: str) -> bool:
+        """將 dispatching message 還原為 queued."""
+        stmt = (
+            update(AgentMessageModel)
+            .where(
+                and_(
+                    AgentMessageModel.message_id == message_id,
+                    AgentMessageModel.status == MessageStatus.DISPATCHING.value,
+                )
+            )
+            .values(status=MessageStatus.QUEUED.value)
+        )
+        result = await self.db.execute(stmt)
+        await self.db.flush()
         return result.rowcount > 0
 
     async def count_queued(self, session_id: str) -> int:
