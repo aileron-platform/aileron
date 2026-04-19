@@ -17,7 +17,7 @@ The default Docker Compose setup is intended to get teams from zero to a usable 
 ```bash
 git clone <your-repo-url>
 cd aileron
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 :::info Build Time
@@ -44,36 +44,59 @@ If you attempt to log in before Keycloak finishes initialization, the frontend w
 
 ## Common Commands
 
+`python scripts/dev/docker/ops.py` is the formal host-side CLI for local Docker operations. It provides one cross-platform command model for startup, shutdown, cleanup, and test execution.
+
 | Operation | Command |
 |-----------|---------|
-| Start all services | `docker compose up -d` |
-| Rebuild images and start | `docker compose up -d --build` |
-| Stop all services | `docker compose down` |
+| Start all services | `python scripts/dev/docker/ops.py up` |
+| Rebuild images and start | `python scripts/dev/docker/ops.py up --build` |
+| Stop all services | `python scripts/dev/docker/ops.py down` |
 | Tail all logs | `docker compose logs -f` |
 | Tail a specific service log | `docker compose logs -f workspace-manager` |
+
+Inspect available subcommands and examples:
+
+```bash
+python scripts/dev/docker/ops.py --help
+python scripts/dev/docker/ops.py test --help
+```
 
 ## Cleanup
 
 Remove workspace containers only (preserve databases):
 
 ```bash
-./scripts/dev/docker/cleanup-workspaces.sh
+python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
 Full cleanup (databases, volumes, containers):
 
 ```bash
-./scripts/dev/docker/cleanup.sh
+python scripts/dev/docker/ops.py cleanup
 ```
 
 :::danger Full Cleanup
-`cleanup.sh` deletes all Docker volumes, including PostgreSQL data. Make sure important data is backed up before running it.
+`cleanup` deletes all Docker volumes, including PostgreSQL data. Make sure important data is backed up before running it.
 :::
+
+On macOS / Linux, the legacy shell wrappers remain available:
+
+```bash
+./scripts/dev/docker/cleanup-workspaces.sh
+./scripts/dev/docker/cleanup.sh
+```
+
+On Windows PowerShell, use:
+
+```powershell
+.\scripts\dev\docker\cleanup-workspaces.ps1
+.\scripts\dev\docker\cleanup.ps1
+```
 
 Restart after cleanup:
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 ## Local Module Development
@@ -92,5 +115,5 @@ cd workspace-runtime && uv sync && uv run uvicorn app.main:app --reload --port 3
 ```
 
 :::tip First Experience
-For first-time users, use Docker Compose directly. It is the fastest way to experience the full platform without rebuilding the environment service by service.
+For first-time users, start with the host-side CLI. It provides the supported cross-platform path without forcing you to learn the lower-level Docker commands up front.
 :::

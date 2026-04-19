@@ -68,11 +68,11 @@ In Docker mode, `docker compose` manages the following services:
 ## Start
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 :::info Build Time
-The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `docker compose up -d` for a fast boot.
+The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `python scripts/dev/docker/ops.py up` for a fast boot.
 :::
 
 ## Workspace Runtime Base Image Selection
@@ -243,13 +243,16 @@ For feature exploration, roughly 4–6GB total is enough. For concurrent agent c
 
 ```bash
 # Start
-docker compose up -d
+python scripts/dev/docker/ops.py up
 
 # Rebuild images and start
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 
 # Stop (preserves volumes)
-docker compose down
+python scripts/dev/docker/ops.py down
+
+# Full reset via the host-side CLI
+python scripts/dev/docker/ops.py cleanup
 
 # Stop and remove volumes
 docker compose down -v
@@ -268,6 +271,8 @@ docker compose restart workspace-runtime
 # Rebuild a single service
 docker compose up -d --build workspace-runtime
 
+For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
+
 # Build workspace-runtime against the lite base
 make build-workspace-runtime RUNTIME_BASE=lite
 
@@ -280,7 +285,7 @@ make build-workspace-runtime RUNTIME_BASE=universal
 ### Remove Workspace Containers Only (Preserve Databases)
 
 ```bash
-./scripts/dev/docker/cleanup-workspaces.sh
+python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
 Only removes dynamically created workspace containers, associated volumes, and network. Platform services and databases are untouched.
@@ -288,7 +293,7 @@ Only removes dynamically created workspace containers, associated volumes, and n
 ### Full Cleanup
 
 ```bash
-./scripts/dev/docker/cleanup.sh
+python scripts/dev/docker/ops.py cleanup
 ```
 
 This script will:
@@ -302,6 +307,25 @@ This script will:
 :::danger
 Full cleanup deletes all database data, including users, workspace settings, templates, etc. Back up before running.
 :::
+
+Wrapper entrypoints remain available for convenience:
+
+```bash
+./scripts/dev/docker/cleanup-workspaces.sh
+./scripts/dev/docker/cleanup.sh
+```
+
+```powershell
+.\scripts\dev\docker\cleanup-workspaces.ps1
+.\scripts\dev\docker\cleanup.ps1
+```
+
+### Start and Stop via the Cross-Platform CLI
+
+```bash
+python scripts/dev/docker/ops.py up --build
+python scripts/dev/docker/ops.py down
+```
 
 Restart after cleanup:
 
