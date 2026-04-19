@@ -73,7 +73,7 @@ services:
       # workspace-runtime/Dockerfile 以 FROM runtime-base 起頭；
       # 測試 compose 需提供對應的預建 base image。
       additional_contexts:
-        runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/codex-universal:latest}
+        runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/codex-universal:latest-amd64}
     container_name: workspace-runtime-test
     depends_on:
       postgres-test:

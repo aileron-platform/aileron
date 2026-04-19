@@ -67,7 +67,7 @@ workspace-runtime/
 
 `workspace-runtime` can now be built against two different base images:
 
-- `RUNTIME_BASE=universal`: published `ailerondocker/codex-universal` image from Docker Hub
+- `RUNTIME_BASE=universal`: published `ailerondocker/codex-universal:<channel>-<arch>` image from Docker Hub
 - `RUNTIME_BASE=lite`: slimmer `workspace-runtime/base-lite`
 
 Build commands:
@@ -92,7 +92,7 @@ make build-workspace-runtime RUNTIME_BASE=lite RUNTIME_BASE_LITE_TAG=mytag IMAGE
 ### Inside a Workspace Container
 
 ```dockerfile
-FROM aileron/workspace-runtime:latest
+FROM ailerondocker/workspace-runtime:latest-codex-amd64
 
 ENV WORKSPACE_ID=my-workspace
 ENV MANAGER_URL=http://workspace-manager:8000
