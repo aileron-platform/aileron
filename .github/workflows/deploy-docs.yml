@@ -2,8 +2,6 @@ name: Deploy Docs to GitHub Pages
 
 on:
   push:
-    branches:
-      - v0.1.0-alpha
     paths:
       - 'docs-site/**'
       - '.github/workflows/deploy-docs.yml'

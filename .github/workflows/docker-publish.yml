@@ -1,20 +1,6 @@
 name: Publish Docker Images
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - ".github/workflows/docker-publish.yml"
-      - ".github/docker-publish.md"
-      - ".gitmodules"
-      - "frontend/**"
-      - "workspace-chrome/**"
-      - "workspace-manager/**"
-      - "workspace-nextjs/**"
-      - "workspace-operator/**"
-      - "workspace-runtime/**"
   workflow_dispatch:
     inputs:
       release_channel:
