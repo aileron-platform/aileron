@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from app.modules.agent_session.domain.enums import PermissionMode, ToolDecisionOutcome, ToolDecisionType
+from app.modules.agent_session.domain.enums import MessageStatus, PermissionMode, ToolDecisionOutcome, ToolDecisionType
 from app.modules.agent_session.schemas.agent_session import (
     AgentSessionCreate,
     AgentSessionUpdate,
@@ -204,12 +204,22 @@ async def test_handle_tool_decision_and_submit_tool_result(monkeypatch: pytest.M
 async def test_queued_message_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     queued_message = SimpleNamespace(
         id="msg-1",
+        session_id="session-1",
+        status=MessageStatus.QUEUED,
         queue_position=2,
         content_preview="queued preview",
         created_at=datetime.now(timezone.utc),
     )
+    dispatching_message = SimpleNamespace(
+        id="msg-2",
+        session_id="session-1",
+        status=MessageStatus.DISPATCHING,
+        queue_position=1,
+        content_preview="dispatching preview",
+        created_at=datetime.now(timezone.utc),
+    )
     message_service = AsyncMock()
-    message_service.get_queued_messages.side_effect = [[queued_message], []]
+    message_service.get_message.side_effect = [queued_message, None, dispatching_message]
     message_service.delete_queued_message.side_effect = [True, False]
     emitter = AsyncMock()
     db = AsyncMock()
@@ -225,8 +235,12 @@ async def test_queued_message_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         await router_module.delete_queued_message("session-1", "missing", db)
     assert exc_missing.value.status_code == 404
 
-    message_service.get_queued_messages.side_effect = None
+    with pytest.raises(HTTPException) as exc_dispatching:
+        await router_module.delete_queued_message("session-1", "msg-2", db)
+    assert exc_dispatching.value.status_code == 409
+
     message_service.get_queued_messages.return_value = [queued_message]
     result = await router_module.get_queued_messages("session-1", AsyncMock())
     assert result["count"] == 1
     assert result["messages"][0]["message_id"] == "msg-1"
+    assert result["messages"][0]["status"] == "queued"

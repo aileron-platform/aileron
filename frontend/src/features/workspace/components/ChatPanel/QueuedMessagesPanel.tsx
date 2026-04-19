@@ -65,6 +65,11 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
                 <span className="text-sm text-foreground truncate">
                   {msg.content_preview || t('workspace.chat.queue.emptyMessage')}
                 </span>
+                {msg.status === 'dispatching' && (
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground shrink-0">
+                    dispatching
+                  </span>
+                )}
               </div>
 
               {/* Actions */}
@@ -84,8 +89,9 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
                     e.stopPropagation();
                     onDelete(msg.message_id);
                   }}
+                  disabled={msg.status === 'dispatching'}
                   className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors"
-                  title={t('workspace.chat.queue.delete')}
+                  title={msg.status === 'dispatching' ? 'Processing' : t('workspace.chat.queue.delete')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

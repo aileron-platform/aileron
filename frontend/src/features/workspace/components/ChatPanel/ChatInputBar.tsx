@@ -54,7 +54,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   const hasMessage = value.trim().length > 0;
   const hasAttachments = attachments.length > 0;
   const hasReferences = codeReferences.length > 0;
-  const canSend = (hasMessage || hasAttachments || hasReferences) && isConnected && !hasActiveRequests && !isAborting;
+  const canSend = (hasMessage || hasAttachments || hasReferences) && isConnected && !isAborting;
   const showPermissionMode = normalizeAgentType(cliType) === 'claude';
 
   const handleKeyDown = useCallback(
