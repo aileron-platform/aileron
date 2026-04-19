@@ -138,7 +138,7 @@ See [Deployment](/deployment/docker) for details.
 ```bash
 git clone <your-repo-url>
 cd aileron
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 This default setup is intended to get teams from zero to a usable agent workspace quickly, without requiring every user to assemble the full environment manually.

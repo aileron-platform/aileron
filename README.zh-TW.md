@@ -101,7 +101,7 @@ Aileron 採用現代化微服務架構：
 ```bash
 git clone <your-repo-url>
 cd aileron
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 > 首次建置可能需要 **5–10 分鐘**。
@@ -169,14 +169,35 @@ helm install aileron ./helm/aileron \
 
 | 任務 | 指令 |
 |---|---|
-| Restart stack | `docker compose up -d --build` |
+| Restart stack | `python scripts/dev/docker/ops.py up --build` |
 | View manager logs | `docker compose logs -f workspace-manager` |
 | View runtime logs | `docker compose logs -f workspace-runtime` |
-| Stop services | `docker compose down` |
-| Clear workspaces | `./scripts/dev/docker/cleanup-workspaces.sh` |
-| Full reset（破壞性操作） | `./scripts/dev/docker/cleanup.sh` |
+| Stop services | `python scripts/dev/docker/ops.py down` |
+| Clear workspaces | `python scripts/dev/docker/ops.py cleanup-workspaces` |
+| Full reset（破壞性操作） | `python scripts/dev/docker/ops.py cleanup` |
 
-> `cleanup.sh` 會刪除所有資料與資料庫。
+> `cleanup` 會刪除所有資料與資料庫。
+>
+> `python scripts/dev/docker/ops.py up --build` 與 `python scripts/dev/docker/ops.py down` 會透過同一個跨平台 CLI 呼叫 `docker compose up/down`。
+>
+> macOS / Linux 也可繼續使用 `./scripts/dev/docker/cleanup.sh` 與 `./scripts/dev/docker/cleanup-workspaces.sh`。
+>
+> Windows PowerShell 可使用 `.\scripts\dev\docker\cleanup.ps1` 與 `.\scripts\dev\docker\cleanup-workspaces.ps1`。
+
+### Host CLI
+
+`python scripts/dev/docker/ops.py` 是目前正式的 host-side CLI 入口，用來統一：
+
+- stack 啟動與停止
+- workspace 清理與完整清理
+- runtime / manager container 測試觸發
+
+可先用以下命令查看可用子命令與範例：
+
+```bash
+python scripts/dev/docker/ops.py --help
+python scripts/dev/docker/ops.py test --help
+```
 
 ---
 
@@ -214,8 +235,15 @@ make test-runtime
 也可使用既有腳本：
 
 ```bash
-./scripts/test/run-all-tests.sh manager
-./scripts/test/run-all-tests.sh runtime
+python scripts/dev/docker/ops.py test manager
+python scripts/dev/docker/ops.py test runtime
+```
+
+或使用 Makefile 的跨平台便利入口：
+
+```bash
+make test-manager-cli
+make test-runtime-cli
 ```
 
 ---
