@@ -68,12 +68,14 @@ In Docker mode, `docker compose` manages the following services:
 ## Start
 
 ```bash
-python scripts/dev/docker/ops.py up --build
+docker compose up -d --build
 ```
 
 :::info Build Time
-The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `python scripts/dev/docker/ops.py up` for a fast boot.
+The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `docker compose up -d` for a fast boot.
 :::
+
+In Aileron, this full Docker Compose stack is not only a deployment path but also the default local development mode. Day-to-day module development should keep the full stack running and rely on the development mounts plus each service's built-in reload behavior to pick up code changes.
 
 ## Workspace Runtime Base Image Selection
 
@@ -203,6 +205,8 @@ See [Environment Variables Reference](./environment-variables) for the full list
 
 ### Development Mounts
 
+These mounts are the core of the local development workflow. Module directories on the host are mapped directly into containers, so frontend, Manager, Runtime, and Terminal code changes usually become effective inside the running stack without rebuilding everything each time.
+
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
 | `./workspace-manager` | `/workspace-manager` | Manager code hot reload |
@@ -307,18 +311,6 @@ This script will:
 :::danger
 Full cleanup deletes all database data, including users, workspace settings, templates, etc. Back up before running.
 :::
-
-Wrapper entrypoints remain available for convenience:
-
-```bash
-./scripts/dev/docker/cleanup-workspaces.sh
-./scripts/dev/docker/cleanup.sh
-```
-
-```powershell
-.\scripts\dev\docker\cleanup-workspaces.ps1
-.\scripts\dev\docker\cleanup.ps1
-```
 
 ### Start and Stop via the Cross-Platform CLI
 

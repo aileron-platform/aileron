@@ -106,13 +106,15 @@ ws.onmessage = (event) => {
 ## Local Development
 
 ```bash
-cd workspace-runtime
+docker compose up -d workspace-runtime
+```
 
-# Install dependencies
-uv sync
+`workspace-runtime` should also be developed primarily through Docker Compose together with the rest of the platform services. Compose mounts `./workspace-runtime` into `/workspace-runtime` inside the container, so code changes are usually reflected through the existing reload behavior.
 
-# Start the service
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3002
+If you need to validate full agent workflows, WebSocket behavior, file watching, or other cross-service flows, start the full stack:
+
+```bash
+docker compose up -d
 ```
 
 ## Testing

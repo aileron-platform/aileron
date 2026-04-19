@@ -105,13 +105,15 @@ workspace-manager/
 ## 本地開發
 
 ```bash
-cd workspace-manager
+docker compose up -d workspace-manager
+```
 
-# 安裝依賴（使用 uv）
-uv sync
+`workspace-manager` 在本地開發時應優先透過 Docker Compose 啟動，並配合完整 stack 一起運作。Compose 會將 `./workspace-manager` 掛載到容器內的 `/workspace-manager`，因此程式碼修改通常可透過既有 reload 機制即時生效。
 
-# 啟動服務
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+若尚未啟動其他相依服務，建議直接使用：
+
+```bash
+docker compose up -d
 ```
 
 ## 測試

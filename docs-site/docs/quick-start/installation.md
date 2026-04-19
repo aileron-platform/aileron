@@ -14,7 +14,7 @@ title: 安裝與啟動
 
 ## 標準 Host CLI
 
-`python scripts/dev/docker/ops.py` 是目前正式的 host-side CLI，用於本機 Docker 操作。請將它作為跨平台的主要入口，負責啟動、停止、清理與測試執行。
+`python scripts/dev/docker/ops.py` 是目前正式的 host-side CLI，用於本機 Docker 操作。文件中的分工原則如下：整體 stack 的啟動、停止、清理與測試執行，優先使用 `ops.py`；模組開發時的即時觀察、單一服務重建與低層除錯，則使用 `docker compose`。
 
 第一次使用前，先查看可用子指令：
 
@@ -111,15 +111,7 @@ macOS / Linux：
 python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
-如果你偏好平台專用入口，legacy wrapper 仍然可用：
-
-```powershell
-.\scripts\dev\docker\cleanup-workspaces.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup-workspaces.sh
-```
+若仍需使用舊版平台專用 wrapper，可參考 `scripts/dev/docker/` 目錄中的既有腳本；文件中的主要路徑以 `python scripts/dev/docker/ops.py` 為準。
 
 ### 完整清理
 
@@ -141,15 +133,7 @@ python scripts/dev/docker/ops.py cleanup
 `cleanup` 會刪除所有 Docker volumes，包含 PostgreSQL 資料。執行前請先確認重要資料已備份。
 :::
 
-完整清理流程的 legacy wrapper 仍然可用：
-
-```powershell
-.\scripts\dev\docker\cleanup.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup.sh
-```
+若仍需使用舊版平台專用 wrapper，可參考 `scripts/dev/docker/` 目錄中的既有腳本；文件中的主要路徑以 `python scripts/dev/docker/ops.py` 為準。
 
 ## 清理後重新啟動
 
@@ -169,19 +153,30 @@ python scripts/dev/docker/ops.py up --build
 
 ## 本地模組開發
 
-若需要單獨開發某個服務：
+Docker Compose 本身就是 Aileron 預設的本地開發方式。進行模組開發時，應先完整啟動整個 stack，而不是把主要服務獨立拉到宿主機執行：
 
 ```bash
-# 前端
-cd frontend && npm install && npm run dev
+docker compose up -d
+```
 
-# Workspace Manager
-cd workspace-manager && uv sync && uv run uvicorn app.main:app --reload --port 3001
+在這個模式下，開發中的模組目錄會直接掛載到對應容器內，修改後通常可即時反映，不需要每次都重新建置整個環境：
 
-# Workspace Runtime
-cd workspace-runtime && uv sync && uv run uvicorn app.main:app --reload --port 3002
+- `./frontend` → `/app`
+- `./workspace-manager` → `/workspace-manager`
+- `./workspace-runtime` → `/workspace-runtime`
+- `./workspace-terminal` → `/workspace-terminal`
+
+這代表前端、Manager、Runtime、Terminal 的程式碼變更，會透過既有的開發用掛載與 reload 機制直接反映到容器內。只有在 Dockerfile、系統依賴或映像層內容改動時，才需要再執行 `docker compose up -d --build`。
+
+若要查看個別服務狀態或追蹤變更是否生效，可搭配：
+
+```bash
+docker compose ps
+docker compose logs -f workspace-manager
+docker compose logs -f workspace-runtime
+docker compose logs -f frontend
 ```
 
 :::tip 初次體驗
-第一次使用時，建議先從 host-side CLI 開始。這是目前支援的跨平台標準路徑，不需要一開始就直接操作較低層的 Docker 指令。
+第一次使用時，先用 `ops.py` 完成環境啟動與清理；進入日常開發後，再使用 `docker compose ps`、`docker compose logs -f`、`docker compose up -d --build <service>` 這類指令追蹤與調整單一服務。
 :::

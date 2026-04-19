@@ -75,6 +75,8 @@ docker compose up -d --build
 第一次啟動需要建置所有映像，約需 5～10 分鐘。後續啟動若無程式碼變更，使用 `docker compose up -d` 即可秒速啟動。
 :::
 
+在 Aileron 中，這個完整的 Docker Compose stack 不只是部署方式，也是預設的本地開發模式。日常模組開發應以整套服務一起啟動為前提，再透過開發用掛載與各服務內建的 reload 機制，即時反映程式碼變更。
+
 ## 確認服務狀態
 
 ```bash
@@ -171,6 +173,8 @@ HOST_PROJECT_ROOT=/Users/yourname/aileron
 
 ### 開發用掛載
 
+以下掛載是本地開發模式的核心。主機上的模組目錄會直接映射到容器內，因此前端、Manager、Runtime、Terminal 的程式碼修改通常可直接在容器內生效，不需要每次都重建整個 stack。
+
 | 路徑 | 容器路徑 | 用途 |
 |------|----------|------|
 | `./workspace-manager` | `/workspace-manager` | Manager 程式碼熱重載 |
@@ -210,14 +214,17 @@ Keycloak 額外設定了 `localhost` 和 `keycloak` 兩個 network alias，以�
 ## 常用指令
 
 ```bash
-# 啟動
-docker compose up -d
+# 啟動整個 stack
+python scripts/dev/docker/ops.py up
 
-# 重建映像後啟動
-docker compose up -d --build
+# 重建映像後啟動整個 stack
+python scripts/dev/docker/ops.py up --build
 
 # 停止（保留 volumes）
-docker compose down
+python scripts/dev/docker/ops.py down
+
+# 完整清理
+python scripts/dev/docker/ops.py cleanup
 
 # 停止並刪除 volumes
 docker compose down -v
@@ -237,12 +244,14 @@ docker compose restart workspace-runtime
 docker compose up -d --build workspace-runtime
 ```
 
+日常整體操作請優先使用 `python scripts/dev/docker/ops.py ...`；`docker compose` 則保留給查看日誌、重啟單一服務、重建單一服務與低層除錯。
+
 ## 清除
 
 ### 清除工作區容器（保留資料庫）
 
 ```bash
-./scripts/dev/docker/cleanup-workspaces.sh
+python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
 僅移除動態建立的 workspace 容器、相關 volume 與 network。平台服務和資料庫不受影響。
@@ -250,10 +259,10 @@ docker compose up -d --build workspace-runtime
 ### 完整清除
 
 ```bash
-./scripts/dev/docker/cleanup.sh
+python scripts/dev/docker/ops.py cleanup
 ```
 
-此腳本會依序：
+此流程會依序：
 1. 刪除所有動態 workspace 容器
 2. 停止 docker-compose 所有服務
 3. 刪除 Docker volumes 和 networks
@@ -268,7 +277,7 @@ docker compose up -d --build workspace-runtime
 清除後重新啟動：
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 ## 健康檢查

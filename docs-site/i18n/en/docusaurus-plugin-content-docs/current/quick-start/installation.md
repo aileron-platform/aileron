@@ -14,7 +14,7 @@ The default Docker Compose setup is intended to get teams from zero to a usable 
 
 ## Standard Host CLI
 
-`python scripts/dev/docker/ops.py` is the formal host-side CLI for local Docker operations. Use it as the primary cross-platform entrypoint for startup, shutdown, cleanup, and test execution.
+`python scripts/dev/docker/ops.py` is the formal host-side CLI for local Docker operations. The intended split is: use `ops.py` for full-stack lifecycle actions such as startup, shutdown, cleanup, and test execution; use raw `docker compose` for day-to-day development tasks such as inspecting logs, rebuilding a single service, or lower-level debugging.
 
 Inspect the available subcommands before your first run:
 
@@ -111,15 +111,7 @@ macOS / Linux:
 python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
-Legacy shell wrappers remain available if you prefer platform-specific entrypoints:
-
-```powershell
-.\scripts\dev\docker\cleanup-workspaces.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup-workspaces.sh
-```
+If you still need the older platform-specific wrappers, refer to the existing scripts under `scripts/dev/docker/`; the primary documented path is `python scripts/dev/docker/ops.py`.
 
 ### Full Cleanup
 
@@ -141,15 +133,7 @@ python scripts/dev/docker/ops.py cleanup
 `cleanup` deletes all Docker volumes, including PostgreSQL data. Make sure important data is backed up before running it.
 :::
 
-Legacy shell wrappers remain available for the full cleanup flow:
-
-```powershell
-.\scripts\dev\docker\cleanup.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup.sh
-```
+If you still need the older platform-specific wrappers, refer to the existing scripts under `scripts/dev/docker/`; the primary documented path is `python scripts/dev/docker/ops.py`.
 
 ## Restart After Cleanup
 
@@ -169,19 +153,30 @@ python scripts/dev/docker/ops.py up --build
 
 ## Local Module Development
 
-If you want to develop a single service locally:
+Docker Compose is the default local development mode for Aileron. For module development, start the full stack first instead of pulling core services out to run directly on the host:
 
 ```bash
-# Frontend
-cd frontend && npm install && npm run dev
+docker compose up -d
+```
 
-# Workspace Manager
-cd workspace-manager && uv sync && uv run uvicorn app.main:app --reload --port 3001
+In this mode, the development module directories are mounted directly into their corresponding containers, so changes usually take effect immediately without rebuilding the full environment every time:
 
-# Workspace Runtime
-cd workspace-runtime && uv sync && uv run uvicorn app.main:app --reload --port 3002
+- `./frontend` → `/app`
+- `./workspace-manager` → `/workspace-manager`
+- `./workspace-runtime` → `/workspace-runtime`
+- `./workspace-terminal` → `/workspace-terminal`
+
+That means frontend, Manager, Runtime, and Terminal code changes flow through the existing development mounts and reload mechanisms inside the containers. You only need `docker compose up -d --build` when Dockerfiles, system dependencies, or image-layer contents change.
+
+To inspect service state or confirm that changes have been picked up, use:
+
+```bash
+docker compose ps
+docker compose logs -f workspace-manager
+docker compose logs -f workspace-runtime
+docker compose logs -f frontend
 ```
 
 :::tip First Experience
-For first-time users, start with the host-side CLI. It provides the supported cross-platform path without forcing you to learn the lower-level Docker commands up front.
+For first-time users, use `ops.py` to bring the environment up and tear it down. Once the stack is running, switch to commands like `docker compose ps`, `docker compose logs -f`, and `docker compose up -d --build <service>` for service-level development work.
 :::
