@@ -13,7 +13,7 @@ Workspace Manager is the core service of Aileron, responsible for managing the f
 
 ### Workspace Management
 - **CRUD**: create, read, update, delete workspaces
-- **Container management**: Docker / Kubernetes / Podman container lifecycle control
+- **Container management**: Docker / Kubernetes container lifecycle control
 - **Template support**: quickly create workspaces from preset templates
 - **Network configuration**: firewall rules and port mapping management
 
@@ -41,7 +41,7 @@ Workspace Manager is the core service of Aileron, responsible for managing the f
 | Database | PostgreSQL |
 | Cache / queue | Redis |
 | Background tasks | Celery |
-| Container management | Docker / Kubernetes / Podman |
+| Container management | Docker / Kubernetes |
 | Authentication | Keycloak JWT |
 
 ## Directory Structure

@@ -123,7 +123,7 @@ services:
       target: development
       args:
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區，預設為 Asia/Taipei
-    image: ailerondocker/workspace-manager:dev-arm64
+    image: ${WORKSPACE_MANAGER_IMAGE:-ailerondocker/workspace-manager:dev-arm64}
     container_name: aileron-workspace-manager-dev
     restart: unless-stopped
     environment:
@@ -199,7 +199,7 @@ services:
         CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
       additional_contexts:
         runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/workspace-runtime-base-lite:dev-arm64}
-    image: ailerondocker/workspace-runtime:dev-lite-arm64
+    image: ${WORKSPACE_RUNTIME_IMAGE:-ailerondocker/workspace-runtime:dev-lite-arm64}
     container_name: workspace-runtime-default-workspace
     restart: unless-stopped
     command: /workspace-runtime/start_services.sh
@@ -234,7 +234,7 @@ services:
       - GIT_USER_NAME=Developer
       - GIT_USER_EMAIL=developer@workspace.local
       # Java Configuration
-      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+      - JAVA_HOME=${WORKSPACE_RUNTIME_JAVA_HOME:-/usr/lib/jvm/openjdk-21}
       # VS Code Server Configuration
       - VSCODE_SERVER_PORT=8080
       # Terminal Service Configuration
@@ -296,7 +296,7 @@ services:
     build:
       context: ./workspace-chrome
       dockerfile: Dockerfile.webrtc
-    image: ailerondocker/workspace-chrome:dev-arm64
+    image: ${WORKSPACE_CHROME_IMAGE:-ailerondocker/workspace-chrome:dev-arm64}
     container_name: workspace-browser-default-workspace
     restart: unless-stopped
     environment:
@@ -338,7 +338,7 @@ services:
   workspace-nextjs:
     build:
       context: ./workspace-nextjs
-    image: ailerondocker/workspace-nextjs:dev-arm64
+    image: ${WORKSPACE_NEXTJS_IMAGE:-ailerondocker/workspace-nextjs:dev-arm64}
     container_name: workspace-nextjs-default-workspace
     restart: unless-stopped
     environment:
@@ -368,7 +368,7 @@ services:
       args:
         VITE_WORKSPACE_MANAGER_URL: http://localhost:3001
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區
-    image: ailerondocker/workspace-ui:dev-arm64
+    image: ${WORKSPACE_UI_IMAGE:-ailerondocker/workspace-ui:dev-arm64}
     container_name: aileron-frontend-dev
     restart: unless-stopped
     environment:

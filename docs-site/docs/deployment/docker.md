@@ -220,6 +220,12 @@ python scripts/dev/docker/ops.py up
 # 重建映像後啟動整個 stack
 python scripts/dev/docker/ops.py up --build
 
+# 互動式選擇啟動模式後啟動
+python scripts/dev/docker/ops.py up
+
+# 直接指定使用 Docker Hub dev tag 啟動
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+
 # 停止（保留 volumes）
 python scripts/dev/docker/ops.py down
 
@@ -245,6 +251,8 @@ docker compose up -d --build workspace-runtime
 ```
 
 日常整體操作請優先使用 `python scripts/dev/docker/ops.py ...`；`docker compose` 則保留給查看日誌、重啟單一服務、重建單一服務與低層除錯。
+
+`ops.py up` 會先詢問使用者要使用本地 build 或 Docker Hub `dev` tag，並依選擇自動覆寫 Compose 使用的 image tag；如需非互動模式，請直接帶入 `--startup-mode`、`--image-arch` 與 `--runtime-base`。
 
 ## 清除
 

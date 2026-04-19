@@ -23,6 +23,17 @@ python scripts/dev/docker/ops.py --help
 python scripts/dev/docker/ops.py test --help
 ```
 
+`python scripts/dev/docker/ops.py up` 現在會先詢問使用者要用哪一種啟動方式，再自動切換對應 image tag。可選模式包含：
+
+- 使用目前 repo 內容本地 build 後啟動
+- 使用 Docker Hub 的 `dev` tag 啟動
+
+若不想進入互動式選單，也可直接用參數指定：
+
+```bash
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+```
+
 ## 第一次啟動
 
 ### Windows PowerShell
@@ -84,6 +95,7 @@ python scripts/dev/docker/ops.py down
 | 操作 | 指令 |
 |------|------|
 | 啟動所有服務 | `python scripts/dev/docker/ops.py up` |
+| 使用 Docker Hub dev tag 啟動 | `python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite` |
 | 重建映像後啟動 | `python scripts/dev/docker/ops.py up --build` |
 | 停止所有服務 | `python scripts/dev/docker/ops.py down` |
 | 清理工作區資源 | `python scripts/dev/docker/ops.py cleanup-workspaces` |

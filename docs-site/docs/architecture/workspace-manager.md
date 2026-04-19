@@ -13,7 +13,7 @@ Workspace Manager 是 Aileron 的核心服務，負責管理開發工作區的�
 
 ### 工作區管理
 - **CRUD**：建立、讀取、更新、刪除工作區
-- **容器管理**：Docker / Kubernetes / Podman 容器生命週期控制
+- **容器管理**：Docker / Kubernetes 容器生命週期控制
 - **範本支援**：基於預設範本快速建立工作區
 - **網路配置**：防火牆規則和端口映射管理
 
@@ -41,7 +41,7 @@ Workspace Manager 是 Aileron 的核心服務，負責管理開發工作區的�
 | 資料庫 | PostgreSQL |
 | 快取 / 佇列 | Redis |
 | 背景任務 | Celery |
-| 容器管理 | Docker / Kubernetes / Podman |
+| 容器管理 | Docker / Kubernetes |
 | 認證 | Keycloak JWT |
 
 ## 目錄結構
