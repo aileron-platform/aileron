@@ -3,14 +3,25 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
 
-OPS_PATH = Path(__file__).resolve().parents[4] / "scripts" / "dev" / "docker" / "ops.py"
+def _find_ops_path() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidate = parent / "scripts" / "dev" / "docker" / "ops.py"
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError("找不到 scripts/dev/docker/ops.py")
+
+
+OPS_PATH = _find_ops_path()
 OPS_SPEC = importlib.util.spec_from_file_location("host_docker_ops", OPS_PATH)
 assert OPS_SPEC is not None and OPS_SPEC.loader is not None
 ops = importlib.util.module_from_spec(OPS_SPEC)
+sys.modules[OPS_SPEC.name] = ops
 OPS_SPEC.loader.exec_module(ops)
 
 
