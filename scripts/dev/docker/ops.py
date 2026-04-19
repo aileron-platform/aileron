@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -70,6 +72,16 @@ class TestServiceConfig:
     work_dir: str
     python_check_command: list[str]
     python_test_command: str
+
+
+@dataclass(frozen=True)
+class StartupProfile:
+    startup_mode: str
+    image_arch: str
+    runtime_base: str
+    service_tag: str
+    runtime_tag: str
+    runtime_base_image: str
 
 
 class OpsError(RuntimeError):
@@ -132,6 +144,7 @@ def run_command(
     cwd: Path | None = None,
     check: bool = True,
     capture_output: bool = True,
+    env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         args,
@@ -139,6 +152,7 @@ def run_command(
         check=check,
         text=True,
         capture_output=capture_output,
+        env=env,
     )
 
 
@@ -158,6 +172,141 @@ def prompt_confirm(message: str, *, default_no: bool = True, assume_yes: bool = 
     if not reply:
         return not default_no
     return reply in {"y", "yes"}
+
+
+def detect_host_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in {"x86_64", "amd64"}:
+        return "amd64"
+    if machine in {"aarch64", "arm64", "arm64e"}:
+        return "arm64"
+    raise OpsError(f"無法判斷主機架構: {machine}")
+
+
+def prompt_choice(message: str, options: list[tuple[str, str]], *, default: str) -> str:
+    option_map = {key: label for key, label in options}
+    if default not in option_map:
+        raise OpsError(f"無效的預設選項: {default}")
+
+    print_info(message)
+    for index, (key, label) in enumerate(options, start=1):
+        default_mark = "（預設）" if key == default else ""
+        print(f"  {index}. {label} [{key}] {default_mark}".rstrip())
+
+    while True:
+        try:
+            reply = input("> 請輸入選項編號或 key（直接 Enter 使用預設）: ").strip().lower()
+        except EOFError:
+            return default
+        if not reply:
+            return default
+        if reply in option_map:
+            return reply
+        if reply.isdigit():
+            index = int(reply) - 1
+            if 0 <= index < len(options):
+                return options[index][0]
+        print_warning("無效選項，請重新輸入。")
+
+
+def resolve_startup_profile(
+    *,
+    startup_mode: str | None,
+    image_arch: str | None,
+    runtime_base: str | None,
+    no_prompt: bool,
+) -> StartupProfile:
+    interactive = sys.stdin.isatty() and not no_prompt
+
+    selected_startup_mode = startup_mode
+    if not selected_startup_mode:
+        if interactive:
+            selected_startup_mode = prompt_choice(
+                "選擇啟動來源",
+                [
+                    ("local-build", "使用目前 repo 本地 build 後啟動"),
+                    ("dockerhub-dev", "使用 Docker Hub 的 dev tag 啟動"),
+                ],
+                default="local-build",
+            )
+        else:
+            selected_startup_mode = "local-build"
+
+    selected_image_arch = image_arch
+    if not selected_image_arch:
+        if interactive:
+            host_arch = detect_host_arch()
+            selected_image_arch = prompt_choice(
+                "選擇 image 架構",
+                [
+                    ("auto", f"依主機自動判斷（目前偵測為 {host_arch}）"),
+                    ("amd64", "固定使用 amd64 tag"),
+                    ("arm64", "固定使用 arm64 tag"),
+                ],
+                default="auto",
+            )
+        else:
+            selected_image_arch = "auto"
+
+    selected_runtime_base = runtime_base
+    if not selected_runtime_base:
+        if interactive:
+            selected_runtime_base = prompt_choice(
+                "選擇 workspace-runtime flavor",
+                [
+                    ("lite", "lite：使用 workspace-runtime-base-lite"),
+                    ("universal", "universal：使用 codex-universal"),
+                ],
+                default="lite",
+            )
+        else:
+            selected_runtime_base = "lite"
+
+    resolved_arch = detect_host_arch() if selected_image_arch == "auto" else selected_image_arch
+    channel = "dev"
+    service_tag = f"{channel}-{resolved_arch}"
+    runtime_flavor = "lite" if selected_runtime_base == "lite" else "codex"
+    runtime_tag = f"{channel}-{runtime_flavor}-{resolved_arch}"
+    if selected_runtime_base == "lite":
+        runtime_base_image = f"ailerondocker/workspace-runtime-base-lite:{channel}-{resolved_arch}"
+    else:
+        runtime_base_image = f"ailerondocker/codex-universal:latest-{resolved_arch}"
+
+    return StartupProfile(
+        startup_mode=selected_startup_mode,
+        image_arch=resolved_arch,
+        runtime_base=selected_runtime_base,
+        service_tag=service_tag,
+        runtime_tag=runtime_tag,
+        runtime_base_image=runtime_base_image,
+    )
+
+
+def build_compose_env(profile: StartupProfile) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "WORKSPACE_MANAGER_IMAGE": f"ailerondocker/workspace-manager:{profile.service_tag}",
+            "WORKSPACE_RUNTIME_IMAGE": f"ailerondocker/workspace-runtime:{profile.runtime_tag}",
+            "WORKSPACE_CHROME_IMAGE": f"ailerondocker/workspace-chrome:{profile.service_tag}",
+            "WORKSPACE_NEXTJS_IMAGE": f"ailerondocker/workspace-nextjs:{profile.service_tag}",
+            "WORKSPACE_UI_IMAGE": f"ailerondocker/workspace-ui:{profile.service_tag}",
+            "WORKSPACE_RUNTIME_BASE_IMAGE": profile.runtime_base_image,
+            "WORKSPACE_RUNTIME_JAVA_HOME": "/usr/lib/jvm/openjdk-21",
+        }
+    )
+    return env
+
+
+def print_startup_profile(profile: StartupProfile, *, build: bool) -> None:
+    print_info("啟動設定：")
+    print(f"  - 啟動來源: {profile.startup_mode}")
+    print(f"  - image 架構: {profile.image_arch}")
+    print(f"  - runtime flavor: {profile.runtime_base}")
+    print(f"  - service tag: {profile.service_tag}")
+    print(f"  - runtime tag: {profile.runtime_tag}")
+    print(f"  - runtime base image: {profile.runtime_base_image}")
+    print(f"  - 是否 build: {'是' if build else '否'}")
 
 
 def list_all_containers(repo_root: Path) -> list[DockerContainer]:
@@ -193,17 +342,34 @@ def stop_and_remove_containers(containers: list[DockerContainer], repo_root: Pat
     return len(container_ids)
 
 
-def compose_down(repo_root: Path) -> None:
+def compose_down(repo_root: Path, *, env: dict[str, str] | None = None) -> None:
     compose_file = repo_root / "docker-compose.yml"
     if not compose_file.is_file():
         print_warning("未找到 docker-compose.yml，跳過 compose down。")
         return
     print_info("停止 docker compose 服務...")
-    run_command(["docker", "compose", "down", "--remove-orphans"], cwd=repo_root, check=False)
+    run_command(
+        ["docker", "compose", "down", "--remove-orphans"],
+        cwd=repo_root,
+        check=False,
+        env=env,
+    )
     print_success("docker compose 服務已停止")
 
 
-def compose_up(repo_root: Path, *, build: bool, detach: bool) -> None:
+def compose_pull(repo_root: Path, *, env: dict[str, str]) -> None:
+    print_info("先從 registry 拉取對應 image...")
+    run_command(["docker", "compose", "pull"], cwd=repo_root, check=False, env=env)
+    print_success("docker compose pull 已完成")
+
+
+def compose_up(
+    repo_root: Path,
+    *,
+    build: bool,
+    detach: bool,
+    env: dict[str, str],
+) -> None:
     compose_file = repo_root / "docker-compose.yml"
     if not compose_file.is_file():
         raise OpsError("未找到 docker-compose.yml，無法啟動 compose stack。")
@@ -213,7 +379,7 @@ def compose_up(repo_root: Path, *, build: bool, detach: bool) -> None:
     if build:
         command.append("--build")
     print_info("啟動 docker compose 服務...")
-    run_command(command, cwd=repo_root, check=False)
+    run_command(command, cwd=repo_root, check=False, env=env)
     print_success("docker compose 啟動命令已送出")
 
 
@@ -601,6 +767,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     up_parser.add_argument("--build", action="store_true", help="Build images before starting")
     up_parser.add_argument(
+        "--startup-mode",
+        choices=("local-build", "dockerhub-dev"),
+        help="啟動來源：本地 build 或 Docker Hub dev tag",
+    )
+    up_parser.add_argument(
+        "--image-arch",
+        choices=("auto", "amd64", "arm64"),
+        help="image 架構選擇",
+    )
+    up_parser.add_argument(
+        "--runtime-base",
+        choices=("lite", "universal"),
+        help="workspace-runtime 的 base flavor",
+    )
+    up_parser.add_argument(
+        "--no-prompt",
+        action="store_true",
+        help="不要顯示互動式選單，未指定時使用預設值",
+    )
+    up_parser.add_argument(
         "--foreground",
         action="store_true",
         help="Run docker compose up in foreground mode",
@@ -672,15 +858,27 @@ def main() -> int:
             raise OpsError(f"不支援的額外參數: {' '.join(unknown)}")
         if args.command == "up":
             ensure_docker_available()
+            profile = resolve_startup_profile(
+                startup_mode=args.startup_mode,
+                image_arch=args.image_arch,
+                runtime_base=args.runtime_base,
+                no_prompt=args.no_prompt,
+            )
+            env = build_compose_env(profile)
+            effective_build = args.build or profile.startup_mode == "local-build"
+            print_startup_profile(profile, build=effective_build)
+            if profile.startup_mode != "local-build":
+                compose_pull(repo_root, env=env)
             compose_up(
                 repo_root,
-                build=args.build,
+                build=effective_build,
                 detach=not args.foreground,
+                env=env,
             )
             return 0
         if args.command == "down":
             ensure_docker_available()
-            compose_down(repo_root)
+            compose_down(repo_root, env=os.environ.copy())
             return 0
         if args.command == "cleanup":
             return full_cleanup(

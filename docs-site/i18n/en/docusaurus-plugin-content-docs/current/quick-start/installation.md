@@ -23,6 +23,17 @@ python scripts/dev/docker/ops.py --help
 python scripts/dev/docker/ops.py test --help
 ```
 
+`python scripts/dev/docker/ops.py up` now asks which startup path to use and then switches the image tags automatically. Available modes include:
+
+- Build from the current repo locally and start
+- Start from Docker Hub `dev` tags
+
+If you want a non-interactive launch, pass the mode explicitly:
+
+```bash
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+```
+
 ## First Launch
 
 ### Windows PowerShell
@@ -84,6 +95,7 @@ This stops the stack while preserving volumes and persisted platform data.
 | Operation | Command |
 |-----------|---------|
 | Start all services | `python scripts/dev/docker/ops.py up` |
+| Start from Docker Hub dev tags | `python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite` |
 | Rebuild images and start | `python scripts/dev/docker/ops.py up --build` |
 | Stop all services | `python scripts/dev/docker/ops.py down` |
 | Cleanup workspace resources | `python scripts/dev/docker/ops.py cleanup-workspaces` |

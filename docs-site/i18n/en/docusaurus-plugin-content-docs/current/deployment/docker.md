@@ -252,6 +252,12 @@ python scripts/dev/docker/ops.py up
 # Rebuild images and start
 python scripts/dev/docker/ops.py up --build
 
+# Start after choosing the startup mode interactively
+python scripts/dev/docker/ops.py up
+
+# Start directly from Docker Hub dev tags
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+
 # Stop (preserves volumes)
 python scripts/dev/docker/ops.py down
 
@@ -283,6 +289,8 @@ make build-workspace-runtime RUNTIME_BASE=universal
 ```
 
 For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
+
+`ops.py up` now prompts for whether to use a local build or Docker Hub `dev` tags, and then overrides the Compose image tags automatically. For non-interactive usage, pass `--startup-mode`, `--image-arch`, and `--runtime-base` explicitly.
 
 ## Cleanup
 
