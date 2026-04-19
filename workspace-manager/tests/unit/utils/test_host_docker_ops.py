@@ -48,6 +48,7 @@ def test_list_workspace_containers_filters_supported_prefixes(monkeypatch: pytes
 @pytest.mark.unit
 def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     commands: list[list[str]] = []
+    envs: list[dict[str, str]] = []
     repo_root = tmp_path
     (repo_root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
 
@@ -57,32 +58,48 @@ def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp
         cwd: Path | None = None,
         check: bool = True,
         capture_output: bool = True,
+        env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         commands.append(args)
+        envs.append(env or {})
         return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(ops, "run_command", fake_run_command)
 
-    ops.compose_up(repo_root, build=True, detach=True)
+    ops.compose_up(repo_root, build=True, detach=True, env={"TEST_ENV": "1"})
 
     assert commands == [["docker", "compose", "up", "-d", "--build"]]
+    assert envs == [{"TEST_ENV": "1"}]
 
 
 @pytest.mark.unit
 def test_compose_up_requires_compose_file(tmp_path: Path) -> None:
     with pytest.raises(ops.OpsError):
-        ops.compose_up(tmp_path, build=False, detach=True)
+        ops.compose_up(tmp_path, build=False, detach=True, env={})
 
 
 @pytest.mark.unit
 def test_main_routes_up_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    calls: list[tuple[Path, bool, bool]] = []
+    calls: list[tuple[Path, bool, bool, dict[str, str]]] = []
+    profile = ops.StartupProfile(
+        startup_mode="dockerhub-dev",
+        image_arch="amd64",
+        runtime_base="lite",
+        service_tag="dev-amd64",
+        runtime_tag="dev-lite-amd64",
+        runtime_base_image="ailerondocker/workspace-runtime-base-lite:dev-amd64",
+    )
+    compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
 
     monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
+    monkeypatch.setattr(ops, "resolve_startup_profile", lambda **kwargs: profile)
+    monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
+    monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, build: None)
+    monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: None)
     monkeypatch.setattr(
         ops,
         "compose_up",
-        lambda repo_root, *, build, detach: calls.append((repo_root, build, detach)),
+        lambda repo_root, *, build, detach, env: calls.append((repo_root, build, detach, env)),
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -99,15 +116,15 @@ def test_main_routes_up_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     exit_code = ops.main()
 
     assert exit_code == 0
-    assert calls == [(tmp_path.resolve(), True, False)]
+    assert calls == [(tmp_path.resolve(), True, False, compose_env)]
 
 
 @pytest.mark.unit
 def test_main_routes_down_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    calls: list[Path] = []
+    calls: list[tuple[Path, dict[str, str] | None]] = []
 
     monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
-    monkeypatch.setattr(ops, "compose_down", lambda repo_root: calls.append(repo_root))
+    monkeypatch.setattr(ops, "compose_down", lambda repo_root, *, env=None: calls.append((repo_root, env)))
     monkeypatch.setattr(
         "sys.argv",
         [
@@ -121,7 +138,9 @@ def test_main_routes_down_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Pat
     exit_code = ops.main()
 
     assert exit_code == 0
-    assert calls == [tmp_path.resolve()]
+    assert len(calls) == 1
+    assert calls[0][0] == tmp_path.resolve()
+    assert isinstance(calls[0][1], dict)
 
 
 @pytest.mark.unit
