@@ -2,8 +2,6 @@ name: CI
 
 on:
   push:
-    branches:
-      - v0.1.0-alpha
     paths-ignore:
       - "docs-site/**"
       - ".gitignore"
