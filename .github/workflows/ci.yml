@@ -74,6 +74,8 @@ jobs:
     name: Workspace Runtime Test
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      WORKSPACE_RUNTIME_BASE_IMAGE: ailerondocker/codex-universal:latest-amd64
 
     steps:
       - name: Checkout
