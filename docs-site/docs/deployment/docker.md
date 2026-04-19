@@ -16,8 +16,11 @@ title: Docker 模式
 
 - [Docker](https://docs.docker.com/get-docker/)（建議 24.0+）
 - [Docker Compose](https://docs.docker.com/compose/install/)（V2，通常已內建於 Docker Desktop）
-- 至少 8GB 可用記憶體（建議 16GB）
-- 至少 20GB 可用磁碟空間
+- 至少 4 vCPU
+- 至少 8GB 可用記憶體
+- 建議 12GB 到 16GB 可用記憶體，以支援較穩定的瀏覽器與 agent 工作流程
+- 至少 30GB 可用磁碟空間
+- 建議保留 50GB 可用磁碟空間，避免 image、volume 與 workspace 資料快速吃滿
 
 ## 服務架構
 
@@ -207,8 +210,8 @@ Keycloak 額外設定了 `localhost` 和 `keycloak` 兩個 network alias，以�
 | workspace-browser | — | 2GB SHM | 共享記憶體（Chrome 需要） |
 | 其他服務 | 無限制 | 無限制 | 視實際使用動態分配 |
 
-:::tip 記憶體建議
-若只是體驗功能，總共約需 4-6GB。若要同時進行 Agent 對話、OpenSpec workflow 與瀏覽器操作，建議至少 8GB；若長時間並行操作多個工作流，建議 16GB。
+:::tip 建議配置
+若只是在單機上體驗與驗證基本流程，建議至少使用 `4 vCPU / 8 GB RAM / 30 GB` 可用磁碟。若要較穩定地使用瀏覽器、自動化流程、Keycloak 與多個服務並行，建議提升到 `6-8 vCPU / 12-16 GB RAM / 50 GB` 可用磁碟。若同一台主機還會再跑 Harbor、registry、其他大型容器或額外開發服務，則應以 `16 GB RAM` 以上為起點，否則很容易進入 swap 或磁碟不足狀態。
 :::
 
 ## 常用指令
