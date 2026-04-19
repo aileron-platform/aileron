@@ -105,13 +105,15 @@ Once authentication is enabled, all API endpoints require a valid JWT token.
 ## Local Development
 
 ```bash
-cd workspace-manager
+docker compose up -d workspace-manager
+```
 
-# Install dependencies (uv)
-uv sync
+For local development, `workspace-manager` should be started through Docker Compose and should normally run alongside the rest of the stack. Compose mounts `./workspace-manager` into `/workspace-manager` inside the container, so code changes are usually picked up through the existing reload behavior.
 
-# Start the service
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+If the dependent services are not already running, start the full stack instead:
+
+```bash
+docker compose up -d
 ```
 
 ## Testing

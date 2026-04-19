@@ -28,6 +28,10 @@ Users do not need to manually assemble complex local environments before they ca
 
 A central **template catalog** lets you predefine Slash Commands, MCP Servers, install flows, and environment variables for different scenarios. Teams can spin up repeatable workspaces quickly while keeping tooling and workflow conventions consistent.
 
+### Lower Adoption Barriers For Non-Technical Users
+
+One important reason to choose Aileron is that it significantly reduces the friction involved in setting up AI agent environments and using CLI-based tools. In many teams, these workflows still depend on engineering knowledge and a fair amount of manual setup, which creates unnecessary barriers for non-technical users. Aileron provides a more consistent and approachable operating model so product, operations, design, and business roles can participate earlier without needing to master the underlying tooling first. That reduces reliance on engineering support and lets teams focus more on real adoption, workflow validation, and cross-functional collaboration.
+
 ### Hybrid & Pluggable Runtime
 
 Claude Code CLI / SDK is currently the default and most complete execution engine, while MCP bridges internal services and tools. The platform is decoupled from any single model provider, and is steadily expanding toward OpenCode, Gemini, Codex, and other agent runtimes.

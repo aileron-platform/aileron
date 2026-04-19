@@ -59,7 +59,7 @@ docker compose exec postgres psql -U postgres -d aileron -c "\dt"
 **解決方式**：
 - 若資料庫未初始化，檢查 `init-sql/` 目錄下的腳本
 - 若密碼錯誤，確認 `DATABASE_URL` 環境變數與 `POSTGRES_PASSWORD` 一致
-- 完整清除後重啟：`./scripts/dev/docker/cleanup.sh && docker compose up -d --build`
+- 完整清除後重啟：`python scripts/dev/docker/ops.py cleanup && python scripts/dev/docker/ops.py up --build`
 
 ### Kubernetes Pod 卡在 `Pending` 狀態
 
@@ -258,8 +258,8 @@ docker compose logs workspace-runtime | grep -i claude
 sudo chown -R 999:999 ./data/postgres
 
 # 或完整清除後重啟
-./scripts/dev/docker/cleanup.sh
-docker compose up -d --build
+python scripts/dev/docker/ops.py cleanup
+python scripts/dev/docker/ops.py up --build
 ```
 
 ### Agent Sessions 表不存在（Kubernetes）
