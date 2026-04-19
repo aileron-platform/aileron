@@ -131,10 +131,12 @@ class MessageStatus(str, Enum):
     """訊息狀態.
 
     - queued: 在佇列中等待執行
+    - dispatching: 已被 queue processor claim，準備送入執行
     - None/null: 正常訊息
     """
 
     QUEUED = "queued"
+    DISPATCHING = "dispatching"
 
 
 class PermissionMode(str, Enum):

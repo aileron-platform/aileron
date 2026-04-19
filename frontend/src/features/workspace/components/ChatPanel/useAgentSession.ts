@@ -1384,26 +1384,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
 
   const sendMessage = useCallback(
     async (prompt: string, options?: Partial<PromptRequest>, permissionConfig?: PermissionConfig) => {
-      const currentState = store.getSnapshot();
-
-      // 防止重複發送：檢查是否正在 streaming 或 thinking
-      if (currentState.isStreaming || currentState.isThinking) {
-        logger.warn('Cannot send message while streaming/thinking is active', {
-          isStreaming: currentState.isStreaming,
-          isThinking: currentState.isThinking
-        });
-        return { success: false, error: 'Already processing' };
-      }
-
-      // 防止重複發送：檢查是否有正在執行的任務
-      if (currentState.activeTask?.status === 'running') {
-        logger.warn('Cannot send message while task is running', {
-          taskId: currentState.activeTask.task_id,
-          taskStatus: currentState.activeTask.status
-        });
-        return { success: false, error: 'Task is running' };
-      }
-
       let sessionId = state.currentSessionId;
 
       if (!sessionId) {
@@ -1571,7 +1551,12 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         );
         // WebSocket event will handle store.removeFromQueue
       } catch (error) {
-        logger.error('Failed to delete queued message', { error });
+        logger.error('Failed to delete queued message', {
+          error,
+          status: typeof error === 'object' && error !== null && 'status' in error
+            ? (error as { status?: number }).status
+            : undefined,
+        });
         throw error;
       }
     },

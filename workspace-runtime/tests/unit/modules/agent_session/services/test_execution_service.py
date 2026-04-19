@@ -489,19 +489,20 @@ async def test_process_queue_and_internal_success_and_failure(monkeypatch: pytes
     queued_entity = SimpleNamespace(id="msg-1", queue_position=3, content=[{"type": "text", "text": "hello"}])
     first_db = AsyncMock()
     second_db = AsyncMock(commit=AsyncMock())
+    third_db = AsyncMock(commit=AsyncMock())
 
     class FakeMessageRepo:
         def __init__(self, db):
             self.db = db
 
-        async def get_next_queued(self, session_id):
+        async def claim_next_queued(self, session_id):
             return SimpleNamespace(id="raw")
 
         def to_entity(self, model):
             return queued_entity
 
     exec_instance = AsyncMock()
-    exec_instance.execute_prompt = AsyncMock(return_value={"success": True})
+    exec_instance.execute_claimed_prompt = AsyncMock(return_value={"success": True})
 
     @asynccontextmanager
     async def fake_scope_success():
@@ -520,7 +521,10 @@ async def test_process_queue_and_internal_success_and_failure(monkeypatch: pytes
     )
     monkeypatch.setattr(
         "app.modules.agent_session.services.execution_service.MessageService",
-        lambda db: AsyncMock(delete_queued_message=AsyncMock()),
+        lambda db: AsyncMock(
+            restore_dispatching_message=AsyncMock(return_value=True),
+            finalize_dispatching_message=AsyncMock(return_value=True),
+        ),
     )
     monkeypatch.setattr("app.modules.agent_session.services.execution_service.ExecutionService", lambda db: exec_instance)
 
@@ -529,7 +533,9 @@ async def test_process_queue_and_internal_success_and_failure(monkeypatch: pytes
     assert service.emitter.emit.await_args.args[0].type == EventType.MESSAGE_DEQUEUED
 
     service.emitter.emit.reset_mock()
-    exec_instance.execute_prompt = AsyncMock(side_effect=RuntimeError("queue fail"))
-    fake_scope_success.dbs = [first_db, second_db]
+    exec_instance.execute_claimed_prompt = AsyncMock(side_effect=RuntimeError("queue fail"))
+    fake_scope_success.dbs = [first_db, second_db, third_db]
     await ExecutionService._process_queue_internal(service, "session-1")
-    assert service.emitter.emit.await_args.args[0].type == EventType.QUEUE_PROCESSING_FAILED
+    emitted_types = [call.args[0].type for call in service.emitter.emit.await_args_list]
+    assert EventType.MESSAGES_QUEUED in emitted_types
+    assert EventType.QUEUE_PROCESSING_FAILED in emitted_types

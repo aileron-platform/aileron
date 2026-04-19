@@ -225,12 +225,13 @@ export const agentSessionApi = {
     session_id: string;
     count: number;
     max_queue_size: number;
-    messages: Array<{
-      message_id: string;
-      queue_position: number;
-      content_preview: string;
-      created_at: string | null;
-    }>;
+      messages: Array<{
+        message_id: string;
+        queue_position: number;
+        content_preview: string;
+        created_at: string | null;
+        status?: 'queued' | 'dispatching' | null;
+      }>;
   }> {
     const client = createRuntimeClient(runtimeBaseUrl);
     return await client.get<{
@@ -242,6 +243,7 @@ export const agentSessionApi = {
         queue_position: number;
         content_preview: string;
         created_at: string | null;
+        status?: 'queued' | 'dispatching' | null;
       }>;
     }>(`/api/v1/agent-sessions/${sessionId}/queued-messages`);
   },
