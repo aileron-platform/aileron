@@ -4,39 +4,35 @@
 
 ## 發布規則
 
-- `develop` branch push：發布 `dev` tag
-- `main` branch push：發布 `latest` tag
+- `develop` branch push：發布 `dev-*` 單平台 tag
+- `main` branch push：發布 `latest-*` 單平台 tag
 - `workflow_dispatch`：可手動選擇發布 `dev`、`latest` 或 `both`
 
 ## 平台與 tag 命名
 
-所有 image 都會先發布單平台 tag，再組成 multi-arch manifest。
+所有 image 只會發布單平台 tag，不再建立無平台的 multi-arch manifest tag。
 
 一般服務 image：
 
 - `:<channel>-amd64`
 - `:<channel>-arm64`
-- `:<channel>`
 
 例如：
 
 - `ailerondocker/workspace-manager:dev-amd64`
 - `ailerondocker/workspace-manager:dev-arm64`
-- `ailerondocker/workspace-manager:dev`
 
 `workspace-runtime` 另外包含 flavor：
 
 - `:<channel>-codex-amd64`
 - `:<channel>-codex-arm64`
-- `:<channel>-codex`
 - `:<channel>-lite-amd64`
 - `:<channel>-lite-arm64`
-- `:<channel>-lite`
 
 例如：
 
-- `ailerondocker/workspace-runtime:latest-codex`
-- `ailerondocker/workspace-runtime:latest-lite`
+- `ailerondocker/workspace-runtime:latest-codex-amd64`
+- `ailerondocker/workspace-runtime:latest-lite-arm64`
 
 ## 涵蓋 image
 
@@ -83,7 +79,7 @@ Runtime：
 ## 注意事項
 
 - `workspace-runtime` 會依 flavor 引用不同 base image：
-  - `codex` -> 直接從 Docker Hub 拉取 `ailerondocker/codex-universal`
-  - `lite` -> `workspace-runtime-base-lite`
+  - `codex` -> 直接從 Docker Hub 拉取 `ailerondocker/codex-universal:latest-<arch>`
+  - `lite` -> `workspace-runtime-base-lite:<channel>-<arch>`
 - workflow 目前只負責發布 image，不會自動修改 `docker-compose.yml`、Helm values 或程式內的預設 image tag。
 - `codex-universal` 由 `aileron-platform/codex-universal` repository 的獨立 workflow 負責建置與發布。
