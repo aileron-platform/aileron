@@ -16,8 +16,11 @@ title: Docker Mode
 
 - [Docker](https://docs.docker.com/get-docker/) (24.0+ recommended)
 - [Docker Compose](https://docs.docker.com/compose/install/) (V2, typically bundled with Docker Desktop)
-- At least 8GB available memory (16GB recommended)
-- At least 20GB available disk space
+- At least 4 vCPU
+- At least 8GB available memory
+- 12GB to 16GB available memory is recommended for more stable browser and agent workflows
+- At least 30GB available disk space
+- Keeping 50GB of free disk space is recommended so images, volumes, and workspace data do not fill the host too quickly
 
 ## Service Architecture
 
@@ -239,8 +242,8 @@ Keycloak has two network aliases (`localhost` and `keycloak`) so that OIDC token
 | workspace-browser | — | 2GB SHM | Shared memory (required by Chrome) |
 | Others | Unlimited | Unlimited | Allocated dynamically |
 
-:::tip Memory Recommendation
-For feature exploration, roughly 4–6GB total is enough. For concurrent agent chat, OpenSpec workflows, and browser operations, 8GB+ is recommended; 16GB is a better target for longer parallel sessions.
+:::tip Recommended Sizing
+For single-machine evaluation and basic workflow validation, plan for at least `4 vCPU / 8 GB RAM / 30 GB` of free disk. For steadier browser usage, automation flows, Keycloak, and multiple services running together, `6-8 vCPU / 12-16 GB RAM / 50 GB` of free disk is a more realistic target. If the same host will also run Harbor, a registry, or other large containers, start at `16 GB RAM` or higher to avoid heavy swap usage and disk pressure.
 :::
 
 ## Common Commands
