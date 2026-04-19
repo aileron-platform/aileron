@@ -96,7 +96,32 @@ Aileron is built on a modern microservices architecture:
 - Docker Compose v2
 - Recommended: **8GB RAM**
 
-### Installation
+### Standard Host CLI
+
+`python scripts/dev/docker/ops.py` is the formal host-side CLI for local Docker operations. It is the standard cross-platform entrypoint for:
+
+- stack startup and shutdown
+- workspace cleanup and full cleanup
+- runtime / manager container test execution
+
+Inspect the available subcommands and examples before your first run:
+
+```bash
+python scripts/dev/docker/ops.py --help
+python scripts/dev/docker/ops.py test --help
+```
+
+### Start The Stack
+
+#### Windows PowerShell
+
+```powershell
+git clone <your-repo-url>
+cd aileron
+python .\scripts\dev\docker\ops.py up --build
+```
+
+#### macOS / Linux
 
 ```bash
 git clone <your-repo-url>
@@ -139,6 +164,106 @@ docker compose ps
 ```
 
 Wait until all services report `healthy` before using the platform. Keycloak may take about 1 minute to become ready.
+
+Recommended services to verify before login:
+
+- `postgres`
+- `redis`
+- `keycloak`
+- `workspace-manager`
+- `frontend`
+
+If `keycloak` is still starting, the frontend can show an OIDC authentication error. Wait until it reports `healthy`.
+
+### Stop The Stack
+
+#### Windows PowerShell
+
+```powershell
+python .\scripts\dev\docker\ops.py down
+```
+
+#### macOS / Linux
+
+```bash
+python scripts/dev/docker/ops.py down
+```
+
+This stops the local stack while preserving volumes and persisted data.
+
+### Cleanup Workflows
+
+Use `cleanup-workspaces` for routine workspace resets. Use `cleanup` only when you need a full environment reset.
+
+#### Workspace Cleanup
+
+Removes dynamic workspace containers and related transient resources, while preserving the main platform services and databases.
+
+Windows PowerShell:
+
+```powershell
+python .\scripts\dev\docker\ops.py cleanup-workspaces
+```
+
+macOS / Linux:
+
+```bash
+python scripts/dev/docker/ops.py cleanup-workspaces
+```
+
+Legacy wrapper scripts remain available if you prefer shell-specific entrypoints:
+
+```powershell
+.\scripts\dev\docker\cleanup-workspaces.ps1
+```
+
+```bash
+./scripts/dev/docker/cleanup-workspaces.sh
+```
+
+#### Full Cleanup
+
+Stops the stack, removes platform volumes and generated local data, and resets the local environment.
+
+Windows PowerShell:
+
+```powershell
+python .\scripts\dev\docker\ops.py cleanup
+```
+
+macOS / Linux:
+
+```bash
+python scripts/dev/docker/ops.py cleanup
+```
+
+Legacy wrapper scripts remain available here as well:
+
+```powershell
+.\scripts\dev\docker\cleanup.ps1
+```
+
+```bash
+./scripts/dev/docker/cleanup.sh
+```
+
+> `cleanup` is destructive. It removes Docker volumes and persisted platform data, including PostgreSQL data.
+
+### Restart After Cleanup
+
+After either cleanup flow, start the stack again with the standard host-side CLI:
+
+#### Windows PowerShell
+
+```powershell
+python .\scripts\dev\docker\ops.py up --build
+```
+
+#### macOS / Linux
+
+```bash
+python scripts/dev/docker/ops.py up --build
+```
 
 ---
 
@@ -195,37 +320,23 @@ To expose the platform through public domains, configure:
 
 | Task | Command |
 |---|---|
-| Restart stack | `python scripts/dev/docker/ops.py up --build` |
+| Start stack | `python scripts/dev/docker/ops.py up` |
+| Rebuild and start stack | `python scripts/dev/docker/ops.py up --build` |
 | Build runtime with lite base | `make build-workspace-runtime RUNTIME_BASE=lite` |
 | Build runtime with universal base | `make build-workspace-runtime RUNTIME_BASE=universal` |
 | View manager logs | `docker compose logs -f workspace-manager` |
 | View runtime logs | `docker compose logs -f workspace-runtime` |
 | Stop services | `python scripts/dev/docker/ops.py down` |
-| Clear workspaces | `python scripts/dev/docker/ops.py cleanup-workspaces` |
+| Cleanup workspaces | `python scripts/dev/docker/ops.py cleanup-workspaces` |
 | Full reset (destructive) | `python scripts/dev/docker/ops.py cleanup` |
 
-> `cleanup` removes all data and databases.
+> `python scripts/dev/docker/ops.py` is the primary cross-platform CLI for startup, shutdown, cleanup, and test execution.
 >
-> `python scripts/dev/docker/ops.py up --build` and `python scripts/dev/docker/ops.py down` route through the same cross-platform CLI layer for Docker Compose operations.
+> Use `cleanup-workspaces` for routine workspace cleanup. Use `cleanup` only when you need to delete persisted platform data and volumes.
 >
-> On macOS / Linux you can still use `./scripts/dev/docker/cleanup.sh` and `./scripts/dev/docker/cleanup-workspaces.sh`.
+> On macOS / Linux, the legacy wrappers remain available: `./scripts/dev/docker/cleanup.sh` and `./scripts/dev/docker/cleanup-workspaces.sh`.
 >
-> On Windows PowerShell you can use `.\scripts\dev\docker\cleanup.ps1` and `.\scripts\dev\docker\cleanup-workspaces.ps1`.
-
-### Host CLI
-
-`python scripts/dev/docker/ops.py` is the formal host-side CLI entrypoint for:
-
-- stack start / stop
-- workspace cleanup and full cleanup
-- runtime / manager container test execution
-
-Use the built-in help to inspect supported subcommands and examples:
-
-```bash
-python scripts/dev/docker/ops.py --help
-python scripts/dev/docker/ops.py test --help
-```
+> On Windows PowerShell, the legacy wrappers remain available: `.\scripts\dev\docker\cleanup.ps1` and `.\scripts\dev\docker\cleanup-workspaces.ps1`.
 
 ---
 

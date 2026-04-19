@@ -588,7 +588,7 @@ class TestSkillsInstallation:
 
     @pytest.mark.asyncio
     async def test_install_codex_skills_to_project_scope(self, service):
-        """Test installing Codex skills into .agents/skills"""
+        """Test installing Codex skills into the Codex project skills directory"""
         request = SkillsInstallRequest(
             cliType="codex",
             skills=[
@@ -606,7 +606,7 @@ class TestSkillsInstallation:
 
         assert success is True
         assert results.created == ["openspec-ff-change/SKILL.md"]
-        assert target_path.endswith("/workspace/.agents/skills")
+        assert target_path.endswith("/workspace/.codex/skills")
         assert total_size == len("# Skill".encode("utf-8"))
         skill_file = Path(target_path) / "openspec-ff-change" / "SKILL.md"
         assert skill_file.exists()

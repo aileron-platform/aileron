@@ -43,6 +43,7 @@ services:
       - PYTHONPATH=/workspace-manager
     volumes:
       - .:/workspace-manager
+      - ../scripts:/scripts:ro
       - ../helm:/helm:ro
     working_dir: /workspace-manager
     command: >
