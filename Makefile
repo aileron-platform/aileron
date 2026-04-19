@@ -1,4 +1,5 @@
-.PHONY: help test-all test-unit test-integration test-frontend test-backend \
+.PHONY: help up down cleanup-workspaces full-reset test-runtime-cli test-manager-cli \
+        test-all test-unit test-integration test-frontend test-backend \
         test-runtime test-manager test-coverage test-setup test-teardown \
         test-status clean-test sync-init-schema \
         build-codex-universal push-codex-universal rebuild-codex-universal \
@@ -49,6 +50,26 @@ help: ## 顯示幫助信息
 	@echo "$(CYAN)╚══════════════════════════════════════════════╝$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(CYAN)%-25s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ 跨平台 Host 入口
+
+up: ## 🚀 使用跨平台 CLI 啟動 stack（含 build）
+	@python3 scripts/dev/docker/ops.py up --build
+
+down: ## 🛑 使用跨平台 CLI 停止 stack
+	@python3 scripts/dev/docker/ops.py down
+
+cleanup-workspaces: ## 🧹 使用跨平台 CLI 清理動態 workspace 容器
+	@python3 scripts/dev/docker/ops.py cleanup-workspaces
+
+full-reset: ## 💥 使用跨平台 CLI 執行完整清理
+	@python3 scripts/dev/docker/ops.py cleanup
+
+test-runtime-cli: ## 🧪 使用跨平台 CLI 執行 runtime container 測試
+	@python3 scripts/dev/docker/ops.py test runtime
+
+test-manager-cli: ## 🧪 使用跨平台 CLI 執行 manager container 測試
+	@python3 scripts/dev/docker/ops.py test manager
 
 ##@ 測試環境管理
 

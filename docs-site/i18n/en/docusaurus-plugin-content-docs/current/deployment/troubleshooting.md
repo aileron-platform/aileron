@@ -59,7 +59,7 @@ docker compose exec postgres psql -U postgres -d aileron -c "\dt"
 **Fixes**:
 - If database isn't initialized, check the scripts under `init-sql/`
 - If the password is wrong, confirm `DATABASE_URL` matches `POSTGRES_PASSWORD`
-- Full cleanup and restart: `./scripts/dev/docker/cleanup.sh && docker compose up -d --build`
+- Full cleanup and restart: `python scripts/dev/docker/ops.py cleanup && python scripts/dev/docker/ops.py up --build`
 
 ### Kubernetes Pod Stuck in `Pending`
 
@@ -241,8 +241,8 @@ docker compose logs workspace-runtime | grep -i claude
 sudo chown -R 999:999 ./data/postgres
 
 # Or full cleanup and restart
-./scripts/dev/docker/cleanup.sh
-docker compose up -d --build
+python scripts/dev/docker/ops.py cleanup
+python scripts/dev/docker/ops.py up --build
 ```
 
 ### Connection Pool Exhausted After Long Runs

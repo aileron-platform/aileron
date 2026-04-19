@@ -101,7 +101,7 @@ Aileron is built on a modern microservices architecture:
 ```bash
 git clone <your-repo-url>
 cd aileron
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 > The first build may take **5–10 minutes**.
@@ -195,16 +195,37 @@ To expose the platform through public domains, configure:
 
 | Task | Command |
 |---|---|
-| Restart stack | `docker compose up -d --build` |
+| Restart stack | `python scripts/dev/docker/ops.py up --build` |
 | Build runtime with lite base | `make build-workspace-runtime RUNTIME_BASE=lite` |
 | Build runtime with universal base | `make build-workspace-runtime RUNTIME_BASE=universal` |
 | View manager logs | `docker compose logs -f workspace-manager` |
 | View runtime logs | `docker compose logs -f workspace-runtime` |
-| Stop services | `docker compose down` |
-| Clear workspaces | `./scripts/dev/docker/cleanup-workspaces.sh` |
-| Full reset (destructive) | `./scripts/dev/docker/cleanup.sh` |
+| Stop services | `python scripts/dev/docker/ops.py down` |
+| Clear workspaces | `python scripts/dev/docker/ops.py cleanup-workspaces` |
+| Full reset (destructive) | `python scripts/dev/docker/ops.py cleanup` |
 
-> `cleanup.sh` removes all data and databases.
+> `cleanup` removes all data and databases.
+>
+> `python scripts/dev/docker/ops.py up --build` and `python scripts/dev/docker/ops.py down` route through the same cross-platform CLI layer for Docker Compose operations.
+>
+> On macOS / Linux you can still use `./scripts/dev/docker/cleanup.sh` and `./scripts/dev/docker/cleanup-workspaces.sh`.
+>
+> On Windows PowerShell you can use `.\scripts\dev\docker\cleanup.ps1` and `.\scripts\dev\docker\cleanup-workspaces.ps1`.
+
+### Host CLI
+
+`python scripts/dev/docker/ops.py` is the formal host-side CLI entrypoint for:
+
+- stack start / stop
+- workspace cleanup and full cleanup
+- runtime / manager container test execution
+
+Use the built-in help to inspect supported subcommands and examples:
+
+```bash
+python scripts/dev/docker/ops.py --help
+python scripts/dev/docker/ops.py test --help
+```
 
 ---
 
@@ -242,8 +263,15 @@ make test-runtime
 You can also use the existing test scripts:
 
 ```bash
-./scripts/test/run-all-tests.sh manager
-./scripts/test/run-all-tests.sh runtime
+python scripts/dev/docker/ops.py test manager
+python scripts/dev/docker/ops.py test runtime
+```
+
+Or use the Makefile convenience targets:
+
+```bash
+make test-manager-cli
+make test-runtime-cli
 ```
 
 ---
