@@ -271,14 +271,14 @@ docker compose restart workspace-runtime
 # Rebuild a single service
 docker compose up -d --build workspace-runtime
 
-For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
-
 # Build workspace-runtime against the lite base
 make build-workspace-runtime RUNTIME_BASE=lite
 
 # Build workspace-runtime against the universal base
 make build-workspace-runtime RUNTIME_BASE=universal
 ```
+
+For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
 
 ## Cleanup
 
@@ -330,7 +330,7 @@ python scripts/dev/docker/ops.py down
 Restart after cleanup:
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 ## Health Checks

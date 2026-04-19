@@ -75,10 +75,10 @@ test-manager-cli: ## 🧪 使用跨平台 CLI 執行 manager container 測試
 
 test-setup: ## 🚀 啟動測試環境 (PostgreSQL + Redis)
 	@echo "$(GREEN)🚀 啟動測試環境...$(NC)"
-	@docker-compose -f docker-compose.test.yml up -d postgres-test redis-test
+	@docker compose -f docker-compose.test.yml up -d postgres-test redis-test
 	@echo "$(YELLOW)⏳ 等待服務健康檢查...$(NC)"
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		if docker-compose -f docker-compose.test.yml ps | grep -q "healthy"; then \
+		if docker compose -f docker-compose.test.yml ps | grep -q "healthy"; then \
 			echo "$(GREEN)✅ 測試環境就緒$(NC)"; \
 			echo "  - PostgreSQL: localhost:5433"; \
 			echo "  - Redis: localhost:6380"; \
@@ -91,12 +91,12 @@ test-setup: ## 🚀 啟動測試環境 (PostgreSQL + Redis)
 
 test-teardown: ## 🧹 清理測試環境
 	@echo "$(YELLOW)🧹 清理測試環境...$(NC)"
-	@docker-compose -f docker-compose.test.yml down -v --remove-orphans
+	@docker compose -f docker-compose.test.yml down -v --remove-orphans
 	@echo "$(GREEN)✅ 清理完成$(NC)"
 
 test-status: ## 📊 檢查測試環境狀態
 	@echo "$(CYAN)📊 測試環境狀態:$(NC)"
-	@docker-compose -f docker-compose.test.yml ps
+	@docker compose -f docker-compose.test.yml ps
 
 ##@ 執行所有測試
 
