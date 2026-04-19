@@ -461,9 +461,14 @@ export const ChatPanel: React.FC = () => {
         description: t('workspace.chat.queue.deletedDescription'),
       });
     } catch (error) {
+      const status = typeof error === 'object' && error !== null && 'status' in error
+        ? (error as { status?: number }).status
+        : undefined;
       toast({
         title: t('workspace.chat.queue.deleteError'),
-        description: error instanceof Error ? error.message : 'Unknown error',
+        description: status === 409
+          ? '訊息已開始處理，無法再從佇列刪除。'
+          : error instanceof Error ? error.message : 'Unknown error',
         variant: 'destructive',
       });
     }

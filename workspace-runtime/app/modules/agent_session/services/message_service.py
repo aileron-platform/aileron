@@ -499,6 +499,21 @@ class MessageService:
         """
         return await self.message_repo.delete_queued(message_id)
 
+    async def claim_next_queued_message(self, session_id: str) -> Optional[Message]:
+        """Claim 下一個 queued message 並標記為 dispatching."""
+        model = await self.message_repo.claim_next_queued(session_id)
+        if not model:
+            return None
+        return self.message_repo.to_entity(model)
+
+    async def restore_dispatching_message(self, message_id: str) -> bool:
+        """將 dispatching message 還原為 queued."""
+        return await self.message_repo.restore_dispatching(message_id)
+
+    async def finalize_dispatching_message(self, message_id: str) -> bool:
+        """刪除已成功接手執行的 dispatching message."""
+        return await self.message_repo.delete_dispatching(message_id)
+
     # NOTE: 舊的別名方法 add_to_queue, get_queue 已移除
     # 直接使用 create_queued_message, get_queued_messages
 

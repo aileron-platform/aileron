@@ -59,6 +59,9 @@ async def test_create_bulk_delete_and_queue_methods() -> None:
             make_db_result(scalar=2),
             make_db_result(all_values=[SimpleNamespace(message_id="q1"), SimpleNamespace(message_id="q2")]),
             make_db_result(all_values=[SimpleNamespace(message_id="q1"), SimpleNamespace(message_id="q2")]),
+            make_db_result(all_values=[SimpleNamespace(message_id="q1", status=MessageStatus.QUEUED.value)]),
+            make_db_result(rowcount=1),
+            make_db_result(rowcount=1),
             make_db_result(rowcount=1),
             make_db_result(scalar=1),
         ]
@@ -88,7 +91,9 @@ async def test_create_bulk_delete_and_queue_methods() -> None:
     queued = await repo.create_queued("s1", "hello", metadata={"a": 1})
     found = await repo.find_queued("s1")
     next_queued = await repo.get_next_queued("s1")
+    claimed = await repo.claim_next_queued("s1")
     removed = await repo.delete_queued("q1")
+    removed_dispatching = await repo.delete_dispatching("q1")
     queued_count = await repo.count_queued("s1")
 
     assert len(created) == 2
@@ -98,7 +103,10 @@ async def test_create_bulk_delete_and_queue_methods() -> None:
     assert queued.queue_position == 3
     assert found[0].message_id == "q1"
     assert next_queued.message_id == "q1"
+    assert claimed.message_id == "q1"
+    assert claimed.status == MessageStatus.DISPATCHING.value
     assert removed is True
+    assert removed_dispatching is True
     assert queued_count == 1
 
 

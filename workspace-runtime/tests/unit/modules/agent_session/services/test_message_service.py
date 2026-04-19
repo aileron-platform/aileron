@@ -28,6 +28,9 @@ def message_service() -> MessageService:
     repo.count_queued = AsyncMock()
     repo.find_queued = AsyncMock()
     repo.delete_queued = AsyncMock()
+    repo.claim_next_queued = AsyncMock()
+    repo.restore_dispatching = AsyncMock()
+    repo.delete_dispatching = AsyncMock()
     repo.to_entity = Mock()
 
     session_repo = Mock()
@@ -189,6 +192,9 @@ async def test_queue_methods_delegate_to_repository(message_service: MessageServ
     message_service.message_repo.find_queued.return_value = [queued_model]
     message_service.message_repo.count_queued.return_value = 2
     message_service.message_repo.delete_queued.return_value = True
+    message_service.message_repo.claim_next_queued.return_value = queued_model
+    message_service.message_repo.restore_dispatching.return_value = True
+    message_service.message_repo.delete_dispatching.return_value = True
     message_service.message_repo.to_entity.return_value = queued_entity
 
     created = await message_service.create_queued_message(
@@ -200,11 +206,17 @@ async def test_queue_methods_delegate_to_repository(message_service: MessageServ
     total = await message_service.count_queued_messages("session-1")
     messages = await message_service.get_queued_messages("session-1")
     deleted = await message_service.delete_queued_message("queued-1")
+    claimed = await message_service.claim_next_queued_message("session-1")
+    restored = await message_service.restore_dispatching_message("queued-1")
+    finalized = await message_service.finalize_dispatching_message("queued-1")
 
     assert created is queued_entity
     assert total == 2
     assert messages == [queued_entity]
     assert deleted is True
+    assert claimed is queued_entity
+    assert restored is True
+    assert finalized is True
     queued_metadata = message_service.message_repo.create_queued.await_args.kwargs["metadata"]
     assert queued_metadata["source"] == "ui"
     assert queued_metadata["queued_by_user_id"] == "user-1"

@@ -19,7 +19,7 @@ from app.modules.agent_session.repositories.agent_session_repository import Agen
 from app.modules.agent_session.repositories.task_repository import TaskRepository
 from app.modules.agent_session.services.message_service import MessageService
 from app.modules.agent_session.services.agent_session_service import AgentSessionService
-from app.modules.agent_session.services.task_service import TaskService
+from app.modules.agent_session.services.task_service import TaskService, TaskServiceError
 from app.modules.agent_session.services.tools.base.streaming_callbacks import (
     StreamingCallbacks,
 )
@@ -414,6 +414,7 @@ class ExecutionService:
                         "session_id": session_id,
                         "queue_position": queued_msg.queue_position,
                         "content_preview": prompt[:100],
+                        "status": "queued",
                         "queued": True,
                     },
                 )
@@ -442,6 +443,32 @@ class ExecutionService:
                 context_files=context_files,
                 tool_type=tool_type,
                 automation_execution_id=automation_execution_id,
+                allow_queue=True,
+            )
+
+    async def execute_claimed_prompt(
+        self,
+        session_id: str,
+        prompt: str,
+        stream: bool = True,
+        permission_mode: Optional[str] = None,
+        automation_execution_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """執行已 claim 的 queued prompt，不允許再次進 queue."""
+        lock = self._get_execution_lock(session_id)
+        if lock.locked():
+            raise ExecutionServiceError(
+                f"Session {session_id} is busy while dispatching queued message"
+            )
+
+        async with lock:
+            return await self._execute_prompt_internal(
+                session_id=session_id,
+                prompt=prompt,
+                stream=stream,
+                permission_mode=permission_mode,
+                automation_execution_id=automation_execution_id,
+                allow_queue=False,
             )
 
     async def _execute_prompt_internal(
@@ -456,6 +483,7 @@ class ExecutionService:
         context_files: Optional[List[str]] = None,
         tool_type: str = "claude-code",
         automation_execution_id: Optional[str] = None,
+        allow_queue: bool = True,
     ) -> Dict[str, Any]:
         """實際執行 prompt 的內部方法（在鎖保護下執行）."""
         # 1. 取得 session
@@ -471,6 +499,10 @@ class ExecutionService:
         logger.info(f"Session {session_id} active tasks count: {len(active_tasks)}")
 
         if active_tasks:
+            if not allow_queue:
+                raise ExecutionServiceError(
+                    f"Session {session_id} has active task while dispatching queued message"
+                )
             # 有 active task，建立 queued message
             logger.info(f"Session {session_id} has active tasks, queueing prompt")
 
@@ -499,6 +531,7 @@ class ExecutionService:
                         "session_id": session_id,  # 供前端過濾使用
                         "queue_position": queued_msg.queue_position,
                         "content_preview": prompt[:100],  # 前端期望 content_preview
+                        "status": "queued",
                         "queued": True,
                     },
                 )
@@ -745,8 +778,8 @@ class ExecutionService:
         2. 非阻塞方式檢查 lock，如果已被鎖定則跳過
         3. 取得下一個 queued message
         4. 驗證 session 狀態
-        5. 刪除 queued message 並發送事件
-        6. 調用 execute_prompt（會創建新的 task 和 messages）
+        5. claim queued message，讓它離開可刪除狀態
+        6. 調用 execute_claimed_prompt（會創建新的 task 和 messages）
 
         注意：必須使用新的 DB session，避免與其他請求衝突。
 
@@ -783,8 +816,8 @@ class ExecutionService:
                 task_service = TaskService(db)
                 message_service = MessageService(db)
 
-                # 取得下一個 queued message
-                next_msg_model = await message_repo.get_next_queued(session_id)
+                # claim 下一個 queued message
+                next_msg_model = await message_repo.claim_next_queued(session_id)
 
                 if not next_msg_model:
                     logger.info(f"No queued messages for session {session_id}")
@@ -805,6 +838,7 @@ class ExecutionService:
                 active_tasks = await task_service.get_active_tasks(session_id)
                 if active_tasks:
                     logger.info(f"Session {session_id} still has active tasks, skipping queue processing")
+                    await message_service.restore_dispatching_message(next_msg_id)
                     return
 
                 logger.info(f"Processing queued message {next_msg.id} (position {next_msg.queue_position})")
@@ -820,23 +854,6 @@ class ExecutionService:
                 elif not isinstance(prompt_content, str):
                     prompt_content = str(prompt_content)
 
-            # 在 DB session 外執行 prompt（會創建新的 session）
-            # 注意：我們先執行，成功後才刪除 queued message
-            # 創建新的 ExecutionService 實例以使用新的 DB session
-            async with async_session_scope() as db:
-                execution_service = ExecutionService(db)
-                result = await execution_service.execute_prompt(
-                    session_id=session_id,
-                    prompt=prompt_content,
-                    stream=True,
-                )
-
-                # 執行成功，現在刪除 queued message
-                # 不需手動 commit：async_session_scope 會在 context 結束時自動 commit
-                message_service = MessageService(db)
-                await message_service.delete_queued_message(next_msg_id)
-
-                # 發送 MESSAGE_DEQUEUED 事件通知前端
                 await self.emitter.emit(
                     WebSocketEvent(
                         type=EventType.MESSAGE_DEQUEUED,
@@ -845,10 +862,22 @@ class ExecutionService:
                         data={
                             "message_id": next_msg_id,
                             "queue_position": queue_position,
-                            "reason": "processed",
+                            "reason": "claimed",
                         },
                     )
                 )
+
+            # 在 DB session 外執行 prompt（會創建新的 task 和 messages）
+            async with async_session_scope() as db:
+                execution_service = ExecutionService(db)
+                await execution_service.execute_claimed_prompt(
+                    session_id=session_id,
+                    prompt=prompt_content,
+                    stream=True,
+                )
+
+                message_service = MessageService(db)
+                await message_service.finalize_dispatching_message(next_msg_id)
 
                 logger.info(f"Successfully processed queued message {next_msg_id} for session {session_id}")
 
@@ -860,6 +889,30 @@ class ExecutionService:
 
             # 通知用戶 queue message 處理失敗
             if next_msg_id:
+                restored = False
+                try:
+                    async with async_session_scope() as db:
+                        message_service = MessageService(db)
+                        restored = await message_service.restore_dispatching_message(next_msg_id)
+                except Exception:
+                    logger.exception("Failed to restore dispatching message after queue processing failure")
+
+                if restored:
+                    await self.emitter.emit(
+                        WebSocketEvent(
+                            type=EventType.MESSAGES_QUEUED,
+                            session_id=session_id,
+                            task_id=None,
+                            data={
+                                "message_id": next_msg_id,
+                                "session_id": session_id,
+                                "queue_position": queue_position,
+                                "content_preview": prompt_content[:100] if prompt_content else None,
+                                "status": "queued",
+                                "queued": True,
+                            },
+                        )
+                    )
                 await self.emitter.emit(
                     WebSocketEvent(
                         type=EventType.QUEUE_PROCESSING_FAILED,

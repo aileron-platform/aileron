@@ -315,6 +315,7 @@ export interface QueuedMessage {
   content_preview?: string;
   queue_position?: number;
   created_at?: string | null;
+  status?: 'queued' | 'dispatching' | null;
 }
 
 // ============================================================================
@@ -568,9 +569,12 @@ export interface PromptRequest {
 
 export interface PromptResponse {
   success: boolean;
-  task_id: string;
+  task_id: string | null;
   status: string;
   streaming: boolean;
+  queued?: boolean;
+  message_id?: string;
+  queue_position?: number;
 }
 
 // ============================================================================
