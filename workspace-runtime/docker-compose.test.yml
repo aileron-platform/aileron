@@ -93,6 +93,7 @@ services:
     volumes:
       # 掛載代碼（開發模式）
       - ./app:/app/app:ro
+      - ./scripts:/app/scripts:ro
       - ./tests:/app/tests:rw
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
