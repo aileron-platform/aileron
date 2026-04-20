@@ -56,7 +56,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   // 使用 Workspace Runtime Hook
   const workspaceRuntime = useWorkspaceRuntime(workspaceId);
   const selectedGitContextId = state.versionControl.selectedGitContextId;
-  const fileManagementContextId = selectedGitContextId ?? 'primary';
+  const fileManagementContextId = selectedGitContextId;
 
   // 使用路由同步 Hook
   useWorkspaceRouteSync(state, dispatch);
@@ -155,7 +155,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
           payload: {
             workspaceId: previousWorkspaceId,
             scope,
-            contextId: scope === 'file-management' ? (previousFileManagementContextIdRef.current ?? 'primary') : undefined,
+            contextId: scope === 'file-management' ? previousFileManagementContextIdRef.current : undefined,
           },
         });
 

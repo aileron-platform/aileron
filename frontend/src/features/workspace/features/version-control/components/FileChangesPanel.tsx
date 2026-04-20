@@ -27,7 +27,7 @@ import {
   GitBranch,
   Loader2,
 } from 'lucide-react';
-import { ApiClient, ApiError } from '@/shared/api/apiClient';
+import { ApiClient } from '@/shared/api/apiClient';
 import { CommitForm } from './CommitForm';
 import { FileChangeItem } from './FileChangeItem';
 import { GitContextSelector } from './GitContextSelector';
@@ -45,6 +45,7 @@ import {
 } from '../hooks/useVersionControlQueries';
 import { refreshVersionControlQueries } from '../lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
+import { isVersionControlNotInitializedError } from '../utils';
 
 interface FileChangesPanelProps {
   onFileSelect?: (file: VersionControlFileChange | null) => void;
@@ -542,8 +543,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // Error 狀態
   if (changesQuery.error || branchesQuery.error) {
     const error = changesQuery.error ?? branchesQuery.error;
-    const isNotInitialized =
-      error instanceof ApiError && error.errorCode === 'VC_REPOSITORY_NOT_INITIALIZED';
+    const isNotInitialized = isVersionControlNotInitializedError(error);
 
     if (isNotInitialized) {
       return (

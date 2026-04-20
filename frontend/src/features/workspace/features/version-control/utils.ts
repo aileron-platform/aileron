@@ -1,5 +1,6 @@
 import type { VersionControlFileChange } from './types';
 import { createLogger } from '@/shared/services/logger';
+import { ApiError } from '@/shared/api/apiClient';
 
 const logger = createLogger('VersionControlUtils');
 
@@ -36,3 +37,7 @@ export const mapCommitFileToChange = (file: VersionControlFileChange): VersionCo
   ...file,
   diff: file.diff ?? file.patch ?? null,
 });
+
+export const isVersionControlNotInitializedError = (error: unknown): error is ApiError => {
+  return error instanceof ApiError && error.errorCode === 'VC_REPOSITORY_NOT_INITIALIZED';
+};

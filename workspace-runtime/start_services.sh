@@ -208,6 +208,8 @@ else
     echo "⚠️  GIT_REPO_URL 未設定，跳過 Git 克隆"
 fi
 
+/workspace-runtime/scripts/bootstrap_git_repo.sh
+
 chown -R developer:developer /workspace 2>/dev/null || true
 echo ""
 

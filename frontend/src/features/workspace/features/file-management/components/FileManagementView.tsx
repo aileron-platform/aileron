@@ -96,7 +96,7 @@ export const FileManagementView: React.FC = () => {
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [extractProgress, setExtractProgress] = useState<ExtractProgressState | null>(null);
-  const selectedGitContextId = workspaceState.versionControl.selectedGitContextId ?? 'primary';
+  const selectedGitContextId = workspaceState.versionControl.selectedGitContextId;
   const showHiddenEntries = workspaceState.fileTreeShowHiddenEntries;
 
   // 只有當 runtime 準備好時才創建 apiConfig
