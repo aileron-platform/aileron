@@ -328,15 +328,18 @@ class RuntimeProvisionService:
         safe_workspace_id = workspace.id.replace('-', '_')
 
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
-        host_scripts = Path(self.settings.HOST_WORKSPACES_DIR).parent / "workspace-scripts" / safe_workspace_id
-        host_claude = Path(self.settings.HOST_WORKSPACES_DIR).parent / "claude-data" / safe_workspace_id
+        host_scripts = Path(self.settings.HOST_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        host_claude = Path(self.settings.HOST_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_workspace = Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
+        manager_scripts = Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
 
-        host_workspace.mkdir(parents=True, exist_ok=True)
-        host_scripts.mkdir(parents=True, exist_ok=True)
-        host_claude.mkdir(parents=True, exist_ok=True)
+        manager_workspace.mkdir(parents=True, exist_ok=True)
+        manager_scripts.mkdir(parents=True, exist_ok=True)
+        manager_claude.mkdir(parents=True, exist_ok=True)
 
         if workspace.setup_script:
-            custom_setup_file = host_scripts / "custom-setup.sh"
+            custom_setup_file = manager_scripts / "custom-setup.sh"
             custom_setup_file.write_text(workspace.setup_script, encoding="utf-8")
             custom_setup_file.chmod(0o755)
 
@@ -435,16 +438,17 @@ class RuntimeProvisionService:
                        f"nextjs={workspace.nextjs_external_port}, nextjs_api={workspace.nextjs_api_external_port}")
             self.db.flush()
 
-    def _find_available_port(self, exclude: set[int] = None) -> int:
+    def _find_available_port(self, exclude: set[int] = None, protocol: str = "tcp") -> int:
         """隨機找一個可用的 port"""
         exclude = exclude or set()
+        socket_type = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
 
         for _ in range(100):
             port = random.randint(PORT_RANGE_MIN, PORT_RANGE_MAX)
             if port in exclude:
                 continue
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                with socket.socket(socket.AF_INET, socket_type) as s:
                     s.bind(("0.0.0.0", port))
                     return port
             except OSError:
@@ -575,7 +579,8 @@ class RuntimeProvisionService:
         udp_port = self._find_available_port(
             exclude={workspace.runtime_external_port, workspace.web_preview_external_port,
                      workspace.terminal_external_port, workspace.browser_webrtc_external_port,
-                     workspace.browser_cdp_external_port}
+                     workspace.browser_cdp_external_port},
+            protocol="udp",
         )
 
         # Port mappings for Browser (neko WebRTC + CDP + UDP media)

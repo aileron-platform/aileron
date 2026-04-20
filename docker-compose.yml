@@ -143,6 +143,11 @@ services:
       - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
       - HOST_WORKSPACE_MANAGER_DIR=${HOST_WORKSPACE_MANAGER_DIR:-./workspace-manager}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
+      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - MANAGER_WORKSPACES_DIR=/host/workspace-data
+      - MANAGER_WORKSPACE_SCRIPTS_DIR=/host/workspace-scripts
+      - MANAGER_CLAUDE_DATA_DIR=/host/claude-data
       # JWT Authentication Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=180
       - REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -169,9 +174,9 @@ services:
       - ./workspace-manager:/workspace-manager  # Mount 整個專案目錄
       - ./data/template-center:/data/template-center  # Template storage volume
       - ./data/init-scripts:/data/init-scripts  # Init scripts storage volume
-      - ./data/workspace-data:/Users/chenshengyang/Documents/aileron/data/workspace-data  # Workspace data
-      - ./data/workspace-scripts:/Users/chenshengyang/Documents/aileron/data/workspace-scripts  # Workspace scripts
-      - ./data/claude-data:/Users/chenshengyang/Documents/aileron/data/claude-data  # Claude data
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}:/host/workspace-data  # Workspace data
+      - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}:/host/workspace-scripts  # Workspace scripts
+      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}:/host/claude-data  # Claude data
     networks:
       - aileron-network-dev
     depends_on:
@@ -226,6 +231,8 @@ services:
       - REDIS_RETRY_ATTEMPTS=3
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
+      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
       - HOST_SSH_KEYS_DIR=${HOST_SSH_KEYS_DIR:-./data/ssh-keys}
       # SSH Configuration
       - SSH_PORT=22
@@ -275,9 +282,9 @@ services:
       - /workspace-runtime/.venv  # 阻擋 host (macOS) venv 蓋過容器內 Linux venv
       - /workspace-runtime/web-preview/node_modules  # 避免 node_modules 被覆蓋
       - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
-      - ./data/workspace-data/default-workspace:/workspace  # Workspace projects
-      - ./data/workspace-scripts/default-workspace:/scripts  # Scripts directory
-      - ./data/claude-data/default_workspace:/home/developer/.claude  # Claude session 持久化
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
+      - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
+      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}/default_workspace:/home/developer/.claude  # Claude session 持久化
     networks:
       - aileron-network-dev
     depends_on:
@@ -323,9 +330,9 @@ services:
     ports:
       - "6080:6080"     # neko HTTP + WebSocket signaling
       - "9223:9223"     # CDP (socat relay → Chrome 9222)
-      - "52000:52000/udp"  # WebRTC media (UDPMUX single port)
+      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:52000/udp"  # WebRTC media (UDPMUX single port)
     volumes:
-      - ./data/workspace-data/default-workspace:/workspace
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace
     networks:
       - aileron-network-dev
     healthcheck:
@@ -351,7 +358,7 @@ services:
       - "3003:3003"     # Next.js dev server
       - "3013:3013"     # Management API
     volumes:
-      - ./data/workspace-data/default-workspace:/workspace
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace
     networks:
       - aileron-network-dev
     healthcheck:
