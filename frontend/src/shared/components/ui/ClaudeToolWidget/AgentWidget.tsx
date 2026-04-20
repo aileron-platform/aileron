@@ -3,9 +3,8 @@
  */
 import React from 'react';
 import { Bot, Cpu, Wrench, Timer, Hash, Maximize2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { cn } from '@/shared/utils/cn';
+import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import {
   Dialog,
   DialogContent,
@@ -156,10 +155,8 @@ export const AgentWidget: React.FC<WidgetProps> = ({ input, output, error, statu
         {/* 結果內容 */}
         {resultContent && (
           <div className="px-3 pb-3 border-t border-gray-100 dark:border-zinc-800 pt-2">
-            <div className="prose prose-sm dark:prose-invert max-w-none text-xs text-gray-900 dark:text-zinc-100 overflow-x-auto max-h-64 overflow-y-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {previewContent || '無結果'}
-              </ReactMarkdown>
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              <MarkdownContent content={previewContent || '無結果'} variant="compact" />
             </div>
           </div>
         )}
@@ -213,11 +210,7 @@ export const AgentWidget: React.FC<WidgetProps> = ({ input, output, error, statu
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900 rounded p-6">
-            <div className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-zinc-100">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {resultContent || '無結果'}
-              </ReactMarkdown>
-            </div>
+            <MarkdownContent content={resultContent || '無結果'} variant="compact" />
           </div>
         </DialogContent>
       </Dialog>

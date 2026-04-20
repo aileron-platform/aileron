@@ -34,6 +34,7 @@ import { Input } from '@/shared/components/ui/input';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { cn } from '@/shared/utils/cn';
+import { sharedComponents } from '@/shared/components/markdown/markdownComponents';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useChatPanelStateContext } from '../../../components/ChatPanel/chatPanelStateContext';
 import { createLogger } from '@/shared/services/logger';
@@ -576,20 +577,18 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
           </a>
         );
       },
-      code: ({ node: _node, ...props }: any) => {
-        const isInline = !props.className;
+      code: ({ node: _node, className, children, ...props }: any) => {
+        const isInline = !className;
         return isInline ? (
-          <code className="px-1.5 py-0.5 rounded bg-muted text-sm font-mono" {...props} />
+          <code className="px-1.5 py-0.5 rounded bg-muted text-foreground text-sm font-mono" {...props}>{children}</code>
         ) : (
-          <code className="block p-4 rounded bg-muted text-sm font-mono overflow-x-auto" {...props} />
+          <code className={cn('text-foreground font-mono text-sm', className)} {...props}>{children}</code>
         );
       },
-      pre: ({ node: _node, ...props }) => (
-        <pre className="my-4 p-4 rounded bg-muted overflow-x-auto" {...props} />
+      pre: ({ node: _node, children, ...props }) => (
+        <pre className="my-4 p-4 rounded bg-muted text-foreground text-sm overflow-x-auto" {...props}>{children}</pre>
       ),
-      blockquote: ({ node: _node, ...props }) => (
-        <blockquote className="my-4 pl-4 border-l-4 border-primary/30 italic text-muted-foreground" {...props} />
-      ),
+      blockquote: sharedComponents.blockquote,
       ul: ({ node: _node, ...props }) => (
         <ul className="my-3 ml-6 list-disc" {...props} />
       ),
@@ -613,9 +612,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       td: ({ node: _node, ...props }) => (
         <td className="border border-border px-4 py-2" {...props} />
       ),
-      hr: ({ node: _node, ...props }) => (
-        <hr className="my-6 border-border" {...props} />
-      ),
+      hr: sharedComponents.hr,
       img: ({ node: _node, src, ...props }) => (
         src ? <img className="max-w-full h-auto rounded my-4" src={src} {...props} /> : null
       ),
