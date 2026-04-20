@@ -47,6 +47,7 @@ def mock_settings():
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
     settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts-host"
     settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES = ["50000-52321"]
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
     settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
@@ -248,19 +249,83 @@ class TestRuntimeProvisionService:
         sample_workspace.runtime_external_port = 3002
         sample_workspace.web_preview_external_port = 3003
         sample_workspace.terminal_external_port = 3004
-        sample_workspace.browser_webrtc_external_port = 6080
+        sample_workspace.browser_webrtc_external_port = 52330
         sample_workspace.browser_cdp_external_port = 9223
 
         with patch("app.services.container_image_service.get_container_image_service") as mock_image_service_getter:
             mock_image_service = MagicMock()
             mock_image_service.get_browser_image_name.return_value = "workspace-browser:latest"
             mock_image_service_getter.return_value = mock_image_service
-            with patch.object(provision_service, "_find_available_port", return_value=52330) as mock_find_port:
-                context = provision_service._build_browser_runtime_context(sample_workspace)
+            context = provision_service._build_browser_runtime_context(sample_workspace)
 
-        assert mock_find_port.call_args.kwargs["protocol"] == "udp"
         assert context.environment["NEKO_WEBRTC_UDPMUX"] == "52330"
+        assert context.environment["NEKO_WEBRTC_NAT1TO1"] == "127.0.0.1"
         assert any(port.protocol == "udp" and port.host_port == 52330 for port in context.ports)
+        assert any(port.protocol == "udp" and port.container_port == 52330 for port in context.ports)
+
+    def test_allocate_ports_uses_shared_browser_webrtc_port_for_tcp_and_udp(
+        self, provision_service, sample_workspace
+    ) -> None:
+        sample_workspace.runtime_external_port = None
+        sample_workspace.web_preview_external_port = None
+        sample_workspace.terminal_external_port = None
+        sample_workspace.browser_webrtc_external_port = None
+        sample_workspace.browser_cdp_external_port = None
+        sample_workspace.nextjs_external_port = None
+        sample_workspace.nextjs_api_external_port = None
+
+        ports = iter([31002, 31003, 31004, 52330, 39223, 33003, 33013])
+        with patch.object(provision_service, "_find_available_port", side_effect=lambda *args, **kwargs: next(ports)):
+            with patch.object(
+                provision_service,
+                "_find_available_browser_webrtc_port",
+                return_value=52330,
+            ) as mock_browser_port:
+                provision_service._allocate_ports_if_needed(sample_workspace)
+
+        mock_browser_port.assert_called_once()
+        assert sample_workspace.browser_webrtc_external_port == 52330
+        assert sample_workspace.browser_webrtc_external_url == "http://localhost:52330"
+
+    def test_find_available_browser_webrtc_port_checks_tcp_udp_and_reserved_ranges(
+        self, provision_service, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        candidate_ports = iter([50010, 52330, 52331])
+        checks: list[tuple[int, str]] = []
+
+        monkeypatch.setattr(
+            "app.services.runtime_provision_service.random.randint",
+            lambda _a, _b: next(candidate_ports),
+        )
+
+        def fake_is_port_available(port: int, protocol: str) -> bool:
+            checks.append((port, protocol))
+            return not (port == 52330 and protocol == "udp")
+
+        monkeypatch.setattr(provision_service, "_is_port_available", fake_is_port_available)
+
+        port = provision_service._find_available_browser_webrtc_port(exclude={52329})
+
+        assert port == 52331
+        assert (50010, "tcp") not in checks
+        assert (52330, "tcp") in checks
+        assert (52330, "udp") in checks
+        assert (52331, "tcp") in checks
+        assert (52331, "udp") in checks
+
+    def test_reserved_browser_webrtc_udp_ranges_ignore_invalid_entries(
+        self, provision_service
+    ) -> None:
+        provision_service.settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES = [
+            "50000-50010",
+            "bad",
+            "60000-59000",
+            "abc-def",
+        ]
+
+        ranges = provision_service._get_reserved_browser_webrtc_udp_ranges()
+
+        assert ranges == ((50000, 50010),)
 
     def test_handle_failure(self, provision_service, mock_db_session, sample_workspace):
         """測試：處理失敗"""

@@ -315,8 +315,8 @@ services:
       - NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko
       - NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin
       - NEKO_WEBRTC_ICELITE=1
-      - NEKO_WEBRTC_UDPMUX=52000
-      - NEKO_WEBRTC_NAT1TO1=127.0.0.1
+      - NEKO_WEBRTC_UDPMUX=${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}
+      - NEKO_WEBRTC_NAT1TO1=${BROWSER_WEBRTC_NAT1TO1_IP:-127.0.0.1}
       - NEKO_SESSION_IMPLICIT_HOSTING=true
     deploy:
       resources:
@@ -328,9 +328,9 @@ services:
           memory: 1G
     shm_size: '2gb'
     ports:
-      - "6080:6080"     # neko HTTP + WebSocket signaling
+      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:6080"     # neko HTTP + WebSocket signaling
       - "9223:9223"     # CDP (socat relay → Chrome 9222)
-      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:52000/udp"  # WebRTC media (UDPMUX single port)
+      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}/udp"  # WebRTC media (UDPMUX single port)
     volumes:
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace
     networks:

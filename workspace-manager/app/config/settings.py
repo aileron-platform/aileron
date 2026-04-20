@@ -75,6 +75,10 @@ class Settings(BaseSettings):
         default="/var/lib/aileron/claude-data",
         description="Claude data host directory",
     )
+    BROWSER_WEBRTC_RESERVED_UDP_RANGES: Annotated[List[str], NoDecode] = Field(
+        default_factory=list,
+        description="Reserved host UDP port ranges excluded from browser WebRTC allocation",
+    )
     MANAGER_WORKSPACES_DIR: str = Field(
         default="/host/workspace-data",
         description="Workspace data directory mounted inside workspace-manager",
@@ -323,6 +327,14 @@ class Settings(BaseSettings):
         """解析預留埠號清單"""
         if isinstance(v, str):
             return [int(port.strip()) for port in v.split(",") if port.strip()]
+        return v
+
+    @field_validator("BROWSER_WEBRTC_RESERVED_UDP_RANGES", mode="before")
+    @classmethod
+    def parse_browser_webrtc_reserved_udp_ranges(cls, v):
+        """解析 Browser WebRTC 要避開的 UDP 區間"""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
     @field_validator("RUNTIME_K8S_ALLOWED_NAMESPACES", mode="before")

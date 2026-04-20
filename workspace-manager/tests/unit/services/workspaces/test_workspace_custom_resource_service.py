@@ -113,6 +113,21 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
 
 @pytest.mark.unit
 @pytest.mark.workspace
+def test_build_workspace_custom_resource_manifest_excludes_docker_specific_browser_webrtc_fields(
+    custom_resource_service, sample_workspace
+):
+    manifest = custom_resource_service._build_workspace_custom_resource(sample_workspace)
+
+    browser_spec = manifest["spec"]["browser"]
+
+    assert "hostPort" not in browser_spec
+    assert "webrtcHostPort" not in browser_spec
+    assert "nat1to1" not in browser_spec
+    assert "environment" not in browser_spec
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
 def test_build_workspace_custom_resource_manifest_prefers_runtime_override(
     custom_resource_service, sample_workspace
 ):
