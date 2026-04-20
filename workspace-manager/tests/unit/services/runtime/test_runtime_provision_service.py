@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import socket
 from unittest.mock import MagicMock, Mock, patch
 from uuid import uuid4
 
@@ -44,11 +45,20 @@ def mock_settings():
     settings.RUNTIME_PROVISIONER = "docker"
     settings.RUNTIME_SCRIPT_ROOT = "/tmp/workspace-scripts"
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
+    settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts-host"
+    settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
+    settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
+    settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
     settings.DOCKER_NETWORK = "workspace-network"
     settings.ENV = "testing"
     settings.DATABASE_URL = "postgresql://test:test@localhost/test"
     settings.REDIS_URL = "redis://localhost:6379/0"
     settings.PORT = 8000
+    settings.INTERNAL_API_TOKEN = "test-token"
+    settings.KEYCLOAK_SERVER_URL = "http://localhost:8080"
+    settings.KEYCLOAK_REALM = "aileron"
+    settings.KEYCLOAK_CLIENT_ID = "aileron-web"
     return settings
 
 @pytest.fixture
@@ -184,6 +194,73 @@ class TestRuntimeProvisionService:
             
             # Template rendered
             mock_template_engine.render_to_file.assert_called_once()
+
+    def test_build_volumes_uses_workspace_scripts_and_claude_roots(
+        self, provision_service, sample_workspace, mock_settings, tmp_path: Path
+    ):
+        mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
+        mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
+        mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "mounted-workspace-scripts")
+        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+
+        volumes = provision_service._build_volumes(sample_workspace)
+
+        sources = {volume.target: volume.source for volume in volumes}
+        assert sources["/workspace"] == str(tmp_path / "workspaces" / "workspace_123")
+        assert sources["/scripts"] == str(tmp_path / "workspace-scripts" / "workspace_123")
+        assert sources["/home/developer/.claude"] == str(tmp_path / "claude-data" / "workspace_123")
+        assert (tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh").is_file()
+
+    def test_find_available_port_uses_requested_protocol(self, provision_service, monkeypatch: pytest.MonkeyPatch):
+        socket_types: list[int] = []
+        ports_tried: list[int] = []
+
+        class FakeSocket:
+            def __init__(self, family: int, socket_type: int) -> None:
+                socket_types.append(socket_type)
+
+            def __enter__(self) -> "FakeSocket":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+            def bind(self, address: tuple[str, int]) -> None:
+                ports_tried.append(address[1])
+                if address[1] == 41001:
+                    raise OSError("port unavailable")
+
+        candidate_ports = iter([41001, 41002])
+        monkeypatch.setattr("app.services.runtime_provision_service.random.randint", lambda _a, _b: next(candidate_ports))
+        monkeypatch.setattr("app.services.runtime_provision_service.socket.socket", FakeSocket)
+
+        port = provision_service._find_available_port(protocol="udp")
+
+        assert port == 41002
+        assert socket_types == [socket.SOCK_DGRAM, socket.SOCK_DGRAM]
+        assert ports_tried == [41001, 41002]
+
+    def test_build_browser_runtime_context_requests_udp_port(
+        self, provision_service, sample_workspace
+    ):
+        sample_workspace.runtime_external_port = 3002
+        sample_workspace.web_preview_external_port = 3003
+        sample_workspace.terminal_external_port = 3004
+        sample_workspace.browser_webrtc_external_port = 6080
+        sample_workspace.browser_cdp_external_port = 9223
+
+        with patch("app.services.container_image_service.get_container_image_service") as mock_image_service_getter:
+            mock_image_service = MagicMock()
+            mock_image_service.get_browser_image_name.return_value = "workspace-browser:latest"
+            mock_image_service_getter.return_value = mock_image_service
+            with patch.object(provision_service, "_find_available_port", return_value=52330) as mock_find_port:
+                context = provision_service._build_browser_runtime_context(sample_workspace)
+
+        assert mock_find_port.call_args.kwargs["protocol"] == "udp"
+        assert context.environment["NEKO_WEBRTC_UDPMUX"] == "52330"
+        assert any(port.protocol == "udp" and port.host_port == 52330 for port in context.ports)
 
     def test_handle_failure(self, provision_service, mock_db_session, sample_workspace):
         """測試：處理失敗"""

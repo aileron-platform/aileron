@@ -73,6 +73,36 @@ def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp
 
 
 @pytest.mark.unit
+def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    profile = ops.StartupProfile(
+        startup_mode="dockerhub-dev",
+        image_arch="arm64",
+        runtime_base="lite",
+        service_tag="dev-arm64",
+        runtime_tag="dev-lite-arm64",
+        runtime_base_image="ailerondocker/workspace-runtime-base-lite:dev-arm64",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("HOST_PROJECT_ROOT", raising=False)
+    monkeypatch.delenv("HOST_WORKSPACE_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("HOST_WORKSPACE_MANAGER_DIR", raising=False)
+    monkeypatch.delenv("HOST_WORKSPACES_DIR", raising=False)
+    monkeypatch.delenv("HOST_WORKSPACE_SCRIPTS_DIR", raising=False)
+    monkeypatch.delenv("HOST_CLAUDE_DATA_DIR", raising=False)
+    monkeypatch.delenv("HOST_SSH_KEYS_DIR", raising=False)
+
+    env = ops.build_compose_env(profile)
+
+    assert env["HOST_PROJECT_ROOT"] == str(tmp_path.resolve())
+    assert env["HOST_WORKSPACE_RUNTIME_DIR"] == str(tmp_path / "workspace-runtime")
+    assert env["HOST_WORKSPACE_MANAGER_DIR"] == str(tmp_path / "workspace-manager")
+    assert env["HOST_WORKSPACES_DIR"] == str(tmp_path / "data" / "workspace-data")
+    assert env["HOST_WORKSPACE_SCRIPTS_DIR"] == str(tmp_path / "data" / "workspace-scripts")
+    assert env["HOST_CLAUDE_DATA_DIR"] == str(tmp_path / "data" / "claude-data")
+    assert env["HOST_SSH_KEYS_DIR"] == str(tmp_path / "data" / "ssh-keys")
+
+
+@pytest.mark.unit
 def test_compose_up_requires_compose_file(tmp_path: Path) -> None:
     with pytest.raises(ops.OpsError):
         ops.compose_up(tmp_path, build=False, detach=True, env={})
@@ -117,6 +147,52 @@ def test_main_routes_up_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
 
     assert exit_code == 0
     assert calls == [(tmp_path.resolve(), True, False, compose_env)]
+
+
+@pytest.mark.unit
+def test_main_routes_dockerhub_dev_without_implicit_build(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    compose_calls: list[tuple[Path, bool, bool, dict[str, str]]] = []
+    pull_calls: list[tuple[Path, dict[str, str]]] = []
+    profile = ops.StartupProfile(
+        startup_mode="dockerhub-dev",
+        image_arch="amd64",
+        runtime_base="lite",
+        service_tag="dev-amd64",
+        runtime_tag="dev-lite-amd64",
+        runtime_base_image="ailerondocker/workspace-runtime-base-lite:dev-amd64",
+    )
+    compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
+
+    monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
+    monkeypatch.setattr(ops, "resolve_startup_profile", lambda **kwargs: profile)
+    monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
+    monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, build: None)
+    monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: pull_calls.append((repo_root, env)))
+    monkeypatch.setattr(
+        ops,
+        "compose_up",
+        lambda repo_root, *, build, detach, env: compose_calls.append((repo_root, build, detach, env)),
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ops.py",
+            "--repo-root",
+            str(tmp_path),
+            "up",
+            "--no-prompt",
+            "--startup-mode",
+            "dockerhub-dev",
+        ],
+    )
+
+    exit_code = ops.main()
+
+    assert exit_code == 0
+    assert pull_calls == [(tmp_path.resolve(), compose_env)]
+    assert compose_calls == [(tmp_path.resolve(), False, True, compose_env)]
 
 
 @pytest.mark.unit

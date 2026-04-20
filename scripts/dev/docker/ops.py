@@ -156,6 +156,15 @@ def run_command(
     )
 
 
+def raise_for_result(result: subprocess.CompletedProcess[str], *, action: str) -> None:
+    if result.returncode == 0:
+        return
+    details = (result.stderr or result.stdout or "").strip()
+    if details:
+        raise OpsError(f"{action} failed:\n{details}")
+    raise OpsError(f"{action} failed with exit code {result.returncode}")
+
+
 def ensure_docker_available() -> None:
     if shutil.which("docker") is None:
         raise OpsError("找不到 docker 指令，請先安裝並啟動 Docker Desktop 或 Docker Engine。")
@@ -284,6 +293,10 @@ def resolve_startup_profile(
 
 def build_compose_env(profile: StartupProfile) -> dict[str, str]:
     env = os.environ.copy()
+    repo_root = Path(env.get("HOST_PROJECT_ROOT", Path.cwd()))
+    if not repo_root.is_absolute():
+        repo_root = repo_root.resolve()
+    data_root = repo_root / "data"
     env.update(
         {
             "WORKSPACE_MANAGER_IMAGE": f"ailerondocker/workspace-manager:{profile.service_tag}",
@@ -293,6 +306,13 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "WORKSPACE_UI_IMAGE": f"ailerondocker/workspace-ui:{profile.service_tag}",
             "WORKSPACE_RUNTIME_BASE_IMAGE": profile.runtime_base_image,
             "WORKSPACE_RUNTIME_JAVA_HOME": "/usr/lib/jvm/openjdk-21",
+            "HOST_PROJECT_ROOT": str(repo_root),
+            "HOST_WORKSPACE_RUNTIME_DIR": str(env.get("HOST_WORKSPACE_RUNTIME_DIR", repo_root / "workspace-runtime")),
+            "HOST_WORKSPACE_MANAGER_DIR": str(env.get("HOST_WORKSPACE_MANAGER_DIR", repo_root / "workspace-manager")),
+            "HOST_WORKSPACES_DIR": str(env.get("HOST_WORKSPACES_DIR", data_root / "workspace-data")),
+            "HOST_WORKSPACE_SCRIPTS_DIR": str(env.get("HOST_WORKSPACE_SCRIPTS_DIR", data_root / "workspace-scripts")),
+            "HOST_CLAUDE_DATA_DIR": str(env.get("HOST_CLAUDE_DATA_DIR", data_root / "claude-data")),
+            "HOST_SSH_KEYS_DIR": str(env.get("HOST_SSH_KEYS_DIR", data_root / "ssh-keys")),
         }
     )
     return env
@@ -348,18 +368,20 @@ def compose_down(repo_root: Path, *, env: dict[str, str] | None = None) -> None:
         print_warning("未找到 docker-compose.yml，跳過 compose down。")
         return
     print_info("停止 docker compose 服務...")
-    run_command(
+    result = run_command(
         ["docker", "compose", "down", "--remove-orphans"],
         cwd=repo_root,
         check=False,
         env=env,
     )
+    raise_for_result(result, action="docker compose down")
     print_success("docker compose 服務已停止")
 
 
 def compose_pull(repo_root: Path, *, env: dict[str, str]) -> None:
     print_info("先從 registry 拉取對應 image...")
-    run_command(["docker", "compose", "pull"], cwd=repo_root, check=False, env=env)
+    result = run_command(["docker", "compose", "pull"], cwd=repo_root, check=False, env=env)
+    raise_for_result(result, action="docker compose pull")
     print_success("docker compose pull 已完成")
 
 
@@ -379,7 +401,8 @@ def compose_up(
     if build:
         command.append("--build")
     print_info("啟動 docker compose 服務...")
-    run_command(command, cwd=repo_root, check=False, env=env)
+    result = run_command(command, cwd=repo_root, check=False, env=env)
+    raise_for_result(result, action="docker compose up")
     print_success("docker compose 啟動命令已送出")
 
 
@@ -865,7 +888,7 @@ def main() -> int:
                 no_prompt=args.no_prompt,
             )
             env = build_compose_env(profile)
-            effective_build = args.build or profile.startup_mode == "local-build"
+            effective_build = args.build
             print_startup_profile(profile, build=effective_build)
             if profile.startup_mode != "local-build":
                 compose_pull(repo_root, env=env)

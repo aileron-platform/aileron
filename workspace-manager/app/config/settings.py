@@ -67,6 +67,26 @@ class Settings(BaseSettings):
         default="/var/lib/aileron/workspaces",
         description="主機上掛載 workspace 檔案的目錄",
     )
+    HOST_WORKSPACE_SCRIPTS_DIR: str = Field(
+        default="/var/lib/aileron/workspace-scripts",
+        description="Workspace scripts host directory",
+    )
+    HOST_CLAUDE_DATA_DIR: str = Field(
+        default="/var/lib/aileron/claude-data",
+        description="Claude data host directory",
+    )
+    MANAGER_WORKSPACES_DIR: str = Field(
+        default="/host/workspace-data",
+        description="Workspace data directory mounted inside workspace-manager",
+    )
+    MANAGER_WORKSPACE_SCRIPTS_DIR: str = Field(
+        default="/host/workspace-scripts",
+        description="Workspace scripts directory mounted inside workspace-manager",
+    )
+    MANAGER_CLAUDE_DATA_DIR: str = Field(
+        default="/host/claude-data",
+        description="Claude data directory mounted inside workspace-manager",
+    )
     RUNTIME_RESERVED_PORTS: Annotated[List[int], NoDecode] = Field(
         default_factory=lambda: [3002], description="預留不可使用的容器埠"
     )
