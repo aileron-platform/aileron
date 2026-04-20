@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import pytest
+import yaml
 
 
 def _find_ops_path() -> Path:
@@ -17,7 +18,21 @@ def _find_ops_path() -> Path:
     raise FileNotFoundError("找不到 scripts/dev/docker/ops.py")
 
 
+def _find_compose_path() -> Path:
+    repo_root_candidate = Path("/repo-root/docker-compose.yml")
+    if repo_root_candidate.is_file():
+        return repo_root_candidate
+
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        candidate = parent / "docker-compose.yml"
+        if candidate.is_file() and (parent / "workspace-chrome").is_dir():
+            return candidate
+    raise FileNotFoundError("Could not find docker-compose.yml")
+
+
 OPS_PATH = _find_ops_path()
+COMPOSE_PATH = _find_compose_path()
 OPS_SPEC = importlib.util.spec_from_file_location("host_docker_ops", OPS_PATH)
 assert OPS_SPEC is not None and OPS_SPEC.loader is not None
 ops = importlib.util.module_from_spec(OPS_SPEC)
@@ -193,6 +208,23 @@ def test_main_routes_dockerhub_dev_without_implicit_build(
     assert exit_code == 0
     assert pull_calls == [(tmp_path.resolve(), compose_env)]
     assert compose_calls == [(tmp_path.resolve(), False, True, compose_env)]
+
+
+@pytest.mark.unit
+def test_default_browser_compose_uses_shared_webrtc_host_port_contract() -> None:
+    compose = yaml.safe_load(COMPOSE_PATH.read_text(encoding="utf-8"))
+    browser_service = compose["services"]["workspace-browser"]
+
+    assert "NEKO_WEBRTC_UDPMUX=${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}" in browser_service["environment"]
+    assert (
+        "NEKO_WEBRTC_NAT1TO1=${BROWSER_WEBRTC_NAT1TO1_IP:-127.0.0.1}"
+        in browser_service["environment"]
+    )
+    assert "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:6080" in browser_service["ports"]
+    assert (
+        "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}/udp"
+        in browser_service["ports"]
+    )
 
 
 @pytest.mark.unit
