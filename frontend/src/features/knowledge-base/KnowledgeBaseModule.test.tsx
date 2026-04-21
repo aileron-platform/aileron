@@ -166,7 +166,7 @@ describe('KnowledgeBaseModule', () => {
     renderModule('/knowledge-bases/kb-1/sharing');
 
     expect(await screen.findByText('管理誰可以查看、編輯或管理這個知識庫。')).toBeInTheDocument();
-    expect(screen.getByText('user-2')).toBeInTheDocument();
+    expect(await screen.findByText('user-2')).toBeInTheDocument();
   });
 
   it('renders the knowledge base detail workspaces route', async () => {
