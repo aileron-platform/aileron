@@ -80,7 +80,7 @@ export const AppRouter: React.FC = () => {
 
           {/* 範本管理模組 */}
           <Route
-            path="/workspaces/template-management/*"
+            path="/templates/*"
             element={(
               <RequireAuth>
                 <TemplateManagementModule />
@@ -90,7 +90,7 @@ export const AppRouter: React.FC = () => {
 
           {/* 自動化中心模組 */}
           <Route
-            path="/workspaces/automation/*"
+            path="/automation/*"
             element={(
               <RequireAuth>
                 <AutomationModule />
@@ -100,7 +100,7 @@ export const AppRouter: React.FC = () => {
 
           {/* 獨立頁面 */}
           <Route
-            path="/workspaces/profile"
+            path="/profile"
             element={(
               <RequireAuth>
                 <ProfilePage />
@@ -108,7 +108,7 @@ export const AppRouter: React.FC = () => {
             )}
           />
           <Route
-            path="/workspaces/settings"
+            path="/settings"
             element={(
               <RequireAuth>
                 <SettingsPage />
