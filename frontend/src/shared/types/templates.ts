@@ -167,6 +167,21 @@ export interface TemplateInstallOptions {
   scripts: boolean;
 }
 
+export const TEMPLATE_INSTALLABLE_FEATURE_KEYS: TemplateFeatureKey[] = [
+  'mcp',
+  'slashCommands',
+  'hooks',
+  'claudeMd',
+  'subAgents',
+  'outputStyles',
+  'skills',
+  'scripts',
+];
+
+export function listEnabledTemplateFeatures(options: TemplateInstallOptions): TemplateFeatureKey[] {
+  return TEMPLATE_INSTALLABLE_FEATURE_KEYS.filter((key) => options[key]);
+}
+
 export interface TemplateSearchFilters {
   search?: string;
   categoryId?: string;

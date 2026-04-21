@@ -17,8 +17,10 @@ import type {
   TemplateStatus,
   TemplateWorkspaceTarget,
 } from '@/shared/types/templates';
+import { listEnabledTemplateFeatures } from '@/shared/types/templates';
 
 import { createLogger } from '@/shared/services/logger';
+import { dispatchWorkspaceTemplateInstalledEvent } from '@/features/workspace/events/templateInstallEvents';
 
 const logger = createLogger('TemplateManagementProvider');
 import * as templateApi from '@/shared/services/templateApi';
@@ -426,6 +428,12 @@ export const TemplateManagementProvider: React.FC<TemplateManagementProviderProp
 
       // 調用後端 API 執行實際安裝
       await templateApi.installTemplate(templateId, workspaceId);
+
+      dispatchWorkspaceTemplateInstalledEvent({
+        workspaceId,
+        templateId,
+        installedFeatures: listEnabledTemplateFeatures(options),
+      });
 
       return { template, workspace, options };
     },

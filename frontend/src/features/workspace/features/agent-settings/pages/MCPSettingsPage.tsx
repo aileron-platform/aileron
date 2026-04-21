@@ -29,6 +29,7 @@ import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
@@ -112,6 +113,12 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     }
     void fetchServers();
   }, [isRuntimeReady, fetchServers]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    features: ['mcp'],
+    onRefresh: fetchServers,
+  });
 
   // 權限檢查函數
   const canEdit = (server: ClaudeMcpServer): boolean => {
