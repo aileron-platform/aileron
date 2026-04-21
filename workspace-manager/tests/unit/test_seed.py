@@ -42,6 +42,8 @@ def test_create_default_workspace_creates_record_in_docker_mode(
         assert workspace.provisioner == "docker"
         assert workspace.runtime_external_url == "http://localhost:3002"
         assert workspace.runtime_internal_url == "http://workspace-runtime-default-workspace:3002"
+        assert workspace.browser_webrtc_external_url == "http://localhost:52330"
+        assert workspace.browser_webrtc_external_port == 52330
         assert workspace.nextjs_container_id == "workspace-nextjs-default-workspace"
         assert workspace.nextjs_internal_url == "http://workspace-nextjs-default-workspace:3003"
         assert workspace.web_preview_internal_url == workspace.nextjs_internal_url
@@ -159,3 +161,104 @@ def test_ensure_bootstrap_default_workspace_retries_until_owner_exists(
         workspace = session.get(db_models.Workspace, "default-workspace")
         assert workspace is not None
         assert workspace.provisioner == "kubernetes"
+
+
+@pytest.mark.unit
+def test_create_default_workspace_reconciles_existing_docker_default_workspace(
+    test_app,
+    create_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, session_factory = test_app
+    user = create_user(id="admin-user-default", email="admin@aileron.com", username="admin")
+    monkeypatch.setattr(
+        "app.db.seed.get_settings",
+        lambda: SimpleNamespace(
+            RUNTIME_PROVISIONER="docker",
+            BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED=False,
+            BOOTSTRAP_DEFAULT_WORKSPACE_ID="default-workspace",
+            BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL="admin@aileron.com",
+            BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL="",
+            BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH="main",
+            BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE=None,
+            RUNTIME_K8S_NAMESPACE="workspace-system",
+        ),
+    )
+
+    with session_factory() as session:
+        session.add(
+            db_models.Workspace(
+                id="default-workspace",
+                owner_id=user.id,
+                name="Default Workspace",
+                provisioner="docker",
+                runtime="universal",
+                branch="main",
+                runtime_status="running",
+                browser_status="running",
+                nextjs_status="running",
+                browser_webrtc_internal_port=6080,
+                browser_webrtc_external_url="http://localhost:6080",
+                browser_webrtc_external_port=6080,
+            )
+        )
+        session.commit()
+
+        create_default_workspace(session)
+        session.commit()
+
+        workspace = session.get(db_models.Workspace, "default-workspace")
+        assert workspace is not None
+        assert workspace.browser_webrtc_external_url == "http://localhost:52330"
+        assert workspace.browser_webrtc_external_port == 52330
+
+
+@pytest.mark.unit
+def test_create_default_workspace_does_not_mutate_existing_kubernetes_default_workspace(
+    test_app,
+    create_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, session_factory = test_app
+    user = create_user(id="admin-user-default", email="admin@aileron.com", username="admin")
+    monkeypatch.setattr(
+        "app.db.seed.get_settings",
+        lambda: SimpleNamespace(
+            RUNTIME_PROVISIONER="kubernetes",
+            BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED=True,
+            BOOTSTRAP_DEFAULT_WORKSPACE_ID="default-workspace",
+            BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL="admin@aileron.com",
+            BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL="",
+            BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH="main",
+            BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE="workspace-system",
+            RUNTIME_K8S_NAMESPACE="workspace-system",
+        ),
+    )
+
+    with session_factory() as session:
+        session.add(
+            db_models.Workspace(
+                id="default-workspace",
+                owner_id=user.id,
+                name="Default Workspace",
+                provisioner="kubernetes",
+                runtime="universal",
+                branch="main",
+                runtime_status="starting",
+                browser_status="starting",
+                nextjs_status="starting",
+                browser_webrtc_internal_port=6080,
+                browser_webrtc_external_url=None,
+                browser_webrtc_external_port=None,
+            )
+        )
+        session.commit()
+
+        create_default_workspace(session)
+        session.commit()
+
+        workspace = session.get(db_models.Workspace, "default-workspace")
+        assert workspace is not None
+        assert workspace.provisioner == "kubernetes"
+        assert workspace.browser_webrtc_external_url is None
+        assert workspace.browser_webrtc_external_port is None

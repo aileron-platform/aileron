@@ -16,18 +16,18 @@ help: ## 顯示幫助信息
 
 test: ## 執行所有測試 (Container內)
 	@echo "$(GREEN)🧪 執行前端測試 (Container)...$(NC)"
-	@docker-compose -f docker-compose.test.yml build frontend-test
-	@docker-compose -f docker-compose.test.yml run --rm frontend-test
+	@docker compose -f docker-compose.test.yml build frontend-test
+	@docker compose -f docker-compose.test.yml run --rm frontend-test
 
 test-unit: ## 執行單元測試 (Container內)
 	@echo "$(GREEN)🧪 執行單元測試 (Container)...$(NC)"
-	@docker-compose -f docker-compose.test.yml build frontend-test
-	@docker-compose -f docker-compose.test.yml run --rm frontend-test
+	@docker compose -f docker-compose.test.yml build frontend-test
+	@docker compose -f docker-compose.test.yml run --rm frontend-test
 
 test-coverage: ## 生成覆蓋率報告 (Container內)
 	@echo "$(GREEN)📊 生成覆蓋率報告 (Container)...$(NC)"
-	@docker-compose -f docker-compose.test.yml build frontend-test
-	@docker-compose -f docker-compose.test.yml run --rm frontend-test sh -c "npm run test:coverage"
+	@docker compose -f docker-compose.test.yml build frontend-test
+	@docker compose -f docker-compose.test.yml run --rm frontend-test sh -c "npm run test:coverage"
 	@echo "$(GREEN)📁 報告位置: coverage/index.html$(NC)"
 
 ##@ 本地測試

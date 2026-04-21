@@ -102,24 +102,24 @@ ARG CLAUDE_CLI_VERSION=stable
 ARG GEMINI_VERSION=latest
 ARG AGENT_BROWSER_CLI_VERSION=latest
 ARG CODEX_CLI_VERSION=latest
-RUN cat <<'EOF' > /usr/local/bin/install-npm-global.sh
-#!/bin/sh
-set -eu
-
-package="$1"
-attempts=0
-until [ "$attempts" -ge 3 ]; do
-    if npm install -g "$package"; then
-        exit 0
-    fi
-    attempts=$((attempts + 1))
-    echo "npm install failed for ${package}, retry ${attempts}/3" >&2
-    sleep 5
-done
-
-echo "npm install failed for ${package} after 3 attempts" >&2
-exit 1
-EOF
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -eu' \
+    '' \
+    'package="$1"' \
+    'attempts=0' \
+    'until [ "$attempts" -ge 3 ]; do' \
+    '    if npm install -g "$package"; then' \
+    '        exit 0' \
+    '    fi' \
+    '    attempts=$((attempts + 1))' \
+    '    echo "npm install failed for ${package}, retry ${attempts}/3" >&2' \
+    '    sleep 5' \
+    'done' \
+    '' \
+    'echo "npm install failed for ${package} after 3 attempts" >&2' \
+    'exit 1' \
+    > /usr/local/bin/install-npm-global.sh
 
 RUN chmod +x /usr/local/bin/install-npm-global.sh && \
     mkdir -p /home/developer/.agent-browser && \
@@ -136,11 +136,11 @@ RUN if command -v mise >/dev/null 2>&1; then mise use -g node@lts; fi && \
     npm config set fetch-retry-factor 2 && \
     npm config set fetch-retry-mintimeout 10000 && \
     npm config set fetch-retry-maxtimeout 120000
-RUN /usr/local/bin/install-npm-global.sh "@fission-ai/openspec@${OPENSPEC_VERSION}"
-RUN /usr/local/bin/install-npm-global.sh "@google/gemini-cli@${GEMINI_VERSION}"
-RUN /usr/local/bin/install-npm-global.sh "agent-browser@${AGENT_BROWSER_CLI_VERSION}"
+RUN bash /usr/local/bin/install-npm-global.sh "@fission-ai/openspec@${OPENSPEC_VERSION}"
+RUN bash /usr/local/bin/install-npm-global.sh "@google/gemini-cli@${GEMINI_VERSION}"
+RUN bash /usr/local/bin/install-npm-global.sh "agent-browser@${AGENT_BROWSER_CLI_VERSION}"
 RUN curl -fsSL https://opencode.ai/install | bash
-RUN /usr/local/bin/install-npm-global.sh "@openai/codex@${CODEX_CLI_VERSION}"
+RUN bash /usr/local/bin/install-npm-global.sh "@openai/codex@${CODEX_CLI_VERSION}"
 RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CLI_VERSION}"
 
 USER root

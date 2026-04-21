@@ -38,6 +38,15 @@ export const API_ENDPOINTS = {
     copy: (templateId: string, scope: string) =>
       `/templates/${templateId}/files/copy?scope=${scope}`,
   },
+  knowledgeBase: {
+    getTree: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/tree`,
+    getContent: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/content`,
+    create: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
+    update: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/content`,
+    delete: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
+    move: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
+    upload: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
+  },
   claudeCode: {
     getTree: (workspaceId: string, collection: 'skills' | 'scripts', scope: string = 'project') =>
       `/workspaces/${workspaceId}/claude-code/${collection}/tree?scope=${scope}&includeHidden=true`,
@@ -65,6 +74,7 @@ export const ERROR_MESSAGES = {
   INVALID_CONFIG: '無效的 API 配置',
   MISSING_WORKSPACE_ID: '缺少 Workspace ID',
   MISSING_TEMPLATE_ID: '缺少 Template ID',
+  MISSING_KNOWLEDGE_BASE_ID: '缺少 Knowledge Base ID',
   MISSING_SCOPE: '缺少 scope 參數',
   FILE_NOT_FOUND: '檔案不存在',
   OPERATION_FAILED: '操作失敗',
@@ -102,4 +112,3 @@ export const DEFAULTS = {
   SEARCH_DEBOUNCE: 300,
   AUTO_SAVE_DELAY: 1000,
 } as const;
-

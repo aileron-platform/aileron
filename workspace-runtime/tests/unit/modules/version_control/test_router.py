@@ -214,6 +214,22 @@ async def test_router_error_path_raises_http_exception() -> None:
 
 
 @pytest.mark.asyncio
+async def test_router_preserves_repository_not_initialized_contract() -> None:
+    service = DummyGitService()
+    service.error = VersionControlError(
+        "Workspace is not a git repository",
+        status_code=400,
+        error_code="VC_REPOSITORY_NOT_INITIALIZED",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_status("ws", None, service)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail["errorCode"] == "VC_REPOSITORY_NOT_INITIALIZED"
+
+
+@pytest.mark.asyncio
 async def test_list_branches_and_get_changes_forward_query_params() -> None:
     service = DummyGitService()
 

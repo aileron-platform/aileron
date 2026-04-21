@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { Button } from '@/shared/components/ui/button';
+import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -23,6 +24,7 @@ import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentToolConfig } from '../types';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface AgentsMdPageProps {
   config: AgentToolConfig;
@@ -52,6 +54,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
   const [saving, setSaving] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [showFallbackNotice, setShowFallbackNotice] = useState(false);
+  const [isStale, setIsStale] = useState(false);
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
 
@@ -76,6 +79,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
   }, []);
 
   const hasChanges = content !== initialContent;
+  const headerTitle = t(config.agentsMd.labelKey, { defaultValue: config.agentsMd.fileName });
 
   const confirmDiscard = useCallback(() => {
     if (!hasChanges) return true;
@@ -101,6 +105,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
         const nextContent = document.content ?? '';
         setContent(nextContent);
         setInitialContent(nextContent);
+        setIsStale(false);
       } catch (err) {
         if (!isMounted) return;
 
@@ -126,6 +131,22 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
     void loadDocument();
     return () => { isMounted = false; };
   }, [runtimeBaseUrl, workspaceId, runtimeError, scope, refreshToken, is404Error, toast, t, api, i18nNs]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    features: ['claudeMd'],
+    onRefresh: () => {
+      setRefreshToken((token) => token + 1);
+    },
+    shouldDeferRefresh: () => hasChanges,
+    onDeferredRefresh: () => {
+      setIsStale(true);
+      toast({
+        title: headerTitle,
+        description: '偵測到模板安裝更新。已保留你未儲存的內容，請儲存或手動重新整理後再載入最新版本。',
+      });
+    },
+  });
 
   const handleScopeChange = useCallback(
     (value: string) => {
@@ -167,6 +188,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       });
       setInitialContent(content);
       setShowFallbackNotice(false);
+      setIsStale(false);
       toast({
         title: t(`${i18nNs}.agentsMd.notifications.saveSuccess.title`, fileNameInterp),
         description: t(`${i18nNs}.agentsMd.notifications.saveSuccess.description`, fileNameInterp),
@@ -184,8 +206,6 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
 
   const saveDisabled = !isRuntimeReady || loading || saving || !hasChanges;
   const refreshDisabled = !isRuntimeReady || loading || saving || runtimeLoading;
-
-  const headerTitle = t(config.agentsMd.labelKey, { defaultValue: config.agentsMd.fileName });
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -261,6 +281,13 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
           />
         ) : (
           <div className="flex flex-1 flex-col overflow-hidden">
+            {isStale ? (
+              <Alert className="mx-4 mt-4">
+                <AlertDescription>
+                  偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <MarkdownEditor
               value={content}
               onChange={setContent}

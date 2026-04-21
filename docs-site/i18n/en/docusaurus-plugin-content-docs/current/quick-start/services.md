@@ -54,8 +54,15 @@ The credentials above are development defaults. You **must** change all password
 
 ```bash
 # Run runtime integration tests
-./scripts/test/run-all-tests.sh runtime
+python scripts/dev/docker/ops.py test runtime
 
 # Run manager integration tests
-./scripts/test/run-all-tests.sh manager
+python scripts/dev/docker/ops.py test manager
+```
+
+If you already use `make`, matching convenience targets are also available:
+
+```bash
+make test-runtime-cli
+make test-manager-cli
 ```

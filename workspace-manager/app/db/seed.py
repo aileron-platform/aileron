@@ -26,6 +26,11 @@ from app.db.models import (
 
 logger = logging.getLogger(__name__)
 
+DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_PORT = 52330
+DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_URL = (
+    f"http://localhost:{DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_PORT}"
+)
+
 DEFAULT_TEMPLATE_CATEGORIES = [
     {
         "id": "general",
@@ -183,9 +188,9 @@ def _create_docker_default_workspace(default_user: User) -> Workspace:
         browser_container_id="workspace-browser-default-workspace",
         browser_status="running",
         browser_webrtc_internal_url="http://workspace-browser-default-workspace:6080",
-        browser_webrtc_external_url="http://localhost:6080",
+        browser_webrtc_external_url=DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_URL,
         browser_webrtc_internal_port=6080,
-        browser_webrtc_external_port=6080,
+        browser_webrtc_external_port=DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_PORT,
         browser_cdp_internal_port=9223,
         browser_cdp_external_port=9223,
         nextjs_container_id="workspace-nextjs-default-workspace",
@@ -206,6 +211,36 @@ def _create_docker_default_workspace(default_user: User) -> Workspace:
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
+
+
+def _reconcile_existing_docker_default_workspace(workspace: Workspace) -> bool:
+    if workspace.provisioner != "docker":
+        return False
+
+    changed = False
+
+    if (
+        workspace.browser_webrtc_external_port
+        != DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_PORT
+    ):
+        workspace.browser_webrtc_external_port = (
+            DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_PORT
+        )
+        changed = True
+
+    if (
+        workspace.browser_webrtc_external_url
+        != DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_URL
+    ):
+        workspace.browser_webrtc_external_url = (
+            DOCKER_DEFAULT_BROWSER_WEBRTC_EXTERNAL_URL
+        )
+        changed = True
+
+    if changed:
+        workspace.updated_at = datetime.utcnow()
+
+    return changed
 
 
 def _create_kubernetes_default_workspace(default_user: User) -> Workspace:
@@ -311,7 +346,13 @@ def create_default_workspace(db: Session) -> None:
     workspace_id = settings.BOOTSTRAP_DEFAULT_WORKSPACE_ID
     existing_workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if existing_workspace:
-        logger.info("預設 workspace 已存在，跳過建立")
+        if _reconcile_existing_docker_default_workspace(existing_workspace):
+            logger.info(
+                "Updated existing docker default workspace browser WebRTC contract: %s",
+                existing_workspace.id,
+            )
+        else:
+            logger.info("預設 workspace 已存在，跳過建立")
         return
 
     # 取得預設使用者

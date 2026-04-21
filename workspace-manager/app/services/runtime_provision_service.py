@@ -27,6 +27,7 @@ from app.services.orchestrator import (
     NetworkConfig,
     ResourceRequirements
 )
+from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
 from app.utils.path_resolver import PathResolver
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,59 @@ class RuntimeProvisionService:
         # 動態獲取 settings，確保在測試環境中使用正確的配置
         self.settings = get_settings()
         self.script_output_root = Path(self.settings.RUNTIME_SCRIPT_ROOT)
+
+    def _get_reserved_browser_webrtc_udp_ranges(self) -> tuple[tuple[int, int], ...]:
+        ranges: list[tuple[int, int]] = []
+        for item in self.settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES:
+            if "-" not in item:
+                logger.warning("Ignoring invalid browser WebRTC reserved UDP range: %s", item)
+                continue
+            start_text, end_text = item.split("-", 1)
+            try:
+                start = int(start_text.strip())
+                end = int(end_text.strip())
+            except ValueError:
+                logger.warning("Ignoring invalid browser WebRTC reserved UDP range: %s", item)
+                continue
+            if start > end:
+                logger.warning("Ignoring descending browser WebRTC reserved UDP range: %s", item)
+                continue
+            ranges.append((start, end))
+        return tuple(ranges)
+
+    def _is_reserved_browser_webrtc_udp_port(self, port: int) -> bool:
+        return any(
+            start <= port <= end
+            for start, end in self._get_reserved_browser_webrtc_udp_ranges()
+        )
+
+    def _is_port_available(self, port: int, protocol: str) -> bool:
+        socket_type = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
+        try:
+            with socket.socket(socket.AF_INET, socket_type) as sock:
+                sock.bind(("0.0.0.0", port))
+                return True
+        except OSError:
+            return False
+
+    def _find_available_browser_webrtc_port(self, exclude: set[int] | None = None) -> int:
+        exclude = exclude or set()
+
+        for _ in range(100):
+            port = random.randint(PORT_RANGE_MIN, PORT_RANGE_MAX)
+            if port in exclude or self._is_reserved_browser_webrtc_udp_port(port):
+                continue
+            if self._is_port_available(port, "tcp") and self._is_port_available(port, "udp"):
+                return port
+
+        raise RuntimeError(
+            f"Could not allocate a browser WebRTC host port in range {PORT_RANGE_MIN}-{PORT_RANGE_MAX}"
+        )
+
+    def _resolve_browser_nat1to1_ip(self) -> str | None:
+        if self.settings.RUNTIME_PROVISIONER != "docker":
+            return None
+        return os.environ.get("BROWSER_WEBRTC_NAT1TO1_IP", "127.0.0.1")
 
     # -- 背景任務主流程 --------------------------------------------------
     def execute_runtime_provision(self, workspace_id: str) -> None:
@@ -328,15 +382,20 @@ class RuntimeProvisionService:
         safe_workspace_id = workspace.id.replace('-', '_')
 
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
-        host_scripts = Path(self.settings.HOST_WORKSPACES_DIR).parent / "workspace-scripts" / safe_workspace_id
-        host_claude = Path(self.settings.HOST_WORKSPACES_DIR).parent / "claude-data" / safe_workspace_id
+        host_scripts = Path(self.settings.HOST_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        host_claude = Path(self.settings.HOST_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_workspace = Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
+        manager_scripts = Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
-        host_workspace.mkdir(parents=True, exist_ok=True)
-        host_scripts.mkdir(parents=True, exist_ok=True)
-        host_claude.mkdir(parents=True, exist_ok=True)
+        manager_workspace.mkdir(parents=True, exist_ok=True)
+        manager_scripts.mkdir(parents=True, exist_ok=True)
+        manager_claude.mkdir(parents=True, exist_ok=True)
+        manager_knowledge_bases.mkdir(parents=True, exist_ok=True)
 
         if workspace.setup_script:
-            custom_setup_file = host_scripts / "custom-setup.sh"
+            custom_setup_file = manager_scripts / "custom-setup.sh"
             custom_setup_file.write_text(workspace.setup_script, encoding="utf-8")
             custom_setup_file.chmod(0o755)
 
@@ -363,6 +422,25 @@ class RuntimeProvisionService:
                 host_project_root = os.environ.get("HOST_PROJECT_ROOT")
                 if host_project_root:
                     volumes.append(VolumeMount(source=f"{host_project_root}/workspace-terminal", target="/workspace-terminal"))
+
+        raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
+        if isinstance(raw_attachments, list):
+            host_kb_root = Path(self.settings.HOST_KNOWLEDGE_BASES_DIR)
+            for attachment in raw_attachments:
+                kb = getattr(attachment, "knowledge_base", None)
+                kb_id = getattr(kb, "id", None) or getattr(attachment, "kb_id", None)
+                mount_alias = getattr(attachment, "mount_alias", None)
+                if not isinstance(kb_id, str) or not isinstance(mount_alias, str):
+                    continue
+
+                (manager_knowledge_bases / kb_id).mkdir(parents=True, exist_ok=True)
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_kb_root / kb_id),
+                        target=f"/knowledge/{mount_alias}",
+                        read_only=getattr(attachment, "mode", "rw") == "ro",
+                    )
+                )
 
         return volumes
 
@@ -391,7 +469,7 @@ class RuntimeProvisionService:
 
         # Browser WebRTC (neko) port
         if not workspace.browser_webrtc_external_port:
-            workspace.browser_webrtc_external_port = self._find_available_port(
+            workspace.browser_webrtc_external_port = self._find_available_browser_webrtc_port(
                 exclude={workspace.runtime_external_port, workspace.web_preview_external_port,
                          workspace.terminal_external_port}
             )
@@ -435,16 +513,17 @@ class RuntimeProvisionService:
                        f"nextjs={workspace.nextjs_external_port}, nextjs_api={workspace.nextjs_api_external_port}")
             self.db.flush()
 
-    def _find_available_port(self, exclude: set[int] = None) -> int:
+    def _find_available_port(self, exclude: set[int] = None, protocol: str = "tcp") -> int:
         """隨機找一個可用的 port"""
         exclude = exclude or set()
+        socket_type = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
 
         for _ in range(100):
             port = random.randint(PORT_RANGE_MIN, PORT_RANGE_MAX)
             if port in exclude:
                 continue
             try:
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                with socket.socket(socket.AF_INET, socket_type) as s:
                     s.bind(("0.0.0.0", port))
                     return port
             except OSError:
@@ -554,6 +633,10 @@ class RuntimeProvisionService:
         if term_key in ports_mapping and not workspace.terminal_external_url:
             workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
 
+        attachment_service = KnowledgeBaseAttachmentService(self.db)
+        workspace.runtime_mounted_kb_signature = attachment_service.reconcile_on_start(
+            workspace_id=workspace.id
+        )
         workspace.runtime_status = "running"
         workspace.runtime_last_seen = datetime.utcnow()
 
@@ -572,11 +655,7 @@ class RuntimeProvisionService:
         browser_container_name = f"workspace-browser-{workspace.id}"
 
         # 為 WebRTC media 分配唯一的 UDP port
-        udp_port = self._find_available_port(
-            exclude={workspace.runtime_external_port, workspace.web_preview_external_port,
-                     workspace.terminal_external_port, workspace.browser_webrtc_external_port,
-                     workspace.browser_cdp_external_port}
-        )
+        udp_port = workspace.browser_webrtc_external_port
 
         # Port mappings for Browser (neko WebRTC + CDP + UDP media)
         port_mappings = [
@@ -606,7 +685,7 @@ class RuntimeProvisionService:
                 "NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD": "admin",
                 "NEKO_WEBRTC_ICELITE": "1",
                 "NEKO_WEBRTC_UDPMUX": str(udp_port),
-                "NEKO_WEBRTC_NAT1TO1": "127.0.0.1",
+                "NEKO_WEBRTC_NAT1TO1": self._resolve_browser_nat1to1_ip(),
                 "NEKO_SESSION_IMPLICIT_HOSTING": "true",
             },
             volumes=volumes,

@@ -189,4 +189,35 @@ describe('useFileTreeManager', () => {
       expect(result.current.state.nodes.map((node) => node.path)).toEqual(['/.env']);
     });
   });
+
+  it('does not auto-reload the tree on rerender when the logical api config is unchanged', async () => {
+    getTreeMock.mockResolvedValue([
+      { id: 'root-readme', name: 'README.md', path: '/README.md', type: 'file' },
+    ]);
+
+    const { rerender } = renderHook(
+      ({ knowledgeBaseId }: { knowledgeBaseId: string }) =>
+        useFileTreeManager({
+          apiConfig: {
+            type: 'knowledge-base',
+            knowledgeBaseId,
+            includeHidden: false,
+          },
+          autoLoad: true,
+        }),
+      {
+        initialProps: { knowledgeBaseId: 'kb-1' },
+      }
+    );
+
+    await waitFor(() => {
+      expect(getTreeMock).toHaveBeenCalledTimes(1);
+    });
+
+    rerender({ knowledgeBaseId: 'kb-1' });
+
+    await waitFor(() => {
+      expect(getTreeMock).toHaveBeenCalledTimes(1);
+    });
+  });
 });

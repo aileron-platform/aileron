@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import type { ClaudeDocument } from '../data';
 import { claudeCodeApi } from '../services/claudeCodeApi';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 type DocumentCollectionState = {
   items: ClaudeDocument[];
@@ -466,6 +467,19 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
     void refreshSubagents();
     void refreshMemory();
   }, [isActive, runtimeBaseUrl, workspaceId, refreshSlashCommands, refreshOutputStyles, refreshSubagents, refreshMemory]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    enabled: isActive,
+    features: ['slashCommands', 'outputStyles', 'subAgents'],
+    onRefresh: async () => {
+      await Promise.all([
+        refreshSlashCommands(),
+        refreshOutputStyles(),
+        refreshSubagents(),
+      ]);
+    },
+  });
 
   const value = useMemo<ClaudeCodeContextValue>(() => ({
     slashCommands: {

@@ -16,8 +16,11 @@ title: Docker 模式
 
 - [Docker](https://docs.docker.com/get-docker/)（建議 24.0+）
 - [Docker Compose](https://docs.docker.com/compose/install/)（V2，通常已內建於 Docker Desktop）
-- 至少 8GB 可用記憶體（建議 16GB）
-- 至少 20GB 可用磁碟空間
+- 至少 4 vCPU
+- 至少 8GB 可用記憶體
+- 建議 12GB 到 16GB 可用記憶體，以支援較穩定的瀏覽器與 agent 工作流程
+- 至少 30GB 可用磁碟空間
+- 建議保留 50GB 可用磁碟空間，避免 image、volume 與 workspace 資料快速吃滿
 
 ## 服務架構
 
@@ -74,6 +77,8 @@ docker compose up -d --build
 :::info 建置時間
 第一次啟動需要建置所有映像，約需 5～10 分鐘。後續啟動若無程式碼變更，使用 `docker compose up -d` 即可秒速啟動。
 :::
+
+在 Aileron 中，這個完整的 Docker Compose stack 不只是部署方式，也是預設的本地開發模式。日常模組開發應以整套服務一起啟動為前提，再透過開發用掛載與各服務內建的 reload 機制，即時反映程式碼變更。
 
 ## 確認服務狀態
 
@@ -171,6 +176,8 @@ HOST_PROJECT_ROOT=/Users/yourname/aileron
 
 ### 開發用掛載
 
+以下掛載是本地開發模式的核心。主機上的模組目錄會直接映射到容器內，因此前端、Manager、Runtime、Terminal 的程式碼修改通常可直接在容器內生效，不需要每次都重建整個 stack。
+
 | 路徑 | 容器路徑 | 用途 |
 |------|----------|------|
 | `./workspace-manager` | `/workspace-manager` | Manager 程式碼熱重載 |
@@ -203,21 +210,30 @@ Keycloak 額外設定了 `localhost` 和 `keycloak` 兩個 network alias，以�
 | workspace-browser | — | 2GB SHM | 共享記憶體（Chrome 需要） |
 | 其他服務 | 無限制 | 無限制 | 視實際使用動態分配 |
 
-:::tip 記憶體建議
-若只是體驗功能，總共約需 4-6GB。若要同時進行 Agent 對話、OpenSpec workflow 與瀏覽器操作，建議至少 8GB；若長時間並行操作多個工作流，建議 16GB。
+:::tip 建議配置
+若只是在單機上體驗與驗證基本流程，建議至少使用 `4 vCPU / 8 GB RAM / 30 GB` 可用磁碟。若要較穩定地使用瀏覽器、自動化流程、Keycloak 與多個服務並行，建議提升到 `6-8 vCPU / 12-16 GB RAM / 50 GB` 可用磁碟。若同一台主機還會再跑 Harbor、registry、其他大型容器或額外開發服務，則應以 `16 GB RAM` 以上為起點，否則很容易進入 swap 或磁碟不足狀態。
 :::
 
 ## 常用指令
 
 ```bash
-# 啟動
-docker compose up -d
+# 啟動整個 stack
+python scripts/dev/docker/ops.py up
 
-# 重建映像後啟動
-docker compose up -d --build
+# 重建映像後啟動整個 stack
+python scripts/dev/docker/ops.py up --build
+
+# 互動式選擇啟動模式後啟動
+python scripts/dev/docker/ops.py up
+
+# 直接指定使用 Docker Hub dev tag 啟動
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
 
 # 停止（保留 volumes）
-docker compose down
+python scripts/dev/docker/ops.py down
+
+# 完整清理
+python scripts/dev/docker/ops.py cleanup
 
 # 停止並刪除 volumes
 docker compose down -v
@@ -237,12 +253,16 @@ docker compose restart workspace-runtime
 docker compose up -d --build workspace-runtime
 ```
 
+日常整體操作請優先使用 `python scripts/dev/docker/ops.py ...`；`docker compose` 則保留給查看日誌、重啟單一服務、重建單一服務與低層除錯。
+
+`ops.py up` 會先詢問使用者要使用本地 build 或 Docker Hub `dev` tag，並依選擇自動覆寫 Compose 使用的 image tag；如需非互動模式，請直接帶入 `--startup-mode`、`--image-arch` 與 `--runtime-base`。
+
 ## 清除
 
 ### 清除工作區容器（保留資料庫）
 
 ```bash
-./scripts/dev/docker/cleanup-workspaces.sh
+python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
 僅移除動態建立的 workspace 容器、相關 volume 與 network。平台服務和資料庫不受影響。
@@ -250,10 +270,10 @@ docker compose up -d --build workspace-runtime
 ### 完整清除
 
 ```bash
-./scripts/dev/docker/cleanup.sh
+python scripts/dev/docker/ops.py cleanup
 ```
 
-此腳本會依序：
+此流程會依序：
 1. 刪除所有動態 workspace 容器
 2. 停止 docker-compose 所有服務
 3. 刪除 Docker volumes 和 networks
@@ -268,7 +288,7 @@ docker compose up -d --build workspace-runtime
 清除後重新啟動：
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 ## 健康檢查

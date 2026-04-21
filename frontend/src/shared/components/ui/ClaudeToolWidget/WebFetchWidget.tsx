@@ -4,8 +4,7 @@
 
 import React from 'react';
 import { Globe2, ExternalLink, Maximize2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +17,7 @@ import { ErrorDisplay } from './ErrorDisplay';
 export const WebFetchWidget: React.FC<WidgetProps> = ({ input, output, error, status }) => {
   const [showFullscreen, setShowFullscreen] = React.useState(false);
   const url = input?.url || '';
-  const content = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+  const content = typeof output === 'string' ? output : output != null ? JSON.stringify(output, null, 2) : '';
 
   // 預覽內容行數限制
   const lines = content.split('\n');
@@ -39,11 +38,7 @@ export const WebFetchWidget: React.FC<WidgetProps> = ({ input, output, error, st
       <div className="bg-gray-50 dark:bg-zinc-900 overflow-hidden">
         {/* 內容預覽 */}
         <div className="overflow-x-auto max-h-80 p-4">
-          <div className="prose prose-sm dark:prose-invert max-w-none text-xs text-gray-900 dark:text-zinc-100">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {previewContent || '無內容'}
-            </ReactMarkdown>
-          </div>
+          <MarkdownContent content={previewContent || '無內容'} variant="compact" />
         </div>
 
         {/* 展開完整內容按鈕 */}
@@ -79,11 +74,7 @@ export const WebFetchWidget: React.FC<WidgetProps> = ({ input, output, error, st
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-auto bg-white dark:bg-zinc-900 rounded p-6">
-            <div className="prose prose-sm dark:prose-invert max-w-none text-gray-900 dark:text-zinc-100">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || '無內容'}
-              </ReactMarkdown>
-            </div>
+            <MarkdownContent content={content || '無內容'} variant="compact" />
           </div>
         </DialogContent>
       </Dialog>

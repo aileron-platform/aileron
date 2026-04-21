@@ -104,6 +104,20 @@ spec:
                         type: string
                       value:
                         type: string
+                knowledgeBases:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - kbId
+                      - mountAlias
+                    properties:
+                      kbId:
+                        type: string
+                      mountAlias:
+                        type: string
+                      readOnly:
+                        type: boolean
                 operations:
                   type: object
                   properties:

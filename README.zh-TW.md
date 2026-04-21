@@ -96,12 +96,37 @@ Aileron 採用現代化微服務架構：
 - Docker Compose v2
 - 建議至少 **8GB RAM**
 
-### 安裝
+### 正式 Host CLI
+
+`python scripts/dev/docker/ops.py` 是目前正式的 host-side CLI，作為本機 Docker 操作的跨平台標準入口，用來統一：
+
+- stack 啟動與停止
+- workspace 清理與完整清理
+- runtime / manager container 測試觸發
+
+第一次操作前，建議先查看可用子命令與範例：
+
+```bash
+python scripts/dev/docker/ops.py --help
+python scripts/dev/docker/ops.py test --help
+```
+
+### 啟動 Stack
+
+#### Windows PowerShell
+
+```powershell
+git clone <your-repo-url>
+cd aileron
+python .\scripts\dev\docker\ops.py up --build
+```
+
+#### macOS / Linux
 
 ```bash
 git clone <your-repo-url>
 cd aileron
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 > 首次建置可能需要 **5–10 分鐘**。
@@ -113,6 +138,106 @@ docker compose ps
 ```
 
 等到所有服務狀態顯示為 `healthy` 再開始操作。Keycloak 啟動通常需要約 1 分鐘。
+
+建議至少確認以下服務：
+
+- `postgres`
+- `redis`
+- `keycloak`
+- `workspace-manager`
+- `frontend`
+
+若 `keycloak` 尚未完成初始化，前端可能出現 OIDC 驗證錯誤；請等到 `healthy` 後再登入。
+
+### 停止 Stack
+
+#### Windows PowerShell
+
+```powershell
+python .\scripts\dev\docker\ops.py down
+```
+
+#### macOS / Linux
+
+```bash
+python scripts/dev/docker/ops.py down
+```
+
+此操作會停止本機 stack，但保留 volumes 與既有持久化資料。
+
+### 清理流程
+
+日常重置 workspace 時優先使用 `cleanup-workspaces`；只有在需要完整重建本機環境時才使用 `cleanup`。
+
+#### Workspace 清理
+
+只移除動態建立的 workspace 容器與相關暫時性資源，保留主要平台服務與資料庫。
+
+Windows PowerShell：
+
+```powershell
+python .\scripts\dev\docker\ops.py cleanup-workspaces
+```
+
+macOS / Linux：
+
+```bash
+python scripts/dev/docker/ops.py cleanup-workspaces
+```
+
+若偏好平台對應 wrapper，也可使用：
+
+```powershell
+.\scripts\dev\docker\cleanup-workspaces.ps1
+```
+
+```bash
+./scripts/dev/docker/cleanup-workspaces.sh
+```
+
+#### 完整清理
+
+停止 stack、移除平台 volumes 與本機產生資料，將開發環境重置為乾淨狀態。
+
+Windows PowerShell：
+
+```powershell
+python .\scripts\dev\docker\ops.py cleanup
+```
+
+macOS / Linux：
+
+```bash
+python scripts/dev/docker/ops.py cleanup
+```
+
+若偏好平台對應 wrapper，也可使用：
+
+```powershell
+.\scripts\dev\docker\cleanup.ps1
+```
+
+```bash
+./scripts/dev/docker/cleanup.sh
+```
+
+> `cleanup` 屬於破壞性操作，會移除 Docker volumes 與持久化平台資料，包含 PostgreSQL 資料。
+
+### 清理後重新啟動
+
+不論是 `cleanup-workspaces` 或 `cleanup`，清理完成後都可用正式 CLI 重新啟動：
+
+#### Windows PowerShell
+
+```powershell
+python .\scripts\dev\docker\ops.py up --build
+```
+
+#### macOS / Linux
+
+```bash
+python scripts/dev/docker/ops.py up --build
+```
 
 ---
 
@@ -154,6 +279,40 @@ helm install aileron ./helm/aileron \
   --create-namespace
 ```
 
+#### Knowledge Base 儲存需求
+
+Kubernetes 模式下，Knowledge Base 會多一塊共享儲存：
+
+- `kubernetes.knowledgeBases.pvcName` 會建立專用的 `knowledge-bases-pvc`
+- `workspace-manager` 會把這顆 PVC 掛到 `/host/knowledge-bases`
+- `workspace-operator` 會把每個 attach 的 KB 以 `subPath=<kbId>` 掛進 runtime Pod 的 `/knowledge/<alias>`
+
+本機單節點開發預設使用：
+
+```yaml
+kubernetes:
+  knowledgeBases:
+    storageClassName: hostpath
+```
+
+這是 dev fallback，不代表真正的多節點 RWX 共用儲存。
+
+正式環境請改用共享型 RWX StorageClass，例如 NFS：
+
+```bash
+helm upgrade --install aileron ./helm/aileron \
+  --namespace aileron \
+  --create-namespace \
+  -f helm/values-rke.yaml
+```
+
+在 Kubernetes 啟用 Knowledge Base 前，至少確認：
+
+- 叢集可以提供 `ReadWriteMany`，或你明確接受單節點 `hostpath` fallback
+- `knowledge-bases-pvc` 狀態為 `Bound`
+- `workspace-manager` Pod 已掛上 `/host/knowledge-bases`
+- operator 建立的 runtime Pod 能透過 `knowledge-bases` volume 掛出 `/knowledge/<alias>`
+
 ### Public Domain Routing
 
 若需公開網域對外提供服務，需額外設定：
@@ -169,14 +328,21 @@ helm install aileron ./helm/aileron \
 
 | 任務 | 指令 |
 |---|---|
-| Restart stack | `docker compose up -d --build` |
+| Start stack | `python scripts/dev/docker/ops.py up` |
+| Rebuild and start stack | `python scripts/dev/docker/ops.py up --build` |
 | View manager logs | `docker compose logs -f workspace-manager` |
 | View runtime logs | `docker compose logs -f workspace-runtime` |
-| Stop services | `docker compose down` |
-| Clear workspaces | `./scripts/dev/docker/cleanup-workspaces.sh` |
-| Full reset（破壞性操作） | `./scripts/dev/docker/cleanup.sh` |
+| Stop services | `python scripts/dev/docker/ops.py down` |
+| Cleanup workspaces | `python scripts/dev/docker/ops.py cleanup-workspaces` |
+| Full reset（破壞性操作） | `python scripts/dev/docker/ops.py cleanup` |
 
-> `cleanup.sh` 會刪除所有資料與資料庫。
+> `python scripts/dev/docker/ops.py` 是正式的跨平台 CLI 入口，適用於啟動、停止、清理與測試操作。
+>
+> 日常重置 workspace 請優先使用 `cleanup-workspaces`；只有需要刪除持久化資料與 volumes 時才使用 `cleanup`。
+>
+> macOS / Linux 的 legacy wrapper：`./scripts/dev/docker/cleanup.sh`、`./scripts/dev/docker/cleanup-workspaces.sh`
+>
+> Windows PowerShell 的 legacy wrapper：`.\scripts\dev\docker\cleanup.ps1`、`.\scripts\dev\docker\cleanup-workspaces.ps1`
 
 ---
 
@@ -214,8 +380,15 @@ make test-runtime
 也可使用既有腳本：
 
 ```bash
-./scripts/test/run-all-tests.sh manager
-./scripts/test/run-all-tests.sh runtime
+python scripts/dev/docker/ops.py test manager
+python scripts/dev/docker/ops.py test runtime
+```
+
+或使用 Makefile 的跨平台便利入口：
+
+```bash
+make test-manager-cli
+make test-runtime-cli
 ```
 
 ---

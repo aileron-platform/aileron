@@ -2,8 +2,6 @@ name: CI
 
 on:
   push:
-    branches:
-      - v0.1.0-alpha
     paths-ignore:
       - "docs-site/**"
       - ".gitignore"
@@ -76,6 +74,8 @@ jobs:
     name: Workspace Runtime Test
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      WORKSPACE_RUNTIME_BASE_IMAGE: ailerondocker/codex-universal:latest-amd64
 
     steps:
       - name: Checkout

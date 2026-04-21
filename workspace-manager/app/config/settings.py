@@ -67,6 +67,38 @@ class Settings(BaseSettings):
         default="/var/lib/aileron/workspaces",
         description="主機上掛載 workspace 檔案的目錄",
     )
+    HOST_WORKSPACE_SCRIPTS_DIR: str = Field(
+        default="/var/lib/aileron/workspace-scripts",
+        description="Workspace scripts host directory",
+    )
+    HOST_CLAUDE_DATA_DIR: str = Field(
+        default="/var/lib/aileron/claude-data",
+        description="Claude data host directory",
+    )
+    BROWSER_WEBRTC_RESERVED_UDP_RANGES: Annotated[List[str], NoDecode] = Field(
+        default_factory=list,
+        description="Reserved host UDP port ranges excluded from browser WebRTC allocation",
+    )
+    MANAGER_WORKSPACES_DIR: str = Field(
+        default="/host/workspace-data",
+        description="Workspace data directory mounted inside workspace-manager",
+    )
+    MANAGER_WORKSPACE_SCRIPTS_DIR: str = Field(
+        default="/host/workspace-scripts",
+        description="Workspace scripts directory mounted inside workspace-manager",
+    )
+    MANAGER_CLAUDE_DATA_DIR: str = Field(
+        default="/host/claude-data",
+        description="Claude data directory mounted inside workspace-manager",
+    )
+    HOST_KNOWLEDGE_BASES_DIR: str = Field(
+        default="/var/lib/aileron/knowledge-bases",
+        description="主機上掛載 knowledge base 檔案的目錄",
+    )
+    MANAGER_KNOWLEDGE_BASES_DIR: str = Field(
+        default="/host/knowledge-bases",
+        description="Knowledge base 資料目錄 mounted inside workspace-manager",
+    )
     RUNTIME_RESERVED_PORTS: Annotated[List[int], NoDecode] = Field(
         default_factory=lambda: [3002], description="預留不可使用的容器埠"
     )
@@ -226,6 +258,59 @@ class Settings(BaseSettings):
         default=10,
         description="檔案樹掃描最大深度（預設 10 層）"
     )
+    DEFAULT_USER_KB_QUOTA_BYTES: int = Field(
+        default=5 * 1024 * 1024 * 1024,
+        description="每個使用者擁有的全部 knowledge bases 預設總配額（bytes）",
+    )
+    DEFAULT_KB_QUOTA_BYTES: int = Field(
+        default=512 * 1024 * 1024,
+        description="單一 knowledge base 預設配額（bytes）",
+    )
+    KB_SINGLE_FILE_SIZE_LIMIT: int = Field(
+        default=50 * 1024 * 1024,
+        description="Knowledge base 單檔大小上限（bytes）",
+    )
+    KB_ALLOWED_EXTENSIONS: Annotated[List[str], NoDecode] = Field(
+        default_factory=lambda: [
+            ".py",
+            ".ts",
+            ".js",
+            ".go",
+            ".rs",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+            ".rb",
+            ".php",
+            ".swift",
+            ".kt",
+            ".sh",
+            ".sql",
+            ".yaml",
+            ".yml",
+            ".json",
+            ".toml",
+            ".xml",
+            ".md",
+            ".txt",
+            ".rst",
+            ".csv",
+            ".pdf",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".svg",
+            ".webp",
+        ],
+        description="Knowledge base 允許的副檔名白名單",
+    )
+    KB_TOMBSTONE_RETENTION_HOURS: int = Field(
+        default=24,
+        description="Knowledge base tombstone 保留時間（小時）",
+    )
 
     # === 日誌設定 ===
     LOG_LEVEL: str = Field(default="INFO", description="日誌等級")
@@ -305,6 +390,14 @@ class Settings(BaseSettings):
             return [int(port.strip()) for port in v.split(",") if port.strip()]
         return v
 
+    @field_validator("BROWSER_WEBRTC_RESERVED_UDP_RANGES", mode="before")
+    @classmethod
+    def parse_browser_webrtc_reserved_udp_ranges(cls, v):
+        """解析 Browser WebRTC 要避開的 UDP 區間"""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
     @field_validator("RUNTIME_K8S_ALLOWED_NAMESPACES", mode="before")
     @classmethod
     def parse_k8s_allowed_namespaces(cls, v):
@@ -359,6 +452,16 @@ class Settings(BaseSettings):
         """解析平台預設 firewall 網域清單"""
         if isinstance(v, str):
             return [domain.strip() for domain in v.split(",") if domain.strip()]
+        return v
+
+    @field_validator("KB_ALLOWED_EXTENSIONS", mode="before")
+    @classmethod
+    def parse_kb_allowed_extensions(cls, v):
+        """解析 KB 允許副檔名清單。"""
+        if isinstance(v, str):
+            return [extension.strip().lower() for extension in v.split(",") if extension.strip()]
+        if isinstance(v, list):
+            return [str(extension).strip().lower() for extension in v if str(extension).strip()]
         return v
 
     @field_validator(

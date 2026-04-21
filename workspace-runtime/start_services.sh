@@ -208,6 +208,8 @@ else
     echo "⚠️  GIT_REPO_URL 未設定，跳過 Git 克隆"
 fi
 
+/workspace-runtime/scripts/bootstrap_git_repo.sh
+
 chown -R developer:developer /workspace 2>/dev/null || true
 echo ""
 
@@ -291,27 +293,7 @@ echo ""
 # 12. 編譯 Terminal Service（如果需要）
 # ============================================================================
 echo "🔧 檢查 Terminal Service 二進制文件..."
-if [ -f "/workspace-terminal/bin/terminal-service" ]; then
-    # ELF magic bytes: 0x7f 0x45 0x4c 0x46
-    if head -c 4 /workspace-terminal/bin/terminal-service | od -An -tx1 | grep -q "7f 45 4c 46"; then
-        echo "  ✓ Terminal Service 已是 Linux 格式"
-    else
-        echo "  ⚠️  Terminal Service 不是 Linux 格式，正在重新編譯..."
-        cd /workspace-terminal
-        if [ -f "go.mod" ] && [ -f "cmd/server/main.go" ]; then
-            rm -f bin/terminal-service
-            mkdir -p bin
-            CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o bin/terminal-service ./cmd/server 2>&1 && \
-            chmod +x bin/terminal-service && \
-            echo "  ✓ Terminal Service 編譯完成"
-        else
-            echo "  ✗ Terminal Service 原始碼不完整，跳過編譯"
-        fi
-        cd /workspace-runtime
-    fi
-else
-    echo "  ⚠️  Terminal Service 二進制文件不存在"
-fi
+/workspace-runtime/scripts/terminal_service.sh
 echo ""
 
 # ============================================================================

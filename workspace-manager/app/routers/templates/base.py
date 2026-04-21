@@ -69,6 +69,15 @@ _CAMEL_MAP = {
 }
 
 
+def _translate_template_base_value_error(translate, error: str) -> str:
+    if error.startswith("模板代號 '") and error.endswith("' 已存在，請使用其他代號"):
+        template_id = error[len("模板代號 '"):].split("' 已存在，請使用其他代號", 1)[0]
+        return translate("templates.base.id_already_exists", template_id=template_id)
+    if "模板代號必須使用 kebab-case 格式" in error:
+        return translate("templates.base.invalid_template_id")
+    return error
+
+
 def _to_camel_feature(key: str) -> str:
     return _CAMEL_MAP.get(key, key)
 
@@ -137,7 +146,13 @@ async def create_template(
     service: TemplateService = Depends(get_template_service)
 ) -> Template:
     """建立新模板"""
-    return service.create(payload)
+    try:
+        return service.create(payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_translate_template_base_value_error(request.state.translate, str(e)),
+        )
 
 
 @router.get(

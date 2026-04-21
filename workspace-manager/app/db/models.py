@@ -59,6 +59,28 @@ class User(Base):
         back_populates="granted_by_user",
         foreign_keys="WorkspaceShare.granted_by_user_id",
     )
+    knowledge_bases_owned: Mapped[list["KnowledgeBase"]] = relationship(
+        "KnowledgeBase",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        foreign_keys="KnowledgeBase.owner_id",
+    )
+    knowledge_base_shares_received: Mapped[list["KnowledgeBaseShare"]] = relationship(
+        "KnowledgeBaseShare",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="KnowledgeBaseShare.user_id",
+    )
+    knowledge_base_shares_granted: Mapped[list["KnowledgeBaseShare"]] = relationship(
+        "KnowledgeBaseShare",
+        back_populates="granted_by",
+        foreign_keys="KnowledgeBaseShare.granted_by_id",
+    )
+    knowledge_base_attachments: Mapped[list["WorkspaceKnowledgeBaseAttachment"]] = relationship(
+        "WorkspaceKnowledgeBaseAttachment",
+        back_populates="attached_by",
+        foreign_keys="WorkspaceKnowledgeBaseAttachment.attached_by_id",
+    )
 
 
 class UserSetting(Base):
@@ -169,6 +191,7 @@ class Workspace(Base):
     fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     workspace_path: Mapped[str] = mapped_column(Text, default="/workspace")
     acp_cli_args: Mapped[list[str]] = mapped_column(JSON, default=list)
+    runtime_mounted_kb_signature: Mapped[Optional[str]] = mapped_column(Text)
 
     # Browser container fields
     browser_container_id: Mapped[Optional[str]] = mapped_column(Text)
@@ -227,6 +250,12 @@ class Workspace(Base):
         back_populates="workspace",
         cascade="all, delete-orphan",
         order_by="asc(WorkspaceShare.created_at)",
+    )
+    knowledge_base_attachments: Mapped[list["WorkspaceKnowledgeBaseAttachment"]] = relationship(
+        "WorkspaceKnowledgeBaseAttachment",
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        order_by="asc(WorkspaceKnowledgeBaseAttachment.created_at)",
     )
 
     __table_args__ = (
@@ -301,6 +330,151 @@ class WorkspaceShare(Base):
         CheckConstraint(
             "role IN ('viewer', 'editor', 'manager')",
             name="workspace_shares_role_check",
+        ),
+    )
+
+
+class KnowledgeBase(Base):
+    """知識庫資料表"""
+
+    __tablename__ = "knowledge_bases"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    owner_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    current_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    quota_bytes: Mapped[Optional[int]] = mapped_column(Integer)
+    tombstoned_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    owner: Mapped[User] = relationship(
+        "User",
+        back_populates="knowledge_bases_owned",
+        foreign_keys=[owner_id],
+    )
+    shares: Mapped[list["KnowledgeBaseShare"]] = relationship(
+        "KnowledgeBaseShare",
+        back_populates="knowledge_base",
+        cascade="all, delete-orphan",
+        order_by="asc(KnowledgeBaseShare.created_at)",
+    )
+    attachments: Mapped[list["WorkspaceKnowledgeBaseAttachment"]] = relationship(
+        "WorkspaceKnowledgeBaseAttachment",
+        back_populates="knowledge_base",
+        passive_deletes=True,
+        order_by="asc(WorkspaceKnowledgeBaseAttachment.created_at)",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("owner_id", "slug", name="knowledge_bases_owner_slug_unique"),
+    )
+
+
+class KnowledgeBaseShare(Base):
+    """知識庫分享授權"""
+
+    __tablename__ = "knowledge_base_shares"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    kb_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    granted_by_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+
+    knowledge_base: Mapped[KnowledgeBase] = relationship(
+        "KnowledgeBase",
+        back_populates="shares",
+    )
+    user: Mapped[User] = relationship(
+        "User",
+        back_populates="knowledge_base_shares_received",
+        foreign_keys=[user_id],
+    )
+    granted_by: Mapped[User] = relationship(
+        "User",
+        back_populates="knowledge_base_shares_granted",
+        foreign_keys=[granted_by_id],
+    )
+
+    __table_args__ = (
+        UniqueConstraint("kb_id", "user_id", name="knowledge_base_shares_kb_user_unique"),
+        CheckConstraint(
+            "role IN ('viewer', 'editor', 'manager')",
+            name="knowledge_base_shares_role_check",
+        ),
+    )
+
+
+class WorkspaceKnowledgeBaseAttachment(Base):
+    """工作區與知識庫的掛載關係"""
+
+    __tablename__ = "workspace_knowledge_base_attachments"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    kb_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("knowledge_bases.id", ondelete="RESTRICT"), nullable=False
+    )
+    mount_alias: Mapped[str] = mapped_column(String(255), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    attached_by_id: Mapped[str] = mapped_column(
+        String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    workspace: Mapped[Workspace] = relationship(
+        "Workspace",
+        back_populates="knowledge_base_attachments",
+    )
+    knowledge_base: Mapped[KnowledgeBase] = relationship(
+        "KnowledgeBase",
+        back_populates="attachments",
+    )
+    attached_by: Mapped[User] = relationship(
+        "User",
+        back_populates="knowledge_base_attachments",
+        foreign_keys=[attached_by_id],
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id",
+            "kb_id",
+            name="workspace_kb_attachments_workspace_kb_unique",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "mount_alias",
+            name="workspace_kb_attachments_workspace_alias_unique",
+        ),
+        CheckConstraint(
+            "mode IN ('rw', 'ro')",
+            name="workspace_kb_attachments_mode_check",
         ),
     )
 

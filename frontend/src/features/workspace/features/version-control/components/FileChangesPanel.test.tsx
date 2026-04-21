@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
+import { ApiError } from '@/shared/api/apiClient';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileChangesPanel } from './FileChangesPanel';
 
@@ -89,6 +90,8 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
 describe('FileChangesPanel', () => {
   beforeEach(() => {
     onFileSelectMock.mockClear();
+    changesQueryMock.error = null;
+    branchesQueryMock.error = null;
   });
 
   it('renders branch and action controls in the changes header', () => {
@@ -144,5 +147,23 @@ describe('FileChangesPanel', () => {
     );
 
     expect(onFileSelectMock).toHaveBeenLastCalledWith(null);
+  });
+
+  it('renders a non-git empty state when the repository is not initialized', () => {
+    const queryClient = new QueryClient();
+    changesQueryMock.error = new ApiError(
+      'Workspace is not a git repository',
+      400,
+      'VC_REPOSITORY_NOT_INITIALIZED',
+    );
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('workspace.versionControl.errors.notInitialized.title')).toBeInTheDocument();
+    expect(screen.getByText('workspace.versionControl.errors.notInitialized.description')).toBeInTheDocument();
   });
 });

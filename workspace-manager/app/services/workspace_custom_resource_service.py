@@ -351,6 +351,7 @@ class WorkspaceCustomResourceService:
                     "url": workspace.git_url,
                     "branch": workspace.branch,
                 },
+                "knowledgeBases": self._knowledge_base_specs(workspace),
                 "workspacePath": workspace.workspace_path,
                 "envVars": workspace.env_vars or [],
                 "operations": {},
@@ -368,6 +369,32 @@ class WorkspaceCustomResourceService:
                 },
             },
         }
+
+    def _knowledge_base_specs(self, workspace: db_models.Workspace) -> list[dict[str, object]]:
+        specs: list[dict[str, object]] = []
+        raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
+        if not isinstance(raw_attachments, list):
+            return specs
+
+        for attachment in raw_attachments:
+            knowledge_base = getattr(attachment, "knowledge_base", None)
+            if getattr(knowledge_base, "tombstoned_at", None) is not None:
+                continue
+
+            kb_id = getattr(attachment, "kb_id", None)
+            mount_alias = getattr(attachment, "mount_alias", None)
+            if not isinstance(kb_id, str) or not isinstance(mount_alias, str):
+                continue
+
+            specs.append(
+                {
+                    "kbId": kb_id,
+                    "mountAlias": mount_alias,
+                    "readOnly": getattr(attachment, "mode", "rw") == "ro",
+                }
+            )
+
+        return specs
 
     def _runtime_resources_spec(self, workspace: db_models.Workspace) -> dict:
         return workspace.runtime_resources or self.settings.RUNTIME_K8S_RUNTIME_RESOURCES

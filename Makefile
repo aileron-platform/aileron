@@ -1,4 +1,5 @@
-.PHONY: help test-all test-unit test-integration test-frontend test-backend \
+.PHONY: help up down cleanup-workspaces full-reset test-runtime-cli test-manager-cli \
+        test-all test-unit test-integration test-frontend test-backend \
         test-runtime test-manager test-coverage test-setup test-teardown \
         test-status clean-test sync-init-schema \
         build-codex-universal push-codex-universal rebuild-codex-universal \
@@ -25,7 +26,7 @@ NC := \033[0m
 REGISTRY ?= docker.io
 NAMESPACE ?= ailerondocker
 IMAGE_TAG ?= latest
-CODEX_UNIVERSAL_TAG ?= custom
+CODEX_UNIVERSAL_TAG ?= latest
 RUNTIME_BASE_LITE_TAG ?= custom
 RUNTIME_BASE ?= universal
 CODEX_UNIVERSAL_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/codex-universal:$(CODEX_UNIVERSAL_TAG)
@@ -50,14 +51,34 @@ help: ## 顯示幫助信息
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(CYAN)%-25s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+##@ 跨平台 Host 入口
+
+up: ## 🚀 使用跨平台 CLI 啟動 stack（含 build）
+	@python3 scripts/dev/docker/ops.py up --build
+
+down: ## 🛑 使用跨平台 CLI 停止 stack
+	@python3 scripts/dev/docker/ops.py down
+
+cleanup-workspaces: ## 🧹 使用跨平台 CLI 清理動態 workspace 容器
+	@python3 scripts/dev/docker/ops.py cleanup-workspaces
+
+full-reset: ## 💥 使用跨平台 CLI 執行完整清理
+	@python3 scripts/dev/docker/ops.py cleanup
+
+test-runtime-cli: ## 🧪 使用跨平台 CLI 執行 runtime container 測試
+	@python3 scripts/dev/docker/ops.py test runtime
+
+test-manager-cli: ## 🧪 使用跨平台 CLI 執行 manager container 測試
+	@python3 scripts/dev/docker/ops.py test manager
+
 ##@ 測試環境管理
 
 test-setup: ## 🚀 啟動測試環境 (PostgreSQL + Redis)
 	@echo "$(GREEN)🚀 啟動測試環境...$(NC)"
-	@docker-compose -f docker-compose.test.yml up -d postgres-test redis-test
+	@docker compose -f docker-compose.test.yml up -d postgres-test redis-test
 	@echo "$(YELLOW)⏳ 等待服務健康檢查...$(NC)"
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		if docker-compose -f docker-compose.test.yml ps | grep -q "healthy"; then \
+		if docker compose -f docker-compose.test.yml ps | grep -q "healthy"; then \
 			echo "$(GREEN)✅ 測試環境就緒$(NC)"; \
 			echo "  - PostgreSQL: localhost:5433"; \
 			echo "  - Redis: localhost:6380"; \
@@ -70,12 +91,12 @@ test-setup: ## 🚀 啟動測試環境 (PostgreSQL + Redis)
 
 test-teardown: ## 🧹 清理測試環境
 	@echo "$(YELLOW)🧹 清理測試環境...$(NC)"
-	@docker-compose -f docker-compose.test.yml down -v --remove-orphans
+	@docker compose -f docker-compose.test.yml down -v --remove-orphans
 	@echo "$(GREEN)✅ 清理完成$(NC)"
 
 test-status: ## 📊 檢查測試環境狀態
 	@echo "$(CYAN)📊 測試環境狀態:$(NC)"
-	@docker-compose -f docker-compose.test.yml ps
+	@docker compose -f docker-compose.test.yml ps
 
 ##@ 執行所有測試
 
@@ -154,20 +175,18 @@ sync-init-schema: ## 🔁 同步共用 init schema 到 Helm chart 內嵌副本
 
 ##@ Image 建置
 
-build-codex-universal: ## 🏗️ 建置 codex-universal image
-	@echo "$(GREEN)🏗️ 建置 codex-universal image...$(NC)"
+build-codex-universal: ## 📥 從 Docker Hub 拉取 codex-universal image
+	@echo "$(GREEN)📥 拉取 codex-universal image...$(NC)"
 	@echo "  Image: $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
-	@docker build -t $(CODEX_UNIVERSAL_IMAGE) -f workspace-runtime/codex-universal/Dockerfile workspace-runtime/codex-universal
-	@echo "$(GREEN)✅ codex-universal 建置完成$(NC)"
+	@docker pull $(CODEX_UNIVERSAL_IMAGE)
+	@echo "$(GREEN)✅ codex-universal 拉取完成$(NC)"
 
-push-codex-universal: ## 📤 推送 codex-universal image
-	@echo "$(GREEN)📤 推送 codex-universal image...$(NC)"
-	@echo "  Image: $(CYAN)$(CODEX_UNIVERSAL_IMAGE)$(NC)"
-	@docker push $(CODEX_UNIVERSAL_IMAGE)
-	@echo "$(GREEN)✅ codex-universal 推送完成$(NC)"
+push-codex-universal: ## ℹ️ codex-universal 由獨立 repo workflow 發布
+	@echo "$(YELLOW)ℹ️ codex-universal 已改由 aileron-platform/codex-universal 的 GitHub Actions 發布$(NC)"
+	@echo "$(YELLOW)ℹ️ 如需更新 image，請在該 repo 修改後合併到 main$(NC)"
 
-rebuild-codex-universal: build-codex-universal push-codex-universal ## 🔁 重建並推送 codex-universal image
-	@echo "$(GREEN)✅ codex-universal rebuild 完成$(NC)"
+rebuild-codex-universal: build-codex-universal push-codex-universal ## 🔁 重新同步 codex-universal image 狀態
+	@echo "$(GREEN)✅ codex-universal 狀態已同步$(NC)"
 
 build-runtime-base-lite: ## 🏗️ 建置 workspace-runtime base-lite image
 	@echo "$(GREEN)🏗️ 建置 workspace-runtime base-lite image...$(NC)"

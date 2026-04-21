@@ -106,13 +106,15 @@ ws.onmessage = (event) => {
 ## 本地開發
 
 ```bash
-cd workspace-runtime
+docker compose up -d workspace-runtime
+```
 
-# 安裝依賴
-uv sync
+`workspace-runtime` 的本地開發也應以 Docker Compose 為主，並與整體平台服務一起運作。Compose 會將 `./workspace-runtime` 掛載到容器內的 `/workspace-runtime`，因此程式碼調整通常能透過既有 reload 機制直接反映。
 
-# 啟動服務
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3002
+若需要驗證完整 agent workflow、WebSocket、檔案監控與其他跨服務行為，建議直接啟動完整 stack：
+
+```bash
+docker compose up -d
 ```
 
 ## 測試

@@ -123,7 +123,7 @@ services:
       target: development
       args:
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區，預設為 Asia/Taipei
-    image: ailerondocker/workspace-manager:dev-arm64
+    image: ${WORKSPACE_MANAGER_IMAGE:-ailerondocker/workspace-manager:dev-arm64}
     container_name: aileron-workspace-manager-dev
     restart: unless-stopped
     environment:
@@ -143,6 +143,13 @@ services:
       - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
       - HOST_WORKSPACE_MANAGER_DIR=${HOST_WORKSPACE_MANAGER_DIR:-./workspace-manager}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
+      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - HOST_KNOWLEDGE_BASES_DIR=${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}
+      - MANAGER_WORKSPACES_DIR=/host/workspace-data
+      - MANAGER_WORKSPACE_SCRIPTS_DIR=/host/workspace-scripts
+      - MANAGER_CLAUDE_DATA_DIR=/host/claude-data
+      - MANAGER_KNOWLEDGE_BASES_DIR=/host/knowledge-bases
       # JWT Authentication Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=180
       - REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -169,9 +176,10 @@ services:
       - ./workspace-manager:/workspace-manager  # Mount 整個專案目錄
       - ./data/template-center:/data/template-center  # Template storage volume
       - ./data/init-scripts:/data/init-scripts  # Init scripts storage volume
-      - ./data/workspace-data:/Users/chenshengyang/Documents/aileron/data/workspace-data  # Workspace data
-      - ./data/workspace-scripts:/Users/chenshengyang/Documents/aileron/data/workspace-scripts  # Workspace scripts
-      - ./data/claude-data:/Users/chenshengyang/Documents/aileron/data/claude-data  # Claude data
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}:/host/workspace-data  # Workspace data
+      - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}:/host/workspace-scripts  # Workspace scripts
+      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}:/host/claude-data  # Claude data
+      - ${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}:/host/knowledge-bases  # Knowledge bases
     networks:
       - aileron-network-dev
     depends_on:
@@ -199,7 +207,7 @@ services:
         CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
       additional_contexts:
         runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/workspace-runtime-base-lite:dev-arm64}
-    image: ailerondocker/workspace-runtime:dev-lite-arm64
+    image: ${WORKSPACE_RUNTIME_IMAGE:-ailerondocker/workspace-runtime:dev-lite-arm64}
     container_name: workspace-runtime-default-workspace
     restart: unless-stopped
     command: /workspace-runtime/start_services.sh
@@ -226,6 +234,8 @@ services:
       - REDIS_RETRY_ATTEMPTS=3
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
+      - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
+      - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
       - HOST_SSH_KEYS_DIR=${HOST_SSH_KEYS_DIR:-./data/ssh-keys}
       # SSH Configuration
       - SSH_PORT=22
@@ -234,7 +244,7 @@ services:
       - GIT_USER_NAME=Developer
       - GIT_USER_EMAIL=developer@workspace.local
       # Java Configuration
-      - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-arm64
+      - JAVA_HOME=${WORKSPACE_RUNTIME_JAVA_HOME:-/usr/lib/jvm/openjdk-21}
       # VS Code Server Configuration
       - VSCODE_SERVER_PORT=8080
       # Terminal Service Configuration
@@ -275,9 +285,9 @@ services:
       - /workspace-runtime/.venv  # 阻擋 host (macOS) venv 蓋過容器內 Linux venv
       - /workspace-runtime/web-preview/node_modules  # 避免 node_modules 被覆蓋
       - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
-      - ./data/workspace-data/default-workspace:/workspace  # Workspace projects
-      - ./data/workspace-scripts/default-workspace:/scripts  # Scripts directory
-      - ./data/claude-data/default_workspace:/home/developer/.claude  # Claude session 持久化
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
+      - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
+      - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}/default_workspace:/home/developer/.claude  # Claude session 持久化
     networks:
       - aileron-network-dev
     depends_on:
@@ -296,7 +306,7 @@ services:
     build:
       context: ./workspace-chrome
       dockerfile: Dockerfile.webrtc
-    image: ailerondocker/workspace-chrome:dev-arm64
+    image: ${WORKSPACE_CHROME_IMAGE:-ailerondocker/workspace-chrome:dev-arm64}
     container_name: workspace-browser-default-workspace
     restart: unless-stopped
     environment:
@@ -308,8 +318,8 @@ services:
       - NEKO_MEMBER_MULTIUSER_USER_PASSWORD=neko
       - NEKO_MEMBER_MULTIUSER_ADMIN_PASSWORD=admin
       - NEKO_WEBRTC_ICELITE=1
-      - NEKO_WEBRTC_UDPMUX=52000
-      - NEKO_WEBRTC_NAT1TO1=127.0.0.1
+      - NEKO_WEBRTC_UDPMUX=${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}
+      - NEKO_WEBRTC_NAT1TO1=${BROWSER_WEBRTC_NAT1TO1_IP:-127.0.0.1}
       - NEKO_SESSION_IMPLICIT_HOSTING=true
     deploy:
       resources:
@@ -321,11 +331,11 @@ services:
           memory: 1G
     shm_size: '2gb'
     ports:
-      - "6080:6080"     # neko HTTP + WebSocket signaling
+      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:6080"     # neko HTTP + WebSocket signaling
       - "9223:9223"     # CDP (socat relay → Chrome 9222)
-      - "52000:52000/udp"  # WebRTC media (UDPMUX single port)
+      - "${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}:${BROWSER_WEBRTC_HOST_UDP_PORT:-52330}/udp"  # WebRTC media (UDPMUX single port)
     volumes:
-      - ./data/workspace-data/default-workspace:/workspace
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace
     networks:
       - aileron-network-dev
     healthcheck:
@@ -338,7 +348,7 @@ services:
   workspace-nextjs:
     build:
       context: ./workspace-nextjs
-    image: ailerondocker/workspace-nextjs:dev-arm64
+    image: ${WORKSPACE_NEXTJS_IMAGE:-ailerondocker/workspace-nextjs:dev-arm64}
     container_name: workspace-nextjs-default-workspace
     restart: unless-stopped
     environment:
@@ -351,7 +361,7 @@ services:
       - "3003:3003"     # Next.js dev server
       - "3013:3013"     # Management API
     volumes:
-      - ./data/workspace-data/default-workspace:/workspace
+      - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace
     networks:
       - aileron-network-dev
     healthcheck:
@@ -368,7 +378,7 @@ services:
       args:
         VITE_WORKSPACE_MANAGER_URL: http://localhost:3001
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區
-    image: ailerondocker/workspace-ui:dev-arm64
+    image: ${WORKSPACE_UI_IMAGE:-ailerondocker/workspace-ui:dev-arm64}
     container_name: aileron-frontend-dev
     restart: unless-stopped
     environment:

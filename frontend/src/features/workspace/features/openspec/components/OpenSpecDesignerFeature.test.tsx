@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@/__tests__/utils/render';
+import { fireEvent, render, screen, waitFor } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import OpenSpecDesignerFeature from './OpenSpecDesignerFeature';
@@ -275,12 +275,9 @@ describe('OpenSpecDesigner components', () => {
     });
 
     expect(await screen.findByLabelText('Default schema')).toBeInTheDocument();
-    await user.clear(screen.getByLabelText('Default schema'));
-    await user.type(screen.getByLabelText('Default schema'), 'review-flow');
-    await user.clear(screen.getByLabelText('Project context'));
-    await user.type(screen.getByLabelText('Project context'), 'Updated context');
-    await user.clear(screen.getByLabelText('Artifact rules'));
-    await user.type(screen.getByLabelText('Artifact rules'), 'tasks:{enter}  - Keep tasks small');
+    fireEvent.change(screen.getByLabelText('Default schema'), { target: { value: 'review-flow' } });
+    fireEvent.change(screen.getByLabelText('Project context'), { target: { value: 'Updated context' } });
+    fireEvent.change(screen.getByLabelText('Artifact rules'), { target: { value: 'tasks:\n  - Keep tasks small' } });
     await user.click(screen.getByRole('button', { name: 'Save project config' }));
 
     await waitFor(() => {
@@ -303,11 +300,9 @@ describe('OpenSpecDesigner components', () => {
       initialRoute: '/workspaces/openspec/designer/project-config',
     });
 
-    await user.clear(screen.getByLabelText('Artifact rules'));
-    await user.type(
-      screen.getByLabelText('Artifact rules'),
-      'proposal:{enter}  - Include rollout plan{enter}tasks: Keep tasks small',
-    );
+    fireEvent.change(screen.getByLabelText('Artifact rules'), {
+      target: { value: 'proposal:\n  - Include rollout plan\ntasks: Keep tasks small' },
+    });
     await user.click(screen.getByRole('button', { name: 'Save project config' }));
 
     await waitFor(() => {
@@ -360,7 +355,7 @@ describe('OpenSpecDesigner components', () => {
     });
 
     expect(await screen.findByLabelText('Schema name')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-monaco-editor')).toHaveValue('name: spec-driven\n');
+    expect(await screen.findByTestId('mock-monaco-editor')).toHaveValue('name: spec-driven\n');
     expect(screen.getByText('Editability:')).toBeInTheDocument();
     expect(screen.getByText('YAML highlighting enabled')).toBeInTheDocument();
 

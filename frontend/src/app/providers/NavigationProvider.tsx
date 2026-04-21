@@ -11,6 +11,7 @@
 import React, { createContext, useContext, useReducer, ReactNode, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { createLogger } from '@/shared/services/logger';
+import { ROUTES } from '@/shared/constants/routes';
 
 const logger = createLogger('NavigationProvider');
 
@@ -25,7 +26,7 @@ export interface NavigationItem {
 }
 
 // 模組類型
-export type ModuleType = 'workspace' | 'template' | 'automation';
+export type ModuleType = 'workspace' | 'template' | 'automation' | 'knowledge-base';
 
 // 導航狀態
 export interface NavigationState {
@@ -299,10 +300,21 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
     pendingNavigation.current = null;
 
     // 根據路徑判斷當前模組
-    if (location.pathname.includes('/template-management')) {
+    if (
+      location.pathname === ROUTES.TEMPLATE_MANAGEMENT ||
+      location.pathname.startsWith(`${ROUTES.TEMPLATE_MANAGEMENT}/`)
+    ) {
       dispatch({ type: 'SET_CURRENT_MODULE', payload: 'template' });
-    } else if (location.pathname.includes('/automation')) {
+    } else if (
+      location.pathname === ROUTES.AUTOMATION ||
+      location.pathname.startsWith(`${ROUTES.AUTOMATION}/`)
+    ) {
       dispatch({ type: 'SET_CURRENT_MODULE', payload: 'automation' });
+    } else if (
+      location.pathname === ROUTES.KNOWLEDGE_BASES ||
+      location.pathname.startsWith(`${ROUTES.KNOWLEDGE_BASES}/`)
+    ) {
+      dispatch({ type: 'SET_CURRENT_MODULE', payload: 'knowledge-base' });
     } else {
       dispatch({ type: 'SET_CURRENT_MODULE', payload: 'workspace' });
     }

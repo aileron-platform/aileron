@@ -34,6 +34,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface SelectedFile {
   path: string;
@@ -116,6 +117,12 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceRuntime?.runtimeBaseUrl, apiConfig]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    features: [collectionType],
+    onRefresh: manager.loadTree,
+  });
 
   // 處理節點點擊
   const handleNodeClick = useCallback((node: FileTreeNodeType, modifier: SelectionModifier) => {
@@ -744,4 +751,3 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
 };
 
 export default ClaudeCodeFileManager;
-

@@ -17,6 +17,7 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useCommitsInfiniteQuery, useCommitFilesQuery } from '../hooks/useVersionControlQueries';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { isVersionControlNotInitializedError } from '../utils';
 
 interface CommitHistoryPanelProps {
   selectedCommitId?: string;
@@ -181,6 +182,22 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
 
   // Error 狀態
   if (commitsQuery.error) {
+    if (isVersionControlNotInitializedError(commitsQuery.error)) {
+      return (
+        <div className="h-full flex items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <GitCommit className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-60" />
+            <p className="text-sm font-medium text-foreground mb-1">
+              {t('workspace.versionControl.errors.notInitialized.title')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t('workspace.versionControl.errors.notInitialized.description')}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-sm text-destructive">{commitsQuery.error.message}</div>
