@@ -1,17 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
-import {
-  TemplateFormValues,
-  HookFormValue,
-  SlashCommandFormValue,
-  SubAgentFormValue,
-  OutputStyleFormValue,
-  FileEntryFormValue,
-  SkillFileFormValue,
-} from './formTypes';
+import React, { useState } from 'react';
+import { Tabs, TabsContent } from '@/shared/components/ui/tabs';
+import { TemplateFormValues } from './formTypes';
 import { Info, File as FileIcon } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { CLAUDE_CODE_ICONS } from '@/features/workspace/components/navigation-constants';
+import { TopTabsBar, TopTabsCountBadge, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 
 import BasicInfoSection from './sections/BasicInfoSection';
 import McpServersSection from './sections/McpServersSection';
@@ -66,48 +59,35 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
   const SlashCommandsIcon = CLAUDE_CODE_ICONS['slash-commands'];
   const OutputStylesIcon = CLAUDE_CODE_ICONS['output-styles'];
   const SkillsIcon = CLAUDE_CODE_ICONS['skills'];
+  const templateTabs = [
+    { value: 'basic', label: t('template.editor.tabs.basic'), icon: Info },
+    { value: 'docs', label: t('template.editor.tabs.claudeMd'), icon: ClaudeMdIcon },
+    { value: 'hooks', label: t('template.editor.tabs.hooks'), icon: HooksIcon, count: values.hooks.length },
+    { value: 'mcp', label: t('template.editor.tabs.mcp'), icon: McpIcon, count: values.mcpServers.length },
+    { value: 'subagent', label: t('template.editor.tabs.subAgents'), icon: SubagentsIcon, count: values.subAgents.length },
+    { value: 'slash', label: t('template.editor.tabs.slashCommands'), icon: SlashCommandsIcon, count: values.slashCommands.length },
+    { value: 'outputstyle', label: t('template.editor.tabs.outputStyles'), icon: OutputStylesIcon, count: values.outputStyles.length },
+    { value: 'skills', label: t('template.editor.tabs.skills'), icon: SkillsIcon, count: values.skills.length },
+    { value: 'scripts', label: t('template.editor.tabs.scripts'), icon: FileIcon, count: values.scripts.length },
+  ] as const;
 
   return (
     <div className="h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-            <TabsList className="flex flex-nowrap w-full overflow-x-auto bg-background p-0 border-b border-border h-16 flex-shrink-0">
-              <TabsTrigger value="basic" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <Info className="h-4 w-4" />
-                {t('template.editor.tabs.basic')}
-              </TabsTrigger>
-              <TabsTrigger value="docs" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <ClaudeMdIcon className="h-4 w-4" />
-                {t('template.editor.tabs.claudeMd')}
-              </TabsTrigger>
-              <TabsTrigger value="hooks" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <HooksIcon className="h-4 w-4" />
-                {t('template.editor.tabs.hooks')}
-              </TabsTrigger>
-              <TabsTrigger value="mcp" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <McpIcon className="h-4 w-4" />
-                {t('template.editor.tabs.mcp')}
-              </TabsTrigger>
-              <TabsTrigger value="subagent" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <SubagentsIcon className="h-4 w-4" />
-                {t('template.editor.tabs.subAgents')}
-              </TabsTrigger>
-              <TabsTrigger value="slash" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <SlashCommandsIcon className="h-4 w-4" />
-                {t('template.editor.tabs.slashCommands')}
-              </TabsTrigger>
-              <TabsTrigger value="outputstyle" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <OutputStylesIcon className="h-4 w-4" />
-                {t('template.editor.tabs.outputStyles')}
-              </TabsTrigger>
-              <TabsTrigger value="skills" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <SkillsIcon className="h-4 w-4" />
-                {t('template.editor.tabs.skills')}
-              </TabsTrigger>
-              <TabsTrigger value="scripts" className="flex items-center gap-2 px-4 py-4 text-sm font-medium border-b-2 border-transparent rounded-none text-muted-foreground hover:text-foreground hover:bg-muted/50 data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-primary/5 flex-shrink-0">
-                <FileIcon className="h-4 w-4" />
-                {t('template.editor.tabs.scripts')}
-              </TabsTrigger>
-            </TabsList>
+        <TopTabsBar>
+          <TopTabsList>
+            {templateTabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <TopTabsTrigger key={tab.value} value={tab.value}>
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  <TopTabsCountBadge count={tab.count ?? 0} />
+                </TopTabsTrigger>
+              );
+            })}
+          </TopTabsList>
+        </TopTabsBar>
           <TabsContent value="basic" className="flex-1 overflow-auto !p-0 !m-0">
             <div className="p-6">
               <BasicInfoSection

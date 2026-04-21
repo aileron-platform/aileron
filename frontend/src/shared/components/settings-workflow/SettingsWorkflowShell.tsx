@@ -1,0 +1,111 @@
+import React from 'react';
+import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
+import { Button } from '@/shared/components/ui/button';
+import { Badge } from '@/shared/components/ui/badge';
+
+export interface SettingsWorkflowShellProps {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  headerActions?: React.ReactNode;
+  summary?: React.ReactNode;
+  singleHeader?: boolean;
+  controls?: React.ReactNode;
+  error?: React.ReactNode;
+  isLoading?: boolean;
+  loadingLabel?: string;
+  hasItems: boolean;
+  emptyIcon?: React.ReactNode;
+  emptyTitle: string;
+  emptyDescription: string;
+  emptyActions?: React.ReactNode;
+  children?: React.ReactNode;
+  contentClassName?: string;
+}
+
+export const SettingsWorkflowShell: React.FC<SettingsWorkflowShellProps> = ({
+  title,
+  icon: Icon,
+  headerActions,
+  summary,
+  singleHeader = false,
+  controls,
+  error,
+  isLoading = false,
+  loadingLabel,
+  hasItems,
+  emptyIcon,
+  emptyTitle,
+  emptyDescription,
+  emptyActions,
+  children,
+  contentClassName = 'space-y-4 p-4',
+}) => {
+  const showToolbar = !singleHeader && Boolean(summary || controls);
+
+  return (
+    <div className="flex h-full flex-col bg-background">
+      <FeatureHeader
+        title={title}
+        icon={Icon}
+        actions={headerActions}
+        info={singleHeader ? summary : undefined}
+      />
+
+      {error ? (
+        <div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {showToolbar ? (
+        <div className="border-b border-border bg-background px-4 py-3">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-foreground">{title}</span>
+              </div>
+              {summary}
+            </div>
+            {controls}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex-1 overflow-hidden">
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
+            {loadingLabel}
+          </div>
+        ) : hasItems ? (
+          <div className={`h-full overflow-auto ${contentClassName}`}>{children}</div>
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+            {emptyIcon ? (
+              <div className="rounded-full bg-muted p-3">
+                {emptyIcon}
+              </div>
+            ) : null}
+            <div className="space-y-1">
+              <p className="text-base font-medium text-foreground">{emptyTitle}</p>
+              <p className="text-sm text-muted-foreground">{emptyDescription}</p>
+            </div>
+            {emptyActions}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export const SettingsWorkflowCountBadge: React.FC<{ label: string }> = ({ label }) => (
+  <Badge variant="secondary" className="text-[11px]">
+    {label}
+  </Badge>
+);
+
+export const SettingsWorkflowActionButton: React.FC<React.ComponentProps<typeof Button>> = (props) => (
+  <Button size="sm" className="h-7 px-2 text-xs" {...props} />
+);
+
+export default SettingsWorkflowShell;

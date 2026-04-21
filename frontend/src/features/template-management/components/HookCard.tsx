@@ -6,14 +6,14 @@ import type { HookFormValue } from '@/features/template-management/features/temp
 
 interface HookCardProps {
   hook: HookFormValue;
-  mode: 'view' | 'edit';
+  showActions?: boolean;
   onEdit?: (hook: HookFormValue) => void;
   onDelete?: (hookId: string) => void;
 }
 
 export default function HookCard({
   hook,
-  mode,
+  showActions = false,
   onEdit,
   onDelete
 }: HookCardProps) {
@@ -25,13 +25,13 @@ export default function HookCard({
   const eventLabel = getEventDescription(hook.event, t);
 
   const handleEdit = () => {
-    if (mode === 'edit' && onEdit) {
+    if (showActions && onEdit) {
       onEdit(hook);
     }
   };
 
   const handleDelete = () => {
-    if (mode === 'edit' && onDelete) {
+    if (showActions && onDelete) {
       onDelete(hook.localId);
     }
   };
@@ -122,7 +122,7 @@ export default function HookCard({
       </div>
 
       {/* Action Buttons - 僅編輯模式顯示 */}
-      {mode === 'edit' && (
+      {showActions ? (
         <div className="absolute top-4 right-4 flex items-center gap-2">
           <button
             type="button"
@@ -143,7 +143,7 @@ export default function HookCard({
             <span className="sr-only">{t('template.editor.hooks.card.actions.deleteSrLabel')}</span>
           </button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

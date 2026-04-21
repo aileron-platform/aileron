@@ -520,6 +520,12 @@ const template = {
         cancel: '取消',
         delete: '刪除',
       },
+      sidebar: {
+        createFile: '新增文字檔',
+        createFolder: '建立資料夾',
+        upload: '上傳檔案',
+        refresh: '重新整理',
+      },
       multiSelect: {
         summary: '已選擇 {{count}} 個項目',
         selectAll: '全選',
@@ -1517,10 +1523,12 @@ const template = {
       },
     },
     mcp: {
+      downloadFileName: 'mcp-servers.json',
       header: {
         title: 'MCP 伺服器配置',
         description: '管理範本串接的 Model Context Protocol 伺服器。',
       },
+      badge: '{{count}} 個 MCP 伺服器',
       empty: {
         title: '尚未配置 MCP 伺服器',
         description: '此範本尚未設定任何 MCP 伺服器。',
@@ -1532,6 +1540,10 @@ const template = {
         copySuccess: {
           title: '配置已複製',
           description: 'MCP 伺服器「{{name}}」的設定已複製到剪貼簿。',
+        },
+        downloadSuccess: {
+          title: '配置已下載',
+          description: 'MCP 伺服器配置已下載為 JSON 檔案。',
         },
       },
       card: {
@@ -1553,6 +1565,7 @@ const template = {
       },
     },
     hooks: {
+      downloadFileName: 'hooks-config.json',
       header: {
         title: 'Hook 配置',
         description: '管理自動化 Hook、觸發事件與執行命令。',

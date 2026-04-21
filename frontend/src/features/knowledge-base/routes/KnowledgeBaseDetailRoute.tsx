@@ -3,11 +3,12 @@ import { Database, Files, Link2, Settings, Share2, Trash2 } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import { Tabs } from '@/shared/components/ui/tabs';
 import { ROUTES } from '@/shared/constants/routes';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { formatFileSize } from '@/shared/utils/fileUtils';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
+import { TopTabsBar, TopTabsCountBadge, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 import { KnowledgeBaseAttachmentsTab } from '../components/KnowledgeBaseAttachmentsTab';
 import { KnowledgeBaseFilesTab } from '../components/KnowledgeBaseFilesTab';
 import { KnowledgeBaseSharingTab } from '../components/KnowledgeBaseSharingTab';
@@ -96,37 +97,31 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
       />
 
       <Tabs value={activeTab} className="flex w-full flex-shrink-0 flex-col">
-        <div className="border-b bg-background px-3">
-          <TabsList className="grid h-10 w-full max-w-xl grid-cols-3 bg-transparent p-0">
-            <TabsTrigger value="files" asChild>
+        <TopTabsBar>
+          <TopTabsList className="max-w-xl">
+            <TopTabsTrigger value="files" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_FILES(knowledgeBaseId)} className="gap-2">
                 <Files className="h-4 w-4" />
                 {t('knowledgeBase.detail.tabs.files')}
-                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[11px]">
-                  {attachments.length}
-                </Badge>
+                <TopTabsCountBadge count={attachments.length} />
               </Link>
-            </TabsTrigger>
-            <TabsTrigger value="sharing" asChild>
+            </TopTabsTrigger>
+            <TopTabsTrigger value="sharing" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_SHARING(knowledgeBaseId)} className="gap-2">
                 <Share2 className="h-4 w-4" />
                 {t('knowledgeBase.detail.tabs.sharing')}
-                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[11px]">
-                  {shares.length}
-                </Badge>
+                <TopTabsCountBadge count={shares.length} />
               </Link>
-            </TabsTrigger>
-            <TabsTrigger value="workspaces" asChild>
+            </TopTabsTrigger>
+            <TopTabsTrigger value="workspaces" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_WORKSPACES(knowledgeBaseId)} className="gap-2">
                 <Link2 className="h-4 w-4" />
                 {t('knowledgeBase.detail.tabs.workspaces')}
-                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-[11px]">
-                  {attachments.length}
-                </Badge>
+                <TopTabsCountBadge count={attachments.length} />
               </Link>
-            </TabsTrigger>
-          </TabsList>
-        </div>
+            </TopTabsTrigger>
+          </TopTabsList>
+        </TopTabsBar>
       </Tabs>
 
       <div className="min-h-0 flex-1 overflow-hidden">

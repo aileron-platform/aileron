@@ -1,9 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 import { Button } from '@/shared/components/ui/button';
 
 const logger = createLogger('MarkdownFileViewer');
-import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
 import {
   DropdownMenu,
@@ -12,15 +11,16 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
 import {
-  Search,
   ChevronLeft,
   ChevronRight,
   Copy,
   Download,
   MoreHorizontal,
   Plus,
+  RefreshCw,
 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
+import SectionSidebarShell from './SectionSidebarShell';
 
 // 基礎項目接口
 export interface BaseItem {
@@ -79,6 +79,8 @@ export interface MarkdownFileViewerProps<T extends BaseItem> {
   topPanelExtra?: (item: T) => React.ReactNode;
   onAdd?: () => void;
   showAddButton?: boolean;
+  onRefresh?: () => void | Promise<void>;
+  refreshLabel?: string;
 }
 
 export function MarkdownFileViewer<T extends BaseItem>({
@@ -92,6 +94,8 @@ export function MarkdownFileViewer<T extends BaseItem>({
   topPanelExtra,
   onAdd,
   showAddButton = false,
+  onRefresh,
+  refreshLabel,
 }: MarkdownFileViewerProps<T>) {
   const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id || null);
@@ -114,6 +118,19 @@ export function MarkdownFileViewer<T extends BaseItem>({
     () => filteredItems.find((item) => item.id === selectedId) ?? null,
     [filteredItems, selectedId],
   );
+
+  useEffect(() => {
+    if (filteredItems.length === 0) {
+      if (selectedId !== null) {
+        setSelectedId(null);
+      }
+      return;
+    }
+
+    if (!selectedId || !filteredItems.some(item => item.id === selectedId)) {
+      setSelectedId(filteredItems[0].id);
+    }
+  }, [filteredItems, selectedId]);
 
   // 導航邏輯
   const currentIndex = selectedItem ? filteredItems.findIndex((item) => item.id === selectedItem.id) : -1;
@@ -156,6 +173,34 @@ export function MarkdownFileViewer<T extends BaseItem>({
   };
 
   const Icon = getItemIcon();
+  const sidebarActions = (
+    <>
+      {onRefresh ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => void onRefresh()}
+          className="h-7 w-7 p-0"
+          aria-label={refreshLabel}
+          title={refreshLabel}
+        >
+          <RefreshCw className="h-4 w-4" />
+        </Button>
+      ) : null}
+      {showAddButton && onAdd ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onAdd}
+          className="h-7 w-7 p-0"
+          aria-label={i18nKeys.actions.add ? t(i18nKeys.actions.add) : undefined}
+          title={i18nKeys.actions.add ? t(i18nKeys.actions.add) : undefined}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      ) : null}
+    </>
+  );
 
   // 頂部面板組件
   const TopPanel = ({ item }: { item: T }) => (
@@ -259,69 +304,54 @@ export function MarkdownFileViewer<T extends BaseItem>({
     <div className="flex h-full overflow-hidden">
       {/* 左側列表 */}
       <div className="w-80 flex-shrink-0">
-        <div className="flex h-full flex-col bg-background text-foreground border-r border-border">
-          <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Icon className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">{t(i18nKeys.sidebar.title)}</span>
-            </div>
-            {showAddButton && onAdd && (
-              <Button variant="ghost" size="sm" onClick={onAdd}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          <div className="space-y-3 border-b border-border bg-muted/30 p-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t(i18nKeys.sidebar.searchPlaceholder)}
-                className="h-8 pl-10 text-xs"
-              />
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-2 overflow-y-auto p-3">
-            {filteredItems.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
-                {t(i18nKeys.sidebar.empty)}
-              </div>
-            ) : (
-              filteredItems.map((item) => {
-                const isActive = item.id === selectedId;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
-                      isActive
-                        ? 'border-primary/60 bg-primary/10 shadow-sm'
-                        : 'border-transparent bg-muted/20 hover:border-primary/20 hover:bg-muted/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium">
-                          {item.fileName || t(i18nKeys.list.nameFallback)}
+        <SectionSidebarShell
+          title={t(i18nKeys.sidebar.title)}
+          icon={<Icon className="h-4 w-4" />}
+          actions={sidebarActions}
+          searchValue={search}
+          onSearchChange={setSearch}
+          onSearchClear={() => setSearch('')}
+          searchPlaceholder={t(i18nKeys.sidebar.searchPlaceholder)}
+          body={(
+            <div className="flex-1 space-y-2 overflow-y-auto p-3">
+              {filteredItems.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
+                  {t(i18nKeys.sidebar.empty)}
+                </div>
+              ) : (
+                filteredItems.map((item) => {
+                  const isActive = item.id === selectedId;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setSelectedId(item.id)}
+                      className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${
+                        isActive
+                          ? 'border-primary/60 bg-primary/10 shadow-sm'
+                          : 'border-transparent bg-muted/20 hover:border-primary/20 hover:bg-muted/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">
+                            {item.fileName || t(i18nKeys.list.nameFallback)}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {item.description || t(i18nKeys.detail.descriptionFallback)}
+                          </div>
                         </div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {item.description || t(i18nKeys.detail.descriptionFallback)}
+                        <div className="text-[11px] text-muted-foreground text-right">
+                          {t('common.markdownFileViewer.units.bytes', { count: item.content.length })}
                         </div>
                       </div>
-                      <div className="text-[11px] text-muted-foreground text-right">
-                        {t('common.markdownFileViewer.units.bytes', { count: item.content.length })}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          )}
+        />
       </div>
 
       {/* 右側內容 */}

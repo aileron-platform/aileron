@@ -72,6 +72,7 @@ const SubAgentsSection: React.FC<SubAgentsSectionProps> = ({
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRefresh={templateId ? loadSubAgents : undefined}
       />
 
       <SubAgentDialog
