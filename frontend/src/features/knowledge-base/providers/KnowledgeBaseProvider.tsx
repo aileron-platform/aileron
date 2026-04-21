@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
+import { useI18n } from '@/shared/hooks/useI18n';
 import * as knowledgeBaseApi from '@/shared/services/knowledgeBaseApi';
 import type {
   KnowledgeBaseAttachmentCreatePayload,
@@ -44,6 +45,7 @@ const KnowledgeBaseContext = createContext<KnowledgeBaseContextValue | undefined
 const logger = createLogger('KnowledgeBaseProvider');
 
 export const KnowledgeBaseProvider: React.FC<KnowledgeBaseProviderProps> = ({ children }) => {
+  const { t } = useI18n();
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseSummary[]>([]);
   const [attachmentCounts, setAttachmentCounts] = useState<Record<string, number>>({});
   const [detailById, setDetailById] = useState<Record<string, KnowledgeBaseDetail | undefined>>({});
@@ -101,7 +103,7 @@ export const KnowledgeBaseProvider: React.FC<KnowledgeBaseProviderProps> = ({ ch
       setAttachmentsById((current) => ({ ...current, ...nextAttachments }));
     } catch (error) {
       logger.error('Failed to load knowledge bases', { error });
-      setListError(error instanceof Error ? error.message : '無法載入知識庫列表');
+      setListError(error instanceof Error ? error.message : t('knowledgeBase.list.loadFailed'));
     } finally {
       setIsLoadingKnowledgeBases(false);
     }

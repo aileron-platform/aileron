@@ -221,7 +221,8 @@ export const KnowledgeBaseSharingTab: React.FC<KnowledgeBaseSharingTabProps> = (
   }, [deleteKnowledgeBaseShare, knowledgeBaseId, t, toast]);
 
   return (
-    <div className="space-y-6">
+    <div className="h-full overflow-auto p-6">
+      <div className="space-y-6">
       <Card>
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
@@ -450,6 +451,7 @@ export const KnowledgeBaseSharingTab: React.FC<KnowledgeBaseSharingTabProps> = (
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };
