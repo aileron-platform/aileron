@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
 from app.config.settings import get_settings
 from app.db import models as db_models
+from app.services.knowledge_base_service import KnowledgeBaseConflictError
 
 
 def _authenticate_as(client, monkeypatch, user: db_models.User) -> None:
@@ -258,6 +260,101 @@ def test_knowledge_base_api_localizes_error_message_by_request_language(test_app
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "INVALID_FILE_TYPE"
     assert response.json()["detail"]["message"] == "不支援的檔案副檔名: .exe"
+
+
+@pytest.mark.integration
+def test_knowledge_base_generic_invalid_request_and_conflict_use_simple_messages(test_app, create_user, monkeypatch):
+    client, _ = test_app
+    owner = create_user(username="kb-owner-generic")
+    _authenticate_as(client, monkeypatch, owner)
+
+    with patch(
+        "app.routers.knowledge_bases.KnowledgeBaseService.create_kb",
+        side_effect=ValueError("unexpected invalid request detail"),
+    ):
+        en_invalid_response = client.post(
+            "/api/v1/knowledge-bases",
+            json={"name": "API Docs", "slug": "api-docs-generic"},
+        )
+        assert en_invalid_response.status_code == 400
+        assert en_invalid_response.json()["detail"]["code"] == "KB_INVALID_REQUEST"
+        assert en_invalid_response.json()["detail"]["message"] == "Invalid knowledge base request"
+
+    client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+    with patch(
+        "app.routers.knowledge_bases.KnowledgeBaseService.create_kb",
+        side_effect=ValueError("unexpected invalid request detail"),
+    ):
+        zh_invalid_response = client.post(
+            "/api/v1/knowledge-bases",
+            json={"name": "API Docs", "slug": "api-docs-generic"},
+        )
+        assert zh_invalid_response.status_code == 400
+        assert zh_invalid_response.json()["detail"]["code"] == "KB_INVALID_REQUEST"
+        assert zh_invalid_response.json()["detail"]["message"] == "無效的知識庫請求"
+
+    client.headers.update({"Accept-Language": "en", "X-Language": "en"})
+    with patch(
+        "app.routers.knowledge_bases.KnowledgeBaseService.create_kb",
+        side_effect=KnowledgeBaseConflictError("unexpected conflict detail"),
+    ):
+        en_conflict_response = client.post(
+            "/api/v1/knowledge-bases",
+            json={"name": "API Docs", "slug": "api-docs-generic"},
+        )
+        assert en_conflict_response.status_code == 409
+        assert en_conflict_response.json()["detail"]["code"] == "KB_CONFLICT"
+        assert en_conflict_response.json()["detail"]["message"] == "Knowledge base conflict"
+
+    client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+    with patch(
+        "app.routers.knowledge_bases.KnowledgeBaseService.create_kb",
+        side_effect=KnowledgeBaseConflictError("unexpected conflict detail"),
+    ):
+        zh_conflict_response = client.post(
+            "/api/v1/knowledge-bases",
+            json={"name": "API Docs", "slug": "api-docs-generic"},
+        )
+        assert zh_conflict_response.status_code == 409
+        assert zh_conflict_response.json()["detail"]["code"] == "KB_CONFLICT"
+        assert zh_conflict_response.json()["detail"]["message"] == "知識庫發生衝突"
+
+
+@pytest.mark.integration
+def test_workspace_knowledge_base_error_translation_uses_code_instead_of_exception_message(
+    test_app, create_user, monkeypatch
+):
+    client, session_factory = test_app
+    owner = create_user(username="workspace-owner-coded")
+    workspace_id = _create_workspace(session_factory, owner_id=owner.id)
+    _authenticate_as(client, monkeypatch, owner)
+
+    client.headers.update({"Accept-Language": "en", "X-Language": "en"})
+    with patch(
+        "app.routers.workspaces.KnowledgeBaseAttachmentService.attach",
+        side_effect=KnowledgeBaseConflictError("totally different conflict wording", code="KB_ALREADY_ATTACHED"),
+    ):
+        en_response = client.post(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases",
+            json={"kbId": "kb-123", "mode": "rw"},
+        )
+
+    client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+    with patch(
+        "app.routers.workspaces.KnowledgeBaseAttachmentService.attach",
+        side_effect=KnowledgeBaseConflictError("完全不同的衝突訊息", code="KB_ALREADY_ATTACHED"),
+    ):
+        zh_response = client.post(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases",
+            json={"kbId": "kb-123", "mode": "rw"},
+        )
+
+    assert en_response.status_code == 409
+    assert en_response.json()["detail"]["code"] == "KB_ALREADY_ATTACHED"
+    assert en_response.json()["detail"]["message"] == "Knowledge base is already attached to this workspace"
+    assert zh_response.status_code == 409
+    assert zh_response.json()["detail"]["code"] == "KB_ALREADY_ATTACHED"
+    assert zh_response.json()["detail"]["message"] == "知識庫已掛載到此工作區"
 
 
 @pytest.mark.integration

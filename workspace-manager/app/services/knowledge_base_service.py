@@ -37,17 +37,35 @@ KB_SHARE_NOT_FOUND_MESSAGE = "知識庫分享不存在"
 class KnowledgeBaseError(ValueError):
     """知識庫基礎錯誤。"""
 
+    def __init__(self, message: str, *, code: str = "KB_INVALID_REQUEST", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 
 class KnowledgeBaseAccessDeniedError(PermissionError):
     """知識庫權限不足。"""
+
+    def __init__(self, message: str, *, code: str = "KB_ACCESS_DENIED", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 class KnowledgeBaseNotFoundError(LookupError):
     """知識庫不存在或已 tombstone。"""
 
+    def __init__(self, message: str, *, code: str = "KB_NOT_FOUND", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 
 class KnowledgeBaseConflictError(KnowledgeBaseError):
     """知識庫資源衝突。"""
+
+    def __init__(self, message: str, *, code: str = "KB_CONFLICT", params: dict | None = None) -> None:
+        super().__init__(message, code=code, params=params)
 
 
 @dataclass(frozen=True)
@@ -59,7 +77,7 @@ def normalize_kb_slug(value: str) -> str:
     """將 KB slug 正規化為小寫 dash 格式。"""
     normalized = _SLUG_SANITIZER.sub("-", value.strip().lower()).strip("-")
     if not normalized:
-        raise KnowledgeBaseError(KB_SLUG_REQUIRED_MESSAGE)
+        raise KnowledgeBaseError(KB_SLUG_REQUIRED_MESSAGE, code="KB_INVALID_SLUG")
     return normalized
 
 
@@ -100,7 +118,7 @@ class KnowledgeBaseService:
     ) -> db_models.KnowledgeBase:
         owner = self.db.get(db_models.User, owner_id)
         if not owner:
-            raise KnowledgeBaseError(KB_OWNER_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseError(KB_OWNER_NOT_FOUND_MESSAGE, code="KB_OWNER_NOT_FOUND")
 
         normalized_slug = normalize_kb_slug(slug)
         self._ensure_unique_slug(owner_id=owner_id, slug=normalized_slug)
@@ -162,7 +180,7 @@ class KnowledgeBaseService:
         ) or 0
 
         if attachment_count > 0 and not force:
-            raise KnowledgeBaseConflictError(KB_IN_USE_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_IN_USE_MESSAGE, code="KB_IN_USE")
 
         if attachment_count > 0 and force:
             kb.tombstoned_at = datetime.utcnow()
@@ -220,13 +238,13 @@ class KnowledgeBaseService:
     ) -> db_models.KnowledgeBase:
         kb = self.db.get(db_models.KnowledgeBase, kb_id)
         if not kb or kb.tombstoned_at is not None:
-            raise KnowledgeBaseNotFoundError(KB_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(KB_NOT_FOUND_MESSAGE, code="KB_NOT_FOUND")
 
         actual_role = self._resolve_role(kb, user_id=user_id)
         if actual_role is None:
-            raise KnowledgeBaseAccessDeniedError(KB_ACCESS_DENIED_MESSAGE)
+            raise KnowledgeBaseAccessDeniedError(KB_ACCESS_DENIED_MESSAGE, code="KB_ACCESS_DENIED")
         if not self._role_satisfies(actual_role, minimum_role):
-            raise KnowledgeBaseAccessDeniedError(KB_PERMISSION_DENIED_MESSAGE)
+            raise KnowledgeBaseAccessDeniedError(KB_PERMISSION_DENIED_MESSAGE, code="KB_PERMISSION_DENIED")
         return kb
 
     def _resolve_role(self, kb: db_models.KnowledgeBase, *, user_id: str) -> Optional[str]:
@@ -253,12 +271,12 @@ class KnowledgeBaseService:
 
         existing = self.db.scalar(query)
         if existing is not None:
-            raise KnowledgeBaseConflictError(KB_SLUG_CONFLICT_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_SLUG_CONFLICT_MESSAGE, code="KB_SLUG_CONFLICT")
 
     @staticmethod
     def _role_satisfies(actual_role: str, minimum_role: str) -> bool:
         if actual_role not in _VALID_KB_ROLES or minimum_role not in _VALID_KB_ROLES:
-            raise KnowledgeBaseError(KB_UNKNOWN_ROLE_MESSAGE)
+            raise KnowledgeBaseError(KB_UNKNOWN_ROLE_MESSAGE, code="KB_INVALID_ROLE")
         ordering = {role: index for index, role in enumerate(reversed(_VALID_KB_ROLES))}
         return ordering[actual_role] >= ordering[minimum_role]
 
@@ -290,9 +308,9 @@ class KnowledgeBaseSharingService:
     ) -> db_models.KnowledgeBaseShare:
         kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="manager")
         if target_user_id == kb.owner_id:
-            raise KnowledgeBaseConflictError(KB_SHARE_OWNER_FORBIDDEN_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_SHARE_OWNER_FORBIDDEN_MESSAGE, code="KB_INVALID_SHARE_TARGET")
         if role not in {"viewer", "editor", "manager"}:
-            raise KnowledgeBaseError(KB_SHARE_INVALID_ROLE_MESSAGE)
+            raise KnowledgeBaseError(KB_SHARE_INVALID_ROLE_MESSAGE, code="KB_INVALID_SHARE_ROLE")
         existing = self.db.scalar(
             select(db_models.KnowledgeBaseShare).where(
                 db_models.KnowledgeBaseShare.kb_id == kb_id,
@@ -300,7 +318,7 @@ class KnowledgeBaseSharingService:
             )
         )
         if existing is not None:
-            raise KnowledgeBaseConflictError(KB_SHARE_CONFLICT_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_SHARE_CONFLICT_MESSAGE, code="KB_SHARE_CONFLICT")
 
         share = db_models.KnowledgeBaseShare(
             id=str(uuid4()),
@@ -323,10 +341,10 @@ class KnowledgeBaseSharingService:
     ) -> db_models.KnowledgeBaseShare:
         share = self.db.get(db_models.KnowledgeBaseShare, share_id)
         if share is None:
-            raise KnowledgeBaseNotFoundError(KB_SHARE_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(KB_SHARE_NOT_FOUND_MESSAGE, code="KB_SHARE_NOT_FOUND")
         self.kb_service.get_kb(user_id=user_id, kb_id=share.kb_id, minimum_role="manager")
         if role not in {"viewer", "editor", "manager"}:
-            raise KnowledgeBaseError(KB_SHARE_INVALID_ROLE_MESSAGE)
+            raise KnowledgeBaseError(KB_SHARE_INVALID_ROLE_MESSAGE, code="KB_INVALID_SHARE_ROLE")
         share.role = role
         self.db.commit()
         self.db.refresh(share)
@@ -335,7 +353,7 @@ class KnowledgeBaseSharingService:
     def revoke_share(self, *, user_id: str, share_id: str) -> None:
         share = self.db.get(db_models.KnowledgeBaseShare, share_id)
         if share is None:
-            raise KnowledgeBaseNotFoundError(KB_SHARE_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(KB_SHARE_NOT_FOUND_MESSAGE, code="KB_SHARE_NOT_FOUND")
         self.kb_service.get_kb(user_id=user_id, kb_id=share.kb_id, minimum_role="manager")
         self.db.delete(share)
         self.db.commit()

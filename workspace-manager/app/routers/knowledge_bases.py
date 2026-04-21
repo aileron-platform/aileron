@@ -74,7 +74,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "INVALID_FILE_TYPE",
-                    "message": "不支援的檔案副檔名: .exe",
+                    "message": "Unsupported file extension: .exe",
                     "details": {
                         "path": "/malware.exe",
                         "extension": ".exe",
@@ -90,7 +90,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "KB_NOT_FOUND",
-                    "message": "知識庫不存在",
+                    "message": "Knowledge base not found",
                     "details": {"resource": "knowledge_base"},
                 }
             },
@@ -102,7 +102,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "KB_QUOTA_EXCEEDED",
-                    "message": "知識庫容量配額不足",
+                    "message": "Knowledge base quota exceeded",
                     "details": {
                         "kbId": "kb-123",
                         "currentSizeBytes": 4,
@@ -117,7 +117,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "KB_ALREADY_ATTACHED",
-                    "message": "知識庫已掛載到此工作區",
+                    "message": "Knowledge base is already attached to this workspace",
                     "details": {"resource": "knowledge_base_attachment"},
                 }
             },
@@ -127,7 +127,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "KB_MOUNT_ALIAS_CONFLICT",
-                    "message": "知識庫掛載別名已存在",
+                    "message": "Knowledge base mount alias already exists",
                     "details": {"resource": "knowledge_base_attachment"},
                 }
             },
@@ -137,7 +137,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "KB_IN_USE",
-                    "message": "知識庫仍被工作區掛載",
+                    "message": "Knowledge base is still attached to one or more workspaces",
                     "details": {"resource": "knowledge_base"},
                 }
             },
@@ -149,7 +149,7 @@ _KB_ERROR_EXAMPLES = {
             "value": {
                 "detail": {
                     "code": "FILE_TOO_LARGE",
-                    "message": "檔案大小超過限制",
+                    "message": "File size exceeds the configured limit",
                     "details": {
                         "path": "/too-large.md",
                         "size": 8,
@@ -162,11 +162,11 @@ _KB_ERROR_EXAMPLES = {
 }
 
 _KB_ERROR_DESCRIPTIONS = {
-    400: "Knowledge base 請求不合法，例如白名單副檔名限制或路徑格式錯誤。",
-    403: "目前使用者沒有對 knowledge base 或 workspace 的操作權限。",
-    404: "指定 knowledge base、share 或 attachment 不存在，或 KB 已 tombstone。",
-    409: "Knowledge base 狀態衝突，例如配額超限、重複 attach、alias 衝突或 KB 仍被掛載。",
-    413: "上傳或寫入的單一檔案超過 `KB_SINGLE_FILE_SIZE_LIMIT`。",
+    400: "Knowledge base 請求不合法，例如白名單副檔名限制或路徑格式錯誤。`detail.message` 會依請求語系本地化。",
+    403: "目前使用者沒有對 knowledge base 或 workspace 的操作權限。`detail.message` 會依請求語系本地化。",
+    404: "指定 knowledge base、share 或 attachment 不存在，或 KB 已 tombstone。`detail.message` 會依請求語系本地化。",
+    409: "Knowledge base 狀態衝突，例如配額超限、重複 attach、alias 衝突或 KB 仍被掛載。`detail.message` 會依請求語系本地化。",
+    413: "上傳或寫入的單一檔案超過 `KB_SINGLE_FILE_SIZE_LIMIT`。`detail.message` 會依請求語系本地化。",
 }
 
 
@@ -226,9 +226,9 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
     if code == "KB_SHARE_NOT_FOUND":
         return translate("knowledge_base.share.not_found")
     if code == "KB_ACCESS_DENIED":
-        if fallback_message == "知識庫權限不足":
-            return translate("knowledge_base.permission_denied")
         return translate("knowledge_base.access_denied")
+    if code == "KB_PERMISSION_DENIED":
+        return translate("knowledge_base.permission_denied")
     if code == "KB_ALREADY_ATTACHED":
         return translate("knowledge_base.already_attached")
     if code == "KB_MOUNT_ALIAS_CONFLICT":
@@ -249,6 +249,10 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.invalid.owner")
     if code == "KB_INVALID_ROLE":
         return translate("knowledge_base.invalid.role")
+    if code == "KB_CONFLICT":
+        return translate("knowledge_base.conflict")
+    if code == "KB_INVALID_REQUEST":
+        return translate("knowledge_base.invalid.request")
     if code == "FILE_NOT_FOUND":
         return translate("knowledge_base.file.not_found", path=details.get("path", ""))
     if code == "FILE_ALREADY_EXISTS":
@@ -267,7 +271,7 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.file.kb_quota_exceeded")
     if code == "USER_KB_QUOTA_EXCEEDED":
         return translate("knowledge_base.file.owner_quota_exceeded")
-    return fallback_message
+    return translate("knowledge_base.unexpected_error")
 
 
 def _translate_kb_details(translate, *, code: str, details: dict) -> dict:
@@ -283,33 +287,33 @@ def _translate_kb_details(translate, *, code: str, details: dict) -> dict:
 def _raise_kb_error(request: Request, exc: Exception) -> None:
     translate = request.state.translate
     if isinstance(exc, KnowledgeBaseNotFoundError):
-        code = _map_not_found_code(str(exc))
-        details = _not_found_details(str(exc))
+        code = getattr(exc, "code", "KB_NOT_FOUND")
+        details = _not_found_details(code)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_build_error_detail(
                 code=code,
-                message=_translate_kb_message(translate, code=code, fallback_message=str(exc), details=details),
+                message=_translate_kb_message(translate, code=code, fallback_message="", details=details),
                 details=details,
             ),
         ) from exc
     if isinstance(exc, KnowledgeBaseAccessDeniedError):
-        code = "KB_ACCESS_DENIED"
+        code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=_build_error_detail(
                 code=code,
-                message=_translate_kb_message(translate, code=code, fallback_message=str(exc), details={}),
+                message=_translate_kb_message(translate, code=code, fallback_message="", details={}),
             ),
         ) from exc
     if isinstance(exc, KnowledgeBaseConflictError):
-        code = _map_conflict_code(str(exc))
-        details = _conflict_details(str(exc))
+        code = getattr(exc, "code", "KB_CONFLICT")
+        details = _conflict_details(code)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_build_error_detail(
                 code=code,
-                message=_translate_kb_message(translate, code=code, fallback_message=str(exc), details=details),
+                message=_translate_kb_message(translate, code=code, fallback_message="", details=details),
                 details=details,
             ),
         ) from exc
@@ -328,12 +332,13 @@ def _raise_kb_error(request: Request, exc: Exception) -> None:
         )
         raise HTTPException(status_code=exc.status_code, detail=_build_error_detail(**localized)) from exc
     if isinstance(exc, ValueError):
-        code = _map_invalid_request_code(str(exc))
+        code = getattr(exc, "code", "KB_INVALID_REQUEST")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
                 code=code,
-                message=_translate_kb_message(translate, code=code, fallback_message=str(exc), details={}),
+                message=_translate_kb_message(translate, code=code, fallback_message="", details={}),
+                details=getattr(exc, "params", {}),
             ),
         ) from exc
     raise exc
@@ -347,92 +352,39 @@ def _build_error_detail(*, code: str, message: str, details: dict | None = None)
     }
 
 
-def _map_not_found_code(message: str) -> str:
-    mapping = {
-        KB_NOT_FOUND_MESSAGE: "KB_NOT_FOUND",
-        KB_ATTACHMENT_NOT_FOUND_MESSAGE: "KB_ATTACHMENT_NOT_FOUND",
-        KB_SHARE_NOT_FOUND_MESSAGE: "KB_SHARE_NOT_FOUND",
-        WORKSPACE_NOT_FOUND_MESSAGE: "WORKSPACE_NOT_FOUND",
-    }
-    return mapping.get(message, "KB_NOT_FOUND")
-
-
-def _map_conflict_code(message: str) -> str:
-    mapping = {
-        KB_ALREADY_ATTACHED_MESSAGE: "KB_ALREADY_ATTACHED",
-        KB_MOUNT_ALIAS_CONFLICT_MESSAGE: "KB_MOUNT_ALIAS_CONFLICT",
-        KB_IN_USE_MESSAGE: "KB_IN_USE",
-        KB_SLUG_CONFLICT_MESSAGE: "KB_SLUG_CONFLICT",
-        KB_SHARE_CONFLICT_MESSAGE: "KB_SHARE_CONFLICT",
-        KB_SHARE_OWNER_FORBIDDEN_MESSAGE: "KB_INVALID_SHARE_TARGET",
-    }
-    return mapping.get(message, "KB_CONFLICT")
-
-
-def _conflict_details(message: str) -> dict:
-    if message in {
-        KB_ALREADY_ATTACHED_MESSAGE,
-        KB_MOUNT_ALIAS_CONFLICT_MESSAGE,
+def _conflict_details(code: str) -> dict:
+    if code in {
+        "KB_ALREADY_ATTACHED",
+        "KB_MOUNT_ALIAS_CONFLICT",
     }:
         return {"resource": "knowledge_base_attachment"}
     return {"resource": "knowledge_base"}
 
 
-def _map_invalid_request_code(message: str) -> str:
-    mapping = {
-        KB_SHARE_INVALID_ROLE_MESSAGE: "KB_INVALID_SHARE_ROLE",
-        KB_SLUG_REQUIRED_MESSAGE: "KB_INVALID_SLUG",
-        KB_OWNER_NOT_FOUND_MESSAGE: "KB_OWNER_NOT_FOUND",
-        KB_UNKNOWN_ROLE_MESSAGE: "KB_INVALID_ROLE",
-    }
-    return mapping.get(message, "KB_INVALID_REQUEST")
-
-
-def _not_found_details(message: str) -> dict:
+def _not_found_details(code: str) -> dict:
     resource_mapping = {
-        KB_NOT_FOUND_MESSAGE: "knowledge_base",
-        KB_ATTACHMENT_NOT_FOUND_MESSAGE: "knowledge_base_attachment",
-        KB_SHARE_NOT_FOUND_MESSAGE: "knowledge_base_share",
-        WORKSPACE_NOT_FOUND_MESSAGE: "workspace",
+        "KB_NOT_FOUND": "knowledge_base",
+        "KB_ATTACHMENT_NOT_FOUND": "knowledge_base_attachment",
+        "KB_SHARE_NOT_FOUND": "knowledge_base_share",
+        "WORKSPACE_NOT_FOUND": "workspace",
     }
-    return {"resource": resource_mapping.get(message, "knowledge_base")}
+    return {"resource": resource_mapping.get(code, "knowledge_base")}
 
 
 def _localize_file_management_error(exc: FileManagementException) -> dict:
     details = dict(exc.details)
     code = exc.code
-    message = exc.message
 
-    if code == "FILE_NOT_FOUND":
-        path = details.get("path", "")
-        message = f"找不到檔案: {path}"
-    elif code == "FILE_ALREADY_EXISTS":
-        path = details.get("path", "")
-        message = f"檔案已存在: {path}"
-    elif code == "INVALID_PATH":
-        message = "無效的路徑"
+    if code == "INVALID_PATH":
         reason = details.get("reason")
         if reason == KB_PATH_TRAVERSAL_REASON:
             details["reason"] = KB_PATH_TRAVERSAL_REASON
         elif reason == KB_NOT_A_FILE_REASON:
             details["reason"] = KB_NOT_A_FILE_REASON
-    elif code == "FILE_TOO_LARGE":
-        message = "檔案大小超過限制"
-    elif code == "CONTENT_CONFLICT":
-        message = KB_CONTENT_CONFLICT_MESSAGE
-    elif code == "DIRECTORY_NOT_EMPTY":
-        message = "目錄非空，若要刪除請使用 recursive=true"
-    elif code == "INVALID_FILE_TYPE":
-        extension = details.get("extension")
-        message = f"{KB_INVALID_FILE_TYPE_MESSAGE}: {extension}" if extension else KB_INVALID_FILE_TYPE_MESSAGE
-    elif code == "KB_QUOTA_EXCEEDED":
-        message = KB_QUOTA_EXCEEDED_MESSAGE
-    elif code == "USER_KB_QUOTA_EXCEEDED":
-        message = KB_OWNER_QUOTA_EXCEEDED_MESSAGE
 
     return {
         "code": code,
-        "message": message,
+        "message": exc.message,
         "details": details,
     }
 

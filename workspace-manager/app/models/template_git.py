@@ -70,6 +70,9 @@ class GitOperationResponse(BaseModel):
     message: str = Field(..., description="回應訊息")
     data: Optional[dict] = Field(None, description="額外資料")
     error: Optional[str] = Field(None, description="錯誤訊息")
+    error_code: Optional[str] = Field(None, alias="errorCode", description="穩定錯誤代碼")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class GitStatusResponse(BaseModel):

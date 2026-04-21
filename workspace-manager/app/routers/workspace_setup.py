@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from app.core.openapi import build_responses
 from app.models import WorkspaceSetupStatus
 from app.services import get_workspace_setup_service
-from app.services.git_service import get_git_service
-from app.services.workspace_setup_service import WorkspaceSetupService
+from app.services.git_service import GitBranchLookupError, get_git_service
+from app.services.workspace_setup_service import WorkspaceSetupError, WorkspaceSetupService
 
 router = APIRouter(prefix="/workspaces/{workspace_id}/setup", tags=["workspace-setup"])
 
@@ -21,6 +21,36 @@ class GitBranchesResponse(BaseModel):
     """Git 分支列表回應"""
     branches: List[str]
     total: int
+
+
+def _translate_workspace_setup_value_error(translate, exc: Exception, *, operation: str) -> str:
+    code = getattr(exc, "code", "")
+    if code == "WORKSPACE_NOT_FOUND":
+        return translate("workspace.not_found")
+    if code == "WORKSPACE_SETUP_SYNC_RUNTIME_NOT_READY":
+        return translate("workspace_setup.sync.runtime_not_ready")
+    if code == "WORKSPACE_SETUP_STATUS_RUNTIME_NOT_READY":
+        return translate("workspace_setup.status.runtime_not_ready")
+    return translate(f"workspace_setup.{operation}.failed")
+
+
+def _translate_git_branch_error(translate, exc: Exception) -> str:
+    code = getattr(exc, "code", "")
+    if code == "WORKSPACE_SETUP_GIT_EMPTY_URL":
+        return translate("workspace_setup.git.empty_url")
+    if code == "WORKSPACE_SETUP_GIT_INVALID_URL":
+        return translate("workspace_setup.git.invalid_url")
+    if code == "WORKSPACE_SETUP_GIT_AUTH_FAILED":
+        return translate("workspace_setup.git.auth_failed")
+    if code == "WORKSPACE_SETUP_GIT_RESOLVE_FAILED":
+        return translate("workspace_setup.git.resolve_failed")
+    if code == "WORKSPACE_SETUP_GIT_REPOSITORY_NOT_FOUND":
+        return translate("workspace_setup.git.repository_not_found")
+    if code == "WORKSPACE_SETUP_GIT_TIMEOUT":
+        return translate("workspace_setup.git.timeout")
+    if code == "WORKSPACE_SETUP_GIT_FETCH_FAILED":
+        return translate("workspace_setup.git.fetch_failed")
+    return translate("workspace_setup.git.fetch_failed")
 
 
 @router.post(
@@ -38,14 +68,18 @@ async def trigger_workspace_initial_sync(
     """啟動新建 Workspace 的初始同步流程"""
     try:
         return await service.run_initial_sync(workspace_id)
-    except ValueError as exc:
-        detail = str(exc)
-        if "不存在" in detail:
+    except WorkspaceSetupError as exc:
+        if getattr(exc, "code", "") == "WORKSPACE_NOT_FOUND":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=request.state.translate("workspace.not_found")
             ) from exc
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_translate_workspace_setup_value_error(
+                request.state.translate, exc, operation="sync"
+            ),
+        ) from exc
 
 
 @router.get(
@@ -66,14 +100,18 @@ async def get_workspace_setup_status(
     """
     try:
         return await service.fetch_runtime_status(workspace_id)
-    except ValueError as exc:
-        detail = str(exc)
-        if "不存在" in detail:
+    except WorkspaceSetupError as exc:
+        if getattr(exc, "code", "") == "WORKSPACE_NOT_FOUND":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=request.state.translate("workspace.not_found")
             ) from exc
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_translate_workspace_setup_value_error(
+                request.state.translate, exc, operation="status"
+            ),
+        ) from exc
 
 
 @router.get(
@@ -84,6 +122,7 @@ async def get_workspace_setup_status(
 )
 async def get_git_branches(
     workspace_id: str,
+    request: Request,
     git_url: str = Query(..., description="Git repository URL"),
 ) -> GitBranchesResponse:
     """
@@ -114,17 +153,16 @@ async def get_git_branches(
     try:
         branches = git_service.get_remote_branches(git_url)
         return GitBranchesResponse(branches=branches, total=len(branches))
-    except ValueError as exc:
+    except GitBranchLookupError as exc:
         # Git URL 無效或認證失敗
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc)
+            detail=_translate_git_branch_error(request.state.translate, exc)
         ) from exc
     except RuntimeError as exc:
-        # Git 命令執行失敗
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(exc)
+            detail=_translate_git_branch_error(request.state.translate, exc)
         ) from exc
 
 

@@ -28,6 +28,76 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _translate_git_result(translate, result) -> str:
+    code = getattr(result, "code", "")
+    params = getattr(result, "params", {}) or {}
+
+    if code == "GIT_REPO_NOT_FOUND":
+        return translate("templates.git.repo_not_found")
+    if code == "GIT_NO_CHANGES":
+        return translate("templates.git.no_changes_to_commit")
+    if code == "GIT_REMOTE_URL_EMPTY":
+        return translate("templates.git.remote_url_empty")
+    if code == "GIT_REPO_ACCESS_FAILED":
+        return translate("templates.git.repo_access_failed")
+    if code == "GIT_CLONE_TARGET_HAS_CHANGES":
+        return translate("templates.git.clone_target_has_changes")
+    if code == "GIT_PULL_HAS_UNCOMMITTED_CHANGES":
+        return translate("templates.git.pull_has_uncommitted_changes")
+    if code == "GIT_PLUGINS_DIR_MISSING":
+        return translate("templates.git.plugins_dir_missing")
+    if code == "GIT_NO_TEMPLATES_FOUND":
+        return translate("templates.git.no_templates_found")
+    if code == "GIT_PUSH_REMOTE_NOT_CONFIGURED":
+        return translate("templates.git.push_remote_not_configured")
+    if code == "GIT_BRANCH_NOT_FOUND":
+        return translate("templates.git.branch_not_found", branch=params.get("branch", ""))
+    if code == "GIT_REMOTE_URL_SET_FAILED":
+        return translate("templates.git.remote_url_set_error_simple")
+    if code == "GIT_COMMIT_FAILED":
+        return translate("templates.git.commit_failed_simple")
+    if code == "GIT_PUSH_FAILED_LOCAL_COMMITTED":
+        return translate("templates.git.push_failed_local_committed_simple")
+    if code == "GIT_COMMIT_PUSH_SUCCESS":
+        return translate("templates.git.commit_and_push_success", commit_info=params.get("commitInfo", ""))
+    if code == "GIT_COMMIT_LOCAL_SUCCESS":
+        return translate("templates.git.commit_local_success", commit_info=params.get("commitInfo", ""))
+    if code == "GIT_PULL_CONFLICT":
+        return translate("templates.git.pull_conflict_simple")
+    if code == "GIT_PULL_FAILED":
+        return translate("templates.git.pull_failed_simple")
+    if code == "GIT_PULL_SUCCESS":
+        return translate("templates.git.pull_success")
+    if code == "GIT_CLONE_REMOTE_MISMATCH":
+        return translate("templates.git.clone_remote_mismatch", current_url=params.get("currentUrl", ""), new_url=params.get("newUrl", ""))
+    if code == "GIT_CHECKOUT_BRANCH_FAILED":
+        return translate("templates.git.checkout_branch_failed_simple", branch=params.get("branch", ""))
+    if code == "GIT_CLONE_FAILED":
+        return translate("templates.git.clone_failed_simple")
+    if code == "GIT_CLONE_SUCCESS":
+        return translate("templates.git.clone_success_detail", detail=params.get("detail", ""))
+    if code == "GIT_CLONE_UPDATE_SUCCESS":
+        return translate("templates.git.clone_update_success", detail=params.get("detail", ""))
+    if code == "GIT_SCAN_FAILED":
+        return translate("templates.git.scan_failed_simple")
+    if code == "GIT_SCAN_SUCCESS":
+        return translate("templates.git.scan_success", count=params.get("count", 0))
+    if code == "GIT_USER_CONFIG_REQUIRED":
+        return translate("templates.git_user_config_required")
+    if code == "GIT_USER_CONFIG_UPDATE_FAILED":
+        return translate("templates.git_user_config_update_failed")
+    return getattr(result, "message", "")
+
+
+def _translate_git_exception(translate, exc: Exception) -> str:
+    message = str(exc)
+    if message in {"SSH_PRIVATE_KEY_INVALID", "SSH_PUBLIC_KEY_INVALID", "私鑰格式不正確", "公鑰格式不正確"}:
+        return translate("templates.ssh_keys_invalid_format")
+    if message == "SSH_KEY_GENERATION_FAILED":
+        return translate("git.ssh_key_gen_failed_simple")
+    return message
+
+
 def get_template_git_service() -> TemplateGitService:
     """取得模板 Git 服務實例"""
     return TemplateGitService()
@@ -132,22 +202,23 @@ async def commit_and_push(
     """提交變更並推送到遠端（本地同步遠端）"""
     try:
         translate = request.state.translate
-        success, message = git_service.commit_and_push(
+        result = git_service.commit_and_push(
             message=payload.message,
             branch=payload.branch,
             push=payload.push
         )
 
-        if success:
+        if result.success:
             return GitOperationResponse(
                 success=True,
-                message=message,
+                message=_translate_git_result(translate, result),
             )
         else:
             return GitOperationResponse(
                 success=False,
-                message=message,
-                error=message,
+                message=translate("templates.git_operation_failed"),
+                error=_translate_git_result(translate, result),
+                error_code=result.code,
             )
     except Exception as e:
         logger.error(f"提交並推送失敗: {e}")
@@ -155,7 +226,7 @@ async def commit_and_push(
         return GitOperationResponse(
             success=False,
             message=translate("templates.git_operation_failed"),
-            error=str(e),
+            error=_translate_git_exception(translate, e),
         )
 
 
@@ -174,18 +245,19 @@ async def pull_from_remote(
     """從遠端拉取變更（遠端同步本地）"""
     try:
         translate = request.state.translate
-        success, message = git_service.pull_from_remote(branch=payload.branch)
+        result = git_service.pull_from_remote(branch=payload.branch)
 
-        if success:
+        if result.success:
             return GitOperationResponse(
                 success=True,
-                message=message,
+                message=_translate_git_result(translate, result),
             )
         else:
             return GitOperationResponse(
                 success=False,
-                message=message,
-                error=message,
+                message=translate("templates.git_operation_failed"),
+                error=_translate_git_result(translate, result),
+                error_code=result.code,
             )
     except Exception as e:
         logger.error(f"從遠端拉取失敗: {e}")
@@ -193,7 +265,7 @@ async def pull_from_remote(
         return GitOperationResponse(
             success=False,
             message=translate("templates.git_operation_failed"),
-            error=str(e),
+            error=_translate_git_exception(translate, e),
         )
 
 
@@ -238,20 +310,21 @@ async def update_git_user_config(
 
     try:
         translate = request.state.translate
-        success, message = git_service.update_user_config(
+        result = git_service.update_user_config(
             user_name=payload.user_name or "",
             user_email=payload.user_email or "",
         )
 
-        if success:
+        if result.success:
             return GitOperationResponse(
                 success=True,
                 message=translate("templates.git_user_config_update_success")
             )
         return GitOperationResponse(
             success=False,
-            message=message,
-            error=message
+            message=translate("templates.git_user_config_update_failed"),
+            error=_translate_git_result(translate, result),
+            error_code=result.code,
         )
     except Exception as e:
         logger.error(f"更新 Git 使用者資訊失敗: {e}")
@@ -259,7 +332,7 @@ async def update_git_user_config(
         return GitOperationResponse(
             success=False,
             message=translate("templates.git_user_config_update_failed"),
-            error=str(e)
+            error=_translate_git_exception(translate, e)
         )
 
 
@@ -279,17 +352,18 @@ async def set_git_remote_url(
 
     try:
         translate = request.state.translate
-        success, message = git_service.set_remote_url(url=payload.url)
+        result = git_service.set_remote_url(url=payload.url)
 
-        if success:
+        if result.success:
             return GitOperationResponse(
                 success=True,
                 message=translate("templates.git_remote_url_set_success")
             )
         return GitOperationResponse(
             success=False,
-            message=message,
-            error=message
+            message=translate("templates.git_remote_url_set_failed"),
+            error=_translate_git_result(translate, result),
+            error_code=result.code,
         )
     except Exception as e:
         logger.error(f"設定遠端倉庫 URL 失敗: {e}")
@@ -297,7 +371,7 @@ async def set_git_remote_url(
         return GitOperationResponse(
             success=False,
             message=translate("templates.git_remote_url_set_failed"),
-            error=str(e)
+            error=_translate_git_exception(translate, e)
         )
 
 
@@ -332,7 +406,7 @@ def _rebuild_templates_background(
             logger.error(f"清除模板資料失敗: {e}")
             progress_service.set_error(
                 task_id,
-                translate_func("templates.rebuild_clear_failed", error=str(e))
+                translate_func("templates.rebuild_clear_failed_simple")
             )
             return
 
@@ -344,7 +418,8 @@ def _rebuild_templates_background(
 
         # 掃描並同步模板到資料庫
         try:
-            sync_success, sync_message, templates = git_service.scan_and_sync_templates()
+            sync_result = git_service.scan_and_sync_templates()
+            sync_success, sync_message, templates = sync_result
 
             if sync_success and templates:
                 template_service = TemplateService(db)
@@ -402,7 +477,7 @@ def _rebuild_templates_background(
             else:
                 progress_service.set_error(
                     task_id,
-                    sync_message or translate_func("templates.rebuild_scan_failed")
+                    _translate_git_result(translate_func, sync_result) or translate_func("templates.rebuild_scan_failed")
                 )
         except Exception as e:
             logger.error(f"掃描模板失敗: {e}")
@@ -415,7 +490,7 @@ def _rebuild_templates_background(
         logger.error(f"重建模板資料庫任務失敗: {e}")
         progress_service.set_error(
             task_id,
-            translate_func("templates.rebuild_task_failed", error=str(e))
+            translate_func("templates.rebuild_task_failed_simple")
         )
 
 
@@ -444,10 +519,11 @@ def _clone_repository_background(
         )
 
         # 執行 clone
-        success, message = git_service.clone_repository(url=url, branch=branch)
+        clone_result = git_service.clone_repository(url=url, branch=branch)
+        success, message = clone_result
 
         if not success:
-            progress_service.set_error(task_id, message)
+            progress_service.set_error(task_id, _translate_git_result(translate_func, clone_result))
             return
 
         progress_service.update_progress(
@@ -458,7 +534,8 @@ def _clone_repository_background(
 
         # 掃描並同步模板到資料庫
         try:
-            sync_success, sync_message, templates = git_service.scan_and_sync_templates()
+            sync_result = git_service.scan_and_sync_templates()
+            sync_success, sync_message, templates = sync_result
 
             if sync_success and templates:
                 template_service = TemplateService(db)
@@ -524,7 +601,7 @@ def _clone_repository_background(
                         logger.error(f"同步模板 {template_info['id']} 失敗: {e}", exc_info=True)
 
                 # 完成
-                result_message = translate_func("templates.clone_success", message=message, count=synced_count)
+                result_message = translate_func("templates.clone_success", message=_translate_git_result(translate_func, clone_result), count=synced_count)
                 progress_service.set_completed(
                     task_id,
                     result={"message": result_message, "synced_count": synced_count},
@@ -534,7 +611,7 @@ def _clone_repository_background(
                 logger.warning(f"掃描模板失敗: {sync_message}")
                 progress_service.set_completed(
                     task_id,
-                    result={"message": message, "synced_count": 0},
+                    result={"message": _translate_git_result(translate_func, clone_result), "synced_count": 0},
                 )
 
         except Exception as e:
@@ -542,12 +619,12 @@ def _clone_repository_background(
             # 即使同步失敗，clone 已成功
             progress_service.set_completed(
                 task_id,
-                result={"message": message, "synced_count": 0},
+                result={"message": _translate_git_result(translate_func, clone_result), "synced_count": 0},
             )
 
     except Exception as e:
         logger.error(f"Clone 倉庫失敗: {e}", exc_info=True)
-        progress_service.set_error(task_id, str(e))
+        progress_service.set_error(task_id, _translate_git_exception(translate_func, e))
 
 
 @router.post(
@@ -781,7 +858,7 @@ async def generate_template_center_ssh_keys(
         translate = request.state.translate
         return {
             "success": False,
-            "error": str(e),
+            "error": _translate_git_exception(translate, e),
             "message": translate("templates.ssh_keys_gen_failed")
         }
 
@@ -814,7 +891,7 @@ async def update_template_center_ssh_keys(
         translate = request.state.translate
         return {
             "success": False,
-            "error": str(e),
+            "error": _translate_git_exception(translate, e),
             "message": translate("templates.ssh_keys_invalid_format")
         }
     except Exception as e:
@@ -822,7 +899,7 @@ async def update_template_center_ssh_keys(
         translate = request.state.translate
         return {
             "success": False,
-            "error": str(e),
+            "error": _translate_git_exception(translate, e),
             "message": translate("templates.ssh_keys_update_failed")
         }
 
@@ -850,7 +927,7 @@ async def delete_template_center_ssh_keys(
         translate = request.state.translate
         return {
             "success": False,
-            "error": str(e),
+            "error": _translate_git_exception(translate, e),
             "message": translate("templates.ssh_keys_delete_failed")
         }
 

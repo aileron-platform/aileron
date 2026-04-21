@@ -54,8 +54,29 @@ WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE = "runtimeResources 僅支援 Ku
 WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE = "portMappings 僅支援 Docker 工作區"
 
 
+class WorkspaceError(ValueError):
+    """工作區相關可預期錯誤。"""
+
+    def __init__(self, message: str, *, code: str = "WORKSPACE_INVALID_REQUEST", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
+
+class WorkspaceNotFoundError(WorkspaceError):
+    """工作區或相關資源不存在。"""
+
+    def __init__(self, message: str, *, code: str = "WORKSPACE_NOT_FOUND", params: dict | None = None) -> None:
+        super().__init__(message, code=code, params=params)
+
+
 class WorkspaceAccessDeniedError(PermissionError):
     """使用者沒有工作區所需權限。"""
+
+    def __init__(self, message: str, *, code: str = "WORKSPACE_ACCESS_DENIED", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
 
 
 @dataclass(frozen=True)
@@ -184,7 +205,7 @@ class WorkspaceService:
     def create(self, payload: WorkspaceCreateRequest) -> WorkspaceDetail:
         owner = self.db.get(db_models.User, payload.owner_id)
         if not owner:
-            raise ValueError(WORKSPACE_OWNER_NOT_FOUND_MESSAGE)
+            raise WorkspaceError(WORKSPACE_OWNER_NOT_FOUND_MESSAGE, code="WORKSPACE_OWNER_NOT_FOUND")
 
         provisioner = self._resolve_workspace_provisioner()
         self._ensure_port_mappings_supported(
@@ -384,7 +405,7 @@ class WorkspaceService:
     ) -> WorkspaceShareListResponse:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise WorkspaceNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -411,7 +432,7 @@ class WorkspaceService:
     ) -> WorkspaceShare:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise WorkspaceNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -423,9 +444,15 @@ class WorkspaceService:
             select(db_models.User).where(func.lower(db_models.User.email) == normalized_email)
         )
         if not target_user:
-            raise ValueError(WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE)
+            raise WorkspaceNotFoundError(
+                WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE,
+                code="WORKSPACE_SHARE_TARGET_NOT_FOUND",
+            )
         if target_user.id == workspace.owner_id:
-            raise ValueError(WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE)
+            raise WorkspaceError(
+                WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE,
+                code="WORKSPACE_INVALID_SHARE_TARGET",
+            )
 
         existing_share = self.db.scalar(
             select(db_models.WorkspaceShare).where(
@@ -434,7 +461,7 @@ class WorkspaceService:
             )
         )
         if existing_share:
-            raise ValueError(WORKSPACE_SHARE_CONFLICT_MESSAGE)
+            raise WorkspaceError(WORKSPACE_SHARE_CONFLICT_MESSAGE, code="WORKSPACE_SHARE_CONFLICT")
 
         share = db_models.WorkspaceShare(
             id=str(uuid4()),
@@ -458,7 +485,7 @@ class WorkspaceService:
     ) -> Optional[WorkspaceShare]:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise WorkspaceNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -483,7 +510,7 @@ class WorkspaceService:
     ) -> bool:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise WorkspaceNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -818,7 +845,11 @@ class WorkspaceService:
 
         namespace = target_namespace or self.settings.RUNTIME_K8S_NAMESPACE
         if namespace not in self.settings.RUNTIME_K8S_ALLOWED_NAMESPACES:
-            raise ValueError(f"{WORKSPACE_INVALID_NAMESPACE_MESSAGE}: {namespace}")
+            raise WorkspaceError(
+                WORKSPACE_INVALID_NAMESPACE_MESSAGE,
+                code="WORKSPACE_INVALID_NAMESPACE",
+                params={"namespace": namespace},
+            )
         return namespace
 
     def _resolve_runtime_resources_for_write(
@@ -830,7 +861,10 @@ class WorkspaceService:
         if runtime_resources is None:
             return None
         if provisioner != "kubernetes":
-            raise ValueError(WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE)
+            raise WorkspaceError(
+                WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE,
+                code="WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED",
+            )
         return runtime_resources.model_dump(by_alias=True)
 
     def _ensure_port_mappings_supported(
@@ -840,7 +874,10 @@ class WorkspaceService:
         port_mappings: list[WorkspacePortMapping],
     ) -> None:
         if provisioner == "kubernetes" and port_mappings:
-            raise ValueError(WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE)
+            raise WorkspaceError(
+                WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE,
+                code="WORKSPACE_PORT_MAPPINGS_UNSUPPORTED",
+            )
 
     def _build_system_port_mappings(
         self,
@@ -954,8 +991,10 @@ class WorkspaceService:
 
     def _ensure_firewall_available(self, *, provisioner: Optional[str]) -> None:
         if not self._is_firewall_available_for_provisioner(provisioner):
-            raise ValueError(
-                self._firewall_unavailable_reason_for_provisioner(provisioner)
+            raise WorkspaceError(
+                self._firewall_unavailable_reason_for_provisioner(provisioner),
+                code="WORKSPACE_FIREWALL_UNAVAILABLE",
+                params={"reason": self._firewall_unavailable_reason_for_provisioner(provisioner)},
             )
 
     def _to_components(self, workspace: db_models.Workspace) -> WorkspaceComponents:

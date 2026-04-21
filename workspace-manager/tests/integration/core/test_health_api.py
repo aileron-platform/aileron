@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import Mock, patch
+
+import httpx
 import pytest
 from fastapi import status
 
@@ -136,6 +139,64 @@ class TestHealthAPI:
         # 併發處理時間應該合理
         total_time = (end_time - start_time) * 1000
         assert total_time < 3000, f"併發處理時間過長: {total_time}ms"
+
+    @pytest.mark.integration
+    def test_hc_007_keycloak_health_skipped_is_localized(self, test_app):
+        client, _ = test_app
+
+        with patch(
+            "app.routers.health.get_keycloak_config",
+            return_value=Mock(enabled=False),
+        ):
+            en_response = client.get("/health/keycloak")
+            assert en_response.status_code == status.HTTP_200_OK
+            assert en_response.json()["message"] == "Authentication is not enabled"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.health.get_keycloak_config",
+            return_value=Mock(enabled=False),
+        ):
+            zh_response = client.get("/health/keycloak")
+            assert zh_response.status_code == status.HTTP_200_OK
+            assert zh_response.json()["message"] == "未啟用認證"
+
+    @pytest.mark.integration
+    def test_hc_008_keycloak_health_http_error_uses_simple_message(self, test_app):
+        client, _ = test_app
+
+        class _FailingAsyncClient:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url):
+                raise httpx.HTTPError("boom")
+
+        mock_config = Mock(
+            enabled=True,
+            server_url="https://keycloak.example.com/realms/test",
+            realm="test",
+        )
+
+        with patch("app.routers.health.get_keycloak_config", return_value=mock_config), patch(
+            "app.routers.health.httpx.AsyncClient",
+            return_value=_FailingAsyncClient(),
+        ):
+            en_response = client.get("/health/keycloak")
+            assert en_response.status_code == status.HTTP_200_OK
+            assert en_response.json()["message"] == "Keycloak connection failed"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch("app.routers.health.get_keycloak_config", return_value=mock_config), patch(
+            "app.routers.health.httpx.AsyncClient",
+            return_value=_FailingAsyncClient(),
+        ):
+            zh_response = client.get("/health/keycloak")
+            assert zh_response.status_code == status.HTTP_200_OK
+            assert zh_response.json()["message"] == "Keycloak 連線失敗"
 
 
 @pytest.fixture

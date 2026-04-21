@@ -20,6 +20,50 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _translate_template_install_error(translate, code: str, params: dict | None = None) -> str:
+    params = params or {}
+    if code == "TEMPLATE_INSTALL_WORKSPACE_NOT_FOUND":
+        return translate("templates.install.workspace_not_found", workspace_id=params.get("workspace_id", ""))
+    if code == "TEMPLATE_INSTALL_WORKSPACE_NOT_RUNNING":
+        return translate("templates.install.workspace_not_running", workspace_id=params.get("workspace_id", ""))
+    if code == "TEMPLATE_INSTALL_TEMPLATE_NOT_FOUND":
+        return translate("templates.install.template_not_found", template_id=params.get("template_id", ""))
+    if code == "TEMPLATE_INSTALL_RUNTIME_URL_MISSING":
+        return translate("templates.install.workspace_runtime_url_missing", workspace_id=params.get("workspace_id", ""))
+    if code == "TEMPLATE_INSTALL_RUNTIME_HTTP_ERROR":
+        return translate(
+            "templates.install.runtime_http_error",
+            status_code=params.get("status_code", ""),
+            response_text=params.get("response_text", ""),
+        )
+    if code == "TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR":
+        return translate("templates.install.runtime_connection_error_simple")
+    return translate("templates.install_failed_simple")
+
+
+def _translate_template_import_value_error(translate, error: str) -> str:
+    if "ZIP 檔案已損壞或格式不正確" in error:
+        return translate("templates.import.invalid_archive")
+    if "缺少 .claude-plugin/plugin.json" in error:
+        return translate("templates.import.missing_plugin_json")
+    if "plugin.json 不是合法的 JSON" in error:
+        return translate("templates.import.invalid_plugin_json")
+    if "plugin.json 缺少 id 欄位" in error:
+        return translate("templates.import.missing_plugin_id")
+    if "plugin.json 的 id 格式不合法" in error:
+        return translate("templates.import.invalid_plugin_id_format")
+    if error.startswith("模板 '") and error.endswith("' 已存在，請使用覆蓋模式"):
+        template_id = error[len("模板 '"):].split("' 已存在，請使用覆蓋模式", 1)[0]
+        return translate("templates.import.already_exists", template_id=template_id)
+    if "模板 metadata 無效" in error:
+        return translate("templates.import.invalid_metadata")
+    return translate("templates.import_failed")
+
+
+def _translate_template_install_generic_error(translate) -> str:
+    return translate("templates.install_failed_simple")
+
+
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
     """取得模板服務實例"""
     return TemplateService(db)
@@ -73,28 +117,32 @@ async def install_template(
         # 轉換結果格式
         return TemplateInstallResponse(
             success=result.get("success", False),
-            message=result.get("message", ""),
+            message=translate("templates.install_success", template_name=template.name),
             templateId=payload.template_id,
             templateName=template.name,
             workspaceId=payload.workspace_id,
             results=result.get("results")
         )
 
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
     except TemplateInstallError as e:
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(e)
+            status_code=(
+                status.HTTP_400_BAD_REQUEST
+                if getattr(e, "code", "").startswith("TEMPLATE_INSTALL_WORKSPACE_")
+                or getattr(e, "code", "") == "TEMPLATE_INSTALL_TEMPLATE_NOT_FOUND"
+                else status.HTTP_502_BAD_GATEWAY
+            ),
+            detail=_translate_template_install_error(
+                request.state.translate,
+                getattr(e, "code", "TEMPLATE_INSTALL_FAILED"),
+                getattr(e, "params", {}),
+            )
         )
     except Exception as e:
         translate = request.state.translate
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=translate("templates.install_failed", error=str(e))
+            detail=_translate_template_install_generic_error(translate)
         )
 
 
@@ -165,7 +213,7 @@ async def import_template(
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=_translate_template_import_value_error(translate, str(e))
         )
 
     return {
