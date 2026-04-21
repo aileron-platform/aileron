@@ -21,6 +21,7 @@ import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 import type { ClaudeScope } from '../../claude-code/types';
 import type { HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 const logger = createLogger('HooksSettingsPage');
 
@@ -212,6 +213,12 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
   useEffect(() => {
     refreshHooks();
   }, [refreshHooks]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    features: ['hooks'],
+    onRefresh: refreshHooks,
+  });
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeLoading);
   const isBusy = loading || processing;

@@ -5,6 +5,7 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { ClaudeDocument, ClaudeScope } from '../../claude-code/types';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface SlashCommandsPageProps {
   apiPrefix?: string;
@@ -52,6 +53,12 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId,
+    features: ['slashCommands'],
+    onRefresh: loadDocuments,
+  });
 
   const handleCreate = useCallback(async (doc: ClaudeDocument): Promise<ClaudeDocument> => {
     const created = await api.createSlashCommand(runtimeBaseUrl, workspaceId, doc);
