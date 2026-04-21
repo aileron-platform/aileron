@@ -89,6 +89,11 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-tree-manager', () => ({
+  API_ENDPOINTS: {
+    knowledgeBase: {
+      copy: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/copy`,
+    },
+  },
   StandardFileTreeLayout: ({
     toolbarContent,
     children,

@@ -86,7 +86,7 @@ export interface FileTreeContextMenuConfig {
     onCreateFile?: () => void;
     /** 新增資料夾 */
     onCreateFolder?: () => void;
-    /** 複製 */
+    /** 複製。實際語意由呼叫方決定，可用於 duplicate 或 clipboard-set。 */
     onCopy?: (node: FileTreeNode) => void;
     /** 複製路徑 */
     onCopyPath?: (path: string) => void;
@@ -157,7 +157,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
       ...features,
     };
 
-    // 唯讀模式：只顯示查看
+    // 唯讀模式：只顯示唯讀操作
     if (readOnly) {
       if (defaultFeatures.view && callbacks.onView) {
         items.push({
@@ -170,6 +170,32 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
           },
         });
       }
+
+      if (defaultFeatures.copyPath && callbacks.onCopyPath) {
+        items.push({
+          key: 'copy-path',
+          label: t('common.fileTree.contextMenu.copyPath'),
+          icon: Copy,
+          onSelect: () => {
+            callbacks.onClose();
+            callbacks.onCopyPath(node.path);
+          },
+        });
+      }
+
+      if (defaultFeatures.refresh && callbacks.onRefresh) {
+        items.push({
+          key: 'refresh',
+          label: t('common.fileTree.contextMenu.refresh'),
+          icon: RefreshCw,
+          onSelect: () => {
+            callbacks.onClose();
+            callbacks.onRefresh();
+          },
+          showDividerBefore: items.length > 0,
+        });
+      }
+
       return items;
     }
 

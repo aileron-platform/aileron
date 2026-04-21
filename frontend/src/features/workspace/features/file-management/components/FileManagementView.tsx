@@ -538,6 +538,25 @@ export const FileManagementView: React.FC = () => {
     [toast, t]
   );
 
+  const handleCopyPath = useCallback(
+    async (path: string) => {
+      try {
+        await navigator.clipboard.writeText(path);
+        toast({
+          title: t('workspace.fileManagement.tree.notifications.pathCopied'),
+          description: path,
+        });
+      } catch (error) {
+        toast({
+          title: t('workspace.fileManagement.tree.notifications.copyFailed'),
+          description: error instanceof Error ? error.message : String(error),
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast, t]
+  );
+
   const handleClipboardPaste = useCallback(
     async (targetDirectory: string) => {
       if (!clipboardItem) {
@@ -813,6 +832,7 @@ export const FileManagementView: React.FC = () => {
       createFolder: true,
       extractArchive: true,
       copy: true,
+      copyPath: true,
       paste: true,
       rename: true,
       delete: true,
@@ -855,6 +875,9 @@ export const FileManagementView: React.FC = () => {
         }
       },
       onCopy: (node) => handleClipboardCopy(node),
+      onCopyPath: (path) => {
+        void handleCopyPath(path);
+      },
       onPaste: () => {
         const node = managerState.contextMenu?.node;
         const targetDirectory = node?.type === 'directory' ? node.path : getParentPath(node?.path || '/');

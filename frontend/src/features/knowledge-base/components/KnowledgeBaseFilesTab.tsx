@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, ChevronLeft, Database, FolderTree, Lock } from 'lucide-react';
 import {
+  API_ENDPOINTS,
   BatchDeleteDialog,
   FileCreateDialog,
   FileDeleteDialog,
@@ -16,6 +17,7 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-tree-manager';
+import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -46,6 +48,30 @@ const getTargetPath = (node?: FileTreeNode): string => {
   return node.path;
 };
 
+const getParentPath = (path: string): string => {
+  const segments = path.split('/').filter(Boolean);
+  segments.pop();
+  return segments.length > 0 ? `/${segments.join('/')}` : ROOT_PATH;
+};
+
+const getNodeName = (path: string): string => {
+  const segments = path.split('/').filter(Boolean);
+  return segments[segments.length - 1] ?? '';
+};
+
+const getApiErrorCode = (error: unknown): string | undefined => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'errorCode' in error &&
+    typeof (error as { errorCode?: unknown }).errorCode === 'string'
+  ) {
+    return (error as { errorCode: string }).errorCode;
+  }
+
+  return undefined;
+};
+
 export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   knowledgeBaseId,
   readOnly,
@@ -58,6 +84,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [treeWidth, setTreeWidth] = React.useState(320);
   const [treeCollapsed, setTreeCollapsed] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [clipboardItem, setClipboardItem] = React.useState<{ path: string; type: 'file' | 'directory' } | null>(null);
   const dragDepthRef = React.useRef(0);
   const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -190,6 +217,62 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     }
   }, [manager, showErrorToast, t]);
 
+  const handleCopy = React.useCallback((node: FileTreeNode) => {
+    setClipboardItem({ path: node.path, type: node.type });
+    toast({
+      title: t('knowledgeBase.files.copySuccessTitle'),
+      description: t('knowledgeBase.files.copySuccessDescription', { path: node.path }),
+    });
+  }, [t, toast]);
+
+  const handleCopyPath = React.useCallback(async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      toast({
+        title: t('knowledgeBase.files.copyPathSuccessTitle'),
+        description: path,
+      });
+    } catch (error) {
+      showErrorToast(error, t('knowledgeBase.files.copyPathFailed'));
+    }
+  }, [showErrorToast, t, toast]);
+
+  const handlePaste = React.useCallback(async () => {
+    const targetNode = manager.state.contextMenu?.node;
+    if (!clipboardItem || !targetNode) {
+      return;
+    }
+
+    const targetDirectory = targetNode.type === 'directory' ? targetNode.path : getParentPath(targetNode.path);
+    const targetPath = joinPath(targetDirectory, getNodeName(clipboardItem.path));
+
+    try {
+      const queryParams = new URLSearchParams({
+        source_path: clipboardItem.path,
+        dest_path: targetPath,
+        overwrite: 'false',
+      });
+      await apiClient.post(`${API_ENDPOINTS.knowledgeBase.copy(knowledgeBaseId)}?${queryParams.toString()}`);
+      await manager.loadTree();
+      setClipboardItem(null);
+      toast({
+        title: t('knowledgeBase.files.pasteSuccessTitle'),
+        description: t('knowledgeBase.files.pasteSuccessDescription', { path: targetPath }),
+      });
+    } catch (error) {
+      const errorCode = getApiErrorCode(error);
+      if (errorCode === 'KB_QUOTA_EXCEEDED' || errorCode === 'USER_KB_QUOTA_EXCEEDED') {
+        showErrorToast(error, t('knowledgeBase.files.quotaExceeded'));
+        return;
+      }
+      if (errorCode === 'FILE_ALREADY_EXISTS') {
+        showErrorToast(error, t('knowledgeBase.files.targetExists'));
+        return;
+      }
+      showErrorToast(error, t('knowledgeBase.files.pasteFailed'));
+    }
+  }, [clipboardItem, knowledgeBaseId, manager, showErrorToast, t, toast]);
+
   const handleDragStart = React.useCallback((node: FileTreeNode) => {
     if (readOnly) {
       return;
@@ -288,12 +371,16 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     enableMultiSelect: !readOnly,
     selectedCount: manager.state.selectedIds.size,
     selectedIds: manager.state.selectedIds,
+    hasClipboard: !!clipboardItem,
     features: {
       open: true,
       view: true,
       upload: !readOnly,
       createFile: !readOnly,
       createFolder: !readOnly,
+      copy: !readOnly,
+      copyPath: true,
+      paste: !readOnly,
       rename: !readOnly,
       delete: !readOnly,
       refresh: true,
@@ -308,6 +395,13 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       onUpload: () => handleUpload(getTargetPath(manager.state.contextMenu?.node)),
       onCreateFile: () => fileOps.openCreateFileDialog(manager.state.contextMenu?.node ?? undefined),
       onCreateFolder: () => fileOps.openCreateFolderDialog(manager.state.contextMenu?.node ?? undefined),
+      onCopy: handleCopy,
+      onCopyPath: (path) => {
+        void handleCopyPath(path);
+      },
+      onPaste: () => {
+        void handlePaste();
+      },
       onRename: (node) => fileOps.openRenameDialog(node),
       onDelete: (node) => fileOps.openDeleteDialog(node),
       onBatchDelete: () => fileOps.openBatchDeleteDialog(selectedNodes),

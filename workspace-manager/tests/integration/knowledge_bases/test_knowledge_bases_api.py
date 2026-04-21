@@ -146,6 +146,79 @@ def test_knowledge_base_file_endpoints_support_create_read_delete(test_app, crea
 
 
 @pytest.mark.integration
+def test_knowledge_base_file_copy_endpoint_supports_copy_and_conflict(test_app, create_user, monkeypatch):
+    client, _ = test_app
+    owner = create_user(username="kb-copy-owner")
+    _authenticate_as(client, monkeypatch, owner)
+    create_kb_response = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "Copy Files", "slug": "copy-files"},
+    )
+    kb_id = create_kb_response.json()["id"]
+
+    create_file_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files",
+        data={"path": "/readme.md", "type": "file", "content": "hello kb"},
+    )
+    copy_file_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/copy",
+        params={"source_path": "/readme.md", "dest_path": "/copies/readme.md"},
+    )
+    copied_content_response = client.get(
+        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+        params={"path": "/copies/readme.md"},
+    )
+    conflict_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/copy",
+        params={"source_path": "/readme.md", "dest_path": "/copies/readme.md"},
+    )
+
+    assert create_file_response.status_code == 200
+    assert copy_file_response.status_code == 200
+    assert copy_file_response.json()["type"] == "file"
+    assert copy_file_response.json()["size"] == len("hello kb")
+    assert copied_content_response.status_code == 200
+    assert copied_content_response.json()["content"] == "hello kb"
+    assert conflict_response.status_code == 409
+    assert conflict_response.json()["detail"]["code"] == "FILE_ALREADY_EXISTS"
+
+
+@pytest.mark.integration
+def test_knowledge_base_file_copy_endpoint_rejects_viewer_and_missing_source(test_app, create_user, monkeypatch):
+    client, _ = test_app
+    owner = create_user(username="kb-copy-owner-2")
+    viewer = create_user(username="kb-copy-viewer")
+
+    _authenticate_as(client, monkeypatch, owner)
+    create_kb_response = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "Viewer Copy Files", "slug": "viewer-copy-files"},
+    )
+    kb_id = create_kb_response.json()["id"]
+    share_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/shares",
+        json={"userId": viewer.id, "role": "viewer"},
+    )
+    assert share_response.status_code == 201
+
+    owner_missing_source_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/copy",
+        params={"source_path": "/missing.md", "dest_path": "/copies/missing.md"},
+    )
+    assert owner_missing_source_response.status_code == 404
+    assert owner_missing_source_response.json()["detail"]["code"] == "FILE_NOT_FOUND"
+
+    _authenticate_as(client, monkeypatch, viewer)
+    viewer_copy_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/files/copy",
+        params={"source_path": "/missing.md", "dest_path": "/copies/missing.md"},
+    )
+
+    assert viewer_copy_response.status_code == 403
+    assert viewer_copy_response.json()["detail"]["code"] == "KB_ACCESS_DENIED"
+
+
+@pytest.mark.integration
 def test_workspace_knowledge_base_endpoints_and_detail_fields(test_app, create_user, monkeypatch):
     client, session_factory = test_app
     owner = create_user(username="workspace-owner")

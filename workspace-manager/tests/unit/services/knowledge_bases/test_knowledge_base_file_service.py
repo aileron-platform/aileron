@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.core.file_management import FileManagementException, FileTooLargeException
+from app.core.file_management import FileAlreadyExistsException, FileManagementException, FileNotFoundException, FileTooLargeException
 from app.db import models as db_models
 from app.services.knowledge_base_file_service import KnowledgeBaseFileService
 from app.services.knowledge_base_service import KnowledgeBaseAccessDeniedError
@@ -149,3 +149,148 @@ def test_delete_entry_reduces_cached_size(file_service, kb):
 
     assert not target.exists()
     assert kb.current_size_bytes == 0
+
+
+@pytest.mark.unit
+def test_copy_entry_copies_file_and_updates_size(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    source = kb_root / "notes.md"
+    source.write_text("hello", encoding="utf-8")
+    kb.current_size_bytes = 5
+
+    result = file_service.copy_entry(
+        user_id="owner-1",
+        kb_id="kb-1",
+        source_path="/notes.md",
+        dest_path="/notes-copy.md",
+    )
+
+    assert result == {"type": "file", "size": 5}
+    assert (kb_root / "notes-copy.md").read_text(encoding="utf-8") == "hello"
+    assert kb.current_size_bytes == 10
+
+
+@pytest.mark.unit
+def test_copy_entry_copies_directory_and_updates_size(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    source_dir = kb_root / "docs"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "a.md").write_text("abc", encoding="utf-8")
+    nested_dir = source_dir / "nested"
+    nested_dir.mkdir()
+    (nested_dir / "b.txt").write_text("de", encoding="utf-8")
+    kb.current_size_bytes = 5
+
+    result = file_service.copy_entry(
+        user_id="owner-1",
+        kb_id="kb-1",
+        source_path="/docs",
+        dest_path="/docs-copy",
+    )
+
+    assert result == {"type": "directory", "size": 5}
+    assert (kb_root / "docs-copy" / "a.md").read_text(encoding="utf-8") == "abc"
+    assert (kb_root / "docs-copy" / "nested" / "b.txt").read_text(encoding="utf-8") == "de"
+    assert kb.current_size_bytes == 10
+
+
+@pytest.mark.unit
+def test_copy_entry_rejects_missing_source(file_service):
+    with pytest.raises(FileNotFoundException):
+        file_service.copy_entry(
+            user_id="owner-1",
+            kb_id="kb-1",
+            source_path="/missing.md",
+            dest_path="/dest.md",
+        )
+
+
+@pytest.mark.unit
+def test_copy_entry_rejects_existing_destination_without_overwrite(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    (kb_root / "source.md").write_text("hello", encoding="utf-8")
+    (kb_root / "dest.md").write_text("world", encoding="utf-8")
+    kb.current_size_bytes = 10
+
+    with pytest.raises(FileAlreadyExistsException):
+        file_service.copy_entry(
+            user_id="owner-1",
+            kb_id="kb-1",
+            source_path="/source.md",
+            dest_path="/dest.md",
+            overwrite=False,
+        )
+
+
+@pytest.mark.unit
+def test_copy_entry_supports_overwrite_and_updates_delta(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    (kb_root / "source.md").write_text("hello", encoding="utf-8")
+    (kb_root / "dest.md").write_text("a", encoding="utf-8")
+    kb.current_size_bytes = 6
+
+    result = file_service.copy_entry(
+        user_id="owner-1",
+        kb_id="kb-1",
+        source_path="/source.md",
+        dest_path="/dest.md",
+        overwrite=True,
+    )
+
+    assert result == {"type": "file", "size": 5}
+    assert (kb_root / "dest.md").read_text(encoding="utf-8") == "hello"
+    assert kb.current_size_bytes == 10
+
+
+@pytest.mark.unit
+def test_copy_entry_rejects_disallowed_extension(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    (kb_root / "source.md").write_text("hello", encoding="utf-8")
+    kb.current_size_bytes = 5
+
+    with pytest.raises(FileManagementException, match="不支援的檔案副檔名"):
+        file_service.copy_entry(
+            user_id="owner-1",
+            kb_id="kb-1",
+            source_path="/source.md",
+            dest_path="/dest.exe",
+        )
+
+
+@pytest.mark.unit
+def test_copy_entry_rejects_kb_quota(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    (kb_root / "source.md").write_text("abcd", encoding="utf-8")
+    kb.current_size_bytes = 18
+
+    with pytest.raises(FileManagementException, match="知識庫容量配額不足"):
+        file_service.copy_entry(
+            user_id="owner-1",
+            kb_id="kb-1",
+            source_path="/source.md",
+            dest_path="/copy.md",
+        )
+
+
+@pytest.mark.unit
+def test_copy_entry_rejects_viewer_write_access(file_service, kb):
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    (kb_root / "source.md").write_text("hello", encoding="utf-8")
+    kb.current_size_bytes = 5
+    file_service.kb_service.get_kb = MagicMock(
+        return_value=(kb, type("Access", (), {"access_role": "viewer"})())
+    )
+
+    with pytest.raises(KnowledgeBaseAccessDeniedError, match="知識庫無寫入權限"):
+        file_service.copy_entry(
+            user_id="viewer-1",
+            kb_id="kb-1",
+            source_path="/source.md",
+            dest_path="/copy.md",
+        )

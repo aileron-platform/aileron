@@ -1445,6 +1445,7 @@ const template = {
       empty: '目前沒有檔案',
       emptySearch: '找不到符合條件的檔案或資料夾',
       noSelection: '請選擇檔案以檢視內容',
+      viewerNotice: '僅供檢視',
       emptyFile: '此檔案目前沒有內容。',
       actions: {
         refresh: '重新整理',
@@ -1596,6 +1597,7 @@ const template = {
       },
     },
     claudeMd: {
+      downloadFileName: 'Claude.md',
       header: {
         title: 'Claude.md 配置',
         description: '範本的全域指令與行為設定檔案。',

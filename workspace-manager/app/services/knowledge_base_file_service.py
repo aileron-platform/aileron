@@ -249,6 +249,54 @@ class KnowledgeBaseFileService:
             "size": dest_fs_path.stat().st_size if dest_fs_path.is_file() else 0,
         }
 
+    def copy_entry(
+        self,
+        *,
+        user_id: str,
+        kb_id: str,
+        source_path: str,
+        dest_path: str,
+        overwrite: bool = False,
+    ) -> dict:
+        kb, access = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
+        self._ensure_write_access(access.access_role, dest_path)
+        source_fs_path = self._resolve_path(kb.id, source_path)
+        dest_fs_path = self._resolve_path(kb.id, dest_path)
+
+        if not source_fs_path.exists():
+            raise FileNotFoundException(source_path, self._scope(kb.id))
+
+        source_size = self._calculate_size(source_fs_path)
+        replaced_size = self._calculate_size(dest_fs_path) if dest_fs_path.exists() else 0
+        delta = source_size - replaced_size
+
+        if source_fs_path.is_file():
+            self._validate_file_extension(dest_path)
+            self._check_file_size(dest_path, source_fs_path.stat().st_size)
+
+        if dest_fs_path.exists() and not overwrite:
+            raise FileAlreadyExistsException(dest_path, self._scope(kb.id))
+
+        self._check_quota(kb, delta)
+        dest_fs_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if dest_fs_path.exists() and overwrite:
+            if dest_fs_path.is_dir():
+                shutil.rmtree(dest_fs_path)
+            else:
+                dest_fs_path.unlink()
+
+        if source_fs_path.is_dir():
+            shutil.copytree(source_fs_path, dest_fs_path)
+        else:
+            shutil.copy2(source_fs_path, dest_fs_path)
+
+        self._update_kb_size(kb, delta)
+        return {
+            "type": "directory" if dest_fs_path.is_dir() else "file",
+            "size": dest_fs_path.stat().st_size if dest_fs_path.is_file() else source_size,
+        }
+
     async def upload_files(
         self,
         *,

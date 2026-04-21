@@ -623,6 +623,32 @@ def patch_knowledge_base_files(
         _raise_kb_error(request, exc)
 
 
+@router.post(
+    "/{kb_id}/files/copy",
+    summary="複製 knowledge base 檔案或資料夾",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+def copy_knowledge_base_files(
+    kb_id: str,
+    request: Request,
+    source_path: str = Query(...),
+    dest_path: str = Query(...),
+    overwrite: bool = Query(False),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseFileService = Depends(get_knowledge_base_file_service),
+) -> dict:
+    try:
+        return service.copy_entry(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            source_path=source_path,
+            dest_path=dest_path,
+            overwrite=overwrite,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
 @router.delete(
     "/{kb_id}/files",
     summary="刪除 knowledge base 檔案或資料夾",

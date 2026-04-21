@@ -6,8 +6,6 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, Loader2, RefreshCw, Save } from 'lucide-react';
-import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import {
   Select,
   SelectContent,
@@ -15,16 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import { Button } from '@/shared/components/ui/button';
-import { Alert, AlertDescription } from '@/shared/components/ui/alert';
-import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
-import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentToolConfig } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
+import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
 
 export interface AgentsMdPageProps {
   config: AgentToolConfig;
@@ -44,7 +39,10 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
   const runtimeError = workspaceRuntime.error;
 
   const agentsMdEndpoint = config.agentsMd.apiEndpoint ?? config.agentsMd.subViewId;
-  const api = useMemo(() => createAgentSettingsApi(config.apiPathPrefix, agentsMdEndpoint), [config.apiPathPrefix, agentsMdEndpoint]);
+  const api = useMemo(
+    () => createAgentSettingsApi(config.apiPathPrefix, agentsMdEndpoint),
+    [config.apiPathPrefix, agentsMdEndpoint],
+  );
 
   const defaultScope = config.agentsMd.scopes[0]?.value ?? 'project';
   const [scope, setScope] = useState(defaultScope);
@@ -120,7 +118,9 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
           toast({
             variant: 'destructive',
             title: t(`${i18nNs}.agentsMd.notifications.loadFailed.title`, fileNameInterp),
-            description: err instanceof Error ? err.message : t(`${i18nNs}.agentsMd.notifications.loadFailed.description`, fileNameInterp),
+            description: err instanceof Error
+              ? err.message
+              : t(`${i18nNs}.agentsMd.notifications.loadFailed.description`, fileNameInterp),
           });
         }
       } finally {
@@ -129,7 +129,9 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
     };
 
     void loadDocument();
-    return () => { isMounted = false; };
+    return () => {
+      isMounted = false;
+    };
   }, [runtimeBaseUrl, workspaceId, runtimeError, scope, refreshToken, is404Error, toast, t, api, i18nNs]);
 
   useWorkspaceTemplateInstallRefresh({
@@ -148,14 +150,11 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
     },
   });
 
-  const handleScopeChange = useCallback(
-    (value: string) => {
-      if (value === scope) return;
-      if (!confirmDiscard()) return;
-      setScope(value);
-    },
-    [confirmDiscard, scope],
-  );
+  const handleScopeChange = useCallback((value: string) => {
+    if (value === scope) return;
+    if (!confirmDiscard()) return;
+    setScope(value);
+  }, [confirmDiscard, scope]);
 
   const handleRefresh = useCallback(() => {
     if (!isRuntimeReady) {
@@ -182,10 +181,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
 
     setSaving(true);
     try {
-      await api.updateAgentsMd(runtimeBaseUrl!, workspaceId!, {
-        scope,
-        content,
-      });
+      await api.updateAgentsMd(runtimeBaseUrl!, workspaceId!, { scope, content });
       setInitialContent(content);
       setShowFallbackNotice(false);
       setIsStale(false);
@@ -197,114 +193,68 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       toast({
         variant: 'destructive',
         title: t(`${i18nNs}.agentsMd.notifications.saveFailed.title`, fileNameInterp),
-        description: err instanceof Error ? err.message : t(`${i18nNs}.agentsMd.notifications.saveFailed.description`, fileNameInterp),
+        description: err instanceof Error
+          ? err.message
+          : t(`${i18nNs}.agentsMd.notifications.saveFailed.description`, fileNameInterp),
       });
     } finally {
       setSaving(false);
     }
   }, [content, isRuntimeReady, scope, runtimeBaseUrl, t, toast, workspaceId, api, i18nNs]);
 
-  const saveDisabled = !isRuntimeReady || loading || saving || !hasChanges;
-  const refreshDisabled = !isRuntimeReady || loading || saving || runtimeLoading;
-
   return (
-    <div className="flex h-full flex-col bg-background">
-      <FeatureHeader
-        title={headerTitle}
-        icon={FileText}
-        actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
-              <span className="text-xs text-muted-foreground">
-                {t(`${i18nNs}.agentsMd.scope.label`)}
-              </span>
-              <Select value={scope} onValueChange={handleScopeChange} disabled={loading || saving || runtimeLoading}>
-                <SelectTrigger className="h-7 w-32 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {config.agentsMd.scopes.map((scopeOption) => (
-                    <SelectItem key={scopeOption.value} value={scopeOption.value}>
-                      <div className="flex items-center gap-2">
-                        <scopeOption.icon className="h-3 w-3" />
-                        {t(scopeOption.labelKey, { defaultValue: scopeOption.value })}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-xs"
-              onClick={handleRefresh}
-              disabled={refreshDisabled}
-            >
-              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
-              {t(`${i18nNs}.agentsMd.actions.refresh`)}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs"
-              onClick={handleSave}
-              disabled={saveDisabled}
-            >
-              {saving ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-              )}
-              {t(`${i18nNs}.agentsMd.actions.save`)}
-            </Button>
-          </div>
-        }
-      />
-
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {runtimeLoading ? (
-          <LoadingSpinner
-            size="md"
-            className="flex-1"
-            text={t(`${i18nNs}.agentsMd.status.runtimeLoading`, fileNameInterp)}
-          />
-        ) : !isRuntimeReady ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
-            <p>{runtimeStatusMessage}</p>
-          </div>
-        ) : loading ? (
-          <LoadingSpinner
-            size="md"
-            className="flex-1"
-            text={t(`${i18nNs}.agentsMd.status.loading`, fileNameInterp)}
-          />
-        ) : (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            {isStale ? (
-              <Alert className="mx-4 mt-4">
-                <AlertDescription>
-                  偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            <MarkdownEditor
-              value={content}
-              onChange={setContent}
-              className="flex-1"
-              statusMessage={showFallbackNotice ? t(`${i18nNs}.agentsMd.status.fallbackNotice`, fileNameInterp) : null}
-              footerExtras={
-                <span>
-                  {t(`${i18nNs}.agentsMd.footer.scope`, {
-                    scope: t(config.agentsMd.scopes.find(s => s.value === scope)?.labelKey ?? '', { defaultValue: scope }),
-                  })}
-                </span>
-              }
-            />
-          </div>
-        )}
-      </div>
-    </div>
+    <MarkdownDocumentShell
+      title={headerTitle}
+      refreshLabel={t(`${i18nNs}.agentsMd.actions.refresh`)}
+      saveLabel={t(`${i18nNs}.agentsMd.actions.save`)}
+      runtimeLoadingLabel={t(`${i18nNs}.agentsMd.status.runtimeLoading`, fileNameInterp)}
+      loadingLabel={t(`${i18nNs}.agentsMd.status.loading`, fileNameInterp)}
+      runtimeStatusMessage={runtimeStatusMessage}
+      runtimeLoading={runtimeLoading}
+      isRuntimeReady={isRuntimeReady}
+      isLoading={loading}
+      isSaving={saving}
+      isStale={isStale}
+      statusMessage={showFallbackNotice ? t(`${i18nNs}.agentsMd.status.fallbackNotice`, fileNameInterp) : null}
+      staleMessage="偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。"
+      value={content}
+      onChange={setContent}
+      onRefresh={handleRefresh}
+      onSave={handleSave}
+      refreshDisabled={!isRuntimeReady || loading || saving || runtimeLoading}
+      saveDisabled={!isRuntimeReady || loading || saving || !hasChanges}
+      headerExtras={(
+        <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
+          <span className="text-xs text-muted-foreground">
+            {t(`${i18nNs}.agentsMd.scope.label`)}
+          </span>
+          <Select value={scope} onValueChange={handleScopeChange} disabled={loading || saving || runtimeLoading}>
+            <SelectTrigger className="h-7 w-32 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {config.agentsMd.scopes.map((scopeOption) => (
+                <SelectItem key={scopeOption.value} value={scopeOption.value}>
+                  <div className="flex items-center gap-2">
+                    <scopeOption.icon className="h-3 w-3" />
+                    {t(scopeOption.labelKey, { defaultValue: scopeOption.value })}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      footerExtras={(
+        <span>
+          {t(`${i18nNs}.agentsMd.footer.scope`, {
+            scope: t(config.agentsMd.scopes.find((item) => item.value === scope)?.labelKey ?? '', {
+              defaultValue: scope,
+            }),
+          })}
+        </span>
+      )}
+    />
   );
 };
 
