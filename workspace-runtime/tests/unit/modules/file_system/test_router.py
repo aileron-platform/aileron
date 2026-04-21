@@ -285,6 +285,21 @@ def test_resolve_file_service_root_uses_git_context(monkeypatch, tmp_path: Path)
     assert _resolve_file_service_root("worktree:feature-auth") == resolved_context_path
 
 
+def test_resolve_file_service_root_uses_workspace_root_for_primary_context(
+    monkeypatch, tmp_path: Path
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+
+    monkeypatch.setattr(
+        file_system_router_module,
+        "get_settings",
+        lambda: SimpleNamespace(WORKSPACE_PATH=str(workspace_root)),
+    )
+
+    assert _resolve_file_service_root("primary") == workspace_root
+
+
 def test_resolve_file_service_root_maps_invalid_context_to_http_error(monkeypatch, tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()

@@ -462,6 +462,46 @@ kubernetes:
 If multiple workspaces need to share base images or tools, use a ReadWriteMany StorageClass (NFS, CephFS, EFS, etc.).
 :::
 
+### Knowledge Base Storage
+
+Knowledge Bases use a dedicated shared PVC managed by the Helm chart:
+
+```yaml
+kubernetes:
+  knowledgeBases:
+    pvcName: knowledge-bases-pvc
+    size: 20Gi
+    accessModes:
+      - ReadWriteMany
+    storageClassName: hostpath
+```
+
+Mount flow:
+
+- Helm creates `knowledge-bases-pvc`
+- `workspace-manager` mounts it at `/host/knowledge-bases`
+- `workspace-operator` mounts each attached KB into runtime Pods at `/knowledge/<alias>` using `subPath=<kbId>`
+
+Local development guidance:
+
+- the default `hostpath` value is a single-node fallback for local clusters
+- it is acceptable for Docker Desktop or local Kubernetes smoke testing
+- it is not a substitute for real multi-node RWX shared storage
+
+Production guidance:
+
+- switch `kubernetes.knowledgeBases.storageClassName` to a real RWX shared class such as `nfs`
+- `helm/values-rke.yaml` already contains this override
+- verify `knowledge-bases-pvc` is `Bound` before validating KB attach / mount flows
+
+Recommended checks:
+
+```bash
+kubectl get pvc -n aileron knowledge-bases-pvc
+kubectl describe pvc -n aileron knowledge-bases-pvc
+kubectl describe deployment -n aileron aileron-workspace-manager
+```
+
 ## CoTURN (WebRTC TURN Server)
 
 The workspace-browser uses [neko](https://github.com/m1k1o/neko) to stream the desktop via WebRTC. In Kubernetes, multiple NAT layers exist between the neko pod and the user's browser — a TURN server is required to relay WebRTC media.
@@ -711,6 +751,16 @@ cilium:
 | `keycloak.auth.adminUser` | `admin` | Keycloak admin |
 | `keycloak.auth.adminPassword` | `admin` | Keycloak password |
 | `workspaceManager.env.SECRET_KEY` | _(dev default)_ | JWT signing key |
+
+### Kubernetes Storage
+
+| Value | Default | Description |
+|-------|---------|-------------|
+| `kubernetes.pvcName` | `workspace-runtime-pvc` | Workspace working directory PVC |
+| `kubernetes.knowledgeBases.pvcName` | `knowledge-bases-pvc` | Dedicated shared PVC name for Knowledge Bases |
+| `kubernetes.knowledgeBases.size` | `20Gi` | Knowledge Base PVC capacity |
+| `kubernetes.knowledgeBases.accessModes` | `[ReadWriteMany]` | Knowledge Base PVC access modes |
+| `kubernetes.knowledgeBases.storageClassName` | `hostpath` | Local dev fallback; switch to a shared RWX class such as `nfs` for production |
 
 ## Verifying the Deployment
 

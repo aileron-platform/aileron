@@ -83,6 +83,7 @@ export type { ScopeSelectorProps, ScopeOption } from './components/ScopeSelector
 
 export { FileTreeContextMenu } from './components/FileTreeContextMenu';
 export type { FileTreeContextMenuProps } from './components/FileTreeContextMenu';
+export * from './components/FileOperationDialogs';
 
 // 佈局
 export { StandardFileTreeLayout } from './layouts/StandardFileTreeLayout';
@@ -98,9 +99,11 @@ export type { UseFileTreeStateOptions, UseFileTreeStateReturn } from './hooks/us
 export { useFileOperations } from './hooks/useFileOperations';
 export type { UseFileOperationsOptions, UseFileOperationsReturn } from './hooks/useFileOperations';
 
+export { useFileOperationsWithDialog } from './hooks/useFileOperationsWithDialog';
+export type { UseFileOperationsWithDialogOptions, DialogState } from './hooks/useFileOperationsWithDialog';
+
 export { useFileEditor } from './hooks/useFileEditor';
 export type { UseFileEditorOptions, UseFileEditorReturn } from './hooks/useFileEditor';
 
 export { useFileTreeContextMenu } from './hooks/useFileTreeContextMenu';
 export type { FileTreeContextMenuConfig } from './hooks/useFileTreeContextMenu';
-

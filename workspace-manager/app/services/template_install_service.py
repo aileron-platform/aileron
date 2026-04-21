@@ -33,6 +33,11 @@ def _flatten_template_file_nodes(nodes: list[TemplateFileNode]) -> list[Template
 class TemplateInstallError(Exception):
     """模板安裝失敗，但屬於可預期且可向使用者說明的錯誤。"""
 
+    def __init__(self, message: str, *, code: str = "TEMPLATE_INSTALL_FAILED", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 
 class TemplateInstallService:
     """模板安裝服務 - 負責將模板配置安裝到 workspace-runtime"""
@@ -65,15 +70,27 @@ class TemplateInstallService:
         # 1. 取得 workspace 資訊
         workspace = self._get_workspace(workspace_id)
         if not workspace:
-            raise ValueError(f"Workspace {workspace_id} not found")
+            raise TemplateInstallError(
+                f"Workspace {workspace_id} not found",
+                code="TEMPLATE_INSTALL_WORKSPACE_NOT_FOUND",
+                params={"workspace_id": workspace_id},
+            )
 
         if workspace.runtime_status != "running":
-            raise ValueError(f"Workspace {workspace_id} is not running")
+            raise TemplateInstallError(
+                f"Workspace {workspace_id} is not running",
+                code="TEMPLATE_INSTALL_WORKSPACE_NOT_RUNNING",
+                params={"workspace_id": workspace_id},
+            )
 
         # 2. 取得模板資料
         template = self.template_service._get_template(template_id)
         if not template:
-            raise ValueError(f"Template {template_id} not found")
+            raise TemplateInstallError(
+                f"Template {template_id} not found",
+                code="TEMPLATE_INSTALL_TEMPLATE_NOT_FOUND",
+                params={"template_id": template_id},
+            )
 
         # 3. 準備安裝資料
         install_payload = await self._prepare_install_payload(template)
@@ -247,10 +264,20 @@ class TemplateInstallService:
                 return response.json()
             except httpx.HTTPStatusError as e:
                 logger.error(f"Runtime API 回應錯誤: {e.response.status_code} - {e.response.text}")
-                raise TemplateInstallError(f"安裝模板失敗：Runtime 回應 {e.response.status_code}，{e.response.text}") from e
+                raise TemplateInstallError(
+                    f"安裝模板失敗：Runtime 回應 {e.response.status_code}，{e.response.text}",
+                    code="TEMPLATE_INSTALL_RUNTIME_HTTP_ERROR",
+                    params={
+                        "status_code": str(e.response.status_code),
+                        "response_text": e.response.text,
+                    },
+                ) from e
             except httpx.RequestError as e:
                 logger.error(f"Runtime API 請求失敗: {e}")
-                raise TemplateInstallError(f"無法連線到 Workspace Runtime：{str(e)}") from e
+                raise TemplateInstallError(
+                    f"無法連線到 Workspace Runtime：{str(e)}",
+                    code="TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR",
+                ) from e
 
     def _get_workspace(self, workspace_id: str) -> Optional[Workspace]:
         """取得 workspace"""
@@ -287,7 +314,11 @@ class TemplateInstallService:
             )
             return workspace.runtime_external_url.rstrip('/')
 
-        raise ValueError(f"Workspace {workspace.id} 沒有可用的 runtime URL")
+        raise TemplateInstallError(
+            f"Workspace {workspace.id} 沒有可用的 runtime URL",
+            code="TEMPLATE_INSTALL_RUNTIME_URL_MISSING",
+            params={"workspace_id": workspace.id},
+        )
 
 
 __all__ = ["TemplateInstallService"]

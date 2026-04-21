@@ -151,6 +151,7 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
       hooks: flags.hasHooks,
       claudeMd: flags.hasClaudeMd,
       subAgents: flags.hasSubAgents,
+      outputStyles: flags.hasOutputStyles,
       scripts: flags.hasScripts,
       skills: flags.hasSkills,
     });

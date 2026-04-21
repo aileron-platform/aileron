@@ -41,6 +41,77 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _translate_template_service_error(translate, error: str) -> str:
+    if "Template not found" in error:
+        return translate("templates.not_found")
+    if "Invalid filename" in error:
+        return translate("templates.file.invalid_filename")
+    if "already exists" in error:
+        return translate("templates.file.already_exists")
+    if "too large" in error:
+        return translate("templates.file.too_large")
+    return translate("templates.file.operation_failed_simple")
+
+
+def _raise_template_service_error(result, translate) -> None:
+    error = result.error or ""
+    if "Template not found" in error or "not found" in error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_translate_template_service_error(translate, error))
+    if "Invalid filename" in error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=_translate_template_service_error(translate, error))
+    if "already exists" in error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_translate_template_service_error(translate, error))
+    if "too large" in error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_translate_template_service_error(translate, error),
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=_translate_template_service_error(translate, error),
+    )
+
+
+def _localize_file_management_exception(translate, exc: FileManagementException) -> dict:
+    details = dict(exc.details)
+    code = exc.code
+    message = exc.message
+
+    if code == "FILE_NOT_FOUND":
+        message = translate("templates.file.not_found", path=details.get("path", ""))
+    elif code == "FILE_ALREADY_EXISTS":
+        message = translate("templates.file.exists", path=details.get("path", ""))
+    elif code == "INVALID_PATH":
+        message = translate("templates.file.invalid_path")
+        reason = details.get("reason")
+        if reason == "Path traversal detected":
+            details["reason"] = translate("templates.file.path_traversal")
+    elif code == "INVALID_SCOPE":
+        message = translate("templates.file.invalid_scope", scope=details.get("scope", ""))
+    elif code == "READONLY_SCOPE":
+        message = translate("templates.file.readonly_scope", scope=details.get("scope", ""))
+    elif code == "PERMISSION_DENIED":
+        message = translate(
+            "templates.file.permission_denied",
+            operation=details.get("operation", ""),
+            path=details.get("path", ""),
+        )
+    elif code == "FILE_TOO_LARGE":
+        message = translate("templates.file.too_large_generic")
+    elif code == "CONTENT_CONFLICT":
+        message = translate("templates.file.content_conflict")
+    elif code == "DIRECTORY_NOT_EMPTY":
+        message = translate("templates.file.directory_not_empty")
+    elif code == "INVALID_FILE_TYPE":
+        message = translate("templates.file.invalid_type", file_type=details.get("fileType", ""))
+
+    return {
+        "code": code,
+        "message": message,
+        "details": details,
+    }
+
+
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
     """取得模板服務實例"""
     return TemplateService(db)
@@ -70,12 +141,7 @@ async def get_template_slash_commands_files(
     result = service.get_slash_commands_files(template_id)
     translate = request.state.translate
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=translate("templates.not_found")
-            )
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, translate)
     return result
 
 
@@ -95,11 +161,7 @@ async def get_template_slash_command_file(
     """取得指定模板中特定 slash-command 檔案的內容"""
     result = service.get_slash_command_file_content(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -120,15 +182,7 @@ async def create_template_slash_command_file(
     """在指定模板的 commands 目錄中新增新檔案"""
     result = service.create_slash_command_file(template_id, payload)
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "already exists" in result.error:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -149,13 +203,7 @@ async def update_template_slash_command_file(
     """更新指定模板中的 slash-command 檔案內容"""
     result = service.update_slash_command_file(template_id, file_name, payload)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -175,11 +223,7 @@ async def delete_template_slash_command_file(
     """刪除指定模板中的 slash-command 檔案"""
     result = service.delete_slash_command_file(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
 
 
 # ============ Claude.md 檔案管理 ============
@@ -217,7 +261,7 @@ async def get_template_claude_md(
         return {
             "success": False,
             "error": "Failed to load Claude.md",
-            "message": translate("templates.claude_md_load_failed", error=str(e))
+            "message": translate("templates.claude_md_load_failed_simple")
         }
 
 
@@ -259,14 +303,14 @@ async def update_template_claude_md(
         return {
             "success": False,
             "error": "Invalid template or content",
-            "message": translate("templates.claude_md_update_failed", error=str(e))
+            "message": translate("templates.claude_md_update_failed_simple")
         }
     except Exception as e:
         translate = request.state.translate
         return {
             "success": False,
             "error": "Failed to update Claude.md",
-            "message": translate("templates.claude_md_update_failed", error=str(e))
+            "message": translate("templates.claude_md_update_failed_simple")
         }
 
 
@@ -289,12 +333,7 @@ async def get_template_sub_agents_files(
     result = service.get_sub_agents_files(template_id)
     translate = request.state.translate
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=translate("templates.not_found")
-            )
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, translate)
     return result
 
 
@@ -314,11 +353,7 @@ async def get_template_sub_agent_file(
     """取得指定模板中特定 subagent 檔案的內容"""
     result = service.get_sub_agent_file_content(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -339,15 +374,7 @@ async def create_template_sub_agent_file(
     """在指定模板的 agents 目錄中新增新檔案"""
     result = service.create_sub_agent_file(template_id, payload)
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "already exists" in result.error:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -368,13 +395,7 @@ async def update_template_sub_agent_file(
     """更新指定模板中的 subagent 檔案內容"""
     result = service.update_sub_agent_file(template_id, file_name, payload)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -394,11 +415,7 @@ async def delete_template_sub_agent_file(
     """刪除指定模板中的 subagent 檔案"""
     result = service.delete_sub_agent_file(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
 
 
 # ============ OutputStyles 檔案管理 ============
@@ -420,12 +437,7 @@ async def get_template_output_styles_files(
     result = service.get_output_styles_files(template_id)
     translate = request.state.translate
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=translate("templates.not_found")
-            )
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, translate)
     return result
 
 
@@ -445,11 +457,7 @@ async def get_template_output_style_file(
     """取得指定模板中特定 output-style 檔案的內容"""
     result = service.get_output_style_file_content(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -470,15 +478,7 @@ async def create_template_output_style_file(
     """在指定模板的 output-styles 目錄中新增新檔案"""
     result = service.create_output_style_file(template_id, payload)
     if not result.success:
-        if "Template not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "already exists" in result.error:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -499,13 +499,7 @@ async def update_template_output_style_file(
     """更新指定模板中的 output-style 檔案內容"""
     result = service.update_output_style_file(template_id, file_name, payload)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        if "too large" in result.error:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
     return result
 
 
@@ -525,11 +519,7 @@ async def delete_template_output_style_file(
     """刪除指定模板中的 output-style 檔案"""
     result = service.delete_output_style_file(template_id, file_name)
     if not result.success:
-        if "Template not found" in result.error or "not found" in result.error:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.error)
-        if "Invalid filename" in result.error:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=result.error)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=result.error)
+        _raise_template_service_error(result, request.state.translate)
 
 
 # ============ 通用檔案管理 API ============
@@ -559,7 +549,10 @@ async def get_file_tree(
             max_depth = settings.FILE_TREE_MAX_DEPTH
         return service.get_tree(template_id, path, scope, include_hidden, max_depth)
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.get(
@@ -580,7 +573,10 @@ async def read_file(
     try:
         return service.read_file(template_id, path, scope)
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -610,7 +606,10 @@ async def create_entry(
             data=result
         )
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.put(
@@ -639,7 +638,10 @@ async def write_file(
             data=result
         )
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -662,7 +664,10 @@ async def upload_files(
     try:
         return await service.upload_files(template_id, target_path, files, overwrite, scope)
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.delete(
@@ -690,7 +695,10 @@ async def delete_entry(
             data=result
         )
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -719,7 +727,10 @@ async def copy_entry(
             data=result
         )
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -748,7 +759,10 @@ async def move_entry(
             data=result
         )
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -770,7 +784,10 @@ async def batch_delete(
     try:
         return service.batch_delete(template_id, paths, scope, recursive)
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 @router.post(
@@ -791,7 +808,10 @@ async def search_files(
     try:
         return service.search_files(template_id, payload, scope)
     except FileManagementException as e:
-        raise HTTPException(status_code=e.status_code, detail=e.to_dict())
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=_localize_file_management_exception(request.state.translate, e),
+        )
 
 
 __all__ = ["router"]

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -22,6 +24,7 @@ COMMON_ERROR_RESPONSES = {
     403: {"model": APIErrorDetail, "description": "目前使用者沒有操作權限。"},
     404: {"model": APIErrorDetail, "description": "指定資源不存在。"},
     409: {"model": APIErrorDetail, "description": "資源狀態衝突，無法完成操作。"},
+    413: {"model": APIErrorDetail, "description": "請求內容超出允許大小限制。"},
     422: {"description": "請求資料驗證失敗。"},
     500: {"model": APIErrorDetail, "description": "伺服器內部錯誤。"},
     502: {"model": APIErrorDetail, "description": "上游服務回應錯誤。"},
@@ -29,11 +32,24 @@ COMMON_ERROR_RESPONSES = {
 }
 
 
-def build_responses(*status_codes: int) -> dict[int, dict]:
+def build_responses(
+    *status_codes: int,
+    model: type[BaseModel] | None = None,
+    descriptions: dict[int, str] | None = None,
+    examples: dict[int, dict[str, Any]] | None = None,
+) -> dict[int, dict]:
     """依狀態碼挑選共用 OpenAPI 錯誤回應。"""
 
-    return {
-        status_code: COMMON_ERROR_RESPONSES[status_code]
-        for status_code in status_codes
-        if status_code in COMMON_ERROR_RESPONSES
-    }
+    responses: dict[int, dict] = {}
+    for status_code in status_codes:
+        if status_code not in COMMON_ERROR_RESPONSES:
+            continue
+        response = dict(COMMON_ERROR_RESPONSES[status_code])
+        if model is not None and status_code != 422:
+            response["model"] = model
+        if descriptions and status_code in descriptions:
+            response["description"] = descriptions[status_code]
+        if examples and status_code in examples:
+            response["content"] = {"application/json": {"examples": examples[status_code]}}
+        responses[status_code] = response
+    return responses

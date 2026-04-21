@@ -7,15 +7,15 @@ import (
 )
 
 type WorkspaceResourceSpec struct {
-	ImageKey  string                        `json:"imageKey,omitempty"`
-	Image     string                        `json:"image,omitempty"`
+	ImageKey  string                       `json:"imageKey,omitempty"`
+	Image     string                       `json:"image,omitempty"`
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 type WorkspaceOptionalComponentSpec struct {
-	Enabled   bool                           `json:"enabled,omitempty"`
-	Image     string                         `json:"image,omitempty"`
-	Resources *corev1.ResourceRequirements  `json:"resources,omitempty"`
+	Enabled   bool                         `json:"enabled,omitempty"`
+	Image     string                       `json:"image,omitempty"`
+	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 type WorkspaceGitSpec struct {
@@ -26,6 +26,12 @@ type WorkspaceGitSpec struct {
 type WorkspaceEnvVar struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type WorkspaceKnowledgeBaseAttachment struct {
+	KBID       string `json:"kbId"`
+	MountAlias string `json:"mountAlias"`
+	ReadOnly   bool   `json:"readOnly,omitempty"`
 }
 
 type WorkspaceOperationsSpec struct {
@@ -47,18 +53,19 @@ type WorkspaceFirewallSpec struct {
 }
 
 type WorkspaceSpec struct {
-	WorkspaceID     string                         `json:"workspaceId"`
-	OwnerID         string                         `json:"ownerId"`
-	Provisioner     string                         `json:"provisioner"`
-	TargetNamespace string                         `json:"targetNamespace,omitempty"`
-	Runtime         WorkspaceResourceSpec          `json:"runtime"`
-	Browser         WorkspaceOptionalComponentSpec `json:"browser"`
-	Nextjs          WorkspaceOptionalComponentSpec `json:"nextjs"`
-	Git             WorkspaceGitSpec               `json:"git,omitempty"`
-	WorkspacePath   string                         `json:"workspacePath"`
-	EnvVars         []WorkspaceEnvVar              `json:"envVars,omitempty"`
-	Operations      WorkspaceOperationsSpec        `json:"operations,omitempty"`
-	Firewall        WorkspaceFirewallSpec          `json:"firewall"`
+	WorkspaceID     string                             `json:"workspaceId"`
+	OwnerID         string                             `json:"ownerId"`
+	Provisioner     string                             `json:"provisioner"`
+	TargetNamespace string                             `json:"targetNamespace,omitempty"`
+	Runtime         WorkspaceResourceSpec              `json:"runtime"`
+	Browser         WorkspaceOptionalComponentSpec     `json:"browser"`
+	Nextjs          WorkspaceOptionalComponentSpec     `json:"nextjs"`
+	Git             WorkspaceGitSpec                   `json:"git,omitempty"`
+	WorkspacePath   string                             `json:"workspacePath"`
+	EnvVars         []WorkspaceEnvVar                  `json:"envVars,omitempty"`
+	KnowledgeBases  []WorkspaceKnowledgeBaseAttachment `json:"knowledgeBases,omitempty"`
+	Operations      WorkspaceOperationsSpec            `json:"operations,omitempty"`
+	Firewall        WorkspaceFirewallSpec              `json:"firewall"`
 }
 
 type WorkspaceComponentStatus struct {
@@ -113,6 +120,30 @@ func (in *Workspace) DeepCopyObject() runtime.Object {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
 	out.ObjectMeta = *in.ObjectMeta.DeepCopy()
+	if in.Spec.EnvVars != nil {
+		out.Spec.EnvVars = make([]WorkspaceEnvVar, len(in.Spec.EnvVars))
+		copy(out.Spec.EnvVars, in.Spec.EnvVars)
+	}
+	if in.Spec.KnowledgeBases != nil {
+		out.Spec.KnowledgeBases = make([]WorkspaceKnowledgeBaseAttachment, len(in.Spec.KnowledgeBases))
+		copy(out.Spec.KnowledgeBases, in.Spec.KnowledgeBases)
+	}
+	if in.Spec.Firewall.Workspace.AllowedDomains != nil {
+		out.Spec.Firewall.Workspace.AllowedDomains = make([]string, len(in.Spec.Firewall.Workspace.AllowedDomains))
+		copy(out.Spec.Firewall.Workspace.AllowedDomains, in.Spec.Firewall.Workspace.AllowedDomains)
+	}
+	if in.Spec.Firewall.Browser.AllowedDomains != nil {
+		out.Spec.Firewall.Browser.AllowedDomains = make([]string, len(in.Spec.Firewall.Browser.AllowedDomains))
+		copy(out.Spec.Firewall.Browser.AllowedDomains, in.Spec.Firewall.Browser.AllowedDomains)
+	}
+	if in.Status.Firewall.Workspace.EffectiveAllowedDomains != nil {
+		out.Status.Firewall.Workspace.EffectiveAllowedDomains = make([]string, len(in.Status.Firewall.Workspace.EffectiveAllowedDomains))
+		copy(out.Status.Firewall.Workspace.EffectiveAllowedDomains, in.Status.Firewall.Workspace.EffectiveAllowedDomains)
+	}
+	if in.Status.Firewall.Browser.EffectiveAllowedDomains != nil {
+		out.Status.Firewall.Browser.EffectiveAllowedDomains = make([]string, len(in.Status.Firewall.Browser.EffectiveAllowedDomains))
+		copy(out.Status.Firewall.Browser.EffectiveAllowedDomains, in.Status.Firewall.Browser.EffectiveAllowedDomains)
+	}
 	return out
 }
 

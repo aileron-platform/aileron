@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,6 +44,11 @@ def mock_settings():
     """Mock Settings"""
     settings = MagicMock()
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
+    settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts"
+    settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
+    settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
+    settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
     return settings
 
 
@@ -550,8 +556,12 @@ class TestVolumeCleanup:
                 lifecycle_service._cleanup_workspace_volumes(workspace_id)
 
                 # Assert
-                # 應該嘗試刪除目錄
-                assert mock_rmtree.call_count >= 1  # 至少調用一次
+                removed_paths = [call.args[0] for call in mock_rmtree.call_args_list]
+                assert removed_paths == [
+                    Path("/mnt/workspaces/workspace_123_456"),
+                    Path("/mnt/workspace-scripts/workspace_123_456"),
+                    Path("/mnt/claude-data/workspace_123_456"),
+                ]
 
     def test_cleanup_workspace_volumes_directory_not_exists(
         self, lifecycle_service

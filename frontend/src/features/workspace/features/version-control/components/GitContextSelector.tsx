@@ -3,6 +3,7 @@ import { GitBranch } from 'lucide-react';
 
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useGitContextsQuery } from '../hooks/useVersionControlQueries';
+import { isVersionControlNotInitializedError } from '../utils';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 export const GitContextSelector: React.FC = () => {
@@ -15,6 +16,13 @@ export const GitContextSelector: React.FC = () => {
   const selectedGitContextId = state.versionControl.selectedGitContextId;
 
   React.useEffect(() => {
+    if (isVersionControlNotInitializedError(contextsQuery.error)) {
+      if (selectedGitContextId !== null) {
+        dispatch({ type: 'SET_SELECTED_GIT_CONTEXT', payload: null });
+      }
+      return;
+    }
+
     const fallbackContextId = selectedGitContextId && contexts.some((context) => context.id === selectedGitContextId)
       ? selectedGitContextId
       : contextsQuery.data?.activeContextId ?? contexts[0]?.id ?? null;
@@ -22,9 +30,9 @@ export const GitContextSelector: React.FC = () => {
     if (fallbackContextId && fallbackContextId !== selectedGitContextId) {
       dispatch({ type: 'SET_SELECTED_GIT_CONTEXT', payload: fallbackContextId });
     }
-  }, [contexts, contextsQuery.data?.activeContextId, dispatch, selectedGitContextId]);
+  }, [contexts, contextsQuery.data?.activeContextId, contextsQuery.error, dispatch, selectedGitContextId]);
 
-  if (contextsQuery.isLoading || contexts.length === 0) {
+  if (contextsQuery.isLoading || contexts.length === 0 || isVersionControlNotInitializedError(contextsQuery.error)) {
     return null;
   }
 

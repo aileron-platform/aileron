@@ -469,8 +469,9 @@ class WorkspaceLifecycleService:
 
         # 定義需要刪除的目錄
         directories_to_remove = [
-            Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id,
-            Path(self.settings.HOST_WORKSPACES_DIR).parent / "workspace-scripts" / safe_workspace_id,
+            Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id,
+            Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id,
+            Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id,
         ]
         
         for directory in directories_to_remove:

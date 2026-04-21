@@ -16,8 +16,11 @@ title: Docker Mode
 
 - [Docker](https://docs.docker.com/get-docker/) (24.0+ recommended)
 - [Docker Compose](https://docs.docker.com/compose/install/) (V2, typically bundled with Docker Desktop)
-- At least 8GB available memory (16GB recommended)
-- At least 20GB available disk space
+- At least 4 vCPU
+- At least 8GB available memory
+- 12GB to 16GB available memory is recommended for more stable browser and agent workflows
+- At least 30GB available disk space
+- Keeping 50GB of free disk space is recommended so images, volumes, and workspace data do not fill the host too quickly
 
 ## Service Architecture
 
@@ -74,6 +77,8 @@ docker compose up -d --build
 :::info Build Time
 The first startup builds all images, roughly 5–10 minutes. Subsequent starts without code changes can use `docker compose up -d` for a fast boot.
 :::
+
+In Aileron, this full Docker Compose stack is not only a deployment path but also the default local development mode. Day-to-day module development should keep the full stack running and rely on the development mounts plus each service's built-in reload behavior to pick up code changes.
 
 ## Workspace Runtime Base Image Selection
 
@@ -203,6 +208,8 @@ See [Environment Variables Reference](./environment-variables) for the full list
 
 ### Development Mounts
 
+These mounts are the core of the local development workflow. Module directories on the host are mapped directly into containers, so frontend, Manager, Runtime, and Terminal code changes usually become effective inside the running stack without rebuilding everything each time.
+
 | Host Path | Container Path | Purpose |
 |-----------|----------------|---------|
 | `./workspace-manager` | `/workspace-manager` | Manager code hot reload |
@@ -235,21 +242,30 @@ Keycloak has two network aliases (`localhost` and `keycloak`) so that OIDC token
 | workspace-browser | — | 2GB SHM | Shared memory (required by Chrome) |
 | Others | Unlimited | Unlimited | Allocated dynamically |
 
-:::tip Memory Recommendation
-For feature exploration, roughly 4–6GB total is enough. For concurrent agent chat, OpenSpec workflows, and browser operations, 8GB+ is recommended; 16GB is a better target for longer parallel sessions.
+:::tip Recommended Sizing
+For single-machine evaluation and basic workflow validation, plan for at least `4 vCPU / 8 GB RAM / 30 GB` of free disk. For steadier browser usage, automation flows, Keycloak, and multiple services running together, `6-8 vCPU / 12-16 GB RAM / 50 GB` of free disk is a more realistic target. If the same host will also run Harbor, a registry, or other large containers, start at `16 GB RAM` or higher to avoid heavy swap usage and disk pressure.
 :::
 
 ## Common Commands
 
 ```bash
 # Start
-docker compose up -d
+python scripts/dev/docker/ops.py up
 
 # Rebuild images and start
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
+
+# Start after choosing the startup mode interactively
+python scripts/dev/docker/ops.py up
+
+# Start directly from Docker Hub dev tags
+python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
 
 # Stop (preserves volumes)
-docker compose down
+python scripts/dev/docker/ops.py down
+
+# Full reset via the host-side CLI
+python scripts/dev/docker/ops.py cleanup
 
 # Stop and remove volumes
 docker compose down -v
@@ -275,12 +291,16 @@ make build-workspace-runtime RUNTIME_BASE=lite
 make build-workspace-runtime RUNTIME_BASE=universal
 ```
 
+For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
+
+`ops.py up` now prompts for whether to use a local build or Docker Hub `dev` tags, and then overrides the Compose image tags automatically. For non-interactive usage, pass `--startup-mode`, `--image-arch`, and `--runtime-base` explicitly.
+
 ## Cleanup
 
 ### Remove Workspace Containers Only (Preserve Databases)
 
 ```bash
-./scripts/dev/docker/cleanup-workspaces.sh
+python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
 Only removes dynamically created workspace containers, associated volumes, and network. Platform services and databases are untouched.
@@ -288,7 +308,7 @@ Only removes dynamically created workspace containers, associated volumes, and n
 ### Full Cleanup
 
 ```bash
-./scripts/dev/docker/cleanup.sh
+python scripts/dev/docker/ops.py cleanup
 ```
 
 This script will:
@@ -303,10 +323,17 @@ This script will:
 Full cleanup deletes all database data, including users, workspace settings, templates, etc. Back up before running.
 :::
 
+### Start and Stop via the Cross-Platform CLI
+
+```bash
+python scripts/dev/docker/ops.py up --build
+python scripts/dev/docker/ops.py down
+```
+
 Restart after cleanup:
 
 ```bash
-docker compose up -d --build
+python scripts/dev/docker/ops.py up --build
 ```
 
 ## Health Checks

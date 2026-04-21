@@ -51,7 +51,7 @@ export class FileTreeApiAdapter {
    * 驗證配置
    */
   private validateConfig(): void {
-    const { type, workspaceId, templateId, scope } = this.config;
+    const { type, workspaceId, templateId, knowledgeBaseId, scope } = this.config;
 
     if (type === 'workspace' || type === 'claude-code') {
       if (!workspaceId) {
@@ -67,6 +67,10 @@ export class FileTreeApiAdapter {
         throw new Error(ERROR_MESSAGES.MISSING_SCOPE);
       }
     }
+
+    if (type === 'knowledge-base' && !knowledgeBaseId) {
+      throw new Error(ERROR_MESSAGES.MISSING_KNOWLEDGE_BASE_ID);
+    }
   }
 
   /**
@@ -80,6 +84,8 @@ export class FileTreeApiAdapter {
         return this.getWorkspaceTree();
       case 'template':
         return this.getTemplateTree();
+      case 'knowledge-base':
+        return this.getKnowledgeBaseTree();
       case 'claude-code':
         return this.getClaudeCodeTree();
       default:
@@ -98,6 +104,8 @@ export class FileTreeApiAdapter {
         return this.getWorkspaceContent(path);
       case 'template':
         return this.getTemplateContent(path);
+      case 'knowledge-base':
+        return this.getKnowledgeBaseContent(path);
       case 'claude-code':
         return this.getClaudeCodeContent(path);
       default:
@@ -116,6 +124,8 @@ export class FileTreeApiAdapter {
         return this.createWorkspaceFile(request);
       case 'template':
         return this.createTemplateFile(request);
+      case 'knowledge-base':
+        return this.createKnowledgeBaseFile(request);
       case 'claude-code':
         return this.createClaudeCodeFile(request);
       default:
@@ -134,6 +144,8 @@ export class FileTreeApiAdapter {
         return this.updateWorkspaceFile(path, content);
       case 'template':
         return this.updateTemplateFile(path, content);
+      case 'knowledge-base':
+        return this.updateKnowledgeBaseFile(path, content);
       case 'claude-code':
         return this.updateClaudeCodeFile(path, content);
       default:
@@ -152,6 +164,8 @@ export class FileTreeApiAdapter {
         return this.deleteWorkspaceFile(path, recursive);
       case 'template':
         return this.deleteTemplateFile(path, recursive);
+      case 'knowledge-base':
+        return this.deleteKnowledgeBaseFile(path, recursive);
       case 'claude-code':
         return this.deleteClaudeCodeFile(path, recursive);
       default:
@@ -170,6 +184,8 @@ export class FileTreeApiAdapter {
         return this.batchDeleteWorkspace(request);
       case 'template':
         return this.batchDeleteTemplate(request);
+      case 'knowledge-base':
+        return this.batchDeleteKnowledgeBase(request);
       case 'claude-code':
         // Claude Code 不支援批次刪除，逐一刪除
         return this.batchDeleteClaudeCode(request);
@@ -189,6 +205,8 @@ export class FileTreeApiAdapter {
         return this.renameWorkspaceFile(oldPath, newPath);
       case 'template':
         return this.renameTemplateFile(oldPath, newPath);
+      case 'knowledge-base':
+        return this.renameKnowledgeBaseFile(oldPath, newPath);
       case 'claude-code':
         return this.renameClaudeCodeFile(oldPath, newPath);
       default:
@@ -207,6 +225,8 @@ export class FileTreeApiAdapter {
         return this.moveWorkspaceFile(sourcePath, targetPath);
       case 'template':
         return this.moveTemplateFile(sourcePath, targetPath);
+      case 'knowledge-base':
+        return this.moveKnowledgeBaseFile(sourcePath, targetPath);
       case 'claude-code':
         return this.moveClaudeCodeFile(sourcePath, targetPath);
       default:
@@ -225,6 +245,8 @@ export class FileTreeApiAdapter {
         return this.uploadWorkspaceFiles(options);
       case 'template':
         return this.uploadTemplateFiles(options);
+      case 'knowledge-base':
+        return this.uploadKnowledgeBaseFiles(options);
       case 'claude-code':
         return this.uploadClaudeCodeFiles(options);
       default:
@@ -243,6 +265,8 @@ export class FileTreeApiAdapter {
         return this.downloadWorkspaceFile(options);
       case 'template':
         throw new Error('Template 不支援下載功能');
+      case 'knowledge-base':
+        throw new Error('Knowledge Base 不支援下載功能');
       case 'claude-code':
         throw new Error('Claude Code 不支援下載功能');
       default:
@@ -537,6 +561,110 @@ export class FileTreeApiAdapter {
       success: item.success,
       error: item.error,
     })) || [];
+  }
+
+  // ==================== Knowledge Base 實作 ====================
+
+  private async getKnowledgeBaseTree(): Promise<FileTreeNode[]> {
+    const { knowledgeBaseId, includeHidden } = this.config;
+    const url = `${API_ENDPOINTS.knowledgeBase.getTree(knowledgeBaseId!)}?path=${encodeURIComponent('/')}&includeHidden=${String(includeHidden ?? false)}`;
+    const response = await this.client.get<{ path: string; scope: string; nodes: FileTreeNode[]; total: number }>(url);
+    return response.nodes || [];
+  }
+
+  private async getKnowledgeBaseContent(path: string): Promise<string> {
+    const { knowledgeBaseId } = this.config;
+    const url = `${API_ENDPOINTS.knowledgeBase.getContent(knowledgeBaseId!)}?path=${encodeURIComponent(path)}`;
+    const response = await this.client.get<{ content: string }>(url);
+    return response.content || '';
+  }
+
+  private async createKnowledgeBaseFile(request: FileOperationRequest): Promise<FileOperationResponse> {
+    const { knowledgeBaseId } = this.config;
+    const formData = new FormData();
+    formData.append('path', request.path);
+    formData.append('type', request.isDirectory ? 'directory' : 'file');
+    if (!request.isDirectory) {
+      formData.append('content', request.content ?? '');
+    }
+
+    return this.client.post(API_ENDPOINTS.knowledgeBase.create(knowledgeBaseId!), formData);
+  }
+
+  private async updateKnowledgeBaseFile(path: string, content: string): Promise<FileOperationResponse> {
+    const { knowledgeBaseId } = this.config;
+    return this.client.put(API_ENDPOINTS.knowledgeBase.update(knowledgeBaseId!), { path, content });
+  }
+
+  private async deleteKnowledgeBaseFile(path: string, recursive: boolean): Promise<FileOperationResponse> {
+    const { knowledgeBaseId } = this.config;
+    const url = `${API_ENDPOINTS.knowledgeBase.delete(knowledgeBaseId!)}?path=${encodeURIComponent(path)}&recursive=${String(recursive)}`;
+    return this.client.delete(url);
+  }
+
+  private async batchDeleteKnowledgeBase(request: BatchDeleteRequest): Promise<BatchDeleteResponse> {
+    const results: BatchDeleteResponse = {
+      success: true,
+      deleted: [],
+      failed: [],
+      total: request.paths.length,
+      successCount: 0,
+      failedCount: 0,
+    };
+
+    for (const path of request.paths) {
+      try {
+        await this.deleteKnowledgeBaseFile(path, request.recursive ?? true);
+        results.deleted.push(path);
+        results.successCount += 1;
+      } catch (error) {
+        results.failed.push({
+          path,
+          error: error instanceof Error ? error.message : '刪除失敗',
+        });
+        results.failedCount += 1;
+      }
+    }
+
+    results.success = results.failedCount === 0;
+    return results;
+  }
+
+  private async renameKnowledgeBaseFile(oldPath: string, newPath: string): Promise<FileOperationResponse> {
+    return this.moveKnowledgeBaseFile(oldPath, newPath);
+  }
+
+  private async moveKnowledgeBaseFile(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
+    const { knowledgeBaseId } = this.config;
+    return this.client.patch(API_ENDPOINTS.knowledgeBase.move(knowledgeBaseId!), {
+      sourcePath,
+      destinationPath: targetPath,
+      overwrite: false,
+    });
+  }
+
+  private async uploadKnowledgeBaseFiles(options: FileUploadOptions): Promise<FileUploadResult[]> {
+    const { knowledgeBaseId } = this.config;
+    const formData = new FormData();
+    formData.append('path', options.targetPath || '/');
+    formData.append('overwrite', options.conflictStrategy === 'overwrite' ? 'true' : 'false');
+    options.files.forEach((file) => formData.append('files', file));
+
+    const response = await this.client.post<{
+      total: number;
+      succeeded: number;
+      failed: number;
+      results?: Array<{ filename: string; path: string; size: number; success: boolean; message?: string }>;
+      uploaded?: Array<{ filename: string; path: string; size: number; success: boolean; error?: string }>;
+    }>(API_ENDPOINTS.knowledgeBase.upload(knowledgeBaseId!), formData);
+
+    const results = response.results ?? response.uploaded ?? [];
+    return results.map((item) => ({
+      fileName: item.filename,
+      path: item.path,
+      success: item.success,
+      error: 'message' in item ? item.message : item.error,
+    }));
   }
 
   // ==================== Claude Code 實作 ====================

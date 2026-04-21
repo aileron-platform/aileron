@@ -156,7 +156,7 @@ async def get_marketplace_config(
         translate = request.state.translate
         return MarketplaceConfigResponse(
             success=False,
-            error=str(e),
+            error=translate("templates.marketplace_config_internal_error"),
             message=translate("templates.marketplace_config_get_failed")
         )
 
@@ -192,7 +192,7 @@ async def update_marketplace_config(
         translate = request.state.translate
         return MarketplaceConfigResponse(
             success=False,
-            error=str(e),
+            error=translate("templates.marketplace_config_internal_error"),
             message=translate("templates.marketplace_config_update_failed")
         )
 

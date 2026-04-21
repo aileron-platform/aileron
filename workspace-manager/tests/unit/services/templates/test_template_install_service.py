@@ -9,7 +9,7 @@ import pytest
 import httpx
 
 from app.db.models import Template as TemplateDB, Workspace
-from app.services.template_install_service import TemplateInstallService
+from app.services.template_install_service import TemplateInstallError, TemplateInstallService
 
 
 # ============================================================================
@@ -115,11 +115,12 @@ class TestInstallation:
         mock_db_session.query.return_value = mock_query
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Workspace .* not found"):
+        with pytest.raises(TemplateInstallError, match="Workspace .* not found") as exc_info:
             await install_service.install_template_to_workspace(
                 "nonexistent-workspace",
                 "test-template"
             )
+        assert exc_info.value.code == "TEMPLATE_INSTALL_WORKSPACE_NOT_FOUND"
 
     @pytest.mark.asyncio
     async def test_install_template_workspace_not_running(
@@ -136,11 +137,12 @@ class TestInstallation:
         mock_db_session.query.return_value = mock_query
 
         # Act & Assert
-        with pytest.raises(ValueError, match="is not running"):
+        with pytest.raises(TemplateInstallError, match="is not running") as exc_info:
             await install_service.install_template_to_workspace(
                 "workspace-123",
                 "test-template"
             )
+        assert exc_info.value.code == "TEMPLATE_INSTALL_WORKSPACE_NOT_RUNNING"
 
     @pytest.mark.asyncio
     async def test_install_template_template_not_found(
@@ -159,11 +161,12 @@ class TestInstallation:
             mock_get_template.return_value = None
 
             # Act & Assert
-            with pytest.raises(ValueError, match="Template .* not found"):
+            with pytest.raises(TemplateInstallError, match="Template .* not found") as exc_info:
                 await install_service.install_template_to_workspace(
                     "workspace-123",
                     "nonexistent-template"
                 )
+            assert exc_info.value.code == "TEMPLATE_INSTALL_TEMPLATE_NOT_FOUND"
 
 
 # ============================================================================
@@ -524,8 +527,9 @@ class TestRuntimeURL:
         mock_workspace.runtime_external_url = None
 
         # Act & Assert
-        with pytest.raises(ValueError, match="沒有可用的 runtime URL"):
+        with pytest.raises(TemplateInstallError, match="沒有可用的 runtime URL") as exc_info:
             install_service._get_runtime_url(mock_workspace)
+        assert exc_info.value.code == "TEMPLATE_INSTALL_RUNTIME_URL_MISSING"
 
 
 # ============================================================================

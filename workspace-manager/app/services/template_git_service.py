@@ -3,8 +3,9 @@
 import json
 import logging
 import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from git import Repo, GitCommandError, InvalidGitRepositoryError
 from git.util import Actor
@@ -22,6 +23,28 @@ from app.models.template_git import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class GitOperationResult:
+    success: bool
+    code: str
+    message: str
+    params: dict[str, Any] = field(default_factory=dict)
+
+    def __iter__(self) -> Iterator[Any]:
+        yield self.success
+        yield self.message
+
+
+@dataclass
+class GitScanResult(GitOperationResult):
+    templates: List[Dict[str, Any]] = field(default_factory=list)
+
+    def __iter__(self) -> Iterator[Any]:
+        yield self.success
+        yield self.message
+        yield self.templates
+
+
 class TemplateGitService:
     """管理模板中心的 Git 版本控制操作"""
 
@@ -37,6 +60,27 @@ class TemplateGitService:
         self.template_center_path = Path(current_settings.TEMPLATE_STORAGE_PATH)
         self._ssh_dir = ssh_dir or (Path.home() / ".ssh")
         self._repo: Optional[Repo] = None
+
+    @staticmethod
+    def _operation_result(
+        success: bool,
+        code: str,
+        *,
+        params: Optional[dict[str, Any]] = None,
+        message: Optional[str] = None,
+    ) -> GitOperationResult:
+        return GitOperationResult(success, code, message or code, params or {})
+
+    @staticmethod
+    def _scan_result(
+        success: bool,
+        code: str,
+        *,
+        templates: Optional[List[Dict[str, Any]]] = None,
+        params: Optional[dict[str, Any]] = None,
+        message: Optional[str] = None,
+    ) -> GitScanResult:
+        return GitScanResult(success, code, message or code, params=params or {}, templates=templates or [])
 
     def _get_repo(self) -> Optional[Repo]:
         """取得 Git 倉庫物件，如果不存在則返回 None"""
@@ -214,7 +258,7 @@ class TemplateGitService:
             sub_dir = "/".join(parts[2:-1]) if len(parts) > 3 else ""
         else:
             template_id = "__other__"
-            template_name = "其他變更"
+            template_name = "other"
             relative_path = file_path
             parts = file_path.split("/")
             sub_dir = "/".join(parts[:-1]) if len(parts) > 1 else ""
@@ -251,10 +295,10 @@ class TemplateGitService:
             logger.warning(f"取得 Git 使用者資訊失敗: {e}")
             return GitUserConfig(user_name=None, user_email=None)
 
-    def update_user_config(self, user_name: str, user_email: str) -> Tuple[bool, str]:
+    def update_user_config(self, user_name: str, user_email: str) -> GitOperationResult:
         """更新 Git 使用者資訊"""
         if not user_name.strip() or not user_email.strip():
-            return False, "Git 使用者名稱與 Email 皆為必填"
+            return self._operation_result(False, "GIT_USER_CONFIG_REQUIRED")
 
         try:
             from git import GitConfigParser
@@ -264,12 +308,12 @@ class TemplateGitService:
                 git_config.set_value("user", "email", user_email.strip())
                 git_config.release()
 
-            return True, "Git 使用者資訊已更新"
+            return self._operation_result(True, "GIT_USER_CONFIG_UPDATED")
         except Exception as e:
             logger.error(f"更新 Git 使用者資訊失敗: {e}")
-            return False, f"更新失敗: {str(e)}"
+            return self._operation_result(False, "GIT_USER_CONFIG_UPDATE_FAILED")
 
-    def set_remote_url(self, url: str) -> Tuple[bool, str]:
+    def set_remote_url(self, url: str) -> GitOperationResult:
         """設定或更新 Git 遠端倉庫 URL
 
         Args:
@@ -280,10 +324,10 @@ class TemplateGitService:
         """
         repo = self._get_repo()
         if repo is None:
-            return False, "不是 Git 倉庫"
+            return self._operation_result(False, "GIT_REPO_NOT_FOUND")
 
         if not url.strip():
-            return False, "遠端倉庫 URL 不能為空"
+            return self._operation_result(False, "GIT_REMOTE_URL_EMPTY")
 
         url = url.strip()
 
@@ -291,14 +335,14 @@ class TemplateGitService:
             if "origin" in repo.remotes:
                 # 已存在，更新 URL
                 repo.remotes.origin.set_url(url)
-                return True, f"成功更新遠端倉庫 URL 為: {url}"
+                return self._operation_result(True, "GIT_REMOTE_URL_UPDATED", params={"url": url})
             else:
                 # 不存在，新增 origin
                 repo.create_remote("origin", url)
-                return True, f"成功新增遠端倉庫 URL: {url}"
+                return self._operation_result(True, "GIT_REMOTE_URL_CREATED", params={"url": url})
         except Exception as e:
             logger.error(f"設定遠端倉庫 URL 失敗: {e}")
-            return False, f"設定失敗: {str(e)}"
+            return self._operation_result(False, "GIT_REMOTE_URL_SET_FAILED")
 
     def get_branches(self) -> GitBranchList:
         """取得分支列表"""
@@ -342,7 +386,7 @@ class TemplateGitService:
 
     def commit_and_push(
         self, message: str, branch: Optional[str] = None, push: bool = True
-    ) -> Tuple[bool, str]:
+    ) -> GitOperationResult:
         """提交變更並推送到遠端
 
         Args:
@@ -355,24 +399,24 @@ class TemplateGitService:
         """
         repo = self._get_repo()
         if repo is None:
-            return False, "不是 Git 倉庫"
+            return self._operation_result(False, "GIT_REPO_NOT_FOUND")
 
         try:
             # 檢查是否有變更
             status = self.get_git_status()
             if not status.has_changes:
-                return False, "沒有需要提交的變更"
+                return self._operation_result(False, "GIT_NO_CHANGES")
 
             # 如果需要推送，先檢查是否有設定 remote origin
             if push and not status.remote_url:
-                return False, "無法推送到遠端：尚未設定 Git 遠端倉庫 (origin)。請先設定遠端倉庫 URL，或取消勾選「自動推送到遠端」選項。"
+                return self._operation_result(False, "GIT_PUSH_REMOTE_NOT_CONFIGURED")
 
             # 如果指定了分支，先切換分支
             if branch:
                 try:
                     repo.heads[branch].checkout()
                 except IndexError:
-                    return False, f"分支 {branch} 不存在"
+                    return self._operation_result(False, "GIT_BRANCH_NOT_FOUND", params={"branch": branch})
 
             # 加入所有變更到 staging area
             repo.index.add("*")
@@ -386,17 +430,17 @@ class TemplateGitService:
                 try:
                     current_branch = branch or status.current_branch
                     repo.remotes.origin.push(current_branch)
-                    return True, f"成功提交並推送到遠端。{commit_info}"
+                    return self._operation_result(True, "GIT_COMMIT_PUSH_SUCCESS", params={"commitInfo": commit_info})
                 except Exception as e:
                     logger.error(f"推送失敗: {e}")
-                    return False, f"推送失敗: {str(e)}。變更已在本地提交。"
+                    return self._operation_result(False, "GIT_PUSH_FAILED_LOCAL_COMMITTED")
 
-            return True, f"成功提交到本地。{commit_info}"
+            return self._operation_result(True, "GIT_COMMIT_LOCAL_SUCCESS", params={"commitInfo": commit_info})
         except Exception as e:
             logger.error(f"提交變更失敗: {e}")
-            return False, f"提交失敗: {str(e)}"
+            return self._operation_result(False, "GIT_COMMIT_FAILED")
 
-    def pull_from_remote(self, branch: Optional[str] = None) -> Tuple[bool, str]:
+    def pull_from_remote(self, branch: Optional[str] = None) -> GitOperationResult:
         """從遠端拉取變更
 
         Args:
@@ -407,34 +451,34 @@ class TemplateGitService:
         """
         repo = self._get_repo()
         if repo is None:
-            return False, "不是 Git 倉庫"
+            return self._operation_result(False, "GIT_REPO_NOT_FOUND")
 
         try:
             # 檢查是否有未提交的變更
             status = self.get_git_status()
             if status.has_changes:
-                return False, "有未提交的變更，請先執行「本地同步遠端」"
+                return self._operation_result(False, "GIT_PULL_HAS_UNCOMMITTED_CHANGES")
 
             # 如果指定了分支，先切換分支
             if branch:
                 try:
                     repo.heads[branch].checkout()
                 except IndexError:
-                    return False, f"分支 {branch} 不存在"
+                    return self._operation_result(False, "GIT_BRANCH_NOT_FOUND", params={"branch": branch})
 
             # 拉取遠端變更
             current_branch = branch or status.current_branch
             try:
                 repo.remotes.origin.pull(current_branch)
-                return True, f"成功從遠端拉取變更"
+                return self._operation_result(True, "GIT_PULL_SUCCESS")
             except GitCommandError as e:
                 # 檢查是否為衝突
                 if "conflict" in str(e).lower():
-                    return False, f"拉取時發生衝突，請手動解決衝突後再試。錯誤: {str(e)}"
-                return False, f"拉取失敗: {str(e)}"
+                    return self._operation_result(False, "GIT_PULL_CONFLICT")
+                return self._operation_result(False, "GIT_PULL_FAILED")
         except Exception as e:
             logger.error(f"拉取遠端變更失敗: {e}")
-            return False, f"拉取失敗: {str(e)}"
+            return self._operation_result(False, "GIT_PULL_FAILED")
 
     def check_conflicts(self) -> Tuple[bool, List[str]]:
         """檢查是否有衝突
@@ -528,7 +572,7 @@ class TemplateGitService:
             )
 
             if result.returncode != 0:
-                raise Exception(f"產生 SSH Key 失敗: {result.stderr}")
+                raise Exception("SSH_KEY_GENERATION_FAILED")
 
             # 讀取私鑰和公鑰
             private_key = key_path.read_text()
@@ -577,11 +621,11 @@ class TemplateGitService:
 
         # 驗證私鑰格式
         if not private_key.strip().startswith("-----BEGIN"):
-            raise ValueError("私鑰格式不正確")
+            raise ValueError("SSH_PRIVATE_KEY_INVALID")
 
         # 驗證公鑰格式
         if not public_key.strip().startswith("ssh-"):
-            raise ValueError("公鑰格式不正確")
+            raise ValueError("SSH_PUBLIC_KEY_INVALID")
 
         # 計算 fingerprint
         fingerprint = self._calculate_ssh_fingerprint(public_key.strip())
@@ -649,7 +693,7 @@ class TemplateGitService:
 
         return f"SHA256:{fingerprint}"
 
-    def clone_repository(self, url: str, branch: Optional[str] = None) -> Tuple[bool, str]:
+    def clone_repository(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
         """Clone 遠端倉庫到模板中心目錄
 
         Args:
@@ -660,7 +704,7 @@ class TemplateGitService:
             (成功與否, 訊息)
         """
         if not url.strip():
-            return False, "遠端倉庫 URL 不能為空"
+            return self._operation_result(False, "GIT_REMOTE_URL_EMPTY")
 
         url = url.strip()
 
@@ -668,12 +712,12 @@ class TemplateGitService:
         if self.is_git_repository():
             repo = self._get_repo()
             if repo is None:
-                return False, "無法存取 Git 倉庫"
+                return self._operation_result(False, "GIT_REPO_ACCESS_FAILED")
 
             # 如果已經是 Git 倉庫，檢查是否有未提交的變更
             status = self.get_git_status()
             if status.has_changes:
-                return False, "目標目錄已是 Git 倉庫且有未提交的變更，請先提交或清除變更"
+                return self._operation_result(False, "GIT_CLONE_TARGET_HAS_CHANGES")
 
             # 檢查 remote URL 是否相同
             try:
@@ -686,12 +730,16 @@ class TemplateGitService:
                 return self._pull_or_clone_existing(url, branch)
             else:
                 # URL 不同，提示用戶
-                return False, f"目標目錄已是 Git 倉庫，但 remote URL 不同。現有 URL: {existing_url or '(未設定)'}，新 URL: {url}"
+                return self._operation_result(
+                    False,
+                    "GIT_CLONE_REMOTE_MISMATCH",
+                    params={"currentUrl": existing_url or "(not configured)", "newUrl": url},
+                )
 
         # 目標目錄不是 Git 倉庫，執行 clone
         return self._clone_fresh(url, branch)
 
-    def _clone_fresh(self, url: str, branch: Optional[str] = None) -> Tuple[bool, str]:
+    def _clone_fresh(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
         """Clone 倉庫到空目錄"""
         import shutil
         import tempfile
@@ -709,7 +757,7 @@ class TemplateGitService:
                         Repo.clone_from(url, str(tmp_clone_path))
                 except Exception as e:
                     logger.error(f"GitPython clone 失敗: {e}")
-                    return False, f"Clone 失敗: {str(e)}"
+                    return self._operation_result(False, "GIT_CLONE_FAILED")
 
                 # 移動檔案到目標目錄
                 # 先清空目標目錄（除了 .gitkeep）
@@ -732,17 +780,18 @@ class TemplateGitService:
                 # 清除舊的 repo 快取
                 self._repo = None
 
-            return True, f"成功 clone 倉庫: {url}" + (f" (分支: {branch})" if branch else "")
+            detail = f"{url}" + (f" (branch: {branch})" if branch else "")
+            return self._operation_result(True, "GIT_CLONE_SUCCESS", params={"detail": detail})
 
         except Exception as e:
             logger.error(f"Clone 倉庫時發生錯誤: {e}")
-            return False, f"Clone 失敗: {str(e)}"
+            return self._operation_result(False, "GIT_CLONE_FAILED")
 
-    def _pull_or_clone_existing(self, url: str, branch: Optional[str] = None) -> Tuple[bool, str]:
+    def _pull_or_clone_existing(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
         """對已存在的倉庫執行 pull 操作"""
         repo = self._get_repo()
         if repo is None:
-            return False, "無法存取 Git 倉庫"
+            return self._operation_result(False, "GIT_REPO_ACCESS_FAILED")
 
         try:
             # 如果指定了分支，切換分支
@@ -755,22 +804,23 @@ class TemplateGitService:
                         repo.create_head(branch, f"origin/{branch}")
                         repo.heads[branch].checkout()
                     except Exception as e:
-                        return False, f"切換到分支 {branch} 失敗: {str(e)}"
+                        return self._operation_result(False, "GIT_CHECKOUT_BRANCH_FAILED", params={"branch": branch})
 
             # 執行 pull
             current_branch = branch or self.get_git_status().current_branch
             try:
                 repo.remotes.origin.pull(current_branch)
             except GitCommandError as e:
-                return False, f"Pull 失敗: {str(e)}"
+                return self._operation_result(False, "GIT_PULL_FAILED")
 
-            return True, f"成功從遠端倉庫更新內容: {url}" + (f" (分支: {branch})" if branch else "")
+            detail = f"{url}" + (f" (branch: {branch})" if branch else "")
+            return self._operation_result(True, "GIT_CLONE_UPDATE_SUCCESS", params={"detail": detail})
 
         except Exception as e:
             logger.error(f"Pull 倉庫時發生錯誤: {e}")
-            return False, f"Pull 失敗: {str(e)}"
+            return self._operation_result(False, "GIT_PULL_FAILED")
 
-    def scan_and_sync_templates(self) -> Tuple[bool, str, List[Dict]]:
+    def scan_and_sync_templates(self) -> GitScanResult:
         """掃描模板中心目錄中的所有 plugin.json 檔案並返回模板資訊
 
         Returns:
@@ -781,7 +831,7 @@ class TemplateGitService:
             plugins_dir = self.template_center_path / "plugins"
 
             if not plugins_dir.exists():
-                return False, "plugins 目錄不存在", []
+                return self._scan_result(False, "GIT_PLUGINS_DIR_MISSING")
 
             # 掃描每個插件目錄
             for plugin_dir in plugins_dir.iterdir():
@@ -823,10 +873,10 @@ class TemplateGitService:
                     logger.error(f"掃描模板失敗 ({plugin_dir.name}): {e}")
 
             if not templates:
-                return False, "未找到任何模板", []
+                return self._scan_result(False, "GIT_NO_TEMPLATES_FOUND")
 
-            return True, f"成功掃描 {len(templates)} 個模板", templates
+            return self._scan_result(True, "GIT_SCAN_SUCCESS", params={"count": len(templates)}, templates=templates)
 
         except Exception as e:
             logger.error(f"掃描模板時發生錯誤: {e}")
-            return False, f"掃描失敗: {str(e)}", []
+            return self._scan_result(False, "GIT_SCAN_FAILED")

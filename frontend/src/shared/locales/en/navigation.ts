@@ -2,6 +2,7 @@ const navigation = {
   workspace: 'Workspace',
   templateCenter: 'Template Center',
   automation: 'Automation',
+  knowledgeBaseCenter: 'Knowledge Base Center',
   brand: {
     title: 'Aileron',
   },
@@ -48,6 +49,7 @@ const navigation = {
       workspace: 'Workspace',
       automation: 'Automation',
       template: 'Template Center',
+      knowledgeBase: 'Knowledge Base Center',
     },
     separator: '›',
   },

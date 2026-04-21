@@ -116,8 +116,11 @@ export const getOpenSpecSubView = (
 };
 
 // 根據路由路徑決定工作區設定子視圖
-export const getWorkspaceSettingsSubView = (pathname: string): 'basic' | 'access' | 'reset' => {
+export const getWorkspaceSettingsSubView = (
+  pathname: string,
+): 'basic' | 'access' | 'knowledge-bases' | 'reset' => {
   if (pathname.includes('/access')) return 'access';
+  if (pathname.includes('/knowledge-bases')) return 'knowledge-bases';
   if (pathname.includes('/reset')) return 'reset';
   return 'basic'; // 預設值
 };

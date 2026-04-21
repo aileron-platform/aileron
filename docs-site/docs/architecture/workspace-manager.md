@@ -13,7 +13,7 @@ Workspace Manager 是 Aileron 的核心服務，負責管理開發工作區的�
 
 ### 工作區管理
 - **CRUD**：建立、讀取、更新、刪除工作區
-- **容器管理**：Docker / Kubernetes / Podman 容器生命週期控制
+- **容器管理**：Docker / Kubernetes 容器生命週期控制
 - **範本支援**：基於預設範本快速建立工作區
 - **網路配置**：防火牆規則和端口映射管理
 
@@ -41,7 +41,7 @@ Workspace Manager 是 Aileron 的核心服務，負責管理開發工作區的�
 | 資料庫 | PostgreSQL |
 | 快取 / 佇列 | Redis |
 | 背景任務 | Celery |
-| 容器管理 | Docker / Kubernetes / Podman |
+| 容器管理 | Docker / Kubernetes |
 | 認證 | Keycloak JWT |
 
 ## 目錄結構
@@ -105,13 +105,15 @@ workspace-manager/
 ## 本地開發
 
 ```bash
-cd workspace-manager
+docker compose up -d workspace-manager
+```
 
-# 安裝依賴（使用 uv）
-uv sync
+`workspace-manager` 在本地開發時應優先透過 Docker Compose 啟動，並配合完整 stack 一起運作。Compose 會將 `./workspace-manager` 掛載到容器內的 `/workspace-manager`，因此程式碼修改通常可透過既有 reload 機制即時生效。
 
-# 啟動服務
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+若尚未啟動其他相依服務，建議直接使用：
+
+```bash
+docker compose up -d
 ```
 
 ## 測試

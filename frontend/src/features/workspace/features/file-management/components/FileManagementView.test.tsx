@@ -181,6 +181,46 @@ describe('FileManagementView', () => {
     );
   });
 
+  it('omits contextId when no git context is selected', () => {
+    useWorkspaceMock.mockReturnValue({
+      workspace: {
+        openTabs: [],
+      },
+      dispatch: dispatchMock,
+      state: {
+        fileTreeShowHiddenEntries: false,
+        versionControl: {
+          selectedGitContextId: null,
+        },
+      },
+      workspaceRuntime: {
+        workspaceId: 'ws-1',
+        runtimeBaseUrl: 'http://runtime.local',
+        isLoading: false,
+        error: null,
+      },
+      layout: {
+        secondColumnCollapsed: false,
+      },
+      toggleSecondColumn: vi.fn(),
+      openFileInTab: vi.fn(),
+      closeTab: vi.fn(),
+    });
+
+    render(<FileManagementView />);
+
+    expect(useFileTreeManagerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiConfig: expect.objectContaining({
+          type: 'workspace',
+          workspaceId: 'ws-1',
+          baseUrl: 'http://runtime.local',
+          contextId: null,
+        }),
+      })
+    );
+  });
+
   it('uses the workspace-level hidden-entry visibility in file tree requests', () => {
     useWorkspaceMock.mockReturnValue({
       workspace: {

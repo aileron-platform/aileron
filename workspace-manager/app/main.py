@@ -23,6 +23,7 @@ from app.routers import (
     automation_router,
     container_images_router,
     health_router,
+    knowledge_bases_router,
     oauth_router,
     settings_router,
     teams_router,
@@ -267,6 +268,7 @@ app.include_router(oauth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(teams_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")
+app.include_router(knowledge_bases_router, prefix="/api/v1")
 app.include_router(workspace_setup_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(templates_router, prefix="/api/v1")

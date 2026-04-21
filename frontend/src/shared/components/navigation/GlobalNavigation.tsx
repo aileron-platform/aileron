@@ -28,6 +28,7 @@ import {
   User,
   Clock,
   FileText,
+  Library,
   Settings,
   LogOut,
   LogIn,
@@ -197,6 +198,9 @@ export const GlobalNavigation: React.FC = () => {
         break;
       case 'automation':
         navigate(ROUTES.AUTOMATION);
+        break;
+      case 'knowledge-base':
+        navigate(ROUTES.KNOWLEDGE_BASES);
         break;
       default:
         navigate(ROUTES.WORKSPACES);
@@ -517,6 +521,20 @@ export const GlobalNavigation: React.FC = () => {
             >
               <FileText className="h-3 w-3" />
               {t('navigation.templateCenter')}
+            </Button>
+
+            <Button
+              variant={state.currentModule === 'knowledge-base' ? 'default' : 'ghost'}
+              size="sm"
+              className={`gap-1 transition-all duration-300 h-7 px-2 text-xs ${
+                state.currentModule === 'knowledge-base'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => setActiveModule('knowledge-base')}
+            >
+              <Library className="h-3 w-3" />
+              {t('navigation.knowledgeBaseCenter')}
             </Button>
           </div>
 

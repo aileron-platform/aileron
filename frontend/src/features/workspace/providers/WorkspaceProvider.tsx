@@ -56,7 +56,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   // 使用 Workspace Runtime Hook
   const workspaceRuntime = useWorkspaceRuntime(workspaceId);
   const selectedGitContextId = state.versionControl.selectedGitContextId;
-  const fileManagementContextId = selectedGitContextId ?? 'primary';
+  const fileManagementContextId = selectedGitContextId;
 
   // 使用路由同步 Hook
   useWorkspaceRouteSync(state, dispatch);
@@ -76,7 +76,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
 
   const lastLoadedTreeIdentityRef = useRef<string | null>(null);
   const previousWorkspaceIdRef = useRef<string | null>(null);
-  const previousFileManagementContextIdRef = useRef<string | null>(null);
+  const previousFileManagementContextIdRef = useRef<string | null | undefined>(undefined);
   const hasLoadedInitialTabsRef = useRef(false);
   // 記錄最近一次已完成 layout restore 的 workspaceId。
   // 1) 作為防抖寫入的 gate：只有與當前 workspaceId 相同時才允許寫入，避免切換瞬間用舊 state 污染新 workspace key
@@ -155,7 +155,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
           payload: {
             workspaceId: previousWorkspaceId,
             scope,
-            contextId: scope === 'file-management' ? (previousFileManagementContextIdRef.current ?? 'primary') : undefined,
+            contextId: scope === 'file-management' ? previousFileManagementContextIdRef.current : undefined,
           },
         });
 
@@ -188,7 +188,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     }
 
     const previousContextId = previousFileManagementContextIdRef.current;
-    if (previousContextId === null) {
+    if (previousContextId === undefined) {
       previousFileManagementContextIdRef.current = fileManagementContextId;
       return;
     }

@@ -21,6 +21,7 @@ import {
   WORKSPACE_CHAT_ADD_REFERENCE_EVENT,
   type ChatCodeReferenceEventDetail,
 } from './chatEvents';
+import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { WorkspaceWizardModule } from '@/features/workspace-wizard/WorkspaceWizardModule';
 import { useAgentSession } from './useAgentSession';
 import { useAgentSessionStore } from './agentSessionStore';
@@ -534,29 +535,41 @@ export const ChatPanel: React.FC = () => {
     }
   }, [permissionMode]);
 
-  // 獲取 slash commands 與 skills
-  useEffect(() => {
+  const loadSlashCommands = useCallback(async () => {
     if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
+      setSlashCommands([]);
       return;
     }
 
-    const loadSlashCommands = async () => {
-      try {
-        const commands = await slashCommandApi.listPickerItems(
-          workspaceRuntime.runtimeBaseUrl,
-          workspaceRuntime.workspaceId!,
-          agentConfig.apiPathPrefix,
-          agentConfig.availableScopes,
-        );
-        setSlashCommands(commands);
-      } catch (error) {
-        logger.error('Failed to load slash commands and skills', { error });
-        setSlashCommands([]);
-      }
-    };
+    try {
+      const commands = await slashCommandApi.listPickerItems(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        agentConfig.apiPathPrefix,
+        agentConfig.availableScopes,
+      );
+      setSlashCommands(commands);
+    } catch (error) {
+      logger.error('Failed to load slash commands and skills', { error });
+      setSlashCommands([]);
+    }
+  }, [
+    workspaceRuntime.runtimeBaseUrl,
+    workspaceRuntime.workspaceId,
+    agentConfig.apiPathPrefix,
+    agentConfig.availableScopes,
+  ]);
 
+  // 獲取 slash commands 與 skills
+  useEffect(() => {
     void loadSlashCommands();
-  }, [workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl, agentConfig.apiPathPrefix]);
+  }, [loadSlashCommands]);
+
+  useWorkspaceTemplateInstallRefresh({
+    workspaceId: workspaceRuntime.workspaceId,
+    features: ['slashCommands', 'skills'],
+    onRefresh: loadSlashCommands,
+  });
 
   React.useEffect(() => {
     const handleAddReference = (event: Event) => {

@@ -77,6 +77,7 @@ func main() {
 		RedisURL:                   os.Getenv("PLATFORM_REDIS_URL"),
 		DatabaseURL:                os.Getenv("PLATFORM_DATABASE_URL"),
 		InternalAPIToken:           os.Getenv("PLATFORM_INTERNAL_API_TOKEN"),
+		KnowledgeBasesPVCName:      os.Getenv("KNOWLEDGE_BASES_PVC_NAME"),
 		TURNServerURL:              os.Getenv("TURN_SERVER_URL"),
 		TURNServerFrontendURL:      os.Getenv("TURN_SERVER_FRONTEND_URL"),
 		TURNServerExternalIP:       os.Getenv("TURN_SERVER_EXTERNAL_IP"),

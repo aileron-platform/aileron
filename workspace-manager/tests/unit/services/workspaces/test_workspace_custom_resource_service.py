@@ -69,6 +69,7 @@ def sample_workspace():
     workspace.browser_firewall_network_access_enabled = False
     workspace.browser_firewall_domain_access_mode = "all"
     workspace.browser_firewall_allowed_domains = ["browser.example.com"]
+    workspace.knowledge_base_attachments = []
     workspace.runtime_status = "starting"
     workspace.updated_at = datetime.utcnow()
     return workspace
@@ -109,6 +110,56 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
     assert manifest["spec"]["firewall"]["browser"]["allowedDomains"] == [
         "browser.example.com"
     ]
+    assert manifest["spec"]["knowledgeBases"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
+def test_build_workspace_custom_resource_manifest_includes_active_knowledge_bases(
+    custom_resource_service, sample_workspace
+):
+    sample_workspace.knowledge_base_attachments = [
+        Mock(
+            kb_id="kb-1",
+            mount_alias="docs",
+            mode="rw",
+            knowledge_base=Mock(id="kb-1", tombstoned_at=None),
+        ),
+        Mock(
+            kb_id="kb-2",
+            mount_alias="readonly-docs",
+            mode="ro",
+            knowledge_base=Mock(id="kb-2", tombstoned_at=None),
+        ),
+        Mock(
+            kb_id="kb-3",
+            mount_alias="deleted-docs",
+            mode="ro",
+            knowledge_base=Mock(id="kb-3", tombstoned_at=datetime.utcnow()),
+        ),
+    ]
+
+    manifest = custom_resource_service._build_workspace_custom_resource(sample_workspace)
+
+    assert manifest["spec"]["knowledgeBases"] == [
+        {"kbId": "kb-1", "mountAlias": "docs", "readOnly": False},
+        {"kbId": "kb-2", "mountAlias": "readonly-docs", "readOnly": True},
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.workspace
+def test_build_workspace_custom_resource_manifest_excludes_docker_specific_browser_webrtc_fields(
+    custom_resource_service, sample_workspace
+):
+    manifest = custom_resource_service._build_workspace_custom_resource(sample_workspace)
+
+    browser_spec = manifest["spec"]["browser"]
+
+    assert "hostPort" not in browser_spec
+    assert "webrtcHostPort" not in browser_spec
+    assert "nat1to1" not in browser_spec
+    assert "environment" not in browser_spec
 
 
 @pytest.mark.unit

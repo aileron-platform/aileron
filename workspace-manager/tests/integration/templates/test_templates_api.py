@@ -5,9 +5,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict
+from unittest.mock import patch
 
 import pytest
 from fastapi import status
+
+from app.services.template_git_service import GitOperationResult
+from app.services.template_install_service import TemplateInstallError
 
 from tests.helpers.auth_helpers import AuthTestHelper
 from tests.helpers.fixtures import TestDataFactory, MockResponses
@@ -482,6 +486,131 @@ class TestTemplatesAPI:
         assert updated_data["success"] is True
         assert "content" in updated_data["data"]
 
+    @pytest.mark.integration
+    def test_tpl_020b_template_slash_command_invalid_filename_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Localized Slash Command Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        invalid_payload = {
+            "fileName": "bad/name.md",
+            "content": "# Invalid Command\nThis filename should fail validation.",
+        }
+
+        en_response = client.post(
+            f"/api/v1/templates/{template_id}/slash-commands",
+            json=invalid_payload,
+        )
+        assert en_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert en_response.json()["detail"] == "Invalid filename"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post(
+            f"/api/v1/templates/{template_id}/slash-commands",
+            json=invalid_payload,
+        )
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == "檔名格式不正確"
+
+    @pytest.mark.integration
+    def test_tpl_020c_create_template_duplicate_id_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Duplicate ID Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        template_id = template_data["templateId"]
+
+        first_response = client.post("/api/v1/templates", json=template_data)
+        assert first_response.status_code == status.HTTP_201_CREATED
+
+        second_response = client.post("/api/v1/templates", json=template_data)
+        assert second_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            second_response.json()["detail"]
+            == f'Template ID "{template_id}" already exists. Please use a different ID.'
+        )
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/templates", json=template_data)
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == f"模板代號「{template_id}」已存在，請使用其他代號。"
+
+    @pytest.mark.integration
+    def test_tpl_020d_create_template_invalid_id_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Invalid ID Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        template_data["templateId"] = "Invalid_Template_123"
+
+        en_response = client.post("/api/v1/templates", json=template_data)
+        assert en_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            en_response.json()["detail"]
+            == "Template ID must use kebab-case and may only contain lowercase letters, numbers, and hyphens."
+        )
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/templates", json=template_data)
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == "模板代號必須使用 kebab-case，且只能包含小寫英文字母、數字與連字號。"
+
+    @pytest.mark.integration
+    def test_tpl_020e_template_file_generic_error_uses_simple_message(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Generic File Error Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        with patch(
+            "app.routers.templates.files.TemplateService.create_slash_command_file",
+            return_value=type("Result", (), {"success": False, "error": "unexpected internal error"})(),
+        ):
+            en_response = client.post(
+                f"/api/v1/templates/{template_id}/slash-commands",
+                json={"fileName": "hello.md", "content": "hi"},
+            )
+            assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert en_response.json()["detail"] == "File operation failed"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.files.TemplateService.create_slash_command_file",
+            return_value=type("Result", (), {"success": False, "error": "unexpected internal error"})(),
+        ):
+            zh_response = client.post(
+                f"/api/v1/templates/{template_id}/slash-commands",
+                json={"fileName": "hello.md", "content": "hi"},
+            )
+            assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert zh_response.json()["detail"] == "檔案操作失敗"
+
     # test_tpl_021_template_featured_list_success 已移除 - /api/v1/templates/featured 端點不存在
 
     @pytest.mark.integration
@@ -782,6 +911,31 @@ class TestTemplatesAPI:
             assert update_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
+    def test_tpl_046b_marketplace_config_internal_error_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.config.TemplateService.get_marketplace_config",
+            side_effect=RuntimeError("boom"),
+        ):
+            en_response = client.get("/api/v1/templates/marketplace/config")
+            assert en_response.status_code == status.HTTP_200_OK
+            assert en_response.json()["success"] is False
+            assert en_response.json()["message"] == "Failed to retrieve Marketplace configuration"
+            assert en_response.json()["error"] == "Marketplace configuration operation failed"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.config.TemplateService.get_marketplace_config",
+            side_effect=RuntimeError("boom"),
+        ):
+            zh_response = client.get("/api/v1/templates/marketplace/config")
+            assert zh_response.status_code == status.HTTP_200_OK
+            assert zh_response.json()["success"] is False
+            assert zh_response.json()["message"] == "取得 Marketplace 配置失敗"
+            assert zh_response.json()["error"] == "Marketplace 配置操作失敗"
+
+    @pytest.mark.integration
     def test_tpl_047_ssh_keys_operations(self, authenticated_client):
         """TPL-047 SSH Keys 操作測試"""
         client, user = authenticated_client
@@ -823,6 +977,113 @@ class TestTemplatesAPI:
             status.HTTP_404_NOT_FOUND,
             status.HTTP_400_BAD_REQUEST
         ]
+
+    @pytest.mark.integration
+    def test_tpl_048b_template_install_workspace_not_found_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Localized Install Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+        workspace_id = str(uuid.uuid4())
+
+        payload = {
+            "templateId": template_id,
+            "workspaceId": workspace_id,
+        }
+
+        en_response = client.post("/api/v1/templates/install", json=payload)
+        assert en_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert en_response.json()["detail"] == f"Workspace {workspace_id} not found"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/templates/install", json=payload)
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == f"找不到工作區 {workspace_id}"
+
+    @pytest.mark.integration
+    def test_tpl_048c_template_install_generic_failure_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Broken Install Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        payload = {
+            "templateId": template_id,
+            "workspaceId": str(uuid.uuid4()),
+        }
+
+        with patch(
+            "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
+            side_effect=RuntimeError("boom"),
+        ):
+            en_response = client.post("/api/v1/templates/install", json=payload)
+            assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert en_response.json()["detail"] == "Failed to install template"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
+            side_effect=RuntimeError("boom"),
+        ):
+            zh_response = client.post("/api/v1/templates/install", json=payload)
+            assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert zh_response.json()["detail"] == "安裝模板失敗"
+
+    @pytest.mark.integration
+    def test_tpl_048d_template_install_runtime_connection_error_uses_simple_localized_message(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Runtime Connection Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        payload = {
+            "templateId": template_id,
+            "workspaceId": str(uuid.uuid4()),
+        }
+
+        with patch(
+            "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
+            side_effect=TemplateInstallError(
+                "底層連線錯誤內容不應外漏",
+                code="TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR",
+            ),
+        ):
+            en_response = client.post("/api/v1/templates/install", json=payload)
+            assert en_response.status_code == status.HTTP_502_BAD_GATEWAY
+            assert en_response.json()["detail"] == "Unable to connect to Workspace Runtime"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
+            side_effect=TemplateInstallError(
+                "完全不同的底層錯誤",
+                code="TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR",
+            ),
+        ):
+            zh_response = client.post("/api/v1/templates/install", json=payload)
+            assert zh_response.status_code == status.HTTP_502_BAD_GATEWAY
+            assert zh_response.json()["detail"] == "無法連線到 Workspace Runtime"
 
     @pytest.mark.integration
     def test_tpl_049_file_copy_operation(self, authenticated_client, test_data_factory):
@@ -1016,6 +1277,111 @@ class TestTemplatesAPI:
             ]
 
     @pytest.mark.integration
+    def test_tpl_057b_git_commit_error_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.commit_and_push",
+            return_value=GitOperationResult(False, "GIT_NO_CHANGES", "沒有需要提交的變更"),
+        ):
+            en_response = client.post(
+                "/api/v1/templates/git/commit",
+                json={"message": "Test commit", "push": False},
+            )
+            assert en_response.status_code == status.HTTP_200_OK
+            data = en_response.json()
+            assert data["success"] is False
+            assert data["message"] == "Operation failed"
+            assert data["error"] == "No changes to commit"
+            assert data["errorCode"] == "GIT_NO_CHANGES"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.git.TemplateGitService.commit_and_push",
+            return_value=GitOperationResult(False, "GIT_NO_CHANGES", "沒有需要提交的變更"),
+        ):
+            zh_response = client.post(
+                "/api/v1/templates/git/commit",
+                json={"message": "Test commit", "push": False},
+            )
+            assert zh_response.status_code == status.HTTP_200_OK
+            data = zh_response.json()
+            assert data["success"] is False
+            assert data["message"] == "操作失敗"
+            assert data["error"] == "沒有需要提交的變更"
+            assert data["errorCode"] == "GIT_NO_CHANGES"
+
+    @pytest.mark.integration
+    def test_tpl_057c_git_remote_url_error_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.set_remote_url",
+            return_value=GitOperationResult(False, "GIT_REPO_NOT_FOUND", "不是 Git 倉庫"),
+        ):
+            en_response = client.post(
+                "/api/v1/templates/git/remote-url",
+                json={"url": "https://example.com/repo.git"},
+            )
+            assert en_response.status_code == status.HTTP_200_OK
+            data = en_response.json()
+            assert data["success"] is False
+            assert data["message"] == "Failed to set remote repository URL"
+            assert data["error"] == "Not a Git repository"
+            assert data["errorCode"] == "GIT_REPO_NOT_FOUND"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.git.TemplateGitService.set_remote_url",
+            return_value=GitOperationResult(False, "GIT_REPO_NOT_FOUND", "不是 Git 倉庫"),
+        ):
+            zh_response = client.post(
+                "/api/v1/templates/git/remote-url",
+                json={"url": "https://example.com/repo.git"},
+            )
+            assert zh_response.status_code == status.HTTP_200_OK
+            data = zh_response.json()
+            assert data["success"] is False
+            assert data["message"] == "設定遠端倉庫 URL 失敗"
+            assert data["error"] == "不是 Git 倉庫"
+            assert data["errorCode"] == "GIT_REPO_NOT_FOUND"
+
+    @pytest.mark.integration
+    def test_tpl_057d_git_commit_internal_error_uses_simple_message(self, authenticated_client):
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.commit_and_push",
+            return_value=GitOperationResult(False, "GIT_COMMIT_FAILED", "提交失敗: fatal: internal git error"),
+        ):
+            en_response = client.post(
+                "/api/v1/templates/git/commit",
+                json={"message": "Test commit", "push": False},
+            )
+            assert en_response.status_code == status.HTTP_200_OK
+            data = en_response.json()
+            assert data["success"] is False
+            assert data["message"] == "Operation failed"
+            assert data["error"] == "Commit failed"
+            assert data["errorCode"] == "GIT_COMMIT_FAILED"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.git.TemplateGitService.commit_and_push",
+            return_value=GitOperationResult(False, "GIT_COMMIT_FAILED", "提交失敗: fatal: internal git error"),
+        ):
+            zh_response = client.post(
+                "/api/v1/templates/git/commit",
+                json={"message": "Test commit", "push": False},
+            )
+            assert zh_response.status_code == status.HTTP_200_OK
+            data = zh_response.json()
+            assert data["success"] is False
+            assert data["message"] == "操作失敗"
+            assert data["error"] == "提交失敗"
+            assert data["errorCode"] == "GIT_COMMIT_FAILED"
+
+    @pytest.mark.integration
     def test_tpl_058_git_clone_operations(self, authenticated_client):
         """TPL-058 Git Clone 操作"""
         client, user = authenticated_client
@@ -1129,6 +1495,25 @@ class TestTemplatesAPI:
                 status.HTTP_400_BAD_REQUEST,
                 status.HTTP_422_UNPROCESSABLE_ENTITY
             ]
+
+    @pytest.mark.integration
+    def test_tpl_062b_template_import_invalid_format_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+
+        en_response = client.post(
+            "/api/v1/templates/import",
+            files={"file": ("invalid.txt", b"not-a-zip", "text/plain")},
+        )
+        assert en_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert en_response.json()["detail"] == "Only ZIP files are allowed"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post(
+            "/api/v1/templates/import",
+            files={"file": ("invalid.txt", b"not-a-zip", "text/plain")},
+        )
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == "僅允許上傳 ZIP 檔案"
 
     @pytest.mark.integration
     def test_tpl_063_list_templates_with_filters(self, authenticated_client, test_data_factory):
@@ -1265,6 +1650,61 @@ class TestTemplatesAPI:
         verify_response = client.get(f"/api/v1/templates/{template_id}/claude-md")
         if verify_response.status_code != status.HTTP_404_NOT_FOUND:
             assert verify_response.status_code == status.HTTP_200_OK
+
+    @pytest.mark.integration
+    def test_tpl_070b_claude_md_errors_are_localized(self, authenticated_client, test_data_factory):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Claude MD Error Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        with patch(
+            "app.routers.templates.files.TemplateService.get_claude_md",
+            side_effect=RuntimeError("boom"),
+        ):
+            en_get = client.get(f"/api/v1/templates/{template_id}/claude-md")
+            assert en_get.status_code == status.HTTP_200_OK
+            assert en_get.json()["success"] is False
+            assert en_get.json()["message"] == "Failed to load Claude.md"
+
+        with patch(
+            "app.routers.templates.files.TemplateService.update_claude_md",
+            side_effect=RuntimeError("boom"),
+        ):
+            en_put = client.put(
+                f"/api/v1/templates/{template_id}/claude-md",
+                json={"content": "# test"},
+            )
+            assert en_put.status_code == status.HTTP_200_OK
+            assert en_put.json()["success"] is False
+            assert en_put.json()["message"] == "Failed to update Claude.md"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.files.TemplateService.get_claude_md",
+            side_effect=RuntimeError("boom"),
+        ):
+            zh_get = client.get(f"/api/v1/templates/{template_id}/claude-md")
+            assert zh_get.status_code == status.HTTP_200_OK
+            assert zh_get.json()["success"] is False
+            assert zh_get.json()["message"] == "載入 Claude.md 失敗"
+
+        with patch(
+            "app.routers.templates.files.TemplateService.update_claude_md",
+            side_effect=RuntimeError("boom"),
+        ):
+            zh_put = client.put(
+                f"/api/v1/templates/{template_id}/claude-md",
+                json={"content": "# test"},
+            )
+            assert zh_put.status_code == status.HTTP_200_OK
+            assert zh_put.json()["success"] is False
+            assert zh_put.json()["message"] == "更新 Claude.md 失敗"
 
     @pytest.mark.integration
     def test_tpl_071_slash_commands_error_scenarios(self, authenticated_client, test_data_factory):
@@ -1475,6 +1915,39 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
             }
             restore_response = client.put("/api/v1/templates/marketplace/ssh-keys", json=restore_data)
             # 不檢查restore結果，因為這是清理操作
+
+    @pytest.mark.integration
+    def test_tpl_078b_ssh_keys_invalid_format_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.update_ssh_keys",
+            side_effect=ValueError("私鑰格式不正確"),
+        ):
+            en_response = client.put(
+                "/api/v1/templates/marketplace/ssh-keys",
+                json={"publicKey": "ssh-rsa AAAA", "privateKey": "bad-key"},
+            )
+            assert en_response.status_code == status.HTTP_200_OK
+            data = en_response.json()
+            assert data["success"] is False
+            assert data["message"] == "Invalid SSH Keys format"
+            assert data["error"] == "Invalid SSH Keys format"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.git.TemplateGitService.update_ssh_keys",
+            side_effect=ValueError("私鑰格式不正確"),
+        ):
+            zh_response = client.put(
+                "/api/v1/templates/marketplace/ssh-keys",
+                json={"publicKey": "ssh-rsa AAAA", "privateKey": "bad-key"},
+            )
+            assert zh_response.status_code == status.HTTP_200_OK
+            data = zh_response.json()
+            assert data["success"] is False
+            assert data["message"] == "SSH Keys 格式不正確"
+            assert data["error"] == "SSH Keys 格式不正確"
 
     @pytest.mark.integration
     def test_tpl_079_ssh_keys_delete(self, authenticated_client):

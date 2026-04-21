@@ -23,6 +23,16 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
+def _translate_oauth_error(translate, *, category: str) -> str:
+    mapping = {
+        "provider": "oauth.provider_error",
+        "exchange_failed": "oauth.exchange_failed",
+        "authenticate_failed": "oauth.authenticate_failed",
+        "refresh_failed": "oauth.refresh_failed",
+    }
+    return translate(mapping[category])
+
+
 class OAuthInfoResponse(BaseModel):
     """OAuth 資訊回應"""
     client_id: str
@@ -36,13 +46,13 @@ class OAuthInfoResponse(BaseModel):
     response_model=OAuthInfoResponse,
     summary="取得 OAuth 設定資訊",
 )
-async def get_oauth_info():
+async def get_oauth_info(request: Request):
     """取得 OAuth 設定資訊"""
     return OAuthInfoResponse(
         client_id="9d1c250a-e61b-44d9-88ed-5944d1962f5e",
         authorization_url="https://claude.ai/oauth/authorize",
         redirect_uri="https://console.anthropic.com/oauth/code/callback",
-        scope="org:create_api_key user:inference user:profile"
+        scope=request.state.translate("oauth.info.scope"),
     )
 
 
@@ -92,13 +102,13 @@ async def exchange_oauth_code(
         logger.error(f"OAuth provider error: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(request.state.translate, category="provider"),
         )
     except Exception as e:
         logger.error(f"Failed to exchange OAuth code: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(request.state.translate, category="exchange_failed"),
         )
 
 
@@ -228,7 +238,7 @@ async def authenticate_and_save(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=http_request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(http_request.state.translate, category="provider"),
         )
     except ValueError as e:
         logger.error(f"Invalid OAuth code format for user {user_id}: {e}")
@@ -242,7 +252,7 @@ async def authenticate_and_save(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=http_request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(http_request.state.translate, category="authenticate_failed"),
         )
 
 
@@ -285,13 +295,13 @@ async def refresh_oauth_token(
         logger.error(f"OAuth provider error: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=http_request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(http_request.state.translate, category="provider"),
         )
     except Exception as e:
         logger.error(f"Failed to refresh OAuth token: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=http_request.state.translate("oauth.error", error=str(e)),
+            detail=_translate_oauth_error(http_request.state.translate, category="refresh_failed"),
         )
 
 
@@ -299,12 +309,12 @@ async def refresh_oauth_token(
     "/health",
     summary="OAuth 服務健康檢查",
 )
-async def oauth_health_check():
+async def oauth_health_check(request: Request):
     """OAuth 服務健康檢查"""
     return {
         "status": "healthy",
-        "service": "oauth",
-        "description": "OAuth 認證服務，提供 code exchange 和 token refresh 功能",
+        "service": request.state.translate("oauth.health.service"),
+        "description": request.state.translate("oauth.health.description"),
         "endpoints": [
             "GET /api/v1/oauth/info",
             "POST /api/v1/oauth/exchange",

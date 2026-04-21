@@ -206,7 +206,7 @@ describe('OpenSpecCustomization components', () => {
     expect(openCustomizationValidationDialogMock).toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Fork Schema' }));
-    await user.type(screen.getByLabelText('目標 schema'), 'rapid');
+    fireEvent.change(screen.getByLabelText('目標 schema'), { target: { value: 'rapid' } });
     await user.click(screen.getByRole('button', { name: 'Fork Schema' }));
 
     await waitFor(() => {
@@ -225,8 +225,8 @@ describe('OpenSpecCustomization components', () => {
     await user.click(screen.getByRole('button', { name: 'Create Schema' }));
     expect(screen.getAllByText('Create Schema').length).toBeGreaterThan(0);
 
-    await user.type(screen.getByLabelText('Schema 名稱'), 'new-flow');
-    await user.type(screen.getByLabelText('Schema 描述'), 'Manual QA workflow');
+    fireEvent.change(screen.getByLabelText('Schema 名稱'), { target: { value: 'new-flow' } });
+    fireEvent.change(screen.getByLabelText('Schema 描述'), { target: { value: 'Manual QA workflow' } });
     await user.click(screen.getAllByRole('button', { name: 'Create Schema' }).at(-1)!);
 
     await waitFor(() => {

@@ -1,20 +1,6 @@
 name: Publish Docker Images
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-    paths:
-      - ".github/workflows/docker-publish.yml"
-      - ".github/docker-publish.md"
-      - ".gitmodules"
-      - "frontend/**"
-      - "workspace-chrome/**"
-      - "workspace-manager/**"
-      - "workspace-nextjs/**"
-      - "workspace-operator/**"
-      - "workspace-runtime/**"
   workflow_dispatch:
     inputs:
       release_channel:
@@ -138,9 +124,6 @@ jobs:
       fail-fast: false
       matrix:
         image:
-          - name: codex-universal
-            context: workspace-runtime/codex-universal
-            file: workspace-runtime/codex-universal/Dockerfile
           - name: workspace-runtime-base-lite
             context: workspace-runtime/base-lite
             file: workspace-runtime/base-lite/Dockerfile
@@ -206,55 +189,6 @@ jobs:
           cache-to: type=gha,mode=max,scope=base-${{ matrix.image.name }}-${{ matrix.platform.arch }}
           provenance: false
           sbom: false
-
-  publish-base-manifest:
-    name: Publish Base Multi-Arch Tags
-    runs-on: ubuntu-latest
-    needs:
-      - resolve-config
-      - publish-base-arch
-    if: |
-      (needs.resolve-config.outputs.scope == 'all' ||
-      needs.resolve-config.outputs.scope == 'base' ||
-      needs.resolve-config.outputs.scope == 'runtime') &&
-      (needs.resolve-config.outputs.publish_dev == 'true' ||
-      needs.resolve-config.outputs.publish_latest == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - codex-universal
-          - workspace-runtime-base-lite
-    steps:
-      - name: Setup Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create manifest tags
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image }}"
-
-          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:dev" \
-              "${image}:dev-amd64" \
-              "${image}:dev-arm64"
-          fi
-
-          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:latest" \
-              "${image}:latest-amd64" \
-              "${image}:latest-arm64"
-          fi
 
   publish-service-arch:
     name: Publish Service Arch Images
@@ -368,63 +302,12 @@ jobs:
           provenance: false
           sbom: false
 
-  publish-service-manifest:
-    name: Publish Service Multi-Arch Tags
-    runs-on: ubuntu-latest
-    needs:
-      - resolve-config
-      - publish-service-arch
-    if: |
-      (needs.resolve-config.outputs.scope == 'all' ||
-      needs.resolve-config.outputs.scope == 'services') &&
-      (needs.resolve-config.outputs.publish_dev == 'true' ||
-      needs.resolve-config.outputs.publish_latest == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - workspace-ui
-          - workspace-manager
-          - workspace-chrome
-          - workspace-nextjs
-          - workspace-operator
-    steps:
-      - name: Setup Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create manifest tags
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image }}"
-
-          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:dev" \
-              "${image}:dev-amd64" \
-              "${image}:dev-arm64"
-          fi
-
-          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:latest" \
-              "${image}:latest-amd64" \
-              "${image}:latest-arm64"
-          fi
-
   publish-runtime-arch:
     name: Publish Runtime Arch Images
     runs-on: ubuntu-latest
     needs:
       - resolve-config
-      - publish-base-manifest
+      - publish-base-arch
     if: |
       (needs.resolve-config.outputs.scope == 'all' ||
       needs.resolve-config.outputs.scope == 'runtime') &&
@@ -435,9 +318,10 @@ jobs:
       matrix:
         flavor:
           - name: codex
-            base_image: codex-universal
+            external_image: codex-universal
+            external_tag_prefix: latest
           - name: lite
-            base_image: workspace-runtime-base-lite
+            internal_image: workspace-runtime-base-lite
         platform:
           - os: linux
             arch: amd64
@@ -489,6 +373,22 @@ jobs:
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
+      - name: Resolve runtime base image
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arch="${{ matrix.platform.arch }}"
+
+          if [ "${{ matrix.flavor.name }}" = "codex" ]; then
+            base_ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.external_image }}:${{ matrix.flavor.external_tag_prefix }}-${arch}"
+          else
+            base_ref="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.internal_image }}:${{ needs.resolve-config.outputs.runtime_base_channel }}-${arch}"
+          fi
+
+          echo "base_ref=${base_ref}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and push runtime image
         uses: docker/build-push-action@v6
         with:
@@ -501,57 +401,8 @@ jobs:
           build-args: |
             GOARCH=${{ matrix.platform.arch }}
           build-contexts: |
-            runtime-base=docker-image://${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.flavor.base_image }}:${{ needs.resolve-config.outputs.runtime_base_channel }}-${{ matrix.platform.arch }}
+            runtime-base=docker-image://${{ steps.base.outputs.base_ref }}
           cache-from: type=gha,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
           cache-to: type=gha,mode=max,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
           provenance: false
           sbom: false
-
-  publish-runtime-manifest:
-    name: Publish Runtime Multi-Arch Tags
-    runs-on: ubuntu-latest
-    needs:
-      - resolve-config
-      - publish-runtime-arch
-    if: |
-      (needs.resolve-config.outputs.scope == 'all' ||
-      needs.resolve-config.outputs.scope == 'runtime') &&
-      (needs.resolve-config.outputs.publish_dev == 'true' ||
-      needs.resolve-config.outputs.publish_latest == 'true')
-    strategy:
-      fail-fast: false
-      matrix:
-        flavor:
-          - codex
-          - lite
-    steps:
-      - name: Setup Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Create runtime manifest tags
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/workspace-runtime"
-          flavor="${{ matrix.flavor }}"
-
-          if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:dev-${flavor}" \
-              "${image}:dev-${flavor}-amd64" \
-              "${image}:dev-${flavor}-arm64"
-          fi
-
-          if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
-            docker buildx imagetools create \
-              -t "${image}:latest-${flavor}" \
-              "${image}:latest-${flavor}-amd64" \
-              "${image}:latest-${flavor}-arm64"
-          fi

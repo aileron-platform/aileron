@@ -13,7 +13,7 @@ Workspace Manager is the core service of Aileron, responsible for managing the f
 
 ### Workspace Management
 - **CRUD**: create, read, update, delete workspaces
-- **Container management**: Docker / Kubernetes / Podman container lifecycle control
+- **Container management**: Docker / Kubernetes container lifecycle control
 - **Template support**: quickly create workspaces from preset templates
 - **Network configuration**: firewall rules and port mapping management
 
@@ -41,7 +41,7 @@ Workspace Manager is the core service of Aileron, responsible for managing the f
 | Database | PostgreSQL |
 | Cache / queue | Redis |
 | Background tasks | Celery |
-| Container management | Docker / Kubernetes / Podman |
+| Container management | Docker / Kubernetes |
 | Authentication | Keycloak JWT |
 
 ## Directory Structure
@@ -105,13 +105,15 @@ Once authentication is enabled, all API endpoints require a valid JWT token.
 ## Local Development
 
 ```bash
-cd workspace-manager
+docker compose up -d workspace-manager
+```
 
-# Install dependencies (uv)
-uv sync
+For local development, `workspace-manager` should be started through Docker Compose and should normally run alongside the rest of the stack. Compose mounts `./workspace-manager` into `/workspace-manager` inside the container, so code changes are usually picked up through the existing reload behavior.
 
-# Start the service
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
+If the dependent services are not already running, start the full stack instead:
+
+```bash
+docker compose up -d
 ```
 
 ## Testing

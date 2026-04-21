@@ -512,6 +512,45 @@ kubernetes:
 若多個 workspace 需要共享基礎映像或工具，可使用 ReadWriteMany 的 StorageClass（如 NFS、CephFS、EFS）。
 :::
 
+### Knowledge Base 儲存
+
+Knowledge Base 會使用獨立的共享 PVC，由 Helm chart 管理：
+
+```yaml
+kubernetes:
+  knowledgeBases:
+    pvcName: knowledge-bases-pvc
+    size: 20Gi
+    accessModes:
+      - ReadWriteMany
+    storageClassName: hostpath
+```
+
+掛載流程如下：
+
+- Helm 建立 `knowledge-bases-pvc`
+- `workspace-manager` 將它掛到 `/host/knowledge-bases`
+- `workspace-operator` 再把每個 attach 的 KB 以 `subPath=<kbId>` 掛進 runtime Pod 的 `/knowledge/<alias>`
+
+本機 dev 建議：
+
+- 預設 `hostpath` 是單節點 fallback，適合 Docker Desktop 或本機 Kubernetes smoke test
+- 它不是多節點共享 RWX 的替代品
+
+正式環境建議：
+
+- 將 `kubernetes.knowledgeBases.storageClassName` 切到真正的共享 RWX 類型，例如 `nfs`
+- `helm/values-rke.yaml` 已內建這個覆寫
+- 在驗證 KB attach / mount 之前，先確認 `knowledge-bases-pvc` 已經 `Bound`
+
+建議檢查：
+
+```bash
+kubectl get pvc -n aileron knowledge-bases-pvc
+kubectl describe pvc -n aileron knowledge-bases-pvc
+kubectl describe deployment -n aileron aileron-workspace-manager
+```
+
 ## CoTURN (WebRTC TURN Server)
 
 workspace-browser 使用 [neko](https://github.com/m1k1o/neko) 透過 WebRTC 串流桌面畫面。在 Kubernetes 環境中，neko pod 與使用者瀏覽器之間存在多層 NAT，必須透過 TURN server 做 relay 才能建立 WebRTC 連線。
@@ -764,6 +803,16 @@ cilium:
 | `keycloak.auth.adminUser` | `admin` | Keycloak 管理員 |
 | `keycloak.auth.adminPassword` | `admin` | Keycloak 密碼 |
 | `workspaceManager.env.SECRET_KEY` | _(開發預設值)_ | JWT signing key |
+
+### Kubernetes Storage
+
+| Value | 預設值 | 說明 |
+|-------|--------|------|
+| `kubernetes.pvcName` | `workspace-runtime-pvc` | Workspace working directory PVC |
+| `kubernetes.knowledgeBases.pvcName` | `knowledge-bases-pvc` | Knowledge Base 專用共享 PVC 名稱 |
+| `kubernetes.knowledgeBases.size` | `20Gi` | Knowledge Base PVC 容量 |
+| `kubernetes.knowledgeBases.accessModes` | `[ReadWriteMany]` | Knowledge Base PVC access modes |
+| `kubernetes.knowledgeBases.storageClassName` | `hostpath` | 本機 dev 預設 fallback；正式環境請切到共享 RWX 類型，例如 `nfs` |
 
 ## 驗證部署
 

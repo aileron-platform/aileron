@@ -82,7 +82,7 @@ def _resolve_file_service_root(context_id: str | None) -> Path:
     settings = get_settings()
     workspace_root = Path(settings.WORKSPACE_PATH).resolve()
 
-    if not context_id:
+    if not context_id or context_id == "primary":
         return workspace_root
 
     utils = GitUtils(workspace_root.parent)
