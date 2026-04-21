@@ -355,7 +355,7 @@ describe('OpenSpecDesigner components', () => {
     });
 
     expect(await screen.findByLabelText('Schema name')).toBeInTheDocument();
-    expect(screen.getByTestId('mock-monaco-editor')).toHaveValue('name: spec-driven\n');
+    expect(await screen.findByTestId('mock-monaco-editor')).toHaveValue('name: spec-driven\n');
     expect(screen.getByText('Editability:')).toBeInTheDocument();
     expect(screen.getByText('YAML highlighting enabled')).toBeInTheDocument();
 
