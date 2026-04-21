@@ -279,6 +279,40 @@ helm install aileron ./helm/aileron \
   --create-namespace
 ```
 
+#### Knowledge Base 儲存需求
+
+Kubernetes 模式下，Knowledge Base 會多一塊共享儲存：
+
+- `kubernetes.knowledgeBases.pvcName` 會建立專用的 `knowledge-bases-pvc`
+- `workspace-manager` 會把這顆 PVC 掛到 `/host/knowledge-bases`
+- `workspace-operator` 會把每個 attach 的 KB 以 `subPath=<kbId>` 掛進 runtime Pod 的 `/knowledge/<alias>`
+
+本機單節點開發預設使用：
+
+```yaml
+kubernetes:
+  knowledgeBases:
+    storageClassName: hostpath
+```
+
+這是 dev fallback，不代表真正的多節點 RWX 共用儲存。
+
+正式環境請改用共享型 RWX StorageClass，例如 NFS：
+
+```bash
+helm upgrade --install aileron ./helm/aileron \
+  --namespace aileron \
+  --create-namespace \
+  -f helm/values-rke.yaml
+```
+
+在 Kubernetes 啟用 Knowledge Base 前，至少確認：
+
+- 叢集可以提供 `ReadWriteMany`，或你明確接受單節點 `hostpath` fallback
+- `knowledge-bases-pvc` 狀態為 `Bound`
+- `workspace-manager` Pod 已掛上 `/host/knowledge-bases`
+- operator 建立的 runtime Pod 能透過 `knowledge-bases` volume 掛出 `/knowledge/<alias>`
+
 ### Public Domain Routing
 
 若需公開網域對外提供服務，需額外設定：

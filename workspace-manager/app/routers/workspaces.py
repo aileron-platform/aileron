@@ -9,8 +9,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 
 from app.core.openapi import build_responses
 from app.models import (
+    KnowledgeBaseErrorResponse,
     WorkspaceCreateRequest,
     WorkspaceDetail,
+    WorkspaceKnowledgeBaseAttachment,
+    WorkspaceKnowledgeBaseAttachmentCreateRequest,
+    WorkspaceKnowledgeBaseAttachmentListResponse,
+    WorkspaceKnowledgeBaseAttachmentUpdateRequest,
     WorkspaceListResponse,
     WorkspaceShare,
     WorkspaceShareCreateRequest,
@@ -19,7 +24,26 @@ from app.models import (
     WorkspaceUpdateRequest,
     WorkspaceRuntimeLogEntry,
 )
-from app.services import get_runtime_provision_service, get_workspace_service
+from app.services import (
+    KnowledgeBaseAccessDeniedError,
+    KnowledgeBaseConflictError,
+    KnowledgeBaseNotFoundError,
+    get_knowledge_base_attachment_service,
+    get_runtime_provision_service,
+    get_workspace_service,
+)
+from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
+from app.services.knowledge_base_attachment_service import (
+    KB_ALREADY_ATTACHED_MESSAGE,
+    KB_ATTACHMENT_NOT_FOUND_MESSAGE,
+    KB_MOUNT_ALIAS_CONFLICT_MESSAGE,
+    WORKSPACE_NOT_FOUND_MESSAGE,
+)
+from app.services.knowledge_base_service import (
+    KB_ACCESS_DENIED_MESSAGE,
+    KB_NOT_FOUND_MESSAGE,
+    KB_PERMISSION_DENIED_MESSAGE,
+)
 from app.services.runtime_provision_service import (
     RuntimeProvisionService,
     run_runtime_provision_task,
@@ -29,7 +53,19 @@ from app.services.workspace_custom_resource_service import (
 )
 from app.services.runtime_sync_service import RuntimeSyncService
 from app.services.workspace_service import WorkspaceService
-from app.services.workspace_service import WorkspaceAccessDeniedError
+from app.services.workspace_service import (
+    WORKSPACE_ACCESS_DENIED_MESSAGE,
+    WORKSPACE_INVALID_NAMESPACE_MESSAGE,
+    WORKSPACE_NOT_FOUND_MESSAGE,
+    WORKSPACE_OWNER_NOT_FOUND_MESSAGE,
+    WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE,
+    WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE,
+    WORKSPACE_SHARE_CONFLICT_MESSAGE,
+    WORKSPACE_SHARE_NOT_FOUND_MESSAGE,
+    WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE,
+    WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE,
+    WorkspaceAccessDeniedError,
+)
 from app.db.database import SessionLocal
 from app.services.workspace_lifecycle_service import (
     run_delete_workspace_task,
@@ -40,6 +76,210 @@ from app.services.workspace_lifecycle_service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
+
+_WORKSPACE_KB_ERROR_DESCRIPTIONS = {
+    400: "工作區 knowledge base 請求不合法，例如 payload 格式錯誤。",
+    403: "目前使用者沒有對工作區或知識庫掛載的操作權限。",
+    404: "指定工作區、知識庫或掛載不存在。",
+    409: "工作區 knowledge base 狀態衝突，例如重複掛載或掛載別名衝突。",
+}
+
+_WORKSPACE_SHARE_ERROR_DESCRIPTIONS = {
+    400: "工作區分享請求不合法，例如不可分享給擁有者。",
+    403: "目前使用者沒有管理工作區分享的權限。",
+    404: "指定工作區、分享目標或工作區分享不存在。",
+    409: "工作區分享狀態衝突，例如重複分享同一位使用者。",
+}
+
+_WORKSPACE_SHARE_ERROR_EXAMPLES = {
+    400: {
+        "shareOwnerForbidden": {
+            "summary": "不可分享給工作區擁有者",
+            "value": {
+                "detail": {
+                    "code": "WORKSPACE_INVALID_SHARE_TARGET",
+                    "message": "不可將工作區分享給擁有者",
+                    "details": {"resource": "workspace_share"},
+                }
+            },
+        }
+    },
+    404: {
+        "shareNotFound": {
+            "summary": "指定的工作區分享不存在",
+            "value": {
+                "detail": {
+                    "code": "WORKSPACE_SHARE_NOT_FOUND",
+                    "message": "工作區分享不存在",
+                    "details": {"resource": "workspace_share"},
+                }
+            },
+        }
+    },
+    409: {
+        "shareConflict": {
+            "summary": "重複分享同一位使用者",
+            "value": {
+                "detail": {
+                    "code": "WORKSPACE_SHARE_CONFLICT",
+                    "message": "工作區分享已存在",
+                    "details": {"resource": "workspace_share"},
+                }
+            },
+        }
+    },
+}
+
+_WORKSPACE_KB_ERROR_EXAMPLES = {
+    404: {
+        "attachmentNotFound": {
+            "summary": "指定的知識庫掛載不存在",
+            "value": {
+                "detail": {
+                    "code": "KB_ATTACHMENT_NOT_FOUND",
+                    "message": "知識庫掛載不存在",
+                    "details": {"resource": "knowledge_base_attachment"},
+                }
+            },
+        }
+    },
+    409: {
+        "duplicateAttachment": {
+            "summary": "重複掛載同一個知識庫",
+            "value": {
+                "detail": {
+                    "code": "KB_ALREADY_ATTACHED",
+                    "message": "知識庫已掛載到此工作區",
+                    "details": {"resource": "knowledge_base_attachment"},
+                }
+            },
+        },
+        "aliasConflict": {
+            "summary": "掛載別名衝突",
+            "value": {
+                "detail": {
+                    "code": "KB_MOUNT_ALIAS_CONFLICT",
+                    "message": "知識庫掛載別名已存在",
+                    "details": {"resource": "knowledge_base_attachment"},
+                }
+            },
+        },
+    },
+}
+
+
+def _build_workspace_kb_responses(*status_codes: int) -> dict[int, dict]:
+    return build_responses(
+        *status_codes,
+        model=KnowledgeBaseErrorResponse,
+        descriptions=_WORKSPACE_KB_ERROR_DESCRIPTIONS,
+        examples={
+            status_code: _WORKSPACE_KB_ERROR_EXAMPLES[status_code]
+            for status_code in status_codes
+            if status_code in _WORKSPACE_KB_ERROR_EXAMPLES
+        },
+    )
+
+
+def _build_workspace_share_responses(*status_codes: int) -> dict[int, dict]:
+    return build_responses(
+        *status_codes,
+        model=KnowledgeBaseErrorResponse,
+        descriptions=_WORKSPACE_SHARE_ERROR_DESCRIPTIONS,
+        examples={
+            status_code: _WORKSPACE_SHARE_ERROR_EXAMPLES[status_code]
+            for status_code in status_codes
+            if status_code in _WORKSPACE_SHARE_ERROR_EXAMPLES
+        },
+    )
+
+
+def _build_workspace_kb_error_detail(*, code: str, message: str, details: dict | None = None) -> dict:
+    return {
+        "code": code,
+        "message": message,
+        "details": details or {},
+    }
+
+
+def _translate_workspace_share_message(translate, message: str) -> str:
+    mapping = {
+        WORKSPACE_NOT_FOUND_MESSAGE: translate("workspace.not_found"),
+        WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE: translate("workspace.share.target_not_found"),
+        WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE: translate("workspace.share.owner_forbidden"),
+        WORKSPACE_SHARE_CONFLICT_MESSAGE: translate("workspace.share.conflict"),
+        WORKSPACE_SHARE_NOT_FOUND_MESSAGE: translate("workspace.share.not_found"),
+    }
+    return mapping.get(message, message)
+
+
+def _workspace_share_error_detail(message: str, translate) -> dict:
+    mapping = {
+        WORKSPACE_NOT_FOUND_MESSAGE: ("WORKSPACE_NOT_FOUND", "workspace"),
+        WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE: ("WORKSPACE_SHARE_TARGET_NOT_FOUND", "user"),
+        WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE: ("WORKSPACE_INVALID_SHARE_TARGET", "workspace_share"),
+        WORKSPACE_SHARE_CONFLICT_MESSAGE: ("WORKSPACE_SHARE_CONFLICT", "workspace_share"),
+        WORKSPACE_SHARE_NOT_FOUND_MESSAGE: ("WORKSPACE_SHARE_NOT_FOUND", "workspace_share"),
+    }
+    code, resource = mapping.get(message, ("WORKSPACE_INVALID_REQUEST", "workspace_share"))
+    return _build_workspace_kb_error_detail(
+        code=code,
+        message=_translate_workspace_share_message(translate, message),
+        details={"resource": resource},
+    )
+
+
+def _translate_workspace_kb_message(translate, message: str) -> str:
+    mapping = {
+        WORKSPACE_NOT_FOUND_MESSAGE: translate("workspace.not_found"),
+        KB_NOT_FOUND_MESSAGE: translate("knowledge_base.not_found"),
+        KB_ATTACHMENT_NOT_FOUND_MESSAGE: translate("knowledge_base.attachment_not_found"),
+        KB_ALREADY_ATTACHED_MESSAGE: translate("knowledge_base.already_attached"),
+        KB_MOUNT_ALIAS_CONFLICT_MESSAGE: translate("knowledge_base.alias_conflict"),
+        KB_ACCESS_DENIED_MESSAGE: translate("knowledge_base.access_denied"),
+        KB_PERMISSION_DENIED_MESSAGE: translate("knowledge_base.permission_denied"),
+    }
+    return mapping.get(message, message)
+
+
+def _translate_workspace_value_error(translate, message: str) -> str:
+    if message == WORKSPACE_OWNER_NOT_FOUND_MESSAGE:
+        return translate("workspace.owner_not_found")
+    if message == WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE:
+        return translate("workspace.runtime_resources_unsupported")
+    if message == WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE:
+        return translate("workspace.port_mappings_unsupported")
+    if message.startswith(f"{WORKSPACE_INVALID_NAMESPACE_MESSAGE}: "):
+        namespace = message.split(": ", 1)[1]
+        return translate("workspace.invalid_namespace", namespace=namespace)
+    return message
+
+
+def _workspace_kb_not_found_detail(message: str, translate) -> dict:
+    mapping = {
+        WORKSPACE_NOT_FOUND_MESSAGE: ("WORKSPACE_NOT_FOUND", "workspace"),
+        KB_NOT_FOUND_MESSAGE: ("KB_NOT_FOUND", "knowledge_base"),
+        KB_ATTACHMENT_NOT_FOUND_MESSAGE: ("KB_ATTACHMENT_NOT_FOUND", "knowledge_base_attachment"),
+    }
+    code, resource = mapping.get(message, ("KB_NOT_FOUND", "knowledge_base"))
+    return _build_workspace_kb_error_detail(
+        code=code,
+        message=_translate_workspace_kb_message(translate, message),
+        details={"resource": resource},
+    )
+
+
+def _workspace_kb_conflict_detail(message: str, translate) -> dict:
+    mapping = {
+        KB_ALREADY_ATTACHED_MESSAGE: ("KB_ALREADY_ATTACHED", "knowledge_base_attachment"),
+        KB_MOUNT_ALIAS_CONFLICT_MESSAGE: ("KB_MOUNT_ALIAS_CONFLICT", "knowledge_base_attachment"),
+    }
+    code, resource = mapping.get(message, ("KB_CONFLICT", "knowledge_base_attachment"))
+    return _build_workspace_kb_error_detail(
+        code=code,
+        message=_translate_workspace_kb_message(translate, message),
+        details={"resource": resource},
+    )
 
 _RUNTIME_LOG_STAGE_KEYS = {
     "queued": "workspace.runtime_log.queued",
@@ -160,7 +400,10 @@ def create_workspace(
             background_tasks.add_task(run_runtime_provision_task, workspace.id)
         return workspace
     except ValueError as exc:  # owner 不存在
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_translate_workspace_value_error(request.state.translate, str(exc)),
+        ) from exc
 
 
 @router.get(
@@ -186,7 +429,7 @@ def get_workspace(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
 
@@ -215,7 +458,7 @@ def get_workspace_runtime_logs(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
     logs = service.get_runtime_logs(workspace_id, limit=limit, stage=stage)
@@ -282,10 +525,13 @@ async def update_workspace(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_translate_workspace_value_error(request.state.translate, str(exc)),
+        ) from exc
 
 
 async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
@@ -359,7 +605,7 @@ def delete_workspace(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
     # 加入背景任務
@@ -422,7 +668,7 @@ def rebuild_workspace(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
     # 加入背景任務
@@ -494,7 +740,7 @@ def restart_browser(
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
     # 加入背景任務
@@ -544,7 +790,7 @@ def restart_nextjs(
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Next.js container not found for this workspace"
+                detail=request.state.translate("workspace.nextjs.not_found"),
             )
 
         if not service.mark_nextjs_restarting(
@@ -553,18 +799,18 @@ def restart_nextjs(
         ):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to mark Next.js container as restarting"
+                detail=request.state.translate("workspace.nextjs.restart_failed"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=str(exc),
+            detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
     background_tasks.add_task(run_restart_nextjs_task, workspace_id)
 
     return {
-        "message": "Next.js container restart initiated",
+        "message": request.state.translate("workspace.nextjs.restart_started"),
         "workspaceId": workspace_id,
         "status": "restarting"
     }
@@ -574,7 +820,7 @@ def restart_nextjs(
     "/{workspace_id}/shares",
     response_model=WorkspaceShareListResponse,
     summary="列出工作區分享名單",
-    responses=build_responses(401, 403, 404, 500),
+    responses=_build_workspace_share_responses(401, 403, 404, 500),
 )
 def list_workspace_shares(
     workspace_id: str,
@@ -585,9 +831,18 @@ def list_workspace_shares(
     try:
         return service.list_shares(workspace_id, current_user_id=current_user_id)
     except WorkspaceAccessDeniedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="WORKSPACE_ACCESS_DENIED",
+                message=request.state.translate("workspace.access_denied"),
+            ),
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_share_error_detail(str(exc), request.state.translate),
+        ) from exc
 
 
 @router.post(
@@ -595,7 +850,7 @@ def list_workspace_shares(
     response_model=WorkspaceShare,
     status_code=status.HTTP_201_CREATED,
     summary="新增工作區分享",
-    responses=build_responses(400, 401, 403, 404, 500),
+    responses=_build_workspace_share_responses(400, 401, 403, 404, 409, 500),
 )
 def create_workspace_share(
     workspace_id: str,
@@ -611,22 +866,30 @@ def create_workspace_share(
             current_user_id=current_user_id,
         )
     except WorkspaceAccessDeniedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="WORKSPACE_ACCESS_DENIED",
+                message=request.state.translate("workspace.access_denied"),
+            ),
+        ) from exc
     except ValueError as exc:
         detail = str(exc)
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if detail in {"Workspace not found", "Target user not found"}
+            if detail in {WORKSPACE_NOT_FOUND_MESSAGE, WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE}
+            else status.HTTP_409_CONFLICT
+            if detail == WORKSPACE_SHARE_CONFLICT_MESSAGE
             else status.HTTP_400_BAD_REQUEST
         )
-        raise HTTPException(status_code=status_code, detail=detail) from exc
+        raise HTTPException(status_code=status_code, detail=_workspace_share_error_detail(detail, request.state.translate)) from exc
 
 
 @router.patch(
     "/{workspace_id}/shares/{share_id}",
     response_model=WorkspaceShare,
     summary="更新工作區分享角色",
-    responses=build_responses(400, 401, 403, 404, 500),
+    responses=_build_workspace_share_responses(400, 401, 403, 404, 500),
 )
 def update_workspace_share(
     workspace_id: str,
@@ -646,20 +909,29 @@ def update_workspace_share(
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace share not found",
+                detail=_workspace_share_error_detail(WORKSPACE_SHARE_NOT_FOUND_MESSAGE, request.state.translate),
             )
         return result
     except WorkspaceAccessDeniedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="WORKSPACE_ACCESS_DENIED",
+                message=request.state.translate("workspace.access_denied"),
+            ),
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_share_error_detail(str(exc), request.state.translate),
+        ) from exc
 
 
 @router.delete(
     "/{workspace_id}/shares/{share_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="移除工作區分享",
-    responses=build_responses(401, 403, 404, 500),
+    responses=_build_workspace_share_responses(401, 403, 404, 500),
 )
 def delete_workspace_share(
     workspace_id: str,
@@ -677,12 +949,218 @@ def delete_workspace_share(
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Workspace share not found",
+                detail=_workspace_share_error_detail(WORKSPACE_SHARE_NOT_FOUND_MESSAGE, request.state.translate),
             )
     except WorkspaceAccessDeniedError as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="WORKSPACE_ACCESS_DENIED",
+                message=request.state.translate("workspace.access_denied"),
+            ),
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_share_error_detail(str(exc), request.state.translate),
+        ) from exc
+
+
+@router.get(
+    "/{workspace_id}/knowledge-bases",
+    response_model=WorkspaceKnowledgeBaseAttachmentListResponse,
+    summary="列出工作區掛載的 knowledge bases",
+    responses=_build_workspace_kb_responses(401, 403, 404, 500),
+)
+def list_workspace_knowledge_bases(
+    workspace_id: str,
+    request: Request,
+    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+) -> WorkspaceKnowledgeBaseAttachmentListResponse:
+    current_user_id = _require_current_user_id(request)
+    try:
+        attachments = service.list_attachments_for_workspace(
+            user_id=current_user_id,
+            workspace_id=workspace_id,
+        )
+        return WorkspaceKnowledgeBaseAttachmentListResponse(
+            items=[
+                WorkspaceKnowledgeBaseAttachment(
+                    id=attachment.id,
+                    kb_id=attachment.knowledge_base.id,
+                    name=attachment.knowledge_base.name,
+                    slug=attachment.knowledge_base.slug,
+                    role=None,
+                    mount_alias=attachment.mount_alias,
+                    mode=attachment.mode,
+                    attached_by_id=attachment.attached_by_id,
+                    created_at=attachment.created_at,
+                    updated_at=attachment.updated_at,
+                )
+                for attachment in attachments
+            ]
+        )
+    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="KB_ACCESS_DENIED",
+                message=_translate_workspace_kb_message(request.state.translate, str(exc)),
+            ),
+        ) from exc
+    except (ValueError, KnowledgeBaseNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_kb_not_found_detail(str(exc), request.state.translate),
+        ) from exc
+
+
+@router.post(
+    "/{workspace_id}/knowledge-bases",
+    response_model=WorkspaceKnowledgeBaseAttachment,
+    status_code=status.HTTP_201_CREATED,
+    summary="掛載 knowledge base 到工作區",
+    responses=_build_workspace_kb_responses(400, 401, 403, 404, 409, 500),
+)
+def create_workspace_knowledge_base_attachment(
+    workspace_id: str,
+    payload: WorkspaceKnowledgeBaseAttachmentCreateRequest,
+    request: Request,
+    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+) -> WorkspaceKnowledgeBaseAttachment:
+    current_user_id = _require_current_user_id(request)
+    try:
+        attachment = service.attach(
+            user_id=current_user_id,
+            workspace_id=workspace_id,
+            kb_id=payload.kb_id,
+            mount_alias=payload.mount_alias,
+            mode=payload.mode,
+        )
+        return WorkspaceKnowledgeBaseAttachment(
+            id=attachment.id,
+            kb_id=attachment.knowledge_base.id,
+            name=attachment.knowledge_base.name,
+            slug=attachment.knowledge_base.slug,
+            role=None,
+            mount_alias=attachment.mount_alias,
+            mode=attachment.mode,
+            attached_by_id=attachment.attached_by_id,
+            created_at=attachment.created_at,
+            updated_at=attachment.updated_at,
+        )
+    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="KB_ACCESS_DENIED",
+                message=_translate_workspace_kb_message(request.state.translate, str(exc)),
+            ),
+        ) from exc
+    except KnowledgeBaseConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_workspace_kb_conflict_detail(str(exc), request.state.translate),
+        ) from exc
+    except (ValueError, KnowledgeBaseNotFoundError) as exc:
+        message = str(exc)
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if message in {WORKSPACE_NOT_FOUND_MESSAGE, KB_NOT_FOUND_MESSAGE, KB_ATTACHMENT_NOT_FOUND_MESSAGE}
+            else status.HTTP_400_BAD_REQUEST
+        )
+        detail = (
+            _workspace_kb_not_found_detail(message, request.state.translate)
+            if status_code == status.HTTP_404_NOT_FOUND
+            else _build_workspace_kb_error_detail(
+                code="KB_INVALID_REQUEST",
+                message=_translate_workspace_kb_message(request.state.translate, message),
+            )
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+@router.patch(
+    "/{workspace_id}/knowledge-bases/{attachment_id}",
+    response_model=WorkspaceKnowledgeBaseAttachment,
+    summary="更新工作區 knowledge base 掛載",
+    responses=_build_workspace_kb_responses(400, 401, 403, 404, 409, 500),
+)
+def update_workspace_knowledge_base_attachment(
+    workspace_id: str,
+    attachment_id: str,
+    payload: WorkspaceKnowledgeBaseAttachmentUpdateRequest,
+    request: Request,
+    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+) -> WorkspaceKnowledgeBaseAttachment:
+    current_user_id = _require_current_user_id(request)
+    try:
+        attachment = service.update_attachment(
+            user_id=current_user_id,
+            attachment_id=attachment_id,
+            mount_alias=payload.mount_alias,
+            mode=payload.mode,
+        )
+        return WorkspaceKnowledgeBaseAttachment(
+            id=attachment.id,
+            kb_id=attachment.knowledge_base.id,
+            name=attachment.knowledge_base.name,
+            slug=attachment.knowledge_base.slug,
+            role=None,
+            mount_alias=attachment.mount_alias,
+            mode=attachment.mode,
+            attached_by_id=attachment.attached_by_id,
+            created_at=attachment.created_at,
+            updated_at=attachment.updated_at,
+        )
+    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="KB_ACCESS_DENIED",
+                message=_translate_workspace_kb_message(request.state.translate, str(exc)),
+            ),
+        ) from exc
+    except KnowledgeBaseConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=_workspace_kb_conflict_detail(str(exc), request.state.translate),
+        ) from exc
+    except (ValueError, KnowledgeBaseNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_kb_not_found_detail(str(exc), request.state.translate),
+        ) from exc
+
+
+@router.delete(
+    "/{workspace_id}/knowledge-bases/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="移除工作區 knowledge base 掛載",
+    responses=_build_workspace_kb_responses(401, 403, 404, 500),
+)
+def delete_workspace_knowledge_base_attachment(
+    workspace_id: str,
+    attachment_id: str,
+    request: Request,
+    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+) -> None:
+    current_user_id = _require_current_user_id(request)
+    try:
+        service.detach(user_id=current_user_id, attachment_id=attachment_id)
+    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_build_workspace_kb_error_detail(
+                code="KB_ACCESS_DENIED",
+                message=_translate_workspace_kb_message(request.state.translate, str(exc)),
+            ),
+        ) from exc
+    except (ValueError, KnowledgeBaseNotFoundError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_workspace_kb_not_found_detail(str(exc), request.state.translate),
+        ) from exc
 
 
 __all__ = ["router"]

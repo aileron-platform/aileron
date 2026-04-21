@@ -27,6 +27,7 @@ from app.models import (
     WorkspaceOwner,
     WorkspacePortMapping,
     WorkspaceSystemPortMapping,
+    WorkspaceKnowledgeBaseAttachment,
     WorkspaceResourceRequirements,
     WorkspaceRuntimeJobSummary,
     WorkspaceSummary,
@@ -37,8 +38,20 @@ from app.models import (
     WorkspaceShareUser,
     WorkspaceUpdateRequest,
 )
-from app.utils.string_utils import snake_case
+from app.services.knowledge_base_service import compute_attachment_signature
 from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
+from app.utils.string_utils import snake_case
+
+WORKSPACE_OWNER_NOT_FOUND_MESSAGE = "工作區擁有者不存在"
+WORKSPACE_NOT_FOUND_MESSAGE = "工作區不存在"
+WORKSPACE_ACCESS_DENIED_MESSAGE = "工作區權限不足"
+WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE = "找不到要分享的使用者"
+WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE = "不可將工作區分享給擁有者"
+WORKSPACE_SHARE_CONFLICT_MESSAGE = "工作區分享已存在"
+WORKSPACE_SHARE_NOT_FOUND_MESSAGE = "工作區分享不存在"
+WORKSPACE_INVALID_NAMESPACE_MESSAGE = "無效的 Kubernetes namespace"
+WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE = "runtimeResources 僅支援 Kubernetes 工作區"
+WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE = "portMappings 僅支援 Docker 工作區"
 
 
 class WorkspaceAccessDeniedError(PermissionError):
@@ -163,6 +176,7 @@ class WorkspaceService:
             workspace,
             access_role=access_context.access_role,
             access_source=access_context.access_source,
+            current_user_id=current_user_id,
         )
 
     # -- 資料寫入 ---------------------------------------------------------
@@ -170,7 +184,7 @@ class WorkspaceService:
     def create(self, payload: WorkspaceCreateRequest) -> WorkspaceDetail:
         owner = self.db.get(db_models.User, payload.owner_id)
         if not owner:
-            raise ValueError("Owner not found")
+            raise ValueError(WORKSPACE_OWNER_NOT_FOUND_MESSAGE)
 
         provisioner = self._resolve_workspace_provisioner()
         self._ensure_port_mappings_supported(
@@ -370,7 +384,7 @@ class WorkspaceService:
     ) -> WorkspaceShareListResponse:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError("Workspace not found")
+            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -397,7 +411,7 @@ class WorkspaceService:
     ) -> WorkspaceShare:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError("Workspace not found")
+            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -409,9 +423,9 @@ class WorkspaceService:
             select(db_models.User).where(func.lower(db_models.User.email) == normalized_email)
         )
         if not target_user:
-            raise ValueError("Target user not found")
+            raise ValueError(WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE)
         if target_user.id == workspace.owner_id:
-            raise ValueError("Cannot share a workspace with its owner")
+            raise ValueError(WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE)
 
         existing_share = self.db.scalar(
             select(db_models.WorkspaceShare).where(
@@ -420,7 +434,7 @@ class WorkspaceService:
             )
         )
         if existing_share:
-            raise ValueError("Workspace share already exists for this user")
+            raise ValueError(WORKSPACE_SHARE_CONFLICT_MESSAGE)
 
         share = db_models.WorkspaceShare(
             id=str(uuid4()),
@@ -444,7 +458,7 @@ class WorkspaceService:
     ) -> Optional[WorkspaceShare]:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError("Workspace not found")
+            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -469,7 +483,7 @@ class WorkspaceService:
     ) -> bool:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError("Workspace not found")
+            raise ValueError(WORKSPACE_NOT_FOUND_MESSAGE)
         self._require_workspace_access(
             workspace,
             current_user_id=current_user_id,
@@ -549,6 +563,7 @@ class WorkspaceService:
         *,
         access_role: WorkspaceAccessRole = "owner",
         access_source: WorkspaceAccessSource = "owned",
+        current_user_id: Optional[str] = None,
     ) -> WorkspaceDetail:
         owner = self._to_owner(workspace.owner)
         runtime_status = RuntimeStatus(
@@ -622,6 +637,17 @@ class WorkspaceService:
         system_port_mappings = self._build_system_port_mappings(workspace)
         port_mappings = [WorkspacePortMapping(**item) for item in workspace.port_mappings or []]
         components = self._to_components(workspace)
+        raw_kb_attachments = getattr(workspace, "knowledge_base_attachments", [])
+        if not isinstance(raw_kb_attachments, list):
+            raw_kb_attachments = []
+        attached_knowledge_bases = self._to_workspace_kb_attachments(
+            workspace,
+            current_user_id=current_user_id,
+        )
+        desired_signature = compute_attachment_signature(raw_kb_attachments)
+        mounted_kb_signature = getattr(workspace, "runtime_mounted_kb_signature", None)
+        if not isinstance(mounted_kb_signature, str):
+            mounted_kb_signature = None
 
         runtime_job = None
         if workspace.runtime_jobs:
@@ -658,10 +684,53 @@ class WorkspaceService:
             acp_cli_args=workspace.acp_cli_args or [],
             access_role=access_role,
             access_source=access_source,
+            attached_knowledge_bases=attached_knowledge_bases,
+            mounted_kb_signature=mounted_kb_signature,
+            has_pending_kb_changes=mounted_kb_signature != desired_signature,
             created_at=workspace.created_at,
             updated_at=workspace.updated_at,
             runtime_job=runtime_job,
         )
+
+    def _to_workspace_kb_attachments(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        current_user_id: Optional[str],
+    ) -> list[WorkspaceKnowledgeBaseAttachment]:
+        attachments: list[WorkspaceKnowledgeBaseAttachment] = []
+        raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
+        if not isinstance(raw_attachments, list):
+            return []
+
+        for attachment in raw_attachments:
+            kb = attachment.knowledge_base
+            role: Optional[str] = None
+            if current_user_id is not None and kb.owner_id == current_user_id:
+                role = "owner"
+            elif current_user_id is not None:
+                share = self.db.scalar(
+                    select(db_models.KnowledgeBaseShare).where(
+                        db_models.KnowledgeBaseShare.kb_id == kb.id,
+                        db_models.KnowledgeBaseShare.user_id == current_user_id,
+                    )
+                )
+                role = share.role if share else None
+            attachments.append(
+                WorkspaceKnowledgeBaseAttachment(
+                    id=attachment.id,
+                    kb_id=kb.id,
+                    name=kb.name,
+                    slug=kb.slug,
+                    role=role,
+                    mount_alias=attachment.mount_alias,
+                    mode=attachment.mode,
+                    attached_by_id=attachment.attached_by_id,
+                    created_at=attachment.created_at,
+                    updated_at=attachment.updated_at,
+                )
+            )
+        return attachments
 
     def _reload_share(self, share_id: str) -> WorkspaceShare:
         share = self.db.execute(
@@ -712,9 +781,9 @@ class WorkspaceService:
             current_user_id=current_user_id,
         )
         if not access_context:
-            raise WorkspaceAccessDeniedError("Workspace access denied")
+            raise WorkspaceAccessDeniedError(WORKSPACE_ACCESS_DENIED_MESSAGE)
         if self._role_rank(access_context.access_role) < self._role_rank(minimum_role):
-            raise WorkspaceAccessDeniedError("Workspace access denied")
+            raise WorkspaceAccessDeniedError(WORKSPACE_ACCESS_DENIED_MESSAGE)
         return access_context
 
     def _role_rank(self, role: WorkspaceAccessRole) -> int:
@@ -749,7 +818,7 @@ class WorkspaceService:
 
         namespace = target_namespace or self.settings.RUNTIME_K8S_NAMESPACE
         if namespace not in self.settings.RUNTIME_K8S_ALLOWED_NAMESPACES:
-            raise ValueError(f"Invalid Kubernetes namespace: {namespace}")
+            raise ValueError(f"{WORKSPACE_INVALID_NAMESPACE_MESSAGE}: {namespace}")
         return namespace
 
     def _resolve_runtime_resources_for_write(
@@ -761,7 +830,7 @@ class WorkspaceService:
         if runtime_resources is None:
             return None
         if provisioner != "kubernetes":
-            raise ValueError("runtimeResources is only supported for Kubernetes workspaces")
+            raise ValueError(WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE)
         return runtime_resources.model_dump(by_alias=True)
 
     def _ensure_port_mappings_supported(
@@ -771,7 +840,7 @@ class WorkspaceService:
         port_mappings: list[WorkspacePortMapping],
     ) -> None:
         if provisioner == "kubernetes" and port_mappings:
-            raise ValueError("portMappings is only supported for Docker workspaces")
+            raise ValueError(WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE)
 
     def _build_system_port_mappings(
         self,

@@ -22,6 +22,13 @@ export const ROUTES = {
   // Automation
   AUTOMATION: '/automation',
 
+  // Knowledge Bases
+  KNOWLEDGE_BASES: '/knowledge-bases',
+  KNOWLEDGE_BASE_DETAIL: (id: string) => `/knowledge-bases/${id}`,
+  KNOWLEDGE_BASE_DETAIL_FILES: (id: string) => `/knowledge-bases/${id}/files`,
+  KNOWLEDGE_BASE_DETAIL_SHARING: (id: string) => `/knowledge-bases/${id}/sharing`,
+  KNOWLEDGE_BASE_DETAIL_WORKSPACES: (id: string) => `/knowledge-bases/${id}/workspaces`,
+
   // User Settings
   PROFILE: '/profile',
   SETTINGS: '/settings',

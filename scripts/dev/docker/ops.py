@@ -42,6 +42,7 @@ DATA_DIRS = (
     "data/workspace-data",
     "data/workspace-scripts",
     "data/claude-data",
+    "data/knowledge-bases",
     "data/template-center",
     "data/ssh-keys",
 )
@@ -312,10 +313,27 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "HOST_WORKSPACES_DIR": str(env.get("HOST_WORKSPACES_DIR", data_root / "workspace-data")),
             "HOST_WORKSPACE_SCRIPTS_DIR": str(env.get("HOST_WORKSPACE_SCRIPTS_DIR", data_root / "workspace-scripts")),
             "HOST_CLAUDE_DATA_DIR": str(env.get("HOST_CLAUDE_DATA_DIR", data_root / "claude-data")),
+            "HOST_KNOWLEDGE_BASES_DIR": str(env.get("HOST_KNOWLEDGE_BASES_DIR", data_root / "knowledge-bases")),
             "HOST_SSH_KEYS_DIR": str(env.get("HOST_SSH_KEYS_DIR", data_root / "ssh-keys")),
         }
     )
     return env
+
+
+def ensure_host_storage_directories(repo_root: Path, env: dict[str, str]) -> None:
+    host_knowledge_bases_dir = Path(env["HOST_KNOWLEDGE_BASES_DIR"])
+    if not host_knowledge_bases_dir.is_absolute():
+        host_knowledge_bases_dir = (repo_root / host_knowledge_bases_dir).resolve()
+
+    host_knowledge_bases_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(host_knowledge_bases_dir, 0o770)
+    if hasattr(os, "chown"):
+        try:
+            os.chown(host_knowledge_bases_dir, 1000, 1000)
+        except PermissionError:
+            print_warning(
+                f"無法將 {host_knowledge_bases_dir} chown 為 1000:1000，保留現有擁有者。"
+            )
 
 
 def print_startup_profile(profile: StartupProfile, *, build: bool) -> None:
@@ -395,6 +413,7 @@ def compose_up(
     compose_file = repo_root / "docker-compose.yml"
     if not compose_file.is_file():
         raise OpsError("未找到 docker-compose.yml，無法啟動 compose stack。")
+    ensure_host_storage_directories(repo_root, env)
     command = ["docker", "compose", "up"]
     if detach:
         command.append("-d")

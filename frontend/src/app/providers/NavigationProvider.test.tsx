@@ -37,4 +37,18 @@ describe('NavigationProvider', () => {
       expect(screen.getByTestId('current-module')).toHaveTextContent('automation');
     });
   });
+
+  it('treats knowledge base root paths as the knowledge-base module', async () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge-bases/kb-1/files']}>
+        <NavigationProvider>
+          <ModuleProbe />
+        </NavigationProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('current-module')).toHaveTextContent('knowledge-base');
+    });
+  });
 });

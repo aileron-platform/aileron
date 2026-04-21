@@ -27,6 +27,7 @@ from app.services.orchestrator import (
     NetworkConfig,
     ResourceRequirements
 )
+from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
 from app.utils.path_resolver import PathResolver
 
 logger = logging.getLogger(__name__)
@@ -386,10 +387,12 @@ class RuntimeProvisionService:
         manager_workspace = Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
         manager_scripts = Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
         manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
         manager_workspace.mkdir(parents=True, exist_ok=True)
         manager_scripts.mkdir(parents=True, exist_ok=True)
         manager_claude.mkdir(parents=True, exist_ok=True)
+        manager_knowledge_bases.mkdir(parents=True, exist_ok=True)
 
         if workspace.setup_script:
             custom_setup_file = manager_scripts / "custom-setup.sh"
@@ -419,6 +422,25 @@ class RuntimeProvisionService:
                 host_project_root = os.environ.get("HOST_PROJECT_ROOT")
                 if host_project_root:
                     volumes.append(VolumeMount(source=f"{host_project_root}/workspace-terminal", target="/workspace-terminal"))
+
+        raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
+        if isinstance(raw_attachments, list):
+            host_kb_root = Path(self.settings.HOST_KNOWLEDGE_BASES_DIR)
+            for attachment in raw_attachments:
+                kb = getattr(attachment, "knowledge_base", None)
+                kb_id = getattr(kb, "id", None) or getattr(attachment, "kb_id", None)
+                mount_alias = getattr(attachment, "mount_alias", None)
+                if not isinstance(kb_id, str) or not isinstance(mount_alias, str):
+                    continue
+
+                (manager_knowledge_bases / kb_id).mkdir(parents=True, exist_ok=True)
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_kb_root / kb_id),
+                        target=f"/knowledge/{mount_alias}",
+                        read_only=getattr(attachment, "mode", "rw") == "ro",
+                    )
+                )
 
         return volumes
 
@@ -611,6 +633,10 @@ class RuntimeProvisionService:
         if term_key in ports_mapping and not workspace.terminal_external_url:
             workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
 
+        attachment_service = KnowledgeBaseAttachmentService(self.db)
+        workspace.runtime_mounted_kb_signature = attachment_service.reconcile_on_start(
+            workspace_id=workspace.id
+        )
         workspace.runtime_status = "running"
         workspace.runtime_last_seen = datetime.utcnow()
 

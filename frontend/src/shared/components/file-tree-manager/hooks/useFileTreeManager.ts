@@ -24,6 +24,7 @@ const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
     workspaceId: apiConfig.workspaceId ?? null,
     contextId: apiConfig.contextId ?? null,
     templateId: apiConfig.templateId ?? null,
+    knowledgeBaseId: apiConfig.knowledgeBaseId ?? null,
     scope: apiConfig.scope ?? null,
     collection: apiConfig.collection ?? null,
     baseUrl: apiConfig.baseUrl ?? null,
@@ -75,6 +76,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   // 狀態管理
   const state = useFileTreeState(stateOptions);
   const apiConfigKey = useMemo(() => buildApiConfigKey(apiConfig), [apiConfig]);
+  const stableApiConfig = useMemo(() => apiConfig, [apiConfigKey]);
   const latestLoadIdRef = useRef(0);
   const activeApiConfigKeyRef = useRef(apiConfigKey);
 
@@ -94,7 +96,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     state.setError(null);
 
     try {
-      const adapter = new (await import('../services/fileTreeAdapter')).FileTreeApiAdapter(apiConfig);
+      const adapter = new (await import('../services/fileTreeAdapter')).FileTreeApiAdapter(stableApiConfig);
       logger.debug('loadTree: 調用 adapter.getTree()');
       const nodes = await adapter.getTree();
 
@@ -155,7 +157,15 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiConfig, apiConfigKey, state]);
+  }, [
+    apiConfigKey,
+    onError,
+    onTreeLoaded,
+    stableApiConfig,
+    state.setError,
+    state.setLoading,
+    state.setNodes,
+  ]);
 
   // 檔案操作 - 在 loadTree 之後定義，這樣 onComplete 才能正確引用
   const operations = useFileOperations({

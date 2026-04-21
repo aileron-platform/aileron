@@ -88,6 +88,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "aileron.fullname" . }}-platform-config
                   key: RUNTIME_K8S_ALLOWED_NAMESPACES
+            - name: KNOWLEDGE_BASES_PVC_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aileron.fullname" . }}-platform-config
+                  key: KNOWLEDGE_BASES_PVC_NAME
             - name: FIREWALL_DEFAULTS_CONFIGMAP_NAME
               valueFrom:
                 configMapKeyRef:

@@ -31,7 +31,13 @@ def _authenticate_as(client, monkeypatch, user: db_models.User) -> None:
     client.headers.update({"Authorization": "Bearer test-access-token"})
 
 
-def _create_workspace(session_factory, *, owner_id: str, name: str = "Shared Workspace") -> str:
+def _create_workspace(
+    session_factory,
+    *,
+    owner_id: str,
+    name: str = "Shared Workspace",
+    nextjs_container_id: str | None = None,
+) -> str:
     with session_factory() as session:
         workspace = db_models.Workspace(
             id=f"workspace-{uuid4().hex[:8]}",
@@ -45,6 +51,7 @@ def _create_workspace(session_factory, *, owner_id: str, name: str = "Shared Wor
             workspace_firewall_allowed_domains=[],
             browser_firewall_allowed_domains=[],
             acp_cli_args=[],
+            nextjs_container_id=nextjs_container_id,
         )
         session.add(workspace)
         session.commit()
@@ -130,10 +137,14 @@ def test_workspace_share_creation_rejects_duplicate_and_self_share(
 
     assert create_response.status_code == 201
     assert create_response.json()["role"] == "editor"
-    assert duplicate_response.status_code == 400
-    assert "already exists" in duplicate_response.json()["detail"]
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json()["detail"]["code"] == "WORKSPACE_SHARE_CONFLICT"
+    assert duplicate_response.json()["detail"]["message"] == "Workspace share already exists"
+    assert duplicate_response.json()["detail"]["details"]["resource"] == "workspace_share"
     assert self_share_response.status_code == 400
-    assert "owner" in self_share_response.json()["detail"]
+    assert self_share_response.json()["detail"]["code"] == "WORKSPACE_INVALID_SHARE_TARGET"
+    assert self_share_response.json()["detail"]["message"] == "Cannot share a workspace with its owner"
+    assert self_share_response.json()["detail"]["details"]["resource"] == "workspace_share"
 
 
 @pytest.mark.integration
@@ -221,6 +232,35 @@ def test_manager_can_update_and_manage_shares_but_editor_cannot(
 
 
 @pytest.mark.integration
+def test_workspace_share_update_and_delete_return_structured_not_found_error(
+    test_app,
+    create_user,
+    monkeypatch,
+):
+    client, session_factory = test_app
+    owner = create_user(username="owner")
+    workspace_id = _create_workspace(session_factory, owner_id=owner.id)
+    _authenticate_as(client, monkeypatch, owner)
+
+    update_response = client.patch(
+        f"/api/v1/workspaces/{workspace_id}/shares/share-missing",
+        json={"role": "viewer"},
+    )
+    delete_response = client.delete(
+        f"/api/v1/workspaces/{workspace_id}/shares/share-missing"
+    )
+
+    assert update_response.status_code == 404
+    assert update_response.json()["detail"]["code"] == "WORKSPACE_SHARE_NOT_FOUND"
+    assert update_response.json()["detail"]["message"] == "Workspace share not found"
+    assert update_response.json()["detail"]["details"]["resource"] == "workspace_share"
+    assert delete_response.status_code == 404
+    assert delete_response.json()["detail"]["code"] == "WORKSPACE_SHARE_NOT_FOUND"
+    assert delete_response.json()["detail"]["message"] == "Workspace share not found"
+    assert delete_response.json()["detail"]["details"]["resource"] == "workspace_share"
+
+
+@pytest.mark.integration
 def test_only_owner_can_delete_workspace_and_manager_can_rebuild(
     test_app,
     create_user,
@@ -264,3 +304,35 @@ def test_only_owner_can_delete_workspace_and_manager_can_rebuild(
     assert denied_delete_response.status_code == 403
     assert delete_response.status_code == 202
     mock_delete.assert_called_once_with(workspace_id)
+
+
+@pytest.mark.integration
+def test_restart_nextjs_returns_localized_messages(
+    test_app,
+    create_user,
+    monkeypatch,
+):
+    client, session_factory = test_app
+    owner = create_user(username="owner")
+    workspace_without_nextjs = _create_workspace(session_factory, owner_id=owner.id)
+    workspace_with_nextjs = _create_workspace(
+        session_factory,
+        owner_id=owner.id,
+        name="Nextjs Workspace",
+        nextjs_container_id="nextjs-container-1",
+    )
+    _authenticate_as(client, monkeypatch, owner)
+
+    missing_response = client.post(f"/api/v1/workspaces/{workspace_without_nextjs}/restart-nextjs")
+
+    with patch("app.routers.workspaces.run_restart_nextjs_task") as mock_restart:
+        with patch("app.routers.workspaces.WorkspaceService.mark_nextjs_restarting", return_value=True):
+            success_response = client.post(f"/api/v1/workspaces/{workspace_with_nextjs}/restart-nextjs")
+
+    assert missing_response.status_code == 400
+    assert missing_response.json()["detail"] == "No restartable Next.js container found for this workspace"
+    assert success_response.status_code == 202
+    assert success_response.json()["message"] == "Next.js container restart started"
+    assert success_response.json()["workspaceId"] == workspace_with_nextjs
+    assert success_response.json()["status"] == "restarting"
+    mock_restart.assert_called_once_with(workspace_with_nextjs)

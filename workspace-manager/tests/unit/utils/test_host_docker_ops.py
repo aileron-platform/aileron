@@ -80,6 +80,7 @@ def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp
         return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(ops, "run_command", fake_run_command)
+    monkeypatch.setattr(ops, "ensure_host_storage_directories", lambda *_args, **_kwargs: None)
 
     ops.compose_up(repo_root, build=True, detach=True, env={"TEST_ENV": "1"})
 
@@ -104,6 +105,7 @@ def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytes
     monkeypatch.delenv("HOST_WORKSPACES_DIR", raising=False)
     monkeypatch.delenv("HOST_WORKSPACE_SCRIPTS_DIR", raising=False)
     monkeypatch.delenv("HOST_CLAUDE_DATA_DIR", raising=False)
+    monkeypatch.delenv("HOST_KNOWLEDGE_BASES_DIR", raising=False)
     monkeypatch.delenv("HOST_SSH_KEYS_DIR", raising=False)
 
     env = ops.build_compose_env(profile)
@@ -114,7 +116,26 @@ def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytes
     assert env["HOST_WORKSPACES_DIR"] == str(tmp_path / "data" / "workspace-data")
     assert env["HOST_WORKSPACE_SCRIPTS_DIR"] == str(tmp_path / "data" / "workspace-scripts")
     assert env["HOST_CLAUDE_DATA_DIR"] == str(tmp_path / "data" / "claude-data")
+    assert env["HOST_KNOWLEDGE_BASES_DIR"] == str(tmp_path / "data" / "knowledge-bases")
     assert env["HOST_SSH_KEYS_DIR"] == str(tmp_path / "data" / "ssh-keys")
+
+
+@pytest.mark.unit
+def test_ensure_host_storage_directories_prepares_knowledge_base_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    chmod_calls: list[tuple[Path, int]] = []
+    chown_calls: list[tuple[Path, int, int]] = []
+    target_dir = tmp_path / "data" / "knowledge-bases"
+
+    monkeypatch.setattr(ops.os, "chmod", lambda path, mode: chmod_calls.append((Path(path), mode)))
+    monkeypatch.setattr(ops.os, "chown", lambda path, uid, gid: chown_calls.append((Path(path), uid, gid)))
+
+    ops.ensure_host_storage_directories(tmp_path, {"HOST_KNOWLEDGE_BASES_DIR": str(target_dir)})
+
+    assert target_dir.is_dir()
+    assert chmod_calls == [(target_dir, 0o770)]
+    assert chown_calls == [(target_dir, 1000, 1000)]
 
 
 @pytest.mark.unit

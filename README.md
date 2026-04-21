@@ -305,6 +305,40 @@ helm install aileron ./helm/aileron \
   --create-namespace
 ```
 
+#### Knowledge Base Storage
+
+Knowledge Bases add one more shared storage surface in Kubernetes mode:
+
+- `kubernetes.knowledgeBases.pvcName` creates a dedicated `knowledge-bases-pvc`
+- `workspace-manager` mounts that PVC at `/host/knowledge-bases`
+- `workspace-operator` mounts each attached KB into runtime pods through `/knowledge/<alias>` with `subPath=<kbId>`
+
+For local single-node development, the default chart uses:
+
+```yaml
+kubernetes:
+  knowledgeBases:
+    storageClassName: hostpath
+```
+
+This is a practical fallback, but not true multi-node RWX storage.
+
+For production, switch to a shared RWX StorageClass such as NFS:
+
+```bash
+helm upgrade --install aileron ./helm/aileron \
+  --namespace aileron \
+  --create-namespace \
+  -f helm/values-rke.yaml
+```
+
+Minimum checks before enabling Knowledge Bases in Kubernetes:
+
+- the cluster can provision `ReadWriteMany` storage, or you explicitly accept the single-node `hostpath` fallback
+- `knowledge-bases-pvc` is `Bound`
+- `workspace-manager` pod has `/host/knowledge-bases` mounted
+- runtime pods can mount `/knowledge/<alias>` through the operator-managed `knowledge-bases` volume
+
 ### Public Domain Routing
 
 To expose the platform through public domains, configure:

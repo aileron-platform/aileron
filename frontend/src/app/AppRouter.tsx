@@ -16,6 +16,7 @@ const WorkspaceModule = React.lazy(() => import('../features/workspace/Workspace
 const TemplateManagementModule = React.lazy(() => import('../features/template-management/TemplateManagementModule'));
 const WorkspaceWizardPage = React.lazy(() => import('../features/workspace-wizard/WorkspaceWizardPage'));
 const AutomationModule = React.lazy(() => import('../features/automation/AutomationModule'));
+const KnowledgeBaseModule = React.lazy(() => import('../features/knowledge-base/KnowledgeBaseModule'));
 const ProfilePage = React.lazy(() => import('../pages/ProfilePage'));
 const SettingsPage = React.lazy(() => import('../pages/SettingsPage'));
 const LoginPage = React.lazy(() => import('../features/auth/pages/LoginPage'));
@@ -94,6 +95,15 @@ export const AppRouter: React.FC = () => {
             element={(
               <RequireAuth>
                 <AutomationModule />
+              </RequireAuth>
+            )}
+          />
+
+          <Route
+            path="/knowledge-bases/*"
+            element={(
+              <RequireAuth>
+                <KnowledgeBaseModule />
               </RequireAuth>
             )}
           />

@@ -36,7 +36,8 @@ export interface FileTreeNode {
 export type ApiEndpointType = 
   | 'workspace'      // Workspace 檔案管理
   | 'template'       // 模板中心
-  | 'claude-code';   // Claude Code
+  | 'claude-code'    // Claude Code
+  | 'knowledge-base'; // Knowledge Base
 
 /**
  * API 配置
@@ -50,6 +51,8 @@ export interface FileTreeApiConfig {
   contextId?: string | null;
   /** Template ID（template 使用） */
   templateId?: string;
+  /** Knowledge Base ID（knowledge-base 使用） */
+  knowledgeBaseId?: string;
   /** 範圍識別（template 使用：'scripts' | 'skills'；claude-code 使用：'project' | 'user' | 'plugin'） */
   scope?: string;
   /** Collection 類型（claude-code 使用：'skills' | 'scripts'） */

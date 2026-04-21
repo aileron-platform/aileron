@@ -8,6 +8,7 @@ from typing import Any, Literal, Optional
 from pydantic import Field
 
 from app.utils.pydantic import CamelModel
+from app.models.knowledge_base import KnowledgeBaseAttachmentMode, KnowledgeBaseRole
 
 # Browser 容器狀態類型
 BrowserStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
@@ -210,6 +211,12 @@ class WorkspaceDetail(CamelModel):
     acp_cli_args: list[str] = Field(default_factory=list, alias="acpCliArgs")
     access_role: WorkspaceAccessRole = Field("owner", alias="accessRole")
     access_source: WorkspaceAccessSource = Field("owned", alias="accessSource")
+    attached_knowledge_bases: list["WorkspaceKnowledgeBaseAttachment"] = Field(
+        default_factory=list,
+        alias="attachedKnowledgeBases",
+    )
+    mounted_kb_signature: Optional[str] = Field(None, alias="mountedKbSignature")
+    has_pending_kb_changes: bool = Field(False, alias="hasPendingKbChanges")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
     runtime_job: Optional["WorkspaceRuntimeJobSummary"] = Field(
@@ -258,6 +265,34 @@ class WorkspaceShareCreateRequest(CamelModel):
 
 class WorkspaceShareUpdateRequest(CamelModel):
     role: WorkspaceShareRole
+
+
+class WorkspaceKnowledgeBaseAttachment(CamelModel):
+    id: str
+    kb_id: str = Field(..., alias="kbId")
+    name: str
+    slug: str
+    role: Optional[KnowledgeBaseRole] = None
+    mount_alias: str = Field(..., alias="mountAlias")
+    mode: KnowledgeBaseAttachmentMode
+    attached_by_id: str = Field(..., alias="attachedById")
+    created_at: datetime = Field(..., alias="createdAt")
+    updated_at: Optional[datetime] = Field(None, alias="updatedAt")
+
+
+class WorkspaceKnowledgeBaseAttachmentListResponse(CamelModel):
+    items: list[WorkspaceKnowledgeBaseAttachment]
+
+
+class WorkspaceKnowledgeBaseAttachmentCreateRequest(CamelModel):
+    kb_id: str = Field(..., alias="kbId")
+    mount_alias: Optional[str] = Field(None, alias="mountAlias")
+    mode: str = "rw"
+
+
+class WorkspaceKnowledgeBaseAttachmentUpdateRequest(CamelModel):
+    mount_alias: Optional[str] = Field(None, alias="mountAlias")
+    mode: Optional[str] = None
 
 
 class WorkspaceListResponse(CamelModel):

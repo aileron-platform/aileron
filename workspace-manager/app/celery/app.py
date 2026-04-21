@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config.settings import get_settings
 
@@ -52,7 +53,15 @@ celery_app.conf.beat_schedule = {
     "automation-cleanup-expired-queue": {
         "task": "automation.cleanup_expired_queue",
         "schedule": 300.0,  # 每 5 分鐘執行一次
-    }
+    },
+    "knowledge-bases-reconcile-kb-quota": {
+        "task": "knowledge_bases.reconcile_kb_quota",
+        "schedule": crontab(hour=2, minute=0),  # 每日凌晨 2 點校正 KB 用量
+    },
+    "knowledge-bases-cleanup-tombstoned-kb": {
+        "task": "knowledge_bases.cleanup_tombstoned_kb",
+        "schedule": crontab(hour=3, minute=0),  # 每日凌晨 3 點清理 tombstoned KB
+    },
 }
 
 # 導出為 app，這樣 celery -A app.celery.app 就能找到
