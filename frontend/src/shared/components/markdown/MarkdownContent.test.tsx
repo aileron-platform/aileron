@@ -94,4 +94,36 @@ describe('MarkdownContent', () => {
     const root = container.firstChild as HTMLElement;
     expect(root.className).toContain('custom-class');
   });
+
+  it('將 YAML frontmatter 呈現為結構化區塊', () => {
+    const content = `---
+name: generate-contracts
+description: 依據 OpenSpec change 的 delta spec 內容產生 contract
+metadata:
+  author: openspec
+  version: "1.0"
+---`;
+
+    const { container } = render(<MarkdownContent content={content} />);
+    expect(container.querySelector('pre code')).toBeNull();
+    expect(screen.getByText('generate-contracts')).toBeTruthy();
+    expect(screen.getByText('openspec')).toBeTruthy();
+    expect(screen.getByText('1.0')).toBeTruthy();
+  });
+
+  it('在中段 frontmatter 後仍繼續渲染 markdown 正文', () => {
+    const content = `<skill>
+<name>openspec-ff-change</name>
+---
+name: openspec-ff-change
+metadata:
+  author: openspec
+---
+
+## Steps`;
+
+    render(<MarkdownContent content={content} />);
+    expect(screen.getByText('openspec-ff-change')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Steps');
+  });
 });

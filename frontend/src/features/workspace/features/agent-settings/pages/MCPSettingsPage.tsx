@@ -94,17 +94,19 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
       const response = await api.listMcpServers(runtimeBaseUrl, workspaceId);
       setServers(response);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '無法載入 MCP 伺服器列表';
+      const message = err instanceof Error
+        ? err.message
+        : t(`${i18nNamespace}.mcp.messages.loadFailed.description`);
       setError(message);
       toast({
         variant: 'destructive',
-        title: '載入失敗',
+        title: t(`${i18nNamespace}.mcp.messages.loadFailed.title`),
         description: message,
       });
     } finally {
       setLoading(false);
     }
-  }, [runtimeBaseUrl, workspaceId, runtimeError, toast, api]);
+  }, [runtimeBaseUrl, workspaceId, runtimeError, toast, api, t, i18nNamespace]);
 
   useEffect(() => {
     if (!isRuntimeReady) {
@@ -139,8 +141,8 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     if (!canEdit(server)) {
       toast({
         variant: 'destructive',
-        title: '無法編輯',
-        description: 'Plugin 提供的 MCP Server 為唯讀',
+        title: t(`${i18nNamespace}.mcp.messages.editForbidden.title`),
+        description: t(`${i18nNamespace}.mcp.messages.editForbidden.description`),
       });
       return;
     }
@@ -152,7 +154,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const handleSubmit = useCallback(
     async (payload: ClaudeMcpServer) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
-        throw new Error('Workspace Runtime 尚未就緒');
+        throw new Error(t(`${i18nNamespace}.mcp.messages.runtimeNotReady`));
       }
 
       const normalized: ClaudeMcpServer = {
@@ -167,42 +169,57 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
       try {
         if (dialogMode === 'create') {
           await api.createMcpServer(runtimeBaseUrl, workspaceId, normalized);
-          toast({ title: '已建立 MCP 伺服器', description: normalized.name });
+          toast({
+            title: t(`${i18nNamespace}.mcp.messages.createSuccess.title`),
+            description: normalized.name,
+          });
         } else {
           await api.updateMcpServer(runtimeBaseUrl, workspaceId, normalized);
-          toast({ title: '已更新 MCP 伺服器', description: normalized.name });
+          toast({
+            title: t(`${i18nNamespace}.mcp.messages.updateSuccess.title`),
+            description: normalized.name,
+          });
         }
         await fetchServers();
         setDialogOpen(false);
         setActiveServer(null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'MCP 伺服器操作失敗';
-        toast({ variant: 'destructive', title: '操作失敗', description: message });
+        const message = err instanceof Error
+          ? err.message
+          : t(`${i18nNamespace}.mcp.messages.operationFailed.description`);
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.operationFailed.title`),
+          description: message,
+        });
         throw err instanceof Error ? err : new Error(message);
       }
     },
-    [runtimeBaseUrl, workspaceId, runtimeError, dialogMode, fetchServers, toast, api],
+    [runtimeBaseUrl, workspaceId, runtimeError, dialogMode, fetchServers, toast, api, t, i18nNamespace],
   );
 
   const handleDelete = useCallback(
     async (server: ClaudeMcpServer) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
-        toast({ variant: 'destructive', title: '操作失敗', description: 'Workspace Runtime 尚未就緒' });
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.operationFailed.title`),
+          description: t(`${i18nNamespace}.mcp.messages.runtimeNotReady`),
+        });
         return;
       }
 
       if (!canDelete(server)) {
         toast({
           variant: 'destructive',
-          title: '無法刪除',
-          description: 'Plugin 提供的 MCP Server 為唯讀',
+          title: t(`${i18nNamespace}.mcp.messages.deleteForbidden.title`),
+          description: t(`${i18nNamespace}.mcp.messages.deleteForbidden.description`),
         });
         return;
       }
 
       const confirmed = window.confirm(
         t(`${i18nNamespace}.mcp.confirm.delete`, {
-          defaultValue: '確定要刪除「{{name}}」嗎？',
           name: server.name,
         }) as string,
       );
@@ -212,11 +229,20 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
       try {
         await api.deleteMcpServer(runtimeBaseUrl, workspaceId, server);
-        toast({ title: '已刪除 MCP 伺服器', description: server.name });
+        toast({
+          title: t(`${i18nNamespace}.mcp.messages.deleteSuccess.title`),
+          description: server.name,
+        });
         await fetchServers();
       } catch (err) {
-        const message = err instanceof Error ? err.message : '刪除失敗';
-        toast({ variant: 'destructive', title: '刪除失敗', description: message });
+        const message = err instanceof Error
+          ? err.message
+          : t(`${i18nNamespace}.mcp.messages.deleteFailed.description`);
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.deleteFailed.title`),
+          description: message,
+        });
       }
     },
     [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, t, api, i18nNamespace],
@@ -225,46 +251,68 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const handleToggleStatus = useCallback(
     async (server: ClaudeMcpServer, enabled: boolean) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
-        toast({ variant: 'destructive', title: '操作失敗', description: 'Workspace Runtime 尚未就緒' });
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.operationFailed.title`),
+          description: t(`${i18nNamespace}.mcp.messages.runtimeNotReady`),
+        });
         return;
       }
 
       try {
         await api.toggleMcpServerStatus(runtimeBaseUrl, workspaceId, server, enabled);
         toast({
-          title: enabled ? '已啟用 MCP 伺服器' : '已停用 MCP 伺服器',
+          title: enabled
+            ? t(`${i18nNamespace}.mcp.messages.toggleEnabled.title`)
+            : t(`${i18nNamespace}.mcp.messages.toggleDisabled.title`),
           description: server.name,
         });
         await fetchServers();
       } catch (err) {
-        const message = err instanceof Error ? err.message : '切換狀態失敗';
-        toast({ variant: 'destructive', title: '操作失敗', description: message });
+        const message = err instanceof Error
+          ? err.message
+          : t(`${i18nNamespace}.mcp.messages.toggleFailed.description`);
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.operationFailed.title`),
+          description: message,
+        });
       }
     },
-    [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, api],
+    [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, api, t, i18nNamespace],
   );
 
   const handleImport = useCallback(
     async (options: { scope: ClaudeMcpServer['scope']; file: File; overwrite?: boolean }) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
-        throw new Error('Workspace Runtime 尚未就緒');
+        throw new Error(t(`${i18nNamespace}.mcp.messages.runtimeNotReady`));
       }
 
       try {
         const result = await api.importMcpServers(runtimeBaseUrl, workspaceId, options);
         await fetchServers();
         toast({
-          title: '匯入完成',
-          description: `新增 ${result.created.length}、更新 ${result.updated.length}、跳過 ${result.skipped.length}`,
+          title: t(`${i18nNamespace}.mcp.messages.importSuccess.title`),
+          description: t(`${i18nNamespace}.mcp.messages.importSuccess.description`, {
+            created: result.created.length,
+            updated: result.updated.length,
+            skipped: result.skipped.length,
+          }),
         });
         return result;
       } catch (err) {
-        const message = err instanceof Error ? err.message : '匯入失敗';
-        toast({ variant: 'destructive', title: '匯入失敗', description: message });
+        const message = err instanceof Error
+          ? err.message
+          : t(`${i18nNamespace}.mcp.messages.importFailed.description`);
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.importFailed.title`),
+          description: message,
+        });
         throw err instanceof Error ? err : new Error(message);
       }
     },
-    [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, api],
+    [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, api, t, i18nNamespace],
   );
 
 
@@ -313,7 +361,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                     {availableScopes.includes('plugin') && (
                       <SelectItem value="plugin">
                         <div className="flex items-center gap-2">
-                          <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.plugin`, { defaultValue: 'Plugins' })}
+                          <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.plugin`)}
                         </div>
                       </SelectItem>
                     )}
@@ -360,7 +408,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                 <Alert>
                   <AlertDescription>
                     {t(`${i18nNamespace}.mcp.status.runtimeUnavailable`, {
-                      defaultValue: 'Workspace Runtime 尚未就緒，請稍後再試。',
+                      message: t(`${i18nNamespace}.mcp.messages.runtimeNotReady`),
                     })}
                   </AlertDescription>
                 </Alert>
@@ -384,9 +432,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                 <div className="flex h-40 flex-col items-center justify-center text-sm text-muted-foreground">
                   <Loader2 className="mb-2 h-5 w-5 animate-spin text-primary" />
                   <span>
-                    {t(`${i18nNamespace}.mcp.list.loading`, {
-                      defaultValue: '載入 MCP 伺服器中…',
-                    })}
+                    {t(`${i18nNamespace}.mcp.list.loading`)}
                   </span>
                 </div>
               )}
@@ -403,7 +449,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                         <div className="flex items-center gap-3 flex-wrap">
                           <h3 className="text-lg font-semibold text-foreground">{server.name}</h3>
                           <Badge className={SCOPE_BADGE_CLASSES[server.scope]}>
-                            {t(`${i18nNamespace}.mcp.server.scope.${server.scope}`, { defaultValue: server.scope })}
+                            {t(`${i18nNamespace}.mcp.server.scope.${server.scope}`)}
                           </Badge>
 
                           {/* Plugin 來源標記 */}
@@ -420,9 +466,9 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                         {supportsToggle && (
                           <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/50">
                             <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                              {server.enabled !== false
-                                ? t(`${i18nNamespace}.mcp.server.status.enabled`, { defaultValue: '啟用' })
-                                : t(`${i18nNamespace}.mcp.server.status.disabled`, { defaultValue: '停用' })}
+                                {server.enabled !== false
+                                ? t(`${i18nNamespace}.mcp.server.status.enabled`)
+                                : t(`${i18nNamespace}.mcp.server.status.disabled`)}
                             </span>
                             <Switch
                               checked={server.enabled !== false}
@@ -468,9 +514,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                             </TooltipTrigger>
                             <TooltipContent className="max-w-xs">
                               <p className="text-sm">
-                                {t(`${i18nNamespace}.mcp.plugin.readonly`, {
-                                  defaultValue: 'Plugin 提供的 MCP Server 為唯讀。可以啟用/停用，但無法編輯或刪除。',
-                                })}
+                                {t(`${i18nNamespace}.mcp.plugin.readonly`)}
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -541,7 +585,11 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                               type="button"
                               onClick={() => setVisibleEnvs(prev => ({ ...prev, [server.id]: !prev[server.id] }))}
                               className="rounded p-0.5 transition-colors hover:bg-muted"
-                              title={visibleEnvs[server.id] ? '隱藏環境變數' : '顯示環境變數'}
+                              title={
+                                visibleEnvs[server.id]
+                                  ? t(`${i18nNamespace}.mcp.actions.hideEnvValues`)
+                                  : t(`${i18nNamespace}.mcp.actions.showEnvValues`)
+                              }
                             >
                               {visibleEnvs[server.id] ? (
                                 <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />

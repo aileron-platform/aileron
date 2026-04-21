@@ -849,6 +849,7 @@ const template = {
           commandRequired: 'Stdio 傳輸需填寫執行命令。',
           urlRequired: 'HTTP 或 SSE 傳輸需填寫伺服器 URL。',
           urlInvalid: '請輸入有效的 URL。',
+          saveFailed: '儲存失敗',
         },
         transport: {
           label: '傳輸類型 *',
