@@ -69,7 +69,7 @@ class KnowledgeBaseAttachmentService:
             )
         )
         if duplicate is not None:
-            raise KnowledgeBaseConflictError(KB_ALREADY_ATTACHED_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_ALREADY_ATTACHED_MESSAGE, code="KB_ALREADY_ATTACHED")
 
         requested_alias = normalize_kb_slug(mount_alias or kb.slug)
         resolved_alias = (
@@ -100,7 +100,7 @@ class KnowledgeBaseAttachmentService:
     ) -> None:
         attachment = self.db.get(db_models.WorkspaceKnowledgeBaseAttachment, attachment_id)
         if attachment is None:
-            raise KnowledgeBaseNotFoundError(KB_ATTACHMENT_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(KB_ATTACHMENT_NOT_FOUND_MESSAGE, code="KB_ATTACHMENT_NOT_FOUND")
         self._require_workspace(attachment.workspace_id, user_id=user_id, minimum_role="editor")
         self.db.delete(attachment)
         self.db.commit()
@@ -115,7 +115,7 @@ class KnowledgeBaseAttachmentService:
     ) -> db_models.WorkspaceKnowledgeBaseAttachment:
         attachment = self.db.get(db_models.WorkspaceKnowledgeBaseAttachment, attachment_id)
         if attachment is None:
-            raise KnowledgeBaseNotFoundError(KB_ATTACHMENT_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(KB_ATTACHMENT_NOT_FOUND_MESSAGE, code="KB_ATTACHMENT_NOT_FOUND")
 
         self._require_workspace(attachment.workspace_id, user_id=user_id, minimum_role="editor")
         _, kb_access = self.kb_service.get_kb(
@@ -146,7 +146,7 @@ class KnowledgeBaseAttachmentService:
     def reconcile_on_start(self, *, workspace_id: str) -> str:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if workspace is None:
-            raise KnowledgeBaseNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE, code="WORKSPACE_NOT_FOUND")
 
         raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
         if not isinstance(raw_attachments, list):
@@ -172,7 +172,7 @@ class KnowledgeBaseAttachmentService:
     ) -> db_models.Workspace:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if workspace is None:
-            raise KnowledgeBaseNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE)
+            raise KnowledgeBaseNotFoundError(WORKSPACE_NOT_FOUND_MESSAGE, code="WORKSPACE_NOT_FOUND")
         self.workspace_service._require_workspace_access(
             workspace,
             current_user_id=user_id,
@@ -200,7 +200,7 @@ class KnowledgeBaseAttachmentService:
             alias=alias,
             exclude_attachment_id=exclude_attachment_id,
         ):
-            raise KnowledgeBaseConflictError(KB_MOUNT_ALIAS_CONFLICT_MESSAGE)
+            raise KnowledgeBaseConflictError(KB_MOUNT_ALIAS_CONFLICT_MESSAGE, code="KB_MOUNT_ALIAS_CONFLICT")
         return alias
 
     def _alias_exists(

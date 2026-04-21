@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import status
+import httpx
 
 from tests.helpers.auth_helpers import AuthTestHelper
 from tests.helpers.fixtures import TestDataFactory, MockResponses
@@ -224,6 +225,85 @@ class TestOAuthAPI:
         assert "service" in data
         assert "endpoints" in data
         assert isinstance(data["endpoints"], list)
+        assert data["description"] == "OAuth authentication service providing code exchange and token refresh"
+
+    @pytest.mark.integration
+    def test_oauth_new_008_health_check_localizes_description(self, test_app):
+        """OAuth-NEW-008 OAuth 健康檢查會依語系切換描述"""
+        client, _ = test_app
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+
+        response = client.get("/api/v1/oauth/health")
+
+        if response.status_code == status.HTTP_404_NOT_FOUND:
+            pytest.skip("OAuth health endpoint not implemented")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["description"] == "OAuth 認證服務，提供 code exchange 和 token refresh 功能"
+
+    @pytest.mark.integration
+    @patch('app.services.oauth_service.OAuthService.exchange_code')
+    def test_oauth_new_009_exchange_provider_error_is_localized(self, mock_exchange: AsyncMock, test_app):
+        client, _ = test_app
+
+        request = httpx.Request("POST", "https://example.com/oauth")
+        response = httpx.Response(400, request=request)
+        mock_exchange.side_effect = httpx.HTTPStatusError("provider boom", request=request, response=response)
+
+        exchange_data = {
+            "authCode": "test_auth_code_123",
+            "verifier": "test_verifier_456"
+        }
+
+        en_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
+        assert en_response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert en_response.json()["detail"] == "OAuth provider error"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
+        assert zh_response.status_code == status.HTTP_502_BAD_GATEWAY
+        assert zh_response.json()["detail"] == "OAuth provider 錯誤"
+
+    @pytest.mark.integration
+    @patch('app.services.oauth_service.OAuthService.exchange_code')
+    def test_oauth_new_010_exchange_internal_error_is_localized(self, mock_exchange: AsyncMock, test_app):
+        client, _ = test_app
+        mock_exchange.side_effect = RuntimeError("unexpected boom")
+
+        exchange_data = {
+            "authCode": "test_auth_code_123",
+            "verifier": "test_verifier_456"
+        }
+
+        en_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
+        assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert en_response.json()["detail"] == "Failed to exchange OAuth code"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
+        assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert zh_response.json()["detail"] == "交換 OAuth 認證碼失敗"
+
+    @pytest.mark.integration
+    @patch('app.services.oauth_service.OAuthService.refresh_access_token')
+    def test_oauth_new_011_refresh_internal_error_is_localized(self, mock_refresh: AsyncMock, test_app):
+        client, _ = test_app
+        mock_refresh.side_effect = RuntimeError("refresh boom")
+
+        refresh_data = {
+            "refreshToken": "old_refresh_token_456"
+        }
+
+        en_response = client.post("/api/v1/oauth/refresh", json=refresh_data)
+        assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert en_response.json()["detail"] == "Failed to refresh OAuth token"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post("/api/v1/oauth/refresh", json=refresh_data)
+        assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert zh_response.json()["detail"] == "更新 OAuth Token 失敗"
 
     # ============ 原有的測試案例（保留用於測試其他 OAuth 流程）============
 

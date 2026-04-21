@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 from fastapi import status
@@ -60,6 +61,48 @@ class TestSettingsAPI:
         assert settings_data["claudeCode"]["model"] == "claude-3-7-sonnet-20250219"
         assert settings_data["claudeCode"]["selectedProvider"] == "anthropic"
         assert settings_data["git"]["userName"] == "Test User"
+
+    @pytest.mark.integration
+    def test_settings_003_sync_errors_are_localized(self, authenticated_client):
+        client, user = authenticated_client
+
+        with patch(
+            "app.services.sync_service.SyncService.sync_to_all_workspaces",
+            side_effect=RuntimeError("sync exploded"),
+        ):
+            en_response = client.post(f"/api/v1/users/{user.id}/settings/sync")
+            assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert en_response.json()["detail"] == "Sync failed"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.services.sync_service.SyncService.sync_to_all_workspaces",
+            side_effect=RuntimeError("sync exploded"),
+        ):
+            zh_response = client.post(f"/api/v1/users/{user.id}/settings/sync")
+            assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert zh_response.json()["detail"] == "同步失敗"
+
+    @pytest.mark.integration
+    def test_settings_004_generate_ssh_key_error_is_localized(self, authenticated_client):
+        client, user = authenticated_client
+
+        with patch(
+            "app.routers.settings.SettingsService.generate_and_save_ssh_keys",
+            side_effect=RuntimeError("ssh exploded"),
+        ):
+            en_response = client.post(f"/api/v1/users/{user.id}/ssh-keys/generate")
+            assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert en_response.json()["detail"] == "Failed to generate SSH Key"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.settings.SettingsService.generate_and_save_ssh_keys",
+            side_effect=RuntimeError("ssh exploded"),
+        ):
+            zh_response = client.post(f"/api/v1/users/{user.id}/ssh-keys/generate")
+            assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert zh_response.json()["detail"] == "產生 SSH Key 失敗"
 
 
 @pytest.fixture

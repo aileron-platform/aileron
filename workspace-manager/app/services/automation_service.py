@@ -56,6 +56,11 @@ def get_system_timezone() -> str:
 class AutomationJobError(Exception):
     """自動化任務執行相關錯誤"""
 
+    def __init__(self, message: str, *, code: str = "AUTOMATION_ERROR", params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
 
 class JobNotFoundError(AutomationJobError):
     """指定任務不存在"""
@@ -201,11 +206,13 @@ class AutomationService:
     def execute_task_now(self, job_id: str) -> JobExecution:
         job = self.db.get(db_models.AutomationJob, job_id)
         if not job:
-            raise JobNotFoundError(f"自動化任務 {job_id} 不存在")
+            raise JobNotFoundError(f"自動化任務 {job_id} 不存在", code="AUTOMATION_JOB_NOT_FOUND", params={"jobId": job_id})
 
         if job.status not in {"active", "paused"}:
             raise JobNotRunnableError(
-                f"自動化任務 {job_id} 目前狀態為 {job.status}，不可執行"
+                f"自動化任務 {job_id} 目前狀態為 {job.status}，不可執行",
+                code="AUTOMATION_JOB_NOT_RUNNABLE",
+                params={"jobId": job_id, "status": job.status},
             )
 
         execution = self.enqueue_execution(
@@ -214,7 +221,7 @@ class AutomationService:
             summary="手動立即觸發自動化任務",
         )
         if not execution:
-            raise JobDispatchError("無法建立任務執行紀錄")
+            raise JobDispatchError("無法建立任務執行紀錄", code="AUTOMATION_EXECUTION_CREATE_FAILED")
 
         try:
             from app.tasks import run_automation_job
@@ -228,7 +235,7 @@ class AutomationService:
         except (CeleryError, ConnectionError, OSError) as exc:  # pragma: no cover - Celery 連線失敗
             logger.exception("派送自動化任務 %s 立即執行失敗", job_id)
             self._mark_execution_dispatch_failed(execution, str(exc))
-            raise JobDispatchError("無法派送自動化任務至 Celery") from exc
+            raise JobDispatchError("無法派送自動化任務至 Celery", code="AUTOMATION_DISPATCH_FAILED") from exc
 
         self.db.refresh(execution)
         return self._to_execution_model(execution)

@@ -18,6 +18,7 @@ from app.models.template_git import (
     TemplateChange,
 )
 from app.services.template_git_service import TemplateGitService
+from app.services.template_git_service import GitOperationResult
 
 
 # ============================================================================
@@ -318,21 +319,21 @@ class TestUserConfig:
             mock_parser_class.return_value = mock_parser
 
             # Act
-            success, message = git_service.update_user_config("New User", "new@example.com")
+            result = git_service.update_user_config("New User", "new@example.com")
 
             # Assert
-            assert success is True
-            assert "已更新" in message
+            assert result.success is True
+            assert result.code == "GIT_USER_CONFIG_UPDATED"
             mock_parser.set_value.assert_called()
 
     def test_update_user_config_empty_values(self, git_service):
         """測試：更新使用者配置時空值失敗"""
         # Act
-        success, message = git_service.update_user_config("", "")
+        result = git_service.update_user_config("", "")
 
         # Assert
-        assert success is False
-        assert "必填" in message
+        assert result.success is False
+        assert result.code == "GIT_USER_CONFIG_REQUIRED"
 
 
 # ============================================================================
@@ -349,11 +350,11 @@ class TestRemoteUrl:
         with patch.object(git_service, '_get_repo', return_value=None):
 
             # Act
-            success, message = git_service.set_remote_url("https://github.com/user/repo.git")
+            result = git_service.set_remote_url("https://github.com/user/repo.git")
 
             # Assert
-            assert success is False
-            assert "不是 Git 倉庫" in message
+            assert result.success is False
+            assert result.code == "GIT_REPO_NOT_FOUND"
 
     def test_set_remote_url_empty(self, git_service, mock_repo):
         """測試：設定空 URL 失敗"""
@@ -361,11 +362,11 @@ class TestRemoteUrl:
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
 
             # Act
-            success, message = git_service.set_remote_url("")
+            result = git_service.set_remote_url("")
 
             # Assert
-            assert success is False
-            assert "不能為空" in message
+            assert result.success is False
+            assert result.code == "GIT_REMOTE_URL_EMPTY"
 
     def test_set_remote_url_create_new(self, git_service, mock_repo):
         """測試：建立新的遠端 URL"""
@@ -374,11 +375,12 @@ class TestRemoteUrl:
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
 
             # Act
-            success, message = git_service.set_remote_url("https://github.com/user/repo.git")
+            result = git_service.set_remote_url("https://github.com/user/repo.git")
 
             # Assert
-            assert success is True
-            assert "新增" in message
+            assert result.success is True
+            assert result.code == "GIT_REMOTE_URL_CREATED"
+            assert result.params["url"] == "https://github.com/user/repo.git"
             mock_repo.create_remote.assert_called_once_with("origin", "https://github.com/user/repo.git")
 
     def test_set_remote_url_update_existing(self, git_service, mock_repo):
@@ -394,11 +396,12 @@ class TestRemoteUrl:
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
 
             # Act
-            success, message = git_service.set_remote_url("https://github.com/user/new-repo.git")
+            result = git_service.set_remote_url("https://github.com/user/new-repo.git")
 
             # Assert
-            assert success is True
-            assert "更新" in message
+            assert result.success is True
+            assert result.code == "GIT_REMOTE_URL_UPDATED"
+            assert result.params["url"] == "https://github.com/user/new-repo.git"
             mock_remote.set_url.assert_called_once_with("https://github.com/user/new-repo.git")
 
 
@@ -461,11 +464,11 @@ class TestCommitAndPush:
         with patch.object(git_service, '_get_repo', return_value=None):
 
             # Act
-            success, message = git_service.commit_and_push("Test commit")
+            result = git_service.commit_and_push("Test commit")
 
             # Assert
-            assert success is False
-            assert "不是 Git 倉庫" in message
+            assert result.success is False
+            assert result.code == "GIT_REPO_NOT_FOUND"
 
     def test_commit_and_push_no_changes(self, git_service, mock_repo):
         """測試：無變更時提交失敗"""
@@ -483,11 +486,11 @@ class TestCommitAndPush:
             )
 
             # Act
-            success, message = git_service.commit_and_push("Test commit")
+            result = git_service.commit_and_push("Test commit")
 
             # Assert
-            assert success is False
-            assert "沒有需要提交的變更" in message
+            assert result.success is False
+            assert result.code == "GIT_NO_CHANGES"
 
     def test_commit_and_push_no_remote(self, git_service, mock_repo):
         """測試：無遠端時推送失敗"""
@@ -505,11 +508,11 @@ class TestCommitAndPush:
             )
 
             # Act
-            success, message = git_service.commit_and_push("Test commit", push=True)
+            result = git_service.commit_and_push("Test commit", push=True)
 
             # Assert
-            assert success is False
-            assert "尚未設定 Git 遠端倉庫" in message
+            assert result.success is False
+            assert result.code == "GIT_PUSH_REMOTE_NOT_CONFIGURED"
 
     def test_commit_and_push_success_no_push(self, git_service, mock_repo):
         """測試：提交成功但不推送"""
@@ -532,11 +535,12 @@ class TestCommitAndPush:
             )
 
             # Act
-            success, message = git_service.commit_and_push("Test commit", push=False)
+            result = git_service.commit_and_push("Test commit", push=False)
 
             # Assert
-            assert success is True
-            assert "成功提交" in message
+            assert result.success is True
+            assert result.code == "GIT_COMMIT_LOCAL_SUCCESS"
+            assert "Commit abc123" in result.params["commitInfo"]
             mock_repo.index.add.assert_called_once()
             mock_repo.index.commit.assert_called_once_with("Test commit")
 
@@ -564,11 +568,11 @@ class TestCommitAndPush:
             )
 
             # Act
-            success, message = git_service.commit_and_push("Test commit", push=True)
+            result = git_service.commit_and_push("Test commit", push=True)
 
             # Assert
-            assert success is True
-            assert "推送到遠端" in message
+            assert result.success is True
+            assert result.code == "GIT_COMMIT_PUSH_SUCCESS"
             mock_remote.push.assert_called_once()
 
 
@@ -586,11 +590,11 @@ class TestPull:
         with patch.object(git_service, '_get_repo', return_value=None):
 
             # Act
-            success, message = git_service.pull_from_remote()
+            result = git_service.pull_from_remote()
 
             # Assert
-            assert success is False
-            assert "不是 Git 倉庫" in message
+            assert result.success is False
+            assert result.code == "GIT_REPO_NOT_FOUND"
 
     def test_pull_with_uncommitted_changes(self, git_service, mock_repo):
         """測試：有未提交變更時拉取失敗"""
@@ -608,11 +612,11 @@ class TestPull:
             )
 
             # Act
-            success, message = git_service.pull_from_remote()
+            result = git_service.pull_from_remote()
 
             # Assert
-            assert success is False
-            assert "未提交的變更" in message
+            assert result.success is False
+            assert result.code == "GIT_PULL_HAS_UNCOMMITTED_CHANGES"
 
     def test_pull_success(self, git_service, mock_repo):
         """測試：拉取成功"""
@@ -633,11 +637,11 @@ class TestPull:
             )
 
             # Act
-            success, message = git_service.pull_from_remote()
+            result = git_service.pull_from_remote()
 
             # Assert
-            assert success is True
-            assert "拉取變更" in message
+            assert result.success is True
+            assert result.code == "GIT_PULL_SUCCESS"
             mock_remote.pull.assert_called_once()
 
 
@@ -730,11 +734,11 @@ class TestCloneRepository:
     def test_clone_repository_empty_url(self, git_service):
         """測試：空 URL 克隆失敗"""
         # Act
-        success, message = git_service.clone_repository("")
+        result = git_service.clone_repository("")
 
         # Assert
-        assert success is False
-        assert "不能為空" in message
+        assert result.success is False
+        assert result.code == "GIT_REMOTE_URL_EMPTY"
 
     def test_clone_repository_already_exists_with_changes(self, git_service, mock_repo):
         """測試：已存在有變更的倉庫克隆失敗"""
@@ -753,11 +757,11 @@ class TestCloneRepository:
             )
 
             # Act
-            success, message = git_service.clone_repository("https://github.com/user/repo.git")
+            result = git_service.clone_repository("https://github.com/user/repo.git")
 
             # Assert
-            assert success is False
-            assert "未提交的變更" in message
+            assert result.success is False
+            assert result.code == "GIT_CLONE_TARGET_HAS_CHANGES"
 
 
 # ============================================================================
@@ -771,12 +775,12 @@ class TestScanTemplates:
     def test_scan_templates_no_plugins_dir(self, git_service, tmp_path):
         """測試：無 plugins 目錄掃描失敗"""
         # Act
-        success, message, templates = git_service.scan_and_sync_templates()
+        result = git_service.scan_and_sync_templates()
 
         # Assert
-        assert success is False
-        assert "plugins 目錄不存在" in message
-        assert len(templates) == 0
+        assert result.success is False
+        assert result.code == "GIT_PLUGINS_DIR_MISSING"
+        assert len(result.templates) == 0
 
     def test_scan_templates_success(self, git_service, tmp_path):
         """測試：掃描模板成功"""
@@ -807,13 +811,14 @@ class TestScanTemplates:
         plugin_json_path.write_text(json.dumps(plugin_data), encoding="utf-8")
 
         # Act
-        success, message, templates = git_service.scan_and_sync_templates()
+        result = git_service.scan_and_sync_templates()
 
         # Assert
-        assert success is True
-        assert len(templates) == 1
-        assert templates[0]["id"] == "test-template"
-        assert templates[0]["name"] == "Test Template"
+        assert result.success is True
+        assert result.code == "GIT_SCAN_SUCCESS"
+        assert len(result.templates) == 1
+        assert result.templates[0]["id"] == "test-template"
+        assert result.templates[0]["name"] == "Test Template"
 
     def test_scan_templates_invalid_json(self, git_service, tmp_path):
         """測試：無效 JSON 跳過模板"""
@@ -831,11 +836,12 @@ class TestScanTemplates:
         plugin_json_path.write_text("invalid json", encoding="utf-8")
 
         # Act
-        success, message, templates = git_service.scan_and_sync_templates()
+        result = git_service.scan_and_sync_templates()
 
         # Assert
-        assert success is False
-        assert len(templates) == 0
+        assert result.success is False
+        assert result.code == "GIT_NO_TEMPLATES_FOUND"
+        assert len(result.templates) == 0
 
 
 # ============================================================================

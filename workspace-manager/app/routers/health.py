@@ -1,9 +1,9 @@
 """健康檢查路由"""
 
-import httpx
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+import httpx
+from fastapi import APIRouter, Request
 
 from app.config.settings import get_settings
 from app.core.openapi import build_responses
@@ -33,7 +33,7 @@ async def health_check() -> dict[str, object]:
     summary="Keycloak 健康檢查",
     responses=build_responses(500, 503),
 )
-async def keycloak_health_check() -> dict[str, object]:
+async def keycloak_health_check(request: Request) -> dict[str, object]:
     """檢查 Keycloak 服務是否可用
 
     返回 Keycloak 的連接狀態和配置資訊。
@@ -41,13 +41,14 @@ async def keycloak_health_check() -> dict[str, object]:
     """
     keycloak_config = get_keycloak_config()
     settings = get_settings()
+    translate = request.state.translate
 
     # 如果認證未啟用，返回跳過狀態
     if not keycloak_config.enabled:
         return {
             "status": "skipped",
             "service": "keycloak",
-            "message": "Authentication is not enabled",
+            "message": translate("health.keycloak.auth_disabled"),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
@@ -65,7 +66,7 @@ async def keycloak_health_check() -> dict[str, object]:
             "service": "keycloak",
             "server_url": keycloak_config.server_url,
             "realm": keycloak_config.realm,
-            "message": "Keycloak is reachable",
+            "message": translate("health.keycloak.reachable"),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
@@ -75,24 +76,24 @@ async def keycloak_health_check() -> dict[str, object]:
             "service": "keycloak",
             "server_url": keycloak_config.server_url,
             "realm": keycloak_config.realm,
-            "message": "Keycloak connection timeout",
+            "message": translate("health.keycloak.timeout"),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
-    except httpx.HTTPError as e:
+    except httpx.HTTPError:
         return {
             "status": "unhealthy",
             "service": "keycloak",
             "server_url": keycloak_config.server_url,
             "realm": keycloak_config.realm,
-            "message": f"Keycloak connection failed: {str(e)}",
+            "message": translate("health.keycloak.connection_failed"),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }
 
-    except Exception as e:
+    except Exception:
         return {
             "status": "unhealthy",
             "service": "keycloak",
-            "message": f"Unexpected error: {str(e)}",
+            "message": translate("health.keycloak.unexpected_error"),
             "timestamp": datetime.utcnow().isoformat() + "Z",
         }

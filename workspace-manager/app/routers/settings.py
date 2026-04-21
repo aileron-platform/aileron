@@ -20,6 +20,14 @@ from sqlalchemy.orm import Session
 router = APIRouter(tags=["settings"])
 
 
+def _translate_settings_error(translate, error: str, *, operation: str) -> str:
+    if operation == "sync":
+        return translate("sync.failed_simple")
+    if operation == "ssh_key_generate":
+        return translate("git.ssh_key_gen_failed_simple")
+    return error
+
+
 @router.get(
     "/users/{user_id}/settings",
     response_model=UserSettingsResponse,
@@ -129,7 +137,7 @@ async def sync_settings_to_workspaces(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("sync.failed", error=str(e))
+            detail=_translate_settings_error(request.state.translate, str(e), operation="sync")
         )
 
 
@@ -200,7 +208,7 @@ async def sync_settings_to_workspace(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("sync.failed", error=str(e))
+            detail=_translate_settings_error(request.state.translate, str(e), operation="sync")
         )
 
 
@@ -227,7 +235,9 @@ def generate_ssh_keys(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("git.ssh_key_gen_failed", error=str(e))
+            detail=_translate_settings_error(
+                request.state.translate, str(e), operation="ssh_key_generate"
+            )
         )
 
 

@@ -13,6 +13,13 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+class GitBranchLookupError(RuntimeError):
+    def __init__(self, message: str, *, code: str, params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
+
 class GitService:
     """處理 Git 相關操作的服務"""
 
@@ -40,14 +47,14 @@ class GitService:
             RuntimeError: 當 git 命令執行失敗時
         """
         if not git_url or not git_url.strip():
-            raise ValueError("Git URL 不能為空")
+            raise GitBranchLookupError("Git URL 不能為空", code="WORKSPACE_SETUP_GIT_EMPTY_URL")
 
         # 清理 URL（移除換行符和空白）
         git_url = git_url.strip()
 
         # 驗證 Git URL 格式
         if not self._is_valid_git_url(git_url):
-            raise ValueError(f"無效的 Git URL: {git_url}")
+            raise GitBranchLookupError(f"無效的 Git URL: {git_url}", code="WORKSPACE_SETUP_GIT_INVALID_URL", params={"gitUrl": git_url})
 
         try:
             # 準備環境變數
@@ -74,13 +81,13 @@ class GitService:
                 
                 # 提供更友善的錯誤訊息
                 if "Authentication failed" in error_msg or "Permission denied" in error_msg:
-                    raise ValueError("認證失敗，請確認 SSH key 設定正確或使用公開倉庫")
+                    raise GitBranchLookupError("認證失敗，請確認 SSH key 設定正確或使用公開倉庫", code="WORKSPACE_SETUP_GIT_AUTH_FAILED")
                 elif "Could not resolve host" in error_msg:
-                    raise ValueError("無法解析主機名稱，請檢查網路連線")
+                    raise GitBranchLookupError("無法解析主機名稱，請檢查網路連線", code="WORKSPACE_SETUP_GIT_RESOLVE_FAILED")
                 elif "Repository not found" in error_msg:
-                    raise ValueError("找不到 repository，請確認 URL 是否正確")
+                    raise GitBranchLookupError("找不到 repository，請確認 URL 是否正確", code="WORKSPACE_SETUP_GIT_REPOSITORY_NOT_FOUND")
                 else:
-                    raise RuntimeError(f"無法獲取分支列表: {error_msg}")
+                    raise GitBranchLookupError(f"無法獲取分支列表: {error_msg}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
 
             # 解析輸出
             branches = self._parse_ls_remote_output(result.stdout)
@@ -90,12 +97,12 @@ class GitService:
 
         except subprocess.TimeoutExpired:
             logger.error(f"git ls-remote 超時: {git_url}")
-            raise RuntimeError("獲取分支列表超時，請稍後再試")
+            raise GitBranchLookupError("獲取分支列表超時，請稍後再試", code="WORKSPACE_SETUP_GIT_TIMEOUT")
         except Exception as e:
-            if isinstance(e, (ValueError, RuntimeError)):
+            if isinstance(e, GitBranchLookupError):
                 raise
             logger.error(f"獲取分支列表時發生錯誤: {e}")
-            raise RuntimeError(f"獲取分支列表失敗: {str(e)}")
+            raise GitBranchLookupError(f"獲取分支列表失敗: {str(e)}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
 
     def _is_valid_git_url(self, url: str) -> bool:
         """

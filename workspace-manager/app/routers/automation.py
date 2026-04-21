@@ -35,6 +35,18 @@ router = APIRouter(prefix="/automation", tags=["自動化"])
 logger = get_logger(__name__)
 
 
+def _translate_automation_error(translate: Callable[..., str], exc: Exception) -> str:
+    code = getattr(exc, "code", "")
+    params = getattr(exc, "params", {}) or {}
+    if code == "AUTOMATION_JOB_NOT_RUNNABLE":
+        return translate("automation.job_not_runnable", job_id=params.get("jobId", ""), status=params.get("status", ""))
+    if code == "AUTOMATION_DISPATCH_FAILED":
+        return translate("automation.dispatch_failed")
+    if code == "AUTOMATION_EXECUTION_CREATE_FAILED":
+        return translate("automation.execution_create_failed")
+    return translate("automation.execution_failed_simple")
+
+
 @router.get(
     "/jobs",
     response_model=JobListResponse,
@@ -161,14 +173,20 @@ async def execute_job_now(
             detail=request.state.translate("automation.job_not_found")
         )
     except JobNotRunnableError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_translate_automation_error(request.state.translate, exc),
+        )
     except JobDispatchError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_translate_automation_error(request.state.translate, exc),
+        )
     except Exception as exc:
         logger.exception("執行自動化任務 %s 時發生未預期的錯誤", job_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("automation.execution_failed", error=str(exc))
+            detail=request.state.translate("automation.execution_failed_simple")
         )
 
 
@@ -346,7 +364,7 @@ async def trigger_webhook(
         logger.exception("Webhook 觸發任務 %s 時發生未預期的錯誤", job_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=request.state.translate("automation.trigger_failed", error=str(exc))
+            detail=request.state.translate("automation.trigger_failed_simple")
         )
 
 
@@ -358,6 +376,7 @@ async def trigger_webhook(
 )
 async def get_workspace_queue(
     workspace_id: str,
+    request: Request,
     service: AutomationService = Depends(get_automation_service),
 ) -> WorkspaceQueueResponse:
     """查詢指定工作區的任務佇列
@@ -376,7 +395,7 @@ async def get_workspace_queue(
         logger.exception("查詢工作區佇列 %s 時發生錯誤", workspace_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"查詢佇列時發生錯誤: {str(exc)}"
+            detail=request.state.translate("automation.queue_fetch_failed")
         )
 
 
@@ -388,6 +407,7 @@ async def get_workspace_queue(
 )
 async def cancel_execution(
     execution_id: str,
+    request: Request,
     service: AutomationService = Depends(get_automation_service),
 ) -> ExecutionCancelResponse:
     """取消排隊中的任務
@@ -408,7 +428,7 @@ async def cancel_execution(
         logger.exception("取消執行記錄 %s 時發生錯誤", execution_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"取消任務時發生錯誤: {str(exc)}"
+            detail=request.state.translate("automation.cancel_failed")
         )
 
 

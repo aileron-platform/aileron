@@ -26,6 +26,13 @@ _STATUS_PENDING = "pending"
 _STATUS_SKIPPED = "skipped"
 
 
+class WorkspaceSetupError(ValueError):
+    def __init__(self, message: str, *, code: str, params: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.params = params or {}
+
+
 class WorkspaceSetupService:
     """負責處理 Workspace 建立後的初始化同步流程"""
 
@@ -36,7 +43,7 @@ class WorkspaceSetupService:
         """執行新建 Workspace 的初始同步任務"""
         workspace = self._get_workspace(workspace_id)
         if not workspace.runtime_internal_url:
-            raise ValueError("Workspace runtime 尚未就緒，無法執行同步")
+            raise WorkspaceSetupError("Workspace runtime 尚未就緒，無法執行同步", code="WORKSPACE_SETUP_SYNC_RUNTIME_NOT_READY")
 
         user_settings = workspace.owner.settings if workspace.owner else None
         if not user_settings:
@@ -90,7 +97,7 @@ class WorkspaceSetupService:
         """從 workspace-runtime 查詢目前各初始化項目的狀態"""
         workspace = self._get_workspace(workspace_id)
         if not workspace.runtime_internal_url:
-            raise ValueError("Workspace runtime 尚未就緒，無法查詢狀態")
+            raise WorkspaceSetupError("Workspace runtime 尚未就緒，無法查詢狀態", code="WORKSPACE_SETUP_STATUS_RUNTIME_NOT_READY")
 
         base_url = workspace.runtime_internal_url.rstrip("/")
         headers = {
@@ -121,7 +128,7 @@ class WorkspaceSetupService:
     def _get_workspace(self, workspace_id: str) -> db_models.Workspace:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise ValueError(f"Workspace {workspace_id} 不存在")
+            raise WorkspaceSetupError(f"Workspace {workspace_id} 不存在", code="WORKSPACE_NOT_FOUND", params={"workspaceId": workspace_id})
         return workspace
 
     def _create_task_status(self, key: str, status: str, message: str) -> WorkspaceSetupTaskStatus:
