@@ -61,8 +61,14 @@ interface MCPFormState {
   command: string;
   args: string[];
   url: string;
-  env: Record<string, string>;
-  headers: Record<string, string>;
+  env: KeyValueRow[];
+  headers: KeyValueRow[];
+}
+
+interface KeyValueRow {
+  id: string;
+  key: string;
+  value: string;
 }
 
 const DEFAULT_FORM: MCPFormState = {
@@ -74,8 +80,8 @@ const DEFAULT_FORM: MCPFormState = {
   command: '',
   args: [],
   url: '',
-  env: {},
-  headers: {},
+  env: [],
+  headers: [],
 };
 
 // ============================================================================
@@ -128,11 +134,29 @@ const parseKeyValueText = (text: string, separator: string): Record<string, stri
   return result;
 };
 
+let keyValueRowCounter = 0;
+
+const createKeyValueRow = (key = '', value = ''): KeyValueRow => ({
+  id: `kv-row-${keyValueRowCounter++}`,
+  key,
+  value,
+});
+
+const createKeyValueRows = (record?: Record<string, string>): KeyValueRow[] =>
+  Object.entries(record ?? {}).map(([key, value]) => createKeyValueRow(key, value));
+
 const toKeyValueText = (record: Record<string, string>, separator: string): string =>
   Object.entries(record)
     .filter(([key, value]) => key.trim() && value.trim())
     .map(([key, value]) => `${key}${separator}${value}`)
     .join('\n');
+
+const toKeyValueRecord = (rows: KeyValueRow[]): Record<string, string> =>
+  Object.fromEntries(
+    rows
+      .map(({ key, value }) => [key.trim(), value] as const)
+      .filter(([key]) => key.length > 0)
+  );
 
 // ============================================================================
 // 元件實作
@@ -185,7 +209,7 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
     ];
     if (!workspaceAvailableScopes) return allOptions;
     return allOptions.filter((opt) => workspaceAvailableScopes.includes(opt.value));
-  }, [t, workspaceAvailableScopes]);
+  }, [t, workspaceAvailableScopes, i18nNs]);
 
   // 傳輸類型選項
   const transportOptions = useMemo(
@@ -218,7 +242,7 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
           : t('template.editor.mcp.dialog.transport.options.http.description'),
       },
     ],
-    [isWorkspace, t]
+    [isWorkspace, t, i18nNs]
   );
 
   // 取得翻譯 key
@@ -247,8 +271,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
           command: server.command ?? '',
           args: server.args ?? [],
           url: server.url ?? '',
-          env: server.env ?? {},
-          headers: server.headers ?? {},
+          env: createKeyValueRows(server.env),
+          headers: createKeyValueRows(server.headers),
         });
       } else {
         setForm({ ...DEFAULT_FORM, id: `mcp-${Date.now()}` });
@@ -265,8 +289,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
           command: initialData.command,
           args: parseArgsText(initialData.argsText),
           url: initialData.url || '',
-          env: parseKeyValueText(initialData.envText, '='),
-          headers: parseKeyValueText(initialData.headersText, ':'),
+          env: createKeyValueRows(parseKeyValueText(initialData.envText, '=')),
+          headers: createKeyValueRows(parseKeyValueText(initialData.headersText, ':')),
         });
       } else {
         setForm({
@@ -306,61 +330,53 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
   };
 
   const addEnv = () => {
-    const key = `VAR_${Object.keys(form.env).length + 1}`;
     setSubmitError(null);
     setForm((prev) => ({
       ...prev,
-      env: { ...prev.env, [key]: '' },
+      env: [...prev.env, createKeyValueRow()],
     }));
   };
 
-  const handleEnvChange = (oldKey: string, newKey: string, value: string) => {
+  const handleEnvChange = (id: string, field: 'key' | 'value', nextValue: string) => {
     setSubmitError(null);
     setForm((prev) => {
-      const env = { ...prev.env };
-      if (oldKey !== newKey) {
-        delete env[oldKey];
-      }
-      env[newKey] = value;
+      const env = prev.env.map((row) =>
+        row.id === id ? { ...row, [field]: nextValue } : row
+      );
       return { ...prev, env };
     });
   };
 
-  const removeEnv = (key: string) => {
+  const removeEnv = (id: string) => {
     setSubmitError(null);
     setForm((prev) => {
-      const env = { ...prev.env };
-      delete env[key];
+      const env = prev.env.filter((row) => row.id !== id);
       return { ...prev, env };
     });
   };
 
   const addHeader = () => {
-    const key = `Header-${Object.keys(form.headers).length + 1}`;
     setSubmitError(null);
     setForm((prev) => ({
       ...prev,
-      headers: { ...prev.headers, [key]: '' },
+      headers: [...prev.headers, createKeyValueRow()],
     }));
   };
 
-  const handleHeaderChange = (oldKey: string, newKey: string, value: string) => {
+  const handleHeaderChange = (id: string, field: 'key' | 'value', nextValue: string) => {
     setSubmitError(null);
     setForm((prev) => {
-      const headers = { ...prev.headers };
-      if (oldKey !== newKey) {
-        delete headers[oldKey];
-      }
-      headers[newKey] = value;
+      const headers = prev.headers.map((row) =>
+        row.id === id ? { ...row, [field]: nextValue } : row
+      );
       return { ...prev, headers };
     });
   };
 
-  const removeHeader = (key: string) => {
+  const removeHeader = (id: string) => {
     setSubmitError(null);
     setForm((prev) => {
-      const headers = { ...prev.headers };
-      delete headers[key];
+      const headers = prev.headers.filter((row) => row.id !== id);
       return { ...prev, headers };
     });
   };
@@ -412,15 +428,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
       return;
     }
 
-    const sanitizeKeyValue = (input: Record<string, string>) =>
-      Object.fromEntries(
-        Object.entries(input ?? {})
-          .map(([key, value]) => [key.trim(), value])
-          .filter(([key]) => key.length > 0)
-      );
-
-    const sanitizedEnv = sanitizeKeyValue(form.env);
-    const sanitizedHeaders = sanitizeKeyValue(form.headers);
+    const sanitizedEnv = toKeyValueRecord(form.env);
+    const sanitizedHeaders = toKeyValueRecord(form.headers);
     const sanitizedArgs = form.args.map((arg) => arg.trim()).filter((arg) => arg.length > 0);
 
     try {
@@ -468,7 +477,13 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
         (props as TemplateMCPServerDialogProps).onOpenChange(false);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : '儲存失敗';
+      const message = err instanceof Error
+        ? err.message
+        : t(
+            isWorkspace
+              ? `${i18nNs}.mcp.dialogs.server.errors.saveFailed`
+              : 'template.editor.mcp.dialog.validation.saveFailed'
+          );
       setSubmitError(message);
       if (isWorkspace) {
         throw err instanceof Error ? err : new Error(message);
@@ -738,11 +753,11 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                     </Button>
                   </div>
                   <div className="space-y-2">
-                    {Object.entries(form.headers).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
+                    {form.headers.map((row) => (
+                      <div key={row.id} className="flex items-center gap-2">
                         <Input
-                          value={key}
-                          onChange={(event) => handleHeaderChange(key, event.target.value, value)}
+                          value={row.key}
+                          onChange={(event) => handleHeaderChange(row.id, 'key', event.target.value)}
                           placeholder={
                             isWorkspace
                               ? t(`${i18nNs}.mcp.dialogs.server.fields.headers.keyPlaceholder`)
@@ -752,8 +767,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                         />
                         <span className="text-muted-foreground">:</span>
                         <Input
-                          value={value}
-                          onChange={(event) => handleHeaderChange(key, key, event.target.value)}
+                          value={row.value}
+                          onChange={(event) => handleHeaderChange(row.id, 'value', event.target.value)}
                           placeholder={
                             isWorkspace
                               ? t(`${i18nNs}.mcp.dialogs.server.fields.headers.valuePlaceholder`)
@@ -765,14 +780,14 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => removeHeader(key)}
+                          onClick={() => removeHeader(row.id)}
                           disabled={submitting}
                         >
                           <X className="h-4 w-4" />
                         </Button>
                       </div>
                     ))}
-                    {Object.keys(form.headers).length === 0 && (
+                    {form.headers.length === 0 && (
                       <p className="text-sm text-muted-foreground">
                         {isWorkspace
                           ? t(`${i18nNs}.mcp.dialogs.server.fields.headers.empty`)
@@ -811,11 +826,11 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                 </Button>
               </div>
               <div className="space-y-2">
-                {Object.entries(form.env).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-2">
+                {form.env.map((row) => (
+                  <div key={row.id} className="flex items-center gap-2">
                     <Input
-                      value={key}
-                      onChange={(event) => handleEnvChange(key, event.target.value, value)}
+                      value={row.key}
+                      onChange={(event) => handleEnvChange(row.id, 'key', event.target.value)}
                       placeholder={
                         isWorkspace
                           ? t(`${i18nNs}.mcp.dialogs.server.fields.env.keyPlaceholder`)
@@ -825,8 +840,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                     />
                     <span className="text-muted-foreground">=</span>
                     <Input
-                      value={value}
-                      onChange={(event) => handleEnvChange(key, key, event.target.value)}
+                      value={row.value}
+                      onChange={(event) => handleEnvChange(row.id, 'value', event.target.value)}
                       placeholder={
                         isWorkspace
                           ? t(`${i18nNs}.mcp.dialogs.server.fields.env.valuePlaceholder`)
@@ -838,14 +853,14 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => removeEnv(key)}
+                      onClick={() => removeEnv(row.id)}
                       disabled={submitting}
                     >
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
-                {Object.keys(form.env).length === 0 && (
+                {form.env.length === 0 && (
                   <p className="text-sm text-muted-foreground">
                     {isWorkspace
                       ? t(`${i18nNs}.mcp.dialogs.server.fields.env.empty`)

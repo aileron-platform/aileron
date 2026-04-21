@@ -659,6 +659,8 @@ const claudeCode = {
     },
     server: {
       status: {
+        enabled: '啟用',
+        disabled: '停用',
         running: '運行中',
         stopped: '已停用',
         error: '錯誤',
@@ -681,7 +683,70 @@ const claudeCode = {
       headers: 'HTTP 標頭',
     },
     list: {
+      loading: '載入 MCP 伺服器中…',
       empty: '未找到符合條件的服務器',
+    },
+    status: {
+      runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}',
+    },
+    actions: {
+      showEnvValues: '顯示環境變數',
+      hideEnvValues: '隱藏環境變數',
+    },
+    plugin: {
+      readonly: 'Plugin 提供的 MCP Server 為唯讀。可以啟用或停用，但無法編輯或刪除。',
+    },
+    confirm: {
+      delete: '確定要刪除「{{name}}」嗎？',
+    },
+    messages: {
+      loadFailed: {
+        title: '載入失敗',
+        description: '無法載入 MCP 伺服器列表',
+      },
+      runtimeNotReady: 'Workspace Runtime 尚未就緒',
+      editForbidden: {
+        title: '無法編輯',
+        description: 'Plugin 提供的 MCP Server 為唯讀',
+      },
+      deleteForbidden: {
+        title: '無法刪除',
+        description: 'Plugin 提供的 MCP Server 為唯讀',
+      },
+      createSuccess: {
+        title: '已建立 MCP 伺服器',
+      },
+      updateSuccess: {
+        title: '已更新 MCP 伺服器',
+      },
+      deleteSuccess: {
+        title: '已刪除 MCP 伺服器',
+      },
+      importSuccess: {
+        title: '匯入完成',
+        description: '新增 {{created}}、更新 {{updated}}、跳過 {{skipped}}',
+      },
+      toggleEnabled: {
+        title: '已啟用 MCP 伺服器',
+      },
+      toggleDisabled: {
+        title: '已停用 MCP 伺服器',
+      },
+      operationFailed: {
+        title: '操作失敗',
+        description: 'MCP 伺服器操作失敗',
+      },
+      deleteFailed: {
+        title: '刪除失敗',
+        description: '刪除 MCP 伺服器失敗',
+      },
+      importFailed: {
+        title: '匯入失敗',
+        description: '匯入 MCP 伺服器失敗',
+      },
+      toggleFailed: {
+        description: '切換 MCP 伺服器狀態失敗',
+      },
     },
     import: {
       descriptionFromJson: '透過 JSON 導入的服務器',
@@ -772,6 +837,12 @@ const claudeCode = {
         actions: {
           create: '新增服務器',
           save: '儲存變更',
+        },
+        errors: {
+          nameRequired: '伺服器名稱為必填項。',
+          commandRequired: 'Stdio 傳輸需填寫執行命令。',
+          urlRequired: 'HTTP 或 SSE 傳輸需填寫伺服器 URL。',
+          saveFailed: '儲存失敗',
         },
       },
       import: {
