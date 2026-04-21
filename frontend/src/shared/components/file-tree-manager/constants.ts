@@ -46,6 +46,7 @@ export const API_ENDPOINTS = {
     delete: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
     move: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
     upload: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files`,
+    copy: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/copy`,
   },
   claudeCode: {
     getTree: (workspaceId: string, collection: 'skills' | 'scripts', scope: string = 'project') =>

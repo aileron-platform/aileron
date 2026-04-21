@@ -14,6 +14,8 @@ export interface UseClaudeMdOptions {
 
 export interface UseClaudeMdReturn {
   content: string;
+  persistedContent: string;
+  hasUnsavedChanges: boolean;
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
@@ -24,6 +26,7 @@ export interface UseClaudeMdReturn {
 
 export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseClaudeMdOptions): UseClaudeMdReturn {
   const [content, setContent] = useState(initialContent);
+  const [persistedContent, setPersistedContent] = useState(initialContent);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +45,7 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
 
       if (response.success && response.data) {
         setContent(response.data.content);
+        setPersistedContent(response.data.content);
       } else {
         const errorMsg = response.error || response.message || t('template.editor.claudeMd.errors.loadFailed');
         setError(errorMsg);
@@ -79,6 +83,7 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
 
       if (response.success) {
         setContent(newContent);
+        setPersistedContent(newContent);
         toast({
           title: t('template.editor.claudeMd.toasts.saveSuccess.title'),
           description: t('template.editor.claudeMd.toasts.saveSuccess.description'),
@@ -114,8 +119,18 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
     }
   }, [templateId, loadContent]);
 
+  useEffect(() => {
+    if (!templateId) {
+      setContent(initialContent);
+      setPersistedContent(initialContent);
+      setError(null);
+    }
+  }, [initialContent, templateId]);
+
   return {
     content,
+    persistedContent,
+    hasUnsavedChanges: content !== persistedContent,
     isLoading,
     isSaving,
     error,

@@ -328,6 +328,7 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
       paste: true,
       rename: true,
       delete: true,
+      refresh: true,
     },
     callbacks: {
       onUpload: handleUpload,
@@ -354,6 +355,7 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
       onPaste: handlePaste,
       onRename: (node) => fileOps.openRenameDialog(node),
       onDelete: (node) => fileOps.openDeleteDialog(node),
+      onRefresh: handleRefresh,
       onClose: manager.state.closeContextMenu,
     },
     t,
