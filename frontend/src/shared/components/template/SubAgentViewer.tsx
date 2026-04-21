@@ -12,12 +12,14 @@ export interface SubAgentViewerProps extends Omit<MarkdownFileViewerProps<SubAge
   isEditable?: boolean;
   onEdit?: (item: SubAgentData) => void;
   onDelete?: (item: SubAgentData) => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 export const SubAgentViewer: React.FC<SubAgentViewerProps> = ({
   isEditable = false,
   onEdit,
   onDelete,
+  onRefresh,
   ...restProps
 }) => {
   const { t } = useI18n();
@@ -84,6 +86,8 @@ export const SubAgentViewer: React.FC<SubAgentViewerProps> = ({
       actions={actions}
       i18nKeys={i18nKeys}
       showAddButton={isEditable}
+      onRefresh={onRefresh}
+      refreshLabel={t('template.editor.fileManagement.sidebar.refresh')}
     />
   );
 };

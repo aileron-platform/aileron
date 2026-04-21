@@ -12,12 +12,14 @@ export interface OutputStyleViewerProps extends Omit<MarkdownFileViewerProps<Out
   isEditable?: boolean;
   onEdit?: (item: OutputStyleData) => void;
   onDelete?: (item: OutputStyleData) => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 export const OutputStyleViewer: React.FC<OutputStyleViewerProps> = ({
   isEditable = false,
   onEdit,
   onDelete,
+  onRefresh,
   ...restProps
 }) => {
   const { t } = useI18n();
@@ -88,9 +90,10 @@ export const OutputStyleViewer: React.FC<OutputStyleViewerProps> = ({
       getDownloadFileType={getDownloadFileType}
       actions={actions}
       showAddButton={isEditable}
+      onRefresh={onRefresh}
+      refreshLabel={t('template.editor.fileManagement.sidebar.refresh')}
     />
   );
 };
 
 export default OutputStyleViewer;
-

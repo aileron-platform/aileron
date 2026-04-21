@@ -520,6 +520,12 @@ const template = {
         cancel: 'Cancel',
         delete: 'Delete',
       },
+      sidebar: {
+        createFile: 'New text file',
+        createFolder: 'Create folder',
+        upload: 'Upload files',
+        refresh: 'Reload',
+      },
       multiSelect: {
         summary: 'Selected {{count}} items',
         selectAll: 'Select all',
@@ -1517,10 +1523,12 @@ const template = {
       },
     },
     mcp: {
+      downloadFileName: 'mcp-servers.json',
       header: {
         title: 'MCP server configuration',
         description: 'Model Context Protocol servers connected to this template.',
       },
+      badge: '{{count}} MCP servers',
       empty: {
         title: 'No MCP servers configured',
         description: 'This template does not include any MCP server definitions yet.',
@@ -1532,6 +1540,10 @@ const template = {
         copySuccess: {
           title: 'Configuration copied',
           description: 'MCP server "{{name}}" has been copied to your clipboard.',
+        },
+        downloadSuccess: {
+          title: 'Configuration downloaded',
+          description: 'MCP server configuration has been downloaded as a JSON file.',
         },
       },
       card: {
@@ -1553,6 +1565,7 @@ const template = {
       },
     },
     hooks: {
+      downloadFileName: 'hooks-config.json',
       header: {
         title: 'Hook configuration',
         description: 'Manage automation hooks, triggers, and execution commands.',

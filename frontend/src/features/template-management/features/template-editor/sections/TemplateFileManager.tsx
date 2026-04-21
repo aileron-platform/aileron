@@ -1,19 +1,26 @@
 /**
  * 模板檔案管理組件
  *
- * 重構後使用統一的檔案樹組件（StandardFileTreeLayout + FileTreePanel）
+ * 使用統一的 sidebar shell + 檔案樹組件，讓模板中心不同區塊的左側欄節奏一致
  */
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createLogger } from '@/shared/services/logger';
+import { FolderPlus, Plus, RefreshCw, Upload } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
+import SectionSidebarShell from '@/shared/components/template/SectionSidebarShell';
 
 const logger = createLogger('TemplateFileManager');
 import { useFileTreeManager } from '@/shared/components/file-tree-manager/hooks/useFileTreeManager';
 import { useFileOperationsWithDialog } from '@/shared/components/file-tree-manager/hooks/useFileOperationsWithDialog';
 import {
   FileTreePanel,
-  StandardFileTreeLayout,
-  FileTreeToolbar,
   FileTreeContextMenu,
   useFileTreeContextMenu,
   type FileTreeApiConfig,
@@ -361,38 +368,74 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
     t,
   });
 
+  const headerActions = (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0"
+        onClick={handleRefresh}
+        disabled={manager.state.isLoading}
+        title={t('template.editor.fileManagement.sidebar.refresh')}
+        aria-label={t('template.editor.fileManagement.sidebar.refresh')}
+      >
+        <RefreshCw className={`h-4 w-4 ${manager.state.isLoading ? 'animate-spin' : ''}`} />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 w-7 p-0"
+        onClick={handleUpload}
+        title={t('template.editor.fileManagement.sidebar.upload')}
+        aria-label={t('template.editor.fileManagement.sidebar.upload')}
+      >
+        <Upload className="h-4 w-4" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0"
+            title={t('template.editor.fileManagement.actions.create.trigger')}
+            aria-label={t('template.editor.fileManagement.actions.create.trigger')}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => fileOps.openCreateFileDialog()} className="text-xs">
+            <Plus className="mr-2 h-4 w-4" />
+            {t('template.editor.fileManagement.sidebar.createFile')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => fileOps.openCreateFolderDialog()} className="text-xs">
+            <FolderPlus className="mr-2 h-4 w-4" />
+            {t('template.editor.fileManagement.sidebar.createFolder')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
+  );
+
   return (
-    <div className="flex h-full border rounded-lg overflow-hidden bg-background">
+    <div className="flex h-full border-x border-b overflow-hidden bg-background">
       {/* 左側檔案樹面板 */}
-      <div className="w-80 border-r">
-        <StandardFileTreeLayout
+      <div className="w-80">
+        <SectionSidebarShell
+          title={title || t('template.editor.fileManagement.header.title')}
+          icon={
+            leadingIcon && React.isValidElement(leadingIcon)
+              ? React.cloneElement(leadingIcon as React.ReactElement, {
+                className: 'h-4 w-4',
+              })
+              : undefined
+          }
+          actions={headerActions}
           searchValue={manager.state.searchQuery}
           onSearchChange={manager.state.setSearchQuery}
           onSearchClear={manager.state.clearSearch}
-          searchPlaceholder={t('common.fileTree.search.placeholder')}
-          toolbarContent={
-            <FileTreeToolbar
-              leftContent={
-                <div className="flex items-center gap-2">
-                  {leadingIcon && React.isValidElement(leadingIcon) && (
-                    React.cloneElement(leadingIcon as React.ReactElement, {
-                      className: 'h-4 w-4',
-                    })
-                  )}
-                  <span className="text-sm font-medium text-sidebar-foreground">
-                    {title || t('template.editor.fileManagement.header.title')}
-                  </span>
-                </div>
-              }
-              onCreateFile={() => fileOps.openCreateFileDialog()}
-              onCreateFolder={() => fileOps.openCreateFolderDialog()}
-              onUpload={handleUpload}
-              onRefresh={handleRefresh}
-              isLoading={manager.state.isLoading}
-              className="p-2 bg-sidebar-accent/20 border-b border-sidebar-border"
-            />
-          }
-        >
+          searchPlaceholder={t('template.editor.fileManagement.search.placeholder')}
+          body={(
           <FileTreePanel
             state={manager.state}
             onNodeClick={handleNodeClick}
@@ -426,14 +469,15 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
             dragOverPath={dragOverPath}
             className="flex-1"
           />
+          )}
+        />
 
-          {/* 右鍵選單 */}
-          <FileTreeContextMenu
-            contextMenu={manager.state.contextMenu}
-            items={contextMenuItems}
-            onClose={manager.state.closeContextMenu}
-          />
-        </StandardFileTreeLayout>
+        {/* 右鍵選單 */}
+        <FileTreeContextMenu
+          contextMenu={manager.state.contextMenu}
+          items={contextMenuItems}
+          onClose={manager.state.closeContextMenu}
+        />
       </div>
 
       {/* 右側編輯器面板 */}

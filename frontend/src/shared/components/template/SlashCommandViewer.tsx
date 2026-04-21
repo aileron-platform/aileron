@@ -12,12 +12,14 @@ export interface SlashCommandViewerProps extends Omit<MarkdownFileViewerProps<Sl
   isEditable?: boolean;
   onEdit?: (item: SlashCommandData) => void;
   onDelete?: (item: SlashCommandData) => void;
+  onRefresh?: () => void | Promise<void>;
 }
 
 export const SlashCommandViewer: React.FC<SlashCommandViewerProps> = ({
   isEditable = false,
   onEdit,
   onDelete,
+  onRefresh,
   ...restProps
 }) => {
   const { t } = useI18n();
@@ -78,7 +80,8 @@ export const SlashCommandViewer: React.FC<SlashCommandViewerProps> = ({
       actions={actions}
       i18nKeys={i18nKeys}
       showAddButton={isEditable}
+      onRefresh={onRefresh}
+      refreshLabel={t('template.editor.fileManagement.sidebar.refresh')}
     />
   );
 };
-

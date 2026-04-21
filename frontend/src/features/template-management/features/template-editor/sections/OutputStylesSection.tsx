@@ -72,6 +72,7 @@ const OutputStylesSection: React.FC<OutputStylesSectionProps> = ({
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRefresh={templateId ? loadOutputStyles : undefined}
       />
 
       <OutputStyleDialog

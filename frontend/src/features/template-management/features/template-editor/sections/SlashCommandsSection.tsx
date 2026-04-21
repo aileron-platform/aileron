@@ -72,6 +72,7 @@ const SlashCommandsSection: React.FC<SlashCommandsSectionProps> = ({
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
+        onRefresh={templateId ? loadSlashCommands : undefined}
       />
 
       <SlashCommandDialog

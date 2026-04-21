@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Wrench, Search, Edit, Trash2, Upload, Plus, Loader2, AlertCircle, Building, User, Layers, Laptop, Puzzle, Info, Eye, EyeOff } from 'lucide-react';
-import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Badge } from '@/shared/components/ui/badge';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -30,6 +29,7 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
+import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
@@ -270,11 +270,10 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   return (
     <TooltipProvider>
-      <div className="flex h-full flex-col bg-background">
-        <FeatureHeader
+      <SettingsWorkflowShell
           title={t(`${i18nNamespace}.mcp.header.title`)}
           icon={Wrench}
-          actions={
+          headerActions={
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
                 <span className="text-xs text-muted-foreground">
@@ -335,36 +334,28 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
               </Button>
             </div>
           }
-        />
-
-        <div className="flex-1 overflow-hidden">
-          <div className="h-full overflow-y-auto">
-            <div className="flex h-10 items-center border-b border-border bg-background px-4">
-              <div className="flex items-center justify-between gap-4 w-full">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Wrench className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">
-                      {t(`${i18nNamespace}.mcp.stats.title`)}
-                    </span>
-                  </div>
-                  <Badge variant="secondary" className="text-[11px]">
-                    {t(`${i18nNamespace}.mcp.stats.total`, { count: filteredServers.length })}
-                  </Badge>
-                </div>
-                <div className="relative w-64">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder={t(`${i18nNamespace}.mcp.search.placeholder`)}
-                    className="h-7 pl-9 text-xs"
-                  />
-                </div>
-              </div>
+          hasItems
+          summary={
+            <SettingsWorkflowCountBadge
+              label={t(`${i18nNamespace}.mcp.stats.total`, { count: filteredServers.length })}
+            />
+          }
+          controls={
+            <div className="relative w-64">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={t(`${i18nNamespace}.mcp.search.placeholder`)}
+                className="h-7 pl-9 text-xs"
+              />
             </div>
-
-            <div className="space-y-4 p-6">
+          }
+          emptyTitle={t(`${i18nNamespace}.mcp.header.title`)}
+          emptyDescription={t(`${i18nNamespace}.mcp.list.empty`)}
+          contentClassName="h-full overflow-y-auto"
+        >
+          <div className="space-y-4 p-6">
               {!isRuntimeReady && !runtimeLoading && (
                 <Alert>
                   <AlertDescription>
@@ -583,9 +574,8 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                   {t(`${i18nNamespace}.mcp.list.empty`)}
                 </div>
               )}
-            </div>
           </div>
-        </div>
+        </SettingsWorkflowShell>
 
         <MCPServerDialog
           open={dialogOpen}
@@ -607,7 +597,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           availableScopes={availableScopes}
           i18nNamespace={i18nNamespace}
         />
-      </div>
+      
     </TooltipProvider>
   );
 };
