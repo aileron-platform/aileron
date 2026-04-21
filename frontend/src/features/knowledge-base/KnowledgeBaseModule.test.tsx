@@ -8,6 +8,12 @@ const { translateMock } = vi.hoisted(() => ({
     const translations: Record<string, string> = {
       'knowledgeBase.list.title': '知識庫中心',
       'knowledgeBase.create.routeTitle': '新建知識庫',
+      'knowledgeBase.detail.settingsAction': '設定',
+      'knowledgeBase.detail.deleteAction': '刪除',
+      'knowledgeBase.detail.tabs.files': '檔案',
+      'knowledgeBase.detail.tabs.sharing': '分享',
+      'knowledgeBase.detail.tabs.workspaces': '工作區',
+      'knowledgeBase.detail.cards.storageTitle': 'Storage',
       'knowledgeBase.sharing.description': '管理誰可以查看、編輯或管理這個知識庫。',
       'knowledgeBase.attachments.description': '管理這個知識庫掛載到哪些工作區，以及 alias / mode。',
       'knowledgeBase.attachments.attachAction': '掛載到工作區',
@@ -165,6 +171,13 @@ describe('KnowledgeBaseModule', () => {
   it('renders the knowledge base detail sharing route', async () => {
     renderModule('/knowledge-bases/kb-1/sharing');
 
+    expect(await screen.findByText('產品文件中心')).toBeInTheDocument();
+    expect(screen.getByText('設定')).toBeInTheDocument();
+    expect(screen.getByText('刪除')).toBeInTheDocument();
+    expect(screen.getByText('Storage: 2 KB / 4 KB')).toBeInTheDocument();
+    expect(screen.getByText('檔案')).toBeInTheDocument();
+    expect(screen.getByText('分享')).toBeInTheDocument();
+    expect(screen.getByText('工作區')).toBeInTheDocument();
     expect(await screen.findByText('管理誰可以查看、編輯或管理這個知識庫。')).toBeInTheDocument();
     expect(await screen.findByText('user-2')).toBeInTheDocument();
   });

@@ -476,7 +476,7 @@ export const GlobalNavigation: React.FC = () => {
       <div className="flex items-center gap-3">
         {/* Hub Navigation - 分為兩個群組 */}
         <div className="flex items-center gap-2">
-          {/* 第一群組：Workspace, Automation & Dashboard */}
+          {/* 第一群組：工作區 */}
           <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={state.currentModule === 'workspace' ? 'default' : 'ghost'}
@@ -491,7 +491,10 @@ export const GlobalNavigation: React.FC = () => {
               <Folder className="h-3 w-3" />
               {t('navigation.workspace')}
             </Button>
+          </div>
 
+          {/* 第二群組：中心類 */}
+          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={state.currentModule === 'automation' ? 'default' : 'ghost'}
               size="sm"
@@ -505,10 +508,7 @@ export const GlobalNavigation: React.FC = () => {
               <Clock className="h-3 w-3" />
               {t('navigation.automation')}
             </Button>
-          </div>
 
-          {/* 第二群組：Template Center */}
-          <div className="flex items-center gap-0.5 bg-muted/50 rounded-md p-0.5">
             <Button
               variant={state.currentModule === 'template' ? 'default' : 'ghost'}
               size="sm"

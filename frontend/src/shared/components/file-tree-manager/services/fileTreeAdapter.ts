@@ -264,11 +264,11 @@ export class FileTreeApiAdapter {
       case 'workspace':
         return this.downloadWorkspaceFile(options);
       case 'template':
-        throw new Error('Template 不支援下載功能');
+        throw new Error('Template does not support download');
       case 'knowledge-base':
-        throw new Error('Knowledge Base 不支援下載功能');
+        throw new Error('Knowledge Base does not support download');
       case 'claude-code':
-        throw new Error('Claude Code 不支援下載功能');
+        throw new Error('Claude Code does not support download');
       default:
         throw new Error(ERROR_MESSAGES.INVALID_CONFIG);
     }

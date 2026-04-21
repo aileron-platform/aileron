@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Database, FolderTree, Lock } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Database, FolderTree, Lock } from 'lucide-react';
 import {
   BatchDeleteDialog,
   FileCreateDialog,
@@ -18,8 +18,10 @@ import {
 } from '@/shared/components/file-tree-manager';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { cn } from '@/shared/utils/cn';
 
 interface KnowledgeBaseFilesTabProps {
   knowledgeBaseId: string;
@@ -53,7 +55,11 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [draggingPath, setDraggingPath] = React.useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = React.useState<string | null>(null);
   const [isExternalDragActive, setIsExternalDragActive] = React.useState(false);
+  const [treeWidth, setTreeWidth] = React.useState(320);
+  const [treeCollapsed, setTreeCollapsed] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
   const dragDepthRef = React.useRef(0);
+  const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
 
   const manager = useFileTreeManager({
     apiConfig: {
@@ -332,30 +338,100 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
         spellCheck={false}
       />
     </div>
-  ), []);
+  ), [t]);
+
+  const handleTreeResizeStart = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    dragStateRef.current = {
+      startX: event.clientX,
+      startWidth: treeWidth,
+    };
+    document.body.classList.add('select-none', 'cursor-col-resize');
+    setIsDragging(true);
+  }, [treeWidth]);
+
+  React.useEffect(() => {
+    if (!isDragging) {
+      return;
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const dragState = dragStateRef.current;
+      if (!dragState) {
+        return;
+      }
+
+      const deltaX = event.clientX - dragState.startX;
+      const nextWidth = Math.min(Math.max(dragState.startWidth + deltaX, 200), 480);
+      setTreeWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      dragStateRef.current = null;
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      dragStateRef.current = null;
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+  }, [isDragging]);
 
   return (
     <div
-      className="relative flex h-[680px] overflow-hidden rounded-xl border bg-background"
+      className="relative flex h-full overflow-hidden bg-background"
       onDragEnter={handleExternalDragEnter}
       onDragOver={handleExternalDragOver}
       onDragLeave={handleExternalDragLeave}
       onDrop={handleExternalDrop}
     >
-      <div className="w-80 border-r">
+      <div
+        className={cn(
+          'relative border-r transition-[width] duration-200',
+          treeCollapsed ? 'w-10' : 'shrink-0',
+        )}
+        style={treeCollapsed ? undefined : { width: treeWidth }}
+      >
+        <div
+          className={cn(
+            'relative flex h-10 items-center border-b border-sidebar-border bg-card px-2',
+            treeCollapsed ? 'justify-center' : 'justify-between',
+          )}
+        >
+          {treeCollapsed ? (
+            <Database className="h-4 w-4 text-sky-600" />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Database className="h-4 w-4 text-sky-600" />
+              <span className="text-sm font-medium">{t('knowledgeBase.files.toolbarTitle')}</span>
+              {readOnly && <Badge variant="outline">{t('knowledgeBase.files.readOnlyBadge')}</Badge>}
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn('h-7 w-7', treeCollapsed && 'absolute right-1 top-1.5')}
+            onClick={() => setTreeCollapsed((value) => !value)}
+            title={treeCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
+            aria-label={treeCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
+          >
+            <ChevronLeft className={cn('h-3.5 w-3.5 transition-transform', treeCollapsed && 'rotate-180')} />
+          </Button>
+        </div>
         <StandardFileTreeLayout
           searchValue={manager.state.searchQuery}
           onSearchChange={manager.state.setSearchQuery}
           onSearchClear={manager.state.clearSearch}
+          showSearch={!treeCollapsed}
           toolbarContent={(
             <FileTreeToolbar
-              leftContent={(
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-sky-600" />
-                  <span className="text-sm font-medium">{t('knowledgeBase.files.toolbarTitle')}</span>
-                  {readOnly && <Badge variant="outline">{t('knowledgeBase.files.readOnlyBadge')}</Badge>}
-                </div>
-              )}
+              leftContent={null}
               onCreateFile={() => fileOps.openCreateFileDialog()}
               onCreateFolder={() => fileOps.openCreateFolderDialog()}
               onUpload={() => handleUpload(ROOT_PATH)}
@@ -365,39 +441,54 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
               className="border-b border-sidebar-border bg-sidebar-accent/20 p-2"
             />
           )}
+          showToolbar={!treeCollapsed}
+          contentClassName={treeCollapsed ? 'items-center justify-start overflow-hidden py-3' : undefined}
         >
-          <FileTreePanel
-            state={manager.state}
-            onNodeClick={handleNodeClick}
-            onNodeDoubleClick={handleNodeDoubleClick}
-            onContextMenu={handleContextMenu}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragOver={handleDragOverNode}
-            onDragLeave={handleDragLeaveNode}
-            onDrop={handleDropOnNode}
-            onCreateFile={() => fileOps.openCreateFileDialog()}
-            onCreateFolder={() => fileOps.openCreateFolderDialog()}
-            onUpload={() => handleUpload(ROOT_PATH)}
-            onPaste={(files) => {
-              void uploadFilesToPath(files, ROOT_PATH);
-            }}
-            onRefresh={() => { void manager.loadTree(); }}
-            onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
-            enableSearch={false}
-            enableToolbar={false}
-            enableMultiSelectBar={!readOnly}
-            enableDragDrop={!readOnly}
-            draggingPath={draggingPath}
-            dragOverPath={dragOverPath}
-            className="flex-1"
-          />
+          {treeCollapsed ? (
+            <div className="flex-1" />
+          ) : (
+            <FileTreePanel
+              state={manager.state}
+              onNodeClick={handleNodeClick}
+              onNodeDoubleClick={handleNodeDoubleClick}
+              onContextMenu={handleContextMenu}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOverNode}
+              onDragLeave={handleDragLeaveNode}
+              onDrop={handleDropOnNode}
+              onCreateFile={() => fileOps.openCreateFileDialog()}
+              onCreateFolder={() => fileOps.openCreateFolderDialog()}
+              onUpload={() => handleUpload(ROOT_PATH)}
+              onPaste={(files) => {
+                void uploadFilesToPath(files, ROOT_PATH);
+              }}
+              onRefresh={() => { void manager.loadTree(); }}
+              onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
+              enableSearch={false}
+              enableToolbar={false}
+              enableMultiSelectBar={!readOnly}
+              enableDragDrop={!readOnly}
+              draggingPath={draggingPath}
+              dragOverPath={dragOverPath}
+              className="flex-1"
+            />
+          )}
           <FileTreeContextMenu
             contextMenu={manager.state.contextMenu}
             items={contextMenuItems}
             onClose={manager.state.closeContextMenu}
           />
         </StandardFileTreeLayout>
+        {!treeCollapsed && (
+          <div
+            className={cn(
+              'absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors',
+              isDragging ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20',
+            )}
+            onMouseDown={handleTreeResizeStart}
+          />
+        )}
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">

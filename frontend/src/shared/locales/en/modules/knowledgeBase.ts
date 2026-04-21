@@ -32,6 +32,7 @@ const knowledgeBase = {
     cardTitle: 'Knowledge base list',
     cardDescription: 'Shows every knowledge base you can access, together with your role, storage usage, and workspace attachment count.',
     loading: 'Loading knowledge bases...',
+    loadFailed: 'Failed to load knowledge base list',
     empty: 'No knowledge bases yet. Create your first one, then upload files and configure sharing.',
     openDetail: 'View details',
     stats: {

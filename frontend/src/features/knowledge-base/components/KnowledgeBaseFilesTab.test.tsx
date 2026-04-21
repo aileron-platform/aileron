@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { KnowledgeBaseFilesTab } from './KnowledgeBaseFilesTab';
 
@@ -79,6 +80,8 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'knowledgeBase.files.readOnlyBadge': '唯讀',
         'knowledgeBase.files.viewerBadge': '檢視者',
         'knowledgeBase.files.viewerNotice': '檢視者僅可讀取',
+        'workspace.layout.collapseSidebar': '收折側欄',
+        'workspace.layout.expandSidebar': '展開側欄',
       };
       return translations[key] ?? key;
     },
@@ -86,9 +89,17 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-tree-manager', () => ({
-  StandardFileTreeLayout: ({ toolbarContent, children }: { toolbarContent?: ReactNode; children: ReactNode }) => (
+  StandardFileTreeLayout: ({
+    toolbarContent,
+    children,
+    showToolbar,
+  }: {
+    toolbarContent?: ReactNode;
+    children: ReactNode;
+    showToolbar?: boolean;
+  }) => (
     <div>
-      {toolbarContent}
+      {showToolbar === false ? null : toolbarContent}
       {children}
     </div>
   ),
@@ -158,5 +169,17 @@ describe('KnowledgeBaseFilesTab', () => {
     expect(screen.getByText('toolbar-readonly')).toBeInTheDocument();
     expect(screen.getByDisplayValue('kb content')).toBeInTheDocument();
     expect(screen.getByText('tree-panel:static:single')).toBeInTheDocument();
+  });
+
+  it('可收折並重新展開 tree panel', async () => {
+    const user = userEvent.setup();
+    render(<KnowledgeBaseFilesTab knowledgeBaseId="kb-1" readOnly={false} />);
+
+    await user.click(screen.getByRole('button', { name: '收折側欄' }));
+    expect(screen.queryByText('tree-panel:drag:multi')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展開側欄' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展開側欄' }));
+    expect(screen.getByText('tree-panel:drag:multi')).toBeInTheDocument();
   });
 });

@@ -32,6 +32,7 @@ const knowledgeBase = {
     cardTitle: '知識庫列表',
     cardDescription: '顯示你可存取的所有知識庫，以及角色、容量與已掛載到多少個工作區。',
     loading: '正在載入知識庫列表...',
+    loadFailed: '無法載入知識庫列表',
     empty: '目前還沒有任何知識庫。你可以先建立第一個知識庫，後續再上傳檔案與設定分享權限。',
     openDetail: '查看詳情',
     stats: {
