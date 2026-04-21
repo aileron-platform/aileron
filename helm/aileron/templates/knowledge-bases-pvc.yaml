@@ -1,0 +1,20 @@
+{{- if .Values.kubernetes.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.kubernetes.knowledgeBases.pvcName }}
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: knowledge-bases
+spec:
+  accessModes:
+    {{- toYaml .Values.kubernetes.knowledgeBases.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.kubernetes.knowledgeBases.size }}
+  {{- if .Values.kubernetes.knowledgeBases.storageClassName }}
+  storageClassName: {{ .Values.kubernetes.knowledgeBases.storageClassName | quote }}
+  {{- else }}
+  {{- include "aileron.storageClassName" . | nindent 2 }}
+  {{- end }}
+{{- end }}

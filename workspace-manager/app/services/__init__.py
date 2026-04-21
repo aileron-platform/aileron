@@ -15,6 +15,16 @@ from .team_service import TeamService
 from .template_service import TemplateService
 from .template_install_service import TemplateInstallService
 from .user_service import UserService
+from .knowledge_base_service import (
+    KnowledgeBaseAccessDeniedError,
+    KnowledgeBaseConflictError,
+    KnowledgeBaseNotFoundError,
+    KnowledgeBaseService,
+    KnowledgeBaseSharingService,
+)
+from .knowledge_base_attachment_service import KnowledgeBaseAttachmentService
+from .knowledge_base_file_service import KnowledgeBaseFileService
+from .knowledge_base_maintenance_service import KnowledgeBaseMaintenanceService
 from .workspace_service import WorkspaceService
 from .workspace_setup_service import WorkspaceSetupService
 from .workspace_lifecycle_service import WorkspaceLifecycleService
@@ -39,6 +49,39 @@ def get_settings_service(db: Session = Depends(get_db)) -> SettingsService:
 def get_workspace_service(db: Session = Depends(get_db)) -> WorkspaceService:
     """取得工作區服務"""
     return WorkspaceService(db)
+
+
+def get_knowledge_base_service(db: Session = Depends(get_db)) -> KnowledgeBaseService:
+    """取得 knowledge base 服務"""
+    return KnowledgeBaseService(db)
+
+
+def get_knowledge_base_sharing_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseSharingService:
+    """取得 knowledge base 分享服務"""
+    return KnowledgeBaseSharingService(db)
+
+
+def get_knowledge_base_attachment_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseAttachmentService:
+    """取得 knowledge base attachment 服務"""
+    return KnowledgeBaseAttachmentService(db)
+
+
+def get_knowledge_base_file_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseFileService:
+    """取得 knowledge base file 服務"""
+    return KnowledgeBaseFileService(db)
+
+
+def get_knowledge_base_maintenance_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseMaintenanceService:
+    """取得 knowledge base 維護服務"""
+    return KnowledgeBaseMaintenanceService(db)
 
 
 def get_workspace_setup_service(db: Session = Depends(get_db)) -> WorkspaceSetupService:
@@ -81,6 +124,14 @@ __all__ = [
     "get_template_service",
     "get_template_install_service",
     "get_user_service",
+    "KnowledgeBaseAccessDeniedError",
+    "KnowledgeBaseConflictError",
+    "KnowledgeBaseNotFoundError",
+    "get_knowledge_base_service",
+    "get_knowledge_base_sharing_service",
+    "get_knowledge_base_attachment_service",
+    "get_knowledge_base_file_service",
+    "get_knowledge_base_maintenance_service",
     "get_workspace_service",
     "get_workspace_setup_service",
     "get_workspace_lifecycle_service",

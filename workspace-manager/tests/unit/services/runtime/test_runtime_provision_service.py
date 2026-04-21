@@ -47,10 +47,12 @@ def mock_settings():
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
     settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts-host"
     settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.HOST_KNOWLEDGE_BASES_DIR = "/tmp/knowledge-bases"
     settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES = ["50000-52321"]
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
     settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
+    settings.MANAGER_KNOWLEDGE_BASES_DIR = "/mnt/knowledge-bases"
     settings.DOCKER_NETWORK = "workspace-network"
     settings.ENV = "testing"
     settings.DATABASE_URL = "postgresql://test:test@localhost/test"
@@ -92,6 +94,7 @@ def sample_workspace():
         {"container_port": 8000, "host_port": 9000, "protocol": "tcp"}
     ]
     workspace.setup_script = "#!/bin/bash\necho 'Setup complete'"
+    workspace.knowledge_base_attachments = []
     return workspace
 
 @pytest.fixture
@@ -202,9 +205,11 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
         mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "mounted-workspace-scripts")
         mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(tmp_path / "mounted-knowledge-bases")
 
         volumes = provision_service._build_volumes(sample_workspace)
 
@@ -213,6 +218,43 @@ class TestRuntimeProvisionService:
         assert sources["/scripts"] == str(tmp_path / "workspace-scripts" / "workspace_123")
         assert sources["/home/developer/.claude"] == str(tmp_path / "claude-data" / "workspace_123")
         assert (tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh").is_file()
+
+    def test_build_volumes_adds_knowledge_base_mounts(
+        self, provision_service, sample_workspace, mock_settings, tmp_path: Path
+    ):
+        mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
+        mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
+        mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
+        mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "mounted-workspace-scripts")
+        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(tmp_path / "mounted-knowledge-bases")
+        sample_workspace.setup_script = None
+        sample_workspace.knowledge_base_attachments = [
+            Mock(
+                kb_id="kb-1",
+                mount_alias="docs",
+                mode="rw",
+                knowledge_base=Mock(id="kb-1"),
+            ),
+            Mock(
+                kb_id="kb-2",
+                mount_alias="readonly-docs",
+                mode="ro",
+                knowledge_base=Mock(id="kb-2"),
+            ),
+        ]
+
+        volumes = provision_service._build_volumes(sample_workspace)
+
+        kb_mounts = {volume.target: volume for volume in volumes if volume.target.startswith("/knowledge/")}
+        assert kb_mounts["/knowledge/docs"].source == str(tmp_path / "knowledge-bases" / "kb-1")
+        assert kb_mounts["/knowledge/docs"].read_only is False
+        assert kb_mounts["/knowledge/readonly-docs"].source == str(tmp_path / "knowledge-bases" / "kb-2")
+        assert kb_mounts["/knowledge/readonly-docs"].read_only is True
+        assert (tmp_path / "mounted-knowledge-bases" / "kb-1").is_dir()
+        assert (tmp_path / "mounted-knowledge-bases" / "kb-2").is_dir()
 
     def test_find_available_port_uses_requested_protocol(self, provision_service, monkeypatch: pytest.MonkeyPatch):
         socket_types: list[int] = []
@@ -341,9 +383,18 @@ class TestRuntimeProvisionService:
         assert job.error_message == "Test Error"
         assert sample_workspace.runtime_status == "error"
 
-    def test_update_workspace_runtime(self, provision_service, sample_workspace):
+    def test_update_workspace_runtime(self, provision_service, sample_workspace, mock_db_session):
         """測試：更新工作區信息"""
         # Arrange
+        mock_db_session.get.return_value = sample_workspace
+        sample_workspace.knowledge_base_attachments = [
+            Mock(
+                kb_id="kb-1",
+                mount_alias="docs",
+                mode="rw",
+                knowledge_base=Mock(id="kb-1", tombstoned_at=None),
+            )
+        ]
         info = RuntimeInfo(
             identifier="c-123",
             workspace_id="ws-123",
@@ -371,3 +422,5 @@ class TestRuntimeProvisionService:
         assert sample_workspace.runtime_external_port == 8080
         assert sample_workspace.web_preview_external_port == 8081
         assert sample_workspace.terminal_external_port == 8082
+        assert isinstance(sample_workspace.runtime_mounted_kb_signature, str)
+        assert len(sample_workspace.runtime_mounted_kb_signature) == 64

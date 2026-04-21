@@ -91,6 +91,14 @@ class Settings(BaseSettings):
         default="/host/claude-data",
         description="Claude data directory mounted inside workspace-manager",
     )
+    HOST_KNOWLEDGE_BASES_DIR: str = Field(
+        default="/var/lib/aileron/knowledge-bases",
+        description="主機上掛載 knowledge base 檔案的目錄",
+    )
+    MANAGER_KNOWLEDGE_BASES_DIR: str = Field(
+        default="/host/knowledge-bases",
+        description="Knowledge base 資料目錄 mounted inside workspace-manager",
+    )
     RUNTIME_RESERVED_PORTS: Annotated[List[int], NoDecode] = Field(
         default_factory=lambda: [3002], description="預留不可使用的容器埠"
     )
@@ -250,6 +258,59 @@ class Settings(BaseSettings):
         default=10,
         description="檔案樹掃描最大深度（預設 10 層）"
     )
+    DEFAULT_USER_KB_QUOTA_BYTES: int = Field(
+        default=5 * 1024 * 1024 * 1024,
+        description="每個使用者擁有的全部 knowledge bases 預設總配額（bytes）",
+    )
+    DEFAULT_KB_QUOTA_BYTES: int = Field(
+        default=512 * 1024 * 1024,
+        description="單一 knowledge base 預設配額（bytes）",
+    )
+    KB_SINGLE_FILE_SIZE_LIMIT: int = Field(
+        default=50 * 1024 * 1024,
+        description="Knowledge base 單檔大小上限（bytes）",
+    )
+    KB_ALLOWED_EXTENSIONS: Annotated[List[str], NoDecode] = Field(
+        default_factory=lambda: [
+            ".py",
+            ".ts",
+            ".js",
+            ".go",
+            ".rs",
+            ".java",
+            ".c",
+            ".cpp",
+            ".h",
+            ".hpp",
+            ".rb",
+            ".php",
+            ".swift",
+            ".kt",
+            ".sh",
+            ".sql",
+            ".yaml",
+            ".yml",
+            ".json",
+            ".toml",
+            ".xml",
+            ".md",
+            ".txt",
+            ".rst",
+            ".csv",
+            ".pdf",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".svg",
+            ".webp",
+        ],
+        description="Knowledge base 允許的副檔名白名單",
+    )
+    KB_TOMBSTONE_RETENTION_HOURS: int = Field(
+        default=24,
+        description="Knowledge base tombstone 保留時間（小時）",
+    )
 
     # === 日誌設定 ===
     LOG_LEVEL: str = Field(default="INFO", description="日誌等級")
@@ -391,6 +452,16 @@ class Settings(BaseSettings):
         """解析平台預設 firewall 網域清單"""
         if isinstance(v, str):
             return [domain.strip() for domain in v.split(",") if domain.strip()]
+        return v
+
+    @field_validator("KB_ALLOWED_EXTENSIONS", mode="before")
+    @classmethod
+    def parse_kb_allowed_extensions(cls, v):
+        """解析 KB 允許副檔名清單。"""
+        if isinstance(v, str):
+            return [extension.strip().lower() for extension in v.split(",") if extension.strip()]
+        if isinstance(v, list):
+            return [str(extension).strip().lower() for extension in v if str(extension).strip()]
         return v
 
     @field_validator(

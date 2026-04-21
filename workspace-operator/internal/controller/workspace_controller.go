@@ -62,6 +62,7 @@ type WorkspaceReconciler struct {
 	TURNServerExternalIP  string // relay IP announced to clients / NAT1TO1
 	TURNServerUsername    string
 	TURNServerCredential  string
+	KnowledgeBasesPVCName string
 }
 
 type firewallDefaultsFile struct {
@@ -229,16 +230,10 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 		deployment.Spec.Selector = &metav1.LabelSelector{MatchLabels: labels}
 		deployment.Spec.Replicas = int32Ptr(1)
 		deployment.Spec.Template.ObjectMeta.Labels = labels
-		deployment.Spec.Template.Spec.Volumes = []corev1.Volume{
-			{
-				Name: "workspace-data",
-				VolumeSource: corev1.VolumeSource{
-					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-						ClaimName: resourceName(pvcComponent, workspace.Spec.WorkspaceID),
-					},
-				},
-			},
+		deployment.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+			FSGroup: int64Ptr(1000),
 		}
+		deployment.Spec.Template.Spec.Volumes = runtimeVolumes(workspace, r.knowledgeBasesPVCName())
 		// 建立容器規格
 		container := corev1.Container{
 			Name:  "runtime",
@@ -247,13 +242,8 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 				{Name: "http", ContainerPort: 3002},
 				{Name: "terminal", ContainerPort: 3004},
 			},
-			Env: append(runtimeEnvVars(workspace, r), toEnvVars(workspace.Spec.EnvVars)...),
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "workspace-data",
-					MountPath: workspaceMountPath(workspace),
-				},
-			},
+			Env:          append(runtimeEnvVars(workspace, r), toEnvVars(workspace.Spec.EnvVars)...),
+			VolumeMounts: runtimeVolumeMounts(workspace),
 		}
 		// 套用資源配置
 		if workspace.Spec.Runtime.Resources != nil {
@@ -1276,6 +1266,61 @@ func componentLabels(
 	}
 }
 
+func runtimeVolumes(
+	workspace *workspacev1alpha1.Workspace,
+	knowledgeBasesPVCName string,
+) []corev1.Volume {
+	volumes := []corev1.Volume{
+		{
+			Name: "workspace-data",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: resourceName(pvcComponent, workspace.Spec.WorkspaceID),
+				},
+			},
+		},
+	}
+	if len(workspace.Spec.KnowledgeBases) > 0 {
+		volumes = append(volumes, corev1.Volume{
+			Name: "knowledge-bases",
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: knowledgeBasesPVCName,
+				},
+			},
+		})
+	}
+	return volumes
+}
+
+func (r *WorkspaceReconciler) knowledgeBasesPVCName() string {
+	if r.KnowledgeBasesPVCName != "" {
+		return r.KnowledgeBasesPVCName
+	}
+	return "knowledge-bases-pvc"
+}
+
+func runtimeVolumeMounts(workspace *workspacev1alpha1.Workspace) []corev1.VolumeMount {
+	mounts := []corev1.VolumeMount{
+		{
+			Name:      "workspace-data",
+			MountPath: workspaceMountPath(workspace),
+		},
+	}
+	for _, attachment := range workspace.Spec.KnowledgeBases {
+		if attachment.KBID == "" || attachment.MountAlias == "" {
+			continue
+		}
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/" + attachment.MountAlias,
+			SubPath:   attachment.KBID,
+			ReadOnly:  attachment.ReadOnly,
+		})
+	}
+	return mounts
+}
+
 func resolveRuntimeImage(workspace *workspacev1alpha1.Workspace) string {
 	if workspace.Spec.Runtime.Image != "" {
 		return workspace.Spec.Runtime.Image
@@ -1408,6 +1453,10 @@ func toEnvVars(items []workspacev1alpha1.WorkspaceEnvVar) []corev1.EnvVar {
 }
 
 func int32Ptr(v int32) *int32 {
+	return &v
+}
+
+func int64Ptr(v int64) *int64 {
 	return &v
 }
 

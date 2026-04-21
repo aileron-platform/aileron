@@ -37,6 +37,14 @@ kubernetes:
   nodePort: null
   nodeAddress: 127.0.0.1
   pvcName: workspace-runtime-pvc
+  knowledgeBases:
+    pvcName: knowledge-bases-pvc
+    size: 20Gi
+    accessModes:
+      - ReadWriteMany
+    # 本機 dev 預設使用 hostpath，作為單節點 fallback。
+    # 若需要真正的 RWX 語意，請改用 NFS / CephFS / EFS 等 shared StorageClass。
+    storageClassName: hostpath
   runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
   browserImage: ailerondocker/workspace-browser:latest-amd64
   nextjsImage: ailerondocker/workspace-nextjs:latest-amd64
@@ -161,6 +169,8 @@ workspaceManager:
     KEYCLOAK_CLIENT_ID: aileron-frontend
     KEYCLOAK_CLIENT_SECRET: ""
     KEYCLOAK_JWKS_CACHE_TTL: "3600"
+    HOST_KNOWLEDGE_BASES_DIR: /host/knowledge-bases
+    MANAGER_KNOWLEDGE_BASES_DIR: /host/knowledge-bases
   extraEnv: []
 
 workspaceOperator:

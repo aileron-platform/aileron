@@ -16,6 +16,7 @@ from app.core.logging import get_celery_logger
 from app.db import models as db_models
 from app.db.database import SessionLocal
 from app.services.automation_execution_logger import AutomationExecutionLogger
+from app.services.knowledge_base_maintenance_service import KnowledgeBaseMaintenanceService
 from app.services.automation_service import AutomationService
 from app.utils.datetime_utils import calculate_duration, utcnow
 
@@ -31,6 +32,20 @@ def automation_service() -> Iterator[AutomationService]:
     db = SessionLocal()
     try:
         yield AutomationService(db)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@contextmanager
+def knowledge_base_maintenance_service() -> Iterator[KnowledgeBaseMaintenanceService]:
+    """建立 KnowledgeBaseMaintenanceService 的資料庫工作階段"""
+
+    db = SessionLocal()
+    try:
+        yield KnowledgeBaseMaintenanceService(db)
     except Exception:
         db.rollback()
         raise
@@ -115,6 +130,22 @@ def cleanup_stuck_executions(timeout_minutes: int = 60) -> dict[str, int]:
 
         logger.info("清理完成，共清理 %d 個卡住的任務", cleaned)
         return {"cleaned": cleaned, "total_stuck": len(stuck_executions)}
+
+
+@current_app.task(name="knowledge_bases.reconcile_kb_quota")
+def reconcile_kb_quota() -> dict[str, int]:
+    """每日校正 knowledge base cached size。"""
+
+    with knowledge_base_maintenance_service() as service:
+        return service.reconcile_kb_quota()
+
+
+@current_app.task(name="knowledge_bases.cleanup_tombstoned_kb")
+def cleanup_tombstoned_kb() -> dict[str, int]:
+    """清理超過 retention 的 tombstoned knowledge bases。"""
+
+    with knowledge_base_maintenance_service() as service:
+        return service.cleanup_tombstoned_knowledge_bases()
 
 
 @current_app.task(name="automation.run_job", bind=True, max_retries=0)

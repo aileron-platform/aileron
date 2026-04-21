@@ -9,6 +9,7 @@ import {
   GitBranch,
   BookOpen,
   Settings,
+  Database,
   Building,
   Cpu,
   Monitor,
@@ -140,6 +141,12 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         id: 'access',
         labelKey: 'workspace.navigation.sub.workspaceSettings.access',
         icon: Users,
+        parentId: 'workspace-settings',
+      },
+      {
+        id: 'knowledge-bases',
+        labelKey: 'workspace.navigation.sub.workspaceSettings.knowledgeBases',
+        icon: Database,
         parentId: 'workspace-settings',
       },
       {

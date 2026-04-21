@@ -4,6 +4,7 @@
 
 import type { FileNode, FileTreeState, FileTreeActions } from '../features/file-management/types';
 import type React from 'react';
+import type { WorkspaceKnowledgeBaseAttachmentSummary } from '@/shared/types/knowledgeBase';
 
 export type WorkspaceTabScope = 'file-management' | 'openspec';
 export interface WorkspaceTab {
@@ -89,7 +90,7 @@ export interface WorkspaceState {
   };
 
   workspaceSettings: {
-    subView: 'basic' | 'access' | 'reset';
+    subView: 'basic' | 'access' | 'knowledge-bases' | 'reset';
   };
 
   containerManagement: {
@@ -133,7 +134,7 @@ export type WorkspaceAction =
   | { type: 'SET_SELECTED_GIT_CONTEXT'; payload: string | null }
   | { type: 'SET_OPENSPEC_SUB_VIEW'; payload: WorkspaceState['openspec']['subView'] }
   | { type: 'SET_OPENSPEC_SELECTED_PATH'; payload: string | null }
-  | { type: 'SET_WORKSPACE_SETTINGS_SUB_VIEW'; payload: 'basic' | 'access' | 'reset' }
+  | { type: 'SET_WORKSPACE_SETTINGS_SUB_VIEW'; payload: WorkspaceState['workspaceSettings']['subView'] }
   | { type: 'SET_CONTAINER_MANAGEMENT_SUB_VIEW'; payload: 'runtime' | 'firewall' | 'terminal' | 'browser' }
   | { type: 'SET_CLAUDE_CODE_SUB_VIEW'; payload: WorkspaceState['claudeCodeSettings']['subView'] }
   | { type: 'SET_AGENT_TOOL_SUB_VIEW'; payload: string }
@@ -291,6 +292,9 @@ export interface WorkspaceDetailResponse {
   description?: string | null;
   accessRole?: 'owner' | 'manager' | 'editor' | 'viewer';
   accessSource?: 'owned' | 'shared';
+  attachedKnowledgeBases?: WorkspaceKnowledgeBaseAttachmentSummary[];
+  mountedKbSignature?: string | null;
+  hasPendingKbChanges?: boolean;
   owner?: {
     id: string;
     displayName: string;

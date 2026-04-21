@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { Button } from '../ui/button';
-import { Minimize, User, Folder, Clock, FileText } from 'lucide-react';
+import { Minimize, User, Folder, Clock, FileText, Library } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar';
 import { ModuleType } from '../../../app/providers/NavigationProvider';
 import { useI18n } from '@/app/providers/I18nProvider';
@@ -29,6 +29,7 @@ export const CompactHeader: React.FC<CompactHeaderProps> = ({
       workspace: t('navigation.compactHeader.modules.workspace'),
       automation: t('navigation.compactHeader.modules.automation'),
       template: t('navigation.compactHeader.modules.template'),
+      'knowledge-base': t('navigation.compactHeader.modules.knowledgeBase'),
     };
     return moduleLabels[module] || module;
   };
@@ -42,6 +43,8 @@ export const CompactHeader: React.FC<CompactHeaderProps> = ({
         return <Clock className={iconClass} />;
       case 'template':
         return <FileText className={iconClass} />;
+      case 'knowledge-base':
+        return <Library className={iconClass} />;
       default:
         return null;
     }

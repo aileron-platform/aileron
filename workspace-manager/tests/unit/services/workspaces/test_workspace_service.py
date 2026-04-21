@@ -374,7 +374,7 @@ class TestWorkspaceCreate:
         )
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Owner not found"):
+        with pytest.raises(ValueError, match="工作區擁有者不存在"):
             workspace_service.create(create_request)
 
     def test_create_workspace_with_env_vars(
@@ -539,7 +539,7 @@ class TestWorkspaceCreate:
 
         with pytest.raises(
             ValueError,
-            match="runtimeResources is only supported for Kubernetes workspaces",
+            match="runtimeResources 僅支援 Kubernetes 工作區",
         ):
             workspace_service.create(create_request)
 
@@ -564,7 +564,7 @@ class TestWorkspaceCreate:
 
         with pytest.raises(
             ValueError,
-            match="portMappings is only supported for Docker workspaces",
+            match="portMappings 僅支援 Docker 工作區",
         ):
             workspace_service.create(create_request)
 
@@ -627,7 +627,7 @@ class TestWorkspaceCreate:
             port_mappings=[],
         )
 
-        with pytest.raises(ValueError, match="Invalid Kubernetes namespace"):
+        with pytest.raises(ValueError, match="無效的 Kubernetes namespace"):
             workspace_service.create(create_request)
 
     def test_create_workspace_ignores_payload_provisioner_and_uses_deployment_runtime(
@@ -757,7 +757,7 @@ class TestWorkspaceUpdate:
 
         with pytest.raises(
             ValueError,
-            match="runtimeResources is only supported for Kubernetes workspaces",
+            match="runtimeResources 僅支援 Kubernetes 工作區",
         ):
             workspace_service.update("workspace-123", update_request)
 
@@ -776,7 +776,7 @@ class TestWorkspaceUpdate:
 
         with pytest.raises(
             ValueError,
-            match="portMappings is only supported for Docker workspaces",
+            match="portMappings 僅支援 Docker 工作區",
         ):
             workspace_service.update("workspace-123", update_request)
 
@@ -855,7 +855,7 @@ class TestWorkspaceUpdate:
             target_namespace="forbidden",
         )
 
-        with pytest.raises(ValueError, match="Invalid Kubernetes namespace"):
+        with pytest.raises(ValueError, match="無效的 Kubernetes namespace"):
             workspace_service.update("workspace-123", update_request)
 
 

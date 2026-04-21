@@ -66,6 +66,10 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 				Image:   "nextjs:test",
 			},
 			WorkspacePath: "/workspace",
+			KnowledgeBases: []workspacev1alpha1.WorkspaceKnowledgeBaseAttachment{
+				{KBID: "kb-1", MountAlias: "docs", ReadOnly: false},
+				{KBID: "kb-2", MountAlias: "readonly-docs", ReadOnly: true},
+			},
 			Firewall: workspacev1alpha1.WorkspaceFirewallSpec{
 				Workspace: workspacev1alpha1.WorkspaceFirewallGroupSpec{
 					NetworkAccessEnabled: true,
@@ -101,6 +105,7 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		Scheme:                     scheme,
 		ConfigNamespace:            "operator-system",
 		CiliumEnabled:              true,
+		KnowledgeBasesPVCName:      "shared-knowledge-bases",
 		FirewallDefaultsConfigName: "firewall-defaults",
 		PublicRouting:              defaultPublicRoutingConfig(),
 		ManagerURL:                 "http://workspace-manager.operator-system:3001",
@@ -142,6 +147,8 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 	assertIngressHost(t, cl, "team-a", "workspace-nextjs-ws-123", "workspace-nextjs-ws-123.example.com", "nginx")
 	assertPVCExists(t, cl, "team-a", "workspace-pvc-ws-123")
 	assertDeploymentUsesPVC(t, cl, "team-a", "workspace-runtime-ws-123", "workspace-pvc-ws-123")
+	assertRuntimeDeploymentSecurityContext(t, cl, "team-a", "workspace-runtime-ws-123")
+	assertRuntimeDeploymentKnowledgeBaseMounts(t, cl, "team-a", "workspace-runtime-ws-123", "shared-knowledge-bases")
 	assertRuntimeDeploymentEnv(t, cl, "team-a", "workspace-runtime-ws-123", map[string]string{
 		"WORKSPACE_ID":        "ws-123",
 		"WORKSPACE_PATH":      "/workspace",
@@ -209,6 +216,157 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		if !reflect.DeepEqual(status.Firewall.Browser.EffectiveAllowedDomains, expectedBrowserDomains) {
 			t.Fatalf("browser domains = %v, want %v", status.Firewall.Browser.EffectiveAllowedDomains, expectedBrowserDomains)
 		}
+	})
+}
+
+func TestWorkspaceReconcilerOmitsKnowledgeBaseVolumeWhenNoAttachments(t *testing.T) {
+	scheme := runtime.NewScheme()
+	mustAddSchemes(t, scheme)
+
+	workspace := &workspacev1alpha1.Workspace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "platform.aileron.io/v1alpha1",
+			Kind:       "Workspace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workspace-empty-kb",
+			Namespace: "operator-system",
+		},
+		Spec: workspacev1alpha1.WorkspaceSpec{
+			WorkspaceID:     "ws-empty",
+			OwnerID:         "user-123",
+			Provisioner:     "kubernetes",
+			TargetNamespace: "team-a",
+			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
+			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			WorkspacePath:   "/workspace",
+		},
+	}
+
+	cl := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&workspacev1alpha1.Workspace{}).
+		WithObjects(workspace).
+		Build()
+
+	reconciler := &WorkspaceReconciler{
+		Client:        cl,
+		Scheme:        scheme,
+		CiliumEnabled: false,
+		PublicRouting: defaultPublicRoutingConfig(),
+	}
+
+	_, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: workspace.Name, Namespace: workspace.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("first reconcile failed: %v", err)
+	}
+	_, err = reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: workspace.Name, Namespace: workspace.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("second reconcile failed: %v", err)
+	}
+
+	assertRuntimeDeploymentHasNoKnowledgeBaseVolume(t, cl, "team-a", "workspace-runtime-ws-empty")
+}
+
+func TestWorkspaceReconcilerUpdatesKnowledgeBaseMountsAfterSpecChange(t *testing.T) {
+	scheme := runtime.NewScheme()
+	mustAddSchemes(t, scheme)
+
+	workspace := &workspacev1alpha1.Workspace{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "platform.aileron.io/v1alpha1",
+			Kind:       "Workspace",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "workspace-update-kb",
+			Namespace: "operator-system",
+		},
+		Spec: workspacev1alpha1.WorkspaceSpec{
+			WorkspaceID:     "ws-update",
+			OwnerID:         "user-123",
+			Provisioner:     "kubernetes",
+			TargetNamespace: "team-a",
+			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
+			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			WorkspacePath:   "/workspace",
+			KnowledgeBases: []workspacev1alpha1.WorkspaceKnowledgeBaseAttachment{
+				{KBID: "kb-1", MountAlias: "docs", ReadOnly: false},
+				{KBID: "kb-2", MountAlias: "readonly-docs", ReadOnly: true},
+			},
+		},
+	}
+
+	cl := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithStatusSubresource(&workspacev1alpha1.Workspace{}).
+		WithObjects(workspace).
+		Build()
+
+	reconciler := &WorkspaceReconciler{
+		Client:                cl,
+		Scheme:                scheme,
+		CiliumEnabled:         false,
+		KnowledgeBasesPVCName: "shared-knowledge-bases",
+		PublicRouting:         defaultPublicRoutingConfig(),
+	}
+
+	request := ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: workspace.Name, Namespace: workspace.Namespace},
+	}
+
+	if _, err := reconciler.Reconcile(context.Background(), request); err != nil {
+		t.Fatalf("first reconcile failed: %v", err)
+	}
+	if _, err := reconciler.Reconcile(context.Background(), request); err != nil {
+		t.Fatalf("second reconcile failed: %v", err)
+	}
+
+	assertRuntimeDeploymentKnowledgeBaseMountSet(t, cl, "team-a", "workspace-runtime-ws-update", "shared-knowledge-bases", map[string]corev1.VolumeMount{
+		"/knowledge/docs": {
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/docs",
+			SubPath:   "kb-1",
+			ReadOnly:  false,
+		},
+		"/knowledge/readonly-docs": {
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/readonly-docs",
+			SubPath:   "kb-2",
+			ReadOnly:  true,
+		},
+	})
+
+	var updated workspacev1alpha1.Workspace
+	if err := cl.Get(context.Background(), request.NamespacedName, &updated); err != nil {
+		t.Fatalf("get workspace for update: %v", err)
+	}
+	updated.Spec.KnowledgeBases = []workspacev1alpha1.WorkspaceKnowledgeBaseAttachment{
+		{KBID: "kb-3", MountAlias: "playbooks", ReadOnly: false},
+	}
+	if err := cl.Update(context.Background(), &updated); err != nil {
+		t.Fatalf("update workspace knowledge bases: %v", err)
+	}
+
+	if _, err := reconciler.Reconcile(context.Background(), request); err != nil {
+		t.Fatalf("third reconcile failed: %v", err)
+	}
+	if _, err := reconciler.Reconcile(context.Background(), request); err != nil {
+		t.Fatalf("fourth reconcile failed: %v", err)
+	}
+
+	assertRuntimeDeploymentKnowledgeBaseMountSet(t, cl, "team-a", "workspace-runtime-ws-update", "shared-knowledge-bases", map[string]corev1.VolumeMount{
+		"/knowledge/playbooks": {
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/playbooks",
+			SubPath:   "kb-3",
+			ReadOnly:  false,
+		},
 	})
 }
 
@@ -1134,6 +1292,134 @@ func assertDeploymentUsesPVC(
 	got := deployment.Spec.Template.Spec.Volumes[0].PersistentVolumeClaim
 	if got == nil || got.ClaimName != claimName {
 		t.Fatalf("deployment %s/%s pvc = %v, want %s", namespace, name, got, claimName)
+	}
+}
+
+func assertRuntimeDeploymentKnowledgeBaseMounts(
+	t *testing.T,
+	cl client.Reader,
+	namespace string,
+	name string,
+	claimName string,
+) {
+	t.Helper()
+	assertRuntimeDeploymentKnowledgeBaseMountSet(t, cl, namespace, name, claimName, map[string]corev1.VolumeMount{
+		"/knowledge/docs": {
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/docs",
+			SubPath:   "kb-1",
+			ReadOnly:  false,
+		},
+		"/knowledge/readonly-docs": {
+			Name:      "knowledge-bases",
+			MountPath: "/knowledge/readonly-docs",
+			SubPath:   "kb-2",
+			ReadOnly:  true,
+		},
+	})
+}
+
+func assertRuntimeDeploymentKnowledgeBaseMountSet(
+	t *testing.T,
+	cl client.Reader,
+	namespace string,
+	name string,
+	claimName string,
+	expectedMounts map[string]corev1.VolumeMount,
+) {
+	t.Helper()
+	var deployment appsv1.Deployment
+	if err := cl.Get(context.Background(), types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, &deployment); err != nil {
+		t.Fatalf("get deployment %s/%s: %v", namespace, name, err)
+	}
+
+	var knowledgeBaseVolume *corev1.Volume
+	for i := range deployment.Spec.Template.Spec.Volumes {
+		volume := &deployment.Spec.Template.Spec.Volumes[i]
+		if volume.Name == "knowledge-bases" {
+			knowledgeBaseVolume = volume
+			break
+		}
+	}
+	if knowledgeBaseVolume == nil {
+		t.Fatalf("deployment %s/%s missing knowledge-bases volume", namespace, name)
+	}
+	if knowledgeBaseVolume.PersistentVolumeClaim == nil || knowledgeBaseVolume.PersistentVolumeClaim.ClaimName != claimName {
+		t.Fatalf("knowledge-bases pvc = %v, want %s", knowledgeBaseVolume.PersistentVolumeClaim, claimName)
+	}
+
+	container := deployment.Spec.Template.Spec.Containers[0]
+	mounts := map[string]corev1.VolumeMount{}
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == "knowledge-bases" || strings.HasPrefix(mount.MountPath, "/knowledge/") {
+			mounts[mount.MountPath] = mount
+		}
+	}
+
+	if len(mounts) != len(expectedMounts) {
+		t.Fatalf("knowledge base mounts = %+v, want %+v", mounts, expectedMounts)
+	}
+
+	for mountPath, expected := range expectedMounts {
+		actual, ok := mounts[mountPath]
+		if !ok {
+			t.Fatalf("deployment %s/%s missing %s mount", namespace, name, mountPath)
+		}
+		if actual.Name != expected.Name || actual.SubPath != expected.SubPath || actual.ReadOnly != expected.ReadOnly {
+			t.Fatalf("mount %s = %+v, want %+v", mountPath, actual, expected)
+		}
+	}
+}
+
+func assertRuntimeDeploymentHasNoKnowledgeBaseVolume(
+	t *testing.T,
+	cl client.Reader,
+	namespace string,
+	name string,
+) {
+	t.Helper()
+	var deployment appsv1.Deployment
+	if err := cl.Get(context.Background(), types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, &deployment); err != nil {
+		t.Fatalf("get deployment %s/%s: %v", namespace, name, err)
+	}
+
+	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+		if volume.Name == "knowledge-bases" {
+			t.Fatalf("deployment %s/%s unexpectedly has knowledge-bases volume", namespace, name)
+		}
+	}
+
+	for _, mount := range deployment.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == "knowledge-bases" || strings.HasPrefix(mount.MountPath, "/knowledge/") {
+			t.Fatalf("deployment %s/%s unexpectedly has knowledge base mount %+v", namespace, name, mount)
+		}
+	}
+}
+
+func assertRuntimeDeploymentSecurityContext(
+	t *testing.T,
+	cl client.Reader,
+	namespace string,
+	name string,
+) {
+	t.Helper()
+	var deployment appsv1.Deployment
+	if err := cl.Get(context.Background(), types.NamespacedName{
+		Name:      name,
+		Namespace: namespace,
+	}, &deployment); err != nil {
+		t.Fatalf("get deployment %s/%s: %v", namespace, name, err)
+	}
+
+	securityContext := deployment.Spec.Template.Spec.SecurityContext
+	if securityContext == nil || securityContext.FSGroup == nil || *securityContext.FSGroup != 1000 {
+		t.Fatalf("deployment %s/%s fsGroup = %v, want 1000", namespace, name, securityContext)
 	}
 }
 

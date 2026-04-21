@@ -119,6 +119,26 @@ Interactive docs:
 
 See `.env.example` for the full configuration surface.
 
+### Knowledge Base Maintenance
+
+Knowledge Base storage uses the manager-side directory configured by `MANAGER_KNOWLEDGE_BASES_DIR`.
+
+Celery Beat runs two daily maintenance jobs:
+
+- `knowledge_bases.reconcile_kb_quota` at `02:00` (`TZ`-aware): scans every non-tombstoned KB directory and refreshes `knowledge_bases.current_size_bytes`
+- `knowledge_bases.cleanup_tombstoned_kb` at `03:00` (`TZ`-aware): removes KB directories past `KB_TOMBSTONE_RETENTION_HOURS` and deletes their DB records
+
+Relevant settings:
+
+| Variable | Description |
+|---|---|
+| `MANAGER_KNOWLEDGE_BASES_DIR` | workspace-manager sees KB files under this path |
+| `DEFAULT_USER_KB_QUOTA_BYTES` | total KB quota per owner |
+| `DEFAULT_KB_QUOTA_BYTES` | default quota per KB |
+| `KB_SINGLE_FILE_SIZE_LIMIT` | max file size per KB file |
+| `KB_ALLOWED_EXTENSIONS` | allowed KB file extension whitelist |
+| `KB_TOMBSTONE_RETENTION_HOURS` | retention window before tombstoned KB cleanup |
+
 ## Tests
 
 ```bash

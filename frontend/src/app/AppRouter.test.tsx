@@ -24,6 +24,10 @@ vi.mock('../features/automation/AutomationModule', () => ({
   default: () => <div>automation-module</div>,
 }));
 
+vi.mock('../features/knowledge-base/KnowledgeBaseModule', () => ({
+  default: () => <div>knowledge-base-module</div>,
+}));
+
 vi.mock('../pages/ProfilePage', () => ({
   default: () => <div>profile-page</div>,
 }));
@@ -67,6 +71,16 @@ describe('AppRouter', () => {
     );
 
     expect(await screen.findByText('automation-module')).toBeInTheDocument();
+  });
+
+  it('renders knowledge base center on the new root path', async () => {
+    render(
+      <MemoryRouter initialEntries={['/knowledge-bases/kb-1/sharing']}>
+        <AppRouter />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('knowledge-base-module')).toBeInTheDocument();
   });
 
   it('renders profile on the new root path', async () => {

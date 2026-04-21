@@ -145,9 +145,11 @@ services:
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
       - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - HOST_KNOWLEDGE_BASES_DIR=${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}
       - MANAGER_WORKSPACES_DIR=/host/workspace-data
       - MANAGER_WORKSPACE_SCRIPTS_DIR=/host/workspace-scripts
       - MANAGER_CLAUDE_DATA_DIR=/host/claude-data
+      - MANAGER_KNOWLEDGE_BASES_DIR=/host/knowledge-bases
       # JWT Authentication Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=180
       - REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -177,6 +179,7 @@ services:
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}:/host/workspace-data  # Workspace data
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}:/host/workspace-scripts  # Workspace scripts
       - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}:/host/claude-data  # Claude data
+      - ${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}:/host/knowledge-bases  # Knowledge bases
     networks:
       - aileron-network-dev
     depends_on:

@@ -2,6 +2,7 @@ const navigation = {
   workspace: '工作區',
   templateCenter: '模板中心',
   automation: '自動化中心',
+  knowledgeBaseCenter: '知識庫中心',
   brand: {
     title: 'Aileron',
   },
@@ -48,6 +49,7 @@ const navigation = {
       workspace: '工作區',
       automation: '自動化中心',
       template: '模板中心',
+      knowledgeBase: '知識庫中心',
     },
     separator: '›',
   },

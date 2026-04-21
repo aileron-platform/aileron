@@ -10,6 +10,7 @@ import { useWorkspace } from '../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { WorkspaceAccessSettings } from './components/WorkspaceAccessSettings';
 import { WorkspaceBasicSettings } from './components/WorkspaceBasicSettings';
+import { WorkspaceKnowledgeBasesSettings } from './components/WorkspaceKnowledgeBasesSettings';
 import { WorkspaceResetSettings } from './components/WorkspaceResetSettings';
 
 // 工作區設定主內容組件（第三欄）
@@ -22,6 +23,8 @@ export const WorkspaceSettingsMainContent: React.FC = () => {
       return <WorkspaceBasicSettings />;
     case 'access':
       return <WorkspaceAccessSettings />;
+    case 'knowledge-bases':
+      return <WorkspaceKnowledgeBasesSettings />;
     case 'reset':
       return <WorkspaceResetSettings />;
     default:
