@@ -4,18 +4,21 @@ import { cn } from '@/shared/utils/cn';
 
 export const sharedComponents: Components = {
   table: ({ children, ...props }) => (
-    <div className="my-2 overflow-x-auto rounded border border-border">
-      <table className="w-full border-collapse text-sm" {...props}>{children}</table>
+    <div className="markdown-table-shell my-2 overflow-x-auto rounded border border-border">
+      <table className="my-0 w-full border-separate border-spacing-0 text-sm" {...props}>{children}</table>
     </div>
   ),
   thead: ({ children, ...props }) => (
     <thead className="bg-muted" {...props}>{children}</thead>
   ),
   th: ({ children, ...props }) => (
-    <th className="border border-border/80 px-3 py-2 text-left font-semibold" {...props}>{children}</th>
+    <th className="border-b border-r border-border/80 px-3 py-2 text-left font-semibold last:border-r-0" {...props}>{children}</th>
+  ),
+  tbody: ({ children, ...props }) => (
+    <tbody className="[&_tr:last-child_td]:border-b-0" {...props}>{children}</tbody>
   ),
   td: ({ children, ...props }) => (
-    <td className="border border-border/60 px-3 py-2" {...props}>{children}</td>
+    <td className="border-b border-r border-border/60 px-3 py-2 last:border-r-0" {...props}>{children}</td>
   ),
   pre: ({ children, ...props }) => (
     <pre

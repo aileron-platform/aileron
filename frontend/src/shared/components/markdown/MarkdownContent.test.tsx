@@ -24,6 +24,12 @@ describe('MarkdownContent', () => {
     expect(root.className).toContain('prose');
   });
 
+  it('chat variant 根容器包含 prose class', () => {
+    const { container } = render(<MarkdownContent content="Hello" variant="chat" />);
+    const root = container.firstChild as HTMLElement;
+    expect(root.className).toContain('prose');
+  });
+
   it('渲染粗體', () => {
     render(<MarkdownContent content="**粗體文字**" />);
     expect(screen.getByText('粗體文字').tagName).toBe('STRONG');
@@ -142,5 +148,21 @@ metadata:
     expect(container.querySelector('table')).not.toBeNull();
     expect(container.querySelectorAll('td')).toHaveLength(2);
     expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
+
+  it('表格只建立單一外框容器並保留內部格線', () => {
+    const content = '| A | B |\n|---|---|\n| 1 | 2 |';
+    const { container } = render(<MarkdownContent content={content} variant="chat" />);
+    const thClasses = container.querySelector('th')?.className.split(/\s+/) ?? [];
+    const tdClasses = container.querySelector('td')?.className.split(/\s+/) ?? [];
+
+    const shells = container.querySelectorAll('.markdown-table-shell');
+    expect(shells).toHaveLength(1);
+    expect(container.querySelector('table')?.className).toContain('border-separate');
+    expect(container.querySelector('table')?.className).toContain('my-0');
+    expect(thClasses).not.toContain('border');
+    expect(tdClasses).not.toContain('border');
+    expect(thClasses).toContain('border-b');
+    expect(tdClasses).toContain('border-r');
   });
 });
