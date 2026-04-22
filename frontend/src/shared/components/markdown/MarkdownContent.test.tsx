@@ -126,4 +126,21 @@ metadata:
     expect(screen.getByText('openspec-ff-change')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Steps');
   });
+
+  it('將 <br> 與 <br/> 渲染成實際換行', () => {
+    const { container, rerender } = render(<MarkdownContent content="line 1<br>line 2" />);
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+
+    rerender(<MarkdownContent content="line 1<br/>line 2" />);
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
+
+  it('在表格儲存格中保留表格結構並渲染 <br>', () => {
+    const content = `| A | B |\n|---|---|\n| 1 | line 1<br>line 2 |`;
+    const { container } = render(<MarkdownContent content={content} />);
+
+    expect(container.querySelector('table')).not.toBeNull();
+    expect(container.querySelectorAll('td')).toHaveLength(2);
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
 });

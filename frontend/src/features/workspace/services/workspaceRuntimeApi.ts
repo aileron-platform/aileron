@@ -190,6 +190,10 @@ export const fetchDefaultWorkspaceId = async (): Promise<string> => {
   return firstWorkspace.id;
 };
 
+export const fetchWorkspaceList = async (pageSize: number = 50): Promise<WorkspaceListResponse> => {
+  return await apiClient.get<WorkspaceListResponse>(`/workspaces/?page=1&pageSize=${pageSize}`);
+};
+
 /**
  * 解析 Runtime Base URL
  */

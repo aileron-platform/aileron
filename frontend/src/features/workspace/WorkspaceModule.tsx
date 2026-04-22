@@ -37,7 +37,7 @@ export const WorkspaceModule: React.FC = () => {
   const { state } = useNavigation();
 
   return (
-    <WorkspaceProvider workspaceId={state.selectedWorkspaceId || undefined}>
+    <WorkspaceProvider workspaceId={state.selectedWorkspaceId}>
       <WorkspaceShell>
         <Routes>
           {/* 預設重定向到檔案管理 */}

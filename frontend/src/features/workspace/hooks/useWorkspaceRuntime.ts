@@ -54,7 +54,7 @@ export interface UseWorkspaceRuntimeReturn {
   changeWorkspace: (workspaceId: string) => Promise<void>;
 }
 
-export const useWorkspaceRuntime = (initialWorkspaceId?: string): UseWorkspaceRuntimeReturn => {
+export const useWorkspaceRuntime = (initialWorkspaceId?: string | null): UseWorkspaceRuntimeReturn => {
   const [workspaceId, setWorkspaceId] = useState<string | null>(initialWorkspaceId ?? null);
   const [runtimeBaseUrl, setRuntimeBaseUrl] = useState<string | null>(null);
   const [terminalExternalUrl, setTerminalExternalUrl] = useState<string | null>(null);
@@ -64,8 +64,17 @@ export const useWorkspaceRuntime = (initialWorkspaceId?: string): UseWorkspaceRu
   const [error, setError] = useState<string | null>(null);
   const runtimeUrlCache = useRef<Map<string, string>>(new Map());
 
+  const resetRuntimeState = useCallback((nextWorkspaceId: string | null) => {
+    setWorkspaceId(nextWorkspaceId);
+    setRuntimeBaseUrl(null);
+    setTerminalExternalUrl(null);
+    setCliType(null);
+    setRuntimeStatus(null);
+    setError(null);
+  }, []);
+
   const initializeWorkspaceRuntime = useCallback(
-    async (preferredWorkspaceId?: string, options?: { force?: boolean }) => {
+    async (preferredWorkspaceId?: string | null, options?: { force?: boolean }) => {
       if (
         !options?.force &&
         !preferredWorkspaceId &&
@@ -78,6 +87,10 @@ export const useWorkspaceRuntime = (initialWorkspaceId?: string): UseWorkspaceRu
       setIsLoading(true);
       try {
         let targetId = preferredWorkspaceId ?? workspaceId ?? null;
+        if (preferredWorkspaceId === null) {
+          resetRuntimeState(null);
+          return;
+        }
         if (!targetId) {
           targetId = await fetchDefaultWorkspaceId();
         }
@@ -122,12 +135,23 @@ export const useWorkspaceRuntime = (initialWorkspaceId?: string): UseWorkspaceRu
   );
 
   useEffect(() => {
-    if (initialWorkspaceId && initialWorkspaceId !== workspaceId) {
-      setWorkspaceId(initialWorkspaceId);
+    const nextWorkspaceId = initialWorkspaceId ?? null;
+    if (nextWorkspaceId === workspaceId) {
+      return;
     }
-  }, [initialWorkspaceId, workspaceId]);
+
+    resetRuntimeState(nextWorkspaceId);
+  }, [initialWorkspaceId, resetRuntimeState, workspaceId]);
 
   useEffect(() => {
+    if (initialWorkspaceId === null) {
+      return;
+    }
+
+    if (initialWorkspaceId === undefined && workspaceId === null) {
+      return;
+    }
+
     initializeWorkspaceRuntime(initialWorkspaceId);
   }, [initialWorkspaceId, initializeWorkspaceRuntime]);
 

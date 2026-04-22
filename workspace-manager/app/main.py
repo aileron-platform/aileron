@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from app.config.settings import get_settings
 from app.core.logging import setup_logging
 from app.db.database import create_tables, engine
+from app.db.migrations import apply_pending_migrations
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.i18n import I18nMiddleware
 from app.middleware.request_id import RequestIDMiddleware
@@ -56,6 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # 初始化資料庫
         create_tables()
         logger.info("✅ 資料庫初始化完成")
+
+        # 套用 scripts/migrations/*.sql(補 create_all 不處理的 schema 變更)
+        apply_pending_migrations(engine)
 
         # 載入種子資料
         try:

@@ -4,7 +4,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
-import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -27,6 +26,7 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { workspaceLifecycleApi } from '../../../services/workspaceLifecycleApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { apiClient } from '@/shared/api/apiClient';
+import { useWorkspaceDeleteFallback } from '../../../hooks/useWorkspaceDeleteFallback';
 import type {
   WorkspaceComponentStatusResponse,
   WorkspaceDetailResponse,
@@ -54,10 +54,10 @@ interface LifecycleOperationState {
 
 export const WorkspaceResetSettings: React.FC = () => {
   const { t } = useI18n();
-  const navigate = useNavigate();
   const { toast } = useToast();
   const { workspaceRuntime } = useWorkspace();
   const workspaceId = workspaceRuntime.workspaceId || '';
+  const resolveDeleteFallback = useWorkspaceDeleteFallback();
 
   const [workspaceDetail, setWorkspaceDetail] = useState<WorkspaceDetailResponse | null>(null);
   const [workspaceName, setWorkspaceName] = useState('');
@@ -401,14 +401,15 @@ export const WorkspaceResetSettings: React.FC = () => {
     setIsDeleting(true);
     try {
       await workspaceLifecycleApi.deleteWorkspace(workspaceId);
+      await resolveDeleteFallback({
+        deletedWorkspaceId: workspaceId,
+        deletedRuntimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
+      });
       toast({
         title: t('workspace.workspaceSettings.reset.delete.success.title'),
         description: t('workspace.workspaceSettings.reset.delete.success.description'),
         variant: 'default',
       });
-      setTimeout(() => {
-        navigate('/workspaces');
-      }, 1000);
     } catch (error) {
       logger.error('刪除工作區失敗', { error, workspaceId });
       toast({

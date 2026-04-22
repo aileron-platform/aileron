@@ -35,6 +35,8 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { cn } from '@/shared/utils/cn';
 import { sharedComponents } from '@/shared/components/markdown/markdownComponents';
+import { preprocessMarkdown } from '@/shared/components/markdown/markdownPreprocess';
+import { remarkLineBreakTag } from '@/shared/components/markdown/remarkLineBreakTag';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useChatPanelStateContext } from '../../../components/ChatPanel/chatPanelStateContext';
 import { createLogger } from '@/shared/services/logger';
@@ -118,6 +120,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   className,
 }) => {
   const { t } = useI18n();
+  const processedContent = useMemo(() => preprocessMarkdown(content), [content]);
   const { toast } = useToast();
   const workspaceContext = useWorkspace();
   const { workspace, fileEditor, fileTreeActions, fileTreeState, openFileInTab } = workspaceContext;
@@ -630,11 +633,11 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       }}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkLineBreakTag]}
         className="prose prose-sm dark:prose-invert max-w-none"
         components={buildMarkdownComponents()}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );
@@ -783,14 +786,14 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             }}
           >
             <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
+              remarkPlugins={[remarkGfm, remarkLineBreakTag]}
               className="prose prose-sm dark:prose-invert max-w-none"
               components={buildMarkdownComponents((text, level) => {
                 const normalizedText = normalizeOpenSpecHeadingText(text, level);
                 return headingLookup.get(`${level}:${normalizedText}`);
               })}
             >
-              {content}
+              {processedContent}
             </ReactMarkdown>
           </div>
 

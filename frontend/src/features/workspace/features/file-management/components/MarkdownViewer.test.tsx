@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MarkdownViewer } from './MarkdownViewer';
 
+vi.mock('rehype-katex', () => ({ default: () => (tree: any) => tree }));
+vi.mock('katex/dist/katex.min.css', () => ({}));
+
 const {
   openFileInTabMock,
   saveFileContentMock,
@@ -267,6 +270,28 @@ describe('MarkdownViewer', () => {
     expect(link).toHaveAttribute('href', 'https://example.com/spec');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('renders <br> tags as line breaks in the default markdown preview', () => {
+    const { container, rerender } = render(
+      <MarkdownViewer
+        content="line 1<br>line 2"
+        fileName="guide.md"
+        filePath="/docs/guide.md"
+      />,
+    );
+
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+
+    rerender(
+      <MarkdownViewer
+        content="line 1<br/>line 2"
+        fileName="guide.md"
+        filePath="/docs/guide.md"
+      />,
+    );
+
+    expect(container.querySelectorAll('br')).toHaveLength(1);
   });
 
   it('shows an error when an internal workspace path cannot be opened', async () => {
