@@ -22,6 +22,7 @@ import type { SelectedFile } from '../features/claude-code/components/ClaudeCode
 import { workspaceLifecycleApi } from '../services/workspaceLifecycleApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createLogger } from '@/shared/services/logger';
+import { useWorkspaceDeleteFallback } from '../hooks/useWorkspaceDeleteFallback';
 
 const logger = createLogger('WorkspaceShell');
 
@@ -138,6 +139,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   } | null>(null);
   const [skillSelectedFile, setSkillSelectedFile] = useState<SelectedFile | null>(null);
   const [scriptSelectedFile, setScriptSelectedFile] = useState<SelectedFile | null>(null);
+  const resolveDeleteFallback = useWorkspaceDeleteFallback();
 
   // 拖曳處理函數
   const handleMouseDown = useCallback((e: React.MouseEvent, type: 'sidebar' | 'secondColumn' | 'rightChat') => {
@@ -703,19 +705,20 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     }
 
     try {
-      await workspaceLifecycleApi.deleteWorkspace(workspaceRuntime.workspaceId);
+      const deletedWorkspaceId = workspaceRuntime.workspaceId;
+      const deletedRuntimeBaseUrl = workspaceRuntime.runtimeBaseUrl;
+
+      await workspaceLifecycleApi.deleteWorkspace(deletedWorkspaceId);
+      await resolveDeleteFallback({
+        deletedWorkspaceId,
+        deletedRuntimeBaseUrl,
+      });
 
       toast({
         title: t('workspace.workspaceSettings.reset.delete.success.title'),
         description: t('workspace.workspaceSettings.reset.delete.success.description'),
         variant: 'default',
       });
-
-      // 導航到工作區列表頁
-      setTimeout(() => {
-        navigate('/workspaces');
-      }, 1000);
-
     } catch (error) {
       logger.error('刪除工作區失敗', { error });
       toast({
@@ -724,7 +727,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         variant: 'destructive',
       });
     }
-  }, [workspaceRuntime.workspaceId, navigate, t, toast]);
+  }, [resolveDeleteFallback, t, toast, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   // 如果有 runtime 錯誤且不在載入狀態，顯示錯誤頁面
   const shouldShowRuntimeError = workspaceRuntime.error &&

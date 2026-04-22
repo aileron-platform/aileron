@@ -27,7 +27,7 @@ export { useWorkspace, useWorkspaceOptional } from './WorkspaceContext';
 // Provider 組件
 interface WorkspaceProviderProps {
   children: ReactNode;
-  workspaceId?: string;
+  workspaceId?: string | null;
 }
 
 export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, workspaceId }) => {

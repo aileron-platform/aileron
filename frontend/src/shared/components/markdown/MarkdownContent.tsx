@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex';
 import { cn } from '@/shared/utils/cn';
 import { sharedComponents } from './markdownComponents';
 import { parseFrontmatterSegments, preprocessMarkdown, type FrontmatterValue } from './markdownPreprocess';
+import { remarkLineBreakTag } from './remarkLineBreakTag';
 import 'katex/dist/katex.min.css';
 
 export type MarkdownVariant = 'default' | 'compact' | 'chat';
@@ -98,7 +99,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
         return (
           <ReactMarkdown
             key={`markdown-${index}`}
-            remarkPlugins={[remarkGfm, remarkMath]}
+            remarkPlugins={[remarkGfm, remarkMath, remarkLineBreakTag]}
             rehypePlugins={[rehypeKatex]}
             components={sharedComponents}
           >

@@ -111,4 +111,11 @@ E=mc^2
     const result = preprocessMarkdown(input);
     expect(result).toContain('$$\n\\begin{equation}');
   });
+
+  it('保留 <br> 標籤，交給後續 markdown plugin 處理', () => {
+    const input = 'line 1<br>line 2\n\n```md\nline 1<br>line 2\n```';
+    const result = preprocessMarkdown(input);
+
+    expect(result).toBe(input);
+  });
 });

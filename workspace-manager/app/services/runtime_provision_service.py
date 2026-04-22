@@ -418,6 +418,8 @@ class RuntimeProvisionService:
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/tests", target="/workspace-runtime/tests"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/pyproject.toml", target="/workspace-runtime/pyproject.toml"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/uv.lock", target="/workspace-runtime/uv.lock"))
+                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/supervisord.conf", target="/workspace-runtime/supervisord.conf"))
+                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/supervisord.dev.conf", target="/workspace-runtime/supervisord.dev.conf"))
                 
                 host_project_root = os.environ.get("HOST_PROJECT_ROOT")
                 if host_project_root:
