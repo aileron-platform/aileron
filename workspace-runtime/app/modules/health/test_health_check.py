@@ -96,6 +96,7 @@ def test_check_and_update_workspace_status_first_time(test_db, mock_settings):
     assert result["container_id"] == "test-container-123"
     assert result["runtime_status"] == "running"
     assert result["updated"] is True
+    assert result["terminal_service"]["status"] == "starting"
     
     # 檢查資料庫更新
     workspace = test_db.query(Workspace).filter(Workspace.id == "test-workspace-1").first()
@@ -121,6 +122,7 @@ def test_check_and_update_workspace_status_already_running(test_db, mock_setting
     assert result["status"] == "healthy"
     assert result["runtime_status"] == "running"
     assert result["updated"] is True  # last_seen 仍會更新
+    assert result["terminal_service"]["status"] == "starting"
 
 
 def test_check_and_update_workspace_status_container_id_changed(test_db, mock_settings):
@@ -140,6 +142,7 @@ def test_check_and_update_workspace_status_container_id_changed(test_db, mock_se
     assert result["status"] == "healthy"
     assert result["container_id"] == "new-container-456"
     assert result["updated"] is True
+    assert result["terminal_service"]["status"] == "starting"
 
     # 檢查資料庫更新
     workspace = test_db.query(Workspace).filter(Workspace.id == "test-workspace-1").first()
@@ -158,6 +161,7 @@ def test_check_and_update_workspace_status_workspace_not_found(test_db):
     # 檢查返回結果
     assert result["status"] == "unhealthy"
     assert "Workspace not found" in result["error"]
+    assert result["terminal_service"]["status"] == "starting"
 
 
 def test_check_and_update_workspace_status_database_error(test_db, mock_settings):
@@ -171,8 +175,8 @@ def test_check_and_update_workspace_status_database_error(test_db, mock_settings
     # 檢查返回結果
     assert result["status"] == "degraded"
     assert "Database connection failed" in result["error"]
+    assert result["terminal_service"]["status"] == "starting"
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

@@ -20,8 +20,9 @@ def _create_terminal_source_tree(root: Path) -> None:
 
 def _create_fake_go(binary_dir: Path) -> None:
     fake_go = binary_dir / "go"
+    build_log = binary_dir / "build.log"
     fake_go.write_text(
-        """#!/bin/sh
+        f"""#!/bin/sh
 set -eu
 output=""
 while [ "$#" -gt 0 ]; do
@@ -33,7 +34,17 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 mkdir -p "$(dirname "$output")"
-printf '#!/bin/sh\\necho built-%s\\n' "$GOARCH" > "$output"
+case "$GOARCH" in
+  arm64) machine_octal='\\267\\000' ;;
+  amd64) machine_octal='\\076\\000' ;;
+  *) echo "unsupported GOARCH: $GOARCH" >&2; exit 1 ;;
+esac
+{{
+  printf '\\177ELF'
+  dd if=/dev/zero bs=1 count=14 2>/dev/null
+  printf "$machine_octal"
+}} > "$output"
+printf '%s\\n' "$GOARCH" >> "{build_log}"
 """,
         encoding="utf-8",
     )
@@ -47,11 +58,21 @@ def _write_minimal_elf(path: Path, machine_code: int) -> None:
     path.write_bytes(payload)
 
 
-def _run_bootstrap(source_dir: Path, binary_dir: Path, fake_go_dir: Path, goarch: str) -> subprocess.CompletedProcess[str]:
+def _run_bootstrap(
+    source_dir: Path,
+    cache_dir: Path,
+    fake_go_dir: Path,
+    goarch: str,
+    *,
+    prebuilt_binary: Path | None = None,
+    rebuild_from_source: bool = False,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["WORKSPACE_TERMINAL_SOURCE_DIR"] = str(source_dir)
-    env["WORKSPACE_TERMINAL_BINARY_DIR"] = str(binary_dir)
+    env["WORKSPACE_TERMINAL_CACHE_DIR"] = str(cache_dir)
     env["WORKSPACE_TERMINAL_GOARCH"] = goarch
+    env["WORKSPACE_TERMINAL_PREBUILT_BINARY"] = str(prebuilt_binary or (cache_dir / "prebuilt" / "terminal-service"))
+    env["WORKSPACE_TERMINAL_REBUILD_FROM_SOURCE"] = "1" if rebuild_from_source else "0"
     env["PATH"] = f"{fake_go_dir}{os.pathsep}{env['PATH']}"
     return subprocess.run(
         ["bash", str(SCRIPT_PATH)],
@@ -63,38 +84,73 @@ def _run_bootstrap(source_dir: Path, binary_dir: Path, fake_go_dir: Path, goarch
 
 
 @pytest.mark.unit
-def test_terminal_bootstrap_rebuilds_missing_binary(tmp_path: Path) -> None:
+def test_terminal_bootstrap_uses_prebuilt_binary_by_default(tmp_path: Path) -> None:
     if os.name == "nt" or shutil.which("bash") is None:
         pytest.skip("bash-based bootstrap test requires a POSIX shell")
 
     source_dir = tmp_path / "workspace-terminal"
-    binary_dir = tmp_path / "terminal-cache" / "bin"
+    cache_dir = tmp_path / "terminal-cache"
+    prebuilt_binary = tmp_path / "prebuilt" / "terminal-service"
     fake_go_dir = tmp_path / "fake-go"
     fake_go_dir.mkdir()
     _create_terminal_source_tree(source_dir)
     _create_fake_go(fake_go_dir)
+    _write_minimal_elf(prebuilt_binary, 183)
 
-    result = _run_bootstrap(source_dir, binary_dir, fake_go_dir, "arm64")
+    result = _run_bootstrap(source_dir, cache_dir, fake_go_dir, "arm64", prebuilt_binary=prebuilt_binary)
 
     assert result.returncode == 0, result.stderr
-    assert (binary_dir / "terminal-service").read_text(encoding="utf-8") == "#!/bin/sh\necho built-arm64\n"
+    assert f"Using terminal-service binary: {prebuilt_binary}" in result.stdout
+    assert not any(cache_dir.rglob("terminal-service"))
+    build_log = fake_go_dir / "build.log"
+    assert not build_log.exists()
 
 
 @pytest.mark.unit
-def test_terminal_bootstrap_rebuilds_wrong_arch_binary(tmp_path: Path) -> None:
+def test_terminal_bootstrap_rebuilds_wrong_arch_prebuilt_via_cache(tmp_path: Path) -> None:
     if os.name == "nt" or shutil.which("bash") is None:
         pytest.skip("bash-based bootstrap test requires a POSIX shell")
 
     source_dir = tmp_path / "workspace-terminal"
-    binary_dir = tmp_path / "terminal-cache" / "bin"
+    cache_dir = tmp_path / "terminal-cache"
+    prebuilt_binary = tmp_path / "prebuilt" / "terminal-service"
     fake_go_dir = tmp_path / "fake-go"
     fake_go_dir.mkdir()
     _create_terminal_source_tree(source_dir)
     _create_fake_go(fake_go_dir)
-    binary_dir.mkdir(parents=True, exist_ok=True)
-    _write_minimal_elf(binary_dir / "terminal-service", 183)
+    _write_minimal_elf(prebuilt_binary, 183)
 
-    result = _run_bootstrap(source_dir, binary_dir, fake_go_dir, "amd64")
+    result = _run_bootstrap(source_dir, cache_dir, fake_go_dir, "amd64", prebuilt_binary=prebuilt_binary)
 
     assert result.returncode == 0, result.stderr
-    assert (binary_dir / "terminal-service").read_text(encoding="utf-8") == "#!/bin/sh\necho built-amd64\n"
+    cached_binaries = list(cache_dir.rglob("terminal-service"))
+    assert len(cached_binaries) == 1
+    assert cached_binaries[0].exists()
+    assert (fake_go_dir / "build.log").read_text(encoding="utf-8").strip().splitlines() == ["amd64"]
+
+
+@pytest.mark.unit
+def test_terminal_bootstrap_reuses_cached_binary_for_explicit_source_rebuild(tmp_path: Path) -> None:
+    if os.name == "nt" or shutil.which("bash") is None:
+        pytest.skip("bash-based bootstrap test requires a POSIX shell")
+
+    source_dir = tmp_path / "workspace-terminal"
+    cache_dir = tmp_path / "terminal-cache"
+    fake_go_dir = tmp_path / "fake-go"
+    fake_go_dir.mkdir()
+    _create_terminal_source_tree(source_dir)
+    _create_fake_go(fake_go_dir)
+
+    first = _run_bootstrap(source_dir, cache_dir, fake_go_dir, "arm64", rebuild_from_source=True)
+    assert first.returncode == 0, first.stderr
+
+    cached_binaries = list(cache_dir.rglob("terminal-service"))
+    assert len(cached_binaries) == 1
+    build_log = fake_go_dir / "build.log"
+    assert build_log.read_text(encoding="utf-8").strip().splitlines() == ["arm64"]
+
+    second = _run_bootstrap(source_dir, cache_dir, fake_go_dir, "arm64", rebuild_from_source=True)
+
+    assert second.returncode == 0, second.stderr
+    assert "Using cached terminal-service binary" in second.stderr
+    assert build_log.read_text(encoding="utf-8").strip().splitlines() == ["arm64"]

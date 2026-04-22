@@ -64,6 +64,7 @@ def sample_workspace():
     workspace.browser_status = "running"
     workspace.nextjs_container_id = None
     workspace.nextjs_status = "stopped"
+    workspace.setup_script = None
     return workspace
 
 
@@ -266,14 +267,29 @@ class TestRestartWorkspace:
         """測試：成功重啟 workspace"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
-        with patch.object(lifecycle_service, "_recreate_container", return_value="container-new"):
+        with patch(
+            "app.services.runtime_provision_service.RuntimeProvisionService.execute_runtime_provision"
+        ) as mock_execute_runtime_provision:
             # Act
             lifecycle_service.restart_workspace_task("workspace-123")
 
         # Assert
-        assert sample_workspace.runtime_container_id == "container-new"
-        assert sample_workspace.runtime_status == "running"
+        mock_execute_runtime_provision.assert_called_once_with("workspace-123")
         mock_db_session.commit.assert_called()
+
+    def test_restart_workspace_uses_runtime_provision_instead_of_recreate_container(
+        self, lifecycle_service, mock_db_session, sample_workspace
+    ):
+        mock_db_session.get.return_value = sample_workspace
+
+        with patch.object(lifecycle_service, "_recreate_container") as mock_recreate_container:
+            with patch(
+                "app.services.runtime_provision_service.RuntimeProvisionService.execute_runtime_provision"
+            ) as mock_execute_runtime_provision:
+                lifecycle_service.restart_workspace_task("workspace-123")
+
+        mock_execute_runtime_provision.assert_called_once_with("workspace-123")
+        mock_recreate_container.assert_not_called()
 
     def test_restart_workspace_not_found(
         self, lifecycle_service, mock_db_session
@@ -343,9 +359,8 @@ class TestRestartWorkspace:
         """測試：Docker 錯誤時的錯誤處理"""
         # Arrange
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
-        with patch.object(
-            lifecycle_service,
-            "_recreate_container",
+        with patch(
+            "app.services.runtime_provision_service.RuntimeProvisionService.execute_runtime_provision",
             side_effect=docker.errors.APIError("Docker API error"),
         ):
             # Act
@@ -361,9 +376,8 @@ class TestRestartWorkspace:
         """測試：容器不存在時的錯誤處理"""
         # Arrange
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
-        with patch.object(
-            lifecycle_service,
-            "_recreate_container",
+        with patch(
+            "app.services.runtime_provision_service.RuntimeProvisionService.execute_runtime_provision",
             side_effect=ValueError("Container container-abc 不存在"),
         ):
             # Act

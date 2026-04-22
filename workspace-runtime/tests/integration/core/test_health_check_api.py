@@ -143,6 +143,8 @@ def test_hl_001_normal_status_update(client):
     assert "container_id" in payload
     assert payload["runtime_status"] == "running"
     assert payload["updated"] is True
+    assert payload["terminal_service"]["status"] == "starting"
+    assert payload["terminal_service"]["port"] == 3004
 
 
 def test_hl_002_database_connection_failure(client):
@@ -175,6 +177,7 @@ def test_hl_002_database_connection_failure(client):
     assert payload["status"] == "degraded"
     assert "error" in payload
     assert "Database connection failed" in payload["error"]
+    assert payload["terminal_service"]["status"] == "starting"
 
 
 def test_hl_003_workspace_not_found(client):
@@ -196,6 +199,7 @@ def test_hl_003_workspace_not_found(client):
     payload = response.json()
     # 即使沒有工作區記錄，健康檢查仍應回報正常
     assert payload["status"] == "unhealthy"
+    assert payload["terminal_service"]["status"] == "starting"
 
 
 def test_hl_004_container_id_unavailable(client):
@@ -236,6 +240,7 @@ def test_hl_004_container_id_unavailable(client):
         payload = response.json()
         assert payload["status"] == "healthy"  # socket.gethostname 失敗不會影響健康檢查
         assert payload["container_id"] is None  # container_id 會是 None
+        assert payload["terminal_service"]["status"] == "starting"
 
     finally:
         # 恢復原始的 socket.gethostname

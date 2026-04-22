@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 
 from app.core.openapi import build_responses
+from app.db import models as db_models
 from app.models import (
     KnowledgeBaseErrorResponse,
     WorkspaceCreateRequest,
@@ -342,6 +343,12 @@ def _require_current_user_id(request: Request) -> str | None:
             detail=request.state.translate("auth.unauthenticated"),
         )
     return current_user_id
+
+
+def _should_schedule_kb_runtime_sync(workspace: object) -> bool:
+    provisioner = getattr(workspace, "provisioner", None)
+    runtime_container_id = getattr(workspace, "runtime_container_id", None)
+    return provisioner == "docker" and isinstance(runtime_container_id, str) and bool(runtime_container_id)
 
 
 @router.get(
@@ -1031,6 +1038,7 @@ def create_workspace_knowledge_base_attachment(
     workspace_id: str,
     payload: WorkspaceKnowledgeBaseAttachmentCreateRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
 ) -> WorkspaceKnowledgeBaseAttachment:
     current_user_id = _require_current_user_id(request)
@@ -1042,6 +1050,9 @@ def create_workspace_knowledge_base_attachment(
             mount_alias=payload.mount_alias,
             mode=payload.mode,
         )
+        workspace = service.db.get(db_models.Workspace, workspace_id)
+        if workspace is not None and _should_schedule_kb_runtime_sync(workspace):
+            background_tasks.add_task(run_runtime_provision_task, workspace_id)
         return WorkspaceKnowledgeBaseAttachment(
             id=attachment.id,
             kb_id=attachment.knowledge_base.id,
@@ -1102,6 +1113,7 @@ def update_workspace_knowledge_base_attachment(
     attachment_id: str,
     payload: WorkspaceKnowledgeBaseAttachmentUpdateRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
 ) -> WorkspaceKnowledgeBaseAttachment:
     current_user_id = _require_current_user_id(request)
@@ -1112,6 +1124,9 @@ def update_workspace_knowledge_base_attachment(
             mount_alias=payload.mount_alias,
             mode=payload.mode,
         )
+        workspace = service.db.get(db_models.Workspace, workspace_id)
+        if workspace is not None and _should_schedule_kb_runtime_sync(workspace):
+            background_tasks.add_task(run_runtime_provision_task, workspace_id)
         return WorkspaceKnowledgeBaseAttachment(
             id=attachment.id,
             kb_id=attachment.knowledge_base.id,
@@ -1157,11 +1172,15 @@ def delete_workspace_knowledge_base_attachment(
     workspace_id: str,
     attachment_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
 ) -> None:
     current_user_id = _require_current_user_id(request)
     try:
         service.detach(user_id=current_user_id, attachment_id=attachment_id)
+        workspace = service.db.get(db_models.Workspace, workspace_id)
+        if workspace is not None and _should_schedule_kb_runtime_sync(workspace):
+            background_tasks.add_task(run_runtime_provision_task, workspace_id)
     except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
         code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
