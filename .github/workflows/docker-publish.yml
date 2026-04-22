@@ -356,19 +356,24 @@ jobs:
           image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/workspace-runtime"
           flavor="${{ matrix.flavor.name }}"
           arch="${{ matrix.platform.arch }}"
-          tags=""
+          dev_tags=""
+          latest_tags=""
 
           if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
-            tags="${tags}${image}:dev-${flavor}-${arch}"$'\n'
+            dev_tags="${dev_tags}${image}:dev-${flavor}-${arch}"$'\n'
           fi
 
           if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
-            tags="${tags}${image}:latest-${flavor}-${arch}"$'\n'
+            latest_tags="${latest_tags}${image}:latest-${flavor}-${arch}"$'\n'
           fi
 
           {
-            echo "tags<<EOF"
-            printf "%s" "${tags}"
+            echo "dev_tags<<EOF"
+            printf "%s" "${dev_tags}"
+            echo
+            echo "EOF"
+            echo "latest_tags<<EOF"
+            printf "%s" "${latest_tags}"
             echo
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
@@ -389,7 +394,27 @@ jobs:
 
           echo "base_ref=${base_ref}" >> "${GITHUB_OUTPUT}"
 
-      - name: Build and push runtime image
+      - name: Build and push runtime dev image
+        if: ${{ needs.resolve-config.outputs.publish_dev == 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: workspace-runtime/Dockerfile
+          target: development
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.dev_tags }}
+          build-args: |
+            GOARCH=${{ matrix.platform.arch }}
+          build-contexts: |
+            runtime-base=docker-image://${{ steps.base.outputs.base_ref }}
+          cache-from: type=gha,scope=runtime-dev-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=runtime-dev-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+      - name: Build and push runtime latest image
+        if: ${{ needs.resolve-config.outputs.publish_latest == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -397,12 +422,12 @@ jobs:
           target: production
           platforms: ${{ matrix.platform.value }}
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ steps.tags.outputs.latest_tags }}
           build-args: |
             GOARCH=${{ matrix.platform.arch }}
           build-contexts: |
             runtime-base=docker-image://${{ steps.base.outputs.base_ref }}
-          cache-from: type=gha,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
-          cache-to: type=gha,mode=max,scope=runtime-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          cache-from: type=gha,scope=runtime-latest-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=runtime-latest-${{ matrix.flavor.name }}-${{ matrix.platform.arch }}
           provenance: false
           sbom: false
