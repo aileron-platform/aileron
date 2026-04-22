@@ -113,24 +113,10 @@ class WorkspaceLifecycleService:
 
             # 記錄重啟日誌
             self._log_event(workspace_id, "restarting", "開始重建 workspace container")
-
-            # 2. 從資料庫構建最新的環境變數
-            fresh_env = self._build_fresh_environment(workspace)
-
-            # 3. 重建 container（使用最新環境變數）
             if workspace.runtime_container_id:
-                new_id = self._recreate_container(
-                    workspace.runtime_container_id, workspace_id,
-                    env_override=fresh_env,
-                )
+                from app.services.runtime_provision_service import RuntimeProvisionService
 
-                # 更新 container ID 和狀態
-                if new_id:
-                    workspace.runtime_container_id = new_id
-                workspace.runtime_status = "running"
-                self._log_event(workspace_id, "running", "Container 重建成功")
-                self.db.commit()
-
+                RuntimeProvisionService(self.db).execute_runtime_provision(workspace_id)
                 logger.info(f"成功重建 workspace container: {workspace_id}")
             else:
                 logger.warning(f"Workspace {workspace_id} 沒有關聯的 container")

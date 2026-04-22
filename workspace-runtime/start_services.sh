@@ -292,10 +292,12 @@ echo "✅ 日誌目錄設定完成"
 echo ""
 
 # ============================================================================
-# 12. 編譯 Terminal Service（如果需要）
+# 12. 建立 Terminal Service 快取目錄
 # ============================================================================
-echo "🔧 檢查 Terminal Service 二進制文件..."
-/workspace-runtime/scripts/terminal_service.sh
+echo "🔧 準備 Terminal Service 快取目錄..."
+mkdir -p "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}"
+chown -R developer:developer "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}" 2>/dev/null || true
+echo "✅ Terminal Service 將由 supervisord 啟動時自行解析 binary"
 echo ""
 
 # ============================================================================

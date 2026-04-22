@@ -3,8 +3,10 @@
 set -euo pipefail
 
 TERMINAL_SOURCE_DIR="${WORKSPACE_TERMINAL_SOURCE_DIR:-${WORKSPACE_TERMINAL_DIR:-/workspace-terminal}}"
-TERMINAL_BINARY_DIR="${WORKSPACE_TERMINAL_BINARY_DIR:-/tmp/terminal-service/bin}"
-TERMINAL_BINARY="${TERMINAL_BINARY_DIR}/terminal-service"
+TERMINAL_PREBUILT_BINARY="${WORKSPACE_TERMINAL_PREBUILT_BINARY:-/opt/terminal-service/bin/terminal-service}"
+TERMINAL_CACHE_ROOT="${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}"
+TERMINAL_REBUILD_FROM_SOURCE="${WORKSPACE_TERMINAL_REBUILD_FROM_SOURCE:-0}"
+RESOLVED_TERMINAL_BINARY=""
 
 detect_target_goarch() {
     if [ -n "${WORKSPACE_TERMINAL_GOARCH:-}" ]; then
@@ -41,68 +43,149 @@ expected_machine_code() {
     esac
 }
 
+is_truthy() {
+    case "${1,,}" in
+        1|true|yes|on)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+terminal_source_available() {
+    [ -f "${TERMINAL_SOURCE_DIR}/go.mod" ] && [ -f "${TERMINAL_SOURCE_DIR}/cmd/server/main.go" ]
+}
+
 is_elf_binary() {
-    [ -f "$TERMINAL_BINARY" ] && head -c 4 "$TERMINAL_BINARY" | od -An -tx1 | grep -q "7f 45 4c 46"
+    local binary_path="$1"
+    [ -f "$binary_path" ] && head -c 4 "$binary_path" | od -An -tx1 | grep -q "7f 45 4c 46"
 }
 
 binary_machine_code() {
-    od -An -tu2 -j 18 -N 2 "$TERMINAL_BINARY" | tr -d '[:space:]'
+    local binary_path="$1"
+    od -An -tu2 -j 18 -N 2 "$binary_path" | tr -d '[:space:]'
 }
 
-terminal_sources_changed() {
-    [ ! -f "$TERMINAL_BINARY" ] && return 0
+is_binary_compatible() {
+    local binary_path="$1"
+    local target_goarch="$2"
+    local expected_machine actual_machine
 
-    find "${TERMINAL_SOURCE_DIR}" \
-        \( -path "${TERMINAL_SOURCE_DIR}/.git" -o -path "${TERMINAL_SOURCE_DIR}/bin" \) -prune \
-        -o \
-        \( -name 'go.mod' -o -name 'go.sum' -o -name '*.go' \) -type f -newer "$TERMINAL_BINARY" -print -quit \
-        | grep -q .
+    expected_machine="$(expected_machine_code "${target_goarch}")"
+    if ! is_elf_binary "$binary_path"; then
+        return 1
+    fi
+
+    actual_machine="$(binary_machine_code "$binary_path")"
+    [ "${actual_machine}" = "${expected_machine}" ]
 }
 
-rebuild_terminal_binary() {
-    local target_goarch
-    target_goarch="$(detect_target_goarch)"
+compute_source_hash() {
+    local files
 
-    if [ ! -f "${TERMINAL_SOURCE_DIR}/go.mod" ] || [ ! -f "${TERMINAL_SOURCE_DIR}/cmd/server/main.go" ]; then
+    if ! terminal_source_available; then
         echo "terminal-service sources not found in ${TERMINAL_SOURCE_DIR}" >&2
         return 1
     fi
 
-    echo "Rebuilding terminal-service for linux/${target_goarch}"
+    files="$(
+        find "${TERMINAL_SOURCE_DIR}" \
+            \( -path "${TERMINAL_SOURCE_DIR}/.git" -o -path "${TERMINAL_SOURCE_DIR}/bin" -o -path "${TERMINAL_SOURCE_DIR}/.cache" \) -prune \
+            -o \
+            \( -name 'go.mod' -o -name 'go.sum' -o -name '*.go' \) -type f -print \
+            | LC_ALL=C sort
+    )"
+
+    if [ -z "$files" ]; then
+        echo "terminal-service source set is empty in ${TERMINAL_SOURCE_DIR}" >&2
+        return 1
+    fi
+
+    (
+        while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            sha256sum "$file"
+        done <<< "$files"
+    ) | sha256sum | awk '{print $1}'
+}
+
+cache_binary_path() {
+    local target_goarch="$1"
+    local source_hash="$2"
+    echo "${TERMINAL_CACHE_ROOT}/${target_goarch}/${source_hash}/terminal-service"
+}
+
+build_terminal_binary() {
+    local output_path="$1"
+    local target_goarch="$2"
+
+    if ! terminal_source_available; then
+        echo "terminal-service sources not found in ${TERMINAL_SOURCE_DIR}" >&2
+        return 1
+    fi
+
+    echo "Rebuilding terminal-service for linux/${target_goarch} -> ${output_path}" >&2
+    mkdir -p "$(dirname "${output_path}")"
     (
         cd "${TERMINAL_SOURCE_DIR}"
-        rm -f "${TERMINAL_BINARY}"
-        mkdir -p "${TERMINAL_BINARY_DIR}"
-        CGO_ENABLED=0 GOOS=linux GOARCH="${target_goarch}" go build -o "${TERMINAL_BINARY}" ./cmd/server
-        chmod +x "${TERMINAL_BINARY}"
+        CGO_ENABLED=0 GOOS=linux GOARCH="${target_goarch}" go build -o "${output_path}" ./cmd/server
     )
+    chmod +x "${output_path}"
+}
+
+resolve_prebuilt_binary() {
+    local target_goarch="$1"
+
+    if is_binary_compatible "${TERMINAL_PREBUILT_BINARY}" "${target_goarch}"; then
+        RESOLVED_TERMINAL_BINARY="${TERMINAL_PREBUILT_BINARY}"
+        return 0
+    fi
+
+    echo "terminal-service prebuilt binary missing or incompatible: ${TERMINAL_PREBUILT_BINARY}" >&2
+    return 1
+}
+
+resolve_source_rebuild_binary() {
+    local target_goarch="$1"
+    local source_hash cache_binary
+
+    source_hash="$(compute_source_hash)"
+    cache_binary="$(cache_binary_path "${target_goarch}" "${source_hash}")"
+
+    if is_binary_compatible "${cache_binary}" "${target_goarch}"; then
+        echo "Using cached terminal-service binary: ${cache_binary}" >&2
+        RESOLVED_TERMINAL_BINARY="${cache_binary}"
+        return 0
+    fi
+
+    build_terminal_binary "${cache_binary}" "${target_goarch}"
+    RESOLVED_TERMINAL_BINARY="${cache_binary}"
+    return 0
 }
 
 ensure_terminal_binary() {
-    local target_goarch expected_machine actual_machine
+    local target_goarch
     target_goarch="$(detect_target_goarch)"
-    expected_machine="$(expected_machine_code "${target_goarch}")"
 
-    if ! is_elf_binary; then
-        rebuild_terminal_binary
-        return
+    if is_truthy "${TERMINAL_REBUILD_FROM_SOURCE}"; then
+        resolve_source_rebuild_binary "${target_goarch}"
+        return 0
     fi
 
-    actual_machine="$(binary_machine_code)"
-    if [ "${actual_machine}" != "${expected_machine}" ]; then
-        echo "terminal-service architecture mismatch (${actual_machine} != ${expected_machine})" >&2
-        rebuild_terminal_binary
-        return
+    if resolve_prebuilt_binary "${target_goarch}"; then
+        return 0
     fi
 
-    if terminal_sources_changed; then
-        echo "terminal-service sources changed; rebuilding cached binary" >&2
-        rebuild_terminal_binary
-    fi
+    echo "Falling back to architecture-safe terminal-service rebuild" >&2
+    resolve_source_rebuild_binary "${target_goarch}"
 }
 
 ensure_terminal_binary
 
 if [ "${1:-}" = "--exec" ]; then
-    exec "${TERMINAL_BINARY}"
+    exec "${RESOLVED_TERMINAL_BINARY}"
 fi
+
+echo "Using terminal-service binary: ${RESOLVED_TERMINAL_BINARY}"

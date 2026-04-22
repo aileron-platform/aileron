@@ -33,7 +33,13 @@ def _authenticate_as(client, monkeypatch, user: db_models.User) -> None:
     client.headers.update({"Authorization": "Bearer test-access-token"})
 
 
-def _create_workspace(session_factory, *, owner_id: str) -> str:
+def _create_workspace(
+    session_factory,
+    *,
+    owner_id: str,
+    runtime_status: str = "stopped",
+    runtime_container_id: str | None = None,
+) -> str:
     with session_factory() as session:
         workspace = db_models.Workspace(
             id=f"workspace-{uuid4().hex[:8]}",
@@ -41,7 +47,8 @@ def _create_workspace(session_factory, *, owner_id: str) -> str:
             name="KB Workspace",
             runtime="universal",
             provisioner="docker",
-            runtime_status="stopped",
+            runtime_status=runtime_status,
+            runtime_container_id=runtime_container_id,
             env_vars=[],
             port_mappings=[],
             workspace_firewall_allowed_domains=[],
@@ -249,6 +256,74 @@ def test_workspace_knowledge_base_endpoints_and_detail_fields(test_app, create_u
     assert detail_response.json()["attachedKnowledgeBases"][0]["role"] == "owner"
     assert detail_response.json()["mountedKbSignature"] is None
     assert detail_response.json()["hasPendingKbChanges"] is True
+
+
+@pytest.mark.integration
+def test_workspace_knowledge_base_endpoints_schedule_runtime_sync_for_running_docker_workspace(
+    test_app, create_user, monkeypatch
+):
+    client, session_factory = test_app
+    owner = create_user(username="workspace-runtime-owner")
+    workspace_id = _create_workspace(
+        session_factory,
+        owner_id=owner.id,
+        runtime_status="running",
+        runtime_container_id="runtime-container-123",
+    )
+    _authenticate_as(client, monkeypatch, owner)
+
+    create_kb_response = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "Runtime Sync Docs", "slug": "runtime-sync-docs"},
+    )
+    kb_id = create_kb_response.json()["id"]
+
+    with patch("app.routers.workspaces.run_runtime_provision_task") as mock_runtime_sync:
+        attach_response = client.post(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases",
+            json={"kbId": kb_id, "mode": "rw"},
+        )
+        attachment_id = attach_response.json()["id"]
+        update_response = client.patch(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases/{attachment_id}",
+            json={"mountAlias": "runtime-sync-docs-v2", "mode": "ro"},
+        )
+        delete_response = client.delete(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases/{attachment_id}"
+        )
+
+    assert attach_response.status_code == 201
+    assert update_response.status_code == 200
+    assert delete_response.status_code == 204
+    assert mock_runtime_sync.call_count == 3
+    assert mock_runtime_sync.call_args_list[0].args == (workspace_id,)
+    assert mock_runtime_sync.call_args_list[1].args == (workspace_id,)
+    assert mock_runtime_sync.call_args_list[2].args == (workspace_id,)
+
+
+@pytest.mark.integration
+def test_workspace_knowledge_base_endpoints_do_not_schedule_runtime_sync_without_runtime_container(
+    test_app, create_user, monkeypatch
+):
+    client, session_factory = test_app
+    owner = create_user(username="workspace-no-runtime-owner")
+    workspace_id = _create_workspace(session_factory, owner_id=owner.id)
+    _authenticate_as(client, monkeypatch, owner)
+
+    create_kb_response = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "Pending Docs", "slug": "pending-docs"},
+    )
+    kb_id = create_kb_response.json()["id"]
+
+    with patch("app.routers.workspaces.run_runtime_provision_task") as mock_runtime_sync:
+        attach_response = client.post(
+            f"/api/v1/workspaces/{workspace_id}/knowledge-bases",
+            json={"kbId": kb_id, "mode": "rw"},
+        )
+
+    assert attach_response.status_code == 201
+    mock_runtime_sync.assert_not_called()
 
 
 @pytest.mark.integration

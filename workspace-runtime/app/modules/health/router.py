@@ -37,10 +37,12 @@ async def health_check(db: Session = Depends(get_db)) -> dict[str, object]:
     except Exception as e:
         # 如果資料庫連線失敗，仍然返回基本的健康狀態
         settings = get_settings()
+        terminal_status = HealthCheckService(db).get_terminal_service_status()
         return {
             "status": "degraded",
             "service": "workspace-runtime",
             "workspace_id": settings.WORKSPACE_ID,
             "error": f"Database connection failed: {str(e)}",
             "timestamp": utcnow().isoformat() + "Z",
+            "terminal_service": terminal_status,
         }

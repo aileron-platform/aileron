@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import socket
 from typing import Literal, Optional, TypedDict
 
@@ -26,6 +27,7 @@ class HealthCheckResult(TypedDict, total=False):
     timestamp: str
     updated: bool
     error: str
+    terminal_service: dict[str, object]
 
 
 class HealthCheckService:
@@ -46,6 +48,16 @@ class HealthCheckService:
         except Exception as e:
             logger.warning(f"無法獲取容器 ID: {e}")
             return None
+
+    def get_terminal_service_status(self) -> dict[str, object]:
+        """回報 terminal-service readiness，避免與主 API 健康狀態混淆。"""
+        port = int(os.getenv("TERMINAL_PORT", "3004"))
+
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return {"status": "ready", "port": port}
+        except OSError:
+            return {"status": "starting", "port": port}
 
     def check_and_update_workspace_status(self) -> HealthCheckResult:
         """
@@ -109,6 +121,7 @@ class HealthCheckService:
                 "last_seen": workspace.runtime_last_seen.isoformat() + "Z" if workspace.runtime_last_seen else None,
                 "timestamp": current_time.isoformat() + "Z",
                 "updated": needs_update,
+                "terminal_service": self.get_terminal_service_status(),
             }
 
         except Exception as e:
@@ -121,8 +134,8 @@ class HealthCheckService:
                 "container_id": container_id,
                 "error": str(e),
                 "timestamp": current_time.isoformat() + "Z",
+                "terminal_service": self.get_terminal_service_status(),
             }
 
 
 __all__ = ["HealthCheckService"]
-

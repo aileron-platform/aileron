@@ -12,6 +12,7 @@ from app.services.knowledge_base_file_service import KnowledgeBaseFileService
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.services.orchestrator.models import RuntimeInfo, RuntimeStatusType
 from app.services.runtime_provision_service import RuntimeProvisionService
+from app.services.workspace_lifecycle_service import WorkspaceLifecycleService
 
 
 def _create_owner_and_workspace(session_factory) -> tuple[str, str]:
@@ -278,3 +279,82 @@ def test_runtime_provision_clears_tombstoned_knowledge_base_attachment_on_start(
     runtime_context = fake_orchestrator.runtime_contexts[-1]
     kb_mounts = [volume for volume in runtime_context.volumes if volume.target.startswith("/knowledge/")]
     assert kb_mounts == []
+
+
+@pytest.mark.integration
+def test_restart_workspace_rebuild_uses_latest_knowledge_base_attachments(
+    test_app,
+    kb_runtime_paths,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _, session_factory = test_app
+    owner_id, workspace_id = _create_owner_and_workspace(session_factory)
+
+    with session_factory() as session:
+        kb_service = KnowledgeBaseService(session)
+        attachment_service = KnowledgeBaseAttachmentService(session)
+
+        kb = kb_service.create_kb(
+            owner_id=owner_id,
+            name="Rebuild Docs",
+            slug="rebuild-docs",
+        )
+        attachment = attachment_service.attach(
+            user_id=owner_id,
+            workspace_id=workspace_id,
+            kb_id=kb.id,
+            mode="rw",
+        )
+        session.commit()
+        attachment_id = attachment.id
+
+    fake_orchestrator = _FakeOrchestrator()
+    fake_image_service = type(
+        "FakeImageService",
+        (),
+        {
+            "get_docker_image_name": lambda _self, _runtime: "workspace-runtime:test",
+            "get_browser_image_name": lambda _self: "workspace-browser:test",
+            "get_nextjs_image_name": lambda _self: "workspace-nextjs:test",
+        },
+    )()
+
+    monkeypatch.setattr(
+        "app.services.runtime_provision_service.OrchestratorFactory.get_orchestrator",
+        lambda: fake_orchestrator,
+    )
+    monkeypatch.setattr(
+        "app.services.container_image_service.get_container_image_service",
+        lambda: fake_image_service,
+    )
+
+    with session_factory() as session:
+        RuntimeProvisionService(session).execute_runtime_provision(workspace_id)
+        workspace = session.get(db_models.Workspace, workspace_id)
+        assert workspace is not None
+        workspace.runtime_container_id = "runtime-container-123"
+        session.commit()
+
+    with session_factory() as session:
+        attachment_service = KnowledgeBaseAttachmentService(session)
+        attachment_service.update_attachment(
+            user_id=owner_id,
+            attachment_id=attachment_id,
+            mount_alias="rebuild-docs-v2",
+            mode="ro",
+        )
+        session.commit()
+
+    with session_factory() as session:
+        WorkspaceLifecycleService(session).restart_workspace_task(workspace_id)
+
+    rebuilt_runtime_context = fake_orchestrator.runtime_contexts[-1]
+    kb_mounts = {
+        volume.target: volume
+        for volume in rebuilt_runtime_context.volumes
+        if volume.target.startswith("/knowledge/")
+    }
+
+    assert "/knowledge/rebuild-docs-v2" in kb_mounts
+    assert "/knowledge/rebuild-docs" not in kb_mounts
+    assert kb_mounts["/knowledge/rebuild-docs-v2"].read_only is True

@@ -163,6 +163,26 @@ ENV DISABLE_AUTOUPDATER=1
 ENV OPENSPEC_AUTO_INIT=1
 ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"
 
+FROM base AS terminal-builder
+
+WORKDIR /workspace-terminal
+
+COPY workspace-terminal/go.mod workspace-terminal/go.sum ./
+RUN go mod download
+COPY workspace-terminal/ ./
+
+ARG TARGETARCH
+RUN mkdir -p /opt/terminal-service/bin && \
+    GOARCH_VALUE="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "${GOARCH_VALUE}" in \
+        amd64|arm64) ;; \
+        x86_64) GOARCH_VALUE="amd64" ;; \
+        aarch64) GOARCH_VALUE="arm64" ;; \
+        *) echo "Unsupported TARGETARCH: ${GOARCH_VALUE}" >&2; exit 1 ;; \
+    esac && \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH_VALUE}" go build -o /opt/terminal-service/bin/terminal-service ./cmd/server && \
+    chmod +x /opt/terminal-service/bin/terminal-service
+
 # Stage 2: Development - 程式碼透過 volume mount 掛入
 FROM base AS development
 
@@ -174,6 +194,10 @@ RUN uv sync --dev
 USER root
 
 RUN mkdir -p /workspace-runtime/app /workspace-runtime/scripts
+COPY --from=terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
+COPY workspace-runtime/scripts/ /workspace-runtime/scripts/
+COPY workspace-terminal/ /workspace-terminal/
+RUN chmod +x /workspace-runtime/scripts/*.sh /opt/terminal-service/bin/terminal-service
 
 EXPOSE 3002 3004 22
 
@@ -191,7 +215,7 @@ RUN chmod o+rx /root 2>/dev/null || true && \
     chmod o+rx /root/.local/share/mise 2>/dev/null || true && \
     chmod o+rwx /root/.local/share/mise/shims 2>/dev/null || true
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:3002/health || exit 1
 
 COPY workspace-runtime/start_services.sh /start_services.sh
@@ -219,17 +243,12 @@ COPY workspace-runtime/.env* ./
 RUN mkdir -p /workspace-runtime/scripts
 COPY workspace-runtime/scripts/ /workspace-runtime/scripts/
 RUN chmod +x /workspace-runtime/scripts/*.sh
+COPY --from=terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
+RUN chmod +x /opt/terminal-service/bin/terminal-service
 
-# 編譯 workspace-terminal Go 服務
 RUN mkdir -p /workspace-terminal
 WORKDIR /workspace-terminal
-COPY workspace-terminal/go.mod workspace-terminal/go.sum ./
-RUN go mod download
 COPY workspace-terminal/ ./
-RUN rm -rf bin && mkdir -p bin
-ARG GOARCH=arm64
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${GOARCH} go build -o bin/terminal-service ./cmd/server && \
-    chmod +x bin/terminal-service
 WORKDIR /workspace-runtime
 
 RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal && \
@@ -256,7 +275,7 @@ RUN chmod +x /start_services.sh
 
 EXPOSE 3002 3004 22
 
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:3002/health || exit 1
 
 # 容器以 root 執行（sshd 需要），應用服務以 developer 執行（supervisord.conf 中設定）
