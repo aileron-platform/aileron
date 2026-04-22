@@ -52,6 +52,7 @@ printf '%s\\n' "$GOARCH" >> "{build_log}"
 
 
 def _write_minimal_elf(path: Path, machine_code: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = bytearray(20)
     payload[0:4] = b"\x7fELF"
     payload[18:20] = machine_code.to_bytes(2, byteorder="little")
