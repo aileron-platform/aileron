@@ -82,7 +82,9 @@ echo ""
 # 5. 設定目錄權限
 # ============================================================================
 echo "📁 設定工作區目錄權限..."
-chown -R developer:developer /workspace /workspace-runtime /workspace-terminal
+chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2>/dev/null || true
+# bind-mount 可能讓 host 上的 script 失去 +x（Dockerfile 的 chmod 被覆蓋），在這裡補回
+chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 
 echo "🔧 修復 /root 目錄訪問權限（developer 用戶需要執行語言工具）..."
 for dir in /root /root/.pyenv/versions /root/.nvm/versions /root/.cargo/bin \
