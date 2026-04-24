@@ -19,6 +19,7 @@ from .models import (
     OpenSpecCustomizationValidationRequest,
     OpenSpecCustomizationValidationResponse,
     OpenSpecWorkspaceResponse,
+    OpenSpecWorkspaceSummaryResponse,
 )
 from .service import OpenSpecService
 
@@ -26,6 +27,19 @@ router = APIRouter(
     prefix="/workspaces/{workspace_id}/openspec",
     tags=["OpenSpec"],
 )
+
+
+@router.get(
+    "/summary",
+    response_model=OpenSpecWorkspaceSummaryResponse,
+    summary="取得 OpenSpec workspace 輕量 summary",
+    responses=build_responses(401, 404, 500),
+)
+async def get_openspec_workspace_summary(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    service: OpenSpecService = Depends(get_openspec_service),
+) -> OpenSpecWorkspaceSummaryResponse:
+    return service.get_workspace_summary(workspace_id)
 
 
 @router.get(

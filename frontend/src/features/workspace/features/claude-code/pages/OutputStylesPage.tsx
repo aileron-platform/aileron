@@ -12,12 +12,18 @@ const OutputStylesPage: React.FC = () => {
   if (!context) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <p>正在載入 Claude Code 設定...</p>
+        <p>{t('workspace.claudeCode.documents.loading')}</p>
       </div>
     );
   }
 
+  return <OutputStylesPageContent />;
+};
+
+const OutputStylesPageContent: React.FC = () => {
+  const { t } = useI18n();
   const { outputStyles } = useClaudeCode();
+
   return (
     <ClaudeDocumentPage
       documents={outputStyles.items}

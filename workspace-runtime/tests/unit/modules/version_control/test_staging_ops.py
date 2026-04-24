@@ -19,6 +19,11 @@ def test_get_changes_uses_cache_and_limits_untracked(tmp_path: Path) -> None:
     utils.diff_index.side_effect = [[], []]
     cache = MagicMock()
     cache.get.return_value = {
+        "branch": "main",
+        "ahead": 0,
+        "behind": 0,
+        "detached": False,
+        "hasConflicts": False,
         "staged": [],
         "unstaged": [],
         "untracked": [],
@@ -26,6 +31,7 @@ def test_get_changes_uses_cache_and_limits_untracked(tmp_path: Path) -> None:
         "untrackedPage": 1,
         "untrackedPageSize": 100,
         "untrackedHasMore": False,
+        "lastFetchedAt": None,
     }
 
     ops = StagingOperations(utils, cache)
@@ -34,6 +40,10 @@ def test_get_changes_uses_cache_and_limits_untracked(tmp_path: Path) -> None:
 
     cache.get.return_value = None
     repo.git.execute.return_value = "a.txt\nb.txt"
+    repo.index.unmerged_blobs.return_value = {}
+    utils.current_branch.return_value = ("main", False)
+    utils.tracking_delta.return_value = (0, 0)
+    utils.last_fetch_time.return_value = None
     (tmp_path / "a.txt").write_text("a")
     (tmp_path / "b.txt").write_text("b")
     result = ops.get_changes("ws-1", page=1, page_size=1)
@@ -53,7 +63,7 @@ def test_stage_and_unstage_invalidate_cache_and_raise_errors() -> None:
 
     stage_result = ops.stage("ws-1", StageRequest(paths=["a.py"]))
     assert stage_result.staged == ["a.py"]
-    assert cache.invalidate.call_count == 2
+    assert cache.invalidate.call_count == 3
 
     repo.index.add.side_effect = GitCommandError("add", 1)
     with pytest.raises(VersionControlError) as exc:

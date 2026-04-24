@@ -5,14 +5,13 @@
 
 from __future__ import annotations
 
-import logging
 import shutil
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from git import GitCommandError
 
-from .cache import CacheKeys, CacheTTL
+from .cache import CacheKeys
 from .models import (
     ChangesResponse,
     DiscardRequest,
@@ -23,13 +22,11 @@ from .models import (
     UnstageRequest,
     UnstageResponse,
 )
-from .utils import DiffEntry, GitUtils, MAX_UNTRACKED_FILES, VersionControlError
+from .snapshot import WorkingTreeSnapshotProvider
+from .utils import DiffEntry, GitUtils, VersionControlError
 
 if TYPE_CHECKING:
     from .cache import GitCache
-
-logger = logging.getLogger(__name__)
-
 
 class StagingOperations:
     """Git 變更與暫存操作
@@ -37,7 +34,12 @@ class StagingOperations:
     提供變更查詢、暫存、取消暫存、放棄變更等功能。
     """
 
-    def __init__(self, utils: GitUtils, cache: Optional["GitCache"] = None) -> None:
+    def __init__(
+        self,
+        utils: GitUtils,
+        cache: Optional["GitCache"] = None,
+        snapshot_provider: Optional[WorkingTreeSnapshotProvider] = None,
+    ) -> None:
         """初始化
 
         Args:
@@ -46,6 +48,7 @@ class StagingOperations:
         """
         self._utils = utils
         self.cache = cache
+        self._snapshot_provider = snapshot_provider or WorkingTreeSnapshotProvider(utils, cache)
 
     def get_changes(
         self,
@@ -64,92 +67,17 @@ class StagingOperations:
         Returns:
             變更回應
         """
-        # 檢查快取
-        if self.cache:
-            cached = self.cache.get(workspace_id, CacheKeys.CHANGES, page=page, page_size=page_size, context_id=context_id)
-            if cached:
-                return ChangesResponse(**cached)
-
-        # 計算結果
-        repo = self._utils.get_repo(workspace_id, context_id)
-        staged = [self._to_file_change(entry) for entry in self._utils.diff_index(repo, staged=True)]
-        unstaged = [self._to_file_change(entry) for entry in self._utils.diff_index(repo, staged=False)]
-
-        # 效能優化: 使用 git ls-files 命令替代 repo.untracked_files
-        worktree = Path(repo.working_tree_dir or ".")
-
-        try:
-            # 使用 Git 命令取得未追蹤檔案（自動套用 .gitignore）
-            result_output = repo.git.execute(
-                ["git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"]
-            )
-            if result_output.strip():
-                untracked_files = result_output.strip().split("\n")
-            else:
-                untracked_files = []
-        except GitCommandError as exc:
-            logger.warning(f"Failed to get untracked files for workspace {workspace_id}: {exc}")
-            untracked_files = []
-
-        # 安全保護: 限制最大檔案數量（防止極端情況）
-        if len(untracked_files) > MAX_UNTRACKED_FILES:
-            logger.warning(
-                f"Workspace {workspace_id} has {len(untracked_files)} untracked files, "
-                f"limiting to {MAX_UNTRACKED_FILES} for performance"
-            )
-            untracked_files = untracked_files[:MAX_UNTRACKED_FILES]
-
-        total_untracked = len(untracked_files)
-
-        # 計算分頁範圍
-        start_idx = (page - 1) * page_size
-        end_idx = start_idx + page_size
-
-        # 取得當前頁的檔案
-        page_files = untracked_files[start_idx:end_idx]
-        has_more = end_idx < total_untracked
-
-        untracked_changes = []
-        for rel_path in page_files:
-            file_path = worktree / rel_path
-            if file_path.is_dir():
-                continue
-
-            # 效能優化: 不計算行數，直接設為 0
-            untracked_changes.append(
-                FileChange(
-                    name=file_path.name,
-                    path=rel_path.replace("\\", "/"),
-                    status="?",
-                    type="untracked",
-                    additions=0,
-                    deletions=0,
-                    diff=None,
-                )
-            )
+        snapshot = self._snapshot_provider.get_snapshot(workspace_id, page=page, page_size=page_size, context_id=context_id)
 
         result = ChangesResponse(
-            staged=staged,
-            unstaged=unstaged,
-            untracked=untracked_changes,
-            untrackedTotal=total_untracked,
-            untrackedPage=page,
-            untrackedPageSize=page_size,
-            untrackedHasMore=has_more,
+            staged=snapshot.staged,
+            unstaged=snapshot.unstaged,
+            untracked=snapshot.untracked,
+            untrackedTotal=snapshot.untrackedTotal,
+            untrackedPage=snapshot.untrackedPage,
+            untrackedPageSize=snapshot.untrackedPageSize,
+            untrackedHasMore=snapshot.untrackedHasMore,
         )
-
-        # 儲存快取（短時間快取，因為變更頻繁）
-        if self.cache:
-            self.cache.set(
-                workspace_id,
-                CacheKeys.CHANGES,
-                result.model_dump(),
-                ttl=CacheTTL.VERY_SHORT,  # 10 秒快取
-                page=page,
-                page_size=page_size,
-                context_id=context_id,
-            )
-
         return result
 
     def stage(self, workspace_id: str, payload: StageRequest, context_id: Optional[str] = None) -> StageResponse:
@@ -176,6 +104,7 @@ class StagingOperations:
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
 
         staged = [entry.path for entry in self._utils.diff_index(repo, staged=True)]
         unstaged = [entry.path for entry in self._utils.diff_index(repo, staged=False)]
@@ -212,6 +141,7 @@ class StagingOperations:
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
 
         remaining = len(self._utils.diff_index(repo, staged=True))
         return UnstageResponse(unstaged=normalized, remainingStaged=remaining)
@@ -245,6 +175,11 @@ class StagingOperations:
                     discarded.append(path)
                 except GitCommandError:
                     continue
+
+        if self.cache:
+            self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
+            self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
 
         return DiscardResponse(discarded=discarded, warnings=[])
 

@@ -38,6 +38,8 @@ from .models import (
     OpenSpecSpecDocument,
     OpenSpecWorkspaceProfile,
     OpenSpecWorkspaceResponse,
+    OpenSpecWorkspaceSummaryCounts,
+    OpenSpecWorkspaceSummaryResponse,
     OpenSpecWorkspaceState,
 )
 
@@ -139,6 +141,15 @@ class OpenSpecService:
             state=state,
             actions=actions,
             changes=navigation_changes,
+        )
+
+    def get_workspace_summary(self, workspace_id: str) -> OpenSpecWorkspaceSummaryResponse:
+        initialized = self._is_initialized()
+        counts = self._summarize_navigation_change_counts() if initialized else OpenSpecWorkspaceSummaryCounts()
+        return OpenSpecWorkspaceSummaryResponse(
+            workspaceId=workspace_id,
+            initialized=initialized,
+            counts=counts,
         )
 
     def get_customization_state(self, workspace_id: str) -> OpenSpecCustomizationStateResponse:
@@ -1078,21 +1089,49 @@ class OpenSpecService:
         return None
 
     def _list_navigation_changes(self) -> list[OpenSpecNavigationChange]:
+        discovered: list[OpenSpecNavigationChange] = []
+        for change_dir, archived in self._iter_navigation_change_dirs():
+            discovered.append(self._build_navigation_change(change_dir, archived=archived))
+
+        return discovered
+
+    def _summarize_navigation_change_counts(self) -> OpenSpecWorkspaceSummaryCounts:
+        counts = OpenSpecWorkspaceSummaryCounts()
+        for change_dir, archived in self._iter_navigation_change_dirs():
+            completed_tasks = 0
+            total_tasks = 0
+            tasks_path = change_dir / "tasks.md"
+            if tasks_path.is_file():
+                completed_tasks, total_tasks = self._parse_task_progress(tasks_path)
+            status = self._resolve_navigation_change_status(
+                archived=archived,
+                completed_tasks=completed_tasks,
+                total_tasks=total_tasks,
+            )
+            if status == OpenSpecChangeStatus.ARCHIVED:
+                counts.archived += 1
+            elif status == OpenSpecChangeStatus.COMPLETE:
+                counts.complete += 1
+            else:
+                counts.inProgress += 1
+        return counts
+
+    def _iter_navigation_change_dirs(self) -> list[tuple[Path, bool]]:
         changes_dir = self._workspace_path / "openspec" / "changes"
         archive_dir = changes_dir / "archive"
-        discovered: list[OpenSpecNavigationChange] = []
+        discovered: list[tuple[Path, bool]] = []
 
         if changes_dir.is_dir():
             for change_dir in sorted(changes_dir.iterdir(), key=lambda item: item.name):
                 if not change_dir.is_dir() or change_dir.name == "archive":
                     continue
-                discovered.append(self._build_navigation_change(change_dir, archived=False))
+                discovered.append((change_dir, False))
 
         if archive_dir.is_dir():
             for change_dir in sorted(archive_dir.iterdir(), key=lambda item: item.name):
                 if not change_dir.is_dir():
                     continue
-                discovered.append(self._build_navigation_change(change_dir, archived=True))
+                discovered.append((change_dir, True))
 
         return discovered
 
@@ -1107,12 +1146,11 @@ class OpenSpecService:
         if tasks_path.is_file():
             completed_tasks, total_tasks = self._parse_task_progress(tasks_path)
 
-        if archived:
-            status = OpenSpecChangeStatus.ARCHIVED
-        elif total_tasks > 0 and completed_tasks == total_tasks:
-            status = OpenSpecChangeStatus.COMPLETE
-        else:
-            status = OpenSpecChangeStatus.IN_PROGRESS
+        status = self._resolve_navigation_change_status(
+            archived=archived,
+            completed_tasks=completed_tasks,
+            total_tasks=total_tasks,
+        )
 
         spec_documents: list[OpenSpecSpecDocument] = []
         if specs_dir.is_dir():
@@ -1140,6 +1178,19 @@ class OpenSpecService:
             totalTasks=total_tasks,
             lastModified=self._get_last_modified(change_dir),
         )
+
+    def _resolve_navigation_change_status(
+        self,
+        *,
+        archived: bool,
+        completed_tasks: int,
+        total_tasks: int,
+    ) -> OpenSpecChangeStatus:
+        if archived:
+            return OpenSpecChangeStatus.ARCHIVED
+        if total_tasks > 0 and completed_tasks == total_tasks:
+            return OpenSpecChangeStatus.COMPLETE
+        return OpenSpecChangeStatus.IN_PROGRESS
 
     def _parse_task_progress(self, tasks_path: Path) -> tuple[int, int]:
         try:

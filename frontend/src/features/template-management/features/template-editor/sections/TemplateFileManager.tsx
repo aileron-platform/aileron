@@ -56,7 +56,23 @@ interface TemplateFileManagerProps {
   onFilesChange?: (files: FileNode[]) => void;
 }
 
-const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
+type TemplateFileManagerContentProps = Omit<TemplateFileManagerProps, 'templateId'> & {
+  templateId: string;
+};
+
+const TemplateFileManagerEmptyState: React.FC = () => {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="text-center text-muted-foreground">
+        <p className="text-sm">{t('template.editor.fileManagement.viewer.noTemplate')}</p>
+      </div>
+    </div>
+  );
+};
+
+const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
   templateId,
   basePath,
   title,
@@ -67,17 +83,6 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [clipboardItem, setClipboardItem] = useState<{ path: string; type: 'file' | 'directory' } | null>(null);
-
-  // 如果沒有 templateId，顯示空狀態
-  if (!templateId) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <p className="text-sm">{t('template.editor.fileManagement.viewer.noTemplate')}</p>
-        </div>
-      </div>
-    );
-  }
 
   // 構建 API 配置
   const apiConfig: FileTreeApiConfig = useMemo(() => ({
@@ -533,6 +538,14 @@ const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({
       />
     </div>
   );
+};
+
+const TemplateFileManager: React.FC<TemplateFileManagerProps> = ({ templateId, ...props }) => {
+  if (!templateId) {
+    return <TemplateFileManagerEmptyState />;
+  }
+
+  return <TemplateFileManagerContent templateId={templateId} {...props} />;
 };
 
 export default TemplateFileManager;

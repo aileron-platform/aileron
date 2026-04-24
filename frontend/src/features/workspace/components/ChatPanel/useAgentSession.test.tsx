@@ -1,0 +1,173 @@
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useAgentSession } from './useAgentSession';
+import { getAgentSessionStore, resetAgentSessionStore } from './agentSessionStore';
+
+const mocks = vi.hoisted(() => ({
+  listSessionsMock: vi.fn(),
+  createSessionMock: vi.fn(),
+  setRealtimeSessionsMock: vi.fn(),
+  upsertRealtimeSessionMock: vi.fn(),
+  refreshMock: vi.fn(async () => undefined),
+  mergeMessagesMock: vi.fn(),
+  setLoadedOffsetMock: vi.fn(),
+  setRealtimeHasMoreMock: vi.fn(),
+  emptyMessages: [] as unknown[],
+  emptyTasks: [] as unknown[],
+  emptySessionsMap: new Map(),
+}));
+
+vi.mock('@/features/auth/hooks/useAuth', () => ({
+  useAuth: () => ({
+    getAccessToken: () => 'token',
+  }),
+}));
+
+vi.mock('./agentSessionEvents', () => ({
+  getEventDispatcher: () => ({
+    subscribe: vi.fn(() => vi.fn()),
+    dispatch: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }),
+}));
+
+vi.mock('./agentSessionApi', () => ({
+  agentApi: {
+    sessions: {
+      listSessions: mocks.listSessionsMock,
+      createSession: mocks.createSessionMock,
+    },
+    tasks: {
+      stopTask: vi.fn(),
+    },
+    messages: {
+      listMessages: vi.fn(),
+    },
+  },
+}));
+
+vi.mock('../../realtime', () => ({
+  useWebSocketClient: () => ({
+    socket: null,
+    connected: false,
+    connecting: false,
+    error: null,
+    reconnect: vi.fn(),
+  }),
+  useRealtimeData: () => ({
+    messages: mocks.emptyMessages,
+    tasks: mocks.emptyTasks,
+    loading: false,
+    refresh: mocks.refreshMock,
+    mergeMessages: mocks.mergeMessagesMock,
+    messagesTotal: 0,
+    hasMoreMessages: false,
+    loadedOffset: 0,
+    setLoadedOffset: mocks.setLoadedOffsetMock,
+    setHasMoreMessages: mocks.setRealtimeHasMoreMock,
+  }),
+  useRealtimeSessions: () => ({
+    sessionsMap: mocks.emptySessionsMap,
+    setSessions: mocks.setRealtimeSessionsMock,
+    upsertSession: mocks.upsertRealtimeSessionMock,
+  }),
+  useStreamingMessages: () => [],
+}));
+
+describe('useAgentSession', () => {
+  beforeEach(() => {
+    resetAgentSessionStore();
+    localStorage.clear();
+    sessionStorage.clear();
+    mocks.listSessionsMock.mockReset();
+    mocks.createSessionMock.mockReset();
+    mocks.setRealtimeSessionsMock.mockReset();
+    mocks.upsertRealtimeSessionMock.mockReset();
+    mocks.refreshMock.mockClear();
+    mocks.mergeMessagesMock.mockClear();
+    mocks.setLoadedOffsetMock.mockClear();
+    mocks.setRealtimeHasMoreMock.mockClear();
+
+    mocks.listSessionsMock.mockImplementation(async (_runtimeBaseUrl: string, params: { workspace_id?: string }) => {
+      if (params.workspace_id === 'ws-a') {
+        return {
+          items: [
+            {
+              session_id: 'session-a',
+              title: 'Session A',
+              created_at: '2026-04-24T00:00:00Z',
+              updated_at: '2026-04-24T00:00:00Z',
+            },
+          ],
+        };
+      }
+
+      return {
+        items: [
+          {
+            session_id: 'session-b',
+            title: 'Session B',
+            created_at: '2026-04-24T00:00:00Z',
+            updated_at: '2026-04-24T00:00:00Z',
+          },
+        ],
+      };
+    });
+  });
+
+  it('resets transient state and selects the new workspace session when workspaceId changes', async () => {
+    const { result, rerender } = renderHook(
+      ({ workspaceId }) =>
+        useAgentSession({
+          runtimeBaseUrl: 'http://runtime.test',
+          workspaceId,
+          autoConnect: true,
+        }),
+      {
+        initialProps: { workspaceId: 'ws-a' },
+      }
+    );
+
+    await waitFor(() => {
+      expect(result.current.state.currentSessionId).toBe('session-a');
+    });
+
+    act(() => {
+      const store = getAgentSessionStore();
+      store.setQueuedMessages([
+        {
+          message_id: 'queued-a',
+          queue_position: 1,
+          content_preview: 'queued',
+          created_at: '2026-04-24T00:00:00Z',
+        } as any,
+      ]);
+      store.setPendingPermission({
+        request_id: 'perm-a',
+        task_id: 'task-a',
+        tool_name: 'write_file',
+        tool_input: {},
+      } as any);
+    });
+
+    expect(result.current.state.queuedMessages).toHaveLength(1);
+    expect(result.current.state.pendingPermission?.request_id).toBe('perm-a');
+
+    rerender({ workspaceId: 'ws-b' });
+
+    await waitFor(() => {
+      expect(result.current.state.currentSessionId).toBe('session-b');
+    });
+
+    expect(result.current.state.queuedMessages).toEqual([]);
+    expect(result.current.state.pendingPermission).toBeNull();
+    expect(mocks.listSessionsMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      expect.objectContaining({ workspace_id: 'ws-a' })
+    );
+    expect(mocks.listSessionsMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      expect.objectContaining({ workspace_id: 'ws-b' })
+    );
+  });
+});

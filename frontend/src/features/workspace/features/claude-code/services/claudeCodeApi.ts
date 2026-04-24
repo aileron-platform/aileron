@@ -1205,6 +1205,8 @@ export interface FileTreeNode {
   children?: FileTreeNode[] | null;
   sizeBytes?: number;
   updatedAt?: string;
+  skillName?: string;
+  skillDescription?: string;
 }
 
 export interface FileCollectionResponse {

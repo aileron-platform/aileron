@@ -16,8 +16,13 @@ export const versionControlKeys = {
   // Branches
   branches: (workspaceId: string, contextId?: string | null) =>
     [...versionControlKeys.all, "branches", workspaceId, contextId ?? "primary"] as const,
-  branchesWithFilter: (workspaceId: string, includeRemote: boolean, search?: string, contextId?: string | null) =>
-    [...versionControlKeys.branches(workspaceId, contextId), { includeRemote, search }] as const,
+  branchesWithFilter: (
+    workspaceId: string,
+    includeRemote: boolean,
+    search?: string,
+    contextId?: string | null,
+    includeMetadata?: boolean,
+  ) => [...versionControlKeys.branches(workspaceId, contextId), { includeRemote, search, includeMetadata }] as const,
 
   // Status
   status: (workspaceId: string, contextId?: string | null) =>

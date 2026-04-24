@@ -653,7 +653,10 @@ export const OpenSpecActionPickerDialog: React.FC<OpenSpecActionPickerDialogProp
       <Dialog open={showExpandedGuide} onOpenChange={setShowExpandedGuide}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader className="space-y-2">
-            <DialogTitle>{t('workspace.chat.dialogs.openspec.expandedGuide.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <BookOpen className="h-5 w-5 text-primary" />
+              {t('workspace.chat.dialogs.openspec.expandedGuide.title')}
+            </DialogTitle>
             <DialogDescription>
               {t('workspace.chat.dialogs.openspec.expandedGuide.description')}
             </DialogDescription>

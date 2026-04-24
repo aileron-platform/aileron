@@ -119,4 +119,31 @@ describe('useWebSocketClient', () => {
     expect(MockWebSocket.instances).toHaveLength(2);
     expect(MockWebSocket.instances[1]!.url).toContain('/api/v1/ws/agent-sessions/session-live');
   });
+
+  it('相同 session 與 runtime 重新 render 時不會建立新 socket', () => {
+    const { rerender } = renderHook(
+      ({ sessionId, runtimeBaseUrl }) =>
+        useWebSocketClient({
+          runtimeBaseUrl,
+          workspaceId: 'ws-1',
+          sessionId,
+          autoConnect: true,
+        }),
+      {
+        initialProps: {
+          sessionId: 'session-stable',
+          runtimeBaseUrl: 'http://runtime.test',
+        },
+      }
+    );
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+
+    rerender({
+      sessionId: 'session-stable',
+      runtimeBaseUrl: 'http://runtime.test',
+    });
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
 });

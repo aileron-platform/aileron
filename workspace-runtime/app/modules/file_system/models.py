@@ -24,6 +24,8 @@ class FileNode(BaseModel):
     extension: Optional[str] = Field(default=None, description="副檔名")
     fileType: Optional[str] = Field(default=None, description="檔案類型")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="額外元數據")
+    skillName: Optional[str] = Field(default=None, description="Skill 名稱（僅 SKILL.md 節點，從 front matter 解析）")
+    skillDescription: Optional[str] = Field(default=None, description="Skill 描述（僅 SKILL.md 節點，從 front matter 解析）")
 
 
 # ============ 請求模型 ============

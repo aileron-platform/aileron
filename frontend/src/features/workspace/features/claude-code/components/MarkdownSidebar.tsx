@@ -18,23 +18,22 @@ interface MarkdownSidebarProps {
   availableScopes?: ClaudeScope[];
 }
 
-export const MarkdownSidebar: React.FC<MarkdownSidebarProps> = ({ subView, availableScopes: availableScopesProp }) => {
+const ClaudeCodeLoadingState: React.FC = () => {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+      <p>{t('workspace.claudeCode.documents.loading')}</p>
+    </div>
+  );
+};
+
+const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, availableScopes: availableScopesProp }) => {
   const { layout, toggleSecondColumn } = useWorkspace();
   const isCollapsed = layout.secondColumnCollapsed;
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState<'all' | 'project' | 'user' | 'local' | 'plugin'>('all');
   const { t } = useI18n();
-  // 安全地檢查 context 是否可用
-  const context = useContext(ClaudeCodeContext);
-
-  if (!context) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <p>正在載入 Claude Code 設定...</p>
-      </div>
-    );
-  }
-
   const { slashCommands, outputStyles, subagents, memory } = useClaudeCode();
 
   const collection = useMemo(() => {
@@ -264,6 +263,16 @@ export const MarkdownSidebar: React.FC<MarkdownSidebarProps> = ({ subView, avail
       )}
     </div>
   );
+};
+
+export const MarkdownSidebar: React.FC<MarkdownSidebarProps> = (props) => {
+  const context = useContext(ClaudeCodeContext);
+
+  if (!context) {
+    return <ClaudeCodeLoadingState />;
+  }
+
+  return <MarkdownSidebarContent {...props} />;
 };
 
 export default MarkdownSidebar;

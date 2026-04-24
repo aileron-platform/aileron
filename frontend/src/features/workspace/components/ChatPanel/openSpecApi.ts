@@ -68,6 +68,18 @@ export interface OpenSpecWorkspaceState {
   activeChanges: OpenSpecChangeSummary[];
 }
 
+export interface OpenSpecWorkspaceSummaryCounts {
+  inProgress: number;
+  complete: number;
+  archived: number;
+}
+
+export interface OpenSpecWorkspaceSummary {
+  workspaceId: string;
+  initialized: boolean;
+  counts: OpenSpecWorkspaceSummaryCounts;
+}
+
 export interface OpenSpecWorkspaceResponse {
   workspaceId: string;
   state: OpenSpecWorkspaceState;
@@ -179,6 +191,16 @@ const createRuntimeClient = (runtimeBaseUrl: string): ApiClient => {
 };
 
 export const openSpecApi = {
+  async getWorkspaceSummary(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+  ): Promise<OpenSpecWorkspaceSummary> {
+    const client = createRuntimeClient(runtimeBaseUrl);
+    return client.get<OpenSpecWorkspaceSummary>(
+      `/api/v1/workspaces/${workspaceId}/openspec/summary`,
+    );
+  },
+
   async getWorkspaceState(
     runtimeBaseUrl: string,
     workspaceId: string,

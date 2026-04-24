@@ -561,18 +561,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
 
   // 渲染內容區域
   const renderContent = () => {
-    if (state.chatExpanded) {
-      return (
-        <div className="fixed inset-0 z-40 flex bg-background overflow-hidden">
-          <div className="flex-1 overflow-hidden max-w-full">
-            <ChatPanel />
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex flex-1 w-full overflow-hidden layout-container relative">
+    const mainColumns = (
+      <>
         {/* 第一欄：功能導航列表 */}
         <div className={`bg-background border-r border-border transition-all duration-300 ${state.chatExpanded ? 'hidden' : ''
           } flex flex-col relative`}
@@ -637,46 +627,56 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           </div>
         )}
 
-        {/* 第三欄：主要內容區域 */}
-        {state.chatExpanded ? (
-          <div className="flex flex-1">
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <div className="flex-1 overflow-hidden">
-                {getThirdColumnContent() || children}
-              </div>
-            </div>
-            <div className="w-full max-w-5xl border-l border-border bg-background">
-              <ChatPanel />
+        <div
+          className="bg-background border-r border-border transition-all duration-300 flex flex-col relative"
+          style={{ flex: '1 1 0', minWidth: '400px' }}
+        >
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-hidden">
+              {getThirdColumnContent() || children}
             </div>
           </div>
-        ) : (
-          <>
+          {!state.rightChatCollapsed && (
             <div
-              className="bg-background border-r border-border transition-all duration-300 flex flex-col relative"
-              style={{ flex: '1 1 0', minWidth: '400px' }}
-            >
-              <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="flex-1 overflow-hidden">
-                  {getThirdColumnContent() || children}
-                </div>
-              </div>
-              {!state.rightChatCollapsed && (
-                <div
-                  className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isDragging === 'rightChat' ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
-                    }`}
-                  onMouseDown={(e) => handleMouseDown(e, 'rightChat')}
-                />
-              )}
-            </div>
-            <div
-              className={`bg-background transition-all duration-300 relative flex-shrink-0 ${state.rightChatCollapsed ? 'w-12' : ''
+              className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isDragging === 'rightChat' ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
                 }`}
-              style={{ width: state.rightChatCollapsed ? '48px' : `${state.rightChatWidth}px` }}
-            >
-              <ChatPanel />
-            </div>
-          </>
-        )}
+              onMouseDown={(e) => handleMouseDown(e, 'rightChat')}
+            />
+          )}
+        </div>
+      </>
+    );
+
+    const wrappedMainColumns = state.currentFeature === 'version-control' ? (
+      <React.Suspense
+        fallback={
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            載入版本控制...
+          </div>
+        }
+      >
+        <VersionControlContainer>{mainColumns}</VersionControlContainer>
+      </React.Suspense>
+    ) : (
+      mainColumns
+    );
+
+    return (
+      <div className="flex flex-1 w-full overflow-hidden layout-container relative">
+        <div className={state.chatExpanded ? 'hidden' : 'contents'}>
+          {wrappedMainColumns}
+        </div>
+        <div
+          className={`bg-background transition-all duration-300 relative ${state.chatExpanded
+            ? 'fixed inset-0 z-40'
+            : `flex-shrink-0 ${state.rightChatCollapsed ? 'w-12' : ''}`
+            }`}
+          style={state.chatExpanded
+            ? undefined
+            : { width: state.rightChatCollapsed ? '48px' : `${state.rightChatWidth}px` }}
+        >
+          <ChatPanel />
+        </div>
       </div>
     );
   };
@@ -773,19 +773,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
               <GlobalNavigation />
 
               {/* 主要Layout區域 - 填滿剩餘空間 */}
-              {state.currentFeature === 'version-control' ? (
-                <React.Suspense
-                  fallback={
-                    <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                      載入版本控制...
-                    </div>
-                  }
-                >
-                  <VersionControlContainer>{renderContent()}</VersionControlContainer>
-                </React.Suspense>
-              ) : (
-                renderContent()
-              )}
+              {renderContent()}
             </div>
           </OpenSpecWorkspaceProvider>
         </ChatPanelStateProvider>

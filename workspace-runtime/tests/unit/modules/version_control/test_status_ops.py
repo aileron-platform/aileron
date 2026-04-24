@@ -9,7 +9,7 @@ from git import GitCommandError
 
 from app.modules.version_control.models import CheckoutRequest
 from app.modules.version_control.status_ops import StatusOperations
-from app.modules.version_control.utils import VersionControlError
+from app.modules.version_control.utils import DiffEntry, VersionControlError
 
 
 def test_get_status_handles_untracked_query_failure_and_conflicts() -> None:
@@ -20,8 +20,12 @@ def test_get_status_handles_untracked_query_failure_and_conflicts() -> None:
     utils.get_repo.return_value = repo
     utils.current_branch.return_value = ("main", False)
     utils.tracking_delta.return_value = (2, 1)
-    utils.diff_index.side_effect = [["a.py"], ["b.py"]]
+    utils.diff_index.side_effect = [
+        [DiffEntry("a.py", "A", "a", 1, 0, None)],
+        [DiffEntry("b.py", "M", "m", 1, 1, None)],
+    ]
     utils.last_fetch_time.return_value = "2026-03-28T00:00:00Z"
+    utils.map_change_type.side_effect = lambda status: {"A": "added", "M": "modified"}[status]
 
     ops = StatusOperations(utils)
     result = ops.get_status("ws-1")
@@ -68,6 +72,25 @@ def test_list_branches_skips_duplicate_remote_and_handles_missing_commit() -> No
     assert [branch.name for branch in result.branches] == ["main", "feature", "origin/other"]
     assert result.branches[0].ahead == 0
     assert result.branches[1].lastCommit is None
+
+
+def test_list_branches_lightweight_mode_skips_expensive_metadata() -> None:
+    local_branch = MagicMock()
+    local_branch.name = "main"
+    repo = MagicMock()
+    repo.branches = [local_branch]
+    repo.remotes = []
+    utils = MagicMock()
+    utils.get_repo.return_value = repo
+    utils.current_branch.return_value = ("main", False)
+
+    ops = StatusOperations(utils)
+    result = ops.list_branches("ws-1", include_remote=False, include_metadata=False)
+
+    assert result.branches[0].name == "main"
+    assert result.branches[0].isActive is True
+    local_branch.tracking_branch.assert_not_called()
+    repo.iter_commits.assert_not_called()
 
 
 def test_checkout_branch_handles_stash_and_checkout_errors() -> None:

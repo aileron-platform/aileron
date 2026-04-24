@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Workflow } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import WarningIcon from '@/shared/components/ui/WarningIcon';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -451,7 +451,8 @@ export const HookDialog: React.FC<HookDialogProps> = (props) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-4xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Workflow className="h-5 w-5 text-primary" />
             {isEdit
               ? t(getTranslationKey('title.edit'))
               : t(getTranslationKey('title.create'))}

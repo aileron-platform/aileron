@@ -22,6 +22,8 @@ from app.modules.openspec.models import (
     OpenSpecChangeStatus,
     OpenSpecNavigationChange,
     OpenSpecWorkspaceResponse,
+    OpenSpecWorkspaceSummaryCounts,
+    OpenSpecWorkspaceSummaryResponse,
     OpenSpecSpecDocument,
     OpenSpecWorkspaceState,
 )
@@ -87,6 +89,17 @@ class FakeOpenSpecService:
                     totalTasks=3,
                 )
             ],
+        )
+
+    def get_workspace_summary(self, workspace_id: str) -> OpenSpecWorkspaceSummaryResponse:
+        return OpenSpecWorkspaceSummaryResponse(
+            workspaceId=workspace_id,
+            initialized=True,
+            counts=OpenSpecWorkspaceSummaryCounts(
+                inProgress=1,
+                complete=2,
+                archived=3,
+            ),
         )
 
     def get_customization_state(self, workspace_id: str) -> OpenSpecCustomizationStateResponse:
@@ -180,6 +193,29 @@ def test_openspec_router_returns_workspace_state() -> None:
     assert payload["changes"][0]["name"] == "add-auth"
     assert payload["changes"][0]["status"] == "in-progress"
     assert fake_service.last_context == (OpenSpecActionContextSubview.COMPLETE, "add-auth")
+
+
+def test_openspec_router_returns_workspace_summary() -> None:
+    app = FastAPI()
+    app.include_router(openspec_router_module.router, prefix="/api/v1")
+    fake_service = FakeOpenSpecService()
+    app.dependency_overrides[openspec_router_module.get_openspec_service] = lambda: fake_service
+
+    client = TestClient(app)
+
+    response = client.get("/api/v1/workspaces/ws-1/openspec/summary")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload == {
+        "workspaceId": "ws-1",
+        "initialized": True,
+        "counts": {
+            "inProgress": 1,
+            "complete": 2,
+            "archived": 3,
+        },
+    }
 
 
 def test_openspec_router_accepts_customization_subview() -> None:

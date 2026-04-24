@@ -106,7 +106,10 @@ export const UploadFileDialog: React.FC<UploadFileDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{t('workspace.chat.dialogs.upload.title')}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <CloudUpload className="h-5 w-5 text-primary" />
+            {t('workspace.chat.dialogs.upload.title')}
+          </DialogTitle>
           <DialogDescription>{t('workspace.chat.dialogs.upload.description')}</DialogDescription>
         </DialogHeader>
 

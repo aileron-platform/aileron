@@ -96,15 +96,17 @@ export function useChangesQuery({ workspaceId, runtimeBaseUrl, contextId }: UseV
 export function useBranchesQuery(
   { workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions,
   includeRemote: boolean = true,
-  search?: string
+  search?: string,
+  includeMetadata: boolean = true,
 ) {
   const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
   
   return useQuery({
-    queryKey: versionControlKeys.branchesWithFilter(workspaceId, includeRemote, search, contextId),
+    queryKey: versionControlKeys.branchesWithFilter(workspaceId, includeRemote, search, contextId, includeMetadata),
     queryFn: () => {
       const params = new URLSearchParams();
       params.set('includeRemote', String(includeRemote));
+      params.set('includeMetadata', String(includeMetadata));
       if (search) params.set('search', search);
       return fetchVersionControl<{ branches: VersionControlBranch[] }>(`branches?${params}`);
     },
@@ -209,7 +211,6 @@ export function useStageMutation({ workspaceId, runtimeBaseUrl, contextId }: Use
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
-        includeContexts: true,
         contextId,
       });
     },
@@ -237,7 +238,6 @@ export function useUnstageMutation({ workspaceId, runtimeBaseUrl, contextId }: U
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
-        includeContexts: true,
         contextId,
       });
     },
@@ -264,7 +264,6 @@ export function useCommitMutation({ workspaceId, runtimeBaseUrl, contextId }: Us
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeCommits: true,
-        includeContexts: true,
         contextId,
       });
     },
@@ -289,7 +288,6 @@ export function useDiscardMutation({ workspaceId, runtimeBaseUrl, contextId }: U
     onSuccess: () => {
       return refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: false,
-        includeContexts: true,
         contextId,
       });
     },

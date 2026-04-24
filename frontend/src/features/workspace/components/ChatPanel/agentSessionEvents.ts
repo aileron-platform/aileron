@@ -133,15 +133,22 @@ export class AgentSessionEventDispatcher {
     };
   }
 
-  private emit<K extends keyof EventHandlers>(handlerName: K, ...args: any[]): void {
+  private emit<K extends keyof EventHandlers>(
+    handlerName: K,
+    ...args: Parameters<NonNullable<EventHandlers[K]>>
+  ): void {
     // Legacy support
-    // @ts-ignore
-    this.legacyHandlers[handlerName]?.(...args);
+    const legacyHandler = this.legacyHandlers[handlerName] as
+      | ((...handlerArgs: Parameters<NonNullable<EventHandlers[K]>>) => void)
+      | undefined;
+    legacyHandler?.(...args);
 
     // Subscribers support
     this.subscribers.forEach(sub => {
-      // @ts-ignore
-      sub[handlerName]?.(...args);
+      const handler = sub[handlerName] as
+        | ((...handlerArgs: Parameters<NonNullable<EventHandlers[K]>>) => void)
+        | undefined;
+      handler?.(...args);
     });
   }
 

@@ -76,6 +76,7 @@ class StubGitService:
         include_remote: bool = False,
         search: Optional[str] = None,
         context_id: Optional[str] = None,
+        include_metadata: bool = True,
     ) -> dict[str, Any]:
         """取得分支列表"""
         branches = self.branches.copy()

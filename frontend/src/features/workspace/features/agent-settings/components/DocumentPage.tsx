@@ -15,7 +15,7 @@ import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
 
 const logger = createLogger('DocumentPage');
 
-export interface DocumentDialogProps extends DocumentWorkflowDialogProps<ClaudeDocument> {}
+export type DocumentDialogProps = DocumentWorkflowDialogProps<ClaudeDocument>;
 
 export interface DocumentPageConfig {
   metaKey: 'slash-commands' | 'output-styles' | 'subagents' | 'memory';

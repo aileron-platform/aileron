@@ -25,6 +25,7 @@ import { API_ENDPOINTS, ERROR_MESSAGES } from '../constants';
  * 檔案樹 API 適配器
  */
 export class FileTreeApiAdapter {
+  private static readonly workspaceRootTreeRequests = new Map<string, Promise<FileTreeNode[]>>();
   private client: ApiClient;
 
   constructor(private config: FileTreeApiConfig) {
@@ -45,6 +46,18 @@ export class FileTreeApiAdapter {
 
     const separator = url.includes('?') ? '&' : '?';
     return `${url}${separator}contextId=${encodeURIComponent(contextId)}`;
+  }
+
+  private buildWorkspaceTreeRequestKey(path: string, maxDepth: number): string {
+    return JSON.stringify({
+      type: this.config.type,
+      workspaceId: this.config.workspaceId ?? null,
+      baseUrl: this.config.baseUrl ?? null,
+      contextId: this.config.contextId ?? null,
+      includeHidden: this.config.includeHidden ?? false,
+      path,
+      maxDepth,
+    });
   }
 
   /**
@@ -296,15 +309,32 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
+    const path = '/';
+    const maxDepth = 2;
     // maxDepth=2：初始只掃描 3 層，後續由懶載入按需展開
     const url = this.appendWorkspaceContext(
-      `/files/tree?path=/&includeHidden=${String(includeHidden ?? false)}&maxDepth=2`
+      `/files/tree?path=${encodeURIComponent(path)}&includeHidden=${String(includeHidden ?? false)}&maxDepth=${maxDepth}`
     );
+    const requestKey = this.buildWorkspaceTreeRequestKey(path, maxDepth);
     logger.debug('getWorkspaceTree: 請求 URL', { url });
 
-    const data = await this.client.get(url);
-    logger.debug('getWorkspaceTree: 獲取到的數據', { data, nodeCount: data.nodes?.length || 0 });
-    return data.nodes || [];
+    const inflightRequest = FileTreeApiAdapter.workspaceRootTreeRequests.get(requestKey);
+    if (inflightRequest) {
+      logger.debug('getWorkspaceTree: 重用進行中的根目錄請求', { requestKey });
+      return inflightRequest;
+    }
+
+    const request = this.client.get(url)
+      .then((data) => {
+        logger.debug('getWorkspaceTree: 獲取到的數據', { data, nodeCount: data.nodes?.length || 0 });
+        return data.nodes || [];
+      })
+      .finally(() => {
+        FileTreeApiAdapter.workspaceRootTreeRequests.delete(requestKey);
+      });
+
+    FileTreeApiAdapter.workspaceRootTreeRequests.set(requestKey, request);
+    return request;
   }
 
   private async getWorkspaceChildren(path: string): Promise<FileTreeNode[]> {

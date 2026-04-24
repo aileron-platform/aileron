@@ -337,7 +337,10 @@ export const KnowledgeBaseSharingTab: React.FC<KnowledgeBaseSharingTabProps> = (
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>{t('knowledgeBase.sharing.candidate.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-primary" />
+              {t('knowledgeBase.sharing.candidate.title')}
+            </DialogTitle>
             <DialogDescription>{t('knowledgeBase.sharing.candidate.description')}</DialogDescription>
           </DialogHeader>
 

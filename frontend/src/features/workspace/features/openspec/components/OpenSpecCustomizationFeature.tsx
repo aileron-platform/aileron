@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { FileCode2, FileCog, FileText, Save } from 'lucide-react';
+import { Bug, FileCode2, FileCog, FileText, Save, ShieldCheck } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
@@ -230,7 +230,10 @@ const OpenSpecCustomizationFeature: React.FC = () => {
       <Dialog open={customizationDialog === 'validation'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('workspace.openspec.customization.validationTitle')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              {t('workspace.openspec.customization.validationTitle')}
+            </DialogTitle>
             <DialogDescription>{customizationValidation?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">
@@ -251,7 +254,10 @@ const OpenSpecCustomizationFeature: React.FC = () => {
       <Dialog open={customizationDialog === 'debug'} onOpenChange={(open) => { if (!open) closeCustomizationDialog(); }}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{t('workspace.openspec.customization.debugTitle')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Bug className="h-5 w-5 text-primary" />
+              {t('workspace.openspec.customization.debugTitle')}
+            </DialogTitle>
             <DialogDescription>{customizationDebug?.targetPath ?? t('workspace.openspec.customization.diagnosticsPlaceholder')}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh]">

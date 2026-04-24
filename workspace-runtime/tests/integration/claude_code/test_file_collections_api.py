@@ -677,3 +677,115 @@ def test_fc_030_refuse_overwrite_existing_file(client):
 
     assert response.status_code == status.HTTP_409_CONFLICT
     assert response.json()["detail"]["code"] == "FILE_ALREADY_EXISTS"
+
+
+# ============ Skill tree metadata enrichment tests ============
+
+def test_fc_skill_tree_001_skill_md_with_metadata_serialized(client):
+    """skills/tree endpoint 應正確序列化含 skillName/skillDescription 的 SKILL.md 節點"""
+    skill_node = FileNode(
+        id="/openspec-apply-change/SKILL.md",
+        name="SKILL.md",
+        path="/openspec-apply-change/SKILL.md",
+        type="file",
+        scope="project",
+        size=512,
+        updatedAt="2024-01-01T00:00:00Z",
+        depth=1,
+        children=[],
+        hasChildren=False,
+        skillName="openspec-apply-change",
+        skillDescription="Implement tasks from an OpenSpec change",
+    )
+    tree = FileTreeResponse(path="/", scope="project", nodes=[skill_node], total=1)
+    service = StubFileCollectionService(tree_result=tree)
+
+    with override_dependency(get_skills_service, lambda: service):
+        response = client.get(
+            f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/skills/tree",
+            params={"path": "/", "scope": "project"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    node_json = response.json()["nodes"][0]
+    assert node_json["skillName"] == "openspec-apply-change"
+    assert node_json["skillDescription"] == "Implement tasks from an OpenSpec change"
+
+
+def test_fc_skill_tree_002_non_skill_md_has_no_metadata(client):
+    """普通檔案節點的 skillName/skillDescription 應為 null"""
+    regular_node = _tree_node("README.md", scope="project")
+    tree = FileTreeResponse(path="/", scope="project", nodes=[regular_node], total=1)
+    service = StubFileCollectionService(tree_result=tree)
+
+    with override_dependency(get_skills_service, lambda: service):
+        response = client.get(
+            f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/skills/tree",
+            params={"path": "/", "scope": "project"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    node_json = response.json()["nodes"][0]
+    assert node_json.get("skillName") is None
+    assert node_json.get("skillDescription") is None
+
+
+def test_fc_skill_tree_003_enrich_skill_nodes_with_front_matter(tmp_path):
+    """FileCollectionService._enrich_skill_nodes 應從磁碟讀取 SKILL.md 並填入 skillName/skillDescription"""
+    import tempfile
+    from unittest.mock import patch
+    from app.modules.claude_code.file_collections.service import FileCollectionService
+    from app.modules.claude_code.file_collections.models import FileCollectionType
+
+    skill_content = "---\nname: my-skill\ndescription: My skill description\n---\n# My Skill\n"
+    skill_file = tmp_path / "SKILL.md"
+    skill_file.write_text(skill_content, encoding="utf-8")
+
+    service = FileCollectionService(FileCollectionType.SKILLS, workspace_id="test-ws")
+
+    node = {
+        "id": "/my-skill/SKILL.md",
+        "name": "SKILL.md",
+        "path": "/my-skill/SKILL.md",
+        "type": "file",
+        "scope": "project",
+        "size": len(skill_content),
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "depth": 1,
+    }
+
+    with patch.object(service, "resolve_scope_path", return_value=skill_file):
+        service._enrich_skill_nodes([node], "project")
+
+    assert node.get("skillName") == "my-skill"
+    assert node.get("skillDescription") == "My skill description"
+
+
+def test_fc_skill_tree_004_enrich_skill_nodes_no_front_matter(tmp_path):
+    """SKILL.md 無 front matter 時，節點不應包含 skillName/skillDescription"""
+    from unittest.mock import patch
+    from app.modules.claude_code.file_collections.service import FileCollectionService
+    from app.modules.claude_code.file_collections.models import FileCollectionType
+
+    skill_content = "# My Skill\nNo front matter here.\n"
+    skill_file = tmp_path / "SKILL.md"
+    skill_file.write_text(skill_content, encoding="utf-8")
+
+    service = FileCollectionService(FileCollectionType.SKILLS, workspace_id="test-ws")
+
+    node = {
+        "id": "/my-skill/SKILL.md",
+        "name": "SKILL.md",
+        "path": "/my-skill/SKILL.md",
+        "type": "file",
+        "scope": "project",
+        "size": len(skill_content),
+        "updatedAt": "2024-01-01T00:00:00Z",
+        "depth": 1,
+    }
+
+    with patch.object(service, "resolve_scope_path", return_value=skill_file):
+        service._enrich_skill_nodes([node], "project")
+
+    assert "skillName" not in node
+    assert "skillDescription" not in node

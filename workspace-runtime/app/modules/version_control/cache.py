@@ -234,10 +234,12 @@ class GitCache:
 # 快取鍵常數
 class CacheKeys:
     """快取鍵名稱常數"""
-    
+
     CHANGES = "changes"
+    WORKING_TREE_SNAPSHOT = "working_tree_snapshot"
     STATUS = "status"
     BRANCHES = "branches"
+    CONTEXT_PATH = "context_path"
     COMMITS = "commits"
     COMMIT_DETAIL = "commit_detail"
     COMMIT_FILES = "commit_files"

@@ -16,6 +16,7 @@ const {
   reloadCurrentFileMock,
   modifiedTabsMock,
   setDraftMessageMock,
+  ensureLoadedMock,
   tMock,
 } = vi.hoisted(() => ({
   openFileInTabMock: vi.fn(),
@@ -27,6 +28,7 @@ const {
   reloadCurrentFileMock: vi.fn().mockResolvedValue({ success: true }),
   modifiedTabsMock: [] as string[],
   setDraftMessageMock: vi.fn(),
+  ensureLoadedMock: vi.fn().mockResolvedValue(undefined),
   tMock: (key: string) =>
     ({
       'workspace.fileManagement.markdown.title': 'Markdown',
@@ -150,6 +152,7 @@ vi.mock('../../../components/ChatPanel/chatPanelStateContext', () => ({
 
 vi.mock('../../openspec/OpenSpecWorkspaceContext', () => ({
   useOpenSpecWorkspace: () => ({
+    ensureLoaded: ensureLoadedMock,
     actions: [
       {
         id: 'apply',
@@ -197,6 +200,8 @@ describe('MarkdownViewer', () => {
     reloadCurrentFileMock.mockReset();
     reloadCurrentFileMock.mockResolvedValue({ success: true });
     setDraftMessageMock.mockReset();
+    ensureLoadedMock.mockReset();
+    ensureLoadedMock.mockResolvedValue(undefined);
     modifiedTabsMock.length = 0;
     saveFileContentMock.mockReset();
     saveFileContentMock.mockResolvedValue({ success: true, message: 'saved' });

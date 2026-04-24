@@ -1,6 +1,7 @@
 """檔案管理基礎服務抽象類"""
 
 from abc import ABC, abstractmethod
+import os
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
@@ -614,31 +615,37 @@ class BaseFileService(ABC):
         nodes = []
 
         try:
-            # 排序：目錄優先，然後按名稱
-            items = sorted(
-                fs_path.iterdir(),
-                key=lambda x: (not x.is_dir(), x.name.lower())
-            )
+            items: list[tuple[os.DirEntry[str], bool]] = []
+            with os.scandir(fs_path) as entries:
+                for entry in entries:
+                    try:
+                        is_directory = entry.is_dir(follow_symlinks=False)
+                    except (PermissionError, OSError):
+                        continue
+                    items.append((entry, is_directory))
 
-            for item in items:
+            # 排序：目錄優先，然後按名稱
+            items.sort(key=lambda item: (not item[1], item[0].name.lower()))
+
+            for entry, is_directory in items:
                 # 跳過隱藏檔
-                if not include_hidden and item.name.startswith('.'):
+                if not include_hidden and entry.name.startswith('.'):
                     continue
 
                 # 跳過特定目錄
-                if item.name in self.SKIP_DIRECTORIES:
+                if entry.name in self.SKIP_DIRECTORIES:
                     continue
 
-                item_relative_path = f"{relative_path}/{item.name}".replace("//", "/")
+                item_relative_path = f"{relative_path}/{entry.name}".replace("//", "/")
 
                 try:
-                    stat = item.stat()
+                    stat = entry.stat(follow_symlinks=False)
                     updated_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()
 
-                    if item.is_file():
+                    if not is_directory:
                         nodes.append({
                             "id": item_relative_path,
-                            "name": item.name,
+                            "name": entry.name,
                             "path": item_relative_path,
                             "type": "file",
                             "scope": scope,
@@ -647,10 +654,11 @@ class BaseFileService(ABC):
                             "depth": current_depth
                         })
 
-                    elif item.is_dir():
+                    else:
+                        item_path = Path(entry.path)
                         # 遞迴掃描子目錄
                         children = self._scan_directory(
-                            fs_path=item,
+                            fs_path=item_path,
                             relative_path=item_relative_path,
                             current_depth=current_depth + 1,
                             max_depth=max_depth,
@@ -658,17 +666,12 @@ class BaseFileService(ABC):
                             scope=scope
                         )
 
-                        # 檢查是否有子項
-                        has_children = len(children) > 0
-                        if not has_children:
-                            try:
-                                has_children = any(item.iterdir())
-                            except PermissionError:
-                                has_children = False
+                        # 對受 depth 限制而被截斷的目錄保留可展開提示，避免額外 I/O 驗證空目錄。
+                        has_children = len(children) > 0 or current_depth >= max_depth
 
                         nodes.append({
                             "id": item_relative_path,
-                            "name": item.name,
+                            "name": entry.name,
                             "path": item_relative_path,
                             "type": "directory",
                             "scope": scope,
@@ -682,7 +685,7 @@ class BaseFileService(ABC):
                 except (PermissionError, OSError):
                     continue
 
-        except PermissionError:
+        except (PermissionError, OSError):
             pass
 
         return nodes
@@ -765,4 +768,3 @@ class BaseFileService(ABC):
             raise InvalidPathException(path, "Absolute paths not allowed")
 
         return path
-

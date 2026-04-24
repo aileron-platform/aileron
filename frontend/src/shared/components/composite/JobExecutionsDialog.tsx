@@ -378,7 +378,10 @@ export const JobExecutionsDialog: React.FC<JobExecutionsDialogProps> = ({
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
         <DialogContent className="max-w-4xl h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="text-lg font-semibold">{dialogTitle}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+              <Clock className="h-5 w-5 text-primary" />
+              {dialogTitle}
+            </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">{dialogDescription}</DialogDescription>
           </DialogHeader>
 

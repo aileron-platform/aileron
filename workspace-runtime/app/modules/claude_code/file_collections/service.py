@@ -129,6 +129,39 @@ class FileCollectionService(BaseFileService):
         """
         return scope == DocumentScope.PLUGIN
 
+    def get_tree(
+        self,
+        path: str = "/",
+        scope: Optional[str] = None,
+        include_hidden: bool = False,
+        max_depth: Optional[int] = None,
+    ) -> Dict:
+        """取得檔案樹，並對 SKILL.md 節點嵌入 front matter metadata"""
+        result = super().get_tree(path, scope, include_hidden, max_depth)
+        if self.collection_type == FileCollectionType.SKILLS:
+            self._enrich_skill_nodes(result["nodes"], scope)
+        return result
+
+    def _enrich_skill_nodes(self, nodes: List[Dict], scope: Optional[str]) -> None:
+        """遞迴走訪節點，對 SKILL.md file 節點嵌入 skillName/skillDescription"""
+        for node in nodes:
+            if node.get("type") == "file" and node.get("name") == "SKILL.md":
+                try:
+                    fs_path = self.resolve_scope_path(scope, node["path"])
+                    content = fs_path.read_text(encoding="utf-8")
+                    front_matter, _ = self._parse_front_matter(content)
+                    if front_matter:
+                        skill_name = front_matter.get("name")
+                        skill_description = front_matter.get("description")
+                        if skill_name:
+                            node["skillName"] = str(skill_name)
+                        if skill_description:
+                            node["skillDescription"] = str(skill_description)
+                except Exception:
+                    pass
+            elif node.get("type") == "directory" and node.get("children"):
+                self._enrich_skill_nodes(node["children"], scope)
+
     def _get_file_type(self, file_path: Path) -> FileType:
         """取得檔案類型"""
         suffix = file_path.suffix.lower()

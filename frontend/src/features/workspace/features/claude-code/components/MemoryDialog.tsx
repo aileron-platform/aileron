@@ -13,6 +13,7 @@ import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { ClaudeDocument } from '../types';
 import type { DocumentDialogProps } from '../../agent-settings/components/DocumentPage';
+import { NotebookPen } from 'lucide-react';
 
 const formatSize = (content: string) => {
   if (!content) return '1KB';
@@ -91,7 +92,8 @@ const MemoryDialog: React.FC<DocumentDialogProps> = ({
       <DialogContent className="max-w-4xl">
         <form className="space-y-4" onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <NotebookPen className="h-5 w-5 text-primary" />
               {t(`workspace.claudeCode.memory.dialog.title.${isEdit ? 'edit' : 'create'}`)}
             </DialogTitle>
             <DialogDescription>

@@ -18,7 +18,7 @@ import {
 } from '@/shared/components/ui/select';
 import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, Server, X } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 // ============================================================================
@@ -501,7 +501,8 @@ export const MCPServerDialog: React.FC<MCPServerDialogProps> = (props) => {
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-2xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Server className="h-5 w-5 text-primary" />
             {isEdit
               ? t(getTranslationKey('title.edit'))
               : t(getTranslationKey('title.create'))}

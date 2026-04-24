@@ -42,6 +42,8 @@ interface SkillTreeNodeResponse {
   type: 'file' | 'directory';
   scope?: SlashCommandScope;
   children?: SkillTreeNodeResponse[] | null;
+  skillName?: string;
+  skillDescription?: string;
 }
 
 interface SkillTreeResponse {
@@ -51,11 +53,6 @@ interface SkillTreeResponse {
   total: number;
 }
 
-interface SkillContentResponse {
-  path: string;
-  scope?: SlashCommandScope;
-  content: string;
-}
 
 interface PluginSkillResponse {
   pluginName: string;
@@ -93,56 +90,25 @@ const mapSummaryToItem = (
   };
 };
 
-const parseSkillFrontMatter = (content: string): { name?: string; description?: string } => {
-  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!match) {
-    return {};
-  }
-
-  const result: { name?: string; description?: string } = {};
-  for (const rawLine of match[1].split('\n')) {
-    const line = rawLine.trim();
-    if (!line) continue;
-
-    const nameMatch = line.match(/^name:\s*(.+)$/);
-    if (nameMatch && !result.name) {
-      result.name = nameMatch[1].trim().replace(/^['"]|['"]$/g, '');
-      continue;
-    }
-
-    const descriptionMatch = line.match(/^description:\s*(.+)$/);
-    if (descriptionMatch && !result.description) {
-      result.description = descriptionMatch[1].trim().replace(/^['"]|['"]$/g, '');
-    }
-  }
-
-  return result;
-};
-
-const collectSkillFilePaths = (nodes: SkillTreeNodeResponse[]): { path: string; scope: SlashCommandScope }[] => {
-  const files: { path: string; scope: SlashCommandScope }[] = [];
+const collectSkillNodes = (nodes: SkillTreeNodeResponse[]): SkillTreeNodeResponse[] => {
+  const result: SkillTreeNodeResponse[] = [];
 
   const walk = (node: SkillTreeNodeResponse) => {
     if (node.type === 'file' && node.name === 'SKILL.md' && node.scope) {
-      files.push({ path: node.path, scope: node.scope });
+      result.push(node);
       return;
     }
     node.children?.forEach(walk);
   };
 
   nodes.forEach(walk);
-  return files;
+  return result;
 };
 
-const mapSkillToItem = (
-  filePath: string,
-  scope: SlashCommandScope,
-  content: string,
-): SlashCommandItem => {
-  const metadata = parseSkillFrontMatter(content);
-  const segments = filePath.split('/').filter(Boolean);
+const mapSkillNodeToItem = (node: SkillTreeNodeResponse, scope: SlashCommandScope): SlashCommandItem => {
+  const segments = node.path.split('/').filter(Boolean);
   const directoryName = segments.length >= 2 ? segments[segments.length - 2] : segments[0] || 'skill';
-  const skillName = metadata.name?.trim() || directoryName;
+  const skillName = node.skillName?.trim() || directoryName;
 
   return {
     id: `${scope}:skill:${skillName}`,
@@ -151,7 +117,7 @@ const mapSkillToItem = (
     scope,
     displayName: buildSkillDisplayName(skillName),
     category: scope,
-    description: metadata.description?.trim() || '',
+    description: node.skillDescription?.trim() || '',
     invocation: buildSkillInvocation(skillName),
     tags: [],
   };
@@ -211,18 +177,8 @@ export const slashCommandApi = {
       const tree = await client.get<SkillTreeResponse>(
         `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/tree?scope=${scope}&maxDepth=8`,
       );
-      const skillFiles = collectSkillFilePaths(tree.nodes);
-      const contents = await Promise.all(
-        skillFiles.map(({ path }) =>
-          client.get<SkillContentResponse>(
-            `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/content?path=${encodeURIComponent(path)}&scope=${scope}`,
-          ),
-        ),
-      );
-
-      skillItems.push(
-        ...contents.map((response, index) => mapSkillToItem(skillFiles[index].path, scope, response.content)),
-      );
+      const skillNodes = collectSkillNodes(tree.nodes);
+      skillItems.push(...skillNodes.map((node) => mapSkillNodeToItem(node, scope)));
     }
 
     return skillItems.sort((a, b) => a.displayName.localeCompare(b.displayName));

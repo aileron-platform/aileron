@@ -47,6 +47,7 @@ from .models import (
     VersionControlStatus,
 )
 from .remote_ops import RemoteOperations
+from .snapshot import WorkingTreeSnapshotProvider
 from .staging_ops import StagingOperations
 from .status_ops import StatusOperations
 from .utils import GitUtils, VersionControlError
@@ -80,10 +81,11 @@ class GitService:
 
         # 初始化工具類
         self._utils = GitUtils(self._root_path, cache)
+        self._snapshot_provider = WorkingTreeSnapshotProvider(self._utils, cache)
 
         # 初始化操作類
-        self._status_ops = StatusOperations(self._utils, cache)
-        self._staging_ops = StagingOperations(self._utils, cache)
+        self._status_ops = StatusOperations(self._utils, cache, self._snapshot_provider)
+        self._staging_ops = StagingOperations(self._utils, cache, self._snapshot_provider)
         self._commit_ops = CommitOperations(self._utils, cache)
         self._remote_ops = RemoteOperations(self._utils, cache)
         self._diff_ops = DiffOperations(self._utils, cache)
@@ -147,6 +149,7 @@ class GitService:
         include_remote: bool = True,
         search: Optional[str] = None,
         context_id: Optional[str] = None,
+        include_metadata: bool = True,
     ) -> BranchListResponse:
         """列出分支
 
@@ -158,7 +161,7 @@ class GitService:
         Returns:
             分支列表回應
         """
-        return self._status_ops.list_branches(workspace_id, include_remote, search, context_id)
+        return self._status_ops.list_branches(workspace_id, include_remote, search, context_id, include_metadata)
 
     def checkout_branch(
         self,

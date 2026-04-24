@@ -5,7 +5,7 @@ import MarkdownFileViewer, { type MarkdownFileViewerProps, type BaseItem, type I
 import { useI18n } from '@/shared/hooks/useI18n';
 
 // Agent 數據類型
-export interface AgentData extends BaseItem {}
+export type AgentData = BaseItem;
 
 // 屬性類型
 export interface AgentViewerProps extends Omit<MarkdownFileViewerProps<AgentData>, 'i18nKeys' | 'getItemIcon' | 'renderContent' | 'getDownloadFileName' | 'getDownloadFileType'> {

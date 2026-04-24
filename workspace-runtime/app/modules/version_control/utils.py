@@ -63,6 +63,7 @@ class GitUtils:
         """
         self._root_path = root_path
         self.cache = cache
+        self._context_path_cache: dict[tuple[str, str], Path] = {}
 
     def workspace_path(self, workspace_id: str) -> Path:
         """取得工作區路徑
@@ -188,6 +189,13 @@ class GitUtils:
         if not context_id:
             return self.workspace_path(workspace_id).resolve()
 
+        cache_key = (workspace_id, context_id)
+        cached_path = self._context_path_cache.get(cache_key)
+        if cached_path is not None:
+            if cached_path.exists():
+                return cached_path
+            self._context_path_cache.pop(cache_key, None)
+
         context_map = {
             context.id: Path(context.repoPath).resolve()
             for context in self.list_contexts(workspace_id).contexts
@@ -199,7 +207,23 @@ class GitUtils:
                 status_code=404,
                 error_code="VC_CONTEXT_NOT_FOUND",
             )
+        if not resolved.exists():
+            raise VersionControlError(
+                f"Git context '{context_id}' not found",
+                status_code=404,
+                error_code="VC_CONTEXT_NOT_FOUND",
+            )
+        self._context_path_cache[cache_key] = resolved
         return resolved
+
+    def invalidate_context_path_cache(self, workspace_id: Optional[str] = None) -> None:
+        """Invalidate cached Git context path resolutions."""
+        if workspace_id is None:
+            self._context_path_cache.clear()
+            return
+        for key in list(self._context_path_cache):
+            if key[0] == workspace_id:
+                self._context_path_cache.pop(key, None)
 
     def get_repo(self, workspace_id: str, context_id: Optional[str] = None) -> Repo:
         """取得 Git Repository

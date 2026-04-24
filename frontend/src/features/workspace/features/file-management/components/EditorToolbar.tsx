@@ -355,7 +355,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
       <AlertDialog open={showRevertDialog} onOpenChange={setShowRevertDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-primary" />
               {t('workspace.fileManagement.editor.dialogs.revertTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>

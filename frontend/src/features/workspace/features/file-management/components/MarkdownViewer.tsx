@@ -125,7 +125,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const workspaceContext = useWorkspace();
   const { workspace, fileEditor, fileTreeActions, fileTreeState, openFileInTab } = workspaceContext;
   const [, chatUiActions] = useChatPanelStateContext();
-  const { actions: openSpecActions } = useOpenSpecWorkspace();
+  const { actions: openSpecActions, ensureLoaded: ensureOpenSpecLoaded } = useOpenSpecWorkspace();
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -166,6 +166,13 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
       .filter((action) => mapping[openSpecKind].includes(action.id))
       .filter((action) => ['enabled', 'blocked', 'setup_required', 'sync_required'].includes(action.availability));
   }, [openSpecActions, openSpecKind]);
+
+  useEffect(() => {
+    if (!openSpecKind) {
+      return;
+    }
+    void ensureOpenSpecLoaded({ reloadActiveDocument: false });
+  }, [ensureOpenSpecLoaded, openSpecKind]);
 
   const taskSummary = useMemo(() => countTasks(content), [content]);
   const specOutline = useMemo(() => parseOpenSpecSpecOutline(content), [content]);

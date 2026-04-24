@@ -14,7 +14,7 @@ export interface KnowledgeBaseSummary {
   updatedAt: string;
 }
 
-export interface KnowledgeBaseDetail extends KnowledgeBaseSummary {}
+export type KnowledgeBaseDetail = KnowledgeBaseSummary;
 
 export interface KnowledgeBaseShareSummary {
   id: string;

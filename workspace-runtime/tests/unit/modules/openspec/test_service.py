@@ -26,6 +26,33 @@ def test_workspace_state_when_cli_missing(tmp_path: Path, monkeypatch) -> None:
     assert result.changes == []
 
 
+def test_workspace_summary_groups_counts_without_full_workspace_state(tmp_path: Path, monkeypatch) -> None:
+    active_dir = tmp_path / "openspec" / "changes" / "active-change"
+    complete_dir = tmp_path / "openspec" / "changes" / "done-change"
+    archived_dir = tmp_path / "openspec" / "changes" / "archive" / "old-change"
+    active_dir.mkdir(parents=True)
+    complete_dir.mkdir(parents=True)
+    archived_dir.mkdir(parents=True)
+    (active_dir / "tasks.md").write_text("- [x] Done 1\n- [ ] Pending 2\n", encoding="utf-8")
+    (complete_dir / "tasks.md").write_text("- [x] Done 1\n- [x] Done 2\n", encoding="utf-8")
+    (archived_dir / "tasks.md").write_text("- [ ] Archived task\n", encoding="utf-8")
+
+    service = OpenSpecService(workspace_path=tmp_path)
+    monkeypatch.setattr(
+        service,
+        "_list_navigation_changes",
+        lambda: (_ for _ in ()).throw(AssertionError("summary should not load full navigation changes")),
+    )
+
+    result = service.get_workspace_summary("ws-1")
+
+    assert result.workspaceId == "ws-1"
+    assert result.initialized is True
+    assert result.counts.inProgress == 1
+    assert result.counts.complete == 1
+    assert result.counts.archived == 1
+
+
 def test_workspace_state_with_initialized_project_and_active_changes(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "openspec").mkdir()
     (tmp_path / ".claude" / "commands" / "opsx").mkdir(parents=True)

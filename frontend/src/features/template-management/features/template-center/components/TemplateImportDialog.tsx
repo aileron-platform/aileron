@@ -9,6 +9,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { Upload } from 'lucide-react';
 
 export interface TemplateImportDialogProps {
   open: boolean;
@@ -49,7 +50,10 @@ export const TemplateImportDialog: React.FC<TemplateImportDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('template.center.import.title')}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5 text-primary" />
+            {t('template.center.import.title')}
+          </DialogTitle>
           <DialogDescription>{t('template.center.import.description')}</DialogDescription>
         </DialogHeader>
 

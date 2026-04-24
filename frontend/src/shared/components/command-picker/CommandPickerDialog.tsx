@@ -102,7 +102,10 @@ export const CommandPickerDialog: React.FC<CommandPickerDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[80vh] max-w-4xl flex-col gap-0 p-0">
         <DialogHeader className="flex-shrink-0 space-y-3 border-b border-border/60 px-6 py-5">
-          <DialogTitle className="text-xl font-semibold">{resolvedLabels.title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2 text-xl font-semibold">
+            <Command className="h-5 w-5 text-primary" />
+            {resolvedLabels.title}
+          </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             {resolvedLabels.description}
           </DialogDescription>
@@ -182,4 +185,3 @@ export const CommandPickerDialog: React.FC<CommandPickerDialogProps> = ({
 };
 
 export default CommandPickerDialog;
-

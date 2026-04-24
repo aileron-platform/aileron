@@ -18,6 +18,7 @@ import type {
 } from '@/shared/types/templates';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { getTemplateCompilePreview, type TemplateCompilePreview } from '@/shared/services/templateApi';
+import { Download } from 'lucide-react';
 
 export interface TemplateInstallDialogProps {
   open: boolean;
@@ -217,7 +218,8 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Download className="h-5 w-5 text-primary" />
             {t('template.center.install.title', { name: template?.name ?? '' })}
           </DialogTitle>
           <DialogDescription>{t('template.center.install.description')}</DialogDescription>

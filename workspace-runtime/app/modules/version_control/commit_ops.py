@@ -97,6 +97,7 @@ class CommitOperations:
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
             self.cache.invalidate(workspace_id, CacheKeys.COMMITS)
 
         stats = commit_obj.stats.total

@@ -97,7 +97,12 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   // React Query - 查詢
   const changesQuery = useChangesQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId }, untrackedPage);
-  const branchesQuery = useBranchesQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const branchesQuery = useBranchesQuery(
+    { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
+    true,
+    undefined,
+    false,
+  );
   const statusQuery = useStatusQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
 
   // React Query - 變更操作

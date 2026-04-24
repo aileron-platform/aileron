@@ -13,7 +13,6 @@ import { AGENT_NAVIGATION_IDS } from '../features/agent-settings/agentToolConfig
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { useOpenSpecWorkspace } from '../features/openspec/OpenSpecWorkspaceContext';
-import type { OpenSpecChangeStatus } from './ChatPanel/openSpecApi';
 
 interface HoverMenuItem {
   item: NavigationConfig;
@@ -29,7 +28,7 @@ export const WorkspaceSidebar: React.FC = () => {
   const { state, dispatch, workspaceRuntime } = useWorkspace();
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { changes } = useOpenSpecWorkspace();
+  const { summary } = useOpenSpecWorkspace();
 
   // 根據 cliType 動態取得導航項目
   const cliType = normalizeAgentType(workspaceRuntime.cliType);
@@ -39,12 +38,6 @@ export const WorkspaceSidebar: React.FC = () => {
   const [hoverMenuItem, setHoverMenuItem] = useState<HoverMenuItem | null>(null);
   const popupMenuRef = useRef<HTMLDivElement>(null);
   const hideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [openSpecCounts, setOpenSpecCounts] = useState<Record<OpenSpecChangeStatus, number>>({
-    'in-progress': 0,
-    complete: 0,
-    archived: 0,
-  });
-
   // 集中管理所有導航項目的 button refs，避免在 map 迴圈中建立新 ref 造成記憶體洩漏
   const buttonRefs = useRef<Record<string, React.RefObject<HTMLButtonElement>>>({});
 
@@ -62,22 +55,6 @@ export const WorkspaceSidebar: React.FC = () => {
       clearHideTimeout();
     };
   }, []);
-
-  useEffect(() => {
-    setOpenSpecCounts(
-      changes.reduce<Record<OpenSpecChangeStatus, number>>(
-        (counts, change) => {
-          counts[change.status] += 1;
-          return counts;
-        },
-        {
-          'in-progress': 0,
-          complete: 0,
-          archived: 0,
-        },
-      ),
-    );
-  }, [changes]);
 
   /**
    * 檢查子選單項目是否為當前激活狀態
@@ -166,11 +143,17 @@ export const WorkspaceSidebar: React.FC = () => {
     }
 
     if (subItemId === 'in-progress' || subItemId === 'complete' || subItemId === 'archived') {
-      return openSpecCounts[subItemId];
+      if (!summary?.initialized) {
+        return 0;
+      }
+      if (subItemId === 'in-progress') {
+        return summary.counts.inProgress;
+      }
+      return summary.counts[subItemId];
     }
 
     return null;
-  }, [openSpecCounts]);
+  }, [summary]);
 
   return (
     <div className="flex-1 overflow-hidden flex flex-col">

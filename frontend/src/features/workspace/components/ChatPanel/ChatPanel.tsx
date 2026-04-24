@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bot } from 'lucide-react';
 import { createLogger } from '@/shared/services/logger';
 
@@ -81,6 +81,7 @@ export const ChatPanel: React.FC = () => {
   const [isAborting, setIsAborting] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [slashCommands, setSlashCommands] = useState<SlashCommandItem[]>([]);
+  const hasLoadedSlashCommandsRef = useRef(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>(() => {
     try {
       const saved = localStorage.getItem('chatPermissionMode');
@@ -98,10 +99,18 @@ export const ChatPanel: React.FC = () => {
   const agentConfig = useMemo(() => getAgentToolConfig(agentType), [agentType]);
   const {
     actions: openSpecActions,
+    ensureLoaded: ensureOpenSpecLoaded,
     state: openSpecState,
     changes: openSpecChanges,
     focusChangeName: openSpecFocusChangeName,
   } = useOpenSpecWorkspace();
+
+  useEffect(() => {
+    if (!uiState.isOpenSpecDialogOpen) {
+      return;
+    }
+    void ensureOpenSpecLoaded();
+  }, [ensureOpenSpecLoaded, uiState.isOpenSpecDialogOpen]);
 
   const resolveDecisionOption = useCallback((
     allow: boolean,
@@ -549,6 +558,7 @@ export const ChatPanel: React.FC = () => {
         agentConfig.availableScopes,
       );
       setSlashCommands(commands);
+      hasLoadedSlashCommandsRef.current = true;
     } catch (error) {
       logger.error('Failed to load slash commands and skills', { error });
       setSlashCommands([]);
@@ -560,10 +570,12 @@ export const ChatPanel: React.FC = () => {
     agentConfig.availableScopes,
   ]);
 
-  // 獲取 slash commands 與 skills
-  useEffect(() => {
-    void loadSlashCommands();
-  }, [loadSlashCommands]);
+  const handleOpenSlashDialog = useCallback(() => {
+    if (!hasLoadedSlashCommandsRef.current) {
+      void loadSlashCommands();
+    }
+    uiActions.openSlashDialog();
+  }, [loadSlashCommands, uiActions]);
 
   useWorkspaceTemplateInstallRefresh({
     workspaceId: workspaceRuntime.workspaceId,
@@ -700,7 +712,7 @@ export const ChatPanel: React.FC = () => {
             onAbort={handleAbort}
             onOpenFilePicker={uiActions.openFileDialog}
             onOpenUploadDialog={uiActions.openUploadDialog}
-            onOpenSlashDialog={uiActions.openSlashDialog}
+            onOpenSlashDialog={handleOpenSlashDialog}
             onOpenOpenSpecDialog={uiActions.openOpenSpecDialog}
             onRemoveAttachment={uiActions.removeUpload}
             onRemoveCodeReference={uiActions.removeCodeReference}

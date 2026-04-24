@@ -15,6 +15,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
 import Editor from '@monaco-editor/react';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { Terminal } from 'lucide-react';
 
 // ============================================================================
 // 類型定義
@@ -421,7 +422,8 @@ export const CommandDialog: React.FC<CommandDialogProps> = (props) => {
     <Dialog open={open} onOpenChange={(next) => !submitting && (!next ? onClose() : null)}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] w-full max-w-4xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Terminal className="h-5 w-5 text-primary" />
             {isEdit ? t(getTranslationKey('title.edit')) : t(getTranslationKey('title.create'))}
           </DialogTitle>
           <DialogDescription>

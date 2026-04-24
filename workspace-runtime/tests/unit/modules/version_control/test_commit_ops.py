@@ -51,7 +51,7 @@ def test_commit_amend_invalidates_cache_and_returns_summary() -> None:
     assert result.commit.author.name == "Tester"
     assert result.commit.additions == 2
     repo.git.commit.assert_called_once()
-    assert cache.invalidate.call_count == 3
+    assert cache.invalidate.call_count == 4
 
 
 def test_list_commits_with_search_and_head_fallback_branch() -> None:

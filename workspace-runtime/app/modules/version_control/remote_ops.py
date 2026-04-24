@@ -21,6 +21,7 @@ from .models import (
     PushUpdate,
 )
 from .utils import GitUtils, VersionControlError
+from .cache import CacheKeys
 
 if TYPE_CHECKING:
     from .cache import GitCache
@@ -81,6 +82,10 @@ class RemoteOperations:
                     status=status,
                 )
             )
+        if self.cache:
+            self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
+            self.cache.invalidate(workspace_id, CacheKeys.BRANCHES)
         return PushResponse(remote=payload.remote, branch=target_branch, updates=updates)
 
     def pull(self, workspace_id: str, payload: PullRequest, context_id: Optional[str] = None) -> PullResponse:
@@ -132,6 +137,13 @@ class RemoteOperations:
             except (ValueError, GitCommandError):
                 fast_forward = False
 
+        if self.cache:
+            self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
+            self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
+            self.cache.invalidate(workspace_id, CacheKeys.BRANCHES)
+            self.cache.invalidate(workspace_id, CacheKeys.COMMITS)
+
         return PullResponse(
             remote=payload.remote,
             branch=target_branch,
@@ -162,6 +174,10 @@ class RemoteOperations:
             raise VersionControlError(str(exc), error_code="VC_FETCH_FAILED") from exc
 
         refs = [info.name for info in results if info.name]
+        if self.cache:
+            self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
+            self.cache.invalidate(workspace_id, CacheKeys.BRANCHES)
         return FetchResponse(remote=payload.remote, fetchedRefs=refs)
 
 

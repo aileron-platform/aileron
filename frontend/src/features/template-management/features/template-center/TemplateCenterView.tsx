@@ -746,7 +746,10 @@ export const TemplateCenterView: React.FC = () => {
       <AlertDialog open={Boolean(deletingTemplate)} onOpenChange={open => !open && setDeletingTemplate(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('template.center.dialogs.delete.title')}</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" />
+              {t('template.center.dialogs.delete.title')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {t('template.center.dialogs.delete.description', {
                 name: deletingTemplate?.name ?? '',
@@ -768,7 +771,10 @@ export const TemplateCenterView: React.FC = () => {
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('template.center.createDialog.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" />
+              {t('template.center.createDialog.title')}
+            </DialogTitle>
             <DialogDescription>
               {t('template.center.createDialog.description')}
             </DialogDescription>

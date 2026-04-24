@@ -5,7 +5,7 @@ import MarkdownFileViewer, { type MarkdownFileViewerProps, type BaseItem } from 
 import { useI18n } from '@/shared/hooks/useI18n';
 
 // OutputStyle 數據類型
-export interface OutputStyleData extends BaseItem {}
+export type OutputStyleData = BaseItem;
 
 // 屬性類型
 export interface OutputStyleViewerProps extends Omit<MarkdownFileViewerProps<OutputStyleData>, 'i18nKeys' | 'getItemIcon' | 'renderContent' | 'getDownloadFileName' | 'getDownloadFileType'> {

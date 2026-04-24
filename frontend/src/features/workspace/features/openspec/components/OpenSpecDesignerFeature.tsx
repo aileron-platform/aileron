@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Expand, FileCog, type LucideIcon, Minimize2, Plus, RefreshCw, Wrench } from 'lucide-react';
+import { CheckCircle2, Expand, FileCog, GitFork, type LucideIcon, Minimize2, Plus, RefreshCw, Wrench } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import yaml from 'js-yaml';
 import { useApp } from '@/app/providers/AppProvider';
@@ -498,7 +498,10 @@ export const OpenSpecDesignerFeature: React.FC = () => {
               <Dialog open={isForkDialogOpen} onOpenChange={setIsForkDialogOpen}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>{t('workspace.openspec.designer.actions.forkSchema')}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      <GitFork className="h-5 w-5 text-primary" />
+                      {t('workspace.openspec.designer.actions.forkSchema')}
+                    </DialogTitle>
                     <DialogDescription>{t('workspace.openspec.designer.schemasDescription')}</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">
@@ -524,7 +527,7 @@ export const OpenSpecDesignerFeature: React.FC = () => {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setIsForkDialogOpen(false)} disabled={isSubmitting}>
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                     <Button onClick={() => void handleForkSchema()} disabled={isSubmitting || !forkDestination.trim()}>
                       {t('workspace.openspec.designer.actions.forkSchema')}
@@ -536,7 +539,10 @@ export const OpenSpecDesignerFeature: React.FC = () => {
               <Dialog open={isInitDialogOpen} onOpenChange={setIsInitDialogOpen}>
                 <DialogContent className="sm:max-w-md">
                   <DialogHeader>
-                    <DialogTitle>{t('workspace.openspec.designer.actions.initSchema')}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Plus className="h-5 w-5 text-primary" />
+                      {t('workspace.openspec.designer.actions.initSchema')}
+                    </DialogTitle>
                     <DialogDescription>{t('workspace.openspec.designer.schemasDescription')}</DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4">

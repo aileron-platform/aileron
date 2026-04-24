@@ -239,7 +239,10 @@ export const FileChooserDialog: React.FC<FileChooserDialogProps> = ({ open, onOp
       <DialogContent className="z-[100] flex h-[80vh] max-w-4xl flex-col p-0">
         <DialogHeader className="border-b px-6 py-4">
           <div className="flex items-center justify-between pr-8">
-            <DialogTitle>{t('workspace.chat.dialogs.fileChooser.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="h-5 w-5 text-primary" />
+              {t('workspace.chat.dialogs.fileChooser.title')}
+            </DialogTitle>
             <Button
               variant="outline"
               size="sm"

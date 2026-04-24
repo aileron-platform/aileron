@@ -377,7 +377,10 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
       <Dialog open={forkOpen} onOpenChange={setForkOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('workspace.openspec.customization.actions.forkSchema')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <GitFork className="h-5 w-5 text-primary" />
+              {t('workspace.openspec.customization.actions.forkSchema')}
+            </DialogTitle>
             <DialogDescription>{t('workspace.openspec.customization.dialogs.forkDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -413,7 +416,10 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('workspace.openspec.customization.actions.createSchema')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5 text-primary" />
+              {t('workspace.openspec.customization.actions.createSchema')}
+            </DialogTitle>
             <DialogDescription>{t('workspace.openspec.customization.dialogs.createDescription')}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

@@ -28,13 +28,15 @@ def test_push_maps_statuses_and_errors() -> None:
     utils.get_repo.return_value = repo
     utils.current_branch.return_value = ("main", False)
 
-    ops = RemoteOperations(utils)
+    cache = Mock()
+    ops = RemoteOperations(utils, cache)
     response = ops.push("ws-1", PushRequest(remote="origin", force=True))
 
     utils.ensure_remote.assert_called_once_with(repo, "origin")
     remote.push.assert_called_once_with("main", force=True)
     assert [update.status for update in response.updates] == ["ok", "error", "rejected"]
     assert response.updates[1].ref == "main"
+    assert cache.invalidate.call_count == 3
 
     remote.push.side_effect = _git_error("push failed")
     with pytest.raises(VersionControlError, match="push failed"):
@@ -63,12 +65,14 @@ def test_pull_collects_commits_fast_forward_and_errors() -> None:
 
     remote.pull.side_effect = pull_side_effect
 
-    ops = RemoteOperations(utils)
+    cache = Mock()
+    ops = RemoteOperations(utils, cache)
     response = ops.pull("ws-1", PullRequest(remote="origin", rebase=True, autostash=True))
 
     remote.pull.assert_called_once_with("main", rebase=True, autostash=True)
     assert response.fastForward is True
     assert [commit.id for commit in response.commits] == ["new1", "new2"]
+    assert cache.invalidate.call_count == 5
 
     repo.commit.side_effect = ValueError("bad commit")
     utils.has_head.side_effect = [True, True]
@@ -94,7 +98,8 @@ def test_pull_handles_missing_head_and_fetch_returns_refs() -> None:
     utils.current_branch.return_value = ("main", False)
     utils.has_head.return_value = False
 
-    ops = RemoteOperations(utils)
+    cache = Mock()
+    ops = RemoteOperations(utils, cache)
     pull_response = ops.pull("ws-1", PullRequest(branch="feature"))
     fetch_response = ops.fetch("ws-1", FetchRequest(prune=True))
 
@@ -103,6 +108,7 @@ def test_pull_handles_missing_head_and_fetch_returns_refs() -> None:
     assert pull_response.commits == []
     remote.fetch.assert_called_once_with(prune=True)
     assert fetch_response.fetchedRefs == ["origin/main"]
+    assert cache.invalidate.call_count == 8
 
     remote.fetch.side_effect = _git_error("fetch failed")
     with pytest.raises(VersionControlError, match="fetch failed"):

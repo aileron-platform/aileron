@@ -5,7 +5,7 @@ import MarkdownFileViewer, { type MarkdownFileViewerProps, type BaseItem, type I
 import { useI18n } from '@/shared/hooks/useI18n';
 
 // Command 數據類型
-export interface CommandData extends BaseItem {}
+export type CommandData = BaseItem;
 
 // 屬性類型
 export interface CommandViewerProps extends Omit<MarkdownFileViewerProps<CommandData>, 'i18nKeys' | 'getItemIcon' | 'renderContent' | 'getDownloadFileName' | 'getDownloadFileType'> {

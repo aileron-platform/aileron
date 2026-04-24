@@ -11,6 +11,7 @@ from typing import Optional, TYPE_CHECKING
 
 from git import GitCommandError
 
+from .cache import CacheKeys
 from .models import (
     BranchCommitInfo,
     BranchInfo,
@@ -19,6 +20,7 @@ from .models import (
     CheckoutResponse,
     VersionControlStatus,
 )
+from .snapshot import WorkingTreeSnapshotProvider
 from .utils import GitUtils, VersionControlError
 
 if TYPE_CHECKING:
@@ -33,7 +35,12 @@ class StatusOperations:
     提供狀態查詢、分支列表、分支切換等功能。
     """
 
-    def __init__(self, utils: GitUtils, cache: Optional["GitCache"] = None) -> None:
+    def __init__(
+        self,
+        utils: GitUtils,
+        cache: Optional["GitCache"] = None,
+        snapshot_provider: Optional[WorkingTreeSnapshotProvider] = None,
+    ) -> None:
         """初始化
 
         Args:
@@ -42,6 +49,7 @@ class StatusOperations:
         """
         self._utils = utils
         self.cache = cache
+        self._snapshot_provider = snapshot_provider or WorkingTreeSnapshotProvider(utils, cache)
 
     def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
         """取得 Git 狀態
@@ -52,37 +60,26 @@ class StatusOperations:
         Returns:
             版本控制狀態
         """
-        repo = self._utils.get_repo(workspace_id, context_id)
-        branch, detached = self._utils.current_branch(repo)
-        ahead, behind = self._utils.tracking_delta(repo)
-        staged_entries = self._utils.diff_index(repo, staged=True)
-        unstaged_entries = self._utils.diff_index(repo, staged=False)
-
-        # 使用 git ls-files 命令替代 repo.untracked_files（效能優化 + 中文檔名支援）
-        try:
-            result_output = repo.git.execute(
-                ["git", "-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard"]
-            )
-            untracked_files = result_output.strip().split("\n") if result_output.strip() else []
-        except GitCommandError as exc:
-            logger.warning(f"Failed to get untracked files for workspace {workspace_id}: {exc}")
-            untracked_files = []
-
-        has_conflicts = bool(repo.index.unmerged_blobs())
+        snapshot = self._snapshot_provider.get_snapshot(workspace_id, context_id=context_id)
         return VersionControlStatus(
-            branch=branch,
-            ahead=ahead,
-            behind=behind,
-            detached=detached,
-            hasConflicts=has_conflicts,
-            stagedCount=len(staged_entries),
-            unstagedCount=len(unstaged_entries),
-            untrackedCount=len(untracked_files),
-            lastFetchedAt=self._utils.last_fetch_time(repo),
+            branch=snapshot.branch,
+            ahead=snapshot.ahead,
+            behind=snapshot.behind,
+            detached=snapshot.detached,
+            hasConflicts=snapshot.hasConflicts,
+            stagedCount=len(snapshot.staged),
+            unstagedCount=len(snapshot.unstaged),
+            untrackedCount=snapshot.untrackedTotal,
+            lastFetchedAt=snapshot.lastFetchedAt,
         )
 
     def list_branches(
-        self, workspace_id: str, include_remote: bool = True, search: Optional[str] = None, context_id: Optional[str] = None
+        self,
+        workspace_id: str,
+        include_remote: bool = True,
+        search: Optional[str] = None,
+        context_id: Optional[str] = None,
+        include_metadata: bool = True,
     ) -> BranchListResponse:
         """列出分支
 
@@ -103,27 +100,29 @@ class StatusOperations:
             if query and query not in branch.name.lower():
                 continue
             ahead, behind = 0, 0
-            tracking = branch.tracking_branch()
-            if tracking:
-                try:
-                    ahead = sum(1 for _ in repo.iter_commits(f"{tracking}..{branch}"))
-                    behind = sum(1 for _ in repo.iter_commits(f"{branch}..{tracking}"))
-                except GitCommandError:
-                    ahead = behind = 0
+            if include_metadata:
+                tracking = branch.tracking_branch()
+                if tracking:
+                    try:
+                        ahead = sum(1 for _ in repo.iter_commits(f"{tracking}..{branch}"))
+                        behind = sum(1 for _ in repo.iter_commits(f"{branch}..{tracking}"))
+                    except GitCommandError:
+                        ahead = behind = 0
             last_commit = None
-            try:
-                commit = branch.commit
-                last_commit = BranchCommitInfo(
-                    id=commit.hexsha,
-                    message=commit.message.strip(),
-                    author=commit.author.name,
-                    email=getattr(commit.author, "email", None),
-                    timestamp=commit.committed_datetime.replace(tzinfo=timezone.utc)
-                    .isoformat()
-                    .replace("+00:00", "Z"),
-                )
-            except ValueError:
-                last_commit = None
+            if include_metadata:
+                try:
+                    commit = branch.commit
+                    last_commit = BranchCommitInfo(
+                        id=commit.hexsha,
+                        message=commit.message.strip(),
+                        author=commit.author.name,
+                        email=getattr(commit.author, "email", None),
+                        timestamp=commit.committed_datetime.replace(tzinfo=timezone.utc)
+                        .isoformat()
+                        .replace("+00:00", "Z"),
+                    )
+                except ValueError:
+                    last_commit = None
             branches.append(
                 BranchInfo(
                     name=branch.name,
@@ -207,6 +206,13 @@ class StatusOperations:
                 created = False
         except GitCommandError as exc:
             raise VersionControlError(str(exc), error_code="VC_BRANCH_CHECKOUT_FAILED") from exc
+
+        if self.cache:
+            self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
+            self.cache.invalidate(workspace_id, CacheKeys.STATUS)
+            self.cache.invalidate(workspace_id, CacheKeys.WORKING_TREE_SNAPSHOT)
+            self.cache.invalidate(workspace_id, CacheKeys.BRANCHES)
+            self.cache.invalidate(workspace_id, CacheKeys.COMMITS)
 
         return CheckoutResponse(
             branch=branch_name,

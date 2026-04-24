@@ -10,6 +10,7 @@ const {
   changesQueryMock,
   branchesQueryMock,
   statusQueryMock,
+  useBranchesQueryMock,
 } = vi.hoisted(() => ({
   onFileSelectMock: vi.fn(),
   changesQueryMock: {
@@ -31,6 +32,7 @@ const {
   statusQueryMock: {
     data: { branch: 'main' },
   },
+  useBranchesQueryMock: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -79,7 +81,7 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
     isLoading: false,
   }),
   useChangesQuery: () => changesQueryMock,
-  useBranchesQuery: () => branchesQueryMock,
+  useBranchesQuery: (...args: unknown[]) => useBranchesQueryMock(...args),
   useStatusQuery: () => statusQueryMock,
   useStageMutation: () => ({ mutateAsync: vi.fn() }),
   useUnstageMutation: () => ({ mutateAsync: vi.fn() }),
@@ -92,6 +94,8 @@ describe('FileChangesPanel', () => {
     onFileSelectMock.mockClear();
     changesQueryMock.error = null;
     branchesQueryMock.error = null;
+    useBranchesQueryMock.mockReset();
+    useBranchesQueryMock.mockReturnValue(branchesQueryMock);
   });
 
   it('renders branch and action controls in the changes header', () => {
@@ -106,6 +110,12 @@ describe('FileChangesPanel', () => {
     expect(screen.getByText('Branch')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'main' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
+    expect(useBranchesQueryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws-refresh', contextId: 'primary' }),
+      true,
+      undefined,
+      false,
+    );
   });
 
   it('keeps unstaged files visible in the panel', () => {

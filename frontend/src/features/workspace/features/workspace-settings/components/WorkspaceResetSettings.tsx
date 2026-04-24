@@ -552,7 +552,8 @@ export const WorkspaceResetSettings: React.FC = () => {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
                       {t('workspace.workspaceSettings.reset.delete.dialog.title', { workspaceName })}
                     </AlertDialogTitle>
                     <AlertDialogDescription className="space-y-3">

@@ -125,3 +125,28 @@ def test_list_contexts_and_resolve_context_path(tmp_path: Path) -> None:
     assert contexts.contexts[1].locked is True
     assert contexts.contexts[1].prunable is True
     assert utils.resolve_context_path("ws-1", "worktree:feature-auth") == worktree_root.resolve()
+    assert utils.resolve_context_path("ws-1", "worktree:feature-auth") == worktree_root.resolve()
+    assert repo.git.worktree.call_count == 2
+
+
+def test_resolve_context_path_invalidates_missing_cached_path(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "ws-1"
+    workspace_root.mkdir()
+    worktree_root = workspace_root / ".worktrees" / "feature-auth"
+    worktree_root.mkdir(parents=True)
+
+    utils = GitUtils(tmp_path)
+    utils.list_contexts = MagicMock(  # type: ignore[method-assign]
+        return_value=SimpleNamespace(
+            contexts=[
+                SimpleNamespace(id="worktree:feature-auth", repoPath=str(worktree_root)),
+            ],
+        )
+    )
+
+    assert utils.resolve_context_path("ws-1", "worktree:feature-auth") == worktree_root.resolve()
+    worktree_root.rmdir()
+
+    with pytest.raises(VersionControlError):
+        utils.resolve_context_path("ws-1", "worktree:feature-auth")
+    assert utils.list_contexts.call_count == 2

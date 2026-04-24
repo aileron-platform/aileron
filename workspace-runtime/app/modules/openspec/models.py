@@ -130,6 +130,22 @@ class OpenSpecWorkspaceState(BaseModel):
     activeChanges: list[OpenSpecChangeSummary] = Field(default_factory=list, description="進行中的 changes")
 
 
+class OpenSpecWorkspaceSummaryCounts(BaseModel):
+    """Workspace OpenSpec grouped counts for generic surfaces."""
+
+    inProgress: int = Field(default=0, description="進行中 changes 數量")
+    complete: int = Field(default=0, description="已完成 changes 數量")
+    archived: int = Field(default=0, description="已封存 changes 數量")
+
+
+class OpenSpecWorkspaceSummaryResponse(BaseModel):
+    """Workspace OpenSpec 輕量 summary 回應。"""
+
+    workspaceId: str = Field(description="Workspace ID")
+    initialized: bool = Field(description="是否已初始化 openspec/")
+    counts: OpenSpecWorkspaceSummaryCounts = Field(description="依狀態分組的 change 計數")
+
+
 class OpenSpecWorkspaceResponse(BaseModel):
     """OpenSpec workspace 狀態與 actions 聚合回應。"""
 

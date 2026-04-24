@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import React from 'react';
 
 import { TemplateInstallDialog } from './TemplateInstallDialog';
 
@@ -96,34 +97,46 @@ vi.mock('@/shared/components/ui/badge', () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 
-vi.mock('@/shared/components/ui/select', () => ({
-  Select: ({
-    value,
-    onValueChange,
-    children,
-  }: {
-    value: string;
-    onValueChange: (value: string) => void;
-    children: React.ReactNode;
-  }) => (
-    <div>
-      <label htmlFor="workspace-select">workspace</label>
-      <select id="workspace-select" value={value} onChange={(e) => onValueChange(e.target.value)}>
-        {children}
-      </select>
-    </div>
-  ),
-  SelectTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SelectValue: ({ placeholder }: { placeholder?: string }) => <option value="">{placeholder}</option>,
-  SelectContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  SelectItem: ({
-    value,
-    children,
-  }: {
-    value: string;
-    children: React.ReactNode;
-  }) => <option value={value}>{typeof children === 'string' ? children : value}</option>,
-}));
+vi.mock('@/shared/components/ui/select', () => {
+  const SelectContent = ({ children }: { children: React.ReactNode }) => <>{children}</>;
+  (SelectContent as React.FC).displayName = 'MockSelectContent';
+
+  return {
+    Select: ({
+      value,
+      onValueChange,
+      children,
+    }: {
+      value: string;
+      onValueChange: (value: string) => void;
+      children: React.ReactNode;
+    }) => {
+      const childArray = React.Children.toArray(children) as React.ReactElement[];
+      const contentChild = childArray.find(
+        child => React.isValidElement(child) && (child.type as { displayName?: string }).displayName === 'MockSelectContent',
+      );
+
+      return (
+        <div>
+          <label htmlFor="workspace-select">workspace</label>
+          <select id="workspace-select" value={value} onChange={(e) => onValueChange(e.target.value)}>
+            {contentChild}
+          </select>
+        </div>
+      );
+    },
+    SelectTrigger: () => null,
+    SelectValue: () => null,
+    SelectContent,
+    SelectItem: ({
+      value,
+      children,
+    }: {
+      value: string;
+      children: React.ReactNode;
+    }) => <option value={value}>{typeof children === 'string' ? children : value}</option>,
+  };
+});
 
 describe('TemplateInstallDialog', () => {
   it('renders canonical labels and installs selected workspace', async () => {

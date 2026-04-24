@@ -66,6 +66,7 @@ class StubGitService:
         include_remote: bool = True,
         search: Optional[str] = None,
         context_id: Optional[str] = None,
+        include_metadata: bool = True,
     ) -> dict[str, Any]:
         branches = self.branches.copy()
         if search:

@@ -497,6 +497,12 @@ const template = {
       save: 'Save changes',
       saving: 'Saving...'
     },
+    collection: {
+      actions: {
+        add: 'Add',
+      },
+      itemTitle: 'Configuration item',
+    },
     fileManagement: {
       collection: {
         actions: {
@@ -1012,6 +1018,13 @@ const template = {
         eventLabel: 'Event',
         matchersAndActions: 'Hook matchers and actions',
         matcherNumber: 'Matcher {{number}}',
+        actions: {
+          editTooltip: 'Edit hook {{event}}',
+          deleteTooltip: 'Delete hook {{event}}',
+          editSrLabel: 'Edit hook',
+          deleteSrLabel: 'Delete hook',
+          remove: 'Remove',
+        },
         execution: {
           type: {
             command: 'Command',
@@ -1037,9 +1050,6 @@ const template = {
           actions: '{{count}} actions',
           commands: '{{count}} commands',
           events: '{{count}} events',
-        },
-        actions: {
-          remove: 'Remove',
         },
         scope: {
           project: 'Project',
@@ -1681,6 +1691,18 @@ const template = {
         download: 'Download',
         edit: 'Edit',
         create: 'Create AGENTS.md',
+        copySuccess: {
+          title: 'Copied',
+          description: 'AGENTS.md content copied to clipboard.',
+        },
+        copyFailed: {
+          title: 'Copy failed',
+          description: 'Unable to copy AGENTS.md content.',
+        },
+        downloadSuccess: {
+          title: 'Download started',
+          description: 'AGENTS.md downloaded as Markdown file.',
+        },
       },
       toasts: {
         copySuccess: {

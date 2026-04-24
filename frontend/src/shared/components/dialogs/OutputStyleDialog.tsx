@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/shared/components/ui/badge';
 import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { Paintbrush } from 'lucide-react';
 
 // ============================================================================
 // 類型定義
@@ -214,7 +215,8 @@ export const OutputStyleDialog: React.FC<OutputStyleDialogProps> = (props) => {
     <Dialog open={open} onOpenChange={(next) => !submitting && (!next ? onClose() : null)}>
       <DialogContent className="flex h-[85vh] max-h-[85vh] w-full max-w-4xl flex-col p-0">
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <Paintbrush className="h-5 w-5 text-primary" />
             {isEdit ? t(getTranslationKey('title.edit')) : t(getTranslationKey('title.create'))}
           </DialogTitle>
           <DialogDescription>

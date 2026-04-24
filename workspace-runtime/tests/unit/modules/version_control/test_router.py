@@ -79,7 +79,14 @@ class DummyGitService:
         self._maybe_raise()
         return VersionControlStatus(branch="main")
 
-    def list_branches(self, workspace_id: str, include_remote: bool = True, search: str | None = None, context_id: str | None = None) -> BranchListResponse:
+    def list_branches(
+        self,
+        workspace_id: str,
+        include_remote: bool = True,
+        search: str | None = None,
+        context_id: str | None = None,
+        include_metadata: bool = True,
+    ) -> BranchListResponse:
         self._maybe_raise()
         return BranchListResponse(branches=[BranchInfo(name="main", displayName="main", isActive=True, isRemote=False)])
 
@@ -182,7 +189,7 @@ async def test_router_success_paths() -> None:
 
     assert (await list_contexts("ws", service)).activeContextId == "primary"
     assert (await get_status("ws", None, service)).branch == "main"
-    assert len((await list_branches("ws", True, None, None, service)).branches) == 1
+    assert len((await list_branches("ws", True, None, True, None, service)).branches) == 1
     assert (await checkout_branch(CheckoutRequest(create=True), "ws", "feature/x", None, service)).created is True
     assert len((await get_changes("ws", "all", 1, 100, None, service)).staged) == 1
     assert len((await get_changes("ws", "staged", 1, 100, None, service)).unstaged) == 0
@@ -233,7 +240,7 @@ async def test_router_preserves_repository_not_initialized_contract() -> None:
 async def test_list_branches_and_get_changes_forward_query_params() -> None:
     service = DummyGitService()
 
-    branches = await list_branches("ws", False, "feature", None, service)
+    branches = await list_branches("ws", False, "feature", True, None, service)
     changes = await get_changes("ws", "unknown", 2, 25, None, service)
 
     assert len(branches.branches) == 1
@@ -245,7 +252,7 @@ async def test_list_branches_and_get_changes_forward_query_params() -> None:
 @pytest.mark.parametrize(
     ("call", "expected_status"),
     [
-        (lambda service: list_branches("ws", True, None, None, service), 422),
+        (lambda service: list_branches("ws", True, None, True, None, service), 422),
         (lambda service: checkout_branch(CheckoutRequest(create=False), "ws", "main", None, service), 422),
         (lambda service: get_changes("ws", "all", 1, 100, None, service), 422),
         (lambda service: stage_changes(StageRequest(paths=["a.py"]), "ws", None, service), 422),

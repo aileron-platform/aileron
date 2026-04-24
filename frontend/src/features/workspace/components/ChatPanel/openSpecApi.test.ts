@@ -12,6 +12,27 @@ vi.mock('@/shared/api/apiClient', () => ({
 
 import { openSpecApi } from './openSpecApi';
 
+describe('openSpecApi.getWorkspaceSummary', () => {
+  beforeEach(() => {
+    clientGetMock.mockReset();
+    clientGetMock.mockResolvedValue({
+      workspaceId: 'ws-1',
+      initialized: true,
+      counts: {
+        inProgress: 1,
+        complete: 2,
+        archived: 3,
+      },
+    });
+  });
+
+  it('requests the lightweight workspace summary endpoint', async () => {
+    await openSpecApi.getWorkspaceSummary('http://runtime.local', 'ws-1');
+
+    expect(clientGetMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/openspec/summary');
+  });
+});
+
 describe('openSpecApi.getWorkspaceState', () => {
   beforeEach(() => {
     clientGetMock.mockReset();

@@ -91,11 +91,18 @@ async def list_branches(
     workspace_id: str = Path(..., description="Workspace ID"),
     include_remote: bool = Query(True, alias="includeRemote", description="是否包含遠端"),
     search: str | None = Query(None, description="名稱過濾"),
+    include_metadata: bool = Query(True, alias="includeMetadata", description="是否包含分支統計與最後提交資訊"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> BranchListResponse:
     try:
-        return service.list_branches(workspace_id, include_remote=include_remote, search=search, context_id=context_id)
+        return service.list_branches(
+            workspace_id,
+            include_remote=include_remote,
+            search=search,
+            context_id=context_id,
+            include_metadata=include_metadata,
+        )
     except VersionControlError as exc:
         raise _handle_error(exc)
 

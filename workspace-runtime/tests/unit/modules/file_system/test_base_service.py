@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -104,6 +105,27 @@ def test_get_tree_respects_include_hidden_and_max_depth(
     assert result["nodes"][0]["children"][0]["name"] == "deep"
     assert result["nodes"][0]["children"][0]["children"] == []
     assert result["nodes"][0]["children"][0]["hasChildren"] is True
+
+
+def test_get_tree_keeps_directory_expandable_without_extra_empty_probe(
+    service: DummyFileService, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    deep_dir = service._root_path / "truncated" / "nested"
+    deep_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(
+        "app.modules.file_system.base_service.get_settings",
+        lambda: SimpleNamespace(FILE_TREE_MAX_DEPTH=2),
+    )
+
+    result = service.get_tree("/", include_hidden=False, max_depth=1)
+
+    truncated_node = next(node for node in result["nodes"] if node["name"] == "truncated")
+    assert truncated_node["type"] == "directory"
+    nested_node = truncated_node["children"][0]
+    assert nested_node["name"] == "nested"
+    assert nested_node["children"] == []
+    assert nested_node["hasChildren"] is True
 
 
 def test_get_tree_raises_when_target_is_file(
@@ -379,14 +401,14 @@ def test_scan_directory_swallows_permission_error(
 ) -> None:
     target = service._root_path / "locked"
     target.mkdir()
-    original_iterdir = Path.iterdir
+    original_scandir = os.scandir
 
-    def fake_iterdir(path_obj: Path):
-        if path_obj == target:
+    def fake_scandir(path_obj):
+        if Path(path_obj) == target:
             raise PermissionError("denied")
-        return original_iterdir(path_obj)
+        return original_scandir(path_obj)
 
-    monkeypatch.setattr(Path, "iterdir", fake_iterdir)
+    monkeypatch.setattr(os, "scandir", fake_scandir)
 
     assert service._scan_directory(target, "/locked", 0, 1, False, None) == []
 

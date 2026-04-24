@@ -497,6 +497,12 @@ const template = {
       save: '儲存變更',
       saving: '儲存中...'
     },
+    collection: {
+      actions: {
+        add: '新增',
+      },
+      itemTitle: '設定項目',
+    },
     fileManagement: {
       collection: {
         actions: {
@@ -1046,6 +1052,10 @@ const template = {
           project: '專案',
         },
         actions: {
+          editTooltip: '編輯 {{event}} 事件 Hook',
+          deleteTooltip: '刪除 {{event}} 事件 Hook',
+          editSrLabel: '編輯 Hook',
+          deleteSrLabel: '刪除 Hook',
           remove: '移除',
         },
       },
@@ -1682,6 +1692,18 @@ const template = {
         download: '下載',
         edit: '編輯',
         create: '建立 AGENTS.md',
+        copySuccess: {
+          title: '複製成功',
+          description: 'AGENTS.md 內容已複製到剪貼簿。',
+        },
+        copyFailed: {
+          title: '複製失敗',
+          description: '無法複製 AGENTS.md 內容。',
+        },
+        downloadSuccess: {
+          title: '下載成功',
+          description: 'AGENTS.md 已下載為 Markdown 檔案。',
+        },
       },
       toasts: {
         copySuccess: {

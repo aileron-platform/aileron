@@ -374,7 +374,10 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
       >
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
-            <DialogTitle>{t('knowledgeBase.attachments.dialog.title')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5 text-primary" />
+              {t('knowledgeBase.attachments.dialog.title')}
+            </DialogTitle>
             <DialogDescription>{t('knowledgeBase.attachments.dialog.description')}</DialogDescription>
           </DialogHeader>
 
