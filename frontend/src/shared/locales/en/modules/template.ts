@@ -76,20 +76,72 @@ const template = {
         confirm: 'Delete',
       },
     },
+    settings: {
+      tabs: {
+        general: 'General',
+        versionControl: 'Version Control',
+        remote: 'Remote',
+        sshKeys: 'SSH Keys',
+      },
+      versionControl: {
+        rebuildProgressTitle: 'Template rebuild progress',
+        confirmDiscard: 'Discard changes to "{{path}}"? This action cannot be undone.',
+        mode: {
+          title: 'Version Control',
+          fileChanges: 'File Changes',
+          commitHistory: 'Commit History',
+        },
+        registryStale: {
+          description: 'Registry content may have changed. Rebuild the template index to sync the latest state.',
+        },
+        status: {
+          branch: 'Branch',
+          noBranch: 'No branch',
+          sync: 'Sync status',
+          aheadBehind: 'Ahead {{ahead}} / behind {{behind}}',
+          changes: 'Changes',
+          changeCounts: 'Staged {{staged}} · unstaged {{unstaged}} · untracked {{untracked}}',
+          conflicts: 'Conflicts',
+          hasConflicts: 'Conflicts found',
+          noConflicts: 'No conflicts',
+        },
+        actions: {
+          rebuild: 'Rebuild index',
+        },
+        toasts: {
+          loadFailed: {
+            title: 'Failed to load Git data',
+            description: 'Unable to load Template Center version-control data',
+          },
+          operationFailed: {
+            title: 'Git operation failed',
+            description: 'Unable to complete Git operation',
+          },
+          commitSuccess: {
+            title: 'Commit successful',
+          },
+          fetchSuccess: {
+            title: 'Fetch successful',
+          },
+          pullSuccess: {
+            title: 'Pull successful',
+          },
+          pushSuccess: {
+            title: 'Push successful',
+          },
+          checkoutSuccess: {
+            title: 'Branch switched',
+          },
+          rebuildFailed: {
+            title: 'Failed to rebuild index',
+            description: 'Unable to start template index rebuild',
+          },
+        },
+      },
+    },
     settingsDialog: {
       title: 'Configure template center',
       description: 'Manage synchronization sources and metadata for the template center.',
-      tabs: {
-        basic: 'Basic Settings',
-        changeLog: 'Change Log',
-        gitUser: 'Git Settings',
-        sshKeys: 'SSH Keys',
-      },
-      gitRepo: {
-        label: 'Git repository URL',
-        placeholder: 'https://github.com/anthropic/claude-code-plugins.git',
-        helper: 'Provide a remote Git repository to synchronize template center content.',
-      },
       basicInfo: {
         title: 'Package information',
         nameLabel: 'Package name',
@@ -105,47 +157,6 @@ const template = {
         emailLabel: 'Owner email',
       },
       git: {
-        status: {
-          title: 'Git Status',
-          loading: 'Loading Git data...',
-          currentBranch: 'Current Branch',
-          currentBranchSuffix: 'current branch',
-          changesCount: '{{count}} template(s) changed',
-          changesCountInline: '{{count}} changes',
-          noChanges: 'No changes',
-          ahead: '{{count}} commit(s) ahead of remote',
-          behind: '{{count}} commit(s) behind remote',
-          upToDate: 'Up to date with remote',
-          notGitRepo: 'Not a Git repository',
-          remoteUrl: 'Remote URL',
-          noRemoteUrl: 'Not configured',
-          syncStatus: 'Sync Status',
-          needRemoteUrl: 'Please configure remote URL first',
-        },
-        actions: {
-          refresh: 'Refresh',
-          commit: 'Commit & Push',
-          pull: 'Pull from Remote',
-          rebuild: 'Rebuild Database',
-          rebuilding: 'Rebuilding...',
-        },
-        changeLog: {
-          title: 'Change Log',
-          rebuildProgressTitle: 'Template Rebuild Progress',
-          emptyMessage: 'No uncommitted changes',
-          templateId: 'Template',
-          filesCount: '{{count}} files',
-          status: {
-            modified: 'Modified',
-            added: 'Added',
-            deleted: 'Deleted',
-            untracked: 'Untracked',
-          },
-          treeTitle: 'Changed Items',
-          emptyTree: 'No file or directory changes to display',
-          expandAll: 'Expand All',
-          collapseAll: 'Collapse All',
-        },
         userConfig: {
           title: 'Git User Information',
           description: 'Configure the global Git user name and email used for commits.',
@@ -243,30 +254,12 @@ const template = {
             },
           },
         },
-        commitDialog: {
-          title: 'Commit & Push to Remote',
-          description: 'Commit local changes and push to remote Git repository',
-          messageLabel: 'Commit Message',
-          messagePlaceholder: 'Describe your changes...',
-          branchLabel: 'Target Branch',
-          branchPlaceholder: 'Select branch (defaults to current)',
-          pushLabel: 'Auto push to remote',
-          actions: {
-            cancel: 'Cancel',
-            confirm: 'Commit & Push',
-            confirming: 'Committing...',
-          },
-        },
       },
       unknownError: 'Unknown error',
       actions: {
         back: 'Back to Template Center',
         save: 'Save',
         saveProcessing: 'Saving...',
-        syncLocalToRemote: 'Sync local to remote',
-        syncLocalToRemoteProcessing: 'Syncing...',
-        syncRemoteToLocal: 'Sync remote to local',
-        syncRemoteToLocalProcessing: 'Syncing...',
       },
       toasts: {
         saved: {

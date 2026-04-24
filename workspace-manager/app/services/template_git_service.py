@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
@@ -13,12 +14,30 @@ from git.util import Actor
 
 from app.config.settings import get_settings
 from app.models.template_git import (
-    GitBranch,
-    GitBranchList,
-    GitChangeLog,
     GitStatus,
-    TemplateChange,
     GitUserConfig,
+    TemplateBlobResponse,
+    TemplateBranchCommitInfo,
+    TemplateChangesResponse,
+    TemplateCheckoutRequest,
+    TemplateCheckoutResponse,
+    TemplateCommitFilesResponse,
+    TemplateCommitListResponse,
+    TemplateCommitResponse,
+    TemplateCommitSummary,
+    TemplateDiffResponse,
+    TemplateDiscardRequest,
+    TemplateDiscardResponse,
+    TemplateFileChange,
+    TemplateRemoteRequest,
+    TemplateRemoteResponse,
+    TemplateStageRequest,
+    TemplateStageResponse,
+    TemplateUnstageRequest,
+    TemplateUnstageResponse,
+    TemplateVersionControlBranch,
+    TemplateVersionControlBranchListResponse,
+    TemplateVersionControlStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,6 +120,84 @@ class TemplateGitService:
         """檢查是否為 Git 倉庫"""
         return self._get_repo() is not None
 
+    def _safe_repo_path(self, path: str) -> str:
+        """Normalize a user supplied path and keep it inside the registry repo."""
+        normalized = path.strip().replace("\\", "/").lstrip("/")
+        if not normalized or normalized == ".":
+            raise ValueError("GIT_PATH_REQUIRED")
+        target = (self.template_center_path / normalized).resolve()
+        root = self.template_center_path.resolve()
+        if root != target and root not in target.parents:
+            raise ValueError("GIT_PATH_OUTSIDE_REPOSITORY")
+        return normalized
+
+    def _safe_repo_paths(self, paths: List[str]) -> List[str]:
+        return [self._safe_repo_path(path) for path in paths]
+
+    @staticmethod
+    def _change_type(status: str) -> str:
+        code = status.strip()[:1]
+        if code == "A":
+            return "added"
+        if code == "D":
+            return "deleted"
+        if code == "R":
+            return "renamed"
+        if code == "C":
+            return "copied"
+        if code == "T":
+            return "typechange"
+        if code == "U":
+            return "unmerged"
+        if status == "??":
+            return "untracked"
+        return "modified"
+
+    def _diff_stats(self, repo: Repo, path: str, *, cached: bool = False) -> tuple[int, int]:
+        args = ["--numstat"]
+        if cached:
+            args.append("--cached")
+        args.extend(["--", path])
+        try:
+            output = repo.git.diff(*args)
+        except GitCommandError:
+            return 0, 0
+        additions = 0
+        deletions = 0
+        for line in output.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            if parts[0].isdigit():
+                additions += int(parts[0])
+            if parts[1].isdigit():
+                deletions += int(parts[1])
+        return additions, deletions
+
+    def _file_change(self, repo: Repo, path: str, status: str, *, cached: bool = False) -> TemplateFileChange:
+        additions, deletions = self._diff_stats(repo, path, cached=cached)
+        return TemplateFileChange(
+            name=Path(path).name,
+            path=path,
+            status=status,
+            type=self._change_type(status),
+            additions=additions,
+            deletions=deletions,
+        )
+
+    def _current_branch_name(self, repo: Repo) -> tuple[str, bool]:
+        if repo.head.is_detached:
+            return repo.head.commit.hexsha[:7], True
+        return repo.active_branch.name, False
+
+    def _tracking_delta_for_branch(self, repo: Repo, branch: str) -> tuple[int, int]:
+        try:
+            commits_behind = list(repo.iter_commits(f"{branch}..origin/{branch}"))
+            commits_ahead = list(repo.iter_commits(f"origin/{branch}..{branch}"))
+            return len(commits_ahead), len(commits_behind)
+        except Exception:
+            return 0, 0
+
     def get_git_status(self) -> GitStatus:
         """取得 Git 倉庫狀態"""
         repo = self._get_repo()
@@ -139,8 +236,8 @@ class TemplateGitService:
 
                     # 計算 ahead/behind
                     try:
-                        commits_behind = list(repo.iter_commits(f'{current_branch}..origin/{current_branch}'))
-                        commits_ahead = list(repo.iter_commits(f'origin/{current_branch}..{current_branch}'))
+                        commits_behind = list(repo.iter_commits(f"{current_branch}..origin/{current_branch}"))
+                        commits_ahead = list(repo.iter_commits(f"origin/{current_branch}..{current_branch}"))
                         behind_count = len(commits_behind)
                         ahead_count = len(commits_ahead)
                     except GitCommandError:
@@ -168,119 +265,311 @@ class TemplateGitService:
                 is_git_repo=True,
             )
 
-    def get_change_log(self) -> GitChangeLog:
-        """取得變更記錄（按模板分組）"""
+    def get_version_control_status(self) -> TemplateVersionControlStatus:
+        """取得 file-level version-control 狀態。"""
         repo = self._get_repo()
         if repo is None:
-            return GitChangeLog(
-                templates=[],
-                total_changes=0,
-                has_staged=False,
-                has_unstaged=False,
+            return TemplateVersionControlStatus(
+                branch="",
+                ahead=0,
+                behind=0,
+                detached=False,
+                hasConflicts=False,
+                stagedCount=0,
+                unstagedCount=0,
+                untrackedCount=0,
             )
+        branch, detached = self._current_branch_name(repo)
+        ahead, behind = self._tracking_delta_for_branch(repo, branch) if not detached else (0, 0)
+        staged = repo.index.diff("HEAD") if repo.head.is_valid() else repo.index.diff(None)
+        unstaged = repo.index.diff(None)
+        conflicts, _ = self.check_conflicts()
+        return TemplateVersionControlStatus(
+            branch=branch,
+            ahead=ahead,
+            behind=behind,
+            detached=detached,
+            hasConflicts=conflicts,
+            stagedCount=len(staged),
+            unstagedCount=len(unstaged),
+            untrackedCount=len(repo.untracked_files),
+        )
+
+    def get_file_changes(self, page: int = 1, page_size: int = 100) -> TemplateChangesResponse:
+        """取得 staged / unstaged / untracked file-level changes."""
+        repo = self._get_repo()
+        if repo is None:
+            return TemplateChangesResponse()
+
+        staged: List[TemplateFileChange] = []
+        unstaged: List[TemplateFileChange] = []
+        try:
+            for diff_item in repo.index.diff("HEAD"):
+                path = diff_item.b_path or diff_item.a_path or ""
+                if path:
+                    staged.append(self._file_change(repo, path, diff_item.change_type or "M", cached=True))
+        except Exception:
+            pass
 
         try:
-            # 取得 staged 和 unstaged 變更
-            template_changes_dict: Dict[str, TemplateChange] = {}
-            has_staged = False
-            has_unstaged = False
+            for diff_item in repo.index.diff(None):
+                path = diff_item.b_path or diff_item.a_path or ""
+                if path:
+                    unstaged.append(self._file_change(repo, path, diff_item.change_type or "M"))
+        except Exception:
+            pass
 
-            # 檢查 staged 變更
-            staged_diffs = repo.index.diff("HEAD")
-            if staged_diffs:
-                has_staged = True
-
-            # 檢查 unstaged 變更
-            unstaged_diffs = repo.index.diff(None)
-            if unstaged_diffs:
-                has_unstaged = True
-
-            # 處理 staged 變更
-            for diff_item in staged_diffs:
-                self._process_diff_item(diff_item, template_changes_dict, "added")
-
-            # 處理 unstaged 變更
-            for diff_item in unstaged_diffs:
-                self._process_diff_item(diff_item, template_changes_dict, "modified")
-
-            # 處理 untracked 檔案
-            for untracked_file in repo.untracked_files:
-                self._process_untracked_file(untracked_file, template_changes_dict)
-
-            templates = list(template_changes_dict.values())
-
-            return GitChangeLog(
-                templates=templates,
-                total_changes=len(templates),
-                has_staged=has_staged,
-                has_unstaged=has_unstaged,
+        untracked_total = len(repo.untracked_files)
+        start = (page - 1) * page_size
+        end = start + page_size
+        untracked = [
+            TemplateFileChange(
+                name=Path(path).name,
+                path=path,
+                status="??",
+                type="untracked",
+                additions=0,
+                deletions=0,
             )
-        except Exception as e:
-            logger.error(f"取得變更記錄失敗: {e}")
-            return GitChangeLog(
-                templates=[],
-                total_changes=0,
-                has_staged=False,
-                has_unstaged=False,
+            for path in repo.untracked_files[start:end]
+        ]
+        return TemplateChangesResponse(
+            staged=staged,
+            unstaged=unstaged,
+            untracked=untracked,
+            untrackedTotal=untracked_total,
+            untrackedPage=page,
+            untrackedPageSize=page_size,
+            untrackedHasMore=end < untracked_total,
+        )
+
+    def stage(self, payload: TemplateStageRequest) -> TemplateStageResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        paths = self._safe_repo_paths(payload.paths)
+        repo.index.add(paths)
+        remaining = self.get_file_changes().unstaged
+        return TemplateStageResponse(staged=paths, unstaged=[item.path for item in remaining])
+
+    def unstage(self, payload: TemplateUnstageRequest) -> TemplateUnstageResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        paths = self._safe_repo_paths(payload.paths)
+        repo.git.reset("HEAD", "--", *paths)
+        return TemplateUnstageResponse(unstaged=paths, remainingStaged=len(self.get_file_changes().staged))
+
+    def discard(self, payload: TemplateDiscardRequest) -> TemplateDiscardResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        paths = self._safe_repo_paths(payload.paths)
+        warnings: List[str] = []
+        for path in paths:
+            abs_path = self.template_center_path / path
+            if path in repo.untracked_files:
+                if abs_path.is_file():
+                    abs_path.unlink()
+                else:
+                    warnings.append(path)
+                continue
+            repo.git.checkout("--", path)
+        return TemplateDiscardResponse(discarded=paths, warnings=warnings)
+
+    def list_version_control_branches(self) -> TemplateVersionControlBranchListResponse:
+        repo = self._get_repo()
+        if repo is None:
+            return TemplateVersionControlBranchListResponse(branches=[])
+        current_branch, detached = self._current_branch_name(repo)
+        branches: List[TemplateVersionControlBranch] = []
+
+        def branch_commit_info(ref) -> Optional[Any]:
+            try:
+                commit = ref.commit
+                return TemplateBranchCommitInfo(
+                    id=commit.hexsha,
+                    message=commit.message.strip().splitlines()[0] if commit.message else "",
+                    author=commit.author.name,
+                    email=commit.author.email,
+                    timestamp=datetime.fromtimestamp(commit.committed_date, timezone.utc).isoformat(),
+                )
+            except Exception:
+                return None
+
+        for head in repo.heads:
+            ahead, behind = self._tracking_delta_for_branch(repo, head.name)
+            branches.append(
+                TemplateVersionControlBranch(
+                    name=head.name,
+                    displayName=head.name,
+                    isActive=(not detached and head.name == current_branch),
+                    isRemote=False,
+                    ahead=ahead,
+                    behind=behind,
+                    lastCommit=branch_commit_info(head),
+                )
             )
+        for remote in repo.remotes:
+            for ref in remote.refs:
+                if ref.remote_head == "HEAD":
+                    continue
+                if any(branch.name == ref.remote_head for branch in branches):
+                    continue
+                branches.append(
+                    TemplateVersionControlBranch(
+                        name=ref.remote_head,
+                        displayName=ref.remote_head,
+                        isActive=False,
+                        isRemote=True,
+                        lastCommit=branch_commit_info(ref),
+                    )
+                )
+        return TemplateVersionControlBranchListResponse(branches=branches)
 
-    def _process_diff_item(self, diff_item: object, template_changes_dict: Dict[str, TemplateChange], default_status: str) -> None:
-        """處理單個 diff 項目"""
-        file_path = diff_item.b_path or diff_item.a_path or ""
-
-        if not file_path:
-            return
-
-        # 判斷變更狀態
-        if diff_item.change_type == "A":
-            change_status = "added"
-        elif diff_item.change_type == "D":
-            change_status = "deleted"
+    def checkout_branch(self, branch_name: str, payload: TemplateCheckoutRequest) -> TemplateCheckoutResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        stashed = None
+        if payload.stashChanges and self.get_version_control_status().unstagedCount:
+            stashed = repo.git.stash("push", "-u", "-m", f"template-center-checkout-{branch_name}")
+        created = False
+        if payload.create:
+            start_point = payload.startPoint or "HEAD"
+            repo.git.checkout("-b", branch_name, start_point)
+            created = True
         else:
-            change_status = default_status
+            repo.git.checkout(branch_name)
+        return TemplateCheckoutResponse(branch=branch_name, created=created, stashedChanges=stashed)
 
-        self._add_to_template_changes(file_path, template_changes_dict, change_status)
+    def commit(self, message: str, paths: Optional[List[str]] = None) -> TemplateCommitResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        if paths:
+            safe_paths = self._safe_repo_paths(paths)
+            repo.index.add(safe_paths)
+        if not repo.index.diff("HEAD"):
+            raise ValueError("GIT_NO_CHANGES")
+        commit = repo.index.commit(message)
+        summary = self._commit_summary(repo, commit)
+        return TemplateCommitResponse(commit=summary)
 
-    def _process_untracked_file(self, file_path: str, template_changes_dict: Dict[str, TemplateChange]) -> None:
-        """處理 untracked 檔案"""
-        self._add_to_template_changes(file_path, template_changes_dict, "untracked")
+    def _commit_summary(self, repo: Repo, commit) -> TemplateCommitSummary:
+        stats = commit.stats.total
+        branch, _ = self._current_branch_name(repo)
+        return TemplateCommitSummary(
+            id=commit.hexsha,
+            message=commit.message.strip().splitlines()[0] if commit.message else "",
+            author=commit.author.name,
+            email=commit.author.email,
+            timestamp=int(commit.committed_date * 1000),
+            branch=branch,
+            additions=stats.get("insertions", 0),
+            deletions=stats.get("deletions", 0),
+            files=stats.get("files", 0),
+        )
 
-    def _add_to_template_changes(self, file_path: str, template_changes_dict: Dict[str, TemplateChange], change_status: str) -> None:
-        """將檔案加入模板變更記錄"""
-        # 判斷是否為 templates/ 目錄下的檔案
-        if file_path.startswith("templates/"):
-            parts = file_path.split("/")
-            if len(parts) < 2:
-                return
+    def list_commits(self, page: int = 1, page_size: int = 20, branch: Optional[str] = None) -> TemplateCommitListResponse:
+        repo = self._get_repo()
+        if repo is None:
+            return TemplateCommitListResponse(page=page, pageSize=page_size, total=0, items=[])
+        ref = branch or "HEAD"
+        commits = list(repo.iter_commits(ref))
+        start = (page - 1) * page_size
+        end = start + page_size
+        return TemplateCommitListResponse(
+            page=page,
+            pageSize=page_size,
+            total=len(commits),
+            items=[self._commit_summary(repo, commit) for commit in commits[start:end]],
+        )
 
-            template_id = parts[1]
-            template_name = template_id
-            relative_path = "/".join(parts[2:]) if len(parts) > 2 else parts[-1]
-            sub_dir = "/".join(parts[2:-1]) if len(parts) > 3 else ""
-        else:
-            template_id = "__other__"
-            template_name = "other"
-            relative_path = file_path
-            parts = file_path.split("/")
-            sub_dir = "/".join(parts[:-1]) if len(parts) > 1 else ""
-
-        # 建立或更新模板變更記錄
-        if template_id not in template_changes_dict:
-            template_changes_dict[template_id] = TemplateChange(
-                template_id=template_id,
-                template_name=template_name,
-                status=change_status,
-                changed_files=[],
-                changed_dirs=[],
+    def get_commit_files(self, commit_id: str) -> TemplateCommitFilesResponse:
+        repo = self._get_repo()
+        if repo is None:
+            return TemplateCommitFilesResponse(commitId=commit_id, files=[])
+        commit = repo.commit(commit_id)
+        parent = f"{commit.hexsha}^" if commit.parents else "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        output = repo.git.diff("--numstat", parent, commit.hexsha)
+        files: List[TemplateFileChange] = []
+        for line in output.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 3:
+                continue
+            path = parts[2]
+            patch = repo.git.diff(parent, commit.hexsha, "--", path)
+            files.append(
+                TemplateFileChange(
+                    name=Path(path).name,
+                    path=path,
+                    status="M",
+                    type="modified",
+                    additions=int(parts[0]) if parts[0].isdigit() else 0,
+                    deletions=int(parts[1]) if parts[1].isdigit() else 0,
+                    diff=patch,
+                    patch=patch,
+                )
             )
+        return TemplateCommitFilesResponse(commitId=commit_id, files=files)
 
-        template_change = template_changes_dict[template_id]
+    def diff(self, path: str, head: str = "WORKTREE") -> TemplateDiffResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        safe_path = self._safe_repo_path(path)
+        args = []
+        if head == "INDEX":
+            args.append("--cached")
+        args.extend(["--", safe_path])
+        patch = repo.git.diff(*args)
+        return TemplateDiffResponse(path=safe_path, patch=patch, diff=patch, binary="Binary files" in patch)
 
-        if relative_path not in template_change.changed_files:
-            template_change.changed_files.append(relative_path)
+    def blob(self, path: str, revision: Optional[str] = None) -> TemplateBlobResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        safe_path = self._safe_repo_path(path)
+        if revision:
+            content = repo.git.show(f"{revision}:{safe_path}")
+        else:
+            content = (self.template_center_path / safe_path).read_text()
+        return TemplateBlobResponse(path=safe_path, revision=revision, content=content)
 
-        if sub_dir and sub_dir not in template_change.changed_dirs:
-            template_change.changed_dirs.append(sub_dir)
+    def fetch(self, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        remote = repo.remotes[payload.remote]
+        remote.fetch()
+        return TemplateRemoteResponse(remote=payload.remote, branch=payload.branch, message="GIT_FETCH_SUCCESS")
+
+    def push(self, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        branch, _ = self._current_branch_name(repo)
+        target_branch = payload.branch or branch
+        args = [target_branch]
+        if payload.force:
+            args.insert(0, "--force")
+        repo.remotes[payload.remote].push(*args)
+        return TemplateRemoteResponse(remote=payload.remote, branch=target_branch, message="GIT_PUSH_SUCCESS")
+
+    def pull(self, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+        repo = self._get_repo()
+        if repo is None:
+            raise ValueError("GIT_REPO_NOT_FOUND")
+        branch, _ = self._current_branch_name(repo)
+        target_branch = payload.branch or branch
+        args = [payload.remote, target_branch]
+        if payload.rebase:
+            args.insert(0, "--rebase")
+        if payload.autostash:
+            args.insert(0, "--autostash")
+        repo.git.pull(*args)
+        return TemplateRemoteResponse(remote=payload.remote, branch=target_branch, message="GIT_PULL_SUCCESS")
 
     def get_user_config(self) -> GitUserConfig:
         """取得 Git 使用者資訊"""
@@ -371,143 +660,35 @@ class TemplateGitService:
 
     def publish_registry(self, message: str, branch: Optional[str] = None) -> GitOperationResult:
         """發布 canonical registry 變更。"""
-        return self.commit_and_push(message=message, branch=branch, push=True)
-
-    def get_branches(self) -> GitBranchList:
-        """取得分支列表"""
-        repo = self._get_repo()
-        if repo is None:
-            return GitBranchList(branches=[], current_branch="")
-
-        try:
-            # 取得當前分支
-            current_branch = repo.active_branch.name if repo.head.is_detached is False else "detached"
-
-            # 取得本地分支
-            branches = []
-            for head in repo.heads:
-                branches.append(
-                    GitBranch(
-                        name=head.name,
-                        is_current=(head.name == current_branch),
-                        is_remote=False,
-                    )
-                )
-
-            # 取得遠端分支
-            for remote in repo.remotes:
-                for ref in remote.refs:
-                    branch_name = ref.remote_head
-                    # 避免重複（如果本地已有同名分支）
-                    if not any(b.name == branch_name for b in branches):
-                        branches.append(
-                            GitBranch(
-                                name=branch_name,
-                                is_current=False,
-                                is_remote=True,
-                            )
-                        )
-
-            return GitBranchList(branches=branches, current_branch=current_branch)
-        except Exception as e:
-            logger.error(f"取得分支列表失敗: {e}")
-            return GitBranchList(branches=[], current_branch="unknown")
-
-    def commit_and_push(
-        self, message: str, branch: Optional[str] = None, push: bool = True
-    ) -> GitOperationResult:
-        """提交變更並推送到遠端
-
-        Args:
-            message: Commit 訊息
-            branch: 目標分支（若為 None 則使用當前分支）
-            push: 是否推送到遠端
-
-        Returns:
-            (成功與否, 訊息)
-        """
         repo = self._get_repo()
         if repo is None:
             return self._operation_result(False, "GIT_REPO_NOT_FOUND")
 
         try:
-            # 檢查是否有變更
             status = self.get_git_status()
             if not status.has_changes:
                 return self._operation_result(False, "GIT_NO_CHANGES")
-
-            # 如果需要推送，先檢查是否有設定 remote origin
-            if push and not status.remote_url:
+            if not status.remote_url:
                 return self._operation_result(False, "GIT_PUSH_REMOTE_NOT_CONFIGURED")
-
-            # 如果指定了分支，先切換分支
             if branch:
                 try:
                     repo.heads[branch].checkout()
                 except IndexError:
                     return self._operation_result(False, "GIT_BRANCH_NOT_FOUND", params={"branch": branch})
-
-            # 加入所有變更到 staging area
-            repo.index.add("*")
-
-            # 提交變更
-            commit = repo.index.commit(message)
-            commit_info = f"Commit {commit.hexsha[:7]}: {commit.message}"
-
-            # 推送到遠端
-            if push:
-                try:
-                    current_branch = branch or status.current_branch
-                    repo.remotes.origin.push(current_branch)
-                    return self._operation_result(True, "GIT_COMMIT_PUSH_SUCCESS", params={"commitInfo": commit_info})
-                except Exception as e:
-                    logger.error(f"推送失敗: {e}")
-                    return self._operation_result(False, "GIT_PUSH_FAILED_LOCAL_COMMITTED")
-
-            return self._operation_result(True, "GIT_COMMIT_LOCAL_SUCCESS", params={"commitInfo": commit_info})
+            repo.git.add("--all")
+            commit_response = self.commit(message=message)
+            branch_name = branch or commit_response.commit.branch or status.current_branch
+            self.push(TemplateRemoteRequest(branch=branch_name))
+            return self._operation_result(
+                True,
+                "GIT_COMMIT_PUSH_SUCCESS",
+                params={"commitInfo": f"Commit {commit_response.commit.id[:7]}: {commit_response.commit.message}"},
+            )
+        except ValueError as e:
+            return self._operation_result(False, str(e))
         except Exception as e:
-            logger.error(f"提交變更失敗: {e}")
+            logger.error(f"發布 registry 變更失敗: {e}")
             return self._operation_result(False, "GIT_COMMIT_FAILED")
-
-    def pull_from_remote(self, branch: Optional[str] = None) -> GitOperationResult:
-        """從遠端拉取變更
-
-        Args:
-            branch: 要拉取的分支（若為 None 則使用當前分支）
-
-        Returns:
-            (成功與否, 訊息)
-        """
-        repo = self._get_repo()
-        if repo is None:
-            return self._operation_result(False, "GIT_REPO_NOT_FOUND")
-
-        try:
-            # 檢查是否有未提交的變更
-            status = self.get_git_status()
-            if status.has_changes:
-                return self._operation_result(False, "GIT_PULL_HAS_UNCOMMITTED_CHANGES")
-
-            # 如果指定了分支，先切換分支
-            if branch:
-                try:
-                    repo.heads[branch].checkout()
-                except IndexError:
-                    return self._operation_result(False, "GIT_BRANCH_NOT_FOUND", params={"branch": branch})
-
-            # 拉取遠端變更
-            current_branch = branch or status.current_branch
-            try:
-                repo.remotes.origin.pull(current_branch)
-                return self._operation_result(True, "GIT_PULL_SUCCESS")
-            except GitCommandError as e:
-                # 檢查是否為衝突
-                if "conflict" in str(e).lower():
-                    return self._operation_result(False, "GIT_PULL_CONFLICT")
-                return self._operation_result(False, "GIT_PULL_FAILED")
-        except Exception as e:
-            logger.error(f"拉取遠端變更失敗: {e}")
-            return self._operation_result(False, "GIT_PULL_FAILED")
 
     def check_conflicts(self) -> Tuple[bool, List[str]]:
         """檢查是否有衝突

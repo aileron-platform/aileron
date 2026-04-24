@@ -18,19 +18,12 @@ import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('FileChangesPanel');
 import {
-  Minus,
-  Plus,
-  ChevronDown,
-  MoreHorizontal,
-  ArrowDown,
-  ArrowUp,
   GitBranch,
   Loader2,
 } from 'lucide-react';
 import { ApiClient } from '@/shared/api/apiClient';
-import { CommitForm } from './CommitForm';
-import { FileChangeItem } from './FileChangeItem';
 import { GitContextSelector } from './GitContextSelector';
+import { VersionControlChangesSidebar, type VersionControlActionMenuItem } from '@/shared/components/version-control';
 import type { VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -67,19 +60,12 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const [lastSelectedStagedPath, setLastSelectedStagedPath] = useState<string | null>(null);
   const [lastSelectedUnstagedPath, setLastSelectedUnstagedPath] = useState<string | null>(null);
 
-  // UI 狀態
-  const [panelHeight, setPanelHeight] = useState(50);
-  const [showBranchDropdown, setShowBranchDropdown] = useState(false);
-  const [showActionMenu, setShowActionMenu] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-
   // 分頁狀態
   const [untrackedPage, setUntrackedPage] = useState(1);
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
 
   // ==================== Refs ====================
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const unstagedLoadMoreRef = useRef<HTMLDivElement>(null);
   const previousViewIdentityRef = useRef<string | null>(null);
 
@@ -216,7 +202,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   // 分支切換
   const handleBranchChange = useCallback(async (branch: string) => {
-    setShowBranchDropdown(false);
     if (branch === currentBranch) return;
 
     try {
@@ -239,7 +224,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   // Git 操作（Pull/Push）
   const handleGitAction = useCallback(async (action: 'pull' | 'push') => {
-    setShowActionMenu(false);
     try {
       const client = new ApiClient({ baseUrl: runtimeBaseUrl });
       const suffix = selectedGitContextId ? `?contextId=${encodeURIComponent(selectedGitContextId)}` : '';
@@ -419,121 +403,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     resetPagination();
   }, [commitMutation, onFileSelect, resetPagination]);
 
-  // 拖拽調整面板高度
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-
-    const startY = e.clientY;
-    const startHeight = panelHeight;
-
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!containerRef.current) return;
-      const containerRect = containerRef.current.getBoundingClientRect();
-      const deltaY = event.clientY - startY;
-      const deltaPercent = (deltaY / containerRect.height) * 100;
-      const newHeight = Math.max(20, Math.min(80, startHeight + deltaPercent));
-      setPanelHeight(newHeight);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-  }, [panelHeight]);
-
-  // ==================== Render Functions ====================
-
-  // 渲染檔案列表
-  const renderFileList = useCallback((
-    type: 'staged' | 'unstaged'
-  ) => {
-    const files = type === 'staged' ? stagedFiles : allUnstagedFiles;
-    const selectedPath = type === 'staged' ? selectedStagedPath : selectedUnstagedPath;
-    const selectedPaths = type === 'staged' ? selectedStagedPaths : selectedUnstagedPaths;
-
-    return (
-      <div className="h-full flex flex-col">
-        {/* Header */}
-        <div
-          className="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between flex-shrink-0"
-        >
-          <h4 className="text-sm font-medium text-foreground flex items-center gap-2">
-            {type === 'staged'
-              ? t('workspace.versionControl.fileChanges.stagedTitle')
-              : t('workspace.versionControl.fileChanges.unstagedTitle')}
-            <span className="text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded">{files.length}</span>
-            {selectedPaths.size > 0 && (
-              <span className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary rounded">
-                {selectedPaths.size} 已選
-              </span>
-            )}
-          </h4>
-          <button
-            className="h-6 w-6 p-0 hover:bg-muted-foreground/10 rounded flex items-center justify-center disabled:opacity-50 transition-colors"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (type === 'staged') {
-                handleUnstageAll();
-              } else {
-                handleStageAll();
-              }
-            }}
-            disabled={files.length === 0}
-            title={type === 'staged'
-              ? t('workspace.versionControl.fileChanges.unstageAllTooltip')
-              : t('workspace.versionControl.fileChanges.stageAllTooltip')}
-          >
-            {type === 'staged' ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-          </button>
-        </div>
-
-        {/* 簡單列表渲染 */}
-        <div className="flex-1 overflow-y-auto p-2 min-h-0">
-          {files.map((file: VersionControlFileChange) => (
-            <FileChangeItem
-              key={file.path}
-              file={file}
-              isSelected={selectedPath === file.path}
-              isMultiSelected={selectedPaths.has(file.path)}
-              type={type}
-              onSelect={handleFileSelect}
-              onStageToggle={(item) => handleStageToggle(item, type)}
-              onDiscard={type === 'unstaged' ? handleDiscard : undefined}
-              selectedCount={selectedPaths.size}
-            />
-          ))}
-
-          {/* 無限滾動觸發器（僅用於 unstaged）*/}
-          {type === 'unstaged' && changesQuery.data?.untrackedHasMore && (
-            <div ref={unstagedLoadMoreRef} className="h-1" />
-          )}
-
-          {/* 載入中指示器 */}
-          {type === 'unstaged' && changesQuery.isFetching && (
-            <div className="text-center py-2 text-muted-foreground text-sm">
-              <Loader2 className="inline-block w-4 h-4 animate-spin mr-2" />
-              {t('workspace.versionControl.fileChanges.loadingMore')}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }, [
-    stagedFiles, allUnstagedFiles,
-    selectedStagedPath, selectedUnstagedPath, selectedStagedPaths, selectedUnstagedPaths,
-    handleStageAll, handleUnstageAll, handleFileSelect, handleStageToggle, handleDiscard,
-    changesQuery.data?.untrackedHasMore, changesQuery.isFetching, unstagedLoadMoreRef, t
-  ]);
-
   // ==================== Early Returns ====================
 
   // Loading 狀態
@@ -577,114 +446,44 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   // ==================== Main Render ====================
 
+  const actionItems: VersionControlActionMenuItem[] = [
+    { id: 'pull', onClick: () => void handleGitAction('pull') },
+    { id: 'push', onClick: () => void handleGitAction('push') },
+  ];
+
   return (
-    <div ref={containerRef} className="h-full flex flex-col version-control-container">
-      <GitContextSelector />
-      {/* Branch and Actions Header */}
-      <div className="px-4 py-2 border-b border-border bg-muted/30 flex items-center justify-between flex-shrink-0">
-        {/* Branch Selector */}
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
-            <GitBranch className="h-3 w-3" />
-            {t('workspace.versionControl.actions.branch.label')}
-          </span>
-          <div className="relative">
-          <button
-            onClick={() => setShowBranchDropdown(!showBranchDropdown)}
-            className="flex items-center gap-2 px-3 py-1 bg-background border border-border rounded-md hover:bg-muted/30 transition-colors"
-          >
-            <GitBranch className="h-3 w-3 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">{currentBranch}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          </button>
-
-          {/* Branch Dropdown */}
-            {showBranchDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg z-10">
-                <div className="py-1">
-                  {branches.map((branch) => (
-                    <button
-                      key={branch.name}
-                      onClick={() => handleBranchChange(branch.name)}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 ${
-                        branch.name === currentBranch ? 'bg-primary/10 text-primary' : 'text-foreground'
-                      }`}
-                    >
-                      <GitBranch className="h-3 w-3" />
-                      {branch.displayName ?? branch.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Actions Menu */}
-        <div className="relative">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowActionMenu(!showActionMenu)}
-              className="p-1 hover:bg-muted/30 rounded transition-colors"
-              aria-label={t('workspace.versionControl.actions.menu.label')}
-              title={t('workspace.versionControl.actions.menu.label')}
-            >
-              <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </div>
-
-          {/* Actions Dropdown */}
-          {showActionMenu && (
-            <div className="absolute top-full right-0 mt-1 w-32 bg-background border border-border rounded-md shadow-lg z-10">
-              <div className="py-1">
-                <button
-                  onClick={() => handleGitAction('pull')}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 text-foreground"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                  {t('workspace.versionControl.actions.pull.label')}
-                </button>
-                <button
-                  onClick={() => handleGitAction('push')}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors flex items-center gap-2 text-foreground"
-                >
-                  <ArrowUp className="h-3 w-3" />
-                  {t('workspace.versionControl.actions.push.label')}
-                </button>
-              </div>
+    <VersionControlChangesSidebar
+      contextSlot={<GitContextSelector />}
+      branches={branches}
+      currentBranch={currentBranch}
+      actions={actionItems}
+      stagedFiles={stagedFiles}
+      unstagedFiles={allUnstagedFiles}
+      selectedStagedPath={selectedStagedPath}
+      selectedUnstagedPath={selectedUnstagedPath}
+      selectedStagedPaths={selectedStagedPaths}
+      selectedUnstagedPaths={selectedUnstagedPaths}
+      isMutating={commitMutation.isPending || stageMutation.isPending || unstageMutation.isPending || discardMutation.isPending}
+      onBranchChange={handleBranchChange}
+      onCommit={handleCommit}
+      onFileSelect={handleFileSelect}
+      onStageToggle={handleStageToggle}
+      onDiscard={handleDiscard}
+      onStageAll={handleStageAll}
+      onUnstageAll={handleUnstageAll}
+      unstagedFooter={(
+        <>
+          {changesQuery.data?.untrackedHasMore && (
+            <div ref={unstagedLoadMoreRef} className="h-1" />
+          )}
+          {changesQuery.isFetching && (
+            <div className="text-center py-2 text-muted-foreground text-sm">
+              <Loader2 className="inline-block w-4 h-4 animate-spin mr-2" />
+              {t('shared.versionControl.fileChanges.loadingMore')}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Commit Section */}
-      <CommitForm
-        onCommit={handleCommit}
-        isLoading={commitMutation.isPending}
-        stagedCount={stagedFiles.length}
-        currentBranch={currentBranch}
+        </>
+      )}
       />
-
-      {/* File Panels with Resizable Divider */}
-      <div className="flex-1 flex flex-col min-h-0 file-panels-container">
-        {/* Staged Changes Panel */}
-        <div className="min-h-0 overflow-hidden" style={{ height: `${panelHeight}%` }}>
-          {renderFileList('staged')}
-        </div>
-
-        {/* Resizable Divider */}
-        <div
-          className={`h-1 bg-border hover:bg-primary/50 cursor-row-resize transition-colors flex-shrink-0 ${
-            isDragging ? 'bg-primary' : ''
-          }`}
-          onMouseDown={handleMouseDown}
-        />
-
-        {/* Unstaged Changes Panel */}
-        <div className="min-h-0 overflow-hidden" style={{ height: `${100 - panelHeight}%` }}>
-          {renderFileList('unstaged')}
-        </div>
-      </div>
-    </div>
   );
 };

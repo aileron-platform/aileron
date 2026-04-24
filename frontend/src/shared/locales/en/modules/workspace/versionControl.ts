@@ -121,6 +121,9 @@ const versionControl = {
     loading: 'Loading diff...',
     empty: 'Select a file to view the diff',
     noDifference: 'No differences found in this file',
+    loadFailed: 'Failed to load diff',
+    binaryOrLarge: 'Unable to display file content',
+    filePath: 'File path: {{path}}',
   },
   errors: {
     loadFailed: 'Failed to load',

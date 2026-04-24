@@ -112,6 +112,9 @@ const versionControl = {
     loading: '載入差異內容...',
     empty: '選擇檔案以查看差異',
     noDifference: '此檔案沒有差異',
+    loadFailed: '載入差異內容失敗',
+    binaryOrLarge: '無法顯示檔案內容',
+    filePath: '檔案路徑：{{path}}',
   },
   errors: {
     loadFailed: '載入失敗',

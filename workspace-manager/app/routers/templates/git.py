@@ -3,24 +3,38 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.openapi import build_responses
 from app.db.database import get_db
 from app.modules.auth import get_current_user_id
 from app.models import (
-    GitBranchListResponse,
-    GitChangeLogResponse,
     GitCloneRequest,
     GitCommitRequest,
     GitOperationResponse,
-    GitPullRequest,
     GitRemoteUrlRequest,
-    GitStatusResponse,
     GitUserConfig,
     GitUserConfigResponse,
     SSHKeysUpdateRequest,
+    TemplateBlobResponse,
+    TemplateChangesResponse,
+    TemplateCheckoutRequest,
+    TemplateCheckoutResponse,
+    TemplateCommitFilesResponse,
+    TemplateCommitListResponse,
+    TemplateCommitResponse,
+    TemplateDiscardRequest,
+    TemplateDiscardResponse,
+    TemplateDiffResponse,
+    TemplateRemoteRequest,
+    TemplateRemoteResponse,
+    TemplateStageRequest,
+    TemplateStageResponse,
+    TemplateUnstageRequest,
+    TemplateUnstageResponse,
+    TemplateVersionControlBranchListResponse,
+    TemplateVersionControlStatus,
 )
 from app.services.template_git_service import TemplateGitService
 
@@ -59,7 +73,7 @@ def _translate_git_result(translate, result) -> str:
     if code == "GIT_PUSH_FAILED_LOCAL_COMMITTED":
         return translate("templates.git.push_failed_local_committed_simple")
     if code == "GIT_COMMIT_PUSH_SUCCESS":
-        return translate("templates.git.commit_and_push_success", commit_info=params.get("commitInfo", ""))
+        return translate("templates.git.commit_push_success", commit_info=params.get("commitInfo", ""))
     if code == "GIT_COMMIT_LOCAL_SUCCESS":
         return translate("templates.git.commit_local_success", commit_info=params.get("commitInfo", ""))
     if code == "GIT_PULL_CONFLICT":
@@ -86,6 +100,14 @@ def _translate_git_result(translate, result) -> str:
         return translate("templates.git_user_config_required")
     if code == "GIT_USER_CONFIG_UPDATE_FAILED":
         return translate("templates.git_user_config_update_failed")
+    if code == "GIT_FETCH_SUCCESS":
+        return translate("templates.git.fetch_success")
+    if code == "GIT_PUSH_SUCCESS":
+        return translate("templates.git.push_success")
+    if code == "GIT_PATH_REQUIRED":
+        return translate("templates.git.path_required")
+    if code == "GIT_PATH_OUTSIDE_REPOSITORY":
+        return translate("templates.git.path_outside_repository")
     return getattr(result, "message", "")
 
 
@@ -95,6 +117,14 @@ def _translate_git_exception(translate, exc: Exception) -> str:
         return translate("templates.ssh_keys_invalid_format")
     if message == "SSH_KEY_GENERATION_FAILED":
         return translate("git.ssh_key_gen_failed_simple")
+    if message in {
+        "GIT_REPO_NOT_FOUND",
+        "GIT_NO_CHANGES",
+        "GIT_PATH_REQUIRED",
+        "GIT_PATH_OUTSIDE_REPOSITORY",
+    }:
+        result = type("Result", (), {"code": message, "params": {}, "message": message})()
+        return _translate_git_result(translate, result)
     return message
 
 
@@ -107,167 +137,232 @@ def get_template_git_service() -> TemplateGitService:
 
 
 @router.get(
-    "/git/status",
-    response_model=GitStatusResponse,
-    summary="取得 Git 狀態",
+    "/git/version-control/status",
+    response_model=TemplateVersionControlStatus,
+    summary="取得 Template Center file-level Git 狀態",
     responses=build_responses(401, 500),
 )
-async def get_git_status(
-    request: Request,
+async def get_template_version_control_status(
     current_user_id: str = Depends(get_current_user_id),
-    git_service: TemplateGitService = Depends(get_template_git_service)
-) -> GitStatusResponse:
-    """取得模板中心的 Git 倉庫狀態"""
-    try:
-        status_obj = git_service.get_git_status()
-        return GitStatusResponse(
-            success=True,
-            data=status_obj,
-        )
-    except Exception as e:
-        logger.error(f"取得 Git 狀態失敗: {e}")
-        translate = request.state.translate
-        return GitStatusResponse(
-            success=False,
-            error=translate("templates.git_status_get_failed"),
-        )
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateVersionControlStatus:
+    return git_service.get_version_control_status()
 
 
 @router.get(
-    "/git/changes",
-    response_model=GitChangeLogResponse,
-    summary="取得變更記錄",
-    responses=build_responses(401, 500),
+    "/git/version-control/changes",
+    response_model=TemplateChangesResponse,
+    summary="取得 Template Center file-level Git 變更",
+    responses=build_responses(401, 422, 500),
 )
-async def get_git_changes(
-    request: Request,
+async def get_template_version_control_changes(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500, alias="pageSize"),
     current_user_id: str = Depends(get_current_user_id),
-    git_service: TemplateGitService = Depends(get_template_git_service)
-) -> GitChangeLogResponse:
-    """取得模板中心的變更記錄"""
-    try:
-        change_log = git_service.get_change_log()
-        return GitChangeLogResponse(
-            success=True,
-            data=change_log,
-        )
-    except Exception as e:
-        logger.error(f"取得變更記錄失敗: {e}")
-        translate = request.state.translate
-        return GitChangeLogResponse(
-            success=False,
-            error=translate("templates.git_changes_get_failed"),
-        )
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateChangesResponse:
+    return git_service.get_file_changes(page=page, page_size=page_size)
 
 
 @router.get(
-    "/git/branches",
-    response_model=GitBranchListResponse,
-    summary="取得分支列表",
+    "/git/version-control/branches",
+    response_model=TemplateVersionControlBranchListResponse,
+    summary="取得 Template Center Git 分支列表",
     responses=build_responses(401, 500),
 )
-async def get_git_branches(
-    request: Request,
+async def list_template_version_control_branches(
     current_user_id: str = Depends(get_current_user_id),
-    git_service: TemplateGitService = Depends(get_template_git_service)
-) -> GitBranchListResponse:
-    """取得可用的 Git 分支列表"""
-    try:
-        branches = git_service.get_branches()
-        return GitBranchListResponse(
-            success=True,
-            data=branches,
-        )
-    except Exception as e:
-        logger.error(f"取得分支列表失敗: {e}")
-        translate = request.state.translate
-        return GitBranchListResponse(
-            success=False,
-            error=translate("templates.git_branches_get_failed"),
-        )
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateVersionControlBranchListResponse:
+    return git_service.list_version_control_branches()
 
 
 @router.post(
-    "/git/commit",
-    response_model=GitOperationResponse,
-    summary="提交並推送變更",
-    responses=build_responses(401, 422, 500),
+    "/git/version-control/branches/{branch_name:path}/checkout",
+    response_model=TemplateCheckoutResponse,
+    summary="切換或建立 Template Center Git 分支",
+    responses=build_responses(400, 401, 404, 422, 500),
 )
-async def commit_and_push(
-    request: Request,
+async def checkout_template_version_control_branch(
+    branch_name: str,
+    payload: TemplateCheckoutRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateCheckoutResponse:
+    try:
+        return git_service.checkout_branch(branch_name, payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
+
+
+@router.post(
+    "/git/version-control/stage",
+    response_model=TemplateStageResponse,
+    summary="暫存 Template Center Git 檔案",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def stage_template_version_control_changes(
+    payload: TemplateStageRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateStageResponse:
+    try:
+        return git_service.stage(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
+
+
+@router.post(
+    "/git/version-control/unstage",
+    response_model=TemplateUnstageResponse,
+    summary="取消暫存 Template Center Git 檔案",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def unstage_template_version_control_changes(
+    payload: TemplateUnstageRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateUnstageResponse:
+    try:
+        return git_service.unstage(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
+
+
+@router.post(
+    "/git/version-control/discard",
+    response_model=TemplateDiscardResponse,
+    summary="捨棄 Template Center Git 檔案變更",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def discard_template_version_control_changes(
+    payload: TemplateDiscardRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateDiscardResponse:
+    try:
+        return git_service.discard(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
+
+
+@router.post(
+    "/git/version-control/commit",
+    response_model=TemplateCommitResponse,
+    summary="提交 Template Center Git 變更",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def commit_template_version_control_changes(
     payload: GitCommitRequest,
     current_user_id: str = Depends(get_current_user_id),
-    git_service: TemplateGitService = Depends(get_template_git_service)
-) -> GitOperationResponse:
-    """提交變更並推送到遠端（本地同步遠端）"""
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateCommitResponse:
     try:
-        translate = request.state.translate
-        result = git_service.commit_and_push(
-            message=payload.message,
-            branch=payload.branch,
-            push=payload.push
-        )
+        return git_service.commit(message=payload.message, paths=payload.paths)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
 
-        if result.success:
-            return GitOperationResponse(
-                success=True,
-                message=_translate_git_result(translate, result),
-            )
-        else:
-            return GitOperationResponse(
-                success=False,
-                message=translate("templates.git_operation_failed"),
-                error=_translate_git_result(translate, result),
-                error_code=result.code,
-            )
-    except Exception as e:
-        logger.error(f"提交並推送失敗: {e}")
-        translate = request.state.translate
-        return GitOperationResponse(
-            success=False,
-            message=translate("templates.git_operation_failed"),
-            error=_translate_git_exception(translate, e),
-        )
+
+@router.get(
+    "/git/version-control/commits",
+    response_model=TemplateCommitListResponse,
+    summary="列出 Template Center Git 提交歷史",
+    responses=build_responses(401, 422, 500),
+)
+async def list_template_version_control_commits(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    branch: Optional[str] = Query(None),
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateCommitListResponse:
+    return git_service.list_commits(page=page, page_size=page_size, branch=branch)
+
+
+@router.get(
+    "/git/version-control/commits/{commit_id}/files",
+    response_model=TemplateCommitFilesResponse,
+    summary="取得 Template Center Git 提交檔案",
+    responses=build_responses(401, 404, 500),
+)
+async def get_template_version_control_commit_files(
+    commit_id: str,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateCommitFilesResponse:
+    return git_service.get_commit_files(commit_id)
+
+
+@router.get(
+    "/git/version-control/diff",
+    response_model=TemplateDiffResponse,
+    summary="取得 Template Center Git 檔案差異",
+    responses=build_responses(401, 422, 500),
+)
+async def get_template_version_control_diff(
+    path: str = Query(...),
+    head: str = Query("WORKTREE"),
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateDiffResponse:
+    return git_service.diff(path=path, head=head)
+
+
+@router.get(
+    "/git/version-control/blob",
+    response_model=TemplateBlobResponse,
+    summary="讀取 Template Center Git 檔案內容",
+    responses=build_responses(401, 422, 500),
+)
+async def get_template_version_control_blob(
+    path: str = Query(...),
+    revision: Optional[str] = Query(None),
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateBlobResponse:
+    return git_service.blob(path=path, revision=revision)
 
 
 @router.post(
-    "/git/pull",
-    response_model=GitOperationResponse,
-    summary="從遠端拉取變更",
-    responses=build_responses(401, 422, 500),
+    "/git/version-control/fetch",
+    response_model=TemplateRemoteResponse,
+    summary="Fetch Template Center Git 遠端引用",
+    responses=build_responses(400, 401, 422, 500),
 )
-async def pull_from_remote(
-    request: Request,
-    payload: GitPullRequest,
+async def fetch_template_version_control(
+    payload: TemplateRemoteRequest,
     current_user_id: str = Depends(get_current_user_id),
-    git_service: TemplateGitService = Depends(get_template_git_service)
-) -> GitOperationResponse:
-    """從遠端拉取變更（遠端同步本地）"""
-    try:
-        translate = request.state.translate
-        result = git_service.pull_from_remote(branch=payload.branch)
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateRemoteResponse:
+    return git_service.fetch(payload)
 
-        if result.success:
-            return GitOperationResponse(
-                success=True,
-                message=_translate_git_result(translate, result),
-            )
-        else:
-            return GitOperationResponse(
-                success=False,
-                message=translate("templates.git_operation_failed"),
-                error=_translate_git_result(translate, result),
-                error_code=result.code,
-            )
-    except Exception as e:
-        logger.error(f"從遠端拉取失敗: {e}")
-        translate = request.state.translate
-        return GitOperationResponse(
-            success=False,
-            message=translate("templates.git_operation_failed"),
-            error=_translate_git_exception(translate, e),
-        )
 
+@router.post(
+    "/git/version-control/pull",
+    response_model=TemplateRemoteResponse,
+    summary="Pull Template Center Git 遠端變更",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def pull_template_version_control(
+    payload: TemplateRemoteRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateRemoteResponse:
+    return git_service.pull(payload)
+
+
+@router.post(
+    "/git/version-control/push",
+    response_model=TemplateRemoteResponse,
+    summary="Push Template Center Git 變更",
+    responses=build_responses(400, 401, 422, 500),
+)
+async def push_template_version_control(
+    payload: TemplateRemoteRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> TemplateRemoteResponse:
+    return git_service.push(payload)
 
 @router.get(
     "/git/user-config",

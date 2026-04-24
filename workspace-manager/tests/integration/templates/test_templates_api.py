@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import patch
 
 import pytest
 from fastapi import status
+from git import Repo
 
 from app.services.template_git_service import GitOperationResult
 from app.services.template_install_service import TemplateInstallError
@@ -193,20 +196,16 @@ class TestTemplatesAPI:
         client, user = authenticated_client
 
         # 取得 Git 分支列表
-        response = client.get("/api/v1/templates/git/branches")
+        response = client.get("/api/v1/templates/git/version-control/branches")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
         # 驗證 Git 分支回應結構
-        assert "success" in data
-        if data["success"]:
-            assert "data" in data
-            branches_data = data["data"]
-            # 分支列表可能包含的欄位
-            if isinstance(branches_data, list):
-                for branch in branches_data:
-                    assert "name" in branch or "branch" in branch
+        assert "branches" in data
+        for branch in data["branches"]:
+            assert "name" in branch
+            assert "displayName" in branch
 
     @pytest.mark.integration
     def test_tpl_010_template_git_changes_success(self, authenticated_client):
@@ -214,20 +213,15 @@ class TestTemplatesAPI:
         client, user = authenticated_client
 
         # 取得 Git 變更記錄
-        response = client.get("/api/v1/templates/git/changes")
+        response = client.get("/api/v1/templates/git/version-control/changes")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
         # 驗證 Git 變更記錄回應結構
-        assert "success" in data
-        if data["success"]:
-            assert "data" in data
-            changes_data = data["data"]
-            # 變更記錄可能包含的欄位
-            if isinstance(changes_data, list):
-                for change in changes_data:
-                    assert "commit" in change or "message" in change
+        assert "staged" in data
+        assert "unstaged" in data
+        assert "untracked" in data
 
     @pytest.mark.integration
     def test_tpl_012_list_templates_success(self, authenticated_client, test_data_factory):
@@ -862,17 +856,17 @@ class TestTemplatesAPI:
         client, user = authenticated_client
 
         # 1. 獲取 Git 狀態
-        status_response = client.get("/api/v1/templates/git/status")
+        status_response = client.get("/api/v1/templates/git/version-control/status")
         if status_response.status_code != status.HTTP_404_NOT_FOUND:
             assert status_response.status_code == status.HTTP_200_OK
 
         # 2. 獲取變更記錄
-        changes_response = client.get("/api/v1/templates/git/changes")
+        changes_response = client.get("/api/v1/templates/git/version-control/changes")
         if changes_response.status_code != status.HTTP_404_NOT_FOUND:
             assert changes_response.status_code == status.HTTP_200_OK
 
         # 3. 獲取分支列表
-        branches_response = client.get("/api/v1/templates/git/branches")
+        branches_response = client.get("/api/v1/templates/git/version-control/branches")
         if branches_response.status_code != status.HTTP_404_NOT_FOUND:
             assert branches_response.status_code == status.HTTP_200_OK
 
@@ -880,6 +874,63 @@ class TestTemplatesAPI:
         user_config_response = client.get("/api/v1/templates/git/user-config")
         if user_config_response.status_code != status.HTTP_404_NOT_FOUND:
             assert user_config_response.status_code == status.HTTP_200_OK
+
+    @pytest.mark.integration
+    def test_tpl_045b_template_version_control_endpoint_workflow(self, authenticated_client):
+        """TPL-045B Template Center file-level Git endpoint workflow"""
+        client, user = authenticated_client
+        repo_path = Path(os.environ["TEMPLATE_STORAGE_PATH"])
+        repo = Repo.init(repo_path)
+        with repo.config_writer() as config:
+            config.set_value("user", "name", "Template Tester")
+            config.set_value("user", "email", "template@example.com")
+
+        template_dir = repo_path / "templates" / "demo"
+        template_dir.mkdir(parents=True)
+        readme = template_dir / "README.md"
+        readme.write_text("hello\n")
+        repo.index.add(["templates/demo/README.md"])
+        repo.index.commit("initial")
+        readme.write_text("hello\nworld\n")
+
+        status_response = client.get("/api/v1/templates/git/version-control/status")
+        assert status_response.status_code == status.HTTP_200_OK
+        status_data = status_response.json()
+        assert status_data["unstagedCount"] == 1
+
+        changes_response = client.get("/api/v1/templates/git/version-control/changes")
+        assert changes_response.status_code == status.HTTP_200_OK
+        changes_data = changes_response.json()
+        assert changes_data["unstaged"][0]["path"] == "templates/demo/README.md"
+
+        diff_response = client.get(
+            "/api/v1/templates/git/version-control/diff",
+            params={"path": "templates/demo/README.md"},
+        )
+        assert diff_response.status_code == status.HTTP_200_OK
+        assert "+world" in diff_response.json()["patch"]
+
+        stage_response = client.post(
+            "/api/v1/templates/git/version-control/stage",
+            json={"paths": ["templates/demo/README.md"]},
+        )
+        assert stage_response.status_code == status.HTTP_200_OK
+        assert stage_response.json()["staged"] == ["templates/demo/README.md"]
+
+        commit_response = client.post(
+            "/api/v1/templates/git/version-control/commit",
+            json={"message": "update demo"},
+        )
+        assert commit_response.status_code == status.HTTP_200_OK
+        commit_id = commit_response.json()["commit"]["id"]
+
+        commits_response = client.get("/api/v1/templates/git/version-control/commits")
+        assert commits_response.status_code == status.HTTP_200_OK
+        assert commits_response.json()["items"][0]["message"] == "update demo"
+
+        commit_files_response = client.get(f"/api/v1/templates/git/version-control/commits/{commit_id}/files")
+        assert commit_files_response.status_code == status.HTTP_200_OK
+        assert commit_files_response.json()["files"][0]["path"] == "templates/demo/README.md"
 
     @pytest.mark.integration
     def test_tpl_046_marketplace_config(self, authenticated_client):
@@ -1315,16 +1366,15 @@ class TestTemplatesAPI:
             assert export_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
-    def test_tpl_054_git_commit_and_push(self, authenticated_client):
-        """TPL-054 Git 提交並推送"""
+    def test_tpl_054_git_file_level_commit(self, authenticated_client):
+        """TPL-054 Git 檔案層級提交"""
         client, user = authenticated_client
 
         commit_data = {
             "message": "Test commit",
-            "files": ["test.md"],
-            "push": False
+            "paths": ["test.md"],
         }
-        commit_response = client.post("/api/v1/templates/git/commit", json=commit_data)
+        commit_response = client.post("/api/v1/templates/git/version-control/commit", json=commit_data)
 
         if commit_response.status_code != status.HTTP_404_NOT_FOUND:
             # 可能因為沒有變更而失敗，這是正常的
@@ -1343,7 +1393,7 @@ class TestTemplatesAPI:
             "branch": "main",
             "rebase": False
         }
-        pull_response = client.post("/api/v1/templates/git/pull", json=pull_data)
+        pull_response = client.post("/api/v1/templates/git/version-control/pull", json=pull_data)
 
         if pull_response.status_code != status.HTTP_404_NOT_FOUND:
             assert pull_response.status_code in [
@@ -1394,39 +1444,20 @@ class TestTemplatesAPI:
             ]
 
     @pytest.mark.integration
-    def test_tpl_057b_git_commit_error_is_localized(self, authenticated_client):
+    def test_tpl_057b_git_commit_error_uses_version_control_endpoint(self, authenticated_client):
         client, _ = authenticated_client
 
         with patch(
-            "app.routers.templates.git.TemplateGitService.commit_and_push",
-            return_value=GitOperationResult(False, "GIT_NO_CHANGES", "沒有需要提交的變更"),
+            "app.routers.templates.git.TemplateGitService.commit",
+            side_effect=Exception("GIT_NO_CHANGES"),
         ):
             en_response = client.post(
-                "/api/v1/templates/git/commit",
-                json={"message": "Test commit", "push": False},
+                "/api/v1/templates/git/version-control/commit",
+                json={"message": "Test commit"},
             )
-            assert en_response.status_code == status.HTTP_200_OK
+            assert en_response.status_code == status.HTTP_400_BAD_REQUEST
             data = en_response.json()
-            assert data["success"] is False
-            assert data["message"] == "Operation failed"
-            assert data["error"] == "No changes to commit"
-            assert data["errorCode"] == "GIT_NO_CHANGES"
-
-        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
-        with patch(
-            "app.routers.templates.git.TemplateGitService.commit_and_push",
-            return_value=GitOperationResult(False, "GIT_NO_CHANGES", "沒有需要提交的變更"),
-        ):
-            zh_response = client.post(
-                "/api/v1/templates/git/commit",
-                json={"message": "Test commit", "push": False},
-            )
-            assert zh_response.status_code == status.HTTP_200_OK
-            data = zh_response.json()
-            assert data["success"] is False
-            assert data["message"] == "操作失敗"
-            assert data["error"] == "沒有需要提交的變更"
-            assert data["errorCode"] == "GIT_NO_CHANGES"
+            assert data["detail"]["errorCode"] == "GIT_NO_CHANGES"
 
     @pytest.mark.integration
     def test_tpl_057c_git_remote_url_error_is_localized(self, authenticated_client):
@@ -1464,39 +1495,20 @@ class TestTemplatesAPI:
             assert data["errorCode"] == "GIT_REPO_NOT_FOUND"
 
     @pytest.mark.integration
-    def test_tpl_057d_git_commit_internal_error_uses_simple_message(self, authenticated_client):
+    def test_tpl_057d_git_commit_internal_error_uses_version_control_endpoint(self, authenticated_client):
         client, _ = authenticated_client
 
         with patch(
-            "app.routers.templates.git.TemplateGitService.commit_and_push",
-            return_value=GitOperationResult(False, "GIT_COMMIT_FAILED", "提交失敗: fatal: internal git error"),
+            "app.routers.templates.git.TemplateGitService.commit",
+            side_effect=Exception("GIT_COMMIT_FAILED"),
         ):
             en_response = client.post(
-                "/api/v1/templates/git/commit",
-                json={"message": "Test commit", "push": False},
+                "/api/v1/templates/git/version-control/commit",
+                json={"message": "Test commit"},
             )
-            assert en_response.status_code == status.HTTP_200_OK
+            assert en_response.status_code == status.HTTP_400_BAD_REQUEST
             data = en_response.json()
-            assert data["success"] is False
-            assert data["message"] == "Operation failed"
-            assert data["error"] == "Commit failed"
-            assert data["errorCode"] == "GIT_COMMIT_FAILED"
-
-        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
-        with patch(
-            "app.routers.templates.git.TemplateGitService.commit_and_push",
-            return_value=GitOperationResult(False, "GIT_COMMIT_FAILED", "提交失敗: fatal: internal git error"),
-        ):
-            zh_response = client.post(
-                "/api/v1/templates/git/commit",
-                json={"message": "Test commit", "push": False},
-            )
-            assert zh_response.status_code == status.HTTP_200_OK
-            data = zh_response.json()
-            assert data["success"] is False
-            assert data["message"] == "操作失敗"
-            assert data["error"] == "提交失敗"
-            assert data["errorCode"] == "GIT_COMMIT_FAILED"
+            assert data["detail"]["errorCode"] == "GIT_COMMIT_FAILED"
 
     @pytest.mark.integration
     def test_tpl_058_git_clone_operations(self, authenticated_client):
@@ -2266,17 +2278,17 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         client, user = authenticated_client
 
         # 1. 檢查 Git 狀態
-        status_response = client.get("/api/v1/templates/git/status")
+        status_response = client.get("/api/v1/templates/git/version-control/status")
         if status_response.status_code != status.HTTP_404_NOT_FOUND:
             assert status_response.status_code == status.HTTP_200_OK
 
         # 2. 檢查變更記錄
-        changes_response = client.get("/api/v1/templates/git/changes")
+        changes_response = client.get("/api/v1/templates/git/version-control/changes")
         if changes_response.status_code != status.HTTP_404_NOT_FOUND:
             assert changes_response.status_code == status.HTTP_200_OK
 
         # 3. 檢查分支列表
-        branches_response = client.get("/api/v1/templates/git/branches")
+        branches_response = client.get("/api/v1/templates/git/version-control/branches")
         if branches_response.status_code != status.HTTP_404_NOT_FOUND:
             assert branches_response.status_code == status.HTTP_200_OK
 

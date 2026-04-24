@@ -15,52 +15,11 @@ class GitStatus(BaseModel):
     is_git_repo: bool = Field(..., description="是否為 Git 倉庫")
 
 
-class TemplateChange(BaseModel):
-    """單一模板的變更資訊"""
-
-    template_id: str = Field(..., description="模板 ID")
-    template_name: str = Field(..., description="模板名稱")
-    status: Literal["modified", "added", "deleted", "untracked"] = Field(..., description="變更狀態")
-    changed_files: List[str] = Field(default_factory=list, description="變更的檔案路徑列表（相對於模板根目錄）")
-    changed_dirs: List[str] = Field(default_factory=list, description="有變更的子目錄路徑（相對於模板根目錄）")
-
-
-class GitChangeLog(BaseModel):
-    """Git 變更記錄"""
-
-    templates: List[TemplateChange] = Field(default_factory=list, description="模板變更列表")
-    total_changes: int = Field(..., description="總變更數")
-    has_staged: bool = Field(default=False, description="是否有已 staged 的變更")
-    has_unstaged: bool = Field(default=False, description="是否有未 staged 的變更")
-
-
-class GitBranch(BaseModel):
-    """Git 分支資訊"""
-
-    name: str = Field(..., description="分支名稱")
-    is_current: bool = Field(..., description="是否為當前分支")
-    is_remote: bool = Field(default=False, description="是否為遠端分支")
-
-
-class GitBranchList(BaseModel):
-    """Git 分支列表"""
-
-    branches: List[GitBranch] = Field(default_factory=list, description="分支列表")
-    current_branch: str = Field(..., description="當前分支名稱")
-
-
 class GitCommitRequest(BaseModel):
     """Git commit 請求"""
 
     message: str = Field(..., min_length=1, description="Commit 訊息")
-    branch: Optional[str] = Field(None, description="目標分支（若為空則使用當前分支）")
-    push: bool = Field(default=True, description="是否自動 push 到遠端")
-
-
-class GitPullRequest(BaseModel):
-    """Git pull 請求"""
-
-    branch: Optional[str] = Field(None, description="要拉取的分支（若為空則使用當前分支）")
+    paths: Optional[List[str]] = Field(default=None, description="限定提交的檔案路徑")
 
 
 class GitOperationResponse(BaseModel):
@@ -73,30 +32,6 @@ class GitOperationResponse(BaseModel):
     error_code: Optional[str] = Field(None, alias="errorCode", description="穩定錯誤代碼")
 
     model_config = ConfigDict(populate_by_name=True)
-
-
-class GitStatusResponse(BaseModel):
-    """Git 狀態回應"""
-
-    success: bool = Field(..., description="操作是否成功")
-    data: Optional[GitStatus] = Field(None, description="Git 狀態")
-    error: Optional[str] = Field(None, description="錯誤訊息")
-
-
-class GitChangeLogResponse(BaseModel):
-    """Git 變更記錄回應"""
-
-    success: bool = Field(..., description="操作是否成功")
-    data: Optional[GitChangeLog] = Field(None, description="變更記錄")
-    error: Optional[str] = Field(None, description="錯誤訊息")
-
-
-class GitBranchListResponse(BaseModel):
-    """Git 分支列表回應"""
-
-    success: bool = Field(..., description="操作是否成功")
-    data: Optional[GitBranchList] = Field(None, description="分支列表")
-    error: Optional[str] = Field(None, description="錯誤訊息")
 
 
 class GitUserConfig(BaseModel):
@@ -140,3 +75,177 @@ class GitCloneRequest(BaseModel):
     branch: Optional[str] = Field(None, description="要 clone 的分支（可選）")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class TemplateVersionControlStatus(BaseModel):
+    """Template Center file-level Git status."""
+
+    branch: str = Field(description="目前分支")
+    ahead: int = Field(default=0, description="領先遠端提交數")
+    behind: int = Field(default=0, description="落後遠端提交數")
+    detached: bool = Field(default=False, description="是否為 detached HEAD")
+    hasConflicts: bool = Field(default=False, description="是否存在衝突")
+    stagedCount: int = Field(default=0, description="暫存檔案數")
+    unstagedCount: int = Field(default=0, description="未暫存檔案數")
+    untrackedCount: int = Field(default=0, description="未追蹤檔案數")
+    lastFetchedAt: Optional[str] = Field(default=None, description="最後 fetch 時間")
+
+
+class TemplateBranchCommitInfo(BaseModel):
+    """分支最後提交摘要。"""
+
+    id: str = Field(description="提交 ID")
+    message: str = Field(description="提交訊息")
+    author: str = Field(description="作者")
+    email: Optional[str] = Field(default=None, description="作者 Email")
+    timestamp: str = Field(description="ISO8601 提交時間")
+
+
+class TemplateVersionControlBranch(BaseModel):
+    """Template Center Git branch."""
+
+    name: str = Field(description="分支名稱")
+    displayName: str = Field(description="顯示名稱")
+    isActive: bool = Field(description="是否為目前分支")
+    isRemote: bool = Field(default=False, description="是否為遠端分支")
+    ahead: int = Field(default=0, description="領先提交數")
+    behind: int = Field(default=0, description="落後提交數")
+    lastCommit: Optional[TemplateBranchCommitInfo] = Field(default=None, description="最後提交資訊")
+
+
+class TemplateVersionControlBranchListResponse(BaseModel):
+    branches: List[TemplateVersionControlBranch] = Field(default_factory=list)
+
+
+class TemplateFileChange(BaseModel):
+    """File-level Git change for Template Center."""
+
+    name: str = Field(description="檔名")
+    path: str = Field(description="相對路徑")
+    status: str = Field(description="Git 狀態碼")
+    type: Literal[
+        "added",
+        "modified",
+        "deleted",
+        "renamed",
+        "copied",
+        "typechange",
+        "unmerged",
+        "untracked",
+    ] = Field(description="變更類型")
+    oldPath: Optional[str] = Field(default=None, description="rename 前路徑")
+    additions: int = Field(default=0, description="新增行數")
+    deletions: int = Field(default=0, description="刪除行數")
+    diff: Optional[str] = Field(default=None, description="差異內容")
+    patch: Optional[str] = Field(default=None, description="差異內容")
+
+
+class TemplateChangesResponse(BaseModel):
+    staged: List[TemplateFileChange] = Field(default_factory=list)
+    unstaged: List[TemplateFileChange] = Field(default_factory=list)
+    untracked: List[TemplateFileChange] = Field(default_factory=list)
+    untrackedTotal: int = Field(default=0)
+    untrackedPage: int = Field(default=1)
+    untrackedPageSize: int = Field(default=100)
+    untrackedHasMore: bool = Field(default=False)
+
+
+class TemplateStageRequest(BaseModel):
+    paths: List[str] = Field(description="要暫存的路徑")
+    includeUntracked: bool = Field(default=True, description="是否包含未追蹤檔案")
+
+
+class TemplateStageResponse(BaseModel):
+    staged: List[str] = Field(default_factory=list)
+    unstaged: List[str] = Field(default_factory=list)
+
+
+class TemplateUnstageRequest(BaseModel):
+    paths: List[str] = Field(description="要取消暫存的路徑")
+
+
+class TemplateUnstageResponse(BaseModel):
+    unstaged: List[str] = Field(default_factory=list)
+    remainingStaged: int = Field(default=0)
+
+
+class TemplateDiscardRequest(BaseModel):
+    paths: List[str] = Field(description="要還原的路徑")
+
+
+class TemplateDiscardResponse(BaseModel):
+    discarded: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class TemplateCommitAuthor(BaseModel):
+    name: str = Field(description="作者名稱")
+    email: str = Field(description="作者 Email")
+
+
+class TemplateCommitSummary(BaseModel):
+    id: str = Field(description="提交 ID")
+    message: str = Field(description="提交訊息")
+    author: str = Field(description="作者")
+    email: Optional[str] = Field(default=None, description="作者 Email")
+    timestamp: int = Field(description="epoch ms")
+    branch: Optional[str] = Field(default=None, description="分支")
+    additions: int = Field(default=0)
+    deletions: int = Field(default=0)
+    files: int = Field(default=0)
+
+
+class TemplateCommitResponse(BaseModel):
+    commit: TemplateCommitSummary
+
+
+class TemplateCommitListResponse(BaseModel):
+    page: int = Field(description="頁碼")
+    pageSize: int = Field(description="每頁筆數")
+    total: int = Field(description="總筆數")
+    items: List[TemplateCommitSummary] = Field(default_factory=list)
+
+
+class TemplateCommitFilesResponse(BaseModel):
+    commitId: str = Field(description="提交 ID")
+    files: List[TemplateFileChange] = Field(default_factory=list)
+
+
+class TemplateCheckoutRequest(BaseModel):
+    create: bool = Field(default=False, description="是否建立新分支")
+    startPoint: Optional[str] = Field(default=None, description="新分支起始點")
+    stashChanges: bool = Field(default=False, description="切換前是否 stash")
+
+
+class TemplateCheckoutResponse(BaseModel):
+    branch: str = Field(description="切換後分支")
+    created: bool = Field(description="是否建立新分支")
+    stashedChanges: Optional[str] = Field(default=None, description="stash 名稱")
+
+
+class TemplateRemoteRequest(BaseModel):
+    remote: str = Field(default="origin", description="遠端名稱")
+    branch: Optional[str] = Field(default=None, description="分支名稱")
+    rebase: bool = Field(default=True, description="pull 時是否 rebase")
+    autostash: bool = Field(default=True, description="pull 時是否 autostash")
+    force: bool = Field(default=False, description="push 時是否 force")
+
+
+class TemplateRemoteResponse(BaseModel):
+    remote: str = Field(default="origin")
+    branch: Optional[str] = None
+    message: str = Field(default="")
+
+
+class TemplateDiffResponse(BaseModel):
+    path: str = Field(description="檔案路徑")
+    patch: str = Field(default="", description="diff patch")
+    diff: str = Field(default="", description="diff patch")
+    binary: bool = Field(default=False, description="是否為二進位")
+
+
+class TemplateBlobResponse(BaseModel):
+    path: str = Field(description="檔案路徑")
+    revision: Optional[str] = Field(default=None, description="revision")
+    content: str = Field(description="檔案內容")
+    encoding: str = Field(default="utf-8")

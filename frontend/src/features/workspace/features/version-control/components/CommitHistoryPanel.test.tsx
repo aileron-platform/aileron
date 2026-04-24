@@ -54,10 +54,6 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-vi.mock('./CommitFilesPanel', () => ({
-  CommitFilesPanel: () => <div data-testid="commit-files-panel" />,
-}));
-
 vi.mock('./GitContextSelector', () => ({
   GitContextSelector: () => null,
 }));

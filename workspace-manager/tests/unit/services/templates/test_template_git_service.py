@@ -7,15 +7,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from git import GitCommandError, InvalidGitRepositoryError
+from git import GitCommandError, InvalidGitRepositoryError, Repo
 
 from app.models.template_git import (
-    GitBranch,
-    GitBranchList,
-    GitChangeLog,
     GitStatus,
     GitUserConfig,
-    TemplateChange,
+    TemplateCommitListResponse,
+    TemplateStageRequest,
+    TemplateUnstageRequest,
 )
 from app.services.template_git_service import TemplateGitService
 from app.services.template_git_service import GitOperationResult
@@ -179,95 +178,69 @@ class TestGitStatus:
             assert result.remote_url == "https://github.com/user/repo.git"
 
 
-# ============================================================================
-# Change Log Tests
-# ============================================================================
-
 @pytest.mark.unit
-class TestChangeLog:
-    """變更記錄測試"""
+class TestTemplateVersionControlOperations:
+    """Template Center file-level version-control operations."""
 
-    def test_get_change_log_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫返回空變更記錄"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=None):
+    def _create_real_repo_service(self, tmp_path):
+        repo = Repo.init(tmp_path)
+        with repo.config_writer() as config:
+            config.set_value("user", "name", "Template Tester")
+            config.set_value("user", "email", "template@example.com")
+        (tmp_path / "templates").mkdir()
+        (tmp_path / "templates" / "demo").mkdir()
+        readme = tmp_path / "templates" / "demo" / "README.md"
+        readme.write_text("hello\n")
+        repo.index.add(["templates/demo/README.md"])
+        repo.index.commit("initial")
 
-            # Act
-            result = git_service.get_change_log()
+        with patch('app.services.template_git_service.get_settings') as mock_settings:
+            mock_settings.return_value.TEMPLATE_STORAGE_PATH = str(tmp_path)
+            service = TemplateGitService()
+            service.template_center_path = tmp_path
+            service._repo = repo
+            return service
 
-            # Assert
-            assert isinstance(result, GitChangeLog)
-            assert result.total_changes == 0
-            assert result.has_staged is False
-            assert result.has_unstaged is False
+    def test_file_level_changes_include_unstaged_and_untracked(self, tmp_path):
+        service = self._create_real_repo_service(tmp_path)
+        (tmp_path / "templates" / "demo" / "README.md").write_text("hello\nworld\n")
+        (tmp_path / "templates" / "demo" / "new.md").write_text("new\n")
 
-    def test_get_change_log_with_staged_changes(self, git_service, mock_repo):
-        """測試：含 staged 變更的記錄"""
-        # Arrange
-        mock_diff = MagicMock()
-        mock_diff.change_type = "M"
-        mock_diff.b_path = "templates/test-template/test.py"
-        mock_diff.a_path = "templates/test-template/test.py"
+        changes = service.get_file_changes()
 
-        mock_repo.index.diff.side_effect = [[mock_diff], []]
-        mock_repo.untracked_files = []
+        assert [item.path for item in changes.unstaged] == ["templates/demo/README.md"]
+        assert [item.path for item in changes.untracked] == ["templates/demo/new.md"]
+        assert changes.untrackedTotal == 1
 
-        with patch.object(git_service, '_get_repo', return_value=mock_repo):
+    def test_stage_and_unstage_paths(self, tmp_path):
+        service = self._create_real_repo_service(tmp_path)
+        (tmp_path / "templates" / "demo" / "README.md").write_text("hello\nworld\n")
 
-            # Act
-            result = git_service.get_change_log()
+        staged = service.stage(TemplateStageRequest(paths=["templates/demo/README.md"]))
+        changes_after_stage = service.get_file_changes()
+        unstaged = service.unstage(TemplateUnstageRequest(paths=["templates/demo/README.md"]))
 
-            # Assert
-            assert result.has_staged is True
-            assert result.total_changes > 0
+        assert staged.staged == ["templates/demo/README.md"]
+        assert [item.path for item in changes_after_stage.staged] == ["templates/demo/README.md"]
+        assert unstaged.unstaged == ["templates/demo/README.md"]
 
-    def test_get_change_log_with_untracked_files(self, git_service, mock_repo):
-        """測試：含未追蹤檔案的記錄"""
-        # Arrange
-        mock_repo.index.diff.side_effect = [[], []]
-        mock_repo.untracked_files = ["templates/test-template/newfile.py"]
+    def test_commit_history_lists_new_commit(self, tmp_path):
+        service = self._create_real_repo_service(tmp_path)
+        (tmp_path / "templates" / "demo" / "README.md").write_text("hello\nworld\n")
+        service.stage(TemplateStageRequest(paths=["templates/demo/README.md"]))
+        service.commit("update demo")
 
-        with patch.object(git_service, '_get_repo', return_value=mock_repo):
+        commits = service.list_commits()
 
-            # Act
-            result = git_service.get_change_log()
+        assert isinstance(commits, TemplateCommitListResponse)
+        assert commits.total == 2
+        assert commits.items[0].message == "update demo"
 
-            # Assert
-            assert result.total_changes > 0
+    def test_safe_repo_path_rejects_traversal(self, tmp_path):
+        service = self._create_real_repo_service(tmp_path)
 
-    def test_process_diff_item_added(self, git_service):
-        """測試：處理新增的檔案"""
-        # Arrange
-        mock_diff = MagicMock()
-        mock_diff.change_type = "A"
-        mock_diff.b_path = "templates/test-template/new.py"
-        mock_diff.a_path = None
-
-        template_changes_dict = {}
-
-        # Act
-        git_service._process_diff_item(mock_diff, template_changes_dict, "added")
-
-        # Assert
-        assert "test-template" in template_changes_dict
-        assert template_changes_dict["test-template"].status == "added"
-
-    def test_process_diff_item_deleted(self, git_service):
-        """測試：處理刪除的檔案"""
-        # Arrange
-        mock_diff = MagicMock()
-        mock_diff.change_type = "D"
-        mock_diff.b_path = None
-        mock_diff.a_path = "templates/test-template/deleted.py"
-
-        template_changes_dict = {}
-
-        # Act
-        git_service._process_diff_item(mock_diff, template_changes_dict, "deleted")
-
-        # Assert
-        assert "test-template" in template_changes_dict
-        assert template_changes_dict["test-template"].status == "deleted"
+        with pytest.raises(ValueError, match="GIT_PATH_OUTSIDE_REPOSITORY"):
+            service._safe_repo_path("../outside.md")
 
 
 # ============================================================================
@@ -403,246 +376,6 @@ class TestRemoteUrl:
             assert result.code == "GIT_REMOTE_URL_UPDATED"
             assert result.params["url"] == "https://github.com/user/new-repo.git"
             mock_remote.set_url.assert_called_once_with("https://github.com/user/new-repo.git")
-
-
-# ============================================================================
-# Branch Tests
-# ============================================================================
-
-@pytest.mark.unit
-class TestBranches:
-    """分支測試"""
-
-    def test_get_branches_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫返回空分支列表"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=None):
-
-            # Act
-            result = git_service.get_branches()
-
-            # Assert
-            assert isinstance(result, GitBranchList)
-            assert len(result.branches) == 0
-            assert result.current_branch == ""
-
-    def test_get_branches_with_local_branches(self, git_service, mock_repo):
-        """測試：取得本地分支"""
-        # Arrange
-        mock_head1 = MagicMock()
-        mock_head1.name = "main"
-        mock_head2 = MagicMock()
-        mock_head2.name = "develop"
-
-        mock_repo.heads = [mock_head1, mock_head2]
-        mock_repo.remotes = []
-
-        with patch.object(git_service, '_get_repo', return_value=mock_repo):
-
-            # Act
-            result = git_service.get_branches()
-
-            # Assert
-            assert len(result.branches) == 2
-            assert result.current_branch == "main"
-            branch_names = [b.name for b in result.branches]
-            assert "main" in branch_names
-            assert "develop" in branch_names
-
-
-# ============================================================================
-# Commit and Push Tests
-# ============================================================================
-
-@pytest.mark.unit
-class TestCommitAndPush:
-    """提交和推送測試"""
-
-    def test_commit_and_push_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫提交失敗"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=None):
-
-            # Act
-            result = git_service.commit_and_push("Test commit")
-
-            # Assert
-            assert result.success is False
-            assert result.code == "GIT_REPO_NOT_FOUND"
-
-    def test_commit_and_push_no_changes(self, git_service, mock_repo):
-        """測試：無變更時提交失敗"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=False,
-                ahead_count=0,
-                behind_count=0,
-                remote_url=None,
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.commit_and_push("Test commit")
-
-            # Assert
-            assert result.success is False
-            assert result.code == "GIT_NO_CHANGES"
-
-    def test_commit_and_push_no_remote(self, git_service, mock_repo):
-        """測試：無遠端時推送失敗"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=True,
-                ahead_count=0,
-                behind_count=0,
-                remote_url=None,
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.commit_and_push("Test commit", push=True)
-
-            # Assert
-            assert result.success is False
-            assert result.code == "GIT_PUSH_REMOTE_NOT_CONFIGURED"
-
-    def test_commit_and_push_success_no_push(self, git_service, mock_repo):
-        """測試：提交成功但不推送"""
-        # Arrange
-        mock_commit = MagicMock()
-        mock_commit.hexsha = "abc123def456"
-        mock_commit.message = "Test commit"
-        mock_repo.index.commit.return_value = mock_commit
-
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=True,
-                ahead_count=0,
-                behind_count=0,
-                remote_url=None,
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.commit_and_push("Test commit", push=False)
-
-            # Assert
-            assert result.success is True
-            assert result.code == "GIT_COMMIT_LOCAL_SUCCESS"
-            assert "Commit abc123" in result.params["commitInfo"]
-            mock_repo.index.add.assert_called_once()
-            mock_repo.index.commit.assert_called_once_with("Test commit")
-
-    def test_commit_and_push_success_with_push(self, git_service, mock_repo):
-        """測試：提交並推送成功"""
-        # Arrange
-        mock_commit = MagicMock()
-        mock_commit.hexsha = "abc123def456"
-        mock_commit.message = "Test commit"
-        mock_repo.index.commit.return_value = mock_commit
-
-        mock_remote = MagicMock()
-        mock_repo.remotes.origin = mock_remote
-
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=True,
-                ahead_count=0,
-                behind_count=0,
-                remote_url="https://github.com/user/repo.git",
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.commit_and_push("Test commit", push=True)
-
-            # Assert
-            assert result.success is True
-            assert result.code == "GIT_COMMIT_PUSH_SUCCESS"
-            mock_remote.push.assert_called_once()
-
-
-# ============================================================================
-# Pull Tests
-# ============================================================================
-
-@pytest.mark.unit
-class TestPull:
-    """拉取測試"""
-
-    def test_pull_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫拉取失敗"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=None):
-
-            # Act
-            result = git_service.pull_from_remote()
-
-            # Assert
-            assert result.success is False
-            assert result.code == "GIT_REPO_NOT_FOUND"
-
-    def test_pull_with_uncommitted_changes(self, git_service, mock_repo):
-        """測試：有未提交變更時拉取失敗"""
-        # Arrange
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=True,
-                ahead_count=0,
-                behind_count=0,
-                remote_url="https://github.com/user/repo.git",
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.pull_from_remote()
-
-            # Assert
-            assert result.success is False
-            assert result.code == "GIT_PULL_HAS_UNCOMMITTED_CHANGES"
-
-    def test_pull_success(self, git_service, mock_repo):
-        """測試：拉取成功"""
-        # Arrange
-        mock_remote = MagicMock()
-        mock_repo.remotes.origin = mock_remote
-
-        with patch.object(git_service, '_get_repo', return_value=mock_repo), \
-             patch.object(git_service, 'get_git_status') as mock_status:
-
-            mock_status.return_value = GitStatus(
-                current_branch="main",
-                has_changes=False,
-                ahead_count=0,
-                behind_count=0,
-                remote_url="https://github.com/user/repo.git",
-                is_git_repo=True
-            )
-
-            # Act
-            result = git_service.pull_from_remote()
-
-            # Assert
-            assert result.success is True
-            assert result.code == "GIT_PULL_SUCCESS"
-            mock_remote.pull.assert_called_once()
 
 
 # ============================================================================
@@ -827,14 +560,30 @@ class TestRegistryFlow:
         assert result.success is True
         mock_pull.assert_called_once_with("https://github.com/example/repo.git", "main")
 
-    def test_publish_registry_uses_commit_and_push(self, git_service):
-        with patch.object(git_service, "commit_and_push") as mock_commit:
-            mock_commit.return_value = GitOperationResult(True, "GIT_PUSH_SUCCESS", "GIT_PUSH_SUCCESS")
+    def test_publish_registry_uses_file_level_commit_and_remote_push(self, git_service):
+        mock_commit_response = MagicMock()
+        mock_commit_response.commit.id = "abcdef123456"
+        mock_commit_response.commit.message = "sync registry"
+        mock_commit_response.commit.branch = "main"
 
+        with patch.object(git_service, "_get_repo", return_value=MagicMock()) as mock_repo, \
+             patch.object(git_service, "get_git_status") as mock_status, \
+             patch.object(git_service, "commit", return_value=mock_commit_response) as mock_commit, \
+             patch.object(git_service, "push") as mock_push:
+            mock_status.return_value = GitStatus(
+                current_branch="main",
+                has_changes=True,
+                ahead_count=0,
+                behind_count=0,
+                remote_url="https://github.com/example/repo.git",
+                is_git_repo=True,
+            )
             result = git_service.publish_registry("sync registry", branch="main")
 
         assert result.success is True
-        mock_commit.assert_called_once_with(message="sync registry", branch="main", push=True)
+        mock_repo.return_value.git.add.assert_called_once_with("--all")
+        mock_commit.assert_called_once_with(message="sync registry")
+        mock_push.assert_called_once()
 
 
 # ============================================================================

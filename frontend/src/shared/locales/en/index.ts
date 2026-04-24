@@ -10,6 +10,7 @@ import knowledgeBase from './modules/knowledgeBase';
 import automation from './modules/automation';
 import template from './modules/template';
 import dialogs from './dialogs';
+import shared from './shared';
 
 export default {
   common,
@@ -20,4 +21,5 @@ export default {
   automation,
   template,
   dialogs,
+  shared,
 };

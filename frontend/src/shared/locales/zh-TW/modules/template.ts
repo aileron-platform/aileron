@@ -76,20 +76,72 @@ const template = {
         confirm: '確認刪除',
       },
     },
+    settings: {
+      tabs: {
+        general: '一般',
+        versionControl: '版本控制',
+        remote: '遠端',
+        sshKeys: 'SSH Keys',
+      },
+      versionControl: {
+        rebuildProgressTitle: '模板重建進度',
+        confirmDiscard: '確定要捨棄「{{path}}」的變更嗎？此操作無法復原。',
+        mode: {
+          title: '版本控制',
+          fileChanges: '檔案變更',
+          commitHistory: '提交歷史',
+        },
+        registryStale: {
+          description: 'Registry 內容可能已變更，建議重建模板索引以同步最新狀態。',
+        },
+        status: {
+          branch: '分支',
+          noBranch: '尚無分支',
+          sync: '同步狀態',
+          aheadBehind: '領先 {{ahead}} / 落後 {{behind}}',
+          changes: '變更',
+          changeCounts: '暫存 {{staged}} · 未暫存 {{unstaged}} · 未追蹤 {{untracked}}',
+          conflicts: '衝突',
+          hasConflicts: '有衝突',
+          noConflicts: '無衝突',
+        },
+        actions: {
+          rebuild: '重建索引',
+        },
+        toasts: {
+          loadFailed: {
+            title: '載入 Git 資料失敗',
+            description: '無法載入模板中心版本控制資料',
+          },
+          operationFailed: {
+            title: 'Git 操作失敗',
+            description: '無法完成 Git 操作',
+          },
+          commitSuccess: {
+            title: '提交成功',
+          },
+          fetchSuccess: {
+            title: 'Fetch 成功',
+          },
+          pullSuccess: {
+            title: 'Pull 成功',
+          },
+          pushSuccess: {
+            title: 'Push 成功',
+          },
+          checkoutSuccess: {
+            title: '切換分支成功',
+          },
+          rebuildFailed: {
+            title: '重建索引失敗',
+            description: '無法啟動模板索引重建',
+          },
+        },
+      },
+    },
     settingsDialog: {
       title: '設定模板中心',
       description: '設定模板中心的同步來源與基本資訊。',
-      tabs: {
-        basic: '基本設定',
-        changeLog: '變更記錄',
-        gitUser: 'Git 設定',
-        sshKeys: 'SSH Keys',
-      },
-      gitRepo: {
-        label: 'Git Repository URL',
-        placeholder: 'https://github.com/anthropic/claude-code-plugins.git',
-        helper: '提供遠端 Git 儲存庫位置，以便同步模板中心內容。',
-      },
       basicInfo: {
         title: '基本資訊',
         nameLabel: '套件名稱',
@@ -105,47 +157,6 @@ const template = {
         emailLabel: '擁有者 Email',
       },
       git: {
-        status: {
-          title: 'Git 狀態',
-          loading: '載入 Git 資料中...',
-          currentBranch: '目前分支',
-          currentBranchSuffix: '當前分支',
-          changesCount: '{{count}} 個模板有變更',
-          changesCountInline: '{{count}} 個變更',
-          noChanges: '沒有變更',
-          ahead: '領先遠端 {{count}} 個提交',
-          behind: '落後遠端 {{count}} 個提交',
-          upToDate: '與遠端同步',
-          notGitRepo: '尚未初始化 Git 倉庫',
-          remoteUrl: '遠端 URL',
-          noRemoteUrl: '尚未設定',
-          syncStatus: '同步狀態',
-          needRemoteUrl: '請先設定遠端倉庫 URL',
-        },
-        actions: {
-          refresh: '重新整理',
-          commit: '本地同步遠端',
-          pull: '遠端同步本地',
-          rebuild: '重建資料庫',
-          rebuilding: '重建中...',
-        },
-        changeLog: {
-          title: '變更記錄',
-          rebuildProgressTitle: '模板重建進度',
-          emptyMessage: '沒有未提交的變更',
-          templateId: '模板',
-          filesCount: '{{count}} 個檔案',
-          status: {
-            modified: '已修改',
-            added: '新增',
-            deleted: '刪除',
-            untracked: '未追蹤',
-          },
-          treeTitle: '變更項目',
-          emptyTree: '找不到可顯示的變更項目',
-          expandAll: '展開全部',
-          collapseAll: '收合全部',
-        },
         userConfig: {
           title: 'Git 使用者資訊',
           description: '設定 Git 提交時使用的全域使用者名稱與 Email。',
@@ -243,30 +254,12 @@ const template = {
             },
           },
         },
-        commitDialog: {
-          title: '提交變更到遠端',
-          description: '將本地變更提交並推送到遠端 Git 倉庫',
-          messageLabel: 'Commit 訊息',
-          messagePlaceholder: '請描述此次變更的內容...',
-          branchLabel: '目標分支',
-          branchPlaceholder: '選擇分支（預設為當前分支）',
-          pushLabel: '自動推送到遠端',
-          actions: {
-            cancel: '取消',
-            confirm: '提交並推送',
-            confirming: '提交中...',
-          },
-        },
       },
       unknownError: '未知錯誤',
       actions: {
         back: '返回模板中心',
         save: '儲存',
         saveProcessing: '儲存中...',
-        syncLocalToRemote: '以本地同步遠端',
-        syncLocalToRemoteProcessing: '同步中...',
-        syncRemoteToLocal: '遠端同步本地',
-        syncRemoteToLocalProcessing: '同步中...',
       },
       toasts: {
         saved: {

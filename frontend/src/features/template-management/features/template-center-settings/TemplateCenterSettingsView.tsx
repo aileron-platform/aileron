@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, Save, ArrowLeft } from 'lucide-react';
+import { Settings, Save, ArrowLeft, Info, GitBranch, Cloud, KeyRound } from 'lucide-react';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Textarea } from '@/shared/components/ui/textarea';
 import { Separator } from '@/shared/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs';
+import { Tabs, TabsContent } from '@/shared/components/ui/tabs';
+import { TopTabsBar, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { apiClient } from '@/shared/api/apiClient';
@@ -15,14 +16,13 @@ import { ROUTES } from '@/shared/constants/routes';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('TemplateCenterSettingsView');
-import { GitChangeLogTab } from './components/GitChangeLogTab';
 import { GitUserConfigTab } from './components/GitUserConfigTab';
 import { SSHKeysTab } from './components/SSHKeysTab';
+import { TemplateRegistryVersionControlTab } from './components/TemplateRegistryVersionControlTab';
 import type { SSHKeys } from '@/shared/services/templateSshApi';
 import {
-  getGitStatus,
+  checkCloneStatus,
   getGitUserConfig,
-  type GitStatus,
   type GitUserConfigRequest,
   updateGitUserConfig,
   cloneRepository,
@@ -44,7 +44,7 @@ export const TemplateCenterSettingsView: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('basic');
+  const [activeTab, setActiveTab] = useState('general');
   const [config, setConfig] = useState<MarketplaceConfig>({
     name: 'claude-code-marketplace',
     version: '1.0.0',
@@ -54,7 +54,6 @@ export const TemplateCenterSettingsView: React.FC = () => {
     homepage: '',
   });
   const [sshKeys, setSshKeys] = useState<SSHKeys | null>(null);
-  const [gitStatus, setGitStatus] = useState<GitStatus | null>(null);
   const [gitRepoUrl, setGitRepoUrl] = useState<string>('');
   const [gitUserConfig, setGitUserConfig] = useState<GitUserConfigRequest | null>(null);
   const [isSavingGitUserConfig, setIsSavingGitUserConfig] = useState(false);
@@ -66,8 +65,8 @@ export const TemplateCenterSettingsView: React.FC = () => {
       try {
         setIsLoading(true);
 
-        // 並行載入配置和 Git 狀態
-        const [configResponse, gitStatusResponse, gitUserConfigResponse] = await Promise.all([
+        // 並行載入配置和 Git 設定
+        const [configResponse, cloneStatusResponse, gitUserConfigResponse] = await Promise.all([
           apiClient.get<{
             success: boolean;
             data?: {
@@ -76,7 +75,7 @@ export const TemplateCenterSettingsView: React.FC = () => {
               metadata: { description: string; version: string; homepage: string };
             };
           }>('/templates/marketplace/config'),
-          getGitStatus(),
+          checkCloneStatus(),
           getGitUserConfig(),
         ]);
 
@@ -92,10 +91,9 @@ export const TemplateCenterSettingsView: React.FC = () => {
           });
         }
 
-        // 設定 Git 狀態
-        if (gitStatusResponse.success && gitStatusResponse.data) {
-          setGitStatus(gitStatusResponse.data);
-          setGitRepoUrl(gitStatusResponse.data.remote_url || '');
+        // 設定 Git 遠端資訊
+        if (cloneStatusResponse.success && cloneStatusResponse.data) {
+          setGitRepoUrl(cloneStatusResponse.data.remote_url || '');
         }
 
         if (gitUserConfigResponse.success && gitUserConfigResponse.data) {
@@ -257,10 +255,10 @@ export const TemplateCenterSettingsView: React.FC = () => {
             variant: 'success',
           });
 
-          // 重新載入 Git 狀態
-          const gitStatusResponse = await getGitStatus();
-          if (gitStatusResponse.success && gitStatusResponse.data) {
-            setGitStatus(gitStatusResponse.data);
+          // 重新載入 Git 遠端資訊
+          const cloneStatusResponse = await checkCloneStatus();
+          if (cloneStatusResponse.success && cloneStatusResponse.data) {
+            setGitRepoUrl(cloneStatusResponse.data.remote_url || '');
           }
         }
       } else {
@@ -320,26 +318,31 @@ export const TemplateCenterSettingsView: React.FC = () => {
         }
       />
 
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-4xl p-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="basic">
-                {t('template.center.settingsDialog.tabs.basic')}
-              </TabsTrigger>
-              <TabsTrigger value="changeLog">
-                {t('template.center.settingsDialog.tabs.changeLog')}
-              </TabsTrigger>
-              <TabsTrigger value="gitUser">
-                {t('template.center.settingsDialog.tabs.gitUser')}
-              </TabsTrigger>
-              <TabsTrigger value="sshKeys">
-                {t('template.center.settingsDialog.tabs.sshKeys')}
-              </TabsTrigger>
-            </TabsList>
+      <div className="flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex h-full flex-col">
+          <TopTabsBar>
+            <TopTabsList>
+              <TopTabsTrigger value="general">
+                <Info className="h-4 w-4" />
+                {t('template.center.settings.tabs.general')}
+              </TopTabsTrigger>
+              <TopTabsTrigger value="versionControl">
+                <GitBranch className="h-4 w-4" />
+                {t('template.center.settings.tabs.versionControl')}
+              </TopTabsTrigger>
+              <TopTabsTrigger value="remote">
+                <Cloud className="h-4 w-4" />
+                {t('template.center.settings.tabs.remote')}
+              </TopTabsTrigger>
+              <TopTabsTrigger value="sshKeys">
+                <KeyRound className="h-4 w-4" />
+                {t('template.center.settings.tabs.sshKeys')}
+              </TopTabsTrigger>
+            </TopTabsList>
+          </TopTabsBar>
 
-            {/* 基本設定 Tab */}
-            <TabsContent value="basic" className="mt-6">
+          <TabsContent value="general" className="flex-1 overflow-auto !m-0 !p-0">
+            <div className="mx-auto w-full max-w-7xl p-6">
               <div className="space-y-8">
             {/* 基本資訊 */}
             <div className="space-y-4">
@@ -432,15 +435,15 @@ export const TemplateCenterSettingsView: React.FC = () => {
               </div>
             </div>
               </div>
-            </TabsContent>
+            </div>
+          </TabsContent>
 
-            {/* 變更記錄 Tab */}
-            <TabsContent value="changeLog" className="mt-6">
-              <GitChangeLogTab />
-            </TabsContent>
+          <TabsContent value="versionControl" className="flex-1 overflow-hidden !m-0 !p-0">
+            <TemplateRegistryVersionControlTab />
+          </TabsContent>
 
-            {/* Git 使用者設定 Tab */}
-            <TabsContent value="gitUser" className="mt-6">
+          <TabsContent value="remote" className="flex-1 overflow-auto !m-0 !p-0">
+            <div className="mx-auto w-full max-w-7xl p-6">
               <GitUserConfigTab
                 value={gitUserConfig}
                 remoteUrl={gitRepoUrl}
@@ -449,18 +452,18 @@ export const TemplateCenterSettingsView: React.FC = () => {
                 isSaving={isSavingGitUserConfig}
                 isCloningRepository={isCloningRepository}
               />
-            </TabsContent>
+            </div>
+          </TabsContent>
 
-            {/* SSH Keys Tab */}
-            <TabsContent value="sshKeys" className="mt-6">
+          <TabsContent value="sshKeys" className="flex-1 overflow-auto !m-0 !p-0">
+            <div className="mx-auto w-full max-w-7xl p-6">
               <SSHKeysTab value={sshKeys} onChange={setSshKeys} />
-            </TabsContent>
-          </Tabs>
-        </div>
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
 };
 
 export default TemplateCenterSettingsView;
-

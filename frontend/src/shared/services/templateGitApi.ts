@@ -3,52 +3,20 @@
  */
 
 import { apiClient } from '@/shared/api/apiClient';
+import type {
+  VersionControlBranch,
+  VersionControlChangesResponse,
+  VersionControlCommitFilesResponse,
+  VersionControlCommitListResponse,
+  VersionControlStatus,
+  VersionControlDiffResponse,
+} from '@/shared/types/versionControl';
 
 // ============ 型別定義 ============
 
-export interface GitStatus {
-  current_branch: string;
-  has_changes: boolean;
-  ahead_count: number;
-  behind_count: number;
-  remote_url: string | null;
-  is_git_repo: boolean;
-}
-
-export interface TemplateChange {
-  template_id: string;
-  template_name: string;
-  status: 'modified' | 'added' | 'deleted' | 'untracked';
-  changed_files: string[];
-  changed_dirs: string[];
-}
-
-export interface GitChangeLog {
-  templates: TemplateChange[];
-  total_changes: number;
-  has_staged: boolean;
-  has_unstaged: boolean;
-}
-
-export interface GitBranch {
-  name: string;
-  is_current: boolean;
-  is_remote: boolean;
-}
-
-export interface GitBranchList {
-  branches: GitBranch[];
-  current_branch: string;
-}
-
 export interface GitCommitRequest {
   message: string;
-  branch?: string;
-  push?: boolean;
-}
-
-export interface GitPullRequest {
-  branch?: string;
+  paths?: string[];
 }
 
 export interface GitOperationResponse {
@@ -83,60 +51,7 @@ export interface GitCloneRequest {
   branch?: string;
 }
 
-export interface GitStatusResponse {
-  success: boolean;
-  data?: GitStatus;
-  error?: string;
-}
-
-export interface GitChangeLogResponse {
-  success: boolean;
-  data?: GitChangeLog;
-  error?: string;
-}
-
-export interface GitBranchListResponse {
-  success: boolean;
-  data?: GitBranchList;
-  error?: string;
-}
-
 // ============ API 方法 ============
-
-/**
- * 取得 Git 倉庫狀態
- */
-export async function getGitStatus(): Promise<GitStatusResponse> {
-  return apiClient.get<GitStatusResponse>('/templates/git/status');
-}
-
-/**
- * 取得變更記錄
- */
-export async function getGitChanges(): Promise<GitChangeLogResponse> {
-  return apiClient.get<GitChangeLogResponse>('/templates/git/changes');
-}
-
-/**
- * 取得分支列表
- */
-export async function getGitBranches(): Promise<GitBranchListResponse> {
-  return apiClient.get<GitBranchListResponse>('/templates/git/branches');
-}
-
-/**
- * 提交並推送變更（本地同步遠端）
- */
-export async function commitAndPush(request: GitCommitRequest): Promise<GitOperationResponse> {
-  return apiClient.post<GitOperationResponse>('/templates/git/commit', request);
-}
-
-/**
- * 從遠端拉取變更（遠端同步本地）
- */
-export async function pullFromRemote(request: GitPullRequest): Promise<GitOperationResponse> {
-  return apiClient.post<GitOperationResponse>('/templates/git/pull', request);
-}
 
 /**
  * 取得 Git 全域使用者設定
@@ -258,3 +173,64 @@ export async function getRebuildProgress(taskId: string): Promise<{
     error?: string;
   }>(`/templates/rebuild/progress/${taskId}`);
 }
+
+export interface TemplateCheckoutRequest {
+  create?: boolean;
+  startPoint?: string;
+  stashChanges?: boolean;
+}
+
+export interface TemplateRemoteRequest {
+  remote?: string;
+  branch?: string;
+  rebase?: boolean;
+  autostash?: boolean;
+  force?: boolean;
+}
+
+const templateVersionControlBase = '/templates/git/version-control';
+
+export const templateVersionControlApi = {
+  getStatus: () => apiClient.get<VersionControlStatus>(`${templateVersionControlBase}/status`),
+  getChanges: (page = 1, pageSize = 100) =>
+    apiClient.get<VersionControlChangesResponse>(`${templateVersionControlBase}/changes?page=${page}&pageSize=${pageSize}`),
+  getBranches: async () => {
+    const response = await apiClient.get<{ branches: VersionControlBranch[] }>(`${templateVersionControlBase}/branches`);
+    return response.branches ?? [];
+  },
+  checkoutBranch: (branch: string, payload: TemplateCheckoutRequest) =>
+    apiClient.post<{ branch: string; created: boolean; stashedChanges?: string | null }>(
+      `${templateVersionControlBase}/branches/${encodeURIComponent(branch)}/checkout`,
+      payload,
+    ),
+  stage: (paths: string[]) =>
+    apiClient.post<{ staged: string[]; unstaged: string[] }>(`${templateVersionControlBase}/stage`, {
+      paths,
+      includeUntracked: true,
+    }),
+  unstage: (paths: string[]) =>
+    apiClient.post<{ unstaged: string[]; remainingStaged: number }>(`${templateVersionControlBase}/unstage`, { paths }),
+  discard: (paths: string[]) =>
+    apiClient.post<{ discarded: string[]; warnings: string[] }>(`${templateVersionControlBase}/discard`, { paths }),
+  commit: (message: string, paths?: string[]) =>
+    apiClient.post<{ commit: unknown }>(`${templateVersionControlBase}/commit`, { message, paths }),
+  getCommits: (page = 1, pageSize = 20, branch?: string) => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (branch) params.set('branch', branch);
+    return apiClient.get<VersionControlCommitListResponse>(`${templateVersionControlBase}/commits?${params}`);
+  },
+  getCommitFiles: (commitId: string) =>
+    apiClient.get<VersionControlCommitFilesResponse>(`${templateVersionControlBase}/commits/${encodeURIComponent(commitId)}/files`),
+  getDiff: (path: string, head: 'INDEX' | 'WORKTREE' = 'WORKTREE') =>
+    apiClient.get<VersionControlDiffResponse>(
+      `${templateVersionControlBase}/diff?path=${encodeURIComponent(path)}&head=${encodeURIComponent(head)}`,
+    ),
+  fetch: (payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(`${templateVersionControlBase}/fetch`, payload),
+  pull: (payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(`${templateVersionControlBase}/pull`, payload),
+  push: (payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(`${templateVersionControlBase}/push`, payload),
+};
