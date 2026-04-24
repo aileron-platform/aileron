@@ -9,13 +9,15 @@
  * 提供完整的檔案樹管理功能
  */
 
-import { useEffect, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
+import { FileTreeApiAdapter } from '../services/fileTreeAdapter';
 
 const logger = createLogger('useFileTreeManager');
 import { useFileTreeState, type UseFileTreeStateOptions } from './useFileTreeState';
 import { useFileOperations, type UseFileOperationsOptions } from './useFileOperations';
 import { useFileEditor, type UseFileEditorOptions } from './useFileEditor';
+import { computeLoadedChildrenPaths, findNodeByPath } from '../utils/fileTreeUtils';
 import type { FileTreeApiConfig, FileTreeNode } from '../types';
 
 const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
@@ -80,6 +82,10 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const latestLoadIdRef = useRef(0);
   const activeApiConfigKeyRef = useRef(apiConfigKey);
 
+  // 懶載入追蹤
+  const loadedChildrenPathsRef = useRef<Set<string>>(new Set());
+  const [loadingChildrenPaths, setLoadingChildrenPaths] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     activeApiConfigKeyRef.current = apiConfigKey;
     latestLoadIdRef.current += 1;
@@ -96,7 +102,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     state.setError(null);
 
     try {
-      const adapter = new (await import('../services/fileTreeAdapter')).FileTreeApiAdapter(stableApiConfig);
+      const adapter = new FileTreeApiAdapter(stableApiConfig);
       logger.debug('loadTree: 調用 adapter.getTree()');
       const nodes = await adapter.getTree();
 
@@ -115,6 +121,12 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
       logger.debug('loadTree: 獲取到節點數量', { count: nodes.length });
       state.setNodes(nodes);
+
+      // 重新計算已載入的子項路徑，並收起不再覆蓋的展開節點
+      const newLoadedPaths = computeLoadedChildrenPaths(nodes);
+      loadedChildrenPathsRef.current = newLoadedPaths;
+      state.syncExpandedWithLoaded(newLoadedPaths);
+
       logger.debug('loadTree: 已調用 state.setNodes()');
 
       if (onTreeLoaded) {
@@ -203,6 +215,51 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     },
     ...editorOptions,
   });
+
+  /**
+   * 切換目錄展開狀態，展開時若子項尚未載入則自動懶載入。
+   * 用來取代 state.toggleNode，讓所有展開動作都走同一個入口。
+   */
+  const toggleDirectory = useCallback(async (node: FileTreeNode) => {
+    if (node.type !== 'directory') return;
+
+    const { path } = node;
+
+    // 已展開 → 直接收起
+    if (state.expandedIds.has(path)) {
+      state.collapseNode(path);
+      return;
+    }
+
+    // 已載入 → 直接展開
+    if (loadedChildrenPathsRef.current.has(path)) {
+      state.expandNode(path);
+      return;
+    }
+
+    // 需要懶載入
+    setLoadingChildrenPaths(prev => new Set([...prev, path]));
+    try {
+      const adapter = new FileTreeApiAdapter(stableApiConfig);
+      const children = await adapter.getChildren(path);
+      state.updateNode(path, { children });
+      loadedChildrenPathsRef.current.add(path);
+      state.expandNode(path);
+    } catch (error) {
+      logger.error('toggleDirectory: 懶載入子項失敗', { path, error });
+      // 即使失敗也展開（顯示已有的空子項）
+      state.expandNode(path);
+      if (onError) {
+        onError(error instanceof Error ? error : new Error('載入子目錄失敗'));
+      }
+    } finally {
+      setLoadingChildrenPaths(prev => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
+    }
+  }, [state, stableApiConfig, onError]);
 
   // 自動載入
   useEffect(() => {
@@ -356,6 +413,10 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     loadTree,
     handleFileSelect,
     handleFileDoubleClick,
+
+    // 懶載入
+    toggleDirectory,
+    loadingChildrenPaths,
 
     // 增強的檔案操作
     createFileAndOpen,

@@ -23,8 +23,10 @@ from app.modules.internal.router import (
     sync_ssh_keys,
 )
 from app.modules.internal.template_install_models import (
+    CompiledTemplateFileInstallItem,
     ClaudeMdInstallRequest,
     HooksInstallRequest,
+    InstallPlanRequest,
     InstallResults,
     McpInstallRequest,
     OutputStyleInstallRequest,
@@ -261,6 +263,72 @@ async def test_install_template_success_with_init_commands() -> None:
     assert result.results.skills is not None
     assert result.results.skills.success is True
     assert service.execute_init_commands.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_install_template_compiled_plan_success() -> None:
+    service = AsyncMock()
+    service.install_compiled_files.return_value = {
+        "claudeMd": InstallResults(created=["AGENTS.md"], updated=[], failed=[]),
+        "slashCommands": InstallResults(created=[".codex/prompts/review.md"], updated=[], failed=[]),
+        "subagents": InstallResults(created=[".codex/agents/reviewer.md"], updated=[], failed=[]),
+        "outputStyles": InstallResults(created=[], updated=[], failed=[]),
+        "files": InstallResults(created=[], updated=[], failed=[]),
+    }
+    service.install_target_output_style.return_value = (
+        True,
+        InstallResults(created=[], updated=["AGENTS.md"], failed=[]),
+    )
+    service.install_target_mcp_servers.return_value = (
+        True,
+        InstallResults(created=["svc"], updated=[], failed=[]),
+    )
+    service.install_target_hooks.return_value = (
+        True,
+        InstallResults(created=[], updated=[], failed=[]),
+    )
+    service.install_skills.return_value = (
+        True,
+        InstallResults(created=["skills/demo/SKILL.md"], updated=[], failed=[]),
+        "/workspace/.codex/skills",
+        12,
+    )
+    service.execute_init_commands.return_value = (True, "done", "")
+
+    template_req = TemplateInstallRequest(
+        templateId="tpl-compiled",
+        templateName="demo",
+        cliType="codex",
+        initCommands="echo hi",
+        installPlan=InstallPlanRequest(
+            target="codex",
+            files=[
+                CompiledTemplateFileInstallItem(path="AGENTS.md", source="agents.md", content="# Agents"),
+                CompiledTemplateFileInstallItem(
+                    path=".codex/prompts/review.md",
+                    source="commands/review.md",
+                    content="# Review",
+                ),
+            ],
+            installHints={
+                "outputStyles": [{"fileName": "output-style.yaml", "content": "Keep answers concise."}],
+                "mcpServers": {"svc": {"command": "node"}},
+                "skills": [{"path": "demo/SKILL.md", "content": "# Skill"}],
+            },
+        ),
+    )
+
+    result = await install_template("ws", template_req, service)
+
+    assert result.success is True
+    assert result.results.claudeMd is not None
+    assert result.results.slashCommands is not None
+    assert result.results.outputStyles is not None
+    assert result.results.mcp is not None
+    assert result.results.skills is not None
+    service.install_compiled_files.assert_awaited_once()
+    service.install_target_output_style.assert_awaited_once()
+    service.install_target_mcp_servers.assert_awaited_once()
 
 
 @pytest.mark.asyncio

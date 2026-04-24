@@ -206,8 +206,8 @@ class TestChangeLog:
         # Arrange
         mock_diff = MagicMock()
         mock_diff.change_type = "M"
-        mock_diff.b_path = "plugins/test-template/test.py"
-        mock_diff.a_path = "plugins/test-template/test.py"
+        mock_diff.b_path = "templates/test-template/test.py"
+        mock_diff.a_path = "templates/test-template/test.py"
 
         mock_repo.index.diff.side_effect = [[mock_diff], []]
         mock_repo.untracked_files = []
@@ -225,7 +225,7 @@ class TestChangeLog:
         """測試：含未追蹤檔案的記錄"""
         # Arrange
         mock_repo.index.diff.side_effect = [[], []]
-        mock_repo.untracked_files = ["plugins/test-template/newfile.py"]
+        mock_repo.untracked_files = ["templates/test-template/newfile.py"]
 
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
 
@@ -240,7 +240,7 @@ class TestChangeLog:
         # Arrange
         mock_diff = MagicMock()
         mock_diff.change_type = "A"
-        mock_diff.b_path = "plugins/test-template/new.py"
+        mock_diff.b_path = "templates/test-template/new.py"
         mock_diff.a_path = None
 
         template_changes_dict = {}
@@ -258,7 +258,7 @@ class TestChangeLog:
         mock_diff = MagicMock()
         mock_diff.change_type = "D"
         mock_diff.b_path = None
-        mock_diff.a_path = "plugins/test-template/deleted.py"
+        mock_diff.a_path = "templates/test-template/deleted.py"
 
         template_changes_dict = {}
 
@@ -765,6 +765,79 @@ class TestCloneRepository:
 
 
 # ============================================================================
+# Registry Flow Tests
+# ============================================================================
+
+@pytest.mark.unit
+class TestRegistryFlow:
+    """canonical registry Git flow 測試"""
+
+    def test_bootstrap_registry_rejects_non_empty_templates_dir(self, git_service, tmp_path):
+        registry_dir = tmp_path / "templates"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+        (registry_dir / "existing-template").mkdir()
+
+        result = git_service.bootstrap_registry("https://github.com/example/repo.git")
+
+        assert result.success is False
+        assert result.code == "GIT_BOOTSTRAP_TARGET_NOT_EMPTY"
+
+    def test_bootstrap_registry_uses_clone_repository(self, git_service):
+        with patch.object(git_service, "clone_repository") as mock_clone:
+            mock_clone.return_value = GitOperationResult(True, "GIT_CLONE_SUCCESS", "GIT_CLONE_SUCCESS")
+
+            result = git_service.bootstrap_registry("https://github.com/example/repo.git", branch="main")
+
+        assert result.success is True
+        mock_clone.assert_called_once_with(url="https://github.com/example/repo.git", branch="main")
+
+    def test_refresh_registry_requires_clean_repo(self, git_service):
+        with patch.object(git_service, "is_git_repository", return_value=True), \
+             patch.object(git_service, "get_git_status") as mock_status:
+            mock_status.return_value = GitStatus(
+                current_branch="main",
+                has_changes=True,
+                ahead_count=0,
+                behind_count=0,
+                remote_url="https://github.com/example/repo.git",
+                is_git_repo=True,
+            )
+
+            result = git_service.refresh_registry()
+
+        assert result.success is False
+        assert result.code == "GIT_REFRESH_HAS_CHANGES"
+
+    def test_refresh_registry_pulls_remote_when_clean(self, git_service):
+        with patch.object(git_service, "is_git_repository", return_value=True), \
+             patch.object(git_service, "get_git_status") as mock_status, \
+             patch.object(git_service, "_pull_or_clone_existing") as mock_pull:
+            mock_status.return_value = GitStatus(
+                current_branch="main",
+                has_changes=False,
+                ahead_count=0,
+                behind_count=0,
+                remote_url="https://github.com/example/repo.git",
+                is_git_repo=True,
+            )
+            mock_pull.return_value = GitOperationResult(True, "GIT_CLONE_UPDATE_SUCCESS", "GIT_CLONE_UPDATE_SUCCESS")
+
+            result = git_service.refresh_registry(branch="main")
+
+        assert result.success is True
+        mock_pull.assert_called_once_with("https://github.com/example/repo.git", "main")
+
+    def test_publish_registry_uses_commit_and_push(self, git_service):
+        with patch.object(git_service, "commit_and_push") as mock_commit:
+            mock_commit.return_value = GitOperationResult(True, "GIT_PUSH_SUCCESS", "GIT_PUSH_SUCCESS")
+
+            result = git_service.publish_registry("sync registry", branch="main")
+
+        assert result.success is True
+        mock_commit.assert_called_once_with(message="sync registry", branch="main", push=True)
+
+
+# ============================================================================
 # Scan Templates Tests
 # ============================================================================
 
@@ -773,7 +846,7 @@ class TestScanTemplates:
     """掃描模板測試"""
 
     def test_scan_templates_no_plugins_dir(self, git_service, tmp_path):
-        """測試：無 plugins 目錄掃描失敗"""
+        """測試：無 templates 目錄掃描失敗"""
         # Act
         result = git_service.scan_and_sync_templates()
 
@@ -785,30 +858,30 @@ class TestScanTemplates:
     def test_scan_templates_success(self, git_service, tmp_path):
         """測試：掃描模板成功"""
         # Arrange
-        plugins_dir = tmp_path / "plugins"
-        plugins_dir.mkdir(parents=True, exist_ok=True)
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
 
-        template_dir = plugins_dir / "test-template"
+        template_dir = templates_dir / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
-
-        plugin_dir = template_dir / ".claude-plugin"
-        plugin_dir.mkdir(parents=True, exist_ok=True)
-
-        plugin_data = {
-            "id": "test-template",
-            "name": "Test Template",
-            "description": "A test template",
-            "version": "1.0.0",
-            "author": {
-                "name": "Test Author",
-                "email": "test@example.com"
-            },
-            "category": "general",
-            "keywords": ["test"]
-        }
-
-        plugin_json_path = plugin_dir / "plugin.json"
-        plugin_json_path.write_text(json.dumps(plugin_data), encoding="utf-8")
+        (template_dir / "template.yaml").write_text(
+            "\n".join(
+                [
+                    "id: test-template",
+                    "name: Test Template",
+                    "description: A test template",
+                    "version: 1.0.0",
+                    "schemaVersion: v0",
+                    "metadata:",
+                    "  author:",
+                    "    name: Test Author",
+                    "    email: test@example.com",
+                    "  category: general",
+                    "  keywords:",
+                    "    - test",
+                ]
+            ),
+            encoding="utf-8",
+        )
 
         # Act
         result = git_service.scan_and_sync_templates()
@@ -820,20 +893,81 @@ class TestScanTemplates:
         assert result.templates[0]["id"] == "test-template"
         assert result.templates[0]["name"] == "Test Template"
 
-    def test_scan_templates_invalid_json(self, git_service, tmp_path):
-        """測試：無效 JSON 跳過模板"""
-        # Arrange
+    def test_scan_templates_supports_canonical_template_yaml(self, git_service, tmp_path):
+        """測試：掃描優先支援 canonical template.yaml"""
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+
+        template_dir = templates_dir / "canonical-template"
+        template_dir.mkdir(parents=True, exist_ok=True)
+        (template_dir / "template.yaml").write_text(
+            "\n".join(
+                [
+                    "id: canonical-template",
+                    "name: Canonical Template",
+                    "version: 2.0.0",
+                    "description: Canonical source",
+                    "schemaVersion: v0",
+                    "supportedTargets:",
+                    "  - codex",
+                    "metadata:",
+                    "  import:",
+                    "    sourceType: gemini",
+                    "  author:",
+                    "    name: Canonical Author",
+                    "    email: author@example.com",
+                    "  keywords:",
+                    "    - canonical",
+                    "  status: draft",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        result = git_service.scan_and_sync_templates()
+
+        assert result.success is True
+        assert result.templates[0]["id"] == "canonical-template"
+        assert result.templates[0]["name"] == "Canonical Template"
+        assert result.templates[0]["cli_type"] == "gemini"
+        assert result.templates[0]["status"] == "draft"
+
+    def test_scan_templates_ignores_legacy_plugins_root(self, git_service, tmp_path):
+        """測試：存在 templates/ 與 plugins/ 時只掃描 templates/"""
+        templates_dir = tmp_path / "templates"
         plugins_dir = tmp_path / "plugins"
+        templates_dir.mkdir(parents=True, exist_ok=True)
         plugins_dir.mkdir(parents=True, exist_ok=True)
 
-        template_dir = plugins_dir / "invalid-template"
+        canonical_dir = templates_dir / "canonical-template"
+        canonical_dir.mkdir(parents=True, exist_ok=True)
+        (canonical_dir / "template.yaml").write_text(
+            "id: canonical-template\nname: Canonical\nversion: 1.0.0\nschemaVersion: v0\n",
+            encoding="utf-8",
+        )
+
+        legacy_dir = plugins_dir / "legacy-template" / ".claude-plugin"
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+        (legacy_dir / "plugin.json").write_text(
+            json.dumps({"id": "legacy-template", "name": "Legacy Template"}),
+            encoding="utf-8",
+        )
+
+        result = git_service.scan_and_sync_templates()
+
+        assert result.success is True
+        assert len(result.templates) == 1
+        assert result.templates[0]["id"] == "canonical-template"
+
+    def test_scan_templates_invalid_yaml(self, git_service, tmp_path):
+        """測試：無效 YAML 跳過模板"""
+        # Arrange
+        templates_dir = tmp_path / "templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+
+        template_dir = templates_dir / "invalid-template"
         template_dir.mkdir(parents=True, exist_ok=True)
-
-        plugin_dir = template_dir / ".claude-plugin"
-        plugin_dir.mkdir(parents=True, exist_ok=True)
-
-        plugin_json_path = plugin_dir / "plugin.json"
-        plugin_json_path.write_text("invalid json", encoding="utf-8")
+        (template_dir / "template.yaml").write_text("invalid: [yaml", encoding="utf-8")
 
         # Act
         result = git_service.scan_and_sync_templates()

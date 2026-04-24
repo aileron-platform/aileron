@@ -35,13 +35,13 @@ export interface TemplateUpsertPayload {
   keywords: string[];
   categoryId?: string;
   documentation?: string;
-  claudeMd?: string;
+  agentsMd?: string;
   initCommands?: string;
   mcpServers: Template['mcpServers'];
-  slashCommands: Template['slashCommands'];
+  commands: Template['commands'];
   hooks: Template['hooks'];
-  subAgents: Template['subAgents'];
-  outputStyles: Template['outputStyles'];
+  agents: Template['agents'];
+  outputStyle: Template['outputStyle'];
   skills: Template['skills'];
   scripts: Template['scripts'];
   isActive?: boolean;
@@ -218,14 +218,14 @@ const buildTemplateFromPayload = (
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     documentation: payload.documentation,
-    claudeMd: payload.claudeMd,
+    agentsMd: payload.agentsMd,
     initCommands: payload.initCommands,
     isActive: payload.isActive ?? true,
     mcpServers: payload.mcpServers,
-    slashCommands: payload.slashCommands,
+    commands: payload.commands,
     hooks: payload.hooks,
-    subAgents: payload.subAgents,
-    outputStyles: payload.outputStyles,
+    agents: payload.agents,
+    outputStyle: payload.outputStyle,
     scripts: payload.scripts,
     skills: payload.skills,
     categoryId: payload.categoryId,
@@ -294,14 +294,14 @@ export const TemplateManagementProvider: React.FC<TemplateManagementProviderProp
           isActive: apiTemplate.status === 'released',
           cliType: apiTemplate.cli_type as any,
           documentation: apiTemplate.documentation,
-          claudeMd: apiTemplate.claudeMd,
+          agentsMd: apiTemplate.agentsMd,
           initCommands: apiTemplate.initCommands,
           // 使用後端返回的配置數據，如果為空則設為空陣列
           mcpServers: apiTemplate.mcpServers || [],
-          slashCommands: apiTemplate.slashCommands || [],
+          commands: apiTemplate.commands || [],
           hooks: apiTemplate.hooks || [],
-          subAgents: apiTemplate.subAgents || [],
-          outputStyles: apiTemplate.outputStyles || [],
+          agents: apiTemplate.agents || [],
+          outputStyle: apiTemplate.outputStyle || [],
           skills: apiTemplate.skills || [],
           scripts: apiTemplate.scripts || [],
           categoryId: apiTemplate.categoryId,
@@ -392,7 +392,8 @@ export const TemplateManagementProvider: React.FC<TemplateManagementProviderProp
 
   const exportTemplate = useCallback(async (id: string): Promise<void> => {
     try {
-      const blob = await templateApi.exportTemplate(id);
+      const template = getTemplateById(id);
+      const blob = await templateApi.exportTemplate(id, template?.cliType);
 
       // 建立下載連結
       const url = window.URL.createObjectURL(blob);
@@ -409,7 +410,7 @@ export const TemplateManagementProvider: React.FC<TemplateManagementProviderProp
       logger.error('匯出模板失敗', { error });
       throw error;
     }
-  }, []);
+  }, [getTemplateById]);
 
   const installTemplate = useCallback(
     async (

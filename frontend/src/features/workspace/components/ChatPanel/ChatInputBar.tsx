@@ -71,7 +71,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     <div className="border-t border-border bg-background/95">
       <div className="space-y-2">
         {!isConnected && (
-          <div className="rounded-md bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
+          <div className="bg-amber-100 px-3 py-2 text-xs font-medium text-amber-800">
             {t('workspace.chat.input.disabledDisconnected')}
           </div>
         )}

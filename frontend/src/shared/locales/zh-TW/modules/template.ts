@@ -22,6 +22,7 @@ const template = {
         claudeCode: 'ClaudeCode',
         codex: 'Codex',
         gemini: 'Gemini',
+        opencode: 'OpenCode',
       },
 
       clear: '清除',
@@ -30,12 +31,12 @@ const template = {
       allFeatures: '全部功能',
       featureOptions: {
         mcp: 'MCP',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        claudeMd: 'Claude.md',
-        agentMd: 'Agent.md',
-        subAgents: 'SubAgent',
-        outputStyles: 'Output Styles',
+        agentsMd: 'AGENTS.md',
+        agentMd: 'AGENT.md',
+        agents: 'Agents',
+        outputStyle: 'Output Style',
         scripts: 'Scripts',
         skills: 'Skills',
       },
@@ -394,11 +395,11 @@ const template = {
     card: {
       features: {
         mcp: 'MCP',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        claudeMd: 'Claude.md',
-        subAgents: 'SubAgent',
-        outputStyles: 'Output Styles',
+        agentsMd: 'AGENTS.md',
+        agents: 'Agents',
+        outputStyle: 'Output Style',
         scripts: 'Scripts',
         skills: 'Skills',
       },
@@ -426,25 +427,25 @@ const template = {
           label: 'MCP 服務',
           description: 'Model Context Protocol 服務器與連線設定',
         },
-        slashCommands: {
-          label: 'Slash Commands',
-          description: '斜線指令與命令範本',
+        commands: {
+          label: 'Commands',
+          description: '可安裝到不同 CLI 的命令與指令範本',
         },
         hooks: {
           label: 'Hooks',
           description: '事件觸發腳本與自動化流程',
         },
-        claudeMd: {
-          label: 'Claude.md',
-          description: 'Claude 行為設定檔與指引',
+        agentsMd: {
+          label: 'AGENTS.md',
+          description: '主要規則文件與代理指引',
         },
-        subAgents: {
-          label: 'SubAgent',
-          description: '子代理與協作腳本',
+        agents: {
+          label: 'Agents',
+          description: '代理角色、子代理與協作定義',
         },
-        outputStyles: {
-          label: 'Output Styles',
-          description: '輸出樣式與格式化設定',
+        outputStyle: {
+          label: 'Output Style',
+          description: '輸出風格與格式偏好設定',
         },
         scripts: {
           label: '範本腳本',
@@ -458,6 +459,19 @@ const template = {
       actions: {
         cancel: '取消',
         confirm: '安裝到 {{workspace}}',
+      },
+      preview: {
+        title: '安裝預覽',
+        summary: '{{files}} 檔案 / {{warnings}} 警告 / {{unsupported}} 不支援 / {{degradation}} 降級',
+        target: '目標：{{target}}',
+        loading: '載入編譯預覽中...',
+        loadFailed: '無法載入安裝預覽',
+        none: '此目標沒有額外警告或降級資訊。',
+        sections: {
+          warnings: '警告',
+          unsupported: '不支援',
+          degradation: '降級',
+        },
       },
     },
     import: {
@@ -729,16 +743,17 @@ const template = {
       },
       error: {
         title: '錯誤',
+        description: '缺少模板資訊，請重新整理後再試。',
       },
     },
     tabs: {
       basic: '基本資訊',
-      claudeMd: 'Claude.md',
+      agentsMd: 'AGENTS.md',
       hooks: 'Hooks',
       mcp: 'MCP',
-      subAgents: 'SubAgent',
-      slashCommands: 'Slash Commands',
-      outputStyles: 'Output Styles',
+      agents: 'Agents',
+      commands: 'Commands',
+      outputStyle: 'Output Style',
       skills: 'Skills',
       scripts: 'Scripts',
       docs: 'Docs',
@@ -913,18 +928,18 @@ const template = {
         },
       },
     },
-    slashCommands: {
+    commands: {
       sidebar: {
-        title: 'Slash Commands',
+        title: 'Commands',
         searchPlaceholder: '搜尋…',
         empty: '尚未找到符合條件的項目。',
       },
       empty: {
-        title: '尚未建立任何 Slash Command',
+        title: '尚未建立任何 Command',
         description: '請建立新的指令來管理 Claude 的行為。',
       },
       actions: {
-        add: '新增 Slash Command',
+        add: '新增 Command',
         copy: '複製內容',
         download: '下載',
         edit: '編輯',
@@ -1125,14 +1140,14 @@ const template = {
         },
       },
     },
-    subAgents: {
+    agents: {
       sidebar: {
-        title: 'SubAgent 管理',
-        searchPlaceholder: '搜尋 SubAgent…',
+        title: 'Agents 管理',
+        searchPlaceholder: '搜尋 Agents…',
         empty: '目前沒有符合條件的項目',
       },
       actions: {
-        add: '新增 SubAgent',
+        add: '新增 Agent',
         copy: '複製內容',
         download: '下載',
         edit: '編輯',
@@ -1142,38 +1157,50 @@ const template = {
         sizeLabel: '大小：{{size}}',
       },
       detail: {
-        nameFallback: '未命名 SubAgent',
+        nameFallback: '未命名 Agent',
         descriptionFallback: '尚未提供描述。',
       },
       empty: {
-        title: '尚未建立任何 SubAgent',
-        description: '新增子代理以擴充模板能力。',
+        title: '尚未建立任何 Agent',
+        description: '新增代理以擴充模板能力。',
       },
       logs: {
-        copyFailed: '複製 SubAgent 內容失敗：',
+        copyFailed: '複製 Agent 內容失敗：',
       },
       toasts: {
         copySuccess: {
           title: '內容已複製',
-          description: 'SubAgent「{{name}}」內容已複製到剪貼簿。',
+          description: 'Agent「{{name}}」內容已複製到剪貼簿。',
         },
         copyFailed: {
           title: '複製失敗',
-          description: '無法複製 SubAgent 內容，請稍後再試。',
+          description: '無法複製 Agent 內容，請稍後再試。',
         },
         downloadSuccess: {
           title: '開始下載',
-          description: '正在下載 SubAgent「{{name}}」為 Markdown 檔案。',
+          description: '正在下載 Agent「{{name}}」為 Markdown 檔案。',
+        },
+        createSuccess: {
+          title: '建立成功',
+          description: 'Agent「{{name}}」已建立。',
+        },
+        updateSuccess: {
+          title: '更新成功',
+          description: 'Agent「{{name}}」已更新。',
+        },
+        deleteSuccess: {
+          title: '刪除成功',
+          description: 'Agent「{{name}}」已刪除。',
         },
       },
       dialog: {
         title: {
-          create: '新增 SubAgent',
-          edit: '編輯 SubAgent',
+          create: '新增 Agent',
+          edit: '編輯 Agent',
         },
         description: {
-          create: '建立新的 SubAgent 與主流程協作。',
-          edit: '更新此 SubAgent 的檔名與內容。',
+          create: '建立新的 Agent 與主流程協作。',
+          edit: '更新此 Agent 的檔名與內容。',
         },
         fields: {
           fileName: {
@@ -1182,9 +1209,9 @@ const template = {
             helper: '請使用能代表角色或專業領域的名稱。',
           },
           content: {
-            label: 'SubAgent 內容 *',
+            label: 'Agent 內容 *',
             sizeHint: '預估大小：{{size}}',
-            helper: '描述此 SubAgent 的行為、工具與專長。',
+            helper: '描述此 Agent 的行為、工具與專長。',
           },
         },
         validation: {
@@ -1192,12 +1219,12 @@ const template = {
           content: '內容不可為空。',
         },
         actions: {
-          create: '建立 SubAgent',
+          create: '建立 Agent',
           save: '儲存變更',
         },
       },
     },
-    outputStyles: {
+    outputStyle: {
       sidebar: {
         title: 'Output Style 管理',
         searchPlaceholder: '搜尋 Output Style…',
@@ -1274,9 +1301,9 @@ const template = {
         },
       },
     },
-    claudeMd: {
+    agentsMd: {
       editor: {
-        placeholder: '編輯 Claude.md 內容－提供給 Claude 的指令檔案（支援 Markdown）。',
+        placeholder: '編輯 AGENTS.md 內容－主要規則文件與代理指引（支援 Markdown）。',
       },
       status: {
         loading: '載入中...',
@@ -1290,20 +1317,20 @@ const template = {
       toasts: {
         loadFailed: {
           title: '載入失敗',
-          description: '無法載入 Claude.md 內容。',
+          description: '無法載入 AGENTS.md 內容。',
         },
         saveSuccess: {
           title: '儲存成功',
-          description: 'Claude.md 內容已更新。',
+          description: 'AGENTS.md 內容已更新。',
         },
         saveFailed: {
           title: '儲存失敗',
-          description: '無法儲存 Claude.md 內容。',
+          description: '無法儲存 AGENTS.md 內容。',
         },
       },
       errors: {
-        loadFailed: '無法載入 Claude.md 內容，請稍後再試。',
-        saveFailed: '無法儲存 Claude.md 內容，請稍後再試。',
+        loadFailed: '無法載入 AGENTS.md 內容，請稍後再試。',
+        saveFailed: '無法儲存 AGENTS.md 內容，請稍後再試。',
       },
     },
     files: {
@@ -1411,12 +1438,12 @@ const template = {
     validation: {
       required: '必填',
       select: '請選擇一項',
-      slashCommandName: '命令名稱為必填',
-      slashCommandContent: '指令內容為必填',
+      commandName: '命令名稱為必填',
+      commandContent: '指令內容為必填',
       hookName: 'Hook 名稱為必填',
       hookEvent: '觸發事件為必填',
-      subAgentFile: '檔名必填',
-      subAgentContent: '內容必填',
+      agentFile: '檔名必填',
+      agentContent: '內容必填',
       filePath: '腳本路徑必填',
     },
   },
@@ -1436,14 +1463,37 @@ const template = {
     },
     tabs: {
       basicInfo: '基本資訊',
-      claudeMd: 'Claude.md',
+      agentsMd: 'AGENTS.md',
       hooks: 'Hooks',
       mcp: 'MCP',
-      subAgents: 'SubAgent',
-      slashCommands: 'Slash Commands',
-      outputStyles: 'Output Styles',
+      agents: 'Agents',
+      commands: 'Commands',
+      outputStyle: 'Output Style',
       skills: 'Skills',
       scripts: 'Scripts',
+      targetPreview: 'Target Preview',
+    },
+    targetPreview: {
+      description: '檢視模板編譯到不同目標 CLI 的輸出檔案與降級資訊。',
+      targetLabel: '目標 CLI',
+      loading: '載入編譯預覽中...',
+      emptyFiles: '此目標目前沒有可輸出的檔案。',
+      sections: {
+        files: '編譯輸出',
+        warnings: '警告',
+        unsupported: '不支援',
+        degradation: '降級',
+      },
+      file: {
+        sourceLabel: '來源',
+        contentPreviewLabel: '內容預覽',
+      },
+      states: {
+        none: '目前沒有項目。',
+      },
+      errors: {
+        loadFailed: '無法載入目標編譯預覽，請稍後再試。',
+      },
     },
     fileViewer: {
       loading: '載入檔案列表…',
@@ -1516,10 +1566,10 @@ const template = {
       },
       stats: {
         mcpServers: 'MCP 伺服器',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        subAgents: 'SubAgents',
-        claudeMd: 'Claude.md',
+        agents: 'Agents',
+        agentsMd: 'AGENTS.md',
         scripts: '腳本檔案',
       },
     },
@@ -1610,10 +1660,10 @@ const template = {
         actions: '{{count}} 個動作',
       },
     },
-    claudeMd: {
-      downloadFileName: 'Claude.md',
+    agentsMd: {
+      downloadFileName: 'AGENTS.md',
       header: {
-        title: 'Claude.md 配置',
+        title: 'AGENTS.md 配置',
         description: '範本的全域指令與行為設定檔案。',
       },
       status: {
@@ -1624,38 +1674,38 @@ const template = {
         error: '錯誤',
       },
       empty: {
-        title: '尚未配置 Claude.md',
-        description: '此範本尚未包含任何 Claude.md 設定檔。',
+        title: '尚未配置 AGENTS.md',
+        description: '此範本尚未包含任何 AGENTS.md 設定檔。',
       },
       actions: {
         copy: '複製',
         download: '下載',
         edit: '編輯',
-        create: '建立 Claude.md',
+        create: '建立 AGENTS.md',
       },
       toasts: {
         copySuccess: {
           title: '複製成功',
-          description: 'Claude.md 內容已複製到剪貼簿。',
+          description: 'AGENTS.md 內容已複製到剪貼簿。',
         },
         copyFailed: {
           title: '複製失敗',
-          description: '無法複製 Claude.md 內容。',
+          description: '無法複製 AGENTS.md 內容。',
         },
         downloadSuccess: {
           title: '下載成功',
-          description: 'Claude.md 已下載為 Markdown 檔案。',
+          description: 'AGENTS.md 已下載為 Markdown 檔案。',
         },
       },
     },
-    subAgents: {
+    agents: {
       accessibility: {
         collapseSidebar: '收合左欄',
       },
       sidebar: {
-        title: 'SubAgent',
+        title: 'Agents',
         searchPlaceholder: '搜尋...',
-        empty: '尚未找到符合條件的 SubAgent',
+        empty: '尚未找到符合條件的 Agent',
       },
       actions: {
         copy: '複製內容',
@@ -1663,36 +1713,36 @@ const template = {
       },
       list: {
         sizeLabel: '大小：{{size}}',
-        nameFallback: '未命名 SubAgent',
+        nameFallback: '未命名 Agent',
       },
       detail: {
         descriptionFallback: '尚未提供描述。',
         noContent: '無內容',
       },
       empty: {
-        title: '尚未建立任何 SubAgent',
-        description: '請從左側選擇或建立新的 SubAgent。',
+        title: '尚未建立任何 Agent',
+        description: '請從左側選擇或建立新的 Agent。',
       },
       errors: {
-        copyFailed: '複製 SubAgent 內容失敗',
+        copyFailed: '複製 Agent 內容失敗',
       },
       toasts: {
         copySuccess: {
           title: '內容已複製',
-          description: 'SubAgent 內容已複製到剪貼簿。',
+          description: 'Agent 內容已複製到剪貼簿。',
         },
         downloadSuccess: {
           title: '開始下載',
-          description: '正在下載 SubAgent 為 Markdown 檔案。',
+          description: '正在下載 Agent 為 Markdown 檔案。',
         },
       },
     },
-    outputStyles: {
+    outputStyle: {
       accessibility: {
         collapseSidebar: '收合左欄',
       },
       sidebar: {
-        title: 'Output Styles',
+        title: 'Output Style',
         searchPlaceholder: '搜尋...',
         empty: '尚未找到符合條件的 Output Style',
       },
@@ -1726,12 +1776,12 @@ const template = {
         },
       },
     },
-    slashCommands: {
+    commands: {
       accessibility: {
         collapseSidebar: '收合左欄',
       },
       sidebar: {
-        title: 'Slash Commands',
+        title: 'Commands',
         searchPlaceholder: '搜尋...',
         empty: '尚未找到符合條件的項目',
         scopeLabel: '範圍',
@@ -1754,7 +1804,7 @@ const template = {
         descriptionFallback: '尚未提供描述。',
       },
       empty: {
-        title: '尚未建立任何 Slash Command',
+        title: '尚未建立任何 Command',
         description: '請從左側選擇或建立新的指令來管理 Claude 的行為。',
       },
       errors: {
@@ -1786,6 +1836,22 @@ const template = {
   },
   common: {
     uncategorized: '未分類',
+    targets: {
+      claudeCode: 'Claude Code',
+      codex: 'Codex',
+      gemini: 'Gemini',
+      opencode: 'OpenCode',
+    },
+    features: {
+      mcp: 'MCP',
+      commands: 'Commands',
+      hooks: 'Hooks',
+      agentsMd: 'AGENTS.md',
+      agents: 'Agents',
+      outputStyle: 'Output Style',
+      scripts: 'Scripts',
+      skills: 'Skills',
+    },
   },
 };
 

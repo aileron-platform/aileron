@@ -123,6 +123,8 @@ export interface UseFileTreeStateReturn {
   expandAll: () => void;
   collapseAll: () => void;
   isNodeExpanded: (path: string) => boolean;
+  /** 收起所有不在 loadedPaths 中的展開節點（懶載入 refresh 後使用） */
+  syncExpandedWithLoaded: (loadedPaths: Set<string>) => void;
 
   // 搜尋操作
   setSearchQuery: (query: string) => void;
@@ -381,6 +383,16 @@ export function useFileTreeState(
 
   const isNodeExpanded = useCallback((path: string) => expandedIds.has(path), [expandedIds]);
 
+  const syncExpandedWithLoaded = useCallback((loadedPaths: Set<string>) => {
+    setExpandedIds(prev => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (loadedPaths.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
   // 搜尋操作
   const clearSearch = useCallback(() => {
     setSearchQuery('');
@@ -437,6 +449,7 @@ export function useFileTreeState(
     expandAll,
     collapseAll,
     isNodeExpanded,
+    syncExpandedWithLoaded,
 
     // 搜尋操作
     setSearchQuery,

@@ -1,9 +1,9 @@
-export interface SlashCommandData {
+export interface CommandData {
   name: string;
   description?: string;
   content?: string;
 }
-export interface SubAgentData {
+export interface AgentData {
   name: string;
   description?: string;
   model?: string;

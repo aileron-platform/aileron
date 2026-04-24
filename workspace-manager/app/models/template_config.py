@@ -88,19 +88,19 @@ class HooksConfigUpdateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-# ============ SlashCommands 模型 ============
+# ============ Commands 模型 ============
 
 
-class TemplateSlashCommandFile(BaseModel):
-    """模板 SlashCommand 檔案資訊"""
+class TemplateCommandFile(BaseModel):
+    """模板 Command 檔案資訊"""
 
     file_name: str = Field(description="檔案名稱")
     size: int = Field(description="檔案大小（位元組）")
     last_modified: datetime = Field(description="最後修改時間")
 
 
-class TemplateSlashCommandContent(BaseModel):
-    """模板 SlashCommand 檔案內容"""
+class TemplateCommandContent(BaseModel):
+    """模板 Command 檔案內容"""
 
     file_name: str = Field(description="檔案名稱")
     content: str = Field(description="檔案內容")
@@ -108,8 +108,8 @@ class TemplateSlashCommandContent(BaseModel):
     last_modified: datetime = Field(description="最後修改時間")
 
 
-class TemplateSlashCommandCreateRequest(BaseModel):
-    """建立 SlashCommand 檔案請求"""
+class TemplateCommandCreateRequest(BaseModel):
+    """建立 Command 檔案請求"""
 
     file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
     content: str = Field(description="檔案內容")
@@ -117,45 +117,45 @@ class TemplateSlashCommandCreateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class TemplateSlashCommandUpdateRequest(BaseModel):
-    """更新 SlashCommand 檔案請求"""
+class TemplateCommandUpdateRequest(BaseModel):
+    """更新 Command 檔案請求"""
 
     content: str = Field(description="檔案內容")
 
     model_config = {"populate_by_name": True}
 
 
-class TemplateSlashCommandResponse(BaseModel):
-    """SlashCommand 操作回應"""
+class TemplateCommandResponse(BaseModel):
+    """Command 操作回應"""
 
     success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateSlashCommandContent] = Field(default=None, description="SlashCommand 檔案資料")
+    data: Optional[TemplateCommandContent] = Field(default=None, description="Command 檔案資料")
     message: Optional[str] = Field(default=None, description="操作訊息")
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
 
-class TemplateSlashCommandListResponse(BaseModel):
-    """SlashCommand 檔案列表回應"""
+class TemplateCommandListResponse(BaseModel):
+    """Command 檔案列表回應"""
 
     success: bool = Field(description="操作是否成功")
-    data: List[TemplateSlashCommandFile] = Field(default_factory=list, description="檔案列表")
+    data: List[TemplateCommandFile] = Field(default_factory=list, description="檔案列表")
     message: Optional[str] = Field(default=None, description="操作訊息")
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
 
-# ============ SubAgents 模型 ============
+# ============ Agents 模型 ============
 
 
-class TemplateSubAgentFile(BaseModel):
-    """模板 SubAgent 檔案資訊"""
+class TemplateAgentFile(BaseModel):
+    """模板 Agent 檔案資訊"""
 
     file_name: str = Field(description="檔案名稱")
     size: int = Field(description="檔案大小（位元組）")
     last_modified: datetime = Field(description="最後修改時間")
 
 
-class TemplateSubAgentContent(BaseModel):
-    """模板 SubAgent 檔案內容"""
+class TemplateAgentContent(BaseModel):
+    """模板 Agent 檔案內容"""
 
     file_name: str = Field(description="檔案名稱")
     content: str = Field(description="檔案內容")
@@ -163,8 +163,8 @@ class TemplateSubAgentContent(BaseModel):
     last_modified: datetime = Field(description="最後修改時間")
 
 
-class TemplateSubAgentCreateRequest(BaseModel):
-    """建立 SubAgent 檔案請求"""
+class TemplateAgentCreateRequest(BaseModel):
+    """建立 Agent 檔案請求"""
 
     file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
     content: str = Field(description="檔案內容")
@@ -172,37 +172,37 @@ class TemplateSubAgentCreateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class TemplateSubAgentUpdateRequest(BaseModel):
-    """更新 SubAgent 檔案請求"""
+class TemplateAgentUpdateRequest(BaseModel):
+    """更新 Agent 檔案請求"""
 
     content: str = Field(description="檔案內容")
 
     model_config = {"populate_by_name": True}
 
 
-class TemplateSubAgentResponse(BaseModel):
-    """SubAgent 操作回應"""
+class TemplateAgentResponse(BaseModel):
+    """Agent 操作回應"""
 
     success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateSubAgentContent] = Field(default=None, description="SubAgent 檔案資料")
+    data: Optional[TemplateAgentContent] = Field(default=None, description="Agent 檔案資料")
     message: Optional[str] = Field(default=None, description="操作訊息")
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
 
-class TemplateSubAgentListResponse(BaseModel):
-    """SubAgent 檔案列表回應"""
+class TemplateAgentListResponse(BaseModel):
+    """Agent 檔案列表回應"""
 
     success: bool = Field(description="操作是否成功")
-    data: List[TemplateSubAgentFile] = Field(default_factory=list, description="檔案列表")
+    data: List[TemplateAgentFile] = Field(default_factory=list, description="檔案列表")
     message: Optional[str] = Field(default=None, description="操作訊息")
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
 
-# ============ OutputStyles 模型 ============
+# ============ Output Style 模型 ============
 
 
 class TemplateOutputStyleFile(BaseModel):
-    """模板 OutputStyle 檔案資訊"""
+    """模板 Output Style 檔案資訊"""
 
     file_name: str = Field(description="檔案名稱")
     size: int = Field(description="檔案大小（位元組）")
@@ -210,7 +210,7 @@ class TemplateOutputStyleFile(BaseModel):
 
 
 class TemplateOutputStyleContent(BaseModel):
-    """模板 OutputStyle 檔案內容"""
+    """模板 Output Style 檔案內容"""
 
     file_name: str = Field(description="檔案名稱")
     content: str = Field(description="檔案內容")
@@ -219,7 +219,7 @@ class TemplateOutputStyleContent(BaseModel):
 
 
 class TemplateOutputStyleCreateRequest(BaseModel):
-    """建立 OutputStyle 檔案請求"""
+    """建立 Output Style 檔案請求"""
 
     file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
     content: str = Field(description="檔案內容")
@@ -228,7 +228,7 @@ class TemplateOutputStyleCreateRequest(BaseModel):
 
 
 class TemplateOutputStyleUpdateRequest(BaseModel):
-    """更新 OutputStyle 檔案請求"""
+    """更新 Output Style 檔案請求"""
 
     content: str = Field(description="檔案內容")
 
@@ -236,16 +236,16 @@ class TemplateOutputStyleUpdateRequest(BaseModel):
 
 
 class TemplateOutputStyleResponse(BaseModel):
-    """OutputStyle 操作回應"""
+    """Output Style 操作回應"""
 
     success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateOutputStyleContent] = Field(default=None, description="OutputStyle 檔案資料")
+    data: Optional[TemplateOutputStyleContent] = Field(default=None, description="Output Style 檔案資料")
     message: Optional[str] = Field(default=None, description="操作訊息")
     error: Optional[str] = Field(default=None, description="錯誤訊息")
 
 
 class TemplateOutputStyleListResponse(BaseModel):
-    """OutputStyle 檔案列表回應"""
+    """Output Style 檔案列表回應"""
 
     success: bool = Field(description="操作是否成功")
     data: List[TemplateOutputStyleFile] = Field(default_factory=list, description="檔案列表")
@@ -294,4 +294,3 @@ class MarketplaceConfigUpdateRequest(BaseModel):
     name: str = Field(description="Marketplace 名稱")
     owner: MarketplaceOwner = Field(description="擁有者資訊")
     metadata: MarketplaceMetadata = Field(description="元資料")
-

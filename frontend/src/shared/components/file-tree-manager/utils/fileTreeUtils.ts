@@ -252,6 +252,33 @@ export function getDescendantPaths(node: FileTreeNode): string[] {
 }
 
 /**
+ * 計算初始樹中哪些目錄的子項已載入。
+ * 判斷依據：hasChildren=false（真的空目錄）或 children.length > 0（後端有實際回傳子項）。
+ * hasChildren=true && children.length===0 代表後端因 maxDepth 截斷，子項尚未載入。
+ */
+export function computeLoadedChildrenPaths(nodes: FileTreeNode[]): Set<string> {
+  const loaded = new Set<string>();
+
+  function traverse(list: FileTreeNode[]) {
+    for (const node of list) {
+      if (node.type === 'directory') {
+        const childrenReturned = node.children !== undefined && node.children.length > 0;
+        const trulyEmpty = node.hasChildren === false;
+        if (childrenReturned || trulyEmpty) {
+          loaded.add(node.path);
+        }
+        if (node.children) {
+          traverse(node.children);
+        }
+      }
+    }
+  }
+
+  traverse(nodes);
+  return loaded;
+}
+
+/**
  * 排序節點（資料夾優先，然後按名稱排序）
  */
 export function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {

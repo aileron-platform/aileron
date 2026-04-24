@@ -497,7 +497,7 @@ def _execute_automation_job(
                 response = client.post(sessions_url, json=create_payload, headers=internal_headers)
                 response.raise_for_status()
                 session_data = response.json()
-                session_id = session_data["id"]  # API response uses "id" field
+                session_id = session_data["session_id"]
                 exec_logger.info("Session 建立成功", session_id=session_id)
                 logger.info(
                     "Session 建立成功 - session_id=%s, workspace_id=%s",

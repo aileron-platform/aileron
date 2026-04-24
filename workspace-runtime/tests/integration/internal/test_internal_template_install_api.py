@@ -50,6 +50,13 @@ class TemplateInstallServiceStub:
             "/workspace/.claude/skills",
             128,
         )
+        self.compiled_files_result: dict[str, InstallResults] = {
+            "claudeMd": InstallResults(created=["AGENTS.md"], updated=[], failed=[]),
+            "slashCommands": InstallResults(created=[".codex/prompts/review.md"], updated=[], failed=[]),
+            "subagents": InstallResults(created=[".codex/agents/reviewer.md"], updated=[], failed=[]),
+            "outputStyles": InstallResults(created=[], updated=[], failed=[]),
+            "files": InstallResults(created=[], updated=[], failed=[]),
+        }
 
     async def install_slash_commands(
         self, workspace_id: str, request: Any
@@ -88,6 +95,26 @@ class TemplateInstallServiceStub:
         self, workspace_id: str, request: Any
     ) -> tuple[bool, InstallResults, str, int]:
         return self.skills_result
+
+    async def install_compiled_files(
+        self, workspace_id: str, request: Any
+    ) -> dict[str, InstallResults]:
+        return self.compiled_files_result
+
+    async def install_target_mcp_servers(
+        self, workspace_id: str, cli_type: str, mcp_servers: Any
+    ) -> tuple[bool, InstallResults]:
+        return self.mcp_result
+
+    async def install_target_output_style(
+        self, workspace_id: str, cli_type: str, output_styles: Any
+    ) -> tuple[bool, InstallResults]:
+        return self.output_styles_result
+
+    async def install_target_hooks(
+        self, workspace_id: str, cli_type: str, hooks: Any
+    ) -> tuple[bool, InstallResults]:
+        return self.hooks_result
 
     async def execute_init_commands(
         self, workspace_id: str, commands: str
@@ -398,3 +425,46 @@ def test_ti_010_install_template_batch_partial_install(client):
     assert payload["results"]["scripts"] is not None
     assert payload["results"]["claudeMd"] is None
     assert payload["results"]["subagents"] is None
+
+
+def test_ti_011_install_template_compiled_plan_success(client):
+    """測試批次安裝模板（compiled install plan）成功"""
+    service = TemplateInstallServiceStub()
+
+    with override_dependency(
+        verify_internal_token, _allow_internal_token
+    ), override_dependency(get_template_install_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/workspaces/test-workspace/templates/install",
+            json={
+                "templateId": "test-template-id",
+                "templateName": "test-template",
+                "cliType": "codex",
+                "installPlan": {
+                    "target": "codex",
+                    "files": [
+                        {"path": "AGENTS.md", "source": "agents.md", "content": "# Agents"},
+                        {
+                            "path": ".codex/prompts/review.md",
+                            "source": "commands/review.md",
+                            "content": "# Review",
+                        },
+                    ],
+                    "installHints": {
+                        "outputStyles": [{"fileName": "output-style.yaml", "content": "Keep answers concise."}],
+                        "mcpServers": {"test-server": {"type": "stdio", "command": "node", "args": []}},
+                        "skills": [{"path": "review/SKILL.md", "content": "# Skill"}],
+                    },
+                },
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["results"]["claudeMd"] is not None
+    assert payload["results"]["slashCommands"] is not None
+    assert payload["results"]["outputStyles"] is not None
+    assert payload["results"]["mcp"] is not None
+    assert payload["results"]["skills"] is not None

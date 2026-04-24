@@ -20,13 +20,13 @@ import { useI18n } from '@/shared/hooks/useI18n';
 // 類型定義
 // ============================================================================
 
-export type SlashCommandScope = 'project' | 'user' | 'local' | 'plugin';
+export type CommandScope = 'project' | 'user' | 'local' | 'plugin';
 
-export interface WorkspaceSlashCommandData {
+export interface WorkspaceCommandData {
   id: string;
   workspaceId?: string;
   title: string;
-  scope: SlashCommandScope;
+  scope: CommandScope;
   content: string;
   description?: string;
   size?: string;
@@ -35,7 +35,7 @@ export interface WorkspaceSlashCommandData {
   marketplaceName?: string;
 }
 
-export interface TemplateSlashCommandData {
+export interface TemplateCommandData {
   localId: string;
   fileName: string;
   content: string;
@@ -45,7 +45,7 @@ export interface TemplateSlashCommandData {
 interface WorkspaceFormState {
   fileName: string;
   namespace: string;
-  scope: SlashCommandScope;
+  scope: CommandScope;
   content: string;
 }
 
@@ -75,41 +75,41 @@ const ensureFileExtension = (fileName: string, format: 'markdown' | 'toml' = 'ma
 // Props 類型
 // ============================================================================
 
-interface WorkspaceSlashCommandDialogProps {
+interface WorkspaceCommandDialogProps {
   variant?: 'workspace';
   open: boolean;
   mode: 'create' | 'edit';
-  initialValue?: WorkspaceSlashCommandData | null;
-  availableScopes?: SlashCommandScope[];
+  initialValue?: WorkspaceCommandData | null;
+  availableScopes?: CommandScope[];
   format?: 'markdown' | 'toml';
   i18nNamespace?: string;
   onClose: () => void;
-  onSubmit: (document: WorkspaceSlashCommandData) => void | Promise<void>;
+  onSubmit: (document: WorkspaceCommandData) => void | Promise<void>;
 }
 
-interface TemplateSlashCommandDialogProps {
+interface TemplateCommandDialogProps {
   variant: 'template';
   open: boolean;
   mode: 'create' | 'edit';
-  initialValue?: TemplateSlashCommandData | null;
+  initialValue?: TemplateCommandData | null;
   onClose: () => void;
-  onSubmit: (command: TemplateSlashCommandData) => void;
+  onSubmit: (command: TemplateCommandData) => void;
 }
 
-export type SlashCommandDialogProps = WorkspaceSlashCommandDialogProps | TemplateSlashCommandDialogProps;
+export type CommandDialogProps = WorkspaceCommandDialogProps | TemplateCommandDialogProps;
 
 // ============================================================================
 // 元件實作
 // ============================================================================
 
-export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => {
+export const CommandDialog: React.FC<CommandDialogProps> = (props) => {
   const { open, mode, onClose } = props;
   const variant = props.variant ?? 'workspace';
   const { t } = useI18n();
 
   const isWorkspace = variant === 'workspace';
   const i18nNs = isWorkspace
-    ? ((props as WorkspaceSlashCommandDialogProps).i18nNamespace ?? 'workspace.claudeCode')
+    ? ((props as WorkspaceCommandDialogProps).i18nNamespace ?? 'workspace.claudeCode')
     : 'workspace.claudeCode';
   const [activeTab, setActiveTab] = useState<'basic' | 'editor'>('basic');
 
@@ -117,17 +117,17 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
   const [fileName, setFileName] = useState('');
   const [namespace, setNamespace] = useState('');
   const [name, setName] = useState('');
-  const [scope, setScope] = useState<SlashCommandScope>('project');
+  const [scope, setScope] = useState<CommandScope>('project');
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ fileName?: string; name?: string; content?: string }>({});
 
   const workspaceAvailableScopes = isWorkspace
-    ? (props as WorkspaceSlashCommandDialogProps).availableScopes
+    ? (props as WorkspaceCommandDialogProps).availableScopes
     : undefined;
 
   const format = isWorkspace
-    ? ((props as WorkspaceSlashCommandDialogProps).format ?? 'markdown')
+    ? ((props as WorkspaceCommandDialogProps).format ?? 'markdown')
     : 'markdown';
 
   const scopeOptions = useMemo(() => {
@@ -136,18 +136,18 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
       { value: 'user', label: t(`${i18nNs}.documents.scope.values.user`) },
     ];
     if (!workspaceAvailableScopes) return allOptions;
-    return allOptions.filter((opt) => workspaceAvailableScopes.includes(opt.value as SlashCommandScope));
+    return allOptions.filter((opt) => workspaceAvailableScopes.includes(opt.value as CommandScope));
   }, [t, workspaceAvailableScopes, i18nNs]);
 
   const buildInitialState = useCallback(() => {
     if (isWorkspace) {
-      const initial = props.initialValue as WorkspaceSlashCommandData | null | undefined;
+      const initial = props.initialValue as WorkspaceCommandData | null | undefined;
       setFileName((initial?.metadata?.fileName as string | undefined) ?? '');
       setNamespace((initial?.metadata?.namespace as string) ?? '');
       setScope(initial?.scope ?? 'project');
       setContent(initial?.content ?? '');
     } else {
-      const initial = props.initialValue as TemplateSlashCommandData | null | undefined;
+      const initial = props.initialValue as TemplateCommandData | null | undefined;
       const fileNameValue = initial?.fileName ?? '';
       let ns = '';
       let nm = '';
@@ -180,7 +180,7 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
   const getTranslationKey = (key: string) => {
     return isWorkspace
       ? `${i18nNs}.slashCommands.dialog.${key}`
-      : `template.editor.slashCommands.dialog.${key}`;
+      : `template.editor.commands.dialog.${key}`;
   };
 
   const validate = () => {
@@ -191,13 +191,13 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
       }
     } else {
       if (!name.trim()) {
-        nextErrors.name = t('template.editor.slashCommands.dialog.validation.nameRequired');
+        nextErrors.name = t('template.editor.commands.dialog.validation.nameRequired');
       }
     }
     if (!content.trim()) {
       nextErrors.content = isWorkspace
         ? t(getTranslationKey('validation.content'))
-        : t('template.editor.slashCommands.dialog.validation.contentRequired');
+        : t('template.editor.commands.dialog.validation.contentRequired');
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -213,14 +213,14 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
 
     try {
       if (isWorkspace) {
-        const initial = props.initialValue as WorkspaceSlashCommandData | null | undefined;
+        const initial = props.initialValue as WorkspaceCommandData | null | undefined;
         const normalizedFileName = ensureFileExtension(fileName, format);
         const identifier = isEdit
           ? (initial?.metadata?.fileName as string | undefined) ?? initial?.id ?? normalizedFileName
           : normalizedFileName;
         const normalizedNamespace = namespace.trim();
 
-        const document: WorkspaceSlashCommandData = {
+        const document: WorkspaceCommandData = {
           id: `${scope}:${identifier}`,
           title: normalizedFileName,
           description: '',
@@ -234,20 +234,20 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
           },
         };
 
-        (props as WorkspaceSlashCommandDialogProps).onSubmit(document);
+        (props as WorkspaceCommandDialogProps).onSubmit(document);
       } else {
-        const initial = props.initialValue as TemplateSlashCommandData | null | undefined;
+        const initial = props.initialValue as TemplateCommandData | null | undefined;
         const resultFileName = namespace.trim()
           ? `${namespace.trim()}/${name.trim()}.md`
           : `${name.trim()}.md`;
 
-        const command: TemplateSlashCommandData = {
+        const command: TemplateCommandData = {
           localId: initial?.localId || `local-${Math.random().toString(36).slice(2, 10)}`,
           fileName: resultFileName,
           content,
         };
 
-        (props as TemplateSlashCommandDialogProps).onSubmit(command);
+        (props as TemplateCommandDialogProps).onSubmit(command);
       }
       onClose();
     } finally {
@@ -285,7 +285,7 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
                 {scopeOptions.find((option) => option.value === scope)?.label ?? scope}
               </Badge>
             ) : (
-              <Select value={scope} onValueChange={(value) => setScope(value as SlashCommandScope)}>
+              <Select value={scope} onValueChange={(value) => setScope(value as CommandScope)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -367,36 +367,36 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
     <div className="flex flex-1 flex-col overflow-hidden px-6 pb-6 pt-4">
       <div className="mb-4 flex-shrink-0 space-y-2">
         <label className="text-sm font-medium text-foreground">
-          {t('template.editor.slashCommands.dialog.fields.name.label')}
+          {t('template.editor.commands.dialog.fields.name.label')}
         </label>
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder={t('template.editor.slashCommands.dialog.fields.name.placeholder')}
+          placeholder={t('template.editor.commands.dialog.fields.name.placeholder')}
         />
         {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
         <p className="text-xs text-muted-foreground">
-          {t('template.editor.slashCommands.dialog.fields.name.helper')}
+          {t('template.editor.commands.dialog.fields.name.helper')}
         </p>
       </div>
 
       <div className="mb-4 flex-shrink-0 space-y-2">
         <label className="text-sm font-medium text-foreground">
-          {t('template.editor.slashCommands.dialog.fields.namespace.label')}
+          {t('template.editor.commands.dialog.fields.namespace.label')}
         </label>
         <Input
           value={namespace}
           onChange={(e) => setNamespace(e.target.value)}
-          placeholder={t('template.editor.slashCommands.dialog.fields.namespace.placeholder')}
+          placeholder={t('template.editor.commands.dialog.fields.namespace.placeholder')}
         />
         <p className="text-xs text-muted-foreground">
-          {t('template.editor.slashCommands.dialog.fields.namespace.helper')}
+          {t('template.editor.commands.dialog.fields.namespace.helper')}
         </p>
       </div>
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <label className="mb-2 text-sm font-medium text-foreground">
-          {t('template.editor.slashCommands.dialog.fields.content.label')}
+          {t('template.editor.commands.dialog.fields.content.label')}
         </label>
         <div className="flex-1 overflow-hidden rounded-lg border">
           <MarkdownEditor
@@ -405,7 +405,7 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
             className="h-full"
             footerExtras={
               <span className="text-xs text-muted-foreground">
-                {t('template.editor.slashCommands.dialog.fields.content.sizeHint', {
+                {t('template.editor.commands.dialog.fields.content.sizeHint', {
                   size: formatSize(content),
                 })}
               </span>
@@ -452,4 +452,4 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = (props) => 
   );
 };
 
-export default SlashCommandDialog;
+export default CommandDialog;

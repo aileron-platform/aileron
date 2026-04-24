@@ -12,6 +12,8 @@ from app.modules.internal.template_install_models import (
     SlashCommandInstallItem,
     SubagentInstallRequest,
     SubagentInstallItem,
+    InstallPlanRequest,
+    CompiledTemplateFileInstallItem,
     OutputStyleInstallRequest,
     OutputStyleInstallItem,
     ClaudeMdInstallRequest,
@@ -216,6 +218,99 @@ class TestSlashCommandsInstallation:
         assert success is True
         assert len(results.created) == 3
         assert len(results.failed) == 0
+
+
+class TestCompiledInstallPlan:
+    """Test compiled install plan file installation."""
+
+    @pytest.mark.asyncio
+    async def test_install_compiled_files_writes_to_workspace_root(self, service):
+        request = InstallPlanRequest(
+            target="codex",
+            files=[
+                CompiledTemplateFileInstallItem(
+                    path="AGENTS.md",
+                    source="agents.md",
+                    content="# Agents",
+                ),
+                CompiledTemplateFileInstallItem(
+                    path=".codex/prompts/review-ui.md",
+                    source="commands/review-ui.md",
+                    content="# Review UI",
+                ),
+                CompiledTemplateFileInstallItem(
+                    path=".codex/agents/ui-investigator.md",
+                    source="agents/ui-investigator.md",
+                    content="# UI Investigator",
+                ),
+            ],
+        )
+
+        workspace_root = service.scripts_base_dir.parent / "workspace"
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(workspace_root)):
+            results = await service.install_compiled_files("workspace-1", request)
+
+        assert (workspace_root / "AGENTS.md").read_text() == "# Agents"
+        assert (workspace_root / ".codex" / "prompts" / "review-ui.md").read_text() == "# Review UI"
+        assert (workspace_root / ".codex" / "agents" / "ui-investigator.md").read_text() == "# UI Investigator"
+        assert results["claudeMd"].created == ["AGENTS.md"]
+        assert results["slashCommands"].created == [".codex/prompts/review-ui.md"]
+        assert results["subagents"].created == [".codex/agents/ui-investigator.md"]
+
+    @pytest.mark.asyncio
+    async def test_install_compiled_files_rejects_path_traversal(self, service):
+        request = InstallPlanRequest(
+            target="gemini",
+            files=[
+                CompiledTemplateFileInstallItem(
+                    path="../escape.md",
+                    source="agents.md",
+                    content="# bad",
+                )
+            ],
+        )
+
+        workspace_root = service.scripts_base_dir.parent / "workspace"
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(workspace_root)):
+            results = await service.install_compiled_files("workspace-1", request)
+
+        assert results["files"].failed == ["../escape.md"]
+
+
+class TestTargetAwareFallbacks:
+    """Test target-aware install fallback behavior."""
+
+    @pytest.mark.asyncio
+    async def test_install_target_output_style_injects_into_agents_md(self, service):
+        workspace_root = service.scripts_base_dir.parent / "workspace"
+        agents_md_path = workspace_root / "AGENTS.md"
+        agents_md_path.parent.mkdir(parents=True, exist_ok=True)
+        agents_md_path.write_text("# Base Agents", encoding="utf-8")
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(workspace_root)):
+            success, results = await service.install_target_output_style(
+                "workspace-1",
+                "codex",
+                [{"fileName": "output-style.yaml", "content": "Keep answers concise."}],
+            )
+
+        assert success is True
+        assert results.updated == ["AGENTS.md"]
+        assert "## Output Style" in agents_md_path.read_text(encoding="utf-8")
+        assert "Keep answers concise." in agents_md_path.read_text(encoding="utf-8")
+
+    @pytest.mark.asyncio
+    async def test_install_target_hooks_skip_for_codex(self, service):
+        success, results = await service.install_target_hooks(
+            "workspace-1",
+            "codex",
+            {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "echo hi"}]}]},
+        )
+
+        assert success is True
+        assert results.created == []
+        assert results.updated == []
+        assert results.failed == []
 
 
 class TestSubagentsInstallation:

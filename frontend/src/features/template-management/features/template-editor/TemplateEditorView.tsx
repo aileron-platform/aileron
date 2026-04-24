@@ -33,7 +33,7 @@ export const TemplateEditorView: React.FC<TemplateEditorViewProps> = ({ mode }) 
   const lastTemplateKeyRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState('basic');
 
-  const { isSaving, saveBasicInfo } = useTemplateApi({
+  const { isSaving, saveCanonicalTemplate } = useTemplateApi({
     templateId,
     onSuccess: reloadFromSource
   });
@@ -70,10 +70,8 @@ export const TemplateEditorView: React.FC<TemplateEditorViewProps> = ({ mode }) 
   }, [setValues]);
 
   const handleSave = useCallback(async () => {
-    if (activeTab === 'basic') {
-      await saveBasicInfo(values);
-    }
-  }, [activeTab, values, saveBasicInfo]);
+    await saveCanonicalTemplate(values);
+  }, [values, saveCanonicalTemplate]);
 
   const notReady = (mode === 'edit' && !template) || (mode === 'create' && categories.length === 0);
   if (isLoading || notReady) {
@@ -96,12 +94,10 @@ export const TemplateEditorView: React.FC<TemplateEditorViewProps> = ({ mode }) 
         icon={PenSquare}
         actions={
           <div className="flex items-center gap-2">
-            {activeTab === 'basic' && (
-              <Button onClick={handleSave} disabled={isSaving} size="sm" className="h-7 px-2 text-xs">
-                <Save className="mr-1.5 h-3.5 w-3.5" />
-                {isSaving ? t('template.editor.toolbar.saving') : t('template.editor.toolbar.save')}
-              </Button>
-            )}
+            <Button onClick={handleSave} disabled={isSaving} size="sm" className="h-7 px-2 text-xs">
+              <Save className="mr-1.5 h-3.5 w-3.5" />
+              {isSaving ? t('template.editor.toolbar.saving') : t('template.editor.toolbar.save')}
+            </Button>
             <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => navigate('../..')}>
               <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> {t('template.editor.toolbar.back')}
             </Button>

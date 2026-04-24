@@ -14,6 +14,7 @@ from app.models import (
     Template,
     TemplateCategory,
     TemplateCategoryListResponse,
+    TemplateCanonicalUpdate,
     TemplateCreate,
     TemplateFeatureListResponse,
     TemplateListResponse,
@@ -60,12 +61,12 @@ DEFAULT_TEMPLATE_CATEGORY_METADATA = {
     },
 }
 
-# 轉換 DB 的 snake_case feature_key 到前端使用的 camelCase 鍵
+# canonical feature key 正規化
 _CAMEL_MAP = {
-    "slash_commands": "slashCommands",
-    "claude_md": "claudeMd",
-    "sub_agents": "subAgents",
-    "output_styles": "outputStyles",
+    "commands": "commands",
+    "agentsMd": "agentsMd",
+    "agents": "agents",
+    "outputStyle": "outputStyle",
 }
 
 
@@ -266,6 +267,30 @@ async def update_template(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=translate("templates.not_found")
+        )
+    return template
+
+
+@router.put(
+    "/{template_id}/canonical",
+    response_model=Template,
+    summary="更新 canonical 模板",
+    responses=build_responses(401, 404, 422, 500),
+)
+async def update_canonical_template(
+    request: Request,
+    template_id: str,
+    payload: TemplateCanonicalUpdate,
+    current_user_id: str = Depends(get_current_user_id),
+    service: TemplateService = Depends(get_template_service),
+) -> Template:
+    """以 canonical template tree 更新模板。"""
+    template = service.update_canonical(template_id, payload)
+    if not template:
+        translate = request.state.translate
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=translate("templates.not_found"),
         )
     return template
 

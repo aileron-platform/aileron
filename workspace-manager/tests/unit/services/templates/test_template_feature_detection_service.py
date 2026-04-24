@@ -79,8 +79,8 @@ def mock_features():
             is_active=True
         ),
         TemplateFeature(
-            id="feat-slash-commands",
-            feature_key="slash_commands",
+            id="feat-commands",
+            feature_key="commands",
             feature_name="Slash Commands",
             description="Slash Commands",
             sort_order=2,
@@ -165,8 +165,8 @@ class TestFeatureDetection:
         # Assert
         assert result["mcp"] is False
 
-    def test_detect_slash_commands_exists(self, feature_detection_service, tmp_path):
-        """測試：Slash Commands 目錄有檔案時偵測成功"""
+    def test_detect_commands_exists(self, feature_detection_service, tmp_path):
+        """測試：Commands 目錄有檔案時偵測成功"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
@@ -178,10 +178,10 @@ class TestFeatureDetection:
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["slashCommands"] is True
+        assert result["commands"] is True
 
-    def test_detect_slash_commands_empty_directory(self, feature_detection_service, tmp_path):
-        """測試：Slash Commands 目錄為空時偵測失敗"""
+    def test_detect_commands_empty_directory(self, feature_detection_service, tmp_path):
+        """測試：Commands 目錄為空時偵測失敗"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
@@ -192,9 +192,9 @@ class TestFeatureDetection:
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["slashCommands"] is False
+        assert result["commands"] is False
 
-    def test_detect_slash_commands_only_gitkeep(self, feature_detection_service, tmp_path):
+    def test_detect_commands_only_gitkeep(self, feature_detection_service, tmp_path):
         """測試：只有 .gitkeep 的目錄偵測失敗"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
@@ -207,7 +207,7 @@ class TestFeatureDetection:
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["slashCommands"] is False
+        assert result["commands"] is False
 
     def test_detect_hooks_exists(self, feature_detection_service, tmp_path):
         """測試：Hooks 檔案存在時偵測成功"""
@@ -225,36 +225,36 @@ class TestFeatureDetection:
         # Assert
         assert result["hooks"] is True
 
-    def test_detect_claudemd_exists(self, feature_detection_service, tmp_path):
-        """測試：CLAUDE.md 存在時偵測成功"""
+    def test_detect_agents_md_exists(self, feature_detection_service, tmp_path):
+        """測試：AGENTS.md 存在時偵測成功"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
-        claude_md = template_dir / "CLAUDE.md"
-        claude_md.write_text("# Claude Instructions\n\nSome content here.")
+        agents_md = template_dir / "agents.md"
+        agents_md.write_text("# Agent Instructions\n\nSome content here.")
 
         # Act
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["claudeMd"] is True
+        assert result["agentsMd"] is True
 
-    def test_detect_claudemd_too_small(self, feature_detection_service, tmp_path):
-        """測試：CLAUDE.md 太小時偵測失敗"""
+    def test_detect_agents_md_too_small(self, feature_detection_service, tmp_path):
+        """測試：AGENTS.md 太小時偵測失敗"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
-        claude_md = template_dir / "CLAUDE.md"
-        claude_md.write_text("abc")  # < 10 bytes
+        agents_md = template_dir / "agents.md"
+        agents_md.write_text("abc")  # < 10 bytes
 
         # Act
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["claudeMd"] is False
+        assert result["agentsMd"] is False
 
-    def test_detect_subagents_exists(self, feature_detection_service, tmp_path):
-        """測試：SubAgents 目錄有檔案時偵測成功"""
+    def test_detect_agents_exists(self, feature_detection_service, tmp_path):
+        """測試：Agents 目錄有檔案時偵測成功"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
@@ -266,22 +266,21 @@ class TestFeatureDetection:
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["subAgents"] is True
+        assert result["agents"] is True
 
-    def test_detect_output_styles_exists(self, feature_detection_service, tmp_path):
-        """測試：Output Styles 目錄有檔案時偵測成功"""
+    def test_detect_output_style_exists(self, feature_detection_service, tmp_path):
+        """測試：Output Style 檔案存在時偵測成功"""
         # Arrange
         template_dir = tmp_path / "plugins" / "test-template"
         template_dir.mkdir(parents=True)
-        styles_dir = template_dir / "output-styles"
-        styles_dir.mkdir()
-        (styles_dir / "style.md").write_text("# Style")
+        output_style = template_dir / "output-style.yaml"
+        output_style.write_text("tone: concise\n", encoding="utf-8")
 
         # Act
         result = feature_detection_service.detect_features("test-template")
 
         # Assert
-        assert result["outputStyles"] is True
+        assert result["outputStyle"] is True
 
     def test_detect_scripts_exists(self, feature_detection_service, tmp_path):
         """測試：Scripts 目錄有檔案時偵測成功"""
@@ -354,9 +353,7 @@ class TestFeatureDetection:
         (agents_dir / "agent.md").write_text("# Agent")
 
         # Output Styles
-        styles_dir = template_dir / "output-styles"
-        styles_dir.mkdir()
-        (styles_dir / "style.md").write_text("# Style")
+        (template_dir / "output-style.yaml").write_text("tone: concise\n", encoding="utf-8")
 
         # Scripts
         scripts_dir = template_dir / "scripts"

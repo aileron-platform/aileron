@@ -4,15 +4,15 @@
 
 export type TemplateFeatureKey =
   | 'mcp'
-  | 'slashCommands'
+  | 'commands'
   | 'hooks'
-  | 'claudeMd'
-  | 'subAgents'
-  | 'outputStyles'
+  | 'agentsMd'
+  | 'agents'
+  | 'outputStyle'
   | 'skills'
   | 'scripts';
 
-export type CliType = 'claude-code' | 'codex' | 'gemini';
+export type CliType = 'claude-code' | 'codex' | 'gemini' | 'opencode';
 
 export type TemplateStatus = 'draft' | 'released';
 
@@ -28,24 +28,24 @@ export interface TemplateAuthor {
 // 功能與 CLI 類型的關聯（多對多）：集中管理，供前端 UI 與邏輯使用
 export const FEATURE_DISPLAY_ORDER: TemplateFeatureKey[] = [
   'mcp',
-  'slashCommands',
+  'commands',
   'hooks',
-  'claudeMd',
-  'subAgents',
-  'outputStyles',
+  'agentsMd',
+  'agents',
+  'outputStyle',
   'skills',
   'scripts',
 ];
 
 export const FEATURE_CLI_MAP: Record<TemplateFeatureKey, CliType[]> = {
-  mcp: ['claude-code', 'codex', 'gemini'],
-  slashCommands: ['claude-code', 'codex', 'gemini'],
-  hooks: ['claude-code'],
-  claudeMd: ['claude-code', 'codex', 'gemini'], // Codex/Gemini 以 Agent.md 呈現
-  subAgents: ['claude-code'],
-  outputStyles: ['claude-code'],
-  skills: ['claude-code', 'codex', 'gemini'],
-  scripts: ['claude-code', 'codex', 'gemini'],
+  mcp: ['claude-code', 'codex', 'gemini', 'opencode'],
+  commands: ['claude-code', 'codex', 'gemini', 'opencode'],
+  hooks: ['claude-code', 'codex', 'gemini', 'opencode'],
+  agentsMd: ['claude-code', 'codex', 'gemini', 'opencode'],
+  agents: ['claude-code', 'codex', 'gemini', 'opencode'],
+  outputStyle: ['claude-code', 'codex', 'gemini', 'opencode'],
+  skills: ['claude-code', 'codex', 'gemini', 'opencode'],
+  scripts: ['claude-code', 'codex', 'gemini', 'opencode'],
 };
 
 export function listFeaturesForCli(cli: 'all' | CliType): TemplateFeatureKey[] {
@@ -84,7 +84,7 @@ export interface TemplateMcpServer {
   headers?: Record<string, string>; // HTTP 標頭，僅在 HTTP/SSE 類型時使用
 }
 
-export interface TemplateSlashCommand {
+export interface TemplateCommand {
   id: string;
   fileName: string;
   content: string;
@@ -102,7 +102,7 @@ export interface TemplateHook {
   timeout?: number;
 }
 
-export interface TemplateSubAgent {
+export interface TemplateAgent {
   id: string;
   fileName: string;
   content: string;
@@ -118,11 +118,11 @@ export interface TemplateOutputStyle {
 
 export interface TemplateFeatureFlags {
   hasMcp: boolean;
-  hasSlashCommands: boolean;
+  hasCommands: boolean;
   hasHooks: boolean;
-  hasClaudeMd: boolean;
-  hasSubAgents: boolean;
-  hasOutputStyles: boolean;
+  hasAgentsMd: boolean;
+  hasAgents: boolean;
+  hasOutputStyle: boolean;
   hasSkills: boolean;
   hasScripts: boolean;
 }
@@ -139,14 +139,14 @@ export interface Template {
   createdAt: string;
   updatedAt?: string;
   documentation?: string;
-  claudeMd?: string;
+  agentsMd?: string;
   isActive?: boolean;
   initCommands?: string;
   mcpServers: TemplateMcpServer[];
-  slashCommands: TemplateSlashCommand[];
+  commands: TemplateCommand[];
   hooks: TemplateHook[];
-  subAgents: TemplateSubAgent[];
-  outputStyles: TemplateOutputStyle[];
+  agents: TemplateAgent[];
+  outputStyle: TemplateOutputStyle[];
   skills: TemplateFileNode[];
   scripts: TemplateFileNode[];
   categoryId?: string;
@@ -158,22 +158,22 @@ export interface Template {
 
 export interface TemplateInstallOptions {
   mcp: boolean;
-  slashCommands: boolean;
+  commands: boolean;
   hooks: boolean;
-  claudeMd: boolean;
-  subAgents: boolean;
-  outputStyles: boolean;
+  agentsMd: boolean;
+  agents: boolean;
+  outputStyle: boolean;
   skills: boolean;
   scripts: boolean;
 }
 
 export const TEMPLATE_INSTALLABLE_FEATURE_KEYS: TemplateFeatureKey[] = [
   'mcp',
-  'slashCommands',
+  'commands',
   'hooks',
-  'claudeMd',
-  'subAgents',
-  'outputStyles',
+  'agentsMd',
+  'agents',
+  'outputStyle',
   'skills',
   'scripts',
 ];

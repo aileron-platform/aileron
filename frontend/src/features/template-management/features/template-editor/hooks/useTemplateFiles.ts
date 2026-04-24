@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/shared/components/ui/use-toast';
 import {
-  getSlashCommandsFiles,
-  getSlashCommandFile,
-  createSlashCommandFile,
-  updateSlashCommandFile,
-  deleteSlashCommandFile,
-  getSubAgentsFiles,
-  getSubAgentFile,
-  createSubAgentFile,
-  updateSubAgentFile,
-  deleteSubAgentFile,
+  getCommandsFiles,
+  getCommandFile,
+  createCommandFile,
+  updateCommandFile,
+  deleteCommandFile,
+  getAgentsFiles,
+  getAgentFile,
+  createAgentFile,
+  updateAgentFile,
+  deleteAgentFile,
 } from '@/shared/services/templateApi';
-import type { SlashCommandFormValue, SubAgentFormValue } from '../formTypes';
+import type { CommandFormValue, AgentFormValue } from '../formTypes';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 const generateLocalId = () => `local-${Math.random().toString(36).slice(2, 10)}`;
@@ -21,25 +21,25 @@ export const useTemplateFiles = (templateId: string) => {
   const { t } = useI18n();
   const { toast } = useToast();
 
-  // SlashCommands 狀態
-  const [slashCommands, setSlashCommands] = useState<SlashCommandFormValue[]>([]);
-  const [slashCommandsLoading, setSlashCommandsLoading] = useState(false);
-  const [slashCommandsError, setSlashCommandsError] = useState<string | null>(null);
+  // Commands 狀態
+  const [commands, setCommands] = useState<CommandFormValue[]>([]);
+  const [commandsLoading, setCommandsLoading] = useState(false);
+  const [commandsError, setCommandsError] = useState<string | null>(null);
 
-  // SubAgents 狀態
-  const [subAgents, setSubAgents] = useState<SubAgentFormValue[]>([]);
-  const [subAgentsLoading, setSubAgentsLoading] = useState(false);
-  const [subAgentsError, setSubAgentsError] = useState<string | null>(null);
+  // Agents 狀態
+  const [agents, setAgents] = useState<AgentFormValue[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
 
-  // 載入 SlashCommands 檔案列表
-  const loadSlashCommands = async () => {
+  // 載入 Commands 檔案列表
+  const loadCommands = async () => {
     if (!templateId) return;
 
-    setSlashCommandsLoading(true);
-    setSlashCommandsError(null);
+    setCommandsLoading(true);
+    setCommandsError(null);
 
     try {
-      const response = await getSlashCommandsFiles(templateId);
+      const response = await getCommandsFiles(templateId);
       if (response.success && response.data) {
         const commands = response.data.map(file => ({
           localId: generateLocalId(),
@@ -48,32 +48,32 @@ export const useTemplateFiles = (templateId: string) => {
           size: file.size,
           lastModified: file.lastModified,
         }));
-        setSlashCommands(commands);
+        setCommands(commands);
       } else {
-        setSlashCommandsError(response.error || t('common.template.errors.loadFailed'));
+        setCommandsError(response.error || t('common.template.errors.loadFailed'));
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.loadFailed');
-      setSlashCommandsError(errorMessage);
+      setCommandsError(errorMessage);
       toast({
         title: t('common.template.errors.loadFailed'),
-        description: '無法載入 Slash Commands 檔案列表。',
+        description: t('template.editor.commands.sidebar.empty'),
         variant: 'destructive',
       });
     } finally {
-      setSlashCommandsLoading(false);
+      setCommandsLoading(false);
     }
   };
 
-  // 載入 SubAgents 檔案列表
-  const loadSubAgents = async () => {
+  // 載入 Agents 檔案列表
+  const loadAgents = async () => {
     if (!templateId) return;
 
-    setSubAgentsLoading(true);
-    setSubAgentsError(null);
+    setAgentsLoading(true);
+    setAgentsError(null);
 
     try {
-      const response = await getSubAgentsFiles(templateId);
+      const response = await getAgentsFiles(templateId);
       if (response.success && response.data) {
         const agents = response.data.map(file => ({
           localId: generateLocalId(),
@@ -82,86 +82,86 @@ export const useTemplateFiles = (templateId: string) => {
           size: file.size,
           lastModified: file.lastModified,
         }));
-        setSubAgents(agents);
+        setAgents(agents);
       } else {
-        setSubAgentsError(response.error || t('common.template.errors.loadFailed'));
+        setAgentsError(response.error || t('common.template.errors.loadFailed'));
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.loadFailed');
-      setSubAgentsError(errorMessage);
+      setAgentsError(errorMessage);
       toast({
         title: t('common.template.errors.loadFailed'),
-        description: '無法載入 SubAgents 檔案列表。',
+        description: t('template.editor.agents.sidebar.empty'),
         variant: 'destructive',
       });
     } finally {
-      setSubAgentsLoading(false);
+      setAgentsLoading(false);
     }
   };
 
-  // 載入特定 SlashCommand 檔案內容
-  const loadSlashCommandContent = async (fileName: string): Promise<string> => {
+  // 載入特定 Command 檔案內容
+  const loadCommandContent = async (fileName: string): Promise<string> => {
     if (!templateId) return '';
 
     try {
-      const response = await getSlashCommandFile(templateId, fileName);
+      const response = await getCommandFile(templateId, fileName);
       if (response.success && response.data) {
         return response.data.content;
       } else {
-        throw new Error(response.error || '載入檔案內容失敗');
+        throw new Error(response.error || t('common.template.errors.loadFailed'));
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '載入檔案內容失敗';
+      const errorMessage = error instanceof Error ? error.message : t('common.template.errors.loadFailed');
       toast({
         title: t('common.template.errors.loadFailed'),
-        description: `無法載入 Slash Command「${fileName}」的內容。`,
+        description: `${t('template.common.features.commands')}「${fileName}」${t('common.template.errors.loadFailed')}`,
         variant: 'destructive',
       });
       throw error;
     }
   };
 
-  // 載入特定 SubAgent 檔案內容
-  const loadSubAgentContent = async (fileName: string): Promise<string> => {
+  // 載入特定 Agent 檔案內容
+  const loadAgentContent = async (fileName: string): Promise<string> => {
     if (!templateId) return '';
 
     try {
-      const response = await getSubAgentFile(templateId, fileName);
+      const response = await getAgentFile(templateId, fileName);
       if (response.success && response.data) {
         return response.data.content;
       } else {
-        throw new Error(response.error || '載入檔案內容失敗');
+        throw new Error(response.error || t('common.template.errors.loadFailed'));
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '載入檔案內容失敗';
+      const errorMessage = error instanceof Error ? error.message : t('common.template.errors.loadFailed');
       toast({
         title: t('common.template.errors.loadFailed'),
-        description: `無法載入 SubAgent「${fileName}」的內容。`,
+        description: `${t('template.common.features.agents')}「${fileName}」${t('common.template.errors.loadFailed')}`,
         variant: 'destructive',
       });
       throw error;
     }
   };
 
-  // 建立 SlashCommand 檔案
-  const createSlashCommand = async (fileName: string, content: string) => {
+  // 建立 Command 檔案
+  const createCommand = async (fileName: string, content: string) => {
     if (!templateId) return false;
 
     try {
-      const response = await createSlashCommandFile(templateId, { fileName, content });
+      const response = await createCommandFile(templateId, { fileName, content });
       if (response.success) {
-        const newCommand: SlashCommandFormValue = {
+        const newCommand: CommandFormValue = {
           localId: generateLocalId(),
           fileName,
           content,
           size: response.data?.size || content.length,
           lastModified: response.data?.lastModified || new Date().toISOString(),
         };
-        setSlashCommands(prev => [...prev, newCommand]);
+        setCommands(prev => [...prev, newCommand]);
 
         toast({
-          title: '建立成功',
-          description: `Slash Command「${fileName}」已建立。`,
+          title: t('template.editor.commands.dialog.actions.create'),
+          description: t('template.detail.commands.empty.title') + `：${fileName}`,
         });
 
         return true;
@@ -172,21 +172,21 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.createFailed');
       toast({
         title: t('common.template.errors.createFailed'),
-        description: `無法建立 Slash Command「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.commands')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // 更新 SlashCommand 檔案
-  const updateSlashCommand = async (fileName: string, content: string) => {
+  // 更新 Command 檔案
+  const updateCommand = async (fileName: string, content: string) => {
     if (!templateId) return false;
 
     try {
-      const response = await updateSlashCommandFile(templateId, fileName, { content });
+      const response = await updateCommandFile(templateId, fileName, { content });
       if (response.success) {
-        setSlashCommands(prev =>
+        setCommands(prev =>
           prev.map(cmd =>
             cmd.fileName === fileName
               ? {
@@ -200,8 +200,8 @@ export const useTemplateFiles = (templateId: string) => {
         );
 
         toast({
-          title: '更新成功',
-          description: `Slash Command「${fileName}」已更新。`,
+          title: t('template.editor.commands.dialog.actions.save'),
+          description: `${t('template.common.features.commands')}「${fileName}」已更新。`,
         });
 
         return true;
@@ -212,24 +212,24 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.updateFailed');
       toast({
         title: t('common.template.errors.updateFailed'),
-        description: `無法更新 Slash Command「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.commands')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // 刪除 SlashCommand 檔案
-  const deleteSlashCommand = async (fileName: string) => {
+  // 刪除 Command 檔案
+  const deleteCommand = async (fileName: string) => {
     if (!templateId) return false;
 
     try {
-      await deleteSlashCommandFile(templateId, fileName);
-      setSlashCommands(prev => prev.filter(cmd => cmd.fileName !== fileName));
+      await deleteCommandFile(templateId, fileName);
+      setCommands(prev => prev.filter(cmd => cmd.fileName !== fileName));
 
       toast({
-        title: '刪除成功',
-        description: `Slash Command「${fileName}」已刪除。`,
+        title: t('common.delete'),
+        description: `${t('template.common.features.commands')}「${fileName}」已刪除。`,
       });
 
       return true;
@@ -237,32 +237,32 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.deleteFailed');
       toast({
         title: t('common.template.errors.deleteFailed'),
-        description: `無法刪除 Slash Command「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.commands')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // 建立 SubAgent 檔案
-  const createSubAgent = async (fileName: string, content: string) => {
+  // 建立 Agent 檔案
+  const createAgent = async (fileName: string, content: string) => {
     if (!templateId) return false;
 
     try {
-      const response = await createSubAgentFile(templateId, { fileName, content });
+      const response = await createAgentFile(templateId, { fileName, content });
       if (response.success) {
-        const newAgent: SubAgentFormValue = {
+        const newAgent: AgentFormValue = {
           localId: generateLocalId(),
           fileName,
           content,
           size: response.data?.size || content.length,
           lastModified: response.data?.lastModified || new Date().toISOString(),
         };
-        setSubAgents(prev => [...prev, newAgent]);
+        setAgents(prev => [...prev, newAgent]);
 
         toast({
-          title: '建立成功',
-          description: `SubAgent「${fileName}」已建立。`,
+          title: t('template.editor.agents.dialog.actions.create'),
+          description: t('template.editor.agents.toasts.createSuccess.description', { name: fileName }),
         });
 
         return true;
@@ -273,21 +273,21 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.createFailed');
       toast({
         title: t('common.template.errors.createFailed'),
-        description: `無法建立 SubAgent「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.agents')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // 更新 SubAgent 檔案
-  const updateSubAgent = async (fileName: string, content: string) => {
+  // 更新 Agent 檔案
+  const updateAgent = async (fileName: string, content: string) => {
     if (!templateId) return false;
 
     try {
-      const response = await updateSubAgentFile(templateId, fileName, { content });
+      const response = await updateAgentFile(templateId, fileName, { content });
       if (response.success) {
-        setSubAgents(prev =>
+        setAgents(prev =>
           prev.map(agent =>
             agent.fileName === fileName
               ? {
@@ -301,8 +301,8 @@ export const useTemplateFiles = (templateId: string) => {
         );
 
         toast({
-          title: '更新成功',
-          description: `SubAgent「${fileName}」已更新。`,
+          title: t('template.editor.agents.dialog.actions.save'),
+          description: t('template.editor.agents.toasts.updateSuccess.description', { name: fileName }),
         });
 
         return true;
@@ -313,24 +313,24 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.updateFailed');
       toast({
         title: t('common.template.errors.updateFailed'),
-        description: `無法更新 SubAgent「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.agents')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
     }
   };
 
-  // 刪除 SubAgent 檔案
-  const deleteSubAgent = async (fileName: string) => {
+  // 刪除 Agent 檔案
+  const deleteAgent = async (fileName: string) => {
     if (!templateId) return false;
 
     try {
-      await deleteSubAgentFile(templateId, fileName);
-      setSubAgents(prev => prev.filter(agent => agent.fileName !== fileName));
+      await deleteAgentFile(templateId, fileName);
+      setAgents(prev => prev.filter(agent => agent.fileName !== fileName));
 
       toast({
-        title: '刪除成功',
-        description: `SubAgent「${fileName}」已刪除。`,
+        title: t('common.delete'),
+        description: t('template.editor.agents.toasts.deleteSuccess.description', { name: fileName }),
       });
 
       return true;
@@ -338,7 +338,7 @@ export const useTemplateFiles = (templateId: string) => {
       const errorMessage = error instanceof Error ? error.message : t('common.template.errors.deleteFailed');
       toast({
         title: t('common.template.errors.deleteFailed'),
-        description: `無法刪除 SubAgent「${fileName}」：${errorMessage}`,
+        description: `${t('template.common.features.agents')}「${fileName}」：${errorMessage}`,
         variant: 'destructive',
       });
       return false;
@@ -348,30 +348,30 @@ export const useTemplateFiles = (templateId: string) => {
   // 初始化載入
   useEffect(() => {
     if (templateId) {
-      loadSlashCommands();
-      loadSubAgents();
+      loadCommands();
+      loadAgents();
     }
   }, [templateId]);
 
   return {
-    // SlashCommands
-    slashCommands,
-    slashCommandsLoading,
-    slashCommandsError,
-    loadSlashCommands,
-    loadSlashCommandContent,
-    createSlashCommand,
-    updateSlashCommand,
-    deleteSlashCommand,
+    // Commands
+    commands,
+    commandsLoading,
+    commandsError,
+    loadCommands,
+    loadCommandContent,
+    createCommand,
+    updateCommand,
+    deleteCommand,
 
-    // SubAgents
-    subAgents,
-    subAgentsLoading,
-    subAgentsError,
-    loadSubAgents,
-    loadSubAgentContent,
-    createSubAgent,
-    updateSubAgent,
-    deleteSubAgent,
+    // Agents
+    agents,
+    agentsLoading,
+    agentsError,
+    loadAgents,
+    loadAgentContent,
+    createAgent,
+    updateAgent,
+    deleteAgent,
   };
 };

@@ -4,7 +4,7 @@ import { useTemplateManagementContext } from '../../../providers/TemplateManagem
 import { OutputStyleViewer } from '@/shared/components/template/OutputStyleViewer';
 import { adaptTemplateOutputStyles } from '@/shared/components/template/adapters';
 
-export const OutputStylesTabContent: React.FC = () => {
+export const OutputStyleTabContent: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const { templates, layout, setTriPrimaryOpen, setTriPrimaryWidth } = useTemplateManagementContext();
 
@@ -14,7 +14,7 @@ export const OutputStylesTabContent: React.FC = () => {
     return null;
   }
 
-  const adaptedStyles = adaptTemplateOutputStyles(template.outputStyles || []);
+  const adaptedStyles = adaptTemplateOutputStyles(template.outputStyle || []);
 
   return (
     <OutputStyleViewer
@@ -28,5 +28,4 @@ export const OutputStylesTabContent: React.FC = () => {
   );
 };
 
-export default OutputStylesTabContent;
-
+export default OutputStyleTabContent;

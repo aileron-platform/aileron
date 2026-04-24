@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
 import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
-import { SubAgentDialog } from '@/shared/components/dialogs';
+import { AgentDialog } from '@/shared/components/dialogs';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 
@@ -29,7 +29,7 @@ const SubagentsPage: React.FC = () => {
       isLoading={subagents.loading}
       error={subagents.error}
       onRefresh={subagents.refresh}
-      dialogComponent={SubAgentDialog}
+      dialogComponent={AgentDialog}
       config={{
         metaKey: 'subagents',
         createButtonLabel: t('workspace.claudeCode.subagents.actions.create'),

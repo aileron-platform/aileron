@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class TemplateBaseService:
     """模板服務基礎類別 - 提供共用的路徑管理和驗證方法"""
 
-    MAX_FILE_SIZE_BYTES = 1024 * 1024  # SlashCommand/SubAgent 檔案限制 1MB
+    MAX_FILE_SIZE_BYTES = 1024 * 1024  # Command/Agent 檔案限制 1MB
     MAX_TEMPLATE_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 模板檔案限制 10MB
     MAX_UPLOAD_FILES = 50  # 單次最多上傳 50 個檔案
     ALLOWED_EXTENSIONS = {
@@ -37,15 +37,33 @@ class TemplateBaseService:
         self.storage_path = Path(settings.TEMPLATE_STORAGE_PATH)
         # 確保儲存目錄存在
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        # 確保 plugins 目錄存在
+        # 保留 plugins 目錄僅供匯入/舊測試資料使用，不作為主儲存來源
         (self.storage_path / "plugins").mkdir(parents=True, exist_ok=True)
+        # canonical registry templates 目錄
+        (self.storage_path / "templates").mkdir(parents=True, exist_ok=True)
+
+    def _get_registry_templates_dir(self) -> Path:
+        """取得 canonical registry templates 根目錄。"""
+        return self.storage_path / "templates"
+
+    def _get_legacy_templates_dir(self) -> Path:
+        """取得 legacy plugins 根目錄。"""
+        return self.storage_path / "plugins"
 
     def _get_template_dir(self, template_id: str) -> Path:
-        """取得模板目錄路徑（包含 plugins 前綴）"""
-        return self.storage_path / "plugins" / template_id
+        """取得模板目錄路徑，固定使用 canonical registry。"""
+        return self._get_registry_template_dir(template_id)
+
+    def _get_registry_template_dir(self, template_id: str) -> Path:
+        """取得 canonical registry 模板目錄。"""
+        return self._get_registry_templates_dir() / template_id
+
+    def _resolve_template_dir(self, template_id: str) -> Path:
+        """解析模板目錄，固定使用 canonical registry。"""
+        return self._get_registry_template_dir(template_id)
 
     def _get_plugin_json_path(self, template_id: str) -> Path:
-        """取得 plugin.json 檔案路徑"""
+        """取得 legacy plugin.json 路徑（僅供匯入/相容邏輯使用）"""
         return self._get_template_dir(template_id) / ".claude-plugin" / "plugin.json"
 
     def _get_template(self, template_id: str) -> Optional[TemplateDB]:
@@ -79,7 +97,7 @@ class TemplateBaseService:
 
     def _ensure_directory(self, template_id: str, subdir: str) -> Tuple[Path, bool]:
         """確保模板子目錄存在，回傳目錄路徑與是否新建"""
-        directory = self._get_template_dir(template_id) / subdir
+        directory = self._resolve_template_dir(template_id) / subdir
         created = False
         if not directory.exists():
             directory.mkdir(parents=True, exist_ok=True)
@@ -253,4 +271,3 @@ class TemplateBaseService:
 
 
 __all__ = ["TemplateBaseService"]
-

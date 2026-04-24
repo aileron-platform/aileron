@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import uuid4
+import yaml
 
 from sqlalchemy.orm import Session
 
@@ -50,37 +51,37 @@ class TemplateFeatureDetectionService:
     # Feature 偵測規則定義
     FEATURE_DETECTION_RULES = {
         'mcp': {
-            'path': '.claude-plugin/mcp.json',
-            'type': 'file',
-            'validator': '_validate_mcp_json'
+            'path': 'mcp',
+            'type': 'directory',
+            'validator': '_has_valid_yaml_files'
         },
-        'slashCommands': {
+        'commands': {
             'path': 'commands',
             'type': 'directory',
             'validator': '_has_valid_md_files'
         },
         'hooks': {
-            'path': '.claude-plugin/hooks.json',
-            'type': 'file',
-            'validator': '_validate_hooks_json'
+            'path': 'hooks',
+            'type': 'directory',
+            'validator': '_has_valid_hook_files'
         },
-        'claudeMd': {
-            'path': 'CLAUDE.md',
+        'agentsMd': {
+            'path': 'agents.md',
             'type': 'file',
-            'validator': '_validate_claude_md'
+            'validator': '_validate_agents_md'
         },
-        'subAgents': {
+        'agents': {
             'path': 'agents',
             'type': 'directory',
             'validator': '_has_valid_md_files'
         },
-        'outputStyles': {
-            'path': 'output-styles',
-            'type': 'directory',
-            'validator': '_has_valid_md_files'
+        'outputStyle': {
+            'path': 'output-style.yaml',
+            'type': 'file',
+            'validator': '_validate_output_style_yaml'
         },
         'scripts': {
-            'path': 'scripts',
+            'path': 'resources/scripts',
             'type': 'directory',
             'validator': '_has_valid_files_in_directory'
         },
@@ -113,7 +114,7 @@ class TemplateFeatureDetectionService:
         Returns:
             Dict[str, bool]: Feature key -> 是否存在的映射
         """
-        template_dir = self.template_base_service._get_template_dir(template_id)
+        template_dir = self.template_base_service._resolve_template_dir(template_id)
 
         if not template_dir.exists():
             logger.warning(f"Template directory not found: {template_dir}")
@@ -305,15 +306,42 @@ class TemplateFeatureDetectionService:
             logger.debug(f"Hooks JSON validation failed for {path}: {e}")
             return False
 
-    def _validate_claude_md(self, path: Path) -> bool:
-        """驗證 CLAUDE.md 有效性
+    def _has_valid_yaml_files(self, directory: Path) -> bool:
+        """目錄下至少存在一個合法 YAML 檔案。"""
+        try:
+            return any(path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir())
+        except Exception as e:
+            logger.debug(f"YAML directory validation failed for {directory}: {e}")
+            return False
+
+    def _has_valid_hook_files(self, directory: Path) -> bool:
+        """hooks 目錄至少有一個合法 hook YAML，忽略 scripts 子目錄。"""
+        try:
+            return any(
+                path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir()
+            )
+        except Exception as e:
+            logger.debug(f"Hook directory validation failed for {directory}: {e}")
+            return False
+
+    def _validate_output_style_yaml(self, path: Path) -> bool:
+        """驗證 canonical output-style.yaml。"""
+        try:
+            data = json.loads(json.dumps(yaml.safe_load(path.read_text(encoding="utf-8")) or {}))
+            return isinstance(data, dict)
+        except Exception as e:
+            logger.debug(f"Output style YAML validation failed for {path}: {e}")
+            return False
+
+    def _validate_agents_md(self, path: Path) -> bool:
+        """驗證 AGENTS.md 有效性
 
         檢查檔案大小 > 10 bytes（非空檔案）
         """
         try:
             return path.stat().st_size > 10
         except OSError as e:
-            logger.debug(f"CLAUDE.md validation failed for {path}: {e}")
+            logger.debug(f"AGENTS.md validation failed for {path}: {e}")
             return False
 
     def _has_valid_md_files(self, directory: Path) -> bool:

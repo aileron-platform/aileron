@@ -17,6 +17,7 @@ import type {
   TemplateWorkspaceTarget,
 } from '@/shared/types/templates';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { getTemplateCompilePreview, type TemplateCompilePreview } from '@/shared/services/templateApi';
 
 export interface TemplateInstallDialogProps {
   open: boolean;
@@ -28,11 +29,11 @@ export interface TemplateInstallDialogProps {
 
 const defaultOptions: TemplateInstallOptions = {
   mcp: true,
-  slashCommands: true,
+  commands: true,
   hooks: true,
-  claudeMd: true,
-  subAgents: true,
-  outputStyles: true,
+  agentsMd: true,
+  agents: true,
+  outputStyle: true,
   scripts: true,
   skills: true,
 };
@@ -46,7 +47,14 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
 }) => {
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
   const [options, setOptions] = useState<TemplateInstallOptions>(defaultOptions);
+  const [preview, setPreview] = useState<TemplateCompilePreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const { t } = useI18n();
+
+  const selectedWorkspaceInfo = useMemo(
+    () => workspaces.find(item => item.id === selectedWorkspace),
+    [selectedWorkspace, workspaces],
+  );
 
   const optionLabels: Array<{
     key: keyof TemplateInstallOptions;
@@ -56,42 +64,42 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
     () => [
       {
         key: 'mcp',
-        label: t('template.center.install.options.mcp.label'),
+        label: t('template.common.features.mcp'),
         description: t('template.center.install.options.mcp.description'),
       },
       {
-        key: 'slashCommands',
-        label: t('template.center.install.options.slashCommands.label'),
-        description: t('template.center.install.options.slashCommands.description'),
+        key: 'commands',
+        label: t('template.common.features.commands'),
+        description: t('template.center.install.options.commands.description'),
       },
       {
         key: 'hooks',
-        label: t('template.center.install.options.hooks.label'),
+        label: t('template.common.features.hooks'),
         description: t('template.center.install.options.hooks.description'),
       },
       {
-        key: 'claudeMd',
-        label: t('template.center.install.options.claudeMd.label'),
-        description: t('template.center.install.options.claudeMd.description'),
+        key: 'agentsMd',
+        label: t('template.common.features.agentsMd'),
+        description: t('template.center.install.options.agentsMd.description'),
       },
       {
-        key: 'subAgents',
-        label: t('template.center.install.options.subAgents.label'),
-        description: t('template.center.install.options.subAgents.description'),
+        key: 'agents',
+        label: t('template.common.features.agents'),
+        description: t('template.center.install.options.agents.description'),
       },
       {
-        key: 'outputStyles',
-        label: t('template.center.install.options.outputStyles.label'),
-        description: t('template.center.install.options.outputStyles.description'),
+        key: 'outputStyle',
+        label: t('template.common.features.outputStyle'),
+        description: t('template.center.install.options.outputStyle.description'),
       },
       {
         key: 'scripts',
-        label: t('template.center.install.options.scripts.label'),
+        label: t('template.common.features.scripts'),
         description: t('template.center.install.options.scripts.description'),
       },
       {
         key: 'skills',
-        label: t('template.center.install.options.skills.label'),
+        label: t('template.common.features.skills'),
         description: t('template.center.install.options.skills.description'),
       },
     ],
@@ -107,16 +115,16 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
       switch (item.key) {
         case 'mcp':
           return flags.hasMcp;
-        case 'slashCommands':
-          return flags.hasSlashCommands;
+        case 'commands':
+          return flags.hasCommands;
         case 'hooks':
           return flags.hasHooks;
-        case 'claudeMd':
-          return flags.hasClaudeMd;
-        case 'subAgents':
-          return flags.hasSubAgents;
-        case 'outputStyles':
-          return flags.hasOutputStyles;
+        case 'agentsMd':
+          return flags.hasAgentsMd;
+        case 'agents':
+          return flags.hasAgents;
+        case 'outputStyle':
+          return flags.hasOutputStyle;
         case 'scripts':
           return flags.hasScripts;
         case 'skills':
@@ -147,15 +155,43 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
     const flags = buildFeatureFlags(template);
     setOptions({
       mcp: flags.hasMcp,
-      slashCommands: flags.hasSlashCommands,
+      commands: flags.hasCommands,
       hooks: flags.hasHooks,
-      claudeMd: flags.hasClaudeMd,
-      subAgents: flags.hasSubAgents,
-      outputStyles: flags.hasOutputStyles,
+      agentsMd: flags.hasAgentsMd,
+      agents: flags.hasAgents,
+      outputStyle: flags.hasOutputStyle,
       scripts: flags.hasScripts,
       skills: flags.hasSkills,
     });
   }, [template]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPreview = async () => {
+      if (!open || !template || !selectedWorkspaceInfo?.cliType) {
+        if (active) {
+          setPreview(null);
+          setPreviewError(null);
+        }
+        return;
+      }
+      try {
+        const result = await getTemplateCompilePreview(template.id, selectedWorkspaceInfo.cliType);
+        if (!active) return;
+        setPreview(result);
+        setPreviewError(null);
+      } catch (error) {
+        if (!active) return;
+        setPreview(null);
+        setPreviewError(error instanceof Error ? error.message : t('template.center.install.preview.loadFailed'));
+      }
+    };
+
+    void loadPreview();
+    return () => {
+      active = false;
+    };
+  }, [open, selectedWorkspaceInfo?.cliType, selectedWorkspace, t, template]);
 
   const handleToggle = (key: keyof TemplateInstallOptions) => {
     setOptions(prev => ({
@@ -194,17 +230,34 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
             </p>
             <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
               <SelectTrigger>
-                <SelectValue placeholder={t('template.center.install.workspace.placeholder')} />
+              {selectedWorkspaceInfo ? (
+                  <span className="flex min-w-0 flex-col items-start justify-center text-left leading-tight">
+                    <span className="block w-full truncate text-sm font-medium text-foreground">
+                      {selectedWorkspaceInfo.name}
+                    </span>
+                    {selectedWorkspaceInfo.description && (
+                      <span className="mt-0.5 block w-full truncate text-xs text-muted-foreground">
+                        {selectedWorkspaceInfo.description}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <SelectValue placeholder={t('template.center.install.workspace.placeholder')} />
+                )}
               </SelectTrigger>
               <SelectContent>
                 {workspaces.map(workspace => (
                   <SelectItem key={workspace.id} value={workspace.id}>
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-foreground">{workspace.name}</span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {workspace.name}
+                      </span>
                       {workspace.description && (
-                        <span className="text-xs text-muted-foreground">{workspace.description}</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {workspace.description}
+                        </span>
                       )}
-                    </div>
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -240,6 +293,81 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">
+                {t('template.center.install.preview.title')}
+              </p>
+              {preview && (
+                <Badge variant="outline" className="text-xs">
+                  {t('template.center.install.preview.summary', {
+                    files: preview.files.length,
+                    warnings: preview.warnings.length,
+                    unsupported: preview.unsupported.length,
+                    degradation: preview.degradationNotes.length,
+                  })}
+                </Badge>
+              )}
+            </div>
+
+            {previewError ? (
+              <div className="rounded border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                {previewError}
+              </div>
+            ) : preview ? (
+              <div className="space-y-2 rounded border border-border bg-muted/20 p-3 text-xs">
+                <div className="font-medium text-foreground">
+                  {t('template.center.install.preview.target', {
+                    target: selectedWorkspaceInfo?.cliType
+                      ? t(`template.common.targets.${selectedWorkspaceInfo.cliType === 'claude-code' ? 'claudeCode' : selectedWorkspaceInfo.cliType}`)
+                      : '',
+                  })}
+                </div>
+                {preview.warnings.length > 0 && (
+                  <div>
+                    <div className="font-medium text-foreground">{t('template.center.install.preview.sections.warnings')}</div>
+                    {preview.warnings.map((item, index) => (
+                      <div key={`${item.feature}-${index}`} className="text-muted-foreground">
+                        {item.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {preview.unsupported.length > 0 && (
+                  <div>
+                    <div className="font-medium text-foreground">{t('template.center.install.preview.sections.unsupported')}</div>
+                    {preview.unsupported.map((item, index) => (
+                      <div key={`${item.feature}-${index}`} className="text-muted-foreground">
+                        {item.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {preview.degradationNotes.length > 0 && (
+                  <div>
+                    <div className="font-medium text-foreground">{t('template.center.install.preview.sections.degradation')}</div>
+                    {preview.degradationNotes.map((item, index) => (
+                      <div key={`${item.feature}-${index}`} className="text-muted-foreground">
+                        {item.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {preview.warnings.length === 0 &&
+                  preview.unsupported.length === 0 &&
+                  preview.degradationNotes.length === 0 && (
+                    <div className="text-muted-foreground">
+                      {t('template.center.install.preview.none')}
+                    </div>
+                  )}
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                {t('template.center.install.preview.loading')}
+              </div>
+            )}
           </div>
         </div>
 

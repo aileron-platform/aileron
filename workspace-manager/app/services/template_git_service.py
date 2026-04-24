@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+import yaml
 from git import Repo, GitCommandError, InvalidGitRepositoryError
 from git.util import Actor
 
@@ -246,8 +247,8 @@ class TemplateGitService:
 
     def _add_to_template_changes(self, file_path: str, template_changes_dict: Dict[str, TemplateChange], change_status: str) -> None:
         """將檔案加入模板變更記錄"""
-        # 判斷是否為 plugins/ 目錄下的檔案
-        if file_path.startswith("plugins/"):
+        # 判斷是否為 templates/ 目錄下的檔案
+        if file_path.startswith("templates/"):
             parts = file_path.split("/")
             if len(parts) < 2:
                 return
@@ -343,6 +344,34 @@ class TemplateGitService:
         except Exception as e:
             logger.error(f"設定遠端倉庫 URL 失敗: {e}")
             return self._operation_result(False, "GIT_REMOTE_URL_SET_FAILED")
+
+    def bootstrap_registry(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
+        """初始化 canonical registry。
+
+        僅當 templates/ 目錄為空時允許 clone，避免隱式覆蓋本地內容。
+        """
+        registry_root = self.template_center_path / "templates"
+        registry_root.mkdir(parents=True, exist_ok=True)
+        if any(registry_root.iterdir()):
+            return self._operation_result(False, "GIT_BOOTSTRAP_TARGET_NOT_EMPTY")
+        return self.clone_repository(url=url, branch=branch)
+
+    def refresh_registry(self, branch: Optional[str] = None) -> GitOperationResult:
+        """更新 canonical registry，要求目前已是 Git 倉庫且無本地變更。"""
+        if not self.is_git_repository():
+            return self._operation_result(False, "GIT_REPO_NOT_FOUND")
+
+        status = self.get_git_status()
+        if status.has_changes:
+            return self._operation_result(False, "GIT_REFRESH_HAS_CHANGES")
+        if not status.remote_url:
+            return self._operation_result(False, "GIT_PUSH_REMOTE_NOT_CONFIGURED")
+
+        return self._pull_or_clone_existing(status.remote_url, branch)
+
+    def publish_registry(self, message: str, branch: Optional[str] = None) -> GitOperationResult:
+        """發布 canonical registry 變更。"""
+        return self.commit_and_push(message=message, branch=branch, push=True)
 
     def get_branches(self) -> GitBranchList:
         """取得分支列表"""
@@ -821,54 +850,36 @@ class TemplateGitService:
             return self._operation_result(False, "GIT_PULL_FAILED")
 
     def scan_and_sync_templates(self) -> GitScanResult:
-        """掃描模板中心目錄中的所有 plugin.json 檔案並返回模板資訊
+        """掃描模板中心目錄中的 canonical 模板並返回模板資訊
 
         Returns:
             (成功與否, 訊息, 掃描到的模板列表)
         """
         try:
             templates = []
-            plugins_dir = self.template_center_path / "plugins"
-
-            if not plugins_dir.exists():
+            templates_root = self._get_scan_templates_root()
+            if templates_root is None:
                 return self._scan_result(False, "GIT_PLUGINS_DIR_MISSING")
 
             # 掃描每個插件目錄
-            for plugin_dir in plugins_dir.iterdir():
+            for plugin_dir in templates_root.iterdir():
                 if not plugin_dir.is_dir():
                     continue
 
-                plugin_json_path = plugin_dir / ".claude-plugin" / "plugin.json"
-
-                if not plugin_json_path.exists():
-                    logger.warning(f"找不到 plugin.json: {plugin_json_path}")
-                    continue
+                template_yaml_path = plugin_dir / "template.yaml"
 
                 try:
-                    # 讀取 plugin.json
-                    with open(plugin_json_path, 'r', encoding='utf-8') as f:
-                        plugin_data = json.load(f)
-
-                    # 提取模板資訊
-                    template_info = {
-                        "id": plugin_data.get("id", plugin_dir.name),
-                        "name": plugin_data.get("name", plugin_dir.name),
-                        "description": plugin_data.get("description", ""),
-                        "version": plugin_data.get("version", "1.0.0"),
-                        "author_name": plugin_data.get("author", {}).get("name", ""),
-                        "author_email": plugin_data.get("author", {}).get("email", ""),
-                        "author_url": plugin_data.get("author", {}).get("url", ""),
-                        "category": plugin_data.get("category", "general"),
-                        "keywords": plugin_data.get("keywords", []),
-                        "cli_type": "claude-code",
-                        "status": "released",
-                    }
+                    if template_yaml_path.exists():
+                        template_info = self._load_canonical_template_info(plugin_dir, template_yaml_path)
+                    else:
+                        logger.warning("找不到 canonical template.yaml: %s", plugin_dir)
+                        continue
 
                     templates.append(template_info)
                     logger.info(f"成功掃描模板: {template_info['id']}")
 
                 except json.JSONDecodeError as e:
-                    logger.error(f"解析 plugin.json 失敗 ({plugin_json_path}): {e}")
+                    logger.error("解析 template.yaml 失敗 (%s): %s", template_yaml_path, e)
                 except Exception as e:
                     logger.error(f"掃描模板失敗 ({plugin_dir.name}): {e}")
 
@@ -880,3 +891,34 @@ class TemplateGitService:
         except Exception as e:
             logger.error(f"掃描模板時發生錯誤: {e}")
             return self._scan_result(False, "GIT_SCAN_FAILED")
+
+    def _get_scan_templates_root(self) -> Optional[Path]:
+        canonical_root = self.template_center_path / "templates"
+        if canonical_root.exists():
+            return canonical_root
+        return None
+
+    def _load_canonical_template_info(self, plugin_dir: Path, template_yaml_path: Path) -> Dict[str, Any]:
+        with open(template_yaml_path, "r", encoding="utf-8") as f:
+            template_data = yaml.safe_load(f) or {}
+
+        metadata = template_data.get("metadata") or {}
+        author = metadata.get("author") or {}
+        keywords = metadata.get("keywords") or []
+        supported_targets = template_data.get("supportedTargets") or []
+        import_metadata = metadata.get("import") or {}
+        cli_type = import_metadata.get("sourceType") or (supported_targets[0] if supported_targets else "claude-code")
+
+        return {
+            "id": template_data.get("id", plugin_dir.name),
+            "name": template_data.get("name", plugin_dir.name),
+            "description": template_data.get("description", ""),
+            "version": template_data.get("version", "1.0.0"),
+            "author_name": author.get("name", ""),
+            "author_email": author.get("email", ""),
+            "author_url": author.get("url", ""),
+            "category": metadata.get("category", "general"),
+            "keywords": keywords if isinstance(keywords, list) else [],
+            "cli_type": cli_type,
+            "status": metadata.get("status", "released"),
+        }

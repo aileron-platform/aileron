@@ -8,14 +8,14 @@ vi.mock('@/shared/hooks/useI18n', () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
         'template.editor.tabs.basic': '基本資訊',
-        'template.editor.tabs.claudeMd': 'Claude.md',
-        'template.editor.tabs.hooks': 'Hooks',
-        'template.editor.tabs.mcp': 'MCP',
-        'template.editor.tabs.subAgents': 'SubAgent',
-        'template.editor.tabs.slashCommands': 'Slash Commands',
-        'template.editor.tabs.outputStyles': 'Output Styles',
-        'template.editor.tabs.skills': 'Skills',
-        'template.editor.tabs.scripts': 'Scripts',
+        'template.common.features.agentsMd': 'AGENTS.md',
+        'template.common.features.hooks': 'Hooks',
+        'template.common.features.mcp': 'MCP',
+        'template.common.features.agents': 'Agents',
+        'template.common.features.commands': 'Commands',
+        'template.common.features.outputStyle': 'Output Style',
+        'template.common.features.skills': 'Skills',
+        'template.common.features.scripts': 'Scripts',
       };
       return translations[key] ?? key;
     },
@@ -30,7 +30,7 @@ vi.mock('./sections/McpServersSection', () => ({
   default: () => <div>mcp-section</div>,
 }));
 
-vi.mock('./sections/SlashCommandsSection', () => ({
+vi.mock('./sections/CommandsSection', () => ({
   default: () => <div>slash-section</div>,
 }));
 
@@ -38,11 +38,11 @@ vi.mock('./sections/HooksSection', () => ({
   default: () => <div>hooks-section</div>,
 }));
 
-vi.mock('./sections/SubAgentsSection', () => ({
+vi.mock('./sections/AgentsSection', () => ({
   default: () => <div>subagent-section</div>,
 }));
 
-vi.mock('./sections/OutputStylesSection', () => ({
+vi.mock('./sections/OutputStyleSection', () => ({
   default: () => <div>outputstyle-section</div>,
 }));
 
@@ -69,14 +69,14 @@ const values: TemplateFormValues = {
   keywords: [],
   categoryId: '',
   documentation: '',
-  claudeMd: '',
+  agentsMd: '',
   isActive: true,
   initCommands: '',
   mcpServers: [{ localId: 'm1', name: 'server-1', type: 'stdio', command: 'run', argsText: '', url: '', description: '', envText: '', headersText: '' }],
-  slashCommands: [{ localId: 's1', fileName: 'foo.md', content: 'x', description: '' }],
+  commands: [{ localId: 's1', fileName: 'foo.md', content: 'x', description: '' }],
   hooks: [{ localId: 'h1', event: 'PreToolUse', matchers: [] }],
-  subAgents: [{ localId: 'a1', fileName: 'worker.md', content: 'x', description: '' }],
-  outputStyles: [{ localId: 'o1', fileName: 'style.md', content: 'x', description: '' }],
+  agents: [{ localId: 'a1', fileName: 'worker.md', content: 'x', description: '' }],
+  outputStyle: [{ localId: 'o1', fileName: 'style.md', content: 'x', description: '' }],
   skills: [{ localId: 'sk1', path: '/skill.md', content: 'x' }],
   scripts: [{ localId: 'sc1', path: '/build.sh', content: 'echo hi' }],
 };
@@ -95,8 +95,12 @@ describe('TemplateForm', () => {
     );
 
     expect(screen.getByRole('tab', { name: /基本資訊/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /agents\.md/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /mcp 1/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /hooks 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /commands 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /agents 1/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /output style 1/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /skills 1/i })).toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
   });

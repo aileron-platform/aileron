@@ -230,6 +230,45 @@ export const fetchWorkspaceDetail = async (workspaceId: string): Promise<Workspa
 };
 
 /**
+ * 一次 API 呼叫同時解析 Runtime Base URL 與工作區詳情。
+ * 原本 resolveRuntimeBaseUrl + fetchWorkspaceDetail 會對同一端點打兩次；
+ * 此函式合為一次請求，URL 成功後才寫入 cache。
+ */
+export const resolveRuntimeBaseUrlWithDetail = async (
+  workspaceId: string,
+  cache: Map<string, string>
+): Promise<{ url: string; detail: WorkspaceDetailResponse | null }> => {
+  if (!workspaceId) {
+    throw new Error('workspaceId 缺失');
+  }
+
+  let detail: WorkspaceDetailResponse | null = null;
+  let runtimeUrl: string | undefined;
+
+  try {
+    detail = await apiClient.get<WorkspaceDetailResponse>(`/workspaces/${encodeURIComponent(workspaceId)}`);
+    runtimeUrl = resolvePreferredWorkspaceUrl(
+      detail.runtimeStatus?.externalUrl,
+      detail.runtimeStatus?.internalUrl
+    );
+  } catch (error) {
+    const cached = cache.get(workspaceId);
+    if (cached) {
+      logger.error('Failed to fetch workspace detail, using cached URL and defaults', { error, workspaceId });
+      return { url: cached, detail: null };
+    }
+    throw error;
+  }
+
+  if (!runtimeUrl) {
+    throw new Error('Workspace Runtime 尚未啟動或尚未提供 URL');
+  }
+
+  cache.set(workspaceId, runtimeUrl);
+  return { url: runtimeUrl, detail };
+};
+
+/**
  * 載入檔案樹
  * 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
  */

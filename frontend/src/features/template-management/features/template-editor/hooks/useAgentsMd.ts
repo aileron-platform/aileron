@@ -1,18 +1,18 @@
 import { useState, useCallback, useEffect } from 'react';
-import { getClaudeMd, updateClaudeMd, type ClaudeMdResponse } from '@/shared/services/templateApi';
+import { getAgentsMd, updateAgentsMd, type AgentsMdResponse } from '@/shared/services/templateApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';
 
-const logger = createLogger('useClaudeMd');
+const logger = createLogger('useAgentsMd');
 
-export interface UseClaudeMdOptions {
+export interface UseAgentsMdOptions {
   templateId?: string;
   initialContent?: string;
   onSuccess?: () => void;
 }
 
-export interface UseClaudeMdReturn {
+export interface UseAgentsMdReturn {
   content: string;
   persistedContent: string;
   hasUnsavedChanges: boolean;
@@ -24,7 +24,7 @@ export interface UseClaudeMdReturn {
   setContent: (content: string) => void;
 }
 
-export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseClaudeMdOptions): UseClaudeMdReturn {
+export function useAgentsMd({ templateId, initialContent = '', onSuccess }: UseAgentsMdOptions): UseAgentsMdReturn {
   const [content, setContent] = useState(initialContent);
   const [persistedContent, setPersistedContent] = useState(initialContent);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,33 +33,37 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
   const { toast } = useToast();
   const { t } = useI18n();
 
-  // 載入 Claude.md 內容
+  // 載入 AGENTS.md 內容
   const loadContent = useCallback(async () => {
-    if (!templateId) return;
+    if (!templateId) {
+      setContent(initialContent);
+      setPersistedContent(initialContent);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const response: ClaudeMdResponse = await getClaudeMd(templateId);
+      const response: AgentsMdResponse = await getAgentsMd(templateId);
 
       if (response.success && response.data) {
         setContent(response.data.content);
         setPersistedContent(response.data.content);
       } else {
-        const errorMsg = response.error || response.message || t('template.editor.claudeMd.errors.loadFailed');
+        const errorMsg = response.error || response.message || t('template.editor.agentsMd.errors.loadFailed');
         setError(errorMsg);
         toast({
-          title: t('template.editor.claudeMd.toasts.loadFailed.title'),
+          title: t('template.editor.agentsMd.toasts.loadFailed.title'),
           description: errorMsg,
           variant: 'destructive',
         });
       }
     } catch (err) {
-      const errorMsg = t('template.editor.claudeMd.errors.loadFailed');
+      const errorMsg = t('template.editor.agentsMd.errors.loadFailed');
       setError(errorMsg);
       toast({
-        title: t('template.editor.claudeMd.toasts.loadFailed.title'),
+        title: t('template.editor.agentsMd.toasts.loadFailed.title'),
         description: errorMsg,
         variant: 'destructive',
       });
@@ -69,15 +73,21 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
     }
   }, [templateId, toast, t]);
 
-  // 保存 Claude.md 內容
+  // 保存 AGENTS.md 內容
   const saveContent = useCallback(async (newContent: string) => {
-    if (!templateId) return;
+    if (!templateId) {
+      setContent(newContent);
+      setPersistedContent(newContent);
+      setError(null);
+      onSuccess?.();
+      return;
+    }
 
     setIsSaving(true);
     setError(null);
 
     try {
-      const response: ClaudeMdResponse = await updateClaudeMd(templateId, {
+      const response: AgentsMdResponse = await updateAgentsMd(templateId, {
         content: newContent,
       });
 
@@ -85,24 +95,24 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
         setContent(newContent);
         setPersistedContent(newContent);
         toast({
-          title: t('template.editor.claudeMd.toasts.saveSuccess.title'),
-          description: t('template.editor.claudeMd.toasts.saveSuccess.description'),
+          title: t('template.editor.agentsMd.toasts.saveSuccess.title'),
+          description: t('template.editor.agentsMd.toasts.saveSuccess.description'),
         });
         onSuccess?.(); // 保存成功後重新載入模板列表
       } else {
-        const errorMsg = response.error || response.message || t('template.editor.claudeMd.errors.saveFailed');
+        const errorMsg = response.error || response.message || t('template.editor.agentsMd.errors.saveFailed');
         setError(errorMsg);
         toast({
-          title: t('template.editor.claudeMd.toasts.saveFailed.title'),
+          title: t('template.editor.agentsMd.toasts.saveFailed.title'),
           description: errorMsg,
           variant: 'destructive',
         });
       }
     } catch (err) {
-      const errorMsg = t('template.editor.claudeMd.errors.saveFailed');
+      const errorMsg = t('template.editor.agentsMd.errors.saveFailed');
       setError(errorMsg);
       toast({
-        title: t('template.editor.claudeMd.toasts.saveFailed.title'),
+        title: t('template.editor.agentsMd.toasts.saveFailed.title'),
         description: errorMsg,
         variant: 'destructive',
       });
@@ -110,7 +120,7 @@ export function useClaudeMd({ templateId, initialContent = '', onSuccess }: UseC
     } finally {
       setIsSaving(false);
     }
-  }, [templateId, toast, t]);
+  }, [templateId, toast, t, onSuccess]);
 
   // 當 templateId 變更時自動載入內容
   useEffect(() => {

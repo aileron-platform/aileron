@@ -1,36 +1,36 @@
-import type { TemplateSlashCommand, TemplateSubAgent, TemplateOutputStyle } from '@/shared/types/templates';
-import type { SlashCommandFormValue, SubAgentFormValue, OutputStyleFormValue } from '../../../features/template-management/features/template-editor/formTypes';
-import type { SlashCommandData, SubAgentData } from './FileViewer';
+import type { TemplateCommand, TemplateAgent, TemplateOutputStyle } from '@/shared/types/templates';
+import type { CommandFormValue, AgentFormValue, OutputStyleFormValue } from '../../../features/template-management/features/template-editor/formTypes';
+import type { CommandData, AgentData } from './FileViewer';
 import type { OutputStyleData } from './OutputStyleViewer';
 
 // 適配器：將不同的數據類型轉換為共用的 BaseItem 格式
 
-// TemplateSlashCommand -> SlashCommandData
-export const adaptTemplateSlashCommand = (cmd: TemplateSlashCommand): SlashCommandData => ({
+// TemplateCommand -> CommandData
+export const adaptTemplateCommand = (cmd: TemplateCommand): CommandData => ({
   id: cmd.id,
   fileName: cmd.fileName,
   description: cmd.description,
   content: cmd.content,
 });
 
-// TemplateSubAgent -> SubAgentData
-export const adaptTemplateSubAgent = (agent: TemplateSubAgent): SubAgentData => ({
+// TemplateAgent -> AgentData
+export const adaptTemplateAgent = (agent: TemplateAgent): AgentData => ({
   id: agent.id,
   fileName: agent.fileName,
   description: agent.description,
   content: agent.content,
 });
 
-// SlashCommandFormValue -> SlashCommandData
-export const adaptSlashCommandFormValue = (cmd: SlashCommandFormValue): SlashCommandData => ({
+// CommandFormValue -> CommandData
+export const adaptCommandFormValue = (cmd: CommandFormValue): CommandData => ({
   id: cmd.localId,
   fileName: cmd.fileName,
   description: cmd.description,
   content: cmd.content,
 });
 
-// SubAgentFormValue -> SubAgentData
-export const adaptSubAgentFormValue = (agent: SubAgentFormValue): SubAgentData => ({
+// AgentFormValue -> AgentData
+export const adaptAgentFormValue = (agent: AgentFormValue): AgentData => ({
   id: agent.localId,
   fileName: agent.fileName,
   description: agent.description,
@@ -54,20 +54,20 @@ export const adaptOutputStyleFormValue = (style: OutputStyleFormValue): OutputSt
 });
 
 // 批量適配器
-export const adaptTemplateSlashCommands = (commands: TemplateSlashCommand[]): SlashCommandData[] =>
-  commands.map(adaptTemplateSlashCommand);
+export const adaptTemplateCommands = (commands: TemplateCommand[]): CommandData[] =>
+  commands.map(adaptTemplateCommand);
 
-export const adaptTemplateSubAgents = (agents: TemplateSubAgent[]): SubAgentData[] =>
-  agents.map(adaptTemplateSubAgent);
+export const adaptTemplateAgents = (agents: TemplateAgent[]): AgentData[] =>
+  agents.map(adaptTemplateAgent);
 
 export const adaptTemplateOutputStyles = (styles: TemplateOutputStyle[]): OutputStyleData[] =>
   styles.map(adaptTemplateOutputStyle);
 
-export const adaptSlashCommandFormValues = (commands: SlashCommandFormValue[]): SlashCommandData[] =>
-  commands.map(adaptSlashCommandFormValue);
+export const adaptCommandFormValues = (commands: CommandFormValue[]): CommandData[] =>
+  commands.map(adaptCommandFormValue);
 
-export const adaptSubAgentFormValues = (agents: SubAgentFormValue[]): SubAgentData[] =>
-  agents.map(adaptSubAgentFormValue);
+export const adaptAgentFormValues = (agents: AgentFormValue[]): AgentData[] =>
+  agents.map(adaptAgentFormValue);
 
 export const adaptOutputStyleFormValues = (styles: OutputStyleFormValue[]): OutputStyleData[] =>
   styles.map(adaptOutputStyleFormValue);

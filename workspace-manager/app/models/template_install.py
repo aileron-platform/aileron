@@ -26,9 +26,9 @@ class TemplateInstallItemResult(BaseModel):
 class TemplateInstallResults(BaseModel):
     """模板安裝結果詳情"""
 
-    claudeMd: Optional[TemplateInstallItemResult] = Field(default=None, alias="claudeMd")
-    slashCommands: Optional[TemplateInstallItemResult] = Field(default=None, alias="slashCommands")
-    subagents: Optional[TemplateInstallItemResult] = Field(default=None, alias="subagents")
+    agentsMd: Optional[TemplateInstallItemResult] = Field(default=None, alias="agentsMd")
+    commands: Optional[TemplateInstallItemResult] = Field(default=None, alias="commands")
+    agents: Optional[TemplateInstallItemResult] = Field(default=None, alias="agents")
     mcp: Optional[TemplateInstallItemResult] = Field(default=None, alias="mcp")
     hooks: Optional[TemplateInstallItemResult] = Field(default=None, alias="hooks")
     scripts: Optional[TemplateInstallItemResult] = Field(default=None, alias="scripts")

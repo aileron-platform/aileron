@@ -4,9 +4,9 @@ import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
 import { Button } from '@/shared/components/ui/button';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { useClaudeMd } from '../features/template-editor/hooks/useClaudeMd';
+import { useAgentsMd } from '../features/template-editor/hooks/useAgentsMd';
 
-interface TemplateClaudeMdWorkflowProps {
+interface TemplateAgentsMdWorkflowProps {
   templateId?: string;
   initialContent?: string | null;
   onContentChange?: (content: string) => void;
@@ -14,7 +14,7 @@ interface TemplateClaudeMdWorkflowProps {
   headerExtras?: React.ReactNode;
 }
 
-export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> = ({
+export const TemplateAgentsMdWorkflow: React.FC<TemplateAgentsMdWorkflowProps> = ({
   templateId,
   initialContent,
   onContentChange,
@@ -32,7 +32,7 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
     loadContent,
     saveContent,
     setContent,
-  } = useClaudeMd({
+  } = useAgentsMd({
     templateId,
     initialContent: initialContent ?? '',
     onSuccess: onSaveSuccess,
@@ -47,13 +47,13 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
     try {
       await navigator.clipboard.writeText(content);
       toast({
-        title: t('template.detail.claudeMd.actions.copySuccess.title'),
-        description: t('template.detail.claudeMd.actions.copySuccess.description'),
+        title: t('template.detail.agentsMd.actions.copySuccess.title'),
+        description: t('template.detail.agentsMd.actions.copySuccess.description'),
       });
     } catch {
       toast({
-        title: t('template.detail.claudeMd.actions.copyFailed.title'),
-        description: t('template.detail.claudeMd.actions.copyFailed.description'),
+        title: t('template.detail.agentsMd.actions.copyFailed.title'),
+        description: t('template.detail.agentsMd.actions.copyFailed.description'),
         variant: 'destructive',
       });
     }
@@ -64,25 +64,25 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
     const url = URL.createObjectURL(blob);
     const anchor = window.document.createElement('a');
     anchor.href = url;
-    anchor.download = t('template.detail.claudeMd.downloadFileName');
+    anchor.download = t('template.common.features.agentsMd');
     window.document.body.appendChild(anchor);
     anchor.click();
     window.document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
 
     toast({
-      title: t('template.detail.claudeMd.actions.downloadSuccess.title'),
-      description: t('template.detail.claudeMd.actions.downloadSuccess.description'),
+      title: t('template.detail.agentsMd.actions.downloadSuccess.title'),
+      description: t('template.detail.agentsMd.actions.downloadSuccess.description'),
     });
   };
 
   return (
     <MarkdownDocumentShell
-      title={t('template.detail.claudeMd.header.title')}
+      title={t('template.common.features.agentsMd')}
       refreshLabel={t('common.refresh')}
       saveLabel={isSaving ? t('common.saving') : t('common.save')}
-      runtimeLoadingLabel={t('template.editor.claudeMd.status.loading')}
-      loadingLabel={t('template.editor.claudeMd.status.loading')}
+      runtimeLoadingLabel={t('template.editor.agentsMd.status.loading')}
+      loadingLabel={t('template.editor.agentsMd.status.loading')}
       isRuntimeReady
       isLoading={isLoading}
       isSaving={isSaving}
@@ -91,9 +91,9 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
       onRefresh={loadContent}
       onSave={() => saveContent(content)}
       refreshDisabled={!templateId || isSaving}
-      saveDisabled={!templateId || isSaving || !hasUnsavedChanges}
+      saveDisabled={isSaving || !hasUnsavedChanges}
       statusMessage={error ? <span className="text-destructive">{error}</span> : null}
-      placeholder={t('template.editor.claudeMd.editor.placeholder')}
+      placeholder={t('template.editor.agentsMd.editor.placeholder')}
       headerExtras={
         <>
           <Button
@@ -104,7 +104,7 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
             disabled={isLoading}
           >
             <Copy className="mr-1.5 h-3.5 w-3.5" />
-            {t('template.detail.claudeMd.actions.copy')}
+            {t('template.detail.agentsMd.actions.copy')}
           </Button>
           <Button
             size="sm"
@@ -114,7 +114,7 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
             disabled={isLoading}
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
-            {t('template.detail.claudeMd.actions.download')}
+            {t('template.detail.agentsMd.actions.download')}
           </Button>
           {headerExtras}
         </>
@@ -123,4 +123,4 @@ export const TemplateClaudeMdWorkflow: React.FC<TemplateClaudeMdWorkflowProps> =
   );
 };
 
-export default TemplateClaudeMdWorkflow;
+export default TemplateAgentsMdWorkflow;

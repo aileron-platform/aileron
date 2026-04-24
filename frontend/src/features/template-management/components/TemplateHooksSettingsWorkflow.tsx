@@ -7,7 +7,6 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { SettingsWorkflowActionButton, SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import HookCard from '@/features/template-management/components/HookCard';
 import type { HookFormValue } from '@/features/template-management/features/template-editor/formTypes';
-import { useTemplateApi } from '@/features/template-management/features/template-editor/hooks/useTemplateApi';
 
 interface TemplateHooksSettingsWorkflowProps {
   templateId?: string;
@@ -28,16 +27,9 @@ export const TemplateHooksSettingsWorkflow: React.FC<TemplateHooksSettingsWorkfl
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingHook, setEditingHook] = useState<HookFormValue | undefined>();
-  const { saveHooksConfig } = useTemplateApi({
-    templateId,
-    onSuccess: onSaveSuccess,
-  });
-
   const handlePersist = async (nextHooks: HookFormValue[]) => {
     onHooksChange?.(nextHooks);
-    if (editable && templateId) {
-      await saveHooksConfig(nextHooks);
-    }
+    onSaveSuccess?.();
   };
 
   const handleAdd = () => {

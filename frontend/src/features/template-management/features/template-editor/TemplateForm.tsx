@@ -8,10 +8,10 @@ import { TopTabsBar, TopTabsCountBadge, TopTabsList, TopTabsTrigger } from '@/sh
 
 import BasicInfoSection from './sections/BasicInfoSection';
 import McpServersSection from './sections/McpServersSection';
-import SlashCommandsSection from './sections/SlashCommandsSection';
+import CommandsSection from './sections/CommandsSection';
 import HooksSection from './sections/HooksSection';
-import SubAgentsSection from './sections/SubAgentsSection';
-import OutputStylesSection from './sections/OutputStylesSection';
+import AgentsSection from './sections/AgentsSection';
+import OutputStyleSection from './sections/OutputStyleSection';
 import DocsSection from './sections/DocsSection';
 import SkillsSection from './sections/SkillsSection';
 import ScriptsSection from './sections/ScriptsSection';
@@ -55,20 +55,20 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
   const ClaudeMdIcon = CLAUDE_CODE_ICONS['claude-md'];
   const HooksIcon = CLAUDE_CODE_ICONS['hooks'];
   const McpIcon = CLAUDE_CODE_ICONS['mcp'];
-  const SubagentsIcon = CLAUDE_CODE_ICONS['subagents'];
-  const SlashCommandsIcon = CLAUDE_CODE_ICONS['slash-commands'];
-  const OutputStylesIcon = CLAUDE_CODE_ICONS['output-styles'];
+  const AgentsIcon = CLAUDE_CODE_ICONS['subagents'];
+  const CommandsIcon = CLAUDE_CODE_ICONS['slash-commands'];
+  const OutputStyleIcon = CLAUDE_CODE_ICONS['output-styles'];
   const SkillsIcon = CLAUDE_CODE_ICONS['skills'];
   const templateTabs = [
     { value: 'basic', label: t('template.editor.tabs.basic'), icon: Info },
-    { value: 'docs', label: t('template.editor.tabs.claudeMd'), icon: ClaudeMdIcon },
-    { value: 'hooks', label: t('template.editor.tabs.hooks'), icon: HooksIcon, count: values.hooks.length },
-    { value: 'mcp', label: t('template.editor.tabs.mcp'), icon: McpIcon, count: values.mcpServers.length },
-    { value: 'subagent', label: t('template.editor.tabs.subAgents'), icon: SubagentsIcon, count: values.subAgents.length },
-    { value: 'slash', label: t('template.editor.tabs.slashCommands'), icon: SlashCommandsIcon, count: values.slashCommands.length },
-    { value: 'outputstyle', label: t('template.editor.tabs.outputStyles'), icon: OutputStylesIcon, count: values.outputStyles.length },
-    { value: 'skills', label: t('template.editor.tabs.skills'), icon: SkillsIcon, count: values.skills.length },
-    { value: 'scripts', label: t('template.editor.tabs.scripts'), icon: FileIcon, count: values.scripts.length },
+    { value: 'docs', label: t('template.common.features.agentsMd'), icon: ClaudeMdIcon },
+    { value: 'hooks', label: t('template.common.features.hooks'), icon: HooksIcon, count: values.hooks.length },
+    { value: 'mcp', label: t('template.common.features.mcp'), icon: McpIcon, count: values.mcpServers.length },
+    { value: 'agent', label: t('template.common.features.agents'), icon: AgentsIcon, count: values.agents.length },
+    { value: 'command', label: t('template.common.features.commands'), icon: CommandsIcon, count: values.commands.length },
+    { value: 'output-style', label: t('template.common.features.outputStyle'), icon: OutputStyleIcon, count: values.outputStyle.length },
+    { value: 'skills', label: t('template.common.features.skills'), icon: SkillsIcon, count: values.skills.length },
+    { value: 'scripts', label: t('template.common.features.scripts'), icon: FileIcon, count: values.scripts.length },
   ] as const;
 
   return (
@@ -107,10 +107,10 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
             />
           </TabsContent>
 
-          <TabsContent value="slash" className="flex-1 overflow-auto !p-0 !mt-0 !mb-0 !mx-0" style={{ marginTop: '1px' }}>
-            <SlashCommandsSection
-              slashCommands={values.slashCommands}
-              onSlashCommandsChange={items => updateCollection('slashCommands', items)}
+          <TabsContent value="command" className="flex-1 overflow-auto !p-0 !mt-0 !mb-0 !mx-0" style={{ marginTop: '1px' }}>
+            <CommandsSection
+              commands={values.commands}
+              onCommandsChange={items => updateCollection('commands', items)}
               templateId={templateId}
               onReloadTemplate={onReloadTemplate}
             />
@@ -123,19 +123,19 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
             />
           </TabsContent>
 
-          <TabsContent value="subagent" className="flex-1 overflow-auto !p-0 !m-0">
-            <SubAgentsSection
-              subAgents={values.subAgents}
-              onSubAgentsChange={items => updateCollection('subAgents', items)}
+          <TabsContent value="agent" className="flex-1 overflow-auto !p-0 !m-0">
+            <AgentsSection
+              agents={values.agents}
+              onAgentsChange={items => updateCollection('agents', items)}
               templateId={templateId}
               onReloadTemplate={onReloadTemplate}
             />
           </TabsContent>
 
-          <TabsContent value="outputstyle" className="flex-1 overflow-auto !p-0 !m-0">
-            <OutputStylesSection
-              outputStyles={values.outputStyles}
-              onOutputStylesChange={items => updateCollection('outputStyles', items)}
+          <TabsContent value="output-style" className="flex-1 overflow-auto !p-0 !m-0">
+            <OutputStyleSection
+              outputStyle={values.outputStyle}
+              onOutputStyleChange={items => updateCollection('outputStyle', items)}
               templateId={templateId}
               onReloadTemplate={onReloadTemplate}
             />
@@ -161,7 +161,7 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
             <DocsSection
               templateId={templateId}
               documentation={values.documentation}
-              claudeMd={values.claudeMd}
+              agentsMd={values.agentsMd}
               onChange={(partial) => onChange({ ...values, ...partial })}
             />
           </TabsContent>

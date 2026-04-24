@@ -2,9 +2,9 @@ import * as React from 'react';
 import type {
   TemplateFormValues,
   McpServerFormValue,
-  SlashCommandFormValue,
+  CommandFormValue,
   HookFormValue,
-  SubAgentFormValue,
+  AgentFormValue,
   FileEntryFormValue,
 } from '../formTypes';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -12,9 +12,9 @@ import { useI18n } from '@/shared/hooks/useI18n';
 export type FieldError = string;
 export type TemplateEditorErrors = Partial<Record<keyof TemplateFormValues, FieldError>> & {
   mcpServers?: Record<string, FieldError | undefined>;
-  slashCommands?: Record<string, FieldError | undefined>;
+  commands?: Record<string, FieldError | undefined>;
   hooks?: Record<string, FieldError | undefined>;
-  subAgents?: Record<string, FieldError | undefined>;
+  agents?: Record<string, FieldError | undefined>;
   scripts?: Record<string, FieldError | undefined>;
 };
 
@@ -44,12 +44,12 @@ export function useTemplateEditorForm(options: UseTemplateEditorFormOptions) {
     if (!v.version?.trim()) next.version = t('template.editor.validation.required');
     if (!v.categoryId?.trim()) next.categoryId = t('template.editor.validation.select');
 
-    // Slash commands - name/content required
-    if (v.slashCommands?.length) {
-      next.slashCommands = {};
-      v.slashCommands.forEach((item: SlashCommandFormValue) => {
-        if (!item.name?.trim()) next.slashCommands![item.localId] = t('template.editor.validation.slashCommandName');
-        else if (!item.content?.trim()) next.slashCommands![item.localId] = t('template.editor.validation.slashCommandContent');
+    // Commands - name/content required
+    if (v.commands?.length) {
+      next.commands = {};
+      v.commands.forEach((item: CommandFormValue) => {
+        if (!item.name?.trim()) next.commands![item.localId] = t('template.editor.validation.commandName');
+        else if (!item.content?.trim()) next.commands![item.localId] = t('template.editor.validation.commandContent');
       });
     }
 
@@ -62,12 +62,12 @@ export function useTemplateEditorForm(options: UseTemplateEditorFormOptions) {
       });
     }
 
-    // SubAgents - fileName/content required
-    if (v.subAgents?.length) {
-      next.subAgents = {};
-      v.subAgents.forEach((item: SubAgentFormValue) => {
-        if (!item.fileName?.trim()) next.subAgents![item.localId] = t('template.editor.validation.subAgentFile');
-        else if (!item.content?.trim()) next.subAgents![item.localId] = t('template.editor.validation.subAgentContent');
+    // Agents - fileName/content required
+    if (v.agents?.length) {
+      next.agents = {};
+      v.agents.forEach((item: AgentFormValue) => {
+        if (!item.fileName?.trim()) next.agents![item.localId] = t('template.editor.validation.agentFile');
+        else if (!item.content?.trim()) next.agents![item.localId] = t('template.editor.validation.agentContent');
       });
     }
 

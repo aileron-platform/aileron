@@ -73,8 +73,12 @@ const mapManagerNodeToFileNode = (
 ): FileNode => {
   const children = node.children?.map(child => mapManagerNodeToFileNode(child, expandedIds, depth + 1)) ?? [];
   const normalizedPath = ensureLeadingSlash(node.path);
+  // hasChildren 優先使用後端回傳的欄位（懶載入截斷時 children=[] 但 hasChildren=true）
   const hasChildren =
-    node.type === 'directory' && (node.children ? node.children.length > 0 : true);
+    node.type === 'directory' && (
+      node.hasChildren === true ||
+      (node.hasChildren === undefined && (node.children ? node.children.length > 0 : true))
+    );
 
   return {
     id: node.id ?? normalizedPath,
@@ -254,16 +258,10 @@ export function useWorkspaceFileTreeAdapter(
   const expandNode = useCallback(async (nodePath: string) => {
     const normalized = ensureLeadingSlash(nodePath);
     const node = findManagerNode(manager.state.nodes, normalized);
-
-    if (runtimeReady && node?.type === 'directory' && (!node.children || node.children.length === 0)) {
-      try {
-        await manager.loadTree();
-      } catch (error) {
-        logger.error('載入節點失敗', { error });
-      }
-    }
-    manager.state.expandNode(normalized);
-  }, [manager, runtimeReady]);
+    if (!node) return;
+    // 使用 toggleDirectory 走懶載入路徑，避免全樹重載
+    await manager.toggleDirectory(node);
+  }, [manager]);
 
   const collapseNode = useCallback((nodePath: string) => {
     manager.state.collapseNode(ensureLeadingSlash(nodePath));

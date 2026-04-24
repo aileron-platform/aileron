@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -139,6 +139,45 @@ class SkillsInstallRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class CompiledTemplateFileInstallItem(BaseModel):
+    """Compiled template file item."""
+
+    path: str = Field(..., description="Target relative path")
+    source: str = Field(..., description="Canonical source path")
+    content: str = Field(..., description="Compiled content")
+
+
+class CompileIssueInstallItem(BaseModel):
+    """Compile issue item."""
+
+    feature: str = Field(..., description="Feature name")
+    target: str = Field(..., description="Target CLI")
+    message: str = Field(..., description="Issue message")
+
+
+class InstallPlanRequest(BaseModel):
+    """Compiled install plan request payload."""
+
+    target: str = Field(..., description="Target CLI")
+    files: List[CompiledTemplateFileInstallItem] = Field(default_factory=list, description="Files to install")
+    warnings: List[CompileIssueInstallItem] = Field(default_factory=list, description="Compile warnings")
+    unsupported: List[CompileIssueInstallItem] = Field(default_factory=list, description="Unsupported features")
+    degradation_notes: List[CompileIssueInstallItem] = Field(
+        default_factory=list,
+        alias="degradationNotes",
+        description="Feature degradation notes",
+    )
+    install_hints: Dict[str, Any] = Field(
+        default_factory=dict,
+        alias="installHints",
+        description="Runtime install hints",
+    )
+    source_hash: Optional[str] = Field(default=None, alias="sourceHash", description="Canonical source hash")
+    cache_key: Optional[str] = Field(default=None, alias="cacheKey", description="Compile cache key")
+
+    model_config = {"populate_by_name": True}
+
+
 class TemplateInstallRequest(BaseModel):
     """模板批次安裝請求"""
 
@@ -147,6 +186,9 @@ class TemplateInstallRequest(BaseModel):
     cliType: Optional[str] = Field(None, alias="cliType", description="CLI 類型")
     initCommands: Optional[str] = Field(
         None, alias="initCommands", description="初始化指令"
+    )
+    installPlan: Optional[InstallPlanRequest] = Field(
+        None, alias="installPlan", description="Compiled install plan"
     )
     claudeMd: Optional[ClaudeMdInstallRequest] = Field(
         None, alias="claudeMd", description="Claude.md 配置"
@@ -332,6 +374,9 @@ __all__ = [
     "ScriptsInstallRequest",
     "SkillFileItem",
     "SkillsInstallRequest",
+    "CompiledTemplateFileInstallItem",
+    "CompileIssueInstallItem",
+    "InstallPlanRequest",
     "TemplateInstallRequest",
     # Response Models
     "InstallResults",

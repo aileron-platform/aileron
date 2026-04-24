@@ -12,6 +12,7 @@ from fastapi import status
 
 from app.services.template_git_service import GitOperationResult
 from app.services.template_install_service import TemplateInstallError
+from app.services.template_canonical_service import CanonicalTemplateValidationError
 
 from tests.helpers.auth_helpers import AuthTestHelper
 from tests.helpers.fixtures import TestDataFactory, MockResponses
@@ -451,7 +452,7 @@ class TestTemplatesAPI:
         assert len(updated_data["hooks"]["before_file_save"][0]["hooks"]) == 1
 
     @pytest.mark.integration
-    def test_tpl_020_template_claude_md_success(self, authenticated_client, test_data_factory):
+    def test_tpl_020_template_agents_md_success(self, authenticated_client, test_data_factory):
         """TPL-020 範本 Claude.md 配置成功"""
         client, user = authenticated_client
 
@@ -466,19 +467,19 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         # 取得 Claude.md 內容
-        get_response = client.get(f"/api/v1/templates/{template_id}/claude-md")
+        get_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         assert get_response.status_code == status.HTTP_200_OK
-        claude_md_data = get_response.json()
+        agents_md_data = get_response.json()
 
         # 驗證回應結構
-        assert "success" in claude_md_data
+        assert "success" in agents_md_data
 
         # 更新 Claude.md 內容
         update_data = {
             "content": "# Test Template\n\nThis is a test template with custom configuration."
         }
 
-        update_response = client.put(f"/api/v1/templates/{template_id}/claude-md", json=update_data)
+        update_response = client.put(f"/api/v1/templates/{template_id}/agents-md", json=update_data)
         assert update_response.status_code == status.HTTP_200_OK
         updated_data = update_response.json()
 
@@ -507,7 +508,7 @@ class TestTemplatesAPI:
         }
 
         en_response = client.post(
-            f"/api/v1/templates/{template_id}/slash-commands",
+            f"/api/v1/templates/{template_id}/commands",
             json=invalid_payload,
         )
         assert en_response.status_code == status.HTTP_400_BAD_REQUEST
@@ -515,7 +516,7 @@ class TestTemplatesAPI:
 
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post(
-            f"/api/v1/templates/{template_id}/slash-commands",
+            f"/api/v1/templates/{template_id}/commands",
             json=invalid_payload,
         )
         assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
@@ -589,11 +590,11 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         with patch(
-            "app.routers.templates.files.TemplateService.create_slash_command_file",
+            "app.routers.templates.files.TemplateService.create_command_file",
             return_value=type("Result", (), {"success": False, "error": "unexpected internal error"})(),
         ):
             en_response = client.post(
-                f"/api/v1/templates/{template_id}/slash-commands",
+                f"/api/v1/templates/{template_id}/commands",
                 json={"fileName": "hello.md", "content": "hi"},
             )
             assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -601,11 +602,11 @@ class TestTemplatesAPI:
 
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         with patch(
-            "app.routers.templates.files.TemplateService.create_slash_command_file",
+            "app.routers.templates.files.TemplateService.create_command_file",
             return_value=type("Result", (), {"success": False, "error": "unexpected internal error"})(),
         ):
             zh_response = client.post(
-                f"/api/v1/templates/{template_id}/slash-commands",
+                f"/api/v1/templates/{template_id}/commands",
                 json={"fileName": "hello.md", "content": "hi"},
             )
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -662,119 +663,119 @@ class TestTemplatesAPI:
     # test_tpl_040_template_testing_automation_success 已移除 - /api/v1/templates/{id}/test 端點不存在
 
     @pytest.mark.integration
-    def test_tpl_041_slash_commands_crud(self, authenticated_client, test_data_factory):
-        """TPL-041 Slash Commands CRUD 操作"""
+    def test_tpl_041_commands_crud(self, authenticated_client, test_data_factory):
+        """TPL-041 Commands CRUD 操作"""
         client, user = authenticated_client
 
         # 先創建範本
         template_data = test_data_factory.create_template_data(
-            name="Template for Slash Commands",
+            name="Template for Commands",
             author_name=user.display_name,
             author_email=user.email,
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 Slash Commands
-        list_response = client.get(f"/api/v1/templates/{template_id}/slash-commands")
+        # 1. 列出 Commands
+        list_response = client.get(f"/api/v1/templates/{template_id}/commands")
         assert list_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建 Slash Command
+        # 2. 創建 Command
         command_data = {
             "fileName": "test-command.md",
-            "content": "# Test Command\nThis is a test slash command."
+            "content": "# Test Command\nThis is a test command."
         }
         create_cmd_response = client.post(
-            f"/api/v1/templates/{template_id}/slash-commands",
+            f"/api/v1/templates/{template_id}/commands",
             json=command_data
         )
         assert create_cmd_response.status_code == status.HTTP_201_CREATED
 
-        # 3. 獲取 Slash Command
+        # 3. 獲取 Command
         get_cmd_response = client.get(
-            f"/api/v1/templates/{template_id}/slash-commands/test-command.md"
+            f"/api/v1/templates/{template_id}/commands/test-command.md"
         )
         assert get_cmd_response.status_code == status.HTTP_200_OK
 
-        # 4. 更新 Slash Command
+        # 4. 更新 Command
         update_data = {"content": "# Updated Command\nUpdated content."}
         update_response = client.put(
-            f"/api/v1/templates/{template_id}/slash-commands/test-command.md",
+            f"/api/v1/templates/{template_id}/commands/test-command.md",
             json=update_data
         )
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除 Slash Command
+        # 5. 刪除 Command
         delete_response = client.delete(
-            f"/api/v1/templates/{template_id}/slash-commands/test-command.md"
+            f"/api/v1/templates/{template_id}/commands/test-command.md"
         )
         assert delete_response.status_code == status.HTTP_204_NO_CONTENT
 
     @pytest.mark.integration
-    def test_tpl_042_subagents_crud(self, authenticated_client, test_data_factory):
-        """TPL-042 SubAgents CRUD 操作"""
+    def test_tpl_042_agents_crud(self, authenticated_client, test_data_factory):
+        """TPL-042 Agents CRUD 操作"""
         client, user = authenticated_client
 
         # 先創建範本
         template_data = test_data_factory.create_template_data(
-            name="Template for SubAgents",
+            name="Template for Agents",
             author_name=user.display_name,
             author_email=user.email,
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 SubAgents
-        list_response = client.get(f"/api/v1/templates/{template_id}/subagents")
+        # 1. 列出 Agents
+        list_response = client.get(f"/api/v1/templates/{template_id}/agents")
         assert list_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建 SubAgent
-        subagent_data = {
+        # 2. 創建 Agent
+        agent_data = {
             "fileName": "test-agent.md",
-            "content": "# Test Agent\nThis is a test subagent."
+            "content": "# Test Agent\nThis is a test agent."
         }
         create_response = client.post(
-            f"/api/v1/templates/{template_id}/subagents",
-            json=subagent_data
+            f"/api/v1/templates/{template_id}/agents",
+            json=agent_data
         )
         assert create_response.status_code == status.HTTP_201_CREATED
 
-        # 3. 獲取 SubAgent
+        # 3. 獲取 Agent
         get_response = client.get(
-            f"/api/v1/templates/{template_id}/subagents/test-agent.md"
+            f"/api/v1/templates/{template_id}/agents/test-agent.md"
         )
         assert get_response.status_code == status.HTTP_200_OK
 
-        # 4. 更新 SubAgent
+        # 4. 更新 Agent
         update_data = {"content": "# Updated Agent\nUpdated content."}
         update_response = client.put(
-            f"/api/v1/templates/{template_id}/subagents/test-agent.md",
+            f"/api/v1/templates/{template_id}/agents/test-agent.md",
             json=update_data
         )
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除 SubAgent
+        # 5. 刪除 Agent
         delete_response = client.delete(
-            f"/api/v1/templates/{template_id}/subagents/test-agent.md"
+            f"/api/v1/templates/{template_id}/agents/test-agent.md"
         )
         assert delete_response.status_code == status.HTTP_204_NO_CONTENT
 
     @pytest.mark.integration
-    def test_tpl_043_output_styles_crud(self, authenticated_client, test_data_factory):
-        """TPL-043 Output Styles CRUD 操作"""
+    def test_tpl_043_output_style_crud(self, authenticated_client, test_data_factory):
+        """TPL-043 Output Style CRUD 操作"""
         client, user = authenticated_client
 
         # 先創建範本
         template_data = test_data_factory.create_template_data(
-            name="Template for Output Styles",
+            name="Template for Output Style",
             author_name=user.display_name,
             author_email=user.email,
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 Output Styles
-        list_response = client.get(f"/api/v1/templates/{template_id}/output-styles")
+        # 1. 列出 Output Style
+        list_response = client.get(f"/api/v1/templates/{template_id}/output-style")
         assert list_response.status_code == status.HTTP_200_OK
 
         # 2. 創建 Output Style
@@ -783,28 +784,28 @@ class TestTemplatesAPI:
             "content": "# Test Style\nThis is a test output style."
         }
         create_response = client.post(
-            f"/api/v1/templates/{template_id}/output-styles",
+            f"/api/v1/templates/{template_id}/output-style",
             json=style_data
         )
         assert create_response.status_code == status.HTTP_201_CREATED
 
         # 3. 獲取 Output Style
         get_response = client.get(
-            f"/api/v1/templates/{template_id}/output-styles/test-style.md"
+            f"/api/v1/templates/{template_id}/output-style/test-style.md"
         )
         assert get_response.status_code == status.HTTP_200_OK
 
         # 4. 更新 Output Style
         update_data = {"content": "# Updated Style\nUpdated content."}
         update_response = client.put(
-            f"/api/v1/templates/{template_id}/output-styles/test-style.md",
+            f"/api/v1/templates/{template_id}/output-style/test-style.md",
             json=update_data
         )
         assert update_response.status_code == status.HTTP_200_OK
 
         # 5. 刪除 Output Style
         delete_response = client.delete(
-            f"/api/v1/templates/{template_id}/output-styles/test-style.md"
+            f"/api/v1/templates/{template_id}/output-style/test-style.md"
         )
         assert delete_response.status_code == status.HTTP_204_NO_CONTENT
 
@@ -1084,6 +1085,122 @@ class TestTemplatesAPI:
             zh_response = client.post("/api/v1/templates/install", json=payload)
             assert zh_response.status_code == status.HTTP_502_BAD_GATEWAY
             assert zh_response.json()["detail"] == "無法連線到 Workspace Runtime"
+
+    @pytest.mark.integration
+    def test_tpl_048e_template_compile_preview_success(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Preview Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        with patch(
+            "app.routers.templates.install.TemplateCompilerService.compile_template",
+            return_value={
+                "target": "codex",
+                "files": [
+                    {
+                        "path": "AGENTS.md",
+                        "source": "agents.md",
+                        "content": "# Agents",
+                    }
+                ],
+                "warnings": [],
+                "unsupported": [],
+                "degradationNotes": [],
+                "installHints": {},
+            },
+        ):
+            response = client.get(
+                f"/api/v1/templates/{template_id}/compile-preview?target=codex"
+            )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["target"] == "codex"
+        assert len(data["files"]) == 1
+        assert data["files"][0]["path"] == "AGENTS.md"
+        assert data["degradationNotes"] == []
+
+    @pytest.mark.integration
+    def test_tpl_048f_template_compile_preview_generic_failure_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Broken Preview Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        with patch(
+            "app.routers.templates.install.TemplateCompilerService.compile_template",
+            side_effect=RuntimeError("boom"),
+        ):
+            en_response = client.get(
+                f"/api/v1/templates/{template_id}/compile-preview?target=codex"
+            )
+            assert en_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert en_response.json()["detail"] == "Failed to load template compile preview"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.install.TemplateCompilerService.compile_template",
+            side_effect=RuntimeError("boom"),
+        ):
+            zh_response = client.get(
+                f"/api/v1/templates/{template_id}/compile-preview?target=codex"
+            )
+            assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+            assert zh_response.json()["detail"] == "取得模板編譯預覽失敗"
+
+    @pytest.mark.integration
+    def test_tpl_048g_template_compile_preview_validation_failure_is_localized(
+        self, authenticated_client, test_data_factory
+    ):
+        client, user = authenticated_client
+
+        template_data = test_data_factory.create_template_data(
+            name="Invalid Canonical Template",
+            author_name=user.display_name,
+            author_email=user.email,
+        )
+        create_response = client.post("/api/v1/templates", json=template_data)
+        template_id = create_response.json()["id"]
+
+        with patch(
+            "app.routers.templates.install.TemplateCompilerService.compile_template",
+            side_effect=CanonicalTemplateValidationError(
+                f"Missing template.yaml in /data/template-center/templates/{template_id}"
+            ),
+        ):
+            en_response = client.get(
+                f"/api/v1/templates/{template_id}/compile-preview?target=codex"
+            )
+            assert en_response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+            assert en_response.json()["detail"] == "This template is missing template.yaml and cannot be compiled"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.install.TemplateCompilerService.compile_template",
+            side_effect=CanonicalTemplateValidationError(
+                f"Missing template.yaml in /data/template-center/templates/{template_id}"
+            ),
+        ):
+            zh_response = client.get(
+                f"/api/v1/templates/{template_id}/compile-preview?target=codex"
+            )
+            assert zh_response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+            assert zh_response.json()["detail"] == "此模板缺少 template.yaml，無法產生編譯預覽"
 
     @pytest.mark.integration
     def test_tpl_049_file_copy_operation(self, authenticated_client, test_data_factory):
@@ -1617,7 +1734,7 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.integration
-    def test_tpl_070_claude_md_operations_full(self, authenticated_client, test_data_factory):
+    def test_tpl_070_agents_md_operations_full(self, authenticated_client, test_data_factory):
         """TPL-070 Claude.md 完整操作流程"""
         client, user = authenticated_client
 
@@ -1631,7 +1748,7 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         # 1. 讀取 Claude.md
-        get_response = client.get(f"/api/v1/templates/{template_id}/claude-md")
+        get_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         if get_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_response.status_code == status.HTTP_200_OK
 
@@ -1640,19 +1757,19 @@ class TestTemplatesAPI:
             "content": "# Claude Configuration\n\nThis is a test configuration."
         }
         update_response = client.put(
-            f"/api/v1/templates/{template_id}/claude-md",
+            f"/api/v1/templates/{template_id}/agents-md",
             json=update_data
         )
         if update_response.status_code != status.HTTP_404_NOT_FOUND:
             assert update_response.status_code == status.HTTP_200_OK
 
         # 3. 再次讀取驗證
-        verify_response = client.get(f"/api/v1/templates/{template_id}/claude-md")
+        verify_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         if verify_response.status_code != status.HTTP_404_NOT_FOUND:
             assert verify_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
-    def test_tpl_070b_claude_md_errors_are_localized(self, authenticated_client, test_data_factory):
+    def test_tpl_070b_agents_md_errors_are_localized(self, authenticated_client, test_data_factory):
         client, user = authenticated_client
 
         template_data = test_data_factory.create_template_data(
@@ -1664,50 +1781,50 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         with patch(
-            "app.routers.templates.files.TemplateService.get_claude_md",
+            "app.routers.templates.files.TemplateService.get_agents_md",
             side_effect=RuntimeError("boom"),
         ):
-            en_get = client.get(f"/api/v1/templates/{template_id}/claude-md")
+            en_get = client.get(f"/api/v1/templates/{template_id}/agents-md")
             assert en_get.status_code == status.HTTP_200_OK
             assert en_get.json()["success"] is False
-            assert en_get.json()["message"] == "Failed to load Claude.md"
+            assert en_get.json()["message"] == "Failed to load AGENTS.md"
 
         with patch(
-            "app.routers.templates.files.TemplateService.update_claude_md",
+            "app.routers.templates.files.TemplateService.update_agents_md",
             side_effect=RuntimeError("boom"),
         ):
             en_put = client.put(
-                f"/api/v1/templates/{template_id}/claude-md",
+                f"/api/v1/templates/{template_id}/agents-md",
                 json={"content": "# test"},
             )
             assert en_put.status_code == status.HTTP_200_OK
             assert en_put.json()["success"] is False
-            assert en_put.json()["message"] == "Failed to update Claude.md"
+            assert en_put.json()["message"] == "Failed to update AGENTS.md"
 
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         with patch(
-            "app.routers.templates.files.TemplateService.get_claude_md",
+            "app.routers.templates.files.TemplateService.get_agents_md",
             side_effect=RuntimeError("boom"),
         ):
-            zh_get = client.get(f"/api/v1/templates/{template_id}/claude-md")
+            zh_get = client.get(f"/api/v1/templates/{template_id}/agents-md")
             assert zh_get.status_code == status.HTTP_200_OK
             assert zh_get.json()["success"] is False
-            assert zh_get.json()["message"] == "載入 Claude.md 失敗"
+            assert zh_get.json()["message"] == "載入 AGENTS.md 失敗"
 
         with patch(
-            "app.routers.templates.files.TemplateService.update_claude_md",
+            "app.routers.templates.files.TemplateService.update_agents_md",
             side_effect=RuntimeError("boom"),
         ):
             zh_put = client.put(
-                f"/api/v1/templates/{template_id}/claude-md",
+                f"/api/v1/templates/{template_id}/agents-md",
                 json={"content": "# test"},
             )
             assert zh_put.status_code == status.HTTP_200_OK
             assert zh_put.json()["success"] is False
-            assert zh_put.json()["message"] == "更新 Claude.md 失敗"
+            assert zh_put.json()["message"] == "更新 AGENTS.md 失敗"
 
     @pytest.mark.integration
-    def test_tpl_071_slash_commands_error_scenarios(self, authenticated_client, test_data_factory):
+    def test_tpl_071_commands_error_scenarios(self, authenticated_client, test_data_factory):
         """TPL-071 Slash Commands 錯誤情境測試"""
         client, user = authenticated_client
 
@@ -1721,16 +1838,16 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         # 1. 取得不存在的 Slash Command
-        response = client.get(f"/api/v1/templates/{template_id}/slash-commands/nonexistent.md")
+        response = client.get(f"/api/v1/templates/{template_id}/commands/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
         # 2. 刪除不存在的 Slash Command
-        response = client.delete(f"/api/v1/templates/{template_id}/slash-commands/nonexistent.md")
+        response = client.delete(f"/api/v1/templates/{template_id}/commands/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_204_NO_CONTENT]
 
     @pytest.mark.integration
-    def test_tpl_072_subagents_error_scenarios(self, authenticated_client, test_data_factory):
-        """TPL-072 SubAgents 錯誤情境測試"""
+    def test_tpl_072_agents_error_scenarios(self, authenticated_client, test_data_factory):
+        """TPL-072 Agents 錯誤情境測試"""
         client, user = authenticated_client
 
         # 創建模板
@@ -1748,13 +1865,13 @@ class TestTemplatesAPI:
             "content": "# Test"
         }
         response = client.put(
-            f"/api/v1/templates/{template_id}/subagents/nonexistent.md",
+            f"/api/v1/templates/{template_id}/agents/nonexistent.md",
             json=update_data
         )
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
     @pytest.mark.integration
-    def test_tpl_073_output_styles_error_scenarios(self, authenticated_client, test_data_factory):
+    def test_tpl_073_output_style_error_scenarios(self, authenticated_client, test_data_factory):
         """TPL-073 Output Styles 錯誤情境測試"""
         client, user = authenticated_client
 
@@ -1768,7 +1885,7 @@ class TestTemplatesAPI:
         template_id = create_response.json()["id"]
 
         # 1. 取得不存在的 Output Style
-        response = client.get(f"/api/v1/templates/{template_id}/output-styles/nonexistent.md")
+        response = client.get(f"/api/v1/templates/{template_id}/output-style/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
     @pytest.mark.integration
@@ -2260,7 +2377,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert isinstance(stats_data["stats"], dict)
 
         # 驗證統計資料結構
-        # 可能的功能類型：mcp, slashCommands, hooks, claudeMd, subAgents, outputStyles, scripts, skills
+        # 可能的功能類型：mcp, commands, hooks, agentsMd, agents, outputStyle, scripts, skills
         for feature_name, stat_item in stats_data["stats"].items():
             assert "name" in stat_item, f"{feature_name} 統計應包含 name 欄位"
             assert "count" in stat_item, f"{feature_name} 統計應包含 count 欄位"

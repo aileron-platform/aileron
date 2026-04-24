@@ -1,10 +1,10 @@
-export type SlashCommandScope = 'project' | 'user' | 'plugin';
+export type CommandScope = 'project' | 'user' | 'plugin';
 export type SlashCommandItemKind = 'slash-command' | 'skill';
 
 export interface SlashCommandItem {
   id: string;
   fileName: string;
-  scope: SlashCommandScope;
+  scope: CommandScope;
   kind: SlashCommandItemKind;
   namespace?: string;
   pluginName?: string;
@@ -37,7 +37,7 @@ export const buildSlashCommandDisplayName = (
 };
 
 export const buildSlashCommandCategory = (
-  scope: SlashCommandScope,
+  scope: CommandScope,
   namespace?: string | null,
 ): string => {
   const trimmedNamespace = namespace?.trim();

@@ -22,6 +22,7 @@ const template = {
         claudeCode: 'ClaudeCode',
         codex: 'Codex',
         gemini: 'Gemini',
+        opencode: 'OpenCode',
       },
 
       clear: 'Clear',
@@ -30,12 +31,12 @@ const template = {
       allFeatures: 'All features',
       featureOptions: {
         mcp: 'MCP',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        claudeMd: 'Claude.md',
-        agentMd: 'Agent.md',
-        subAgents: 'SubAgent',
-        outputStyles: 'Output Styles',
+        agentsMd: 'AGENTS.md',
+        agentMd: 'AGENT.md',
+        agents: 'Agents',
+        outputStyle: 'Output Style',
         scripts: 'Scripts',
         skills: 'Skills',
       },
@@ -394,11 +395,11 @@ const template = {
     card: {
       features: {
         mcp: 'MCP',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        claudeMd: 'Claude.md',
-        subAgents: 'SubAgent',
-        outputStyles: 'Output Styles',
+        agentsMd: 'AGENTS.md',
+        agents: 'Agents',
+        outputStyle: 'Output Style',
         scripts: 'Scripts',
         skills: 'Skills',
       },
@@ -426,25 +427,25 @@ const template = {
           label: 'MCP services',
           description: 'Model Context Protocol servers and connection settings',
         },
-        slashCommands: {
-          label: 'Slash Commands',
-          description: 'Slash command definitions and examples',
+        commands: {
+          label: 'Commands',
+          description: 'Installable commands and command templates for different CLIs',
         },
         hooks: {
           label: 'Hooks',
           description: 'Event triggers and automation flows',
         },
-        claudeMd: {
-          label: 'Claude.md',
-          description: 'Claude behaviour configuration and guidance',
+        agentsMd: {
+          label: 'AGENTS.md',
+          description: 'Primary instruction document and agent guidance',
         },
-        subAgents: {
-          label: 'SubAgents',
-          description: 'Sub-agent definitions and collaboration scripts',
+        agents: {
+          label: 'Agents',
+          description: 'Agent roles, subagents, and collaboration definitions',
         },
-        outputStyles: {
-          label: 'Output Styles',
-          description: 'Output formatting and style configurations',
+        outputStyle: {
+          label: 'Output Style',
+          description: 'Output style and formatting preferences',
         },
         scripts: {
           label: 'Template scripts',
@@ -458,6 +459,19 @@ const template = {
       actions: {
         cancel: 'Cancel',
         confirm: 'Install to {{workspace}}',
+      },
+      preview: {
+        title: 'Install Preview',
+        summary: '{{files}} files / {{warnings}} warnings / {{unsupported}} unsupported / {{degradation}} degradation',
+        target: 'Target: {{target}}',
+        loading: 'Loading compile preview...',
+        loadFailed: 'Unable to load install preview',
+        none: 'No additional warnings or degradation for this target.',
+        sections: {
+          warnings: 'Warnings',
+          unsupported: 'Unsupported',
+          degradation: 'Degradation',
+        },
       },
     },
     import: {
@@ -729,16 +743,17 @@ const template = {
       },
       error: {
         title: 'Error',
+        description: 'Missing template information. Refresh and try again.',
       },
     },
     tabs: {
       basic: 'Basic info',
-      claudeMd: 'Claude.md',
+      agentsMd: 'AGENTS.md',
       hooks: 'Hooks',
       mcp: 'MCP',
-      subAgents: 'SubAgents',
-      slashCommands: 'Slash Commands',
-      outputStyles: 'Output Styles',
+      agents: 'Agents',
+      commands: 'Commands',
+      outputStyle: 'Output Style',
       skills: 'Skills',
       scripts: 'Scripts',
       docs: 'Docs',
@@ -912,18 +927,18 @@ const template = {
         },
       },
     },
-    slashCommands: {
+    commands: {
       sidebar: {
-        title: 'Slash Commands',
+        title: 'Commands',
         searchPlaceholder: 'Search…',
         empty: 'No commands match your filters yet.',
       },
       empty: {
-        title: 'No slash commands yet',
+        title: 'No commands yet',
         description: 'Create a new command to guide Claude’s behaviour.',
       },
       actions: {
-        add: 'Add slash command',
+        add: 'Add command',
         copy: 'Copy content',
         download: 'Download',
         edit: 'Edit',
@@ -1124,14 +1139,14 @@ const template = {
         },
       },
     },
-    subAgents: {
+    agents: {
       sidebar: {
-        title: 'Subagents',
-        searchPlaceholder: 'Search subagents…',
-        empty: 'No subagents match your filters',
+        title: 'Agents',
+        searchPlaceholder: 'Search agents…',
+        empty: 'No agents match your filters',
       },
       actions: {
-        add: 'Add subagent',
+        add: 'Add agent',
         copy: 'Copy content',
         download: 'Download',
         edit: 'Edit',
@@ -1141,38 +1156,50 @@ const template = {
         sizeLabel: 'Size: {{size}}',
       },
       detail: {
-        nameFallback: 'Untitled subagent',
+        nameFallback: 'Untitled agent',
         descriptionFallback: 'No description provided.',
       },
       empty: {
-        title: 'No subagents yet',
+        title: 'No agents yet',
         description: 'Create a specialized agent to extend template capabilities.',
       },
       logs: {
-        copyFailed: 'Failed to copy subagent content:',
+        copyFailed: 'Failed to copy agent content:',
       },
       toasts: {
         copySuccess: {
           title: 'Content copied',
-          description: 'Subagent "{{name}}" content copied to clipboard.',
+          description: 'Agent "{{name}}" content copied to clipboard.',
         },
         copyFailed: {
           title: 'Copy failed',
-          description: 'Unable to copy subagent content. Please try again.',
+          description: 'Unable to copy agent content. Please try again.',
         },
         downloadSuccess: {
           title: 'Download started',
-          description: 'Downloading subagent "{{name}}" as a Markdown file.',
+          description: 'Downloading agent "{{name}}" as a Markdown file.',
+        },
+        createSuccess: {
+          title: 'Created',
+          description: 'Agent "{{name}}" has been created.',
+        },
+        updateSuccess: {
+          title: 'Updated',
+          description: 'Agent "{{name}}" has been updated.',
+        },
+        deleteSuccess: {
+          title: 'Deleted',
+          description: 'Agent "{{name}}" has been deleted.',
         },
       },
       dialog: {
         title: {
-          create: 'Add subagent',
-          edit: 'Edit subagent',
+          create: 'Add agent',
+          edit: 'Edit agent',
         },
         description: {
-          create: 'Create a new subagent to collaborate on tasks.',
-          edit: 'Update the file name and content for this subagent.',
+          create: 'Create a new agent to collaborate on tasks.',
+          edit: 'Update the file name and content for this agent.',
         },
         fields: {
           fileName: {
@@ -1181,9 +1208,9 @@ const template = {
             helper: 'Use a descriptive name that reflects the role or expertise.',
           },
           content: {
-            label: 'Subagent content *',
+            label: 'Agent content *',
             sizeHint: 'Estimated size: {{size}}',
-            helper: 'Describe behaviour, tools, and expertise for this subagent.',
+            helper: 'Describe behaviour, tools, and expertise for this agent.',
           },
         },
         validation: {
@@ -1191,14 +1218,14 @@ const template = {
           content: 'Content cannot be empty.',
         },
         actions: {
-          create: 'Create subagent',
+          create: 'Create agent',
           save: 'Save changes',
         },
       },
     },
-    outputStyles: {
+    outputStyle: {
       sidebar: {
-        title: 'Output Styles',
+        title: 'Output Style',
         searchPlaceholder: 'Search output styles…',
         empty: 'No output styles match your filters',
       },
@@ -1273,9 +1300,9 @@ const template = {
         },
       },
     },
-    claudeMd: {
+    agentsMd: {
       editor: {
-        placeholder: 'Edit Claude.md content – instructions for the Claude model (Markdown supported).',
+        placeholder: 'Edit AGENTS.md content - the primary instruction document and agent guidance (Markdown supported).',
       },
       status: {
         loading: 'Loading...',
@@ -1289,20 +1316,20 @@ const template = {
       toasts: {
         loadFailed: {
           title: 'Load failed',
-          description: 'Unable to load Claude.md content.',
+          description: 'Unable to load AGENTS.md content.',
         },
         saveSuccess: {
           title: 'Saved',
-          description: 'Claude.md content has been updated.',
+          description: 'AGENTS.md content has been updated.',
         },
         saveFailed: {
           title: 'Save failed',
-          description: 'Unable to save Claude.md content.',
+          description: 'Unable to save AGENTS.md content.',
         },
       },
       errors: {
-        loadFailed: 'Unable to load Claude.md content, please try again later.',
-        saveFailed: 'Unable to save Claude.md content, please try again later.',
+        loadFailed: 'Unable to load AGENTS.md content, please try again later.',
+        saveFailed: 'Unable to save AGENTS.md content, please try again later.',
       },
     },
     files: {
@@ -1410,12 +1437,12 @@ const template = {
     validation: {
       required: 'Required',
       select: 'Please select an option',
-      slashCommandName: 'Command name is required',
-      slashCommandContent: 'Command content is required',
+      commandName: 'Command name is required',
+      commandContent: 'Command content is required',
       hookName: 'Hook name is required',
       hookEvent: 'Hook event is required',
-      subAgentFile: 'File name is required',
-      subAgentContent: 'SubAgent content is required',
+      agentFile: 'File name is required',
+      agentContent: 'Agent content is required',
       filePath: 'Script path is required',
     },
   },
@@ -1435,14 +1462,37 @@ const template = {
     },
     tabs: {
       basicInfo: 'Basic Info',
-      claudeMd: 'Claude.md',
+      agentsMd: 'AGENTS.md',
       hooks: 'Hooks',
       mcp: 'MCP',
-      subAgents: 'SubAgents',
-      slashCommands: 'Slash Commands',
-      outputStyles: 'Output Styles',
+      agents: 'Agents',
+      commands: 'Commands',
+      outputStyle: 'Output Style',
       skills: 'Skills',
       scripts: 'Scripts',
+      targetPreview: 'Target Preview',
+    },
+    targetPreview: {
+      description: 'Inspect compiled output files and degradation details for each target CLI.',
+      targetLabel: 'Target CLI',
+      loading: 'Loading compile preview...',
+      emptyFiles: 'No compiled output files for this target yet.',
+      sections: {
+        files: 'Compiled Output',
+        warnings: 'Warnings',
+        unsupported: 'Unsupported',
+        degradation: 'Degradation',
+      },
+      file: {
+        sourceLabel: 'Source',
+        contentPreviewLabel: 'Content Preview',
+      },
+      states: {
+        none: 'No items.',
+      },
+      errors: {
+        loadFailed: 'Unable to load the target compile preview. Please try again later.',
+      },
     },
     fileViewer: {
       loading: 'Loading files…',
@@ -1515,10 +1565,10 @@ const template = {
       },
       stats: {
         mcpServers: 'MCP Servers',
-        slashCommands: 'Slash Commands',
+        commands: 'Commands',
         hooks: 'Hooks',
-        subAgents: 'SubAgents',
-        claudeMd: 'Claude.md',
+        agents: 'Agents',
+        agentsMd: 'AGENTS.md',
         scripts: 'Script Files',
       },
     },
@@ -1609,10 +1659,10 @@ const template = {
         actions: '{{count}} actions',
       },
     },
-    claudeMd: {
-      downloadFileName: 'Claude.md',
+    agentsMd: {
+      downloadFileName: 'AGENTS.md',
       header: {
-        title: 'Claude.md configuration',
+        title: 'AGENTS.md configuration',
         description: 'Global instructions and behaviour configuration for this template.',
       },
       status: {
@@ -1623,38 +1673,38 @@ const template = {
         error: 'Error',
       },
       empty: {
-        title: 'Claude.md is not configured yet',
-        description: 'This template does not include a Claude.md configuration file.',
+        title: 'AGENTS.md is not configured yet',
+        description: 'This template does not include an AGENTS.md configuration file.',
       },
       actions: {
         copy: 'Copy',
         download: 'Download',
         edit: 'Edit',
-        create: 'Create Claude.md',
+        create: 'Create AGENTS.md',
       },
       toasts: {
         copySuccess: {
           title: 'Copied',
-          description: 'Claude.md content copied to clipboard.',
+          description: 'AGENTS.md content copied to clipboard.',
         },
         copyFailed: {
           title: 'Copy failed',
-          description: 'Unable to copy Claude.md content.',
+          description: 'Unable to copy AGENTS.md content.',
         },
         downloadSuccess: {
           title: 'Download started',
-          description: 'Claude.md downloaded as Markdown file.',
+          description: 'AGENTS.md downloaded as Markdown file.',
         },
       },
     },
-    subAgents: {
+    agents: {
       accessibility: {
         collapseSidebar: 'Collapse primary sidebar',
       },
       sidebar: {
-        title: 'SubAgents',
-        searchPlaceholder: 'Search SubAgents...',
-        empty: 'No SubAgents match your filters',
+        title: 'Agents',
+        searchPlaceholder: 'Search agents...',
+        empty: 'No agents match your filters',
       },
       actions: {
         copy: 'Copy content',
@@ -1662,36 +1712,36 @@ const template = {
       },
       list: {
         sizeLabel: 'Size: {{size}}',
-        nameFallback: 'Unnamed subagent',
+        nameFallback: 'Unnamed agent',
       },
       detail: {
         descriptionFallback: 'No description provided.',
         noContent: 'No content available',
       },
       empty: {
-        title: 'No SubAgents yet',
-        description: 'Select or create a SubAgent from the sidebar.',
+        title: 'No agents yet',
+        description: 'Select or create an agent from the sidebar.',
       },
       errors: {
-        copyFailed: 'Failed to copy SubAgent content.',
+        copyFailed: 'Failed to copy agent content.',
       },
       toasts: {
         copySuccess: {
           title: 'Content copied',
-          description: 'SubAgent content copied to clipboard.',
+          description: 'Agent content copied to clipboard.',
         },
         downloadSuccess: {
           title: 'Download started',
-          description: 'Downloading SubAgent as Markdown file.',
+          description: 'Downloading agent as Markdown file.',
         },
       },
     },
-    outputStyles: {
+    outputStyle: {
       accessibility: {
         collapseSidebar: 'Collapse primary sidebar',
       },
       sidebar: {
-        title: 'Output Styles',
+        title: 'Output Style',
         searchPlaceholder: 'Search output styles...',
         empty: 'No output styles match your filters',
       },
@@ -1725,12 +1775,12 @@ const template = {
         },
       },
     },
-    slashCommands: {
+    commands: {
       accessibility: {
         collapseSidebar: 'Collapse primary sidebar',
       },
       sidebar: {
-        title: 'Slash Commands',
+        title: 'Commands',
         searchPlaceholder: 'Search commands...',
         scopeLabel: 'Filter by scope',
         scopes: {
@@ -1753,11 +1803,11 @@ const template = {
         descriptionFallback: 'No description provided.',
       },
       empty: {
-        title: 'No slash commands yet',
-        description: 'Select or create a slash command from the sidebar to review its details.',
+        title: 'No commands yet',
+        description: 'Select or create a command from the sidebar to review its details.',
       },
       errors: {
-        copyFailed: 'Failed to copy slash command content.',
+        copyFailed: 'Failed to copy command content.',
       },
     },
     files: {
@@ -1785,6 +1835,22 @@ const template = {
   },
   common: {
     uncategorized: 'Uncategorized',
+    targets: {
+      claudeCode: 'Claude Code',
+      codex: 'Codex',
+      gemini: 'Gemini',
+      opencode: 'OpenCode',
+    },
+    features: {
+      mcp: 'MCP',
+      commands: 'Commands',
+      hooks: 'Hooks',
+      agentsMd: 'AGENTS.md',
+      agents: 'Agents',
+      outputStyle: 'Output Style',
+      scripts: 'Scripts',
+      skills: 'Skills',
+    },
   },
 };
 

@@ -10,8 +10,8 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
-        'template.editor.tabs.skills': 'Skills',
-        'template.editor.tabs.scripts': 'Scripts',
+        'template.common.features.skills': 'Skills',
+        'template.common.features.scripts': 'Scripts',
       };
       return translations[key] ?? key;
     },

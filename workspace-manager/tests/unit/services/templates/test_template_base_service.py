@@ -73,6 +73,24 @@ class TestPathManagement:
         expected = tmp_path / "plugins" / "test-template"
         assert result == expected
 
+    def test_get_registry_template_dir(self, base_service, tmp_path):
+        """測試：取得 canonical registry 模板目錄路徑"""
+        result = base_service._get_registry_template_dir("test-template")
+
+        expected = tmp_path / "templates" / "test-template"
+        assert result == expected
+
+    def test_resolve_template_dir_prefers_registry_template(self, base_service, tmp_path):
+        """測試：解析模板目錄時優先使用 registry templates 目錄"""
+        registry_dir = tmp_path / "templates" / "test-template"
+        legacy_dir = tmp_path / "plugins" / "test-template"
+        registry_dir.mkdir(parents=True, exist_ok=True)
+        legacy_dir.mkdir(parents=True, exist_ok=True)
+
+        result = base_service._resolve_template_dir("test-template")
+
+        assert result == registry_dir
+
     def test_get_plugin_json_path(self, base_service, tmp_path):
         """測試：取得 plugin.json 路徑"""
         # Act

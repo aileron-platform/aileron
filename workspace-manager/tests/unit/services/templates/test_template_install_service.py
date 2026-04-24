@@ -9,6 +9,7 @@ import pytest
 import httpx
 
 from app.db.models import Template as TemplateDB, Workspace
+from app.models.template_canonical import CanonicalTarget, InstallPlan
 from app.services.template_install_service import TemplateInstallError, TemplateInstallService
 
 
@@ -90,11 +91,14 @@ class TestInstallation:
 
         with patch.object(install_service.template_service, '_get_template') as mock_get_template, \
              patch.object(install_service, '_prepare_install_payload') as mock_prepare, \
-             patch.object(install_service, '_call_runtime_install_api') as mock_call_api:
+             patch.object(install_service, '_call_runtime_install_api') as mock_call_api, \
+             patch.object(install_service.template_compiler, "compile_template") as mock_compile, \
+             patch.object(install_service.artifact_cache, "record_install_manifest") as mock_record_manifest:
 
             mock_get_template.return_value = mock_template_db
             mock_prepare.return_value = {"templateId": "test-template"}
             mock_call_api.return_value = {"success": True}
+            mock_compile.return_value = InstallPlan(target=CanonicalTarget.CLAUDE_CODE, installHints={})
 
             # Act
             result = await install_service.install_template_to_workspace(
@@ -105,6 +109,7 @@ class TestInstallation:
             # Assert
             assert result["success"] is True
             mock_call_api.assert_called_once()
+            mock_record_manifest.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_install_template_workspace_not_found(self, install_service, mock_db_session):
@@ -184,66 +189,39 @@ class TestPayloadPreparation:
         mock_template_db
     ):
         """測試：準備基本安裝資料"""
-        # Arrange
-        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
+        with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                installHints={},
+            )
 
-            mock_claude_md.return_value = None
-            mock_commands.return_value = []
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = []
-            mock_hooks.return_value = []
-            mock_files.return_value = []
-            mock_skills.return_value = []
-
-            # Act
             result = await install_service._prepare_install_payload(mock_template_db)
 
-            # Assert
-            assert result["templateId"] == "test-template"
-            assert result["templateName"] == "Test Template"
-            assert result["cliType"] == "claude-code"
-            assert result["initCommands"] == ["echo 'Hello'"]
+        assert result["templateId"] == "test-template"
+        assert result["templateName"] == "Test Template"
+        assert result["cliType"] == "claude-code"
+        assert result["initCommands"] == ["echo 'Hello'"]
+        mock_compile.assert_called_once_with("test-template", "claude-code")
 
     @pytest.mark.asyncio
-    async def test_prepare_install_payload_with_claude_md(
+    async def test_prepare_install_payload_with_agents_md(
         self,
         install_service,
         mock_template_db
     ):
-        """測試：準備含 Claude.md 的安裝資料"""
-        # Arrange
-        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
+        """測試：準備含 install plan 的安裝資料"""
+        with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                files=[],
+                installHints={"agentsMdContent": "# AGENTS content"},
+            )
 
-            mock_claude_md.return_value = "# Claude.md content"
-            mock_commands.return_value = []
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = []
-            mock_hooks.return_value = []
-            mock_files.return_value = []
-            mock_skills.return_value = []
-
-            # Act
             result = await install_service._prepare_install_payload(mock_template_db)
 
-            # Assert
-            assert "claudeMd" in result
-            assert result["claudeMd"]["content"] == "# Claude.md content"
+        assert "installPlan" in result
+        assert result["installPlan"]["target"] == "claude-code"
+        assert result["installPlan"]["installHints"]["agentsMdContent"] == "# AGENTS content"
 
     @pytest.mark.asyncio
     async def test_prepare_install_payload_with_commands(
@@ -251,38 +229,26 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備含 Slash Commands 的安裝資料"""
-        # Arrange
-        mock_command = MagicMock()
-        mock_command.fileName = "test-command"
-        mock_command.content = "Command content"
+        """測試：安裝 payload 攜帶 compiled files 而非 legacy commands 欄位"""
+        with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                files=[
+                    {
+                        "path": ".claude/commands/test-command.md",
+                        "source": "commands/test-command.md",
+                        "content": "Command content",
+                    }
+                ],
+                installHints={},
+            )
 
-        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
-
-            mock_claude_md.return_value = None
-            mock_commands.return_value = [mock_command]
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = []
-            mock_hooks.return_value = []
-            mock_files.return_value = []
-            mock_skills.return_value = []
-
-            # Act
             result = await install_service._prepare_install_payload(mock_template_db)
 
-            # Assert
-            assert "slashCommands" in result
-            assert len(result["slashCommands"]) == 1
-            assert result["slashCommands"][0]["fileName"] == "test-command.md"
-            assert result["slashCommands"][0]["content"] == "Command content"
+        assert "installPlan" in result
+        assert len(result["installPlan"]["files"]) == 1
+        assert result["installPlan"]["files"][0]["path"] == ".claude/commands/test-command.md"
+        assert "commands" not in result
 
     @pytest.mark.asyncio
     async def test_prepare_install_payload_with_mcp_servers(
@@ -290,43 +256,28 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備含 MCP Servers 的安裝資料"""
-        # Arrange
-        mock_server = MagicMock()
-        mock_server.name = "test-mcp"
-        mock_server.type = "stdio"
-        mock_server.command = "python"
-        mock_server.args = ["-m", "test"]
-        mock_server.env = {"KEY": "value"}
-        mock_server.url = None
-        mock_server.headers = None
+        """測試：準備含 MCP compile hint 的安裝資料"""
+        with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                installHints={
+                    "mcpServers": {
+                        "test-mcp": {
+                            "type": "stdio",
+                            "command": "python",
+                            "args": ["-m", "test"],
+                            "env": {"KEY": "value"},
+                        }
+                    }
+                },
+            )
 
-        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
-
-            mock_claude_md.return_value = None
-            mock_commands.return_value = []
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = [mock_server]
-            mock_hooks.return_value = []
-            mock_files.return_value = []
-            mock_skills.return_value = []
-
-            # Act
             result = await install_service._prepare_install_payload(mock_template_db)
 
-            # Assert
-            assert "mcpServers" in result
-            assert "test-mcp" in result["mcpServers"]
-            assert result["mcpServers"]["test-mcp"]["type"] == "stdio"
-            assert result["mcpServers"]["test-mcp"]["command"] == "python"
+        assert "installPlan" in result
+        assert "test-mcp" in result["installPlan"]["installHints"]["mcpServers"]
+        assert result["installPlan"]["installHints"]["mcpServers"]["test-mcp"]["type"] == "stdio"
+        assert result["installPlan"]["installHints"]["mcpServers"]["test-mcp"]["command"] == "python"
 
     @pytest.mark.asyncio
     async def test_prepare_install_payload_with_skills(
@@ -335,35 +286,25 @@ class TestPayloadPreparation:
         mock_template_db
     ):
         """測試：準備含 Skills 的安裝資料"""
-        mock_skill = MagicMock()
-        mock_skill.type = "file"
-        mock_skill.path = "openspec-ff-change/SKILL.md"
-        mock_skill.content = "# Skill"
-
-        with patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch.object(install_service.template_service.file_service, 'load_skills') as mock_skills:
-
-            mock_claude_md.return_value = None
-            mock_commands.return_value = []
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = []
-            mock_hooks.return_value = []
-            mock_files.return_value = []
-            mock_skills.return_value = [mock_skill]
+        with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                installHints={
+                    "skills": [
+                        {
+                            "path": "openspec-ff-change/SKILL.md",
+                            "content": "# Skill",
+                        }
+                    ]
+                },
+            )
 
             result = await install_service._prepare_install_payload(mock_template_db)
 
-            assert result["skills"] == [{
-                "path": "openspec-ff-change/SKILL.md",
-                "content": "# Skill",
-            }]
+        assert result["installPlan"]["installHints"]["skills"] == [{
+            "path": "openspec-ff-change/SKILL.md",
+            "content": "# Skill",
+        }]
 
 
 # ============================================================================
@@ -562,24 +503,15 @@ class TestIntegration:
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(install_service.template_service, '_get_template') as mock_get_template, \
-             patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch('app.services.template_install_service.httpx.AsyncClient') as mock_client, \
-             patch('os.path.exists', return_value=False):
+             patch.object(install_service.template_compiler, "compile_template") as mock_compile, \
+             patch('app.services.template_install_service.httpx.AsyncClient') as mock_client:
 
             mock_get_template.return_value = mock_template_db
-            mock_claude_md.return_value = "# Template"
-            mock_commands.return_value = []
-            mock_agents.return_value = []
-            mock_styles.return_value = []
-            mock_mcp.return_value = []
-            mock_hooks.return_value = []
-            mock_files.return_value = []
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                files=[{"path": "CLAUDE.md", "source": "agents.md", "content": "# Template"}],
+                installHints={"agentsMdContent": "# Template"},
+            )
 
             mock_client_instance = AsyncMock()
             mock_client_instance.__aenter__.return_value = mock_client_instance
@@ -596,6 +528,9 @@ class TestIntegration:
             # Assert
             assert result["success"] is True
             assert "installed successfully" in result["message"]
+            call_args = mock_client_instance.post.call_args
+            payload = call_args[1]["json"]
+            assert "installPlan" in payload
 
     @pytest.mark.asyncio
     async def test_installation_with_all_components(
@@ -611,63 +546,30 @@ class TestIntegration:
         mock_query.filter.return_value.first.return_value = mock_workspace
         mock_db_session.query.return_value = mock_query
 
-        # 建立各種 mock 組件
-        mock_command = MagicMock()
-        mock_command.fileName = "cmd"
-        mock_command.content = "content"
-
-        mock_agent = MagicMock()
-        mock_agent.fileName = "agent"
-        mock_agent.content = "content"
-
-        mock_style = MagicMock()
-        mock_style.fileName = "style"
-        mock_style.content = "content"
-
-        mock_server = MagicMock()
-        mock_server.name = "mcp"
-        mock_server.type = "stdio"
-        mock_server.command = "python"
-        mock_server.args = []
-        mock_server.env = {}
-        mock_server.url = None
-        mock_server.headers = None
-
-        mock_hook = MagicMock()
-        mock_hook.event = "before_chat"
-        mock_hook.matcher = "*"
-        mock_hook.action = "exec"
-        mock_hook.command = "echo"
-        mock_hook.timeout = 30
-
-        mock_file = MagicMock()
-        mock_file.type = "file"
-        mock_file.path = "script.py"
-        mock_file.content = "print('hello')"
-
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True}
         mock_response.raise_for_status = MagicMock()
 
         with patch.object(install_service.template_service, '_get_template') as mock_get_template, \
-             patch.object(install_service.template_service, 'get_claude_md') as mock_claude_md, \
-             patch.object(install_service.template_service, '_load_commands') as mock_commands, \
-             patch.object(install_service.template_service, '_load_agents') as mock_agents, \
-             patch.object(install_service.template_service, '_load_output_styles') as mock_styles, \
-             patch.object(install_service.template_service, '_load_mcp_servers') as mock_mcp, \
-             patch.object(install_service.template_service, '_load_hooks') as mock_hooks, \
-             patch.object(install_service.template_service, '_load_files') as mock_files, \
-             patch('app.services.template_install_service.httpx.AsyncClient') as mock_client, \
-             patch('os.path.exists', return_value=False):
+             patch.object(install_service.template_compiler, "compile_template") as mock_compile, \
+             patch('app.services.template_install_service.httpx.AsyncClient') as mock_client:
 
             mock_get_template.return_value = mock_template_db
-            mock_claude_md.return_value = "# Claude.md"
-            mock_commands.return_value = [mock_command]
-            mock_agents.return_value = [mock_agent]
-            mock_styles.return_value = [mock_style]
-            mock_mcp.return_value = [mock_server]
-            mock_hooks.return_value = [mock_hook]
-            mock_files.return_value = [mock_file]
+            mock_compile.return_value = InstallPlan(
+                target=CanonicalTarget.CLAUDE_CODE,
+                files=[
+                    {"path": "CLAUDE.md", "source": "agents.md", "content": "# Claude.md"},
+                    {"path": ".claude/commands/cmd.md", "source": "commands/cmd.md", "content": "content"},
+                    {"path": ".claude/agents/user/agent.md", "source": "agents/agent.md", "content": "content"},
+                ],
+                installHints={
+                    "agentsMdContent": "# Claude.md",
+                    "outputStyle": [{"fileName": "style.yaml", "content": "concise"}],
+                    "mcpServers": {"mcp": {"type": "stdio", "command": "python"}},
+                    "hooks": {"before_chat": [{"matcher": "*", "hooks": [{"type": "exec", "command": "echo", "timeout": 30}]}]},
+                    "skills": [{"path": "review/SKILL.md", "content": "# skill"}],
+                },
+            )
 
             mock_client_instance = AsyncMock()
             mock_client_instance.__aenter__.return_value = mock_client_instance
@@ -688,10 +590,8 @@ class TestIntegration:
             call_args = mock_client_instance.post.call_args
             assert call_args is not None
             payload = call_args[1]["json"]
-            assert "claudeMd" in payload
-            assert "slashCommands" in payload
-            assert "subagents" in payload
-            assert "outputStyles" in payload
-            assert "mcpServers" in payload
-            assert "hooks" in payload
-            assert "scripts" in payload
+            assert "installPlan" in payload
+            assert len(payload["installPlan"]["files"]) == 3
+            assert "mcpServers" in payload["installPlan"]["installHints"]
+            assert "hooks" in payload["installPlan"]["installHints"]
+            assert "skills" in payload["installPlan"]["installHints"]

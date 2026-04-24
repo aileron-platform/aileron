@@ -3,12 +3,12 @@
  */
 
 export {
-  SubAgentDialog,
-  type SubAgentDialogProps,
-  type WorkspaceSubAgentData,
-  type TemplateSubAgentData,
-  type SubAgentScope,
-} from './SubAgentDialog';
+  AgentDialog,
+  type AgentDialogProps,
+  type WorkspaceAgentData,
+  type TemplateAgentData,
+  type AgentScope,
+} from './AgentDialog';
 
 export {
   OutputStyleDialog,
@@ -19,12 +19,12 @@ export {
 } from './OutputStyleDialog';
 
 export {
-  SlashCommandDialog,
-  type SlashCommandDialogProps,
-  type WorkspaceSlashCommandData,
-  type TemplateSlashCommandData,
-  type SlashCommandScope,
-} from './SlashCommandDialog';
+  CommandDialog,
+  type CommandDialogProps,
+  type WorkspaceCommandData,
+  type TemplateCommandData,
+  type CommandScope,
+} from './CommandDialog';
 
 export {
   HookDialog,

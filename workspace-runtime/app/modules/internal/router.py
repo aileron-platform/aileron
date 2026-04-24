@@ -26,6 +26,7 @@ from .template_install_models import (
     ClaudeMdInstallResponse,
     HooksInstallRequest,
     HooksInstallResponse,
+    InstallResults,
     McpInstallRequest,
     McpInstallResponse,
     OutputStyleInstallRequest,
@@ -537,6 +538,186 @@ async def install_template(
     """批次安裝模板配置"""
     results = TemplateInstallResults()
     overall_success = True
+
+    if request.installPlan:
+        compiled_results = await service.install_compiled_files(
+            workspace_id,
+            request.installPlan,
+        )
+
+        def _to_item_result(install_results: InstallResults) -> TemplateInstallItemResult | None:
+            total = (
+                len(install_results.created)
+                + len(install_results.updated)
+                + len(install_results.failed)
+            )
+            if total == 0:
+                return None
+            success = len(install_results.failed) == 0
+            return TemplateInstallItemResult(
+                success=success,
+                created=len(install_results.created),
+                updated=len(install_results.updated),
+                failed=len(install_results.failed),
+            )
+
+        results.claudeMd = _to_item_result(compiled_results["claudeMd"])
+        results.slashCommands = _to_item_result(compiled_results["slashCommands"])
+        results.subagents = _to_item_result(compiled_results["subagents"])
+        results.outputStyles = _to_item_result(compiled_results["outputStyles"])
+
+        if any(install_results.failed for install_results in compiled_results.values()):
+            overall_success = False
+
+        cli_type = (request.cliType or request.installPlan.target).strip().lower()
+        install_hints = request.installPlan.install_hints
+
+        if install_hints.get("outputStyles"):
+            try:
+                success, os_results = await service.install_target_output_style(
+                    workspace_id,
+                    cli_type,
+                    install_hints["outputStyles"],
+                )
+                results.outputStyles = TemplateInstallItemResult(
+                    success=success,
+                    created=len(os_results.created),
+                    updated=len(os_results.updated),
+                    failed=len(os_results.failed),
+                )
+                if not success:
+                    overall_success = False
+            except Exception as e:
+                logger.error(f"Failed to install output styles in compiled plan: {e}")
+                results.outputStyles = TemplateInstallItemResult(
+                    success=False,
+                    created=0,
+                    updated=0,
+                    failed=len(install_hints["outputStyles"]),
+                    error=str(e),
+                )
+                overall_success = False
+
+        if install_hints.get("mcpServers"):
+            try:
+                success, mcp_results = await service.install_target_mcp_servers(
+                    workspace_id,
+                    cli_type,
+                    install_hints["mcpServers"],
+                )
+                results.mcp = TemplateInstallItemResult(
+                    success=success,
+                    created=len(mcp_results.created),
+                    updated=len(mcp_results.updated),
+                    failed=len(mcp_results.failed),
+                )
+                if not success:
+                    overall_success = False
+            except Exception as e:
+                logger.error(f"Failed to install MCP servers in compiled plan: {e}")
+                results.mcp = TemplateInstallItemResult(
+                    success=False,
+                    created=0,
+                    updated=0,
+                    failed=len(install_hints["mcpServers"]),
+                    error=str(e),
+                )
+                overall_success = False
+
+        if install_hints.get("hooks"):
+            try:
+                success, hooks_results = await service.install_target_hooks(
+                    workspace_id,
+                    cli_type,
+                    install_hints["hooks"],
+                )
+                results.hooks = TemplateInstallItemResult(
+                    success=success,
+                    created=len(hooks_results.created),
+                    updated=len(hooks_results.updated),
+                    failed=len(hooks_results.failed),
+                )
+                if not success:
+                    overall_success = False
+            except Exception as e:
+                logger.error(f"Failed to install hooks in compiled plan: {e}")
+                results.hooks = TemplateInstallItemResult(
+                    success=False,
+                    created=0,
+                    updated=0,
+                    failed=1,
+                    error=str(e),
+                )
+                overall_success = False
+
+        if install_hints.get("skills"):
+            try:
+                from .template_install_models import SkillsInstallRequest as SkillsRequest
+
+                skills_request = SkillsRequest(
+                    cliType=cli_type,
+                    skills=install_hints["skills"],
+                )
+                success, skills_results, _, _ = await service.install_skills(
+                    workspace_id, skills_request
+                )
+                results.skills = TemplateInstallItemResult(
+                    success=success,
+                    created=len(skills_results.created),
+                    updated=len(skills_results.updated),
+                    failed=len(skills_results.failed),
+                )
+                if not success:
+                    overall_success = False
+            except Exception as e:
+                logger.error(f"Failed to install skills in compiled plan: {e}")
+                results.skills = TemplateInstallItemResult(
+                    success=False,
+                    created=0,
+                    updated=0,
+                    failed=len(install_hints["skills"]),
+                    error=str(e),
+                )
+                overall_success = False
+
+        message = "模板安裝完成" if overall_success else "模板安裝完成（部分失敗）"
+
+        if request.initCommands and request.initCommands.strip():
+            try:
+                logger.info(f"開始執行模板初始化指令: {request.templateName}")
+                success, stdout, stderr = await service.execute_init_commands(
+                    workspace_id, request.initCommands
+                )
+                if not success:
+                    redacted = (stderr or "").strip()
+                    redacted_msg = redacted[:200] + ("..." if len(redacted) > 200 else "")
+                    logger.warning(
+                        "模板初始化指令執行失敗 (workspace=%s, template=%s): %s",
+                        workspace_id,
+                        request.templateId,
+                        redacted_msg,
+                    )
+                    overall_success = False
+                    message = "模板安裝完成（初始化指令失敗）"
+                else:
+                    logger.info(
+                        "模板初始化指令執行成功 (workspace=%s, template=%s, stdout_length=%d)",
+                        workspace_id,
+                        request.templateId,
+                        len(stdout or ""),
+                    )
+            except Exception as e:
+                logger.error(f"Failed to execute init commands in batch: {e}")
+                overall_success = False
+                message = "模板安裝完成（初始化指令失敗）"
+
+        return TemplateInstallResponse(
+            success=overall_success,
+            message=message,
+            templateId=request.templateId,
+            templateName=request.templateName,
+            results=results,
+        )
 
     # 安裝 Claude.md
     if request.claudeMd:

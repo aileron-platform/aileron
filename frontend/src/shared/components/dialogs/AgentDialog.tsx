@@ -18,16 +18,16 @@ import { useI18n } from '@/shared/hooks/useI18n';
 // 類型定義
 // ============================================================================
 
-export type SubAgentScope = 'project' | 'user' | 'local' | 'plugin';
+export type AgentScope = 'project' | 'user' | 'local' | 'plugin';
 
 /**
  * 工作區版本的 SubAgent 數據（兼容 ClaudeDocument）
  */
-export interface WorkspaceSubAgentData {
+export interface WorkspaceAgentData {
   id: string;
   workspaceId?: string;
   title: string;
-  scope: SubAgentScope;
+  scope: AgentScope;
   content: string;
   description?: string;
   size?: string;
@@ -39,7 +39,7 @@ export interface WorkspaceSubAgentData {
 /**
  * 模板版本的 SubAgent 數據
  */
-export interface TemplateSubAgentData {
+export interface TemplateAgentData {
   localId: string;
   fileName: string;
   content: string;
@@ -48,7 +48,7 @@ export interface TemplateSubAgentData {
 
 interface FormState {
   fileName: string;
-  scope: SubAgentScope;
+  scope: AgentScope;
   content: string;
 }
 
@@ -73,35 +73,35 @@ const ensureMdExtension = (fileName: string): string => {
 // 工作區版本 Props（向後兼容，variant 為可選）
 // ============================================================================
 
-interface WorkspaceSubAgentDialogProps {
+interface WorkspaceAgentDialogProps {
   variant?: 'workspace';
   open: boolean;
   mode: 'create' | 'edit';
-  initialValue?: WorkspaceSubAgentData | null;
+  initialValue?: WorkspaceAgentData | null;
   onClose: () => void;
-  onSubmit: (document: WorkspaceSubAgentData) => void | Promise<void>;
+  onSubmit: (document: WorkspaceAgentData) => void | Promise<void>;
 }
 
 // ============================================================================
 // 模板版本 Props
 // ============================================================================
 
-interface TemplateSubAgentDialogProps {
+interface TemplateAgentDialogProps {
   variant: 'template';
   open: boolean;
   mode: 'create' | 'edit';
-  initialValue?: TemplateSubAgentData | null;
+  initialValue?: TemplateAgentData | null;
   onClose: () => void;
-  onSubmit: (subAgent: TemplateSubAgentData) => void;
+  onSubmit: (subAgent: TemplateAgentData) => void;
 }
 
-export type SubAgentDialogProps = WorkspaceSubAgentDialogProps | TemplateSubAgentDialogProps;
+export type AgentDialogProps = WorkspaceAgentDialogProps | TemplateAgentDialogProps;
 
 // ============================================================================
 // 元件實作
 // ============================================================================
 
-export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
+export const AgentDialog: React.FC<AgentDialogProps> = (props) => {
   const { open, mode, onClose } = props;
   // 向後兼容：variant 為 undefined 時預設為 'workspace'
   const variant = props.variant ?? 'workspace';
@@ -112,14 +112,14 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
   // 從初始值建立表單狀態
   const buildInitialState = useCallback((): FormState => {
     if (variant === 'workspace') {
-      const initial = props.initialValue as WorkspaceSubAgentData | null | undefined;
+      const initial = props.initialValue as WorkspaceAgentData | null | undefined;
       return {
         fileName: (initial?.metadata?.fileName as string | undefined) ?? '',
         scope: initial?.scope ?? 'project',
         content: initial?.content ?? '',
       };
     } else {
-      const initial = props.initialValue as TemplateSubAgentData | null | undefined;
+      const initial = props.initialValue as TemplateAgentData | null | undefined;
       return {
         fileName: initial?.fileName ?? '',
         scope: 'project',
@@ -155,7 +155,7 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
     if (variant === 'workspace') {
       return `workspace.claudeCode.subagents.dialog.${key}`;
     }
-    return `template.editor.subAgents.dialog.${key}`;
+    return `template.editor.agents.dialog.${key}`;
   };
 
   const validate = () => {
@@ -181,12 +181,12 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
 
     try {
       if (variant === 'workspace') {
-        const initial = props.initialValue as WorkspaceSubAgentData | null | undefined;
+        const initial = props.initialValue as WorkspaceAgentData | null | undefined;
         const identifier =
           (initial?.metadata?.fileName as string | undefined) ?? initial?.id ?? normalizedFileName;
         const scope = formState.scope;
 
-        const document: WorkspaceSubAgentData = {
+        const document: WorkspaceAgentData = {
           id: `${scope}:${identifier}`,
           title: normalizedFileName,
           description: '',
@@ -198,17 +198,17 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
           },
         };
 
-        (props as WorkspaceSubAgentDialogProps).onSubmit(document);
+        (props as WorkspaceAgentDialogProps).onSubmit(document);
       } else {
-        const initial = props.initialValue as TemplateSubAgentData | null | undefined;
-        const subAgent: TemplateSubAgentData = {
+        const initial = props.initialValue as TemplateAgentData | null | undefined;
+        const subAgent: TemplateAgentData = {
           localId: initial?.localId || `local-${Math.random().toString(36).slice(2, 10)}`,
           fileName: normalizedFileName,
           description: '',
           content: formState.content,
         };
 
-        (props as TemplateSubAgentDialogProps).onSubmit(subAgent);
+        (props as TemplateAgentDialogProps).onSubmit(subAgent);
       }
       onClose();
     } finally {
@@ -249,7 +249,7 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
                       <Select
                         value={formState.scope}
                         onValueChange={(value) =>
-                          setFormState((prev) => ({ ...prev, scope: value as SubAgentScope }))
+                          setFormState((prev) => ({ ...prev, scope: value as AgentScope }))
                         }
                       >
                         <SelectTrigger>
@@ -296,7 +296,7 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
                   />
                   {errors.fileName && <p className="text-xs text-destructive">{errors.fileName}</p>}
                   <p className="text-xs text-muted-foreground">
-                    {t('template.editor.subAgents.dialog.fields.fileName.helper')}
+                    {t('template.editor.agents.dialog.fields.fileName.helper')}
                   </p>
                 </div>
               )}
@@ -317,7 +317,7 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
                           ? t('workspace.claudeCode.subagents.dialog.fields.content.estimatedSize', {
                               size: formatSize(formState.content),
                             })
-                          : t('template.editor.subAgents.dialog.fields.content.sizeHint', {
+                          : t('template.editor.agents.dialog.fields.content.sizeHint', {
                               size: formatSize(formState.content),
                             })}
                       </span>
@@ -350,4 +350,4 @@ export const SubAgentDialog: React.FC<SubAgentDialogProps> = (props) => {
   );
 };
 
-export default SubAgentDialog;
+export default AgentDialog;

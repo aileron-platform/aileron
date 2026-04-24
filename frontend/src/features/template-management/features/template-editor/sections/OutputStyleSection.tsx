@@ -1,32 +1,23 @@
 import React from 'react';
 import { OutputStyleDialog } from '@/shared/components/dialogs';
 import type { OutputStyleFormValue } from '../formTypes';
-import * as templateApi from '@/shared/services/templateApi';
 import { adaptOutputStyleFormValues } from '@/shared/components/template/adapters';
 import { OutputStyleViewer, type OutputStyleData } from '@/shared/components/template/OutputStyleViewer';
 import useTemplateDocumentSection from '../hooks/useTemplateDocumentSection';
-import { useTemplateApi } from '../hooks/useTemplateApi';
 
-interface OutputStylesSectionProps {
-  outputStyles: OutputStyleFormValue[];
-  onOutputStylesChange: (styles: OutputStyleFormValue[]) => void;
+interface OutputStyleSectionProps {
+  outputStyle: OutputStyleFormValue[];
+  onOutputStyleChange: (styles: OutputStyleFormValue[]) => void;
   templateId?: string;
   onReloadTemplate?: () => Promise<void>;
 }
 
-const OutputStylesSection: React.FC<OutputStylesSectionProps> = ({
-  outputStyles,
-  onOutputStylesChange,
+const OutputStyleSection: React.FC<OutputStyleSectionProps> = ({
+  outputStyle,
+  onOutputStyleChange,
   templateId,
   onReloadTemplate,
 }) => {
-  const { loadOutputStyles } = useTemplateApi({
-    templateId,
-    onSuccess: () => {
-      void onReloadTemplate?.();
-    },
-  });
-
   const {
     viewItems,
     dialogOpen,
@@ -38,29 +29,12 @@ const OutputStylesSection: React.FC<OutputStylesSectionProps> = ({
     handleDelete,
     handleSubmit,
   } = useTemplateDocumentSection<OutputStyleFormValue, OutputStyleData>({
-    templateId,
-    initialItems: outputStyles,
-    onItemsChange: onOutputStylesChange,
-    onReloadTemplate,
-    loadItems: templateId ? loadOutputStyles : undefined,
+    initialItems: outputStyle,
+    onItemsChange: onOutputStyleChange,
     getIdentifier: item => item.fileName,
     toViewItems: adaptOutputStyleFormValues,
     getViewItemId: item => item.id,
     getFormItemId: item => item.localId,
-    createRemote: async (item) => {
-      await templateApi.createOutputStyleFile(templateId!, {
-        file_name: item.fileName,
-        content: item.content,
-      });
-    },
-    updateRemote: async (item, original) => {
-      await templateApi.updateOutputStyleFile(templateId!, original.fileName, {
-        content: item.content,
-      });
-    },
-    deleteRemote: async (item) => {
-      await templateApi.deleteOutputStyleFile(templateId!, item.fileName);
-    },
     normalizeUpdatedItem: (item, original) => ({ ...item, fileName: original.fileName }),
   });
 
@@ -72,7 +46,7 @@ const OutputStylesSection: React.FC<OutputStylesSectionProps> = ({
         onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
-        onRefresh={templateId ? loadOutputStyles : undefined}
+        onRefresh={onReloadTemplate}
       />
 
       <OutputStyleDialog
@@ -87,4 +61,4 @@ const OutputStylesSection: React.FC<OutputStylesSectionProps> = ({
   );
 };
 
-export default OutputStylesSection;
+export default OutputStyleSection;

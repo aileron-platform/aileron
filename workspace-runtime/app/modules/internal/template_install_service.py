@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from app.modules.claude_code.common import DocumentScope
 from app.modules.claude_code.mcp import McpService
@@ -24,6 +24,19 @@ from app.modules.claude_code.claude_md.models import (
     ClaudeMdScope,
     ClaudeMdUpdateRequest,
 )
+from app.modules.cli_settings.hooks.config import CliHookScope, HookTool, get_hook_tool_config
+from app.modules.cli_settings.hooks.models import (
+    CliHookImportMode,
+    CliHookImportRequest,
+    CliHookScopeDocument,
+)
+from app.modules.cli_settings.hooks.service import CliHookService
+from app.modules.cli_settings.mcp.models import (
+    CliMcpImportRequest,
+    CliMcpScope,
+    CliMcpServerConfig,
+)
+from app.modules.cli_settings.mcp.service import CliMcpService, McpTool, get_mcp_tool_config
 from app.modules.cli_settings.skills.config import SkillTool, get_skill_config
 from app.config.settings import get_workspace_path
 
@@ -31,6 +44,7 @@ from .template_install_models import (
     ClaudeMdInstallRequest,
     HooksInstallRequest,
     InstallResults,
+    InstallPlanRequest,
     McpInstallRequest,
     OutputStyleInstallRequest,
     SkillsInstallRequest,
@@ -40,6 +54,34 @@ from .template_install_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+TARGET_INSTALL_MATRIX: Dict[str, Dict[str, Any]] = {
+    "claude-code": {
+        "agents_md_file": "CLAUDE.md",
+        "output_style_mode": "native",
+        "hooks_mode": "native",
+        "mcp_mode": "native",
+    },
+    "codex": {
+        "agents_md_file": "AGENTS.md",
+        "output_style_mode": "inject-agents-md",
+        "hooks_mode": "skip",
+        "mcp_mode": "cli-settings",
+    },
+    "gemini": {
+        "agents_md_file": "GEMINI.md",
+        "output_style_mode": "inject-agents-md",
+        "hooks_mode": "cli-settings",
+        "mcp_mode": "cli-settings",
+    },
+    "opencode": {
+        "agents_md_file": "AGENTS.md",
+        "output_style_mode": "inject-agents-md",
+        "hooks_mode": "skip",
+        "mcp_mode": "cli-settings",
+    },
+}
 
 
 class TemplateInstallService:
@@ -85,6 +127,77 @@ class TemplateInstallService:
             self.claude_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
             self.scripts_base_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
+    @staticmethod
+    def _is_safe_relative_path(relative_path: str) -> bool:
+        return bool(relative_path) and not relative_path.startswith("/") and ".." not in relative_path.split("/")
+
+    @staticmethod
+    def _classify_compiled_file(path: str) -> str:
+        normalized = path.strip("/")
+        name = Path(normalized).name
+        if name in {"CLAUDE.md", "AGENTS.md", "GEMINI.md"}:
+            return "claudeMd"
+        if "/commands/" in normalized or "/prompts/" in normalized:
+            return "slashCommands"
+        if "/agents/" in normalized:
+            return "subagents"
+        if "/output-styles/" in normalized:
+            return "outputStyles"
+        return "files"
+
+    @staticmethod
+    def _get_target_strategy(cli_type: str) -> Dict[str, Any]:
+        normalized = cli_type.strip().lower()
+        if normalized not in TARGET_INSTALL_MATRIX:
+            raise ValueError(f"Unsupported cli type for template installation: {cli_type}")
+        return TARGET_INSTALL_MATRIX[normalized]
+
+    async def install_compiled_files(
+        self,
+        workspace_id: str,
+        request: InstallPlanRequest,
+    ) -> Dict[str, InstallResults]:
+        """安裝 compiled install plan 中的檔案到 workspace project scope。"""
+        workspace_root = Path(get_workspace_path())
+        workspace_root.mkdir(mode=0o755, parents=True, exist_ok=True)
+
+        results_by_category: Dict[str, InstallResults] = {
+            "claudeMd": InstallResults(),
+            "slashCommands": InstallResults(),
+            "subagents": InstallResults(),
+            "outputStyles": InstallResults(),
+            "files": InstallResults(),
+        }
+
+        for compiled in request.files:
+            category = self._classify_compiled_file(compiled.path)
+            category_results = results_by_category[category]
+            try:
+                if not self._is_safe_relative_path(compiled.path):
+                    logger.warning("Invalid compiled file path: %s", compiled.path)
+                    category_results.failed.append(compiled.path)
+                    continue
+
+                file_path = (workspace_root / compiled.path).resolve()
+                if workspace_root.resolve() not in file_path.parents and file_path != workspace_root.resolve():
+                    logger.warning("Compiled file path escaped workspace root: %s", compiled.path)
+                    category_results.failed.append(compiled.path)
+                    continue
+
+                is_new = not file_path.exists()
+                file_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+                file_path.write_text(compiled.content, encoding="utf-8")
+                file_path.chmod(0o644)
+
+                if is_new:
+                    category_results.created.append(compiled.path)
+                else:
+                    category_results.updated.append(compiled.path)
+            except Exception as e:
+                logger.error("Failed to install compiled file %s: %s", compiled.path, e)
+                category_results.failed.append(compiled.path)
+
+        return results_by_category
     # ============ Slash Commands ============
 
     async def install_slash_commands(
@@ -451,6 +564,125 @@ class TemplateInstallService:
 
         success = len(results.failed) == 0
         return success, results, str(target_dir), total_size
+
+    async def install_target_mcp_servers(
+        self,
+        workspace_id: str,
+        cli_type: str,
+        mcp_servers: Dict[str, Dict[str, Any]],
+    ) -> Tuple[bool, InstallResults]:
+        """依 target CLI 安裝 MCP 設定。"""
+        if not mcp_servers:
+            return True, InstallResults()
+
+        normalized = cli_type.strip().lower()
+        strategy = self._get_target_strategy(normalized)
+        if strategy["mcp_mode"] == "native":
+            request = McpInstallRequest(mcpServers=mcp_servers)
+            return await self.install_mcp_servers(workspace_id, request)
+
+        tool_map = {
+            "gemini": McpTool.GEMINI,
+            "codex": McpTool.CODEX,
+            "opencode": McpTool.OPENCODE,
+        }
+        tool = tool_map.get(normalized)
+        if tool is None:
+            raise ValueError(f"Unsupported cli type for MCP installation: {cli_type}")
+
+        service = CliMcpService(get_mcp_tool_config(tool))
+        import_request = CliMcpImportRequest(
+            scope=CliMcpScope.PROJECT,
+            mcpServers={name: CliMcpServerConfig(**config) for name, config in mcp_servers.items()},
+            overwrite=True,
+        )
+        response = service.import_servers(workspace_id, import_request)
+        return True, InstallResults(
+            created=response.created,
+            updated=response.updated,
+            failed=[],
+        )
+
+    async def install_target_hooks(
+        self,
+        workspace_id: str,
+        cli_type: str,
+        hooks: Dict[str, List[Dict[str, Any]]],
+    ) -> Tuple[bool, InstallResults]:
+        """依 target CLI 安裝 hooks 設定。"""
+        if not hooks:
+            return True, InstallResults()
+
+        normalized = cli_type.strip().lower()
+        strategy = self._get_target_strategy(normalized)
+        if strategy["hooks_mode"] == "native":
+            request = HooksInstallRequest(hooks=hooks)
+            return await self.install_hooks(workspace_id, request)
+
+        if strategy["hooks_mode"] == "skip":
+            logger.info("Skipping hooks installation for unsupported cli type: %s", cli_type)
+            return True, InstallResults()
+
+        service = CliHookService(get_hook_tool_config(HookTool.GEMINI))
+        import_request = CliHookImportRequest(
+            mode=CliHookImportMode.REPLACE,
+            scopes=[
+                CliHookScopeDocument(
+                    scope=CliHookScope.PROJECT,
+                    hooks=hooks,
+                )
+            ],
+        )
+        response = service.import_scopes(workspace_id, import_request)
+        created = [f"hooks_imported_{i}" for i in range(response.imported)]
+        updated = [f"hooks_updated_{i}" for i in range(response.updated)]
+        return True, InstallResults(created=created, updated=updated, failed=[])
+
+    async def install_target_output_style(
+        self,
+        workspace_id: str,
+        cli_type: str,
+        output_styles: List[Dict[str, Any]],
+    ) -> Tuple[bool, InstallResults]:
+        """依 target CLI 安裝或降級注入 output style。"""
+        if not output_styles:
+            return True, InstallResults()
+
+        normalized = cli_type.strip().lower()
+        strategy = self._get_target_strategy(normalized)
+
+        if strategy["output_style_mode"] == "native":
+            request = OutputStyleInstallRequest(outputStyles=output_styles)
+            return await self.install_output_styles(workspace_id, request)
+
+        if strategy["output_style_mode"] != "inject-agents-md":
+            logger.info("Skipping output style installation for cli type: %s", cli_type)
+            return True, InstallResults()
+
+        fallback_parts = [str(item.get("content") or "").strip() for item in output_styles]
+        fallback_text = "\n\n".join(part for part in fallback_parts if part)
+        if not fallback_text:
+            return True, InstallResults()
+
+        workspace_root = Path(get_workspace_path())
+        agents_md_path = workspace_root / strategy["agents_md_file"]
+        existing = agents_md_path.read_text(encoding="utf-8") if agents_md_path.exists() else ""
+        injected = (
+            f"{existing.rstrip()}\n\n"
+            "## Output Style\n\n"
+            f"{fallback_text}\n"
+        ).lstrip()
+        is_new = not agents_md_path.exists()
+        agents_md_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        agents_md_path.write_text(injected, encoding="utf-8")
+        agents_md_path.chmod(0o644)
+
+        results = InstallResults()
+        if is_new:
+            results.created.append(strategy["agents_md_file"])
+        else:
+            results.updated.append(strategy["agents_md_file"])
+        return True, results
 
     @staticmethod
     def _resolve_skill_tool(cli_type: str) -> SkillTool:

@@ -17,7 +17,7 @@ const ScriptsSection: React.FC<ScriptsSectionProps> = ({ scripts, onScriptsChang
     <TemplateFileManager
       templateId={templateId}
       basePath="scripts"
-      title={t('template.editor.tabs.scripts')}
+      title={t('template.common.features.scripts')}
       leadingIcon={<FileCode className="h-4 w-4 text-primary" />}
       onFilesChange={(files) => {
         // 轉換 FileNode[] 為 FileEntryFormValue[]

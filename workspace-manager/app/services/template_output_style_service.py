@@ -1,4 +1,4 @@
-"""模板 Output Styles 檔案管理服務"""
+"""模板 Output Style 檔案管理服務"""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ from app.services.template_base_service import TemplateBaseService
 logger = logging.getLogger(__name__)
 
 
-class TemplateOutputStylesService(TemplateBaseService):
-    """處理模板的 Output Styles 檔案管理"""
+class TemplateOutputStyleService(TemplateBaseService):
+    """處理模板的 Output Style 檔案管理"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
-    def get_output_styles_files(self, template_id: str) -> TemplateOutputStyleListResponse:
-        """取得模板的 output-styles 檔案列表"""
+    def get_output_style_files(self, template_id: str) -> TemplateOutputStyleListResponse:
+        """取得模板的 output-style 檔案列表"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateOutputStyleListResponse,
@@ -39,7 +39,7 @@ class TemplateOutputStylesService(TemplateBaseService):
             return TemplateOutputStyleListResponse(
                 success=True,
                 data=[],
-                message="Output styles directory created",
+                message="Output style directory created",
             )
 
         try:
@@ -47,13 +47,13 @@ class TemplateOutputStylesService(TemplateBaseService):
             return TemplateOutputStyleListResponse(
                 success=True,
                 data=files,
-                message="Output styles files loaded successfully",
+                message="Output style files loaded successfully",
             )
         except Exception as e:
-            logger.error(f"取得 output styles 檔案列表失敗: {e}")
+            logger.error(f"取得 output style 檔案列表失敗: {e}")
             return TemplateOutputStyleListResponse(
                 success=False,
-                error=f"Failed to list output styles files: {str(e)}",
+                error=f"Failed to list output style files: {str(e)}",
             )
 
     def get_output_style_file_content(self, template_id: str, file_name: str) -> TemplateOutputStyleResponse:
@@ -195,15 +195,15 @@ class TemplateOutputStylesService(TemplateBaseService):
                 error=f"Failed to delete output style file: {str(e)}",
             )
 
-    def load_output_styles(self, template_id: str) -> List:
-        """載入 Output Styles 配置"""
+    def load_output_style(self, template_id: str) -> List:
+        """載入 Output Style 配置"""
         from app.models.template import TemplateOutputStyle
 
         styles_dir = self._get_template_dir(template_id) / "output-styles"
         if not styles_dir.exists():
             return []
 
-        output_styles = []
+        output_style = []
         try:
             for file_path in styles_dir.glob("*.md"):
                 content = file_path.read_text(encoding="utf-8")
@@ -211,18 +211,17 @@ class TemplateOutputStylesService(TemplateBaseService):
                 # 提取 description
                 description = self._extract_yaml_description(content)
 
-                output_styles.append(TemplateOutputStyle(
+                output_style.append(TemplateOutputStyle(
                     id=str(file_path),
                     fileName=file_path.name,
                     content=content,
                     description=description,
                 ))
 
-            return output_styles
+            return output_style
         except Exception as e:
-            logger.error(f"載入 Output Styles 配置失敗: {e}")
+            logger.error(f"載入 Output Style 配置失敗: {e}")
             return []
 
 
-__all__ = ["TemplateOutputStylesService"]
-
+__all__ = ["TemplateOutputStyleService"]

@@ -1,4 +1,4 @@
-"""模板 Slash Commands 檔案管理服務"""
+"""模板 Commands 檔案管理服務"""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from app.models.template_config import (
-    TemplateSlashCommandListResponse,
-    TemplateSlashCommandResponse,
-    TemplateSlashCommandContent,
-    TemplateSlashCommandCreateRequest,
-    TemplateSlashCommandUpdateRequest,
-    TemplateSlashCommandFile,
+    TemplateCommandListResponse,
+    TemplateCommandResponse,
+    TemplateCommandContent,
+    TemplateCommandCreateRequest,
+    TemplateCommandUpdateRequest,
+    TemplateCommandFile,
 )
 from app.services.template_base_service import TemplateBaseService
 
@@ -21,16 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateCommandsService(TemplateBaseService):
-    """處理模板的 Slash Commands 檔案管理"""
+    """處理模板的 Commands 檔案管理"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
-    def get_slash_commands_files(self, template_id: str) -> TemplateSlashCommandListResponse:
-        """取得模板的 slash-commands 檔案列表"""
+    def get_commands_files(self, template_id: str) -> TemplateCommandListResponse:
+        """取得模板的 commands 檔案列表"""
         _, error_response = self._validate_template_and_filename(
             template_id,
-            TemplateSlashCommandListResponse,
+            TemplateCommandListResponse,
             include_list_data=True,
         )
         if error_response:
@@ -38,32 +38,32 @@ class TemplateCommandsService(TemplateBaseService):
 
         commands_dir, created = self._ensure_directory(template_id, "commands")
         if created:
-            return TemplateSlashCommandListResponse(
+            return TemplateCommandListResponse(
                 success=True,
                 data=[],
                 message="Commands directory created",
             )
 
         try:
-            files = self._list_markdown_files(commands_dir, TemplateSlashCommandFile)
-            return TemplateSlashCommandListResponse(
+            files = self._list_markdown_files(commands_dir, TemplateCommandFile)
+            return TemplateCommandListResponse(
                 success=True,
                 data=files,
                 message=f"Found {len(files)} command files",
             )
         except Exception as e:
-            logger.error(f"讀取 slash-commands 檔案列表失敗: {e}")
-            return TemplateSlashCommandListResponse(
+            logger.error(f"讀取 commands 檔案列表失敗: {e}")
+            return TemplateCommandListResponse(
                 success=False,
                 data=[],
                 error=f"Failed to read commands directory: {str(e)}",
             )
 
-    def get_slash_command_file_content(self, template_id: str, file_name: str) -> TemplateSlashCommandResponse:
-        """取得單個 slash-command 檔案內容"""
+    def get_command_file_content(self, template_id: str, file_name: str) -> TemplateCommandResponse:
+        """取得單個 command 檔案內容"""
         _, error_response = self._validate_template_and_filename(
             template_id,
-            TemplateSlashCommandResponse,
+            TemplateCommandResponse,
             file_name=file_name,
         )
         if error_response:
@@ -71,30 +71,30 @@ class TemplateCommandsService(TemplateBaseService):
 
         command_file = self._get_template_dir(template_id) / "commands" / file_name
         if not command_file.exists():
-            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+            return TemplateCommandResponse(success=False, error="Command file not found")
 
         try:
-            content_model = self._read_file_content(command_file, TemplateSlashCommandContent)
-            return TemplateSlashCommandResponse(
+            content_model = self._read_file_content(command_file, TemplateCommandContent)
+            return TemplateCommandResponse(
                 success=True,
                 data=content_model,
                 message="Command file loaded successfully",
             )
         except Exception as e:
-            logger.error(f"讀取 slash-command 檔案內容失敗: {e}")
-            return TemplateSlashCommandResponse(
+            logger.error(f"讀取 command 檔案內容失敗: {e}")
+            return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to read command file: {str(e)}",
             )
 
-    def create_slash_command_file(self, template_id: str, request: TemplateSlashCommandCreateRequest) -> TemplateSlashCommandResponse:
-        """建立新的 slash-command 檔案（支援子目錄結構）"""
+    def create_command_file(self, template_id: str, request: TemplateCommandCreateRequest) -> TemplateCommandResponse:
+        """建立新的 command 檔案（支援子目錄結構）"""
         # 標準化檔案名稱（自動補上 .md）
         normalized_file_name = self._normalize_file_name(request.file_name)
 
         _, error_response = self._validate_template_and_filename(
             template_id,
-            TemplateSlashCommandResponse,
+            TemplateCommandResponse,
             file_name=normalized_file_name,
         )
         if error_response:
@@ -103,7 +103,7 @@ class TemplateCommandsService(TemplateBaseService):
         commands_dir, _ = self._ensure_directory(template_id, "commands")
         command_file = commands_dir / normalized_file_name
         if command_file.exists():
-            return TemplateSlashCommandResponse(success=False, error="Command file already exists")
+            return TemplateCommandResponse(success=False, error="Command file already exists")
 
         try:
             # 如果檔案名稱包含路徑，確保父目錄存在
@@ -113,31 +113,31 @@ class TemplateCommandsService(TemplateBaseService):
             content_model, error_message = self._write_file_with_stats(
                 command_file,
                 request.content,
-                TemplateSlashCommandContent,
+                TemplateCommandContent,
             )
             if error_message:
-                return TemplateSlashCommandResponse(success=False, error=error_message)
+                return TemplateCommandResponse(success=False, error=error_message)
 
             # 更新 plugin.json
             self._update_plugin_json(template_id)
 
-            return TemplateSlashCommandResponse(
+            return TemplateCommandResponse(
                 success=True,
                 data=content_model,
                 message="Command file created successfully",
             )
         except Exception as e:
-            logger.error(f"建立 slash-command 檔案失敗: {e}")
-            return TemplateSlashCommandResponse(
+            logger.error(f"建立 command 檔案失敗: {e}")
+            return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to create command file: {str(e)}",
             )
 
-    def update_slash_command_file(self, template_id: str, file_name: str, request: TemplateSlashCommandUpdateRequest) -> TemplateSlashCommandResponse:
-        """更新現有的 slash-command 檔案"""
+    def update_command_file(self, template_id: str, file_name: str, request: TemplateCommandUpdateRequest) -> TemplateCommandResponse:
+        """更新現有的 command 檔案"""
         _, error_response = self._validate_template_and_filename(
             template_id,
-            TemplateSlashCommandResponse,
+            TemplateCommandResponse,
             file_name=file_name,
         )
         if error_response:
@@ -145,34 +145,34 @@ class TemplateCommandsService(TemplateBaseService):
 
         command_file = self._get_template_dir(template_id) / "commands" / file_name
         if not command_file.exists():
-            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+            return TemplateCommandResponse(success=False, error="Command file not found")
 
         try:
             content_model, error_message = self._write_file_with_stats(
                 command_file,
                 request.content,
-                TemplateSlashCommandContent,
+                TemplateCommandContent,
             )
             if error_message:
-                return TemplateSlashCommandResponse(success=False, error=error_message)
+                return TemplateCommandResponse(success=False, error=error_message)
 
-            return TemplateSlashCommandResponse(
+            return TemplateCommandResponse(
                 success=True,
                 data=content_model,
                 message="Command file updated successfully",
             )
         except Exception as e:
-            logger.error(f"更新 slash-command 檔案失敗: {e}")
-            return TemplateSlashCommandResponse(
+            logger.error(f"更新 command 檔案失敗: {e}")
+            return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to update command file: {str(e)}",
             )
 
-    def delete_slash_command_file(self, template_id: str, file_name: str) -> TemplateSlashCommandResponse:
-        """刪除 slash-command 檔案"""
+    def delete_command_file(self, template_id: str, file_name: str) -> TemplateCommandResponse:
+        """刪除 command 檔案"""
         _, error_response = self._validate_template_and_filename(
             template_id,
-            TemplateSlashCommandResponse,
+            TemplateCommandResponse,
             file_name=file_name,
         )
         if error_response:
@@ -180,7 +180,7 @@ class TemplateCommandsService(TemplateBaseService):
 
         command_file = self._get_template_dir(template_id) / "commands" / file_name
         if not command_file.exists():
-            return TemplateSlashCommandResponse(success=False, error="Command file not found")
+            return TemplateCommandResponse(success=False, error="Command file not found")
 
         try:
             command_file.unlink()
@@ -188,26 +188,26 @@ class TemplateCommandsService(TemplateBaseService):
             # 更新 plugin.json
             self._update_plugin_json(template_id)
 
-            return TemplateSlashCommandResponse(
+            return TemplateCommandResponse(
                 success=True,
                 message="Command file deleted successfully",
             )
         except Exception as e:
-            logger.error(f"刪除 slash-command 檔案失敗: {e}")
-            return TemplateSlashCommandResponse(
+            logger.error(f"刪除 command 檔案失敗: {e}")
+            return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to delete command file: {str(e)}",
             )
 
     def load_commands(self, template_id: str) -> List:
         """載入 Commands 配置（支援子目錄結構）"""
-        from app.models.template import TemplateSlashCommand
+        from app.models.template import TemplateCommand
 
         commands_dir = self._get_template_dir(template_id) / "commands"
         if not commands_dir.exists():
             return []
 
-        slash_commands = []
+        commands = []
         try:
             # 使用 rglob 遞迴搜尋所有 .md 檔案（包含子目錄）
             for file_path in commands_dir.rglob("*.md"):
@@ -220,18 +220,17 @@ class TemplateCommandsService(TemplateBaseService):
                 # 提取 description
                 description = self._extract_yaml_description(content)
 
-                slash_commands.append(TemplateSlashCommand(
+                commands.append(TemplateCommand(
                     id=str(file_path),
                     fileName=command_name,  # 使用完整的相對路徑作為 fileName（如 "namespace/command" 或 "command"）
                     content=content,
                     description=description,
                 ))
 
-            return slash_commands
+            return commands
         except Exception as e:
             logger.error(f"載入 Commands 配置失敗: {e}")
             return []
 
 
 __all__ = ["TemplateCommandsService"]
-

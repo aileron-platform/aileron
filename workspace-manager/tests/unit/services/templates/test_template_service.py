@@ -11,6 +11,7 @@ from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
+import yaml
 
 from app.db.models import Template as TemplateDB
 from app.models import (
@@ -317,7 +318,7 @@ class TestTemplateCRUD:
         mock_db_session.query.return_value = mock_query
 
         # 建立模板目錄
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
 
         with patch.object(template_service, '_delete_template_structure'):
@@ -359,7 +360,7 @@ class TestTemplateImportExport:
         mock_db_session.query.return_value = mock_query
 
         # 建立模板目錄和檔案
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
         (template_dir / "test.txt").write_text("test content")
 
@@ -479,7 +480,7 @@ class TestTemplateImportExport:
             zipf.writestr(".claude-plugin/plugin.json", json.dumps(plugin_data))
             zipf.writestr("commands/new-command.md", "content")
 
-        existing_dir = tmp_path / "plugins" / "test-template"
+        existing_dir = tmp_path / "templates" / "test-template"
         existing_dir.mkdir(parents=True, exist_ok=True)
         (existing_dir / "old.txt").write_text("stale content")
 
@@ -718,28 +719,28 @@ class TestTemplateStructure:
         template_service._create_template_structure("new-template", mock_template_create)
 
         # Assert
-        template_dir = tmp_path / "plugins" / "new-template"
+        template_dir = tmp_path / "templates" / "new-template"
         assert template_dir.exists()
         assert (template_dir / "commands").exists()
         assert (template_dir / "agents").exists()
-        assert (template_dir / "scripts").exists()
         assert (template_dir / "skills").exists()
         assert (template_dir / "hooks").exists()
-        assert (template_dir / "output-styles").exists()
-        assert (template_dir / ".claude-plugin").exists()
+        assert (template_dir / "mcp").exists()
+        assert (template_dir / "resources" / "scripts").exists()
+        assert (template_dir / "template.yaml").exists()
 
-        plugin_json_path = template_dir / ".claude-plugin" / "plugin.json"
-        assert plugin_json_path.exists()
+        template_yaml_path = template_dir / "template.yaml"
+        assert template_yaml_path.exists()
 
-        # 驗證 plugin.json 內容
-        plugin_data = json.loads(plugin_json_path.read_text())
-        assert plugin_data["id"] == "new-template"
-        assert plugin_data["name"] == "New Template"
+        # 驗證 template.yaml 內容
+        template_data = yaml.safe_load(template_yaml_path.read_text())
+        assert template_data["id"] == "new-template"
+        assert template_data["name"] == "New Template"
 
     def test_delete_template_structure(self, template_service, tmp_path):
         """測試：刪除模板檔案結構"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
         (template_dir / "test.txt").write_text("test")
 
@@ -784,14 +785,14 @@ class TestServiceDelegation:
             mock_method.assert_called_once_with("test-template")
             assert result == {"hooks": {}}
 
-    def test_get_slash_commands_delegation(self, template_service):
+    def test_get_commands_delegation(self, template_service):
         """測試：Slash Commands 委派"""
         # Arrange
-        with patch.object(template_service.commands_service, 'get_slash_commands_files') as mock_method:
+        with patch.object(template_service.commands_service, 'get_commands_files') as mock_method:
             mock_method.return_value = []
 
             # Act
-            result = template_service.get_slash_commands_files("test-template")
+            result = template_service.get_commands_files("test-template")
 
             # Assert
             mock_method.assert_called_once_with("test-template")
@@ -802,28 +803,28 @@ class TestServiceDelegation:
         [
             ("mcp_service", "update_mcp_config", "update_mcp_config", ("test-template", {"servers": []}), {"ok": True}),
             ("hooks_service", "update_hooks_config", "update_hooks_config", ("test-template", {"hooks": []}), {"ok": True}),
-            ("commands_service", "get_slash_command_file_content", "get_slash_command_file_content", ("test-template", "cmd.md"), "command"),
-            ("commands_service", "create_slash_command_file", "create_slash_command_file", ("test-template", {"name": "cmd"}), {"created": True}),
-            ("commands_service", "update_slash_command_file", "update_slash_command_file", ("test-template", "cmd.md", {"content": "new"}), {"updated": True}),
-            ("commands_service", "delete_slash_command_file", "delete_slash_command_file", ("test-template", "cmd.md"), {"deleted": True}),
-            ("agents_service", "get_sub_agents_files", "get_sub_agents_files", ("test-template",), ["agent.md"]),
-            ("agents_service", "get_sub_agent_file_content", "get_sub_agent_file_content", ("test-template", "agent.md"), "agent"),
-            ("agents_service", "create_sub_agent_file", "create_sub_agent_file", ("test-template", {"name": "agent"}), {"created": True}),
-            ("agents_service", "update_sub_agent_file", "update_sub_agent_file", ("test-template", "agent.md", {"content": "new"}), {"updated": True}),
-            ("agents_service", "delete_sub_agent_file", "delete_sub_agent_file", ("test-template", "agent.md"), {"deleted": True}),
-            ("output_styles_service", "get_output_styles_files", "get_output_styles_files", ("test-template",), ["style.md"]),
-            ("output_styles_service", "get_output_style_file_content", "get_output_style_file_content", ("test-template", "style.md"), "style"),
-            ("output_styles_service", "create_output_style_file", "create_output_style_file", ("test-template", {"name": "style"}), {"created": True}),
-            ("output_styles_service", "update_output_style_file", "update_output_style_file", ("test-template", "style.md", {"content": "new"}), {"updated": True}),
-            ("output_styles_service", "delete_output_style_file", "delete_output_style_file", ("test-template", "style.md"), {"deleted": True}),
+            ("commands_service", "get_command_file_content", "get_command_file_content", ("test-template", "cmd.md"), "command"),
+            ("commands_service", "create_command_file", "create_command_file", ("test-template", {"name": "cmd"}), {"created": True}),
+            ("commands_service", "update_command_file", "update_command_file", ("test-template", "cmd.md", {"content": "new"}), {"updated": True}),
+            ("commands_service", "delete_command_file", "delete_command_file", ("test-template", "cmd.md"), {"deleted": True}),
+            ("agents_service", "get_agents_files", "get_agents_files", ("test-template",), ["agent.md"]),
+            ("agents_service", "get_agent_file_content", "get_agent_file_content", ("test-template", "agent.md"), "agent"),
+            ("agents_service", "create_agent_file", "create_agent_file", ("test-template", {"name": "agent"}), {"created": True}),
+            ("agents_service", "update_agent_file", "update_agent_file", ("test-template", "agent.md", {"content": "new"}), {"updated": True}),
+            ("agents_service", "delete_agent_file", "delete_agent_file", ("test-template", "agent.md"), {"deleted": True}),
+            ("output_style_service", "get_output_style_files", "get_output_style_files", ("test-template",), ["style.md"]),
+            ("output_style_service", "get_output_style_file_content", "get_output_style_file_content", ("test-template", "style.md"), "style"),
+            ("output_style_service", "create_output_style_file", "create_output_style_file", ("test-template", {"name": "style"}), {"created": True}),
+            ("output_style_service", "update_output_style_file", "update_output_style_file", ("test-template", "style.md", {"content": "new"}), {"updated": True}),
+            ("output_style_service", "delete_output_style_file", "delete_output_style_file", ("test-template", "style.md"), {"deleted": True}),
             ("file_service", "search_files", "search_files", ("test-template", {"query": "test"}), ["match"]),
-            ("claude_md_service", "get_claude_md", "get_claude_md", ("test-template",), "# Claude"),
-            ("claude_md_service", "update_claude_md", "update_claude_md", ("test-template", "# Updated"), None),
+            ("agents_md_service", "get_agents_md", "get_agents_md", ("test-template",), "# Claude"),
+            ("agents_md_service", "update_agents_md", "update_agents_md", ("test-template", "# Updated"), None),
             ("marketplace_service", "get_marketplace_config", "get_marketplace_config", (), {"featured": []}),
             ("marketplace_service", "update_marketplace_config", "update_marketplace_config", ({"featured": []},), {"saved": True}),
             ("commands_service", "load_commands", "_load_commands", ("test-template",), ["cmd"]),
             ("agents_service", "load_agents", "_load_agents", ("test-template",), ["agent"]),
-            ("output_styles_service", "load_output_styles", "_load_output_styles", ("test-template",), ["style"]),
+            ("output_style_service", "load_output_style", "_load_output_style", ("test-template",), ["style"]),
             ("mcp_service", "load_mcp_servers", "_load_mcp_servers", ("test-template",), {"servers": {}}),
             ("hooks_service", "load_hooks", "_load_hooks", ("test-template",), {"hooks": []}),
             ("file_service", "load_files", "_load_files", ("test-template",), ["file"]),
@@ -1105,7 +1106,7 @@ class TestErrorHandling:
             with patch.object(template_service.hooks_service, 'load_hooks') as mock_hooks:
                 with patch.object(template_service.commands_service, 'load_commands') as mock_commands:
                     with patch.object(template_service.agents_service, 'load_agents') as mock_agents:
-                        with patch.object(template_service.output_styles_service, 'load_output_styles') as mock_styles:
+                        with patch.object(template_service.output_style_service, 'load_output_style') as mock_styles:
                             with patch.object(template_service.file_service, 'load_files') as mock_files:
                                 mock_mcp.return_value = []
                                 mock_hooks.return_value = []

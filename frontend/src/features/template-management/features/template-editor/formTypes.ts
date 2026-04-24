@@ -3,9 +3,9 @@ import type {
   Template,
   TemplateCategory,
   TemplateMcpServer,
-  TemplateSlashCommand,
+  TemplateCommand,
   TemplateHook,
-  TemplateSubAgent,
+  TemplateAgent,
   TemplateOutputStyle,
 } from '@/shared/types/templates';
 import { flattenFileTree, buildFileTreeFromEntries, TemplateFileEntry } from '../../utils/templateFiles';
@@ -22,7 +22,7 @@ export interface McpServerFormValue {
   headersText: string; // HTTP 標頭，僅在 HTTP/SSE 類型時使用
 }
 
-export interface SlashCommandFormValue {
+export interface CommandFormValue {
   localId: string;
   fileName: string;
   content: string;
@@ -48,7 +48,7 @@ export interface HookFormValue {
   matchers: HookMatcherFormValue[];
 }
 
-export interface SubAgentFormValue {
+export interface AgentFormValue {
   localId: string;
   fileName: string;
   content: string;
@@ -85,14 +85,14 @@ export interface TemplateFormValues {
   keywords: string[];
   categoryId?: string;
   documentation: string;
-  claudeMd: string;
+  agentsMd: string;
   isActive: boolean;
   initCommands: string;
   mcpServers: McpServerFormValue[];
-  slashCommands: SlashCommandFormValue[];
+  commands: CommandFormValue[];
   hooks: HookFormValue[];
-  subAgents: SubAgentFormValue[];
-  outputStyles: OutputStyleFormValue[];
+  agents: AgentFormValue[];
+  outputStyle: OutputStyleFormValue[];
   skills: SkillFileFormValue[];
   scripts: FileEntryFormValue[];
 }
@@ -173,7 +173,7 @@ export const mapTemplateToFormValues = (template: Template): TemplateFormValues 
   keywords: template.keywords ?? [],
   categoryId: template.categoryId,
   documentation: template.documentation ?? '',
-  claudeMd: template.claudeMd ?? '',
+  agentsMd: template.agentsMd ?? '',
   isActive: template.isActive ?? true,
   initCommands: template.initCommands ?? '',
   mcpServers: template.mcpServers.map<McpServerFormValue>(item => ({
@@ -187,7 +187,7 @@ export const mapTemplateToFormValues = (template: Template): TemplateFormValues 
     envText: toEnvText(item.env),
     headersText: toHeadersText(item.headers),
   })),
-  slashCommands: template.slashCommands.map<SlashCommandFormValue>(item => ({
+  commands: template.commands.map<CommandFormValue>(item => ({
     localId: generateLocalId(),
     fileName: item.fileName,
     content: item.content,
@@ -218,14 +218,14 @@ export const mapTemplateToFormValues = (template: Template): TemplateFormValues 
       }))
     }));
   })(),
-  subAgents: template.subAgents.map<SubAgentFormValue>(item => ({
+  agents: template.agents.map<AgentFormValue>(item => ({
     localId: generateLocalId(),
     fileName: item.fileName,
     content: item.content,
     description: item.description ?? '',
     size: item.content.length,
   })),
-  outputStyles: template.outputStyles.map<OutputStyleFormValue>(item => ({
+  outputStyle: template.outputStyle.map<OutputStyleFormValue>(item => ({
     localId: generateLocalId(),
     fileName: item.fileName,
     content: item.content,
@@ -255,14 +255,14 @@ export const createEmptyFormValues = (categories: TemplateCategory[]): TemplateF
   keywords: [],
   categoryId: categories[0]?.id ?? '',
   documentation: '',
-  claudeMd: '',
+  agentsMd: '',
   isActive: true,
   initCommands: '',
   mcpServers: [],
-  slashCommands: [],
+  commands: [],
   hooks: [],
-  subAgents: [],
-  outputStyles: [],
+  agents: [],
+  outputStyle: [],
   skills: [],
   scripts: [],
 });
@@ -280,7 +280,7 @@ export const mapFormValuesToPayload = (values: TemplateFormValues): TemplateUpse
   },
   keywords: values.keywords,
   documentation: values.documentation,
-  claudeMd: values.claudeMd,
+  agentsMd: values.agentsMd,
   isActive: values.isActive,
   initCommands: values.initCommands,
   mcpServers: values.mcpServers.map<TemplateMcpServer>(item => ({
@@ -294,7 +294,7 @@ export const mapFormValuesToPayload = (values: TemplateFormValues): TemplateUpse
     env: parseEnvText(item.envText),
     headers: parseHeadersText(item.headersText),
   })),
-  slashCommands: values.slashCommands.map<TemplateSlashCommand>(item => ({
+  commands: values.commands.map<TemplateCommand>(item => ({
     id: item.localId,
     fileName: item.fileName,
     content: item.content,
@@ -321,13 +321,13 @@ export const mapFormValuesToPayload = (values: TemplateFormValues): TemplateUpse
     });
     return allHooks;
   })(),
-  subAgents: values.subAgents.map<TemplateSubAgent>(item => ({
+  agents: values.agents.map<TemplateAgent>(item => ({
     id: item.localId,
     fileName: item.fileName,
     content: item.content,
     description: item.description,
   })),
-  outputStyles: values.outputStyles.map<TemplateOutputStyle>(item => ({
+  outputStyle: values.outputStyle.map<TemplateOutputStyle>(item => ({
     id: item.localId,
     fileName: item.fileName,
     content: item.content,

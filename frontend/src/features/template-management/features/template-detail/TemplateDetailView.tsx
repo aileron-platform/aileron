@@ -26,13 +26,14 @@ import { CLAUDE_CODE_ICONS } from '@/features/workspace/components/navigation-co
 import { useTemplateManagementContext } from '../../providers/TemplateManagementProvider';
 import { apiClient } from '@/shared/api/apiClient';
 
-import { SlashCommandsTabContent } from './components/SlashCommandsTabContent';
+import { CommandsTabContent } from './components/CommandsTabContent';
 import { McpTabContent as McpTabContentView } from './components/McpTabContent';
 import { HooksTabContent as HooksTabContentView } from './components/HooksTabContent';
-import { ClaudeMdTabContent } from './components/ClaudeMdTabContent';
-import { SubAgentsTabContent } from './components/SubAgentsTabContent';
-import { OutputStylesTabContent } from './components/OutputStylesTabContent';
+import { AgentsMdTabContent } from './components/AgentsMdTabContent';
+import { AgentsTabContent } from './components/AgentsTabContent';
+import { OutputStyleTabContent } from './components/OutputStyleTabContent';
 import { BasicInfoTabContent } from './components/BasicInfoTabContent';
+import { TargetPreviewTabContent } from './components/TargetPreviewTabContent';
 
 import TemplateDetailFileViewer from './components/TemplateDetailFileViewer';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -98,19 +99,20 @@ export const TemplateDetailView: React.FC = () => {
   const tabs = useMemo(
     () => [
       { id: 'basic-info', name: t('template.detail.tabs.basicInfo'), icon: FileText, count: 0 },
-      { id: 'claude-md', name: t('template.detail.tabs.claudeMd'), icon: CLAUDE_CODE_ICONS['claude-md'], count: 0 },
-      { id: 'hooks', name: t('template.detail.tabs.hooks'), icon: CLAUDE_CODE_ICONS['hooks'], count: template?.hooks.length || 0 },
-      { id: 'mcp', name: t('template.detail.tabs.mcp'), icon: CLAUDE_CODE_ICONS['mcp'], count: template?.mcpServers.length || 0 },
-      { id: 'subagent', name: t('template.detail.tabs.subAgents'), icon: CLAUDE_CODE_ICONS['subagents'], count: template?.subAgents.length || 0 },
+      { id: 'agents-md', name: t('template.common.features.agentsMd'), icon: CLAUDE_CODE_ICONS['claude-md'], count: 0 },
+      { id: 'hooks', name: t('template.common.features.hooks'), icon: CLAUDE_CODE_ICONS['hooks'], count: template?.hooks.length || 0 },
+      { id: 'mcp', name: t('template.common.features.mcp'), icon: CLAUDE_CODE_ICONS['mcp'], count: template?.mcpServers.length || 0 },
+      { id: 'agent', name: t('template.common.features.agents'), icon: CLAUDE_CODE_ICONS['subagents'], count: template?.agents.length || 0 },
       {
-        id: 'slash-commands',
-        name: t('template.detail.tabs.slashCommands'),
+        id: 'commands',
+        name: t('template.common.features.commands'),
         icon: CLAUDE_CODE_ICONS['slash-commands'],
-        count: template?.slashCommands.length || 0,
+        count: template?.commands.length || 0,
       },
-      { id: 'output-styles', name: t('template.detail.tabs.outputStyles'), icon: CLAUDE_CODE_ICONS['output-styles'], count: template?.outputStyles.length || 0 },
-      { id: 'skills', name: t('template.detail.tabs.skills'), icon: CLAUDE_CODE_ICONS['skills'], count: skillsCount },
-      { id: 'scripts', name: t('template.detail.tabs.scripts'), icon: FolderOpen, count: scriptsCount },
+      { id: 'output-style', name: t('template.common.features.outputStyle'), icon: CLAUDE_CODE_ICONS['output-styles'], count: template?.outputStyle.length || 0 },
+      { id: 'skills', name: t('template.common.features.skills'), icon: CLAUDE_CODE_ICONS['skills'], count: skillsCount },
+      { id: 'scripts', name: t('template.common.features.scripts'), icon: FolderOpen, count: scriptsCount },
+      { id: 'target-preview', name: t('template.detail.tabs.targetPreview'), icon: Sparkles, count: 0 },
     ],
     [
       scriptsCount,
@@ -118,9 +120,9 @@ export const TemplateDetailView: React.FC = () => {
       t,
       template?.hooks.length,
       template?.mcpServers.length,
-      template?.slashCommands.length,
-      template?.subAgents.length,
-      template?.outputStyles.length,
+      template?.commands.length,
+      template?.agents.length,
+      template?.outputStyle.length,
     ],
   );
 
@@ -253,8 +255,8 @@ export const TemplateDetailView: React.FC = () => {
               {/* Basic Info Tab */}
               {activeTab === 'basic-info' && <BasicInfoTabContent template={template} />}
 
-              {/* Slash Commands Tab */}
-              {activeTab === 'slash-commands' && <SlashCommandsTabContent commands={template.slashCommands} />}
+              {/* Commands Tab */}
+              {activeTab === 'commands' && <CommandsTabContent commands={template.commands} />}
 
               {/* MCP Tab */}
               {activeTab === 'mcp' && <McpTabContentView mcpServers={template.mcpServers} />}
@@ -262,21 +264,29 @@ export const TemplateDetailView: React.FC = () => {
               {/* Hooks Tab */}
               {activeTab === 'hooks' && <HooksTabContentView hooks={template.hooks} />}
 
-              {/* Claude.md Tab */}
-              {activeTab === 'claude-md' && <ClaudeMdTabContent templateId={templateId} claudeMd={template.claudeMd} />}
+              {/* AGENTS.md Tab */}
+              {activeTab === 'agents-md' && <AgentsMdTabContent templateId={templateId} agentsMd={template.agentsMd} />}
 
-              {/* SubAgent Tab */}
-              {activeTab === 'subagent' && <SubAgentsTabContent agents={template.subAgents} />}
+              {/* Agents Tab */}
+              {activeTab === 'agent' && <AgentsTabContent agents={template.agents} />}
 
               {/* Output Styles Tab */}
-              {activeTab === 'output-styles' && <OutputStylesTabContent />}
+              {activeTab === 'output-style' && <OutputStyleTabContent />}
+
+              {/* Target Preview Tab */}
+              {activeTab === 'target-preview' && templateId && (
+                <TargetPreviewTabContent
+                  templateId={templateId}
+                  defaultTarget={template.cliType ?? 'claude-code'}
+                />
+              )}
 
               {/* Skills Tab */}
               {activeTab === 'skills' && templateId && (
                 <TemplateDetailFileViewer
                   templateId={templateId}
                   basePath="skills"
-                  title={t('template.detail.tabs.skills')}
+                  title={t('template.common.features.skills')}
                   onTreeUpdate={(_, count) => setSkillsCount(count)}
                 />
               )}
@@ -286,7 +296,7 @@ export const TemplateDetailView: React.FC = () => {
                 <TemplateDetailFileViewer
                   templateId={templateId}
                   basePath="scripts"
-                  title={t('template.detail.tabs.scripts')}
+                  title={t('template.common.features.scripts')}
                   onTreeUpdate={(_, count) => setScriptsCount(count)}
                 />
               )}

@@ -102,6 +102,15 @@ export interface FileTreePanelProps {
 
   /** 自訂工具列渲染 */
   renderToolbar?: () => React.ReactNode;
+
+  /**
+   * 目錄展開/收起回調（支援懶載入）。
+   * 提供時取代 state.toggleNode；未提供時回退到 state.toggleNode。
+   */
+  onExpandDirectory?: (node: FileTreeNodeType) => void;
+
+  /** 正在懶載入子項的目錄路徑集合（用於節點 loading spinner） */
+  loadingChildrenPaths?: Set<string>;
 }
 
 export const FileTreePanel: React.FC<FileTreePanelProps> = ({
@@ -131,6 +140,8 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
   dragOverPath,
   className,
   renderToolbar,
+  onExpandDirectory,
+  loadingChildrenPaths,
 }) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -185,6 +196,8 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
     const isDragging = draggingPath === node.path;
     const isDropTarget = dragOverPath === node.path;
 
+    const isChildrenLoading = loadingChildrenPaths?.has(node.path) ?? false;
+
     return (
       <FileTreeNode
         key={node.path}
@@ -195,9 +208,16 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
         isExpanded={nodeState.isExpanded}
         isDragging={isDragging}
         isDropTarget={isDropTarget}
+        isLoading={isChildrenLoading}
         onClick={onNodeClick}
         onDoubleClick={onNodeDoubleClick}
-        onExpandToggle={(n) => state.toggleNode(n.path)}
+        onExpandToggle={(n) => {
+          if (onExpandDirectory) {
+            onExpandDirectory(n);
+          } else {
+            state.toggleNode(n.path);
+          }
+        }}
         onContextMenu={onContextMenu}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
@@ -208,7 +228,7 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
         className="text-foreground hover:bg-muted/40"
       />
     );
-  }, [onNodeClick, onNodeDoubleClick, onContextMenu, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, state.toggleNode, enableDragDrop, draggingPath, dragOverPath]);
+  }, [onNodeClick, onNodeDoubleClick, onContextMenu, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, state.toggleNode, onExpandDirectory, loadingChildrenPaths, enableDragDrop, draggingPath, dragOverPath]);
 
   // 決定要顯示的節點
   const nodesToRender = React.useMemo(() => {

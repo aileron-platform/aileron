@@ -94,6 +94,17 @@ export class FileTreeApiAdapter {
   }
 
   /**
+   * 懶載入：取得指定目錄的子節點（一層深）
+   * 僅 workspace 類型支援；其他類型回傳空陣列。
+   */
+  async getChildren(path: string): Promise<FileTreeNode[]> {
+    if (this.config.type === 'workspace') {
+      return this.getWorkspaceChildren(path);
+    }
+    return [];
+  }
+
+  /**
    * 取得檔案內容
    */
   async getContent(path: string): Promise<string> {
@@ -285,14 +296,24 @@ export class FileTreeApiAdapter {
       throw new Error('Workspace runtime baseUrl is required');
     }
 
-    // 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
+    // maxDepth=2：初始只掃描 3 層，後續由懶載入按需展開
     const url = this.appendWorkspaceContext(
-      `/files/tree?path=/&includeHidden=${String(includeHidden ?? false)}`
+      `/files/tree?path=/&includeHidden=${String(includeHidden ?? false)}&maxDepth=2`
     );
     logger.debug('getWorkspaceTree: 請求 URL', { url });
 
     const data = await this.client.get(url);
     logger.debug('getWorkspaceTree: 獲取到的數據', { data, nodeCount: data.nodes?.length || 0 });
+    return data.nodes || [];
+  }
+
+  private async getWorkspaceChildren(path: string): Promise<FileTreeNode[]> {
+    const { baseUrl, includeHidden } = this.config;
+    if (!baseUrl) throw new Error('Workspace runtime baseUrl is required');
+    const url = this.appendWorkspaceContext(
+      `/files/tree/children?path=${encodeURIComponent(path)}&includeHidden=${String(includeHidden ?? false)}&maxDepth=1`
+    );
+    const data = await this.client.get(url);
     return data.nodes || [];
   }
 

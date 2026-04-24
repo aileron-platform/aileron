@@ -10,24 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.db.models import Template as TemplateDB, Workspace
-from app.models.template import TemplateFileNode
+from app.services.template_compiler_service import TemplateCompilerService
+from app.services.template_artifact_cache_service import TemplateArtifactCacheService
 from app.services.template_service import TemplateService
 
 logger = logging.getLogger(__name__)
-
-
-def _flatten_template_file_nodes(nodes: list[TemplateFileNode]) -> list[TemplateFileNode]:
-    """將模板檔案樹展平成檔案節點列表。"""
-    flattened: list[TemplateFileNode] = []
-
-    for node in nodes:
-        if node.type == "file":
-            flattened.append(node)
-            continue
-        if node.children:
-            flattened.extend(_flatten_template_file_nodes(node.children))
-
-    return flattened
 
 
 class TemplateInstallError(Exception):
@@ -45,6 +32,8 @@ class TemplateInstallService:
     def __init__(self, db: Session):
         self.db = db
         self.template_service = TemplateService(db)
+        self.template_compiler = TemplateCompilerService(db)
+        self.artifact_cache = TemplateArtifactCacheService(db)
         # 動態獲取 settings，確保在測試環境中使用正確的配置
         settings = get_settings()
         self.internal_api_token = settings.INTERNAL_API_TOKEN
@@ -103,141 +92,32 @@ class TemplateInstallService:
             install_payload
         )
 
+        if result.get("success"):
+            compiled_plan = self.template_compiler.compile_template(template.id, template.cli_type)
+            self.artifact_cache.record_install_manifest(
+                workspace_id=workspace_id,
+                template_id=template.id,
+                target=template.cli_type,
+                plan=compiled_plan,
+            )
+
         logger.info(f"模板 {template_id} 安裝完成: {result.get('success', False)}")
         return result
 
     async def _prepare_install_payload(self, template: TemplateDB) -> Dict[str, Any]:
         """準備安裝資料"""
+        return await self._prepare_canonical_install_payload(template)
+
+    async def _prepare_canonical_install_payload(self, template: TemplateDB) -> Dict[str, Any]:
+        install_plan = self.template_compiler.compile_template(template.id, template.cli_type)
         payload = {
             "templateId": template.id,
             "templateName": template.name,
             "cliType": template.cli_type,
+            "installPlan": install_plan.model_dump(by_alias=True, mode="json"),
         }
-
-        # 初始化指令
         if template.init_commands:
             payload["initCommands"] = template.init_commands
-
-        # Claude.md
-        claude_md = self.template_service.get_claude_md(template.id)
-        if claude_md:
-            payload["claudeMd"] = {"content": claude_md}
-
-        # Slash Commands
-        slash_commands = self.template_service._load_commands(template.id)
-        if slash_commands:
-            payload["slashCommands"] = [
-                {
-                    # 保留完整的檔案名稱（可能包含 namespace/）
-                    "fileName": f"{cmd.fileName}.md" if not cmd.fileName.endswith('.md') else cmd.fileName,
-                    "content": cmd.content
-                }
-                for cmd in slash_commands
-            ]
-
-        # Subagents
-        subagents = self.template_service._load_agents(template.id)
-        if subagents:
-            payload["subagents"] = [
-                {
-                    "fileName": agent.fileName,
-                    "content": agent.content
-                }
-                for agent in subagents
-            ]
-
-        # Output Styles
-        output_styles = self.template_service._load_output_styles(template.id)
-        if output_styles:
-            payload["outputStyles"] = [
-                {
-                    "fileName": style.fileName,
-                    "content": style.content
-                }
-                for style in output_styles
-            ]
-
-        # MCP Servers
-        mcp_servers = self.template_service._load_mcp_servers(template.id)
-        if mcp_servers:
-            mcp_dict = {}
-            for server in mcp_servers:
-                server_config = {
-                    "type": server.type or "stdio"
-                }
-                if server.command:
-                    server_config["command"] = server.command
-                if server.args:
-                    server_config["args"] = server.args
-                if server.env:
-                    server_config["env"] = server.env
-                if server.url:
-                    server_config["url"] = server.url
-                if server.headers:
-                    server_config["headers"] = server.headers
-
-                mcp_dict[server.name] = server_config
-
-            payload["mcpServers"] = mcp_dict
-
-        # Hooks
-        hooks = self.template_service._load_hooks(template.id)
-        if hooks:
-            hooks_dict = {}
-            for hook in hooks:
-                if hook.event not in hooks_dict:
-                    hooks_dict[hook.event] = []
-
-                hook_rule = {
-                    "matcher": hook.matcher or "*"
-                }
-
-                # 建立 hooks 列表
-                hook_actions = []
-                if hook.action:
-                    hook_action = {
-                        "type": hook.action
-                    }
-                    if hook.command:
-                        hook_action["command"] = hook.command
-                    if hook.timeout:
-                        hook_action["timeout"] = hook.timeout
-                    hook_actions.append(hook_action)
-
-                hook_rule["hooks"] = hook_actions
-                hooks_dict[hook.event].append(hook_rule)
-
-            payload["hooks"] = hooks_dict
-
-        # Scripts
-        scripts = self.template_service._load_files(template.id)
-        if scripts:
-            scripts_list = []
-            for script in scripts:
-                if script.type == "file" and script.content:
-                    script_item = {
-                        "path": script.path,
-                        "content": script.content,
-                        "executable": script.path.endswith(('.sh', '.bash', '.zsh', '.py'))
-                    }
-                    scripts_list.append(script_item)
-
-            if scripts_list:
-                payload["scripts"] = scripts_list
-
-        # Skills
-        skills = _flatten_template_file_nodes(self.template_service.file_service.load_skills(template.id))
-        if skills:
-            skills_list = []
-            for skill in skills:
-                if skill.type == "file" and skill.content is not None:
-                    skills_list.append({
-                        "path": skill.path,
-                        "content": skill.content,
-                    })
-
-            if skills_list:
-                payload["skills"] = skills_list
 
         return payload
 

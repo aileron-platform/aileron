@@ -148,7 +148,7 @@ export const OutputStyleDialog: React.FC<OutputStyleDialogProps> = (props) => {
     if (variant === 'workspace') {
       return `workspace.claudeCode.outputStyles.dialog.${key}`;
     }
-    return `template.editor.outputStyles.dialog.${key}`;
+    return `template.editor.outputStyle.dialog.${key}`;
   };
 
   const validate = () => {
@@ -292,7 +292,7 @@ export const OutputStyleDialog: React.FC<OutputStyleDialogProps> = (props) => {
                   />
                   {errors.fileName && <p className="text-xs text-destructive">{errors.fileName}</p>}
                   <p className="text-xs text-muted-foreground">
-                    {t('template.editor.outputStyles.dialog.fields.fileName.helper')}
+                    {t('template.editor.outputStyle.dialog.fields.fileName.helper')}
                   </p>
                 </div>
               )}
@@ -312,7 +312,7 @@ export const OutputStyleDialog: React.FC<OutputStyleDialogProps> = (props) => {
                           ? t('workspace.claudeCode.outputStyles.dialog.fields.content.estimatedSize', {
                               size: formatSize(formState.content),
                             })
-                          : t('template.editor.outputStyles.dialog.fields.content.sizeHint', {
+                          : t('template.editor.outputStyle.dialog.fields.content.sizeHint', {
                               size: formatSize(formState.content),
                             })}
                       </span>
@@ -333,15 +333,15 @@ export const OutputStyleDialog: React.FC<OutputStyleDialogProps> = (props) => {
             >
               {variant === 'workspace'
                 ? t('workspace.claudeCode.outputStyles.dialog.actions.cancel')
-                : t('template.editor.outputStyles.dialog.actions.cancel')}
+                : t('template.editor.outputStyle.dialog.actions.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
               {submitting && variant === 'template'
-                ? t('template.editor.outputStyles.dialog.actions.submitting')
+                ? t('template.editor.outputStyle.dialog.actions.submitting')
                 : isEdit
                   ? variant === 'workspace'
                     ? t('workspace.claudeCode.outputStyles.dialog.actions.save')
-                    : t('template.editor.outputStyles.dialog.actions.update')
+                    : t('template.editor.outputStyle.dialog.actions.update')
                   : t(getTranslationKey('actions.create'))}
             </Button>
           </DialogFooter>

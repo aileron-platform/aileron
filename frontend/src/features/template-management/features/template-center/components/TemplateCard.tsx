@@ -31,14 +31,14 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
   const { t } = useI18n();
   const featureLabels: Array<{ key: keyof ReturnType<typeof buildFeatureFlags>; label: string }> = useMemo(
     () => [
-      { key: 'hasMcp', label: t('template.center.card.features.mcp') },
-      { key: 'hasSlashCommands', label: t('template.center.card.features.slashCommands') },
-      { key: 'hasHooks', label: t('template.center.card.features.hooks') },
-      { key: 'hasClaudeMd', label: t('template.center.card.features.claudeMd') },
-      { key: 'hasSubAgents', label: t('template.center.card.features.subAgents') },
-      { key: 'hasOutputStyles', label: t('template.center.card.features.outputStyles') },
-      { key: 'hasScripts', label: t('template.center.card.features.scripts') },
-      { key: 'hasSkills', label: t('template.center.card.features.skills') },
+      { key: 'hasMcp', label: t('template.common.features.mcp') },
+      { key: 'hasCommands', label: t('template.common.features.commands') },
+      { key: 'hasHooks', label: t('template.common.features.hooks') },
+      { key: 'hasAgentsMd', label: t('template.common.features.agentsMd') },
+      { key: 'hasAgents', label: t('template.common.features.agents') },
+      { key: 'hasOutputStyle', label: t('template.common.features.outputStyle') },
+      { key: 'hasScripts', label: t('template.common.features.scripts') },
+      { key: 'hasSkills', label: t('template.common.features.skills') },
     ],
     [t],
   );

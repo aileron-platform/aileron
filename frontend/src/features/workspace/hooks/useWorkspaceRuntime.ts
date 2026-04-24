@@ -6,8 +6,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   fetchDefaultWorkspaceId,
-  resolveRuntimeBaseUrl,
-  fetchWorkspaceDetail,
+  resolveRuntimeBaseUrlWithDetail,
 } from '../services/workspaceRuntimeApi';
 import { createLogger } from '@/shared/services/logger';
 
@@ -98,23 +97,19 @@ export const useWorkspaceRuntime = (initialWorkspaceId?: string | null): UseWork
           throw new Error('找不到有效的工作區');
         }
 
-        const resolvedUrl = await resolveRuntimeBaseUrl(targetId, runtimeUrlCache.current);
+        const { url: resolvedUrl, detail: workspaceDetail } = await resolveRuntimeBaseUrlWithDetail(
+          targetId,
+          runtimeUrlCache.current
+        );
 
-        // 獲取 workspace detail 以取得 cliType、terminalExternalUrl 和 runtimeStatus
-        try {
-          const workspaceDetail = await fetchWorkspaceDetail(targetId);
+        if (workspaceDetail) {
           setCliType(workspaceDetail.cliType || 'claude-code');
           setTerminalExternalUrl(workspaceDetail.runtimeStatus?.terminalExternalUrl || null);
           setRuntimeStatus(workspaceDetail.runtimeStatus || null);
-        } catch (error) {
-          // 使用預設值，但記錄錯誤以便監控
-          // 這可能是暫時性網路問題或後端服務問題
-          logger.error('Failed to fetch workspace detail, using defaults', { error, workspaceId: targetId });
+        } else {
           setCliType('claude-code');
           setTerminalExternalUrl(null);
           setRuntimeStatus(null);
-          // 注意：不設置 error 狀態，因為使用預設值是可接受的降級
-          // 使用者仍可使用基本功能，但 Chrome 預覽等高級功能可能不可用
         }
 
         setWorkspaceId(targetId);

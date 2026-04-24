@@ -4,7 +4,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Badge } from '@/shared/components/ui/badge';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
-import { ChevronDown, ChevronRight, File, Folder, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Folder, RefreshCw, Search } from 'lucide-react';
 import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import type { FileNode } from '@/features/workspace/features/file-management/types';
@@ -238,7 +238,19 @@ export const FileChooserDialog: React.FC<FileChooserDialogProps> = ({ open, onOp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="z-[100] flex h-[80vh] max-w-4xl flex-col p-0">
         <DialogHeader className="border-b px-6 py-4">
-          <DialogTitle>{t('workspace.chat.dialogs.fileChooser.title')}</DialogTitle>
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle>{t('workspace.chat.dialogs.fileChooser.title')}</DialogTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void fileTreeActions.refreshFileTree()}
+              disabled={fileTreeState.isLoading}
+              className="gap-1.5"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', fileTreeState.isLoading && 'animate-spin')} />
+              {t('workspace.fileManagement.tree.actions.refresh.tooltip')}
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -318,9 +330,11 @@ export const FileChooserDialog: React.FC<FileChooserDialogProps> = ({ open, onOp
               <div className="text-xs text-muted-foreground">
                 {totalFiles > 0 && t('workspace.chat.dialogs.fileChooser.foundCount', { count: totalFiles })}
               </div>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                {t('common.cancel')}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  {t('common.cancel')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>

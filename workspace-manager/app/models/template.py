@@ -24,7 +24,7 @@ class TemplateCreate(BaseModel):
     version: Optional[str] = Field(default="1.0.0", description="版本號")
     author: TemplateAuthor = Field(description="作者資訊")
     keywords: Optional[List[str]] = Field(default_factory=list, description="關鍵字陣列")
-    cli_type: Literal["claude-code", "codex", "gemini"] = Field(
+    cli_type: Literal["claude-code", "codex", "gemini", "opencode"] = Field(
         default="claude-code", description="CLI 類型"
     )
     status: Literal["draft", "released"] = Field(default="draft", description="模板狀態")
@@ -42,7 +42,7 @@ class TemplateUpdate(BaseModel):
     author: Optional[TemplateAuthor] = Field(default=None, description="作者資訊")
     keywords: Optional[List[str]] = Field(default=None, description="關鍵字陣列")
     categoryId: Optional[str] = Field(default=None, description="分類 ID", alias="categoryId")
-    cli_type: Optional[Literal["claude-code", "codex", "gemini"]] = Field(
+    cli_type: Optional[Literal["claude-code", "codex", "gemini", "opencode"]] = Field(
         default=None, description="CLI 類型"
     )
     status: Optional[Literal["draft", "released"]] = Field(default=None, description="模板狀態")
@@ -65,8 +65,8 @@ class TemplateMcpServer(BaseModel):
     headers: Optional[Dict[str, str]] = Field(default=None, description="HTTP 標頭")
 
 
-class TemplateSlashCommand(BaseModel):
-    """Slash 命令配置"""
+class TemplateCommand(BaseModel):
+    """命令配置"""
 
     id: str = Field(description="命令 ID")
     fileName: str = Field(description="檔案名稱")
@@ -87,10 +87,10 @@ class TemplateHook(BaseModel):
     timeout: Optional[int] = Field(default=None, description="逾時秒數")
 
 
-class TemplateSubAgent(BaseModel):
-    """SubAgent 配置"""
+class TemplateAgent(BaseModel):
+    """Agent 配置"""
 
-    id: str = Field(description="SubAgent ID")
+    id: str = Field(description="Agent ID")
     fileName: str = Field(description="檔案名稱")
     description: Optional[str] = Field(default=None, description="描述")
     content: str = Field(description="檔案內容")
@@ -130,21 +130,50 @@ class Template(TimestampMixin):
     cliType: str = Field(default="claude-code", description="CLI 類型", alias="cliType")
     status: str = Field(default="draft", description="模板狀態")
     documentation: Optional[str] = Field(default=None, description="文檔")
-    claudeMd: Optional[str] = Field(default=None, description="Claude.md 內容", alias="claudeMd")
+    agentsMd: Optional[str] = Field(default=None, description="AGENTS.md 內容", alias="agentsMd")
     isActive: bool = Field(default=True, description="是否啟用", alias="isActive")
     storage_path: Optional[str] = Field(default=None, description="儲存路徑", alias="storagePath")
     initCommands: Optional[str] = Field(default=None, description="初始化指令", alias="initCommands")
 
     # 配置數據
     mcpServers: List[TemplateMcpServer] = Field(default_factory=list, description="MCP 伺服器", alias="mcpServers")
-    slashCommands: List[TemplateSlashCommand] = Field(default_factory=list, description="Slash 命令", alias="slashCommands")
+    commands: List[TemplateCommand] = Field(default_factory=list, description="命令", alias="commands")
     hooks: List[TemplateHook] = Field(default_factory=list, description="Hooks", alias="hooks")
-    subAgents: List[TemplateSubAgent] = Field(default_factory=list, description="SubAgents", alias="subAgents")
-    outputStyles: List[TemplateOutputStyle] = Field(default_factory=list, description="輸出樣式", alias="outputStyles")
+    agents: List[TemplateAgent] = Field(default_factory=list, description="Agents", alias="agents")
+    outputStyle: List[TemplateOutputStyle] = Field(default_factory=list, description="輸出風格", alias="outputStyle")
     scripts: List[TemplateFileNode] = Field(default_factory=list, description="腳本", alias="scripts")
     skills: List[TemplateFileNode] = Field(default_factory=list, description="技能", alias="skills")
 
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+
+class TemplateCanonicalUpdate(BaseModel):
+    """Canonical 模板編輯器更新請求"""
+
+    name: str = Field(description="模板名稱")
+    description: Optional[str] = Field(default=None, description="模板描述")
+    version: str = Field(description="版本號")
+    author: TemplateAuthor = Field(description="作者資訊")
+    keywords: List[str] = Field(default_factory=list, description="關鍵字陣列")
+    categoryId: Optional[str] = Field(default=None, description="分類 ID", alias="categoryId")
+    documentation: Optional[str] = Field(default=None, description="文檔")
+    agentsMd: Optional[str] = Field(default=None, description="AGENTS.md canonical 內容", alias="agentsMd")
+    initCommands: Optional[str] = Field(default=None, description="初始化指令", alias="initCommands")
+    mcpServers: List[TemplateMcpServer] = Field(default_factory=list, description="MCP 伺服器", alias="mcpServers")
+    commands: List[TemplateCommand] = Field(default_factory=list, description="Commands", alias="commands")
+    hooks: List[TemplateHook] = Field(default_factory=list, description="Hooks", alias="hooks")
+    agents: List[TemplateAgent] = Field(default_factory=list, description="Agents", alias="agents")
+    outputStyle: List[TemplateOutputStyle] = Field(default_factory=list, description="Output Style", alias="outputStyle")
+    skills: List[TemplateFileNode] = Field(default_factory=list, description="Skills", alias="skills")
+    scripts: List[TemplateFileNode] = Field(default_factory=list, description="Scripts", alias="scripts")
+    isActive: bool = Field(default=True, description="是否啟用", alias="isActive")
+    cliType: Optional[Literal["claude-code", "codex", "gemini", "opencode"]] = Field(
+        default=None,
+        description="預設 CLI 類型",
+        alias="cliType",
+    )
+
+    model_config = {"populate_by_name": True}
 
 
 class TemplateListResponse(BaseModel):

@@ -17,7 +17,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ skills, onSkillsChange, t
     <TemplateFileManager
       templateId={templateId}
       basePath="skills"
-      title={t('template.editor.tabs.skills')}
+      title={t('template.common.features.skills')}
       leadingIcon={<Wand2 className="h-4 w-4 text-primary" />}
       onFilesChange={(files) => {
         // 轉換 FileNode[] 為 SkillFileFormValue[]

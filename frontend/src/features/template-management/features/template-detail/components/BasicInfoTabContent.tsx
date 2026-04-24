@@ -213,17 +213,17 @@ export const BasicInfoTabContent: React.FC<BasicInfoTabContentProps> = ({ templa
                   {template.mcpServers.length}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.mcpServers')}
+                  {t('template.common.features.mcp')}
                 </div>
               </div>
 
-              {/* Slash Commands */}
+              {/* Commands */}
               <div className="flex flex-col items-center p-4 border rounded-lg">
                 <div className="text-2xl font-bold text-primary">
-                  {template.slashCommands.length}
+                  {template.commands.length}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.slashCommands')}
+                  {t('template.common.features.commands')}
                 </div>
               </div>
 
@@ -233,27 +233,27 @@ export const BasicInfoTabContent: React.FC<BasicInfoTabContentProps> = ({ templa
                   {template.hooks.length}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.hooks')}
+                  {t('template.common.features.hooks')}
                 </div>
               </div>
 
-              {/* SubAgents */}
+              {/* Agents */}
               <div className="flex flex-col items-center p-4 border rounded-lg">
                 <div className="text-2xl font-bold text-primary">
-                  {template.subAgents.length}
+                  {template.agents.length}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.subAgents')}
+                  {t('template.common.features.agents')}
                 </div>
               </div>
 
-              {/* Claude.md */}
+              {/* AGENTS.md */}
               <div className="flex flex-col items-center p-4 border rounded-lg">
                 <div className="text-2xl font-bold text-primary">
-                  {template.claudeMd ? '1' : '0'}
+                  {template.agentsMd ? '1' : '0'}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.claudeMd')}
+                  {t('template.common.features.agentsMd')}
                 </div>
               </div>
 
@@ -263,7 +263,7 @@ export const BasicInfoTabContent: React.FC<BasicInfoTabContentProps> = ({ templa
                   {template.scripts.length}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.detail.basicInfo.stats.scripts')}
+                  {t('template.common.features.scripts')}
                 </div>
               </div>
             </div>

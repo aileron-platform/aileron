@@ -89,7 +89,7 @@ export const TemplateCenterView: React.FC = () => {
         const data = await apiClient.get<{ items: string[] }>(`/templates/features${qs}`);
         if (aborted) return;
         // 簡單的型別守衛：僅接受已知鍵
-        const allowed: TemplateFeatureKey[] = ['mcp','slashCommands','hooks','claudeMd','subAgents','outputStyles','skills','scripts'];
+        const allowed: TemplateFeatureKey[] = ['mcp','commands','hooks','agentsMd','agents','outputStyle','skills','scripts'];
         const keys = data.items.filter((k): k is TemplateFeatureKey => (allowed as string[]).includes(k));
         setRemoteFeatureKeys(keys);
       } catch (err) {
@@ -155,26 +155,23 @@ export const TemplateCenterView: React.FC = () => {
     const keys = remoteFeatureKeys ?? fallbackKeys;
 
     const labelFor = (k: TemplateFeatureKey) => {
-      if (k === 'claudeMd' && (activeCliType === 'codex' || activeCliType === 'gemini')) {
-        return t('template.center.filters.featureOptions.agentMd');
-      }
       switch (k) {
         case 'mcp':
-          return t('template.center.filters.featureOptions.mcp');
-        case 'slashCommands':
-          return t('template.center.filters.featureOptions.slashCommands');
+          return t('template.common.features.mcp');
+        case 'commands':
+          return t('template.common.features.commands');
         case 'hooks':
-          return t('template.center.filters.featureOptions.hooks');
-        case 'claudeMd':
-          return t('template.center.filters.featureOptions.claudeMd');
-        case 'subAgents':
-          return t('template.center.filters.featureOptions.subAgents');
-        case 'outputStyles':
-          return t('template.center.filters.featureOptions.outputStyles');
+          return t('template.common.features.hooks');
+        case 'agentsMd':
+          return t('template.common.features.agentsMd');
+        case 'agents':
+          return t('template.common.features.agents');
+        case 'outputStyle':
+          return t('template.common.features.outputStyle');
         case 'skills':
-          return t('template.center.filters.featureOptions.skills');
+          return t('template.common.features.skills');
         case 'scripts':
-          return t('template.center.filters.featureOptions.scripts');
+          return t('template.common.features.scripts');
         default:
           return k;
       }
@@ -498,6 +495,17 @@ export const TemplateCenterView: React.FC = () => {
                   }}
                 >
                   {t('template.center.filters.cliOptions.gemini')}
+                </Button>
+                <Button
+                  variant={activeCliType === 'opencode' ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setActiveCliType('opencode');
+                    setCurrentPage(1);
+                  }}
+                >
+                  {t('template.center.filters.cliOptions.opencode')}
                 </Button>
               </div>
             </div>

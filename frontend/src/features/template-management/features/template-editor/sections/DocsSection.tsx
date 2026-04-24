@@ -1,27 +1,27 @@
 import React from 'react';
-import TemplateClaudeMdWorkflow from '@/features/template-management/components/TemplateClaudeMdWorkflow';
+import TemplateAgentsMdWorkflow from '@/features/template-management/components/TemplateAgentsMdWorkflow';
 import { useTemplateManagementContext } from '../../../providers/TemplateManagementProvider';
 
 interface DocsSectionProps {
   templateId?: string;
   documentation: string;
-  claudeMd: string;
-  onChange: (next: { documentation?: string; claudeMd?: string }) => void;
+  agentsMd: string;
+  onChange: (next: { documentation?: string; agentsMd?: string }) => void;
 }
 
 const DocsSection: React.FC<DocsSectionProps> = ({
   templateId,
   documentation: _documentation,
-  claudeMd: initialClaudeMd,
+  agentsMd: initialAgentsMd,
   onChange
 }) => {
   const { reloadFromSource } = useTemplateManagementContext();
 
   return (
-    <TemplateClaudeMdWorkflow
+    <TemplateAgentsMdWorkflow
       templateId={templateId}
-      initialContent={initialClaudeMd}
-      onContentChange={(claudeMd) => onChange({ claudeMd })}
+      initialContent={initialAgentsMd}
+      onContentChange={(agentsMd) => onChange({ agentsMd })}
       onSaveSuccess={reloadFromSource}
     />
   );

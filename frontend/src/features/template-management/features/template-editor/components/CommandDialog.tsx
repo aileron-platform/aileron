@@ -10,15 +10,15 @@ import {
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
-import type { SlashCommandFormValue } from '../formTypes';
+import type { CommandFormValue } from '../formTypes';
 import { useI18n } from '@/shared/hooks/useI18n';
 
-interface SlashCommandDialogProps {
+interface CommandDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
-  initialValue?: SlashCommandFormValue | null;
+  initialValue?: CommandFormValue | null;
   onClose: () => void;
-  onSubmit: (command: SlashCommandFormValue) => void;
+  onSubmit: (command: CommandFormValue) => void;
 }
 
 interface FormState {
@@ -27,7 +27,7 @@ interface FormState {
   content: string;
 }
 
-const buildInitialState = (initialValue?: SlashCommandFormValue | null): FormState => {
+const buildInitialState = (initialValue?: CommandFormValue | null): FormState => {
   // 從檔案名稱解析 namespace 和 name
   const fileName = initialValue?.fileName ?? '';
   let namespace = '';
@@ -58,7 +58,7 @@ const formatSize = (content: string) => {
   return `${kiloBytes}KB`;
 };
 
-export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
+export const CommandDialog: React.FC<CommandDialogProps> = ({
   open,
   mode,
   initialValue,
@@ -83,10 +83,10 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
   const validate = () => {
     const nextErrors: { name?: string; content?: string } = {};
     if (!formState.name.trim()) {
-      nextErrors.name = t('template.editor.slashCommands.dialog.validation.nameRequired');
+      nextErrors.name = t('template.editor.commands.dialog.validation.nameRequired');
     }
     if (!formState.content.trim()) {
-      nextErrors.content = t('template.editor.slashCommands.dialog.validation.contentRequired');
+      nextErrors.content = t('template.editor.commands.dialog.validation.contentRequired');
     }
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -104,7 +104,7 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
       ? `${formState.namespace.trim()}/${formState.name.trim()}.md`
       : `${formState.name.trim()}.md`;
 
-    const command: SlashCommandFormValue = {
+    const command: CommandFormValue = {
       localId: initialValue?.localId || `local-${Math.random().toString(36).slice(2, 10)}`,
       fileName,
       content: formState.content,
@@ -121,13 +121,13 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
         <DialogHeader className="flex-shrink-0 px-6 pt-6">
           <DialogTitle>
             {isEdit
-              ? t('template.editor.slashCommands.dialog.title.edit')
-              : t('template.editor.slashCommands.dialog.title.create')}
+              ? t('template.editor.commands.dialog.title.edit')
+              : t('template.editor.commands.dialog.title.create')}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? t('template.editor.slashCommands.dialog.description.edit')
-              : t('template.editor.slashCommands.dialog.description.create')}
+              ? t('template.editor.commands.dialog.description.edit')
+              : t('template.editor.commands.dialog.description.create')}
           </DialogDescription>
         </DialogHeader>
 
@@ -136,42 +136,42 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
             {/* 命令名稱 - 必填 */}
             <div className="flex-shrink-0 space-y-2 mb-4">
               <label className="text-sm font-medium text-foreground">
-                {t('template.editor.slashCommands.dialog.fields.name.label')}
+                {t('template.editor.commands.dialog.fields.name.label')}
               </label>
               <Input
                 value={formState.name}
                 onChange={(event) =>
                   setFormState((prev) => ({ ...prev, name: event.target.value }))
                 }
-                placeholder={t('template.editor.slashCommands.dialog.fields.name.placeholder')}
+                placeholder={t('template.editor.commands.dialog.fields.name.placeholder')}
               />
               {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
               <p className="text-xs text-muted-foreground">
-                {t('template.editor.slashCommands.dialog.fields.name.helper')}
+                {t('template.editor.commands.dialog.fields.name.helper')}
               </p>
             </div>
 
             {/* 命名空間 - 非必填 */}
             <div className="flex-shrink-0 space-y-2 mb-4">
               <label className="text-sm font-medium text-foreground">
-                {t('template.editor.slashCommands.dialog.fields.namespace.label')}
+                {t('template.editor.commands.dialog.fields.namespace.label')}
               </label>
               <Input
                 value={formState.namespace}
                 onChange={(event) =>
                   setFormState((prev) => ({ ...prev, namespace: event.target.value }))
                 }
-                placeholder={t('template.editor.slashCommands.dialog.fields.namespace.placeholder')}
+                placeholder={t('template.editor.commands.dialog.fields.namespace.placeholder')}
               />
               <p className="text-xs text-muted-foreground">
-                {t('template.editor.slashCommands.dialog.fields.namespace.helper')}
+                {t('template.editor.commands.dialog.fields.namespace.helper')}
               </p>
             </div>
 
             {/* 指令內容 - 必填，Markdown 編輯器 */}
             <div className="flex flex-1 flex-col overflow-hidden">
               <label className="mb-2 text-sm font-medium text-foreground">
-                {t('template.editor.slashCommands.dialog.fields.content.label')}
+                {t('template.editor.commands.dialog.fields.content.label')}
               </label>
               <div className="flex-1 overflow-hidden rounded-lg border">
                 <MarkdownEditor
@@ -182,7 +182,7 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
                   className="h-full"
                   footerExtras={(
                     <span className="text-xs text-muted-foreground">
-                      {t('template.editor.slashCommands.dialog.fields.content.sizeHint', {
+                      {t('template.editor.commands.dialog.fields.content.sizeHint', {
                         size: formatSize(formState.content)
                       })}
                     </span>
@@ -199,8 +199,8 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
             </Button>
             <Button type="submit" disabled={submitting}>
               {isEdit
-                ? t('template.editor.slashCommands.dialog.actions.save')
-                : t('template.editor.slashCommands.dialog.actions.create')}
+                ? t('template.editor.commands.dialog.actions.save')
+                : t('template.editor.commands.dialog.actions.create')}
             </Button>
           </DialogFooter>
         </form>
@@ -209,4 +209,4 @@ export const SlashCommandDialog: React.FC<SlashCommandDialogProps> = ({
   );
 };
 
-export default SlashCommandDialog;
+export default CommandDialog;

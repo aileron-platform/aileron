@@ -124,7 +124,7 @@ export const FileManagementView: React.FC = () => {
     },
   });
 
-  const { state: managerState, loadTree, operations } = manager;
+  const { state: managerState, loadTree, operations, toggleDirectory, loadingChildrenPaths } = manager;
   const currentPath = managerState.selectedId ?? workspace.activeTabId ?? '/';
   const closeContextMenu = useCallback(() => {
     managerState.closeContextMenu();
@@ -443,12 +443,12 @@ export const FileManagementView: React.FC = () => {
   const handleNodeDoubleClick = useCallback(
     (node: FileTreeNode) => {
       if (node.type === 'directory') {
-        managerState.toggleNode(node.path);
+        void toggleDirectory(node);
         return;
       }
       openFileInTab(node.path);
     },
-    [managerState, openFileInTab]
+    [toggleDirectory, openFileInTab]
   );
 
   const handleContextMenu = useCallback(
@@ -973,6 +973,8 @@ export const FileManagementView: React.FC = () => {
               enableMultiSelectBar={true}
               enableBottomStatusBar={true}
               enableDragDrop={true}
+              onExpandDirectory={(node) => void toggleDirectory(node)}
+              loadingChildrenPaths={loadingChildrenPaths}
               renderToolbar={() => (
                 <div className="flex w-full items-center justify-between gap-2">
                   <div className="flex items-center gap-1">

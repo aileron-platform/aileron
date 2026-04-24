@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DocumentPage } from '../components/DocumentPage';
-import { SlashCommandDialog } from '@/shared/components/dialogs';
+import { CommandDialog } from '@/shared/components/dialogs';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
@@ -83,7 +83,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     await loadDocuments();
   }, [loadDocuments]);
 
-  // 包裝 SlashCommandDialog 以注入 format 和 availableScopes
+  // 包裝 CommandDialog 以注入 format 和 availableScopes
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
       open: boolean;
@@ -92,14 +92,14 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onClose: () => void;
       onSubmit: (document: ClaudeDocument) => Promise<void> | void;
     }> = (props) => (
-      <SlashCommandDialog
+      <CommandDialog
         {...props}
         format={format}
         availableScopes={availableScopes}
         i18nNamespace={i18nNamespace}
       />
     );
-    Wrapper.displayName = 'SlashCommandDialogWrapper';
+    Wrapper.displayName = 'CommandDialogWrapper';
     return Wrapper;
   }, [format, availableScopes, i18nNamespace]);
 

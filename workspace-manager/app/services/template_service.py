@@ -4,11 +4,11 @@
 - TemplateBaseService: 基礎方法和路徑管理
 - TemplateMcpService: MCP 配置管理
 - TemplateHooksService: Hooks 配置管理
-- TemplateCommandsService: Slash Commands 檔案管理
-- TemplateAgentsService: SubAgents 檔案管理
-- TemplateOutputStylesService: Output Styles 檔案管理
+- TemplateCommandsService: Commands 檔案管理
+- TemplateAgentsService: Agents 檔案管理
+- TemplateOutputStyleService: Output Style 檔案管理
 - TemplateFileService: 通用檔案操作（scripts/skills）
-- TemplateClaudeMdService: Claude.md 檔案管理
+- TemplateAgentsMdService: AGENTS.md 檔案管理
 - TemplateMarketplaceService: Marketplace 配置管理
 """
 
@@ -22,35 +22,47 @@ import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import UploadFile
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+import yaml
 
 from app.config.settings import get_settings
 from app.db.models import Template as TemplateDB
 from app.models import (
     Template,
     TemplateAuthor,
+    TemplateCanonicalUpdate,
     TemplateCreate,
     TemplateListResponse,
     TemplateUpdate,
 )
+from app.models.template_canonical import CanonicalTemplate
+from app.models.template import (
+    TemplateFileNode,
+    TemplateHook,
+    TemplateMcpServer,
+    TemplateOutputStyle,
+    TemplateCommand,
+    TemplateAgent,
+)
 from app.services.template_base_service import TemplateBaseService
+from app.services.template_canonical_service import TemplateCanonicalService
 from app.services.template_mcp_service import TemplateMcpService
 from app.services.template_hooks_service import TemplateHooksService
 from app.services.template_commands_service import TemplateCommandsService
 from app.services.template_agents_service import TemplateAgentsService
-from app.services.template_output_styles_service import TemplateOutputStylesService
+from app.services.template_output_style_service import TemplateOutputStyleService
 from app.services.template_file_service import TemplateFileService
-from app.services.template_claude_md_service import TemplateClaudeMdService
+from app.services.template_agents_md_service import TemplateAgentsMdService
 from app.services.template_marketplace_service import TemplateMarketplaceService
 from app.services.template_feature_detection_service import TemplateFeatureDetectionService
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_TEMPLATE_CLI_TYPES = {"claude-code", "codex", "gemini"}
+ALLOWED_TEMPLATE_CLI_TYPES = {"claude-code", "codex", "gemini", "opencode"}
 ALLOWED_TEMPLATE_STATUSES = {"draft", "released"}
 LEGACY_TEMPLATE_STATUS_MAP = {
     "active": "released",
@@ -80,11 +92,12 @@ class TemplateService(TemplateBaseService):
         self.hooks_service = TemplateHooksService(db)
         self.commands_service = TemplateCommandsService(db)
         self.agents_service = TemplateAgentsService(db)
-        self.output_styles_service = TemplateOutputStylesService(db)
+        self.output_style_service = TemplateOutputStyleService(db)
         self.file_service = TemplateFileService(db)
-        self.claude_md_service = TemplateClaudeMdService(db)
+        self.agents_md_service = TemplateAgentsMdService(db)
         self.marketplace_service = TemplateMarketplaceService(db)
         self.feature_detection_service = TemplateFeatureDetectionService(db, self)
+        self.canonical_service = TemplateCanonicalService(db)
 
     # ============ 模板 CRUD 操作 ============
 
@@ -126,12 +139,12 @@ class TemplateService(TemplateBaseService):
         if features:
             feature_list = [f.strip() for f in features.split(",") if f.strip()]
 
-            # 將 camelCase 轉換為 snake_case（如果需要）
+            # canonical feature keys
             _SNAKE_MAP = {
-                "slashCommands": "slash_commands",
-                "claudeMd": "claude_md",
-                "subAgents": "sub_agents",
-                "outputStyles": "output_styles",
+                "commands": "commands",
+                "agentsMd": "agentsMd",
+                "agents": "agents",
+                "outputStyle": "outputStyle",
             }
 
             for feature_key in feature_list:
@@ -268,6 +281,37 @@ class TemplateService(TemplateBaseService):
 
         return self._db_to_pydantic(db_template)
 
+    def update_canonical(self, template_id: str, payload: TemplateCanonicalUpdate) -> Optional[Template]:
+        """更新 canonical template tree 與 metadata。"""
+        db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
+        if not db_template:
+            return None
+
+        db_template.name = payload.name
+        db_template.description = payload.description
+        db_template.version = payload.version
+        db_template.author_name = payload.author.name
+        db_template.author_email = payload.author.email
+        db_template.author_url = payload.author.url
+        db_template.keywords = payload.keywords or []
+        db_template.category = payload.categoryId
+        db_template.init_commands = payload.initCommands
+        if payload.cliType:
+            db_template.cli_type = payload.cliType
+        db_template.status = "released" if payload.isActive else "draft"
+        db_template.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(db_template)
+
+        self._write_canonical_template_tree(template_id, payload, db_template)
+
+        try:
+            self.feature_detection_service.index_features(template_id)
+        except Exception as e:
+            logger.error("Feature indexing failed for template %s: %s", template_id, e, exc_info=True)
+
+        return self._db_to_pydantic(db_template)
+
     def delete(self, template_id: str) -> bool:
         """刪除模板（資料庫 + 檔案系統）"""
         db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
@@ -307,43 +351,44 @@ class TemplateService(TemplateBaseService):
 
     def _create_template_structure(self, template_id: str, payload: TemplateCreate) -> None:
         """建立模板檔案系統結構"""
-        template_dir = self._get_template_dir(template_id)
+        template_dir = self._resolve_template_dir(template_id)
         template_dir.mkdir(parents=True, exist_ok=True)
+        for directory in ("skills", "commands", "agents", "hooks", "mcp", "resources"):
+            (template_dir / directory).mkdir(exist_ok=True)
+        (template_dir / "resources" / "scripts").mkdir(parents=True, exist_ok=True)
 
-        # 建立標準目錄結構
-        (template_dir / "commands").mkdir(exist_ok=True)
-        (template_dir / "agents").mkdir(exist_ok=True)
-        (template_dir / "scripts").mkdir(exist_ok=True)
-        (template_dir / "skills").mkdir(exist_ok=True)
-        (template_dir / "hooks").mkdir(exist_ok=True)
-        (template_dir / "output-styles").mkdir(exist_ok=True)
-        (template_dir / ".claude-plugin").mkdir(exist_ok=True)
-
-        # 建立 plugin.json
-        plugin_data = {
+        template_yaml = {
             "id": template_id,
             "name": payload.name,
-            "description": payload.description,
             "version": payload.version or "1.0.0",
-            "author": {
-                "name": payload.author.name,
-                "email": payload.author.email,
-                "url": payload.author.url,
+            "description": payload.description,
+            "schemaVersion": "v0",
+            "supportedTargets": ["claude-code", "codex", "gemini", "opencode"],
+            "features": {
+                "agentsMd": {"path": "agents.md"},
+                "outputStyle": {"path": "output-style.yaml"},
+                "skills": {"path": "skills"},
+                "commands": {"path": "commands"},
+                "agents": {"path": "agents"},
+                "hooks": {"path": "hooks"},
+                "mcpServers": {"path": "mcp"},
+                "resources": {"path": "resources"},
             },
-            "cli_type": payload.cli_type,
-            "status": payload.status,
-            "keywords": payload.keywords or [],
-            "init_commands": payload.init_commands,
-            "mcp_servers": {},
-            "hooks": {},
-            "commands": [],
-            "agents": [],
-            "output_styles": [],
-            "files": [],
+            "metadata": {
+                "author": {
+                    "name": payload.author.name,
+                    "email": payload.author.email,
+                    "url": payload.author.url,
+                },
+                "keywords": payload.keywords or [],
+                "status": payload.status,
+                "initCommands": payload.init_commands,
+            },
         }
-
-        plugin_json_path = self._get_plugin_json_path(template_id)
-        plugin_json_path.write_text(json.dumps(plugin_data, indent=2, ensure_ascii=False), encoding="utf-8")
+        (template_dir / "template.yaml").write_text(
+            yaml.safe_dump(template_yaml, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
 
     def _delete_template_structure(self, template_id: str) -> None:
         """刪除模板檔案系統結構"""
@@ -353,17 +398,25 @@ class TemplateService(TemplateBaseService):
 
     def _db_to_pydantic(self, db_template: TemplateDB) -> Template:
         """將資料庫模型轉換為 Pydantic 模型（包含完整配置）"""
+        canonical_root = self._resolve_template_dir(db_template.id)
+        if (canonical_root / "template.yaml").exists():
+            try:
+                canonical = self.canonical_service.load_from_template_id(db_template.id)
+                return self._canonical_to_pydantic(db_template, canonical)
+            except Exception as e:
+                logger.error("Load canonical template failed for %s: %s", db_template.id, e, exc_info=True)
+
         # 載入各項配置
         mcp_config = self.mcp_service.load_mcp_servers(db_template.id)
         hooks_config = self.hooks_service.load_hooks(db_template.id)
         commands = self.commands_service.load_commands(db_template.id)
         agents = self.agents_service.load_agents(db_template.id)
-        output_styles = self.output_styles_service.load_output_styles(db_template.id)
+        output_style = self.output_style_service.load_output_style(db_template.id)
         files = self.file_service.load_files(db_template.id)
         skills = self.file_service.load_skills(db_template.id)
 
-        # 載入 Claude.md 內容
-        claude_md = self.claude_md_service.get_claude_md(db_template.id)
+        # 載入 AGENTS.md 內容
+        agents_md = self.agents_md_service.get_agents_md(db_template.id)
 
         return Template(
             id=db_template.id,
@@ -380,17 +433,292 @@ class TemplateService(TemplateBaseService):
             status=db_template.status,
             keywords=db_template.keywords or [],
             initCommands=db_template.init_commands,
-            claudeMd=claude_md,
+            agentsMd=agents_md,
             mcpServers=mcp_config,
             hooks=hooks_config,
-            slashCommands=commands,
-            subAgents=agents,
-            outputStyles=output_styles,
+            commands=commands,
+            agents=agents,
+            outputStyle=output_style,
             scripts=files,
             skills=skills,
             created_at=db_template.created_at,
             updated_at=db_template.updated_at,
         )
+
+    def _canonical_to_pydantic(self, db_template: TemplateDB, canonical: CanonicalTemplate) -> Template:
+        output_style: List[TemplateOutputStyle] = []
+        if canonical.output_style:
+            output_style.append(
+                TemplateOutputStyle(
+                    id="output-style",
+                    fileName=Path(canonical.output_style.path).name,
+                    description=canonical.output_style.data.get("description"),
+                    content=canonical.output_style.fallback_instruction
+                    or yaml.safe_dump(canonical.output_style.data, allow_unicode=True, sort_keys=False),
+                )
+            )
+
+        return Template(
+            id=db_template.id,
+            name=db_template.name,
+            description=db_template.description,
+            author=TemplateAuthor(
+                name=db_template.author_name,
+                email=db_template.author_email,
+                url=db_template.author_url,
+            ),
+            categoryId=db_template.category,
+            version=db_template.version,
+            cliType=db_template.cli_type,
+            status=db_template.status,
+            keywords=db_template.keywords or [],
+            initCommands=db_template.init_commands,
+            documentation=canonical.index.metadata.get("documentation"),
+            agentsMd=canonical.agents_md_content,
+            mcpServers=[
+                TemplateMcpServer(
+                    id=server.id,
+                    name=server.id,
+                    type=server.transport,  # type: ignore[arg-type]
+                    command=server.command,
+                    args=server.args or None,
+                    url=server.url,
+                    description=server.raw.get("description"),
+                    env=server.env or None,
+                    headers=server.headers or None,
+                )
+                for server in canonical.mcp_servers
+            ],
+            hooks=[
+                TemplateHook(
+                    id=hook.id,
+                    name=hook.id,
+                    event=hook.event,
+                    matcher=(hook.matcher or {}).get("tool") if isinstance(hook.matcher, dict) else None,
+                    action=str((hook.action or {}).get("type") or "command"),  # type: ignore[arg-type]
+                    command=(hook.action or {}).get("command"),
+                    script=(hook.action or {}).get("path"),
+                    timeout=hook.timeout,
+                )
+                for hook in canonical.hooks
+            ],
+            commands=[
+                TemplateCommand(
+                    id=doc.name,
+                    fileName=Path(doc.path).name,
+                    description=doc.frontmatter.get("description"),
+                    content=doc.content,
+                )
+                for doc in canonical.commands
+            ],
+            agents=[
+                TemplateAgent(
+                    id=doc.name,
+                    fileName=Path(doc.path).name,
+                    description=doc.frontmatter.get("description"),
+                    content=doc.content,
+                )
+                for doc in canonical.agents
+            ],
+            outputStyle=output_style,
+            scripts=self._canonical_resources_to_file_nodes(canonical),
+            skills=[
+                TemplateFileNode(
+                    id=skill.id,
+                    name=Path(skill.skill_md_path).name,
+                    path=skill.skill_md_path,
+                    type="file",
+                    content=skill.content,
+                )
+                for skill in canonical.skills
+            ],
+            created_at=db_template.created_at,
+            updated_at=db_template.updated_at,
+        )
+
+    def _canonical_resources_to_file_nodes(self, canonical: CanonicalTemplate) -> List[TemplateFileNode]:
+        root = Path(canonical.root_path)
+        nodes: List[TemplateFileNode] = []
+        for resource in canonical.resources:
+            nodes.extend(self._flatten_resource_nodes(resource, root))
+        return nodes
+
+    def _flatten_resource_nodes(self, node: Any, root: Path) -> List[TemplateFileNode]:
+        items: List[TemplateFileNode] = []
+        if getattr(node, "type", None) == "file":
+            file_path = root / node.path
+            content = file_path.read_text(encoding="utf-8") if file_path.exists() else None
+            items.append(
+                TemplateFileNode(
+                    id=node.path,
+                    name=Path(node.path).name,
+                    path=node.path,
+                    type="file",
+                    content=content,
+                )
+            )
+        for child in getattr(node, "children", []) or []:
+            items.extend(self._flatten_resource_nodes(child, root))
+        return items
+
+    def _write_canonical_template_tree(
+        self,
+        template_id: str,
+        payload: TemplateCanonicalUpdate,
+        db_template: TemplateDB,
+    ) -> None:
+        root = self._resolve_template_dir(template_id)
+        if root.exists():
+            shutil.rmtree(root)
+        root.mkdir(parents=True, exist_ok=True)
+
+        if payload.agentsMd:
+            (root / "agents.md").write_text(payload.agentsMd, encoding="utf-8")
+
+        if payload.outputStyle:
+            primary_style = payload.outputStyle[0]
+            output_payload: Dict[str, Any] = {
+                "id": Path(primary_style.fileName).stem,
+                "fallbackInstruction": primary_style.content,
+            }
+            if primary_style.description:
+                output_payload["description"] = primary_style.description
+            (root / "output-style.yaml").write_text(
+                yaml.safe_dump(output_payload, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+
+        self._write_markdown_documents(root / "commands", payload.commands)
+        self._write_markdown_documents(root / "agents", payload.agents)
+        self._write_hooks(root / "hooks", payload.hooks)
+        self._write_mcp_servers(root / "mcp", payload.mcpServers)
+        self._write_file_nodes(root / "skills", payload.skills)
+        self._write_file_nodes(root / "resources" / "scripts", payload.scripts)
+        self._write_template_yaml(root, payload, db_template)
+
+    def _write_markdown_documents(self, directory: Path, items: List[Any]) -> None:
+        if not items:
+            return
+        directory.mkdir(parents=True, exist_ok=True)
+        for item in items:
+            file_name = Path(item.fileName).name
+            frontmatter: Dict[str, Any] = {"name": Path(file_name).stem}
+            if getattr(item, "description", None):
+                frontmatter["description"] = item.description
+            (directory / file_name).write_text(
+                self._render_frontmatter_markdown(frontmatter, item.content),
+                encoding="utf-8",
+            )
+
+    def _write_hooks(self, directory: Path, hooks: List[TemplateHook]) -> None:
+        if not hooks:
+            return
+        directory.mkdir(parents=True, exist_ok=True)
+        for hook in hooks:
+            hook_payload: Dict[str, Any] = {
+                "id": hook.id,
+                "event": hook.event,
+                "matcher": {"tool": hook.matcher or "*"},
+                "action": {
+                    "type": hook.action,
+                    **({"command": hook.command} if hook.command else {}),
+                    **({"path": hook.script} if hook.script else {}),
+                },
+            }
+            if hook.timeout is not None:
+                hook_payload["timeout"] = hook.timeout
+            (directory / f"{hook.id}.yaml").write_text(
+                yaml.safe_dump(hook_payload, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+
+    def _write_mcp_servers(self, directory: Path, servers: List[TemplateMcpServer]) -> None:
+        if not servers:
+            return
+        directory.mkdir(parents=True, exist_ok=True)
+        for server in servers:
+            server_id = server.name or server.id
+            server_payload: Dict[str, Any] = {
+                "id": server_id,
+                "transport": server.type,
+                **({"command": server.command} if server.command else {}),
+                **({"args": server.args} if server.args else {}),
+                **({"url": server.url} if server.url else {}),
+                **({"env": server.env} if server.env else {}),
+                **({"headers": server.headers} if server.headers else {}),
+            }
+            if server.description:
+                server_payload["description"] = server.description
+            (directory / f"{server_id}.yaml").write_text(
+                yaml.safe_dump(server_payload, allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+
+    def _write_file_nodes(self, root: Path, nodes: List[TemplateFileNode]) -> None:
+        if not nodes:
+            return
+        for node in nodes:
+            self._write_file_node(root, node)
+
+    def _write_file_node(self, root: Path, node: TemplateFileNode) -> None:
+        target_path = root / node.path
+        if node.type == "directory":
+            target_path.mkdir(parents=True, exist_ok=True)
+            for child in node.children or []:
+                self._write_file_node(root, child)
+            return
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(node.content or "", encoding="utf-8")
+
+    def _write_template_yaml(self, root: Path, payload: TemplateCanonicalUpdate, db_template: TemplateDB) -> None:
+        template_yaml = {
+            "id": db_template.id,
+            "name": payload.name,
+            "version": payload.version,
+            "description": payload.description,
+            "schemaVersion": "v0",
+            "supportedTargets": ["claude-code", "codex", "gemini", "opencode"],
+            "features": {
+                "agentsMd": {"path": "agents.md"},
+                "outputStyle": {"path": "output-style.yaml"},
+                "skills": {"path": "skills"},
+                "commands": {"path": "commands"},
+                "agents": {"path": "agents"},
+                "hooks": {"path": "hooks"},
+                "mcpServers": {"path": "mcp"},
+                "resources": {"path": "resources"},
+            },
+            "compileHints": {
+                "claude-code": {"agentsMdFileName": "CLAUDE.md"},
+                "codex": {"agentsMdFileName": "AGENTS.md"},
+                "gemini": {"agentsMdFileName": "GEMINI.md"},
+                "opencode": {"agentsMdFileName": "AGENTS.md"},
+            },
+            "metadata": {
+                "author": {
+                    "name": payload.author.name,
+                    "email": payload.author.email,
+                    "url": payload.author.url,
+                },
+                "keywords": payload.keywords,
+                "status": db_template.status,
+                "documentation": payload.documentation,
+                "initCommands": payload.initCommands,
+                "category": payload.categoryId or "general",
+            },
+        }
+        (root / "template.yaml").write_text(
+            yaml.safe_dump(template_yaml, allow_unicode=True, sort_keys=False),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _render_frontmatter_markdown(frontmatter: Dict[str, Any], content: str) -> str:
+        if not frontmatter:
+            return content
+        frontmatter_text = yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False).strip()
+        body = content.lstrip("\n")
+        return f"---\n{frontmatter_text}\n---\n\n{body}\n"
 
     # ============ 模板匯入/匯出 ============
 
@@ -591,71 +919,71 @@ class TemplateService(TemplateBaseService):
         """更新 Hooks 配置"""
         return self.hooks_service.update_hooks_config(template_id, request)
 
-    # ============ Slash Commands 管理（委派給 commands_service） ============
+    # ============ Commands 管理（委派給 commands_service） ============
 
-    def get_slash_commands_files(self, template_id: str):
-        """取得 Slash Commands 檔案列表"""
-        return self.commands_service.get_slash_commands_files(template_id)
+    def get_commands_files(self, template_id: str):
+        """取得 Commands 檔案列表"""
+        return self.commands_service.get_commands_files(template_id)
 
-    def get_slash_command_file_content(self, template_id: str, file_name: str):
+    def get_command_file_content(self, template_id: str, file_name: str):
         """取得 Slash Command 檔案內容"""
-        return self.commands_service.get_slash_command_file_content(template_id, file_name)
+        return self.commands_service.get_command_file_content(template_id, file_name)
 
-    def create_slash_command_file(self, template_id: str, request):
+    def create_command_file(self, template_id: str, request):
         """建立 Slash Command 檔案"""
-        return self.commands_service.create_slash_command_file(template_id, request)
+        return self.commands_service.create_command_file(template_id, request)
 
-    def update_slash_command_file(self, template_id: str, file_name: str, request):
+    def update_command_file(self, template_id: str, file_name: str, request):
         """更新 Slash Command 檔案"""
-        return self.commands_service.update_slash_command_file(template_id, file_name, request)
+        return self.commands_service.update_command_file(template_id, file_name, request)
 
-    def delete_slash_command_file(self, template_id: str, file_name: str):
+    def delete_command_file(self, template_id: str, file_name: str):
         """刪除 Slash Command 檔案"""
-        return self.commands_service.delete_slash_command_file(template_id, file_name)
+        return self.commands_service.delete_command_file(template_id, file_name)
 
-    # ============ SubAgents 管理（委派給 agents_service） ============
+    # ============ Agents 管理（委派給 agents_service） ============
 
-    def get_sub_agents_files(self, template_id: str):
-        """取得 SubAgents 檔案列表"""
-        return self.agents_service.get_sub_agents_files(template_id)
+    def get_agents_files(self, template_id: str):
+        """取得 Agents 檔案列表"""
+        return self.agents_service.get_agents_files(template_id)
 
-    def get_sub_agent_file_content(self, template_id: str, file_name: str):
-        """取得 SubAgent 檔案內容"""
-        return self.agents_service.get_sub_agent_file_content(template_id, file_name)
+    def get_agent_file_content(self, template_id: str, file_name: str):
+        """取得 Agent 檔案內容"""
+        return self.agents_service.get_agent_file_content(template_id, file_name)
 
-    def create_sub_agent_file(self, template_id: str, request):
-        """建立 SubAgent 檔案"""
-        return self.agents_service.create_sub_agent_file(template_id, request)
+    def create_agent_file(self, template_id: str, request):
+        """建立 Agent 檔案"""
+        return self.agents_service.create_agent_file(template_id, request)
 
-    def update_sub_agent_file(self, template_id: str, file_name: str, request):
-        """更新 SubAgent 檔案"""
-        return self.agents_service.update_sub_agent_file(template_id, file_name, request)
+    def update_agent_file(self, template_id: str, file_name: str, request):
+        """更新 Agent 檔案"""
+        return self.agents_service.update_agent_file(template_id, file_name, request)
 
-    def delete_sub_agent_file(self, template_id: str, file_name: str):
-        """刪除 SubAgent 檔案"""
-        return self.agents_service.delete_sub_agent_file(template_id, file_name)
+    def delete_agent_file(self, template_id: str, file_name: str):
+        """刪除 Agent 檔案"""
+        return self.agents_service.delete_agent_file(template_id, file_name)
 
-    # ============ Output Styles 管理（委派給 output_styles_service） ============
+    # ============ Output Styles 管理（委派給 output_style_service） ============
 
-    def get_output_styles_files(self, template_id: str):
+    def get_output_style_files(self, template_id: str):
         """取得 Output Styles 檔案列表"""
-        return self.output_styles_service.get_output_styles_files(template_id)
+        return self.output_style_service.get_output_style_files(template_id)
 
     def get_output_style_file_content(self, template_id: str, file_name: str):
         """取得 Output Style 檔案內容"""
-        return self.output_styles_service.get_output_style_file_content(template_id, file_name)
+        return self.output_style_service.get_output_style_file_content(template_id, file_name)
 
     def create_output_style_file(self, template_id: str, request):
         """建立 Output Style 檔案"""
-        return self.output_styles_service.create_output_style_file(template_id, request)
+        return self.output_style_service.create_output_style_file(template_id, request)
 
     def update_output_style_file(self, template_id: str, file_name: str, request):
         """更新 Output Style 檔案"""
-        return self.output_styles_service.update_output_style_file(template_id, file_name, request)
+        return self.output_style_service.update_output_style_file(template_id, file_name, request)
 
     def delete_output_style_file(self, template_id: str, file_name: str):
         """刪除 Output Style 檔案"""
-        return self.output_styles_service.delete_output_style_file(template_id, file_name)
+        return self.output_style_service.delete_output_style_file(template_id, file_name)
 
     # ============ 檔案管理（委派給 file_service） ============
 
@@ -759,15 +1087,15 @@ class TemplateService(TemplateBaseService):
         """搜尋檔案"""
         return self.file_service.search_files(template_id, request)
 
-    # ============ Claude.md 管理（委派給 claude_md_service） ============
+    # ============ AGENTS.md 管理（委派給 agents_md_service） ============
 
-    def get_claude_md(self, template_id: str) -> str:
-        """取得 Claude.md 檔案內容"""
-        return self.claude_md_service.get_claude_md(template_id)
+    def get_agents_md(self, template_id: str) -> str:
+        """取得 AGENTS.md 檔案內容"""
+        return self.agents_md_service.get_agents_md(template_id)
 
-    def update_claude_md(self, template_id: str, content: str) -> None:
-        """更新 Claude.md 檔案"""
-        return self.claude_md_service.update_claude_md(template_id, content)
+    def update_agents_md(self, template_id: str, content: str) -> None:
+        """更新 AGENTS.md 檔案"""
+        return self.agents_md_service.update_agents_md(template_id, content)
 
     # ============ Marketplace 配置管理（委派給 marketplace_service） ============
 
@@ -789,9 +1117,9 @@ class TemplateService(TemplateBaseService):
         """載入 Agents 配置"""
         return self.agents_service.load_agents(template_id)
 
-    def _load_output_styles(self, template_id: str):
+    def _load_output_style(self, template_id: str):
         """載入 Output Styles 配置"""
-        return self.output_styles_service.load_output_styles(template_id)
+        return self.output_style_service.load_output_style(template_id)
 
     def _load_mcp_servers(self, template_id: str):
         """載入 MCP Servers 配置"""

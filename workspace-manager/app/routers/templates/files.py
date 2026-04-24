@@ -1,4 +1,4 @@
-"""模板文件管理路由（Slash Commands、SubAgents、Output Styles、Claude.md、通用文件管理）"""
+"""模板文件管理路由（Commands、Agents、Output Style、AGENTS.md、通用文件管理）"""
 
 import logging
 from typing import List, Optional
@@ -25,14 +25,14 @@ from app.models.template_config import (
     TemplateOutputStyleListResponse,
     TemplateOutputStyleResponse,
     TemplateOutputStyleUpdateRequest,
-    TemplateSlashCommandCreateRequest,
-    TemplateSlashCommandListResponse,
-    TemplateSlashCommandResponse,
-    TemplateSlashCommandUpdateRequest,
-    TemplateSubAgentCreateRequest,
-    TemplateSubAgentListResponse,
-    TemplateSubAgentResponse,
-    TemplateSubAgentUpdateRequest,
+    TemplateCommandCreateRequest,
+    TemplateCommandListResponse,
+    TemplateCommandResponse,
+    TemplateCommandUpdateRequest,
+    TemplateAgentCreateRequest,
+    TemplateAgentListResponse,
+    TemplateAgentResponse,
+    TemplateAgentUpdateRequest,
 )
 from app.services.template_file_service import TemplateFileService
 from app.services.template_service import TemplateService
@@ -122,23 +122,23 @@ def get_template_file_service(db: Session = Depends(get_db)) -> TemplateFileServ
     return TemplateFileService(db)
 
 
-# ============ SlashCommands 檔案管理 ============
+# ============ Commands 檔案管理 ============
 
 
 @router.get(
-    "/{template_id}/slash-commands",
-    response_model=TemplateSlashCommandListResponse,
-    summary="取得模板 SlashCommands 檔案列表",
+    "/{template_id}/commands",
+    response_model=TemplateCommandListResponse,
+    summary="取得模板 Commands 檔案列表",
     responses=build_responses(401, 404, 500),
 )
-async def get_template_slash_commands_files(
+async def get_template_commands_files(
     request: Request,
     template_id: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSlashCommandListResponse:
+) -> TemplateCommandListResponse:
     """取得指定模板的 commands 目錄下所有檔案列表"""
-    result = service.get_slash_commands_files(template_id)
+    result = service.get_commands_files(template_id)
     translate = request.state.translate
     if not result.success:
         _raise_template_service_error(result, translate)
@@ -146,138 +146,138 @@ async def get_template_slash_commands_files(
 
 
 @router.get(
-    "/{template_id}/slash-commands/{file_name}",
-    response_model=TemplateSlashCommandResponse,
-    summary="取得 SlashCommand 檔案內容",
+    "/{template_id}/commands/{file_name}",
+    response_model=TemplateCommandResponse,
+    summary="取得 Command 檔案內容",
     responses=build_responses(400, 401, 404, 500),
 )
-async def get_template_slash_command_file(
+async def get_template_command_file(
     request: Request,
     template_id: str,
     file_name: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSlashCommandResponse:
-    """取得指定模板中特定 slash-command 檔案的內容"""
-    result = service.get_slash_command_file_content(template_id, file_name)
+) -> TemplateCommandResponse:
+    """取得指定模板中特定 command 檔案的內容"""
+    result = service.get_command_file_content(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.post(
-    "/{template_id}/slash-commands",
-    response_model=TemplateSlashCommandResponse,
+    "/{template_id}/commands",
+    response_model=TemplateCommandResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 SlashCommand 檔案",
+    summary="新增 Command 檔案",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
-async def create_template_slash_command_file(
+async def create_template_command_file(
     request: Request,
     template_id: str,
-    payload: TemplateSlashCommandCreateRequest,
+    payload: TemplateCommandCreateRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSlashCommandResponse:
+) -> TemplateCommandResponse:
     """在指定模板的 commands 目錄中新增新檔案"""
-    result = service.create_slash_command_file(template_id, payload)
+    result = service.create_command_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.put(
-    "/{template_id}/slash-commands/{file_name}",
-    response_model=TemplateSlashCommandResponse,
-    summary="更新 SlashCommand 檔案",
+    "/{template_id}/commands/{file_name}",
+    response_model=TemplateCommandResponse,
+    summary="更新 Command 檔案",
     responses=build_responses(400, 401, 404, 422, 500),
 )
-async def update_template_slash_command_file(
+async def update_template_command_file(
     request: Request,
     template_id: str,
     file_name: str,
-    payload: TemplateSlashCommandUpdateRequest,
+    payload: TemplateCommandUpdateRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSlashCommandResponse:
-    """更新指定模板中的 slash-command 檔案內容"""
-    result = service.update_slash_command_file(template_id, file_name, payload)
+) -> TemplateCommandResponse:
+    """更新指定模板中的 command 檔案內容"""
+    result = service.update_command_file(template_id, file_name, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.delete(
-    "/{template_id}/slash-commands/{file_name}",
+    "/{template_id}/commands/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 SlashCommand 檔案",
+    summary="刪除 Command 檔案",
     responses=build_responses(400, 401, 404, 500),
 )
-async def delete_template_slash_command_file(
+async def delete_template_command_file(
     request: Request,
     template_id: str,
     file_name: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板中的 slash-command 檔案"""
-    result = service.delete_slash_command_file(template_id, file_name)
+    """刪除指定模板中的 command 檔案"""
+    result = service.delete_command_file(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
 
 
-# ============ Claude.md 檔案管理 ============
+# ============ AGENTS.md 檔案管理 ============
 
 
 @router.get(
-    "/{template_id}/claude-md",
-    summary="取得 Claude.md 內容",
+    "/{template_id}/agents-md",
+    summary="取得 AGENTS.md 內容",
     responses=build_responses(401, 404, 500),
 )
-async def get_template_claude_md(
+async def get_template_agents_md(
     request: Request,
     template_id: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> dict:
-    """取得模板的 Claude.md 內容"""
+    """取得模板的 AGENTS.md 內容"""
     try:
         translate = request.state.translate
-        claude_md = service.get_claude_md(template_id)
-        if claude_md is None:
+        agents_md = service.get_agents_md(template_id)
+        if agents_md is None:
             return {
                 "success": False,
-                "error": "Claude.md not found",
-                "message": translate("templates.claude_md_empty")
+                "error": "AGENTS.md not found",
+                "message": translate("templates.agents_md_empty")
             }
         return {
             "success": True,
             "data": {
-                "content": claude_md
+                "content": agents_md
             }
         }
     except Exception as e:
         translate = request.state.translate
         return {
             "success": False,
-            "error": "Failed to load Claude.md",
-            "message": translate("templates.claude_md_load_failed_simple")
+            "error": "Failed to load AGENTS.md",
+            "message": translate("templates.agents_md_load_failed_simple")
         }
 
 
 @router.put(
-    "/{template_id}/claude-md",
-    summary="更新 Claude.md 內容",
+    "/{template_id}/agents-md",
+    summary="更新 AGENTS.md 內容",
     responses=build_responses(400, 401, 404, 422, 500),
 )
-async def update_template_claude_md(
+async def update_template_agents_md(
     request: Request,
     template_id: str,
     payload: dict,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> dict:
-    """更新模板的 Claude.md 內容"""
+    """更新模板的 AGENTS.md 內容"""
     try:
         translate = request.state.translate
         content = payload.get("content", "")
@@ -285,52 +285,52 @@ async def update_template_claude_md(
             return {
                 "success": False,
                 "error": "Content cannot be empty",
-                "message": translate("templates.claude_md_content_empty")
+                "message": translate("templates.agents_md_content_empty")
             }
 
         # 呼叫 service 方法實際保存檔案
-        service.update_claude_md(template_id, content)
+        service.update_agents_md(template_id, content)
 
         return {
             "success": True,
             "data": {
                 "content": content
             },
-            "message": translate("templates.claude_md_updated")
+            "message": translate("templates.agents_md_updated")
         }
     except ValueError as e:
         translate = request.state.translate
         return {
             "success": False,
             "error": "Invalid template or content",
-            "message": translate("templates.claude_md_update_failed_simple")
+            "message": translate("templates.agents_md_update_failed_simple")
         }
     except Exception as e:
         translate = request.state.translate
         return {
             "success": False,
-            "error": "Failed to update Claude.md",
-            "message": translate("templates.claude_md_update_failed_simple")
+            "error": "Failed to update AGENTS.md",
+            "message": translate("templates.agents_md_update_failed_simple")
         }
 
 
-# ============ SubAgents 檔案管理 ============
+# ============ Agents 檔案管理 ============
 
 
 @router.get(
-    "/{template_id}/subagents",
-    response_model=TemplateSubAgentListResponse,
-    summary="取得模板 SubAgents 檔案列表",
+    "/{template_id}/agents",
+    response_model=TemplateAgentListResponse,
+    summary="取得模板 Agents 檔案列表",
     responses=build_responses(401, 404, 500),
 )
-async def get_template_sub_agents_files(
+async def get_template_agents_files(
     request: Request,
     template_id: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSubAgentListResponse:
+) -> TemplateAgentListResponse:
     """取得指定模板的 agents 目錄下所有檔案列表"""
-    result = service.get_sub_agents_files(template_id)
+    result = service.get_agents_files(template_id)
     translate = request.state.translate
     if not result.success:
         _raise_template_service_error(result, translate)
@@ -338,103 +338,103 @@ async def get_template_sub_agents_files(
 
 
 @router.get(
-    "/{template_id}/subagents/{file_name}",
-    response_model=TemplateSubAgentResponse,
-    summary="取得 SubAgent 檔案內容",
+    "/{template_id}/agents/{file_name}",
+    response_model=TemplateAgentResponse,
+    summary="取得 Agent 檔案內容",
     responses=build_responses(400, 401, 404, 500),
 )
-async def get_template_sub_agent_file(
+async def get_template_agent_file(
     request: Request,
     template_id: str,
     file_name: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSubAgentResponse:
-    """取得指定模板中特定 subagent 檔案的內容"""
-    result = service.get_sub_agent_file_content(template_id, file_name)
+) -> TemplateAgentResponse:
+    """取得指定模板中特定 agent 檔案的內容"""
+    result = service.get_agent_file_content(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.post(
-    "/{template_id}/subagents",
-    response_model=TemplateSubAgentResponse,
+    "/{template_id}/agents",
+    response_model=TemplateAgentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 SubAgent 檔案",
+    summary="新增 Agent 檔案",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
-async def create_template_sub_agent_file(
+async def create_template_agent_file(
     request: Request,
     template_id: str,
-    payload: TemplateSubAgentCreateRequest,
+    payload: TemplateAgentCreateRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSubAgentResponse:
+) -> TemplateAgentResponse:
     """在指定模板的 agents 目錄中新增新檔案"""
-    result = service.create_sub_agent_file(template_id, payload)
+    result = service.create_agent_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.put(
-    "/{template_id}/subagents/{file_name}",
-    response_model=TemplateSubAgentResponse,
-    summary="更新 SubAgent 檔案",
+    "/{template_id}/agents/{file_name}",
+    response_model=TemplateAgentResponse,
+    summary="更新 Agent 檔案",
     responses=build_responses(400, 401, 404, 422, 500),
 )
-async def update_template_sub_agent_file(
+async def update_template_agent_file(
     request: Request,
     template_id: str,
     file_name: str,
-    payload: TemplateSubAgentUpdateRequest,
+    payload: TemplateAgentUpdateRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
-) -> TemplateSubAgentResponse:
-    """更新指定模板中的 subagent 檔案內容"""
-    result = service.update_sub_agent_file(template_id, file_name, payload)
+) -> TemplateAgentResponse:
+    """更新指定模板中的 agent 檔案內容"""
+    result = service.update_agent_file(template_id, file_name, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
     return result
 
 
 @router.delete(
-    "/{template_id}/subagents/{file_name}",
+    "/{template_id}/agents/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 SubAgent 檔案",
+    summary="刪除 Agent 檔案",
     responses=build_responses(400, 401, 404, 500),
 )
-async def delete_template_sub_agent_file(
+async def delete_template_agent_file(
     request: Request,
     template_id: str,
     file_name: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板中的 subagent 檔案"""
-    result = service.delete_sub_agent_file(template_id, file_name)
+    """刪除指定模板中的 agent 檔案"""
+    result = service.delete_agent_file(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
 
 
-# ============ OutputStyles 檔案管理 ============
+# ============ Output Style 檔案管理 ============
 
 
 @router.get(
-    "/{template_id}/output-styles",
+    "/{template_id}/output-style",
     response_model=TemplateOutputStyleListResponse,
-    summary="取得模板 OutputStyles 檔案列表",
+    summary="取得模板 Output Style 檔案列表",
     responses=build_responses(401, 404, 500),
 )
-async def get_template_output_styles_files(
+async def get_template_output_style_files(
     request: Request,
     template_id: str,
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleListResponse:
-    """取得指定模板的 output-styles 目錄下所有檔案列表"""
-    result = service.get_output_styles_files(template_id)
+    """取得指定模板的 output-style 目錄下所有檔案列表"""
+    result = service.get_output_style_files(template_id)
     translate = request.state.translate
     if not result.success:
         _raise_template_service_error(result, translate)
@@ -442,9 +442,9 @@ async def get_template_output_styles_files(
 
 
 @router.get(
-    "/{template_id}/output-styles/{file_name}",
+    "/{template_id}/output-style/{file_name}",
     response_model=TemplateOutputStyleResponse,
-    summary="取得 OutputStyle 檔案內容",
+    summary="取得 Output Style 檔案內容",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_template_output_style_file(
@@ -462,10 +462,10 @@ async def get_template_output_style_file(
 
 
 @router.post(
-    "/{template_id}/output-styles",
+    "/{template_id}/output-style",
     response_model=TemplateOutputStyleResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 OutputStyle 檔案",
+    summary="新增 Output Style 檔案",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_template_output_style_file(
@@ -475,7 +475,7 @@ async def create_template_output_style_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleResponse:
-    """在指定模板的 output-styles 目錄中新增新檔案"""
+    """在指定模板的 output-style 目錄中新增新檔案"""
     result = service.create_output_style_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -483,9 +483,9 @@ async def create_template_output_style_file(
 
 
 @router.put(
-    "/{template_id}/output-styles/{file_name}",
+    "/{template_id}/output-style/{file_name}",
     response_model=TemplateOutputStyleResponse,
-    summary="更新 OutputStyle 檔案",
+    summary="更新 Output Style 檔案",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def update_template_output_style_file(
@@ -504,9 +504,9 @@ async def update_template_output_style_file(
 
 
 @router.delete(
-    "/{template_id}/output-styles/{file_name}",
+    "/{template_id}/output-style/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 OutputStyle 檔案",
+    summary="刪除 Output Style 檔案",
     responses=build_responses(400, 401, 404, 500),
 )
 async def delete_template_output_style_file(

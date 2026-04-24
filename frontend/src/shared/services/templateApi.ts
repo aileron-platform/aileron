@@ -6,12 +6,13 @@
 import { apiClient } from '@/shared/api/apiClient';
 import { createLogger } from './logger';
 import type {
+  CliType,
+  TemplateFileNode,
   TemplateHook,
   TemplateMcpServer,
-  TemplateSlashCommand,
-  TemplateSubAgent,
   TemplateOutputStyle,
-  TemplateFileNode,
+  TemplateCommand,
+  TemplateAgent,
 } from '@/shared/types/templates';
 
 const logger = createLogger('Template API');
@@ -32,7 +33,7 @@ export interface TemplateBasicInfo {
   author: TemplateAuthorInfo;
   keywords: string[];
   categoryId?: string;
-  cli_type?: 'claude-code' | 'codex' | 'gemini';
+  cli_type?: 'claude-code' | 'codex' | 'gemini' | 'opencode';
   initCommands?: string;
 }
 
@@ -82,15 +83,36 @@ export interface TemplateResponse {
   updated_at: string;
   storagePath: string;
   documentation?: string;
-  claudeMd?: string;
+  agentsMd?: string;
   initCommands?: string;
   mcpServers?: TemplateMcpServer[];
-  slashCommands?: TemplateSlashCommand[];
+  commands?: TemplateCommand[];
   hooks?: TemplateHook[];
-  subAgents?: TemplateSubAgent[];
-  outputStyles?: TemplateOutputStyle[];
+  agents?: TemplateAgent[];
+  outputStyle?: TemplateOutputStyle[];
   scripts?: TemplateFileNode[];
   skills?: TemplateFileNode[];
+}
+
+export interface CanonicalTemplateUpdatePayload {
+  name: string;
+  description?: string;
+  version: string;
+  author: TemplateAuthorInfo;
+  keywords: string[];
+  categoryId?: string;
+  documentation?: string;
+  agentsMd?: string;
+  initCommands?: string;
+  mcpServers: TemplateMcpServer[];
+  commands: TemplateCommand[];
+  hooks: TemplateHook[];
+  agents: TemplateAgent[];
+  outputStyle: TemplateOutputStyle[];
+  skills: TemplateFileNode[];
+  scripts: TemplateFileNode[];
+  isActive?: boolean;
+  cliType?: CliType;
 }
 
 export interface McpConfigResponse {
@@ -156,6 +178,29 @@ export interface TemplateFileListResponse {
   error?: string;
 }
 
+export interface TemplateCompileIssue {
+  feature: string;
+  target: CliType;
+  message: string;
+}
+
+export interface TemplateCompiledFile {
+  path: string;
+  source: string;
+  content: string;
+}
+
+export interface TemplateCompilePreview {
+  target: CliType;
+  files: TemplateCompiledFile[];
+  warnings: TemplateCompileIssue[];
+  unsupported: TemplateCompileIssue[];
+  degradationNotes: TemplateCompileIssue[];
+  installHints: Record<string, unknown>;
+  sourceHash?: string;
+  cacheKey?: string;
+}
+
 // ============ API Functions ============
 
 /**
@@ -199,6 +244,19 @@ export async function getTemplate(templateId: string): Promise<TemplateResponse>
 }
 
 /**
+ * 取得模板編譯預覽
+ */
+export async function getTemplateCompilePreview(
+  templateId: string,
+  target: CliType,
+): Promise<TemplateCompilePreview> {
+  const response = await apiClient.get(
+    `/templates/${templateId}/compile-preview?target=${encodeURIComponent(target)}`,
+  );
+  return response;
+}
+
+/**
  * 建立模板
  */
 export async function createTemplate(data: TemplateBasicInfo): Promise<TemplateResponse> {
@@ -214,6 +272,14 @@ export async function updateTemplate(
   data: Partial<TemplateBasicInfo>
 ): Promise<TemplateResponse> {
   const response = await apiClient.put(`/templates/${templateId}`, data);
+  return response;
+}
+
+export async function updateCanonicalTemplate(
+  templateId: string,
+  data: CanonicalTemplateUpdatePayload,
+): Promise<TemplateResponse> {
+  const response = await apiClient.put(`/templates/${templateId}/canonical`, data);
   return response;
 }
 
@@ -244,9 +310,10 @@ function getAuthToken(): string | null {
 /**
  * 匯出模板
  */
-export async function exportTemplate(templateId: string): Promise<Blob> {
+export async function exportTemplate(templateId: string, target?: CliType): Promise<Blob> {
   // 使用 ApiClient.getBlob 來確保請求攜帶 Authorization header
-  return apiClient.getBlob(`/templates/${templateId}/export`);
+  const suffix = target ? `?target=${encodeURIComponent(target)}` : '';
+  return apiClient.getBlob(`/templates/${templateId}/export${suffix}`);
 }
 
 /**
@@ -298,121 +365,121 @@ export async function updateHooksConfig(
   return response;
 }
 
-// ============ SlashCommands API Functions ============
+// ============ Commands API Functions ============
 
 /**
- * 取得模板的 SlashCommands 檔案列表
+ * 取得模板的 Commands 檔案列表
  */
-export async function getSlashCommandsFiles(templateId: string): Promise<TemplateFileListResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/slash-commands`);
+export async function getCommandsFiles(templateId: string): Promise<TemplateFileListResponse> {
+  const response = await apiClient.get(`/templates/${templateId}/commands`);
   return response;
 }
 
 /**
- * 取得特定 SlashCommand 檔案內容
+ * 取得特定 Command 檔案內容
  */
-export async function getSlashCommandFile(
+export async function getCommandFile(
   templateId: string,
   fileName: string
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/slash-commands/${fileName}`);
+  const response = await apiClient.get(`/templates/${templateId}/commands/${fileName}`);
   return response;
 }
 
 /**
- * 新增 SlashCommand 檔案
+ * 新增 Command 檔案
  */
-export async function createSlashCommandFile(
+export async function createCommandFile(
   templateId: string,
   data: TemplateFileCreateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.post(`/templates/${templateId}/slash-commands`, data);
+  const response = await apiClient.post(`/templates/${templateId}/commands`, data);
   return response;
 }
 
 /**
- * 更新 SlashCommand 檔案
+ * 更新 Command 檔案
  */
-export async function updateSlashCommandFile(
+export async function updateCommandFile(
   templateId: string,
   fileName: string,
   data: TemplateFileUpdateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.put(`/templates/${templateId}/slash-commands/${fileName}`, data);
+  const response = await apiClient.put(`/templates/${templateId}/commands/${fileName}`, data);
   return response;
 }
 
 /**
- * 刪除 SlashCommand 檔案
+ * 刪除 Command 檔案
  */
-export async function deleteSlashCommandFile(
+export async function deleteCommandFile(
   templateId: string,
   fileName: string
 ): Promise<void> {
-  await apiClient.delete(`/templates/${templateId}/slash-commands/${fileName}`);
+  await apiClient.delete(`/templates/${templateId}/commands/${fileName}`);
 }
 
-// ============ SubAgents API Functions ============
+// ============ Agents API Functions ============
 
 /**
- * 取得模板的 SubAgents 檔案列表
+ * 取得模板的 Agents 檔案列表
  */
-export async function getSubAgentsFiles(templateId: string): Promise<TemplateFileListResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/subagents`);
+export async function getAgentsFiles(templateId: string): Promise<TemplateFileListResponse> {
+  const response = await apiClient.get(`/templates/${templateId}/agents`);
   return response;
 }
 
 /**
- * 取得特定 SubAgent 檔案內容
+ * 取得特定 Agent 檔案內容
  */
-export async function getSubAgentFile(
+export async function getAgentFile(
   templateId: string,
   fileName: string
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/subagents/${fileName}`);
+  const response = await apiClient.get(`/templates/${templateId}/agents/${fileName}`);
   return response;
 }
 
 /**
- * 新增 SubAgent 檔案
+ * 新增 Agent 檔案
  */
-export async function createSubAgentFile(
+export async function createAgentFile(
   templateId: string,
   data: TemplateFileCreateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.post(`/templates/${templateId}/subagents`, data);
+  const response = await apiClient.post(`/templates/${templateId}/agents`, data);
   return response;
 }
 
 /**
- * 更新 SubAgent 檔案
+ * 更新 Agent 檔案
  */
-export async function updateSubAgentFile(
+export async function updateAgentFile(
   templateId: string,
   fileName: string,
   data: TemplateFileUpdateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.put(`/templates/${templateId}/subagents/${fileName}`, data);
+  const response = await apiClient.put(`/templates/${templateId}/agents/${fileName}`, data);
   return response;
 }
 
 /**
- * 刪除 SubAgent 檔案
+ * 刪除 Agent 檔案
  */
-export async function deleteSubAgentFile(
+export async function deleteAgentFile(
   templateId: string,
   fileName: string
 ): Promise<void> {
-  await apiClient.delete(`/templates/${templateId}/subagents/${fileName}`);
+  await apiClient.delete(`/templates/${templateId}/agents/${fileName}`);
 }
 
-// ============ OutputStyles API Functions ============
+// ============ Output Style API Functions ============
 
 /**
  * 取得模板的 OutputStyles 檔案列表
  */
-export async function getOutputStylesFiles(templateId: string): Promise<TemplateFileListResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/output-styles`);
+export async function getOutputStyleFiles(templateId: string): Promise<TemplateFileListResponse> {
+  const response = await apiClient.get(`/templates/${templateId}/output-style`);
   return response;
 }
 
@@ -423,7 +490,7 @@ export async function getOutputStyleFile(
   templateId: string,
   fileName: string
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/output-styles/${fileName}`);
+  const response = await apiClient.get(`/templates/${templateId}/output-style/${fileName}`);
   return response;
 }
 
@@ -434,7 +501,7 @@ export async function createOutputStyleFile(
   templateId: string,
   data: TemplateFileCreateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.post(`/templates/${templateId}/output-styles`, data);
+  const response = await apiClient.post(`/templates/${templateId}/output-style`, data);
   return response;
 }
 
@@ -446,7 +513,7 @@ export async function updateOutputStyleFile(
   fileName: string,
   data: TemplateFileUpdateRequest
 ): Promise<TemplateFileResponse> {
-  const response = await apiClient.put(`/templates/${templateId}/output-styles/${fileName}`, data);
+  const response = await apiClient.put(`/templates/${templateId}/output-style/${fileName}`, data);
   return response;
 }
 
@@ -457,12 +524,12 @@ export async function deleteOutputStyleFile(
   templateId: string,
   fileName: string
 ): Promise<void> {
-  await apiClient.delete(`/templates/${templateId}/output-styles/${fileName}`);
+  await apiClient.delete(`/templates/${templateId}/output-style/${fileName}`);
 }
 
-// ============ Claude.md API Functions ============
+// ============ AGENTS.md API Functions ============
 
-export interface ClaudeMdResponse {
+export interface AgentsMdResponse {
   success: boolean;
   data?: {
     content: string;
@@ -471,26 +538,26 @@ export interface ClaudeMdResponse {
   error?: string;
 }
 
-export interface ClaudeMdUpdateRequest {
+export interface AgentsMdUpdateRequest {
   content: string;
 }
 
 /**
- * 取得模板的 Claude.md 內容
+ * 取得模板的 AGENTS.md 內容
  */
-export async function getClaudeMd(templateId: string): Promise<ClaudeMdResponse> {
-  const response = await apiClient.get(`/templates/${templateId}/claude-md`);
+export async function getAgentsMd(templateId: string): Promise<AgentsMdResponse> {
+  const response = await apiClient.get(`/templates/${templateId}/agents-md`);
   return response;
 }
 
 /**
- * 更新模板的 Claude.md 內容
+ * 更新模板的 AGENTS.md 內容
  */
-export async function updateClaudeMd(
+export async function updateAgentsMd(
   templateId: string,
-  data: ClaudeMdUpdateRequest
-): Promise<ClaudeMdResponse> {
-  const response = await apiClient.put(`/templates/${templateId}/claude-md`, data);
+  data: AgentsMdUpdateRequest
+): Promise<AgentsMdResponse> {
+  const response = await apiClient.put(`/templates/${templateId}/agents-md`, data);
   return response;
 }
 
@@ -824,9 +891,9 @@ export interface TemplateInstallItemResult {
 }
 
 export interface TemplateInstallResults {
-  claudeMd?: TemplateInstallItemResult;
-  slashCommands?: TemplateInstallItemResult;
-  subagents?: TemplateInstallItemResult;
+  agentsMd?: TemplateInstallItemResult;
+  commands?: TemplateInstallItemResult;
+  agents?: TemplateInstallItemResult;
   mcp?: TemplateInstallItemResult;
   hooks?: TemplateInstallItemResult;
   scripts?: TemplateInstallItemResult;

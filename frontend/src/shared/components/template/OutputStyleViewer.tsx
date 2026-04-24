@@ -27,28 +27,28 @@ export const OutputStyleViewer: React.FC<OutputStyleViewerProps> = ({
   // 翻譯鍵
   const i18nKeys: MarkdownFileViewerProps<OutputStyleData>['i18nKeys'] = {
     sidebar: {
-      title: isEditable ? 'template.editor.outputStyles.sidebar.title' : 'template.detail.outputStyles.sidebar.title',
-      searchPlaceholder: isEditable ? 'template.editor.outputStyles.sidebar.searchPlaceholder' : 'template.detail.outputStyles.sidebar.searchPlaceholder',
-      empty: isEditable ? 'template.editor.outputStyles.sidebar.empty' : 'template.detail.outputStyles.sidebar.empty',
+      title: isEditable ? 'template.editor.outputStyle.sidebar.title' : 'template.detail.outputStyle.sidebar.title',
+      searchPlaceholder: isEditable ? 'template.editor.outputStyle.sidebar.searchPlaceholder' : 'template.detail.outputStyle.sidebar.searchPlaceholder',
+      empty: isEditable ? 'template.editor.outputStyle.sidebar.empty' : 'template.detail.outputStyle.sidebar.empty',
     },
     list: {
-      nameFallback: isEditable ? 'template.editor.outputStyles.list.nameFallback' : 'template.detail.outputStyles.list.nameFallback',
-      sizeLabel: isEditable ? 'template.editor.outputStyles.list.sizeLabel' : 'template.detail.outputStyles.list.sizeLabel',
+      nameFallback: isEditable ? 'template.editor.outputStyle.list.nameFallback' : 'template.detail.outputStyle.list.nameFallback',
+      sizeLabel: isEditable ? 'template.editor.outputStyle.list.sizeLabel' : 'template.detail.outputStyle.list.sizeLabel',
     },
     detail: {
-      descriptionFallback: isEditable ? 'template.editor.outputStyles.detail.descriptionFallback' : 'template.detail.outputStyles.detail.descriptionFallback',
+      descriptionFallback: isEditable ? 'template.editor.outputStyle.detail.descriptionFallback' : 'template.detail.outputStyle.detail.descriptionFallback',
     },
     actions: {
-      copy: isEditable ? 'template.editor.outputStyles.actions.copy' : 'template.detail.outputStyles.actions.copy',
-      download: isEditable ? 'template.editor.outputStyles.actions.download' : 'template.detail.outputStyles.actions.download',
-      add: isEditable ? 'template.editor.outputStyles.actions.add' : undefined,
+      copy: isEditable ? 'template.editor.outputStyle.actions.copy' : 'template.detail.outputStyle.actions.copy',
+      download: isEditable ? 'template.editor.outputStyle.actions.download' : 'template.detail.outputStyle.actions.download',
+      add: isEditable ? 'template.editor.outputStyle.actions.add' : undefined,
     },
     empty: {
-      title: isEditable ? 'template.editor.outputStyles.empty.title' : 'template.detail.outputStyles.empty.title',
-      description: isEditable ? 'template.editor.outputStyles.empty.description' : 'template.detail.outputStyles.empty.description',
+      title: isEditable ? 'template.editor.outputStyle.empty.title' : 'template.detail.outputStyle.empty.title',
+      description: isEditable ? 'template.editor.outputStyle.empty.description' : 'template.detail.outputStyle.empty.description',
     },
     errors: {
-      copyFailed: isEditable ? 'template.editor.outputStyles.errors.copyFailed' : 'template.detail.outputStyles.errors.copyFailed',
+      copyFailed: isEditable ? 'template.editor.outputStyle.errors.copyFailed' : 'template.detail.outputStyle.errors.copyFailed',
     },
   };
 
@@ -71,11 +71,11 @@ export const OutputStyleViewer: React.FC<OutputStyleViewerProps> = ({
     return {
       edit: onEdit && isEditable ? {
         onClick: (item: OutputStyleData) => onEdit(item),
-        label: t('template.editor.outputStyles.actions.edit'),
+        label: t('template.editor.outputStyle.actions.edit'),
       } : undefined,
       delete: onDelete && isEditable ? {
         onClick: (item: OutputStyleData) => onDelete(item),
-        label: t('template.editor.outputStyles.actions.delete'),
+        label: t('template.editor.outputStyle.actions.delete'),
       } : undefined,
     };
   }, [isEditable, onEdit, onDelete, t]);

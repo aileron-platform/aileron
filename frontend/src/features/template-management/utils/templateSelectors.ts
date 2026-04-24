@@ -2,11 +2,11 @@ import type { Template, TemplateFeatureFlags, TemplateFeatureKey, CliType } from
 
 export const buildFeatureFlags = (template: Template): TemplateFeatureFlags => ({
   hasMcp: template.mcpServers.length > 0,
-  hasSlashCommands: template.slashCommands.length > 0,
+  hasCommands: template.commands.length > 0,
   hasHooks: template.hooks.length > 0,
-  hasClaudeMd: Boolean(template.claudeMd && template.claudeMd.trim().length > 0),
-  hasSubAgents: template.subAgents.length > 0,
-  hasOutputStyles: template.outputStyles.length > 0,
+  hasAgentsMd: Boolean(template.agentsMd && template.agentsMd.trim().length > 0),
+  hasAgents: template.agents.length > 0,
+  hasOutputStyle: template.outputStyle.length > 0,
   hasScripts: template.scripts.length > 0,
   hasSkills: template.skills.length > 0,
 });
@@ -19,16 +19,16 @@ export const templateSupportsFeature = (
   switch (feature) {
     case 'mcp':
       return flags.hasMcp;
-    case 'slashCommands':
-      return flags.hasSlashCommands;
+    case 'commands':
+      return flags.hasCommands;
     case 'hooks':
       return flags.hasHooks;
-    case 'claudeMd':
-      return flags.hasClaudeMd;
-    case 'subAgents':
-      return flags.hasSubAgents;
-    case 'outputStyles':
-      return flags.hasOutputStyles;
+    case 'agentsMd':
+      return flags.hasAgentsMd;
+    case 'agents':
+      return flags.hasAgents;
+    case 'outputStyle':
+      return flags.hasOutputStyle;
     case 'scripts':
       return flags.hasScripts;
     case 'skills':

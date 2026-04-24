@@ -1,18 +1,24 @@
-"""模板安装、导入、导出路由"""
+"""模板安装、导入、导出与编译预览路由"""
 
 import logging
+import tempfile
+import zipfile
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.openapi import build_responses
 from app.db.database import get_db
 from app.modules.auth import get_current_user_id
+from app.models import CanonicalTarget, InstallPlan
 from app.models.template_install import (
     TemplateInstallRequest,
     TemplateInstallResponse,
 )
+from app.services.template_canonical_service import CanonicalTemplateValidationError
+from app.services.template_compiler_service import TemplateCompilerService
 from app.services.template_install_service import TemplateInstallError, TemplateInstallService
 from app.services.template_service import TemplateService
 
@@ -64,6 +70,18 @@ def _translate_template_install_generic_error(translate) -> str:
     return translate("templates.install_failed_simple")
 
 
+def _translate_template_preview_generic_error(translate) -> str:
+    return translate("templates.preview_failed")
+
+
+def _translate_template_preview_validation_error(translate, error: str) -> str:
+    if "Missing template.yaml" in error:
+        return translate("templates.preview_missing_template_yaml")
+    if "Template root not found" in error:
+        return translate("templates.preview_template_root_not_found")
+    return translate("templates.preview_invalid_canonical_template")
+
+
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
     """取得模板服務實例"""
     return TemplateService(db)
@@ -72,6 +90,11 @@ def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
 def get_template_install_service(db: Session = Depends(get_db)) -> TemplateInstallService:
     """取得模板安裝服務實例"""
     return TemplateInstallService(db)
+
+
+def get_template_compiler_service(db: Session = Depends(get_db)) -> TemplateCompilerService:
+    """取得模板編譯服務實例"""
+    return TemplateCompilerService(db)
 
 
 @router.post(
@@ -91,9 +114,9 @@ async def install_template(
     將模板配置安裝到指定的 workspace
 
     安裝內容包括：
-    - Claude.md
-    - Slash Commands
-    - Subagents
+    - AGENTS.md / 指令文件
+    - Commands
+    - Agents
     - MCP Servers
     - Hooks
     - Scripts
@@ -147,6 +170,45 @@ async def install_template(
 
 
 @router.get(
+    "/{template_id}/compile-preview",
+    response_model=InstallPlan,
+    summary="取得模板目標編譯預覽",
+    responses=build_responses(401, 404, 422, 500),
+)
+async def get_template_compile_preview(
+    request: Request,
+    template_id: str,
+    target: CanonicalTarget = Query(..., description="編譯目標 CLI"),
+    current_user_id: str = Depends(get_current_user_id),
+    compiler_service: TemplateCompilerService = Depends(get_template_compiler_service),
+    template_service: TemplateService = Depends(get_template_service),
+) -> InstallPlan:
+    """回傳指定模板在目標 CLI 下的編譯預覽結果。"""
+    translate = request.state.translate
+    template = template_service._get_template(template_id)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=translate("templates.not_found"),
+        )
+
+    try:
+        return compiler_service.compile_template(template_id, target.value)
+    except CanonicalTemplateValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_translate_template_preview_validation_error(translate, str(e)),
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_translate_template_preview_generic_error(translate),
+        )
+
+
+@router.get(
     "/{template_id}/export",
     summary="匯出模板",
     responses={
@@ -157,25 +219,47 @@ async def install_template(
 async def export_template(
     request: Request,
     template_id: str,
+    target: CanonicalTarget | None = Query(default=None, description="匯出目標 CLI"),
     current_user_id: str = Depends(get_current_user_id),
-    service: TemplateService = Depends(get_template_service)
+    service: TemplateService = Depends(get_template_service),
+    compiler_service: TemplateCompilerService = Depends(get_template_compiler_service),
 ):
-    """匯出模板為 ZIP 檔案"""
-    zip_path = service.export_template(template_id)
+    """匯出模板為 target-specific ZIP 檔案。"""
     translate = request.state.translate
-
-    if not zip_path:
+    template = service.get(template_id)
+    if not template:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=translate("templates.export_not_found", template_id=template_id)
         )
 
+    export_target = target or CanonicalTarget(template.cliType)
+    try:
+        plan = compiler_service.compile_template(template_id, export_target.value)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_translate_template_preview_generic_error(translate),
+        )
+
+    temp_dir = Path(tempfile.mkdtemp())
+    zip_path = temp_dir / f"{template_id}-{export_target.value}.zip"
+    try:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for compiled_file in plan.files:
+                zipf.writestr(compiled_file.path, compiled_file.content)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=translate("templates.export_failed"),
+        )
+
     return FileResponse(
         path=str(zip_path),
-        filename=f"{template_id}.zip",
+        filename=f"{template_id}-{export_target.value}.zip",
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="{template_id}.zip"'
+            "Content-Disposition": f'attachment; filename="{template_id}-{export_target.value}.zip"'
         }
     )
 

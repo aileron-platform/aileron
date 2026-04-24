@@ -18,6 +18,8 @@ export interface FileTreeNode {
   type: 'file' | 'directory';
   /** 子節點（僅資料夾有） */
   children?: FileTreeNode[];
+  /** 目錄是否有子項（後端在 maxDepth 截斷時仍會回傳此欄位，用於懶載入判斷） */
+  hasChildren?: boolean;
   /** 檔案大小（bytes） */
   size?: number;
   /** 檔案副檔名 */
