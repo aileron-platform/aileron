@@ -90,7 +90,7 @@ const mapSummaryToItem = (
   };
 };
 
-const collectSkillNodes = (nodes: SkillTreeNodeResponse[]): SkillTreeNodeResponse[] => {
+const collectSkillNodes = (nodes: SkillTreeNodeResponse[] = []): SkillTreeNodeResponse[] => {
   const result: SkillTreeNodeResponse[] = [];
 
   const walk = (node: SkillTreeNodeResponse) => {
@@ -103,6 +103,35 @@ const collectSkillNodes = (nodes: SkillTreeNodeResponse[]): SkillTreeNodeRespons
 
   nodes.forEach(walk);
   return result;
+};
+
+const parseSkillFrontMatter = (content: string): { skillName?: string; skillDescription?: string } => {
+  if (!content.startsWith('---\n')) {
+    return {};
+  }
+
+  const endMarker = content.indexOf('\n---\n', 4);
+  if (endMarker === -1) {
+    return {};
+  }
+
+  const frontMatter = content.slice(4, endMarker);
+  const metadata: { skillName?: string; skillDescription?: string } = {};
+  frontMatter.split('\n').forEach((line) => {
+    const separatorIndex = line.indexOf(':');
+    if (separatorIndex === -1) return;
+
+    const key = line.slice(0, separatorIndex).trim();
+    const value = line.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (key === 'name' && value) {
+      metadata.skillName = value;
+    }
+    if (key === 'description' && value) {
+      metadata.skillDescription = value;
+    }
+  });
+
+  return metadata;
 };
 
 const mapSkillNodeToItem = (node: SkillTreeNodeResponse, scope: SlashCommandScope): SlashCommandItem => {
@@ -178,6 +207,19 @@ export const slashCommandApi = {
         `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/tree?scope=${scope}&maxDepth=8`,
       );
       const skillNodes = collectSkillNodes(tree.nodes);
+      await Promise.all(skillNodes.map(async (node) => {
+        if (node.skillName || node.skillDescription) return;
+
+        const params = new URLSearchParams();
+        params.set('path', node.path);
+        params.set('scope', scope);
+        const content = await client.get<{ content?: string }>(
+          `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/content?${params.toString()}`,
+        );
+        const metadata = parseSkillFrontMatter(content.content ?? '');
+        node.skillName = metadata.skillName;
+        node.skillDescription = metadata.skillDescription;
+      }));
       skillItems.push(...skillNodes.map((node) => mapSkillNodeToItem(node, scope)));
     }
 

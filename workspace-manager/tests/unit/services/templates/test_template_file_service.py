@@ -157,7 +157,7 @@ class TestPathResolution:
         result = file_service._resolve_path("test-template", "scripts", "/")
 
         # Assert
-        expected = tmp_path / "plugins" / "test-template" / "scripts"
+        expected = tmp_path / "templates" / "test-template" / "scripts"
         assert result == expected
 
     def test_resolve_path_with_subdirectory(self, file_service, tmp_path):
@@ -166,7 +166,7 @@ class TestPathResolution:
         result = file_service._resolve_path("test-template", "scripts", "subdir/file.txt")
 
         # Assert
-        expected = tmp_path / "plugins" / "test-template" / "scripts" / "subdir" / "file.txt"
+        expected = tmp_path / "templates" / "test-template" / "scripts" / "subdir" / "file.txt"
         assert result == expected
 
 
@@ -202,7 +202,7 @@ class TestFileTree:
         mock_db_session.query.return_value = mock_query
 
         # 建立測試檔案
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("content1")
         (scripts_dir / "file2.js").write_text("content2")
@@ -242,7 +242,7 @@ class TestFileRead:
         mock_db_session.query.return_value = mock_query
 
         # 建立測試檔案
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_file = scripts_dir / "test.py"
         test_content = "print('Hello World')"
@@ -264,7 +264,7 @@ class TestFileRead:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # Act & Assert
@@ -278,7 +278,7 @@ class TestFileRead:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_file = scripts_dir / "large.txt"
         # 建立超過限制的檔案
@@ -304,7 +304,7 @@ class TestFileWrite:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         content = "print('Hello World')"
@@ -343,7 +343,7 @@ class TestFileWrite:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # 先寫入初始內容
@@ -386,7 +386,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # Act
@@ -411,7 +411,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # Act
@@ -435,7 +435,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "existing.py").write_text("exists")
 
@@ -455,7 +455,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_file = scripts_dir / "test.py"
         test_file.write_text("content")
@@ -474,7 +474,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_dir = scripts_dir / "testdir"
         test_dir.mkdir()
@@ -491,7 +491,7 @@ class TestFileCreateDelete:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_dir = scripts_dir / "testdir"
         test_dir.mkdir()
@@ -520,7 +520,7 @@ class TestFileCopyMove:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         source_file = scripts_dir / "source.py"
         source_file.write_text("source content")
@@ -547,7 +547,7 @@ class TestFileCopyMove:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         source_file = scripts_dir / "source.py"
         source_file.write_text("source content")
@@ -574,7 +574,7 @@ class TestFileCopyMove:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "source.py").write_text("source")
         (scripts_dir / "dest.py").write_text("dest")
@@ -605,7 +605,7 @@ class TestBatchOperations:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("content1")
         (scripts_dir / "file2.py").write_text("content2")
@@ -630,7 +630,7 @@ class TestBatchOperations:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("content1")
         # file2.py 不存在
@@ -665,7 +665,7 @@ class TestFileUpload:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         # 建立 mock UploadFile
@@ -725,7 +725,7 @@ class TestFileSearch:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "test.py").write_text("content")
         (scripts_dir / "example.js").write_text("content")
@@ -753,7 +753,7 @@ class TestFileSearch:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("This contains the search term")
         (scripts_dir / "file2.py").write_text("No match here")
@@ -779,7 +779,7 @@ class TestFileSearch:
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        scripts_dir = tmp_path / "plugins" / "test-template" / "scripts"
+        scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         search_request = FileSearchRequest(

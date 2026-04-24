@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .claude_md.router import router as claude_md_router
-from .file_collections import scripts_router
+from .file_collections import scripts_router, skills_router
 from .hooks.router import router as hooks_router
 from .memory.router import router as memory_router
 from .mcp.router import router as mcp_router
@@ -26,6 +26,7 @@ router.include_router(slash_commands_router)
 router.include_router(output_styles_router)
 router.include_router(subagents_router)
 router.include_router(settings_router)
+router.include_router(skills_router)
 router.include_router(scripts_router)
 
 __all__ = ["router"]

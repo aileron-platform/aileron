@@ -7,6 +7,7 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { SettingsWorkflowActionButton, SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import type { McpServerFormValue } from '@/features/template-management/features/template-editor/formTypes';
 import TemplateMcpServerCard from '@/features/template-management/components/TemplateMcpServerCard';
+import { useTemplateApi } from '@/features/template-management/features/template-editor/hooks/useTemplateApi';
 
 interface TemplateMcpSettingsWorkflowProps {
   templateId?: string;
@@ -25,9 +26,14 @@ export const TemplateMcpSettingsWorkflow: React.FC<TemplateMcpSettingsWorkflowPr
 }) => {
   const { t } = useI18n();
   const { toast } = useToast();
+  const { saveMcpConfig } = useTemplateApi({ templateId });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServerFormValue | undefined>();
   const handlePersist = async (nextServers: McpServerFormValue[]) => {
+    if (templateId) {
+      const saved = await saveMcpConfig(nextServers);
+      if (!saved) return;
+    }
     onServersChange?.(nextServers);
     onSaveSuccess?.();
   };

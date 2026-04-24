@@ -70,7 +70,7 @@ class TestPathManagement:
         result = base_service._get_template_dir("test-template")
 
         # Assert
-        expected = tmp_path / "plugins" / "test-template"
+        expected = tmp_path / "templates" / "test-template"
         assert result == expected
 
     def test_get_registry_template_dir(self, base_service, tmp_path):
@@ -97,7 +97,7 @@ class TestPathManagement:
         result = base_service._get_plugin_json_path("test-template")
 
         # Assert
-        expected = tmp_path / "plugins" / "test-template" / ".claude-plugin" / "plugin.json"
+        expected = tmp_path / "templates" / "test-template" / ".claude-plugin" / "plugin.json"
         assert result == expected
 
     def test_ensure_directory_creates_new(self, base_service, tmp_path):
@@ -106,7 +106,7 @@ class TestPathManagement:
         directory, created = base_service._ensure_directory("test-template", "commands")
 
         # Assert
-        expected = tmp_path / "plugins" / "test-template" / "commands"
+        expected = tmp_path / "templates" / "test-template" / "commands"
         assert directory == expected
         assert directory.exists()
         assert created is True
@@ -114,7 +114,7 @@ class TestPathManagement:
     def test_ensure_directory_existing(self, base_service, tmp_path):
         """測試：確保目錄存在不會重複建立"""
         # Arrange
-        existing_dir = tmp_path / "plugins" / "test-template" / "commands"
+        existing_dir = tmp_path / "templates" / "test-template" / "commands"
         existing_dir.mkdir(parents=True, exist_ok=True)
 
         # Act
@@ -482,7 +482,7 @@ class TestPluginJsonUpdate:
     def test_update_plugin_json_success(self, base_service, tmp_path):
         """測試：更新 plugin.json 成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
 
         # 建立 commands 和 agents 目錄

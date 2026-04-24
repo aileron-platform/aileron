@@ -37,7 +37,9 @@ def mock_db_session():
 def mock_template_base_service(tmp_path):
     """Mock TemplateBaseService"""
     service = MagicMock(spec=TemplateBaseService)
-    service._get_template_dir = MagicMock(return_value=tmp_path / "plugins" / "test-template")
+    template_dir = tmp_path / "templates" / "test-template"
+    service._get_template_dir = MagicMock(return_value=template_dir)
+    service._resolve_template_dir = MagicMock(return_value=template_dir)
     service._get_template = MagicMock()
     return service
 
@@ -106,14 +108,13 @@ class TestFeatureDetection:
     """Feature 偵測測試"""
 
     def test_detect_mcp_feature_exists(self, feature_detection_service, tmp_path):
-        """測試：MCP 檔案存在時偵測成功"""
+        """測試：MCP YAML 檔案存在時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        mcp_dir = template_dir / ".claude-plugin"
+        mcp_dir = template_dir / "mcp"
         mcp_dir.mkdir()
-        mcp_file = mcp_dir / "mcp.json"
-        mcp_file.write_text(json.dumps({"mcpServers": {"test": {}}}))
+        (mcp_dir / "test.yaml").write_text("command: test\n", encoding="utf-8")
 
         # Act
         result = feature_detection_service.detect_features("test-template")
@@ -124,7 +125,7 @@ class TestFeatureDetection:
     def test_detect_mcp_feature_not_exists(self, feature_detection_service, tmp_path):
         """測試：MCP 檔案不存在時偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
 
         # Act
@@ -133,15 +134,14 @@ class TestFeatureDetection:
         # Assert
         assert result["mcp"] is False
 
-    def test_detect_mcp_invalid_json(self, feature_detection_service, tmp_path):
-        """測試：MCP JSON 格式錯誤時偵測失敗"""
+    def test_detect_mcp_non_yaml_file(self, feature_detection_service, tmp_path):
+        """測試：MCP 目錄沒有 YAML 檔案時偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        mcp_dir = template_dir / ".claude-plugin"
+        mcp_dir = template_dir / "mcp"
         mcp_dir.mkdir()
-        mcp_file = mcp_dir / "mcp.json"
-        mcp_file.write_text("invalid json")
+        (mcp_dir / "mcp.json").write_text(json.dumps({"mcpServers": {"test": {}}}), encoding="utf-8")
 
         # Act
         result = feature_detection_service.detect_features("test-template")
@@ -149,15 +149,12 @@ class TestFeatureDetection:
         # Assert
         assert result["mcp"] is False
 
-    def test_detect_mcp_missing_servers_field(self, feature_detection_service, tmp_path):
-        """測試：MCP JSON 缺少 mcpServers 欄位"""
+    def test_detect_mcp_empty_directory(self, feature_detection_service, tmp_path):
+        """測試：MCP 目錄為空時偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        mcp_dir = template_dir / ".claude-plugin"
-        mcp_dir.mkdir()
-        mcp_file = mcp_dir / "mcp.json"
-        mcp_file.write_text(json.dumps({"other": "data"}))
+        (template_dir / "mcp").mkdir()
 
         # Act
         result = feature_detection_service.detect_features("test-template")
@@ -168,7 +165,7 @@ class TestFeatureDetection:
     def test_detect_commands_exists(self, feature_detection_service, tmp_path):
         """測試：Commands 目錄有檔案時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         commands_dir = template_dir / "commands"
         commands_dir.mkdir()
@@ -183,7 +180,7 @@ class TestFeatureDetection:
     def test_detect_commands_empty_directory(self, feature_detection_service, tmp_path):
         """測試：Commands 目錄為空時偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         commands_dir = template_dir / "commands"
         commands_dir.mkdir()
@@ -197,7 +194,7 @@ class TestFeatureDetection:
     def test_detect_commands_only_gitkeep(self, feature_detection_service, tmp_path):
         """測試：只有 .gitkeep 的目錄偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         commands_dir = template_dir / "commands"
         commands_dir.mkdir()
@@ -210,14 +207,13 @@ class TestFeatureDetection:
         assert result["commands"] is False
 
     def test_detect_hooks_exists(self, feature_detection_service, tmp_path):
-        """測試：Hooks 檔案存在時偵測成功"""
+        """測試：Hooks YAML 檔案存在時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        hooks_dir = template_dir / ".claude-plugin"
+        hooks_dir = template_dir / "hooks"
         hooks_dir.mkdir()
-        hooks_file = hooks_dir / "hooks.json"
-        hooks_file.write_text(json.dumps({"hooks": {}}))
+        (hooks_dir / "pre-tool-use.yaml").write_text("matcher: '*'\n", encoding="utf-8")
 
         # Act
         result = feature_detection_service.detect_features("test-template")
@@ -228,7 +224,7 @@ class TestFeatureDetection:
     def test_detect_agents_md_exists(self, feature_detection_service, tmp_path):
         """測試：AGENTS.md 存在時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         agents_md = template_dir / "agents.md"
         agents_md.write_text("# Agent Instructions\n\nSome content here.")
@@ -242,7 +238,7 @@ class TestFeatureDetection:
     def test_detect_agents_md_too_small(self, feature_detection_service, tmp_path):
         """測試：AGENTS.md 太小時偵測失敗"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         agents_md = template_dir / "agents.md"
         agents_md.write_text("abc")  # < 10 bytes
@@ -256,7 +252,7 @@ class TestFeatureDetection:
     def test_detect_agents_exists(self, feature_detection_service, tmp_path):
         """測試：Agents 目錄有檔案時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         agents_dir = template_dir / "agents"
         agents_dir.mkdir()
@@ -271,7 +267,7 @@ class TestFeatureDetection:
     def test_detect_output_style_exists(self, feature_detection_service, tmp_path):
         """測試：Output Style 檔案存在時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         output_style = template_dir / "output-style.yaml"
         output_style.write_text("tone: concise\n", encoding="utf-8")
@@ -285,10 +281,10 @@ class TestFeatureDetection:
     def test_detect_scripts_exists(self, feature_detection_service, tmp_path):
         """測試：Scripts 目錄有檔案時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        scripts_dir = template_dir / "scripts"
-        scripts_dir.mkdir()
+        scripts_dir = template_dir / "resources" / "scripts"
+        scripts_dir.mkdir(parents=True)
         (scripts_dir / "script.sh").write_text("#!/bin/bash")
 
         # Act
@@ -300,7 +296,7 @@ class TestFeatureDetection:
     def test_detect_skills_exists(self, feature_detection_service, tmp_path):
         """測試：Skills 目錄有檔案時偵測成功"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
         skills_dir = template_dir / "skills"
         skills_dir.mkdir()
@@ -315,7 +311,7 @@ class TestFeatureDetection:
     def test_detect_no_features(self, feature_detection_service, tmp_path):
         """測試：空模板無任何 Feature"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
 
         # Act
@@ -328,24 +324,26 @@ class TestFeatureDetection:
     def test_detect_all_features(self, feature_detection_service, tmp_path):
         """測試：模板包含所有 Feature"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
 
         # MCP
-        mcp_dir = template_dir / ".claude-plugin"
+        mcp_dir = template_dir / "mcp"
         mcp_dir.mkdir()
-        (mcp_dir / "mcp.json").write_text(json.dumps({"mcpServers": {"test": {}}}))
+        (mcp_dir / "test.yaml").write_text("command: test\n", encoding="utf-8")
 
         # Hooks
-        (mcp_dir / "hooks.json").write_text(json.dumps({"hooks": {}}))
+        hooks_dir = template_dir / "hooks"
+        hooks_dir.mkdir()
+        (hooks_dir / "pre-tool-use.yaml").write_text("matcher: '*'\n", encoding="utf-8")
 
         # Slash Commands
         commands_dir = template_dir / "commands"
         commands_dir.mkdir()
         (commands_dir / "test.md").write_text("# Test")
 
-        # CLAUDE.md
-        (template_dir / "CLAUDE.md").write_text("# Claude Instructions\n")
+        # AGENTS.md
+        (template_dir / "agents.md").write_text("# Agent Instructions\n")
 
         # SubAgents
         agents_dir = template_dir / "agents"
@@ -356,8 +354,8 @@ class TestFeatureDetection:
         (template_dir / "output-style.yaml").write_text("tone: concise\n", encoding="utf-8")
 
         # Scripts
-        scripts_dir = template_dir / "scripts"
-        scripts_dir.mkdir()
+        scripts_dir = template_dir / "resources" / "scripts"
+        scripts_dir.mkdir(parents=True)
         (scripts_dir / "script.sh").write_text("#!/bin/bash")
 
         # Skills
@@ -387,11 +385,11 @@ class TestFeatureIndexing:
     ):
         """測試：成功建立 Feature mappings"""
         # Arrange
-        template_dir = tmp_path / "plugins" / "test-template"
+        template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
-        mcp_dir = template_dir / ".claude-plugin"
+        mcp_dir = template_dir / "mcp"
         mcp_dir.mkdir()
-        (mcp_dir / "mcp.json").write_text(json.dumps({"mcpServers": {"test": {}}}))
+        (mcp_dir / "test.yaml").write_text("command: test\n", encoding="utf-8")
 
         mock_template_base_service._get_template.return_value = mock_template_db
 
