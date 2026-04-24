@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplateRegistryVersionControlTab } from './TemplateRegistryVersionControlTab';
 
 const templateVersionControlApiMock = vi.hoisted(() => ({
@@ -66,11 +66,6 @@ const templateVersionControlApiMock = vi.hoisted(() => ({
 
 const tMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) => {
   const values: Record<string, string> = {
-    'template.center.settings.versionControl.status.branch': 'Branch',
-    'template.center.settings.versionControl.status.sync': 'Sync',
-    'template.center.settings.versionControl.status.changes': 'Changes',
-    'template.center.settings.versionControl.status.conflicts': 'Conflicts',
-    'template.center.settings.versionControl.status.noBranch': 'No branch',
     'template.center.settings.versionControl.status.aheadBehind': `Ahead ${params?.ahead ?? 0}, behind ${params?.behind ?? 0}`,
     'template.center.settings.versionControl.status.changeCounts': `Staged ${params?.staged ?? 0}, unstaged ${params?.unstaged ?? 0}, untracked ${params?.untracked ?? 0}`,
     'template.center.settings.versionControl.status.hasConflicts': 'Has conflicts',
@@ -79,6 +74,10 @@ const tMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) =
     'template.center.settings.versionControl.mode.fileChanges': 'File Changes',
     'template.center.settings.versionControl.mode.commitHistory': 'Commit History',
     'template.center.settings.versionControl.actions.rebuild': 'Rebuild',
+    'template.center.settings.versionControl.setupRequired.title': 'Git repository setup required',
+    'template.center.settings.versionControl.setupRequired.description': 'Set up repository first',
+    'template.center.settings.versionControl.setupRequired.action': 'Open repository setup',
+    'template.center.settings.versionControl.remoteMissing.inline': 'Remote sync actions disabled',
     'shared.versionControl.actions.menu.label': 'Git actions',
     'shared.versionControl.actions.branch.label': 'Branch',
     'shared.versionControl.actions.refresh.label': 'Refresh',
@@ -152,11 +151,30 @@ vi.mock('@/shared/hooks/useTaskProgress', () => ({
   }),
 }));
 
+const initializedRepositoryStatus = {
+  isGitRepo: true,
+  currentBranch: 'main',
+  remoteUrl: 'git@example.com:repo.git',
+  hasOrigin: true,
+  hasLocalContent: true,
+  canCloneSafely: false,
+  canInitSafely: false,
+};
+
 describe('TemplateRegistryVersionControlTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('loads registry version-control data and runs file and commit actions', async () => {
     const user = userEvent.setup();
 
-    render(<TemplateRegistryVersionControlTab />);
+    render(
+      <TemplateRegistryVersionControlTab
+        repositoryStatus={initializedRepositoryStatus}
+        onOpenRemoteSettings={vi.fn()}
+      />,
+    );
 
     await waitFor(() => expect(screen.getByText('README.md')).toBeInTheDocument());
     expect(screen.getByTestId('version-control-layout')).toBeInTheDocument();
@@ -186,5 +204,54 @@ describe('TemplateRegistryVersionControlTab', () => {
     expect(screen.getByText('Initial registry')).toBeInTheDocument();
     await user.click(screen.getByText('Initial registry'));
     await waitFor(() => expect(templateVersionControlApiMock.getCommitFiles).toHaveBeenCalledWith('abcdef1234567890'));
+  });
+
+  it('shows repository setup state before Git is initialized', async () => {
+    const onOpenRemoteSettings = vi.fn();
+
+    render(
+      <TemplateRegistryVersionControlTab
+        repositoryStatus={{
+          isGitRepo: false,
+          currentBranch: null,
+          remoteUrl: null,
+          hasOrigin: false,
+          hasLocalContent: true,
+          canCloneSafely: false,
+          canInitSafely: true,
+          cloneBlockedReason: 'GIT_CLONE_TARGET_NOT_EMPTY',
+        }}
+        onOpenRemoteSettings={onOpenRemoteSettings}
+      />,
+    );
+
+    expect(await screen.findByText('Git repository setup required')).toBeInTheDocument();
+    expect(templateVersionControlApiMock.getStatus).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open repository setup' }));
+    expect(onOpenRemoteSettings).toHaveBeenCalled();
+  });
+
+  it('keeps local workflows available and disables remote actions without origin', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <TemplateRegistryVersionControlTab
+        repositoryStatus={{
+          ...initializedRepositoryStatus,
+          remoteUrl: null,
+          hasOrigin: false,
+        }}
+        onOpenRemoteSettings={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('README.md')).toBeInTheDocument();
+    expect(screen.getByText('Remote sync actions disabled')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Git actions'));
+    expect(screen.getByRole('button', { name: 'Fetch' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Pull' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Push' })).toBeDisabled();
   });
 });

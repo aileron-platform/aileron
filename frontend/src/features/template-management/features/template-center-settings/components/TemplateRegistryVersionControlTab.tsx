@@ -15,6 +15,7 @@ import { useTaskProgress } from '@/shared/hooks/useTaskProgress';
 import { TaskProgressDialog } from '@/shared/components/task-progress/TaskProgressDialog';
 import {
   getRebuildProgress,
+  type GitRepositoryStatus,
   rebuildTemplates,
   templateVersionControlApi,
 } from '@/shared/services/templateGitApi';
@@ -43,7 +44,15 @@ const emptyChanges: VersionControlChangesResponse = {
   untracked: [],
 };
 
-export const TemplateRegistryVersionControlTab: React.FC = () => {
+interface TemplateRegistryVersionControlTabProps {
+  repositoryStatus: GitRepositoryStatus | null;
+  onOpenRemoteSettings: () => void;
+}
+
+export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersionControlTabProps> = ({
+  repositoryStatus,
+  onOpenRemoteSettings,
+}) => {
   const { t } = useI18n();
   const { toast } = useToast();
   const [mode, setMode] = useState<VersionControlMode>('changes');
@@ -96,6 +105,10 @@ export const TemplateRegistryVersionControlTab: React.FC = () => {
   const selectedDiffFile = mode === 'history' ? selectedCommitFile : selectedFile;
 
   const loadData = useCallback(async () => {
+    if (!repositoryStatus?.isGitRepo) {
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const [nextStatus, nextChanges, nextBranches, nextCommits] = await Promise.all([
@@ -119,7 +132,7 @@ export const TemplateRegistryVersionControlTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [t, toast]);
+  }, [repositoryStatus?.isGitRepo, t, toast]);
 
   useEffect(() => {
     void loadData();
@@ -302,9 +315,21 @@ export const TemplateRegistryVersionControlTab: React.FC = () => {
 
   const actionItems: VersionControlActionMenuItem[] = [
     { id: 'refresh', onClick: () => void loadData() },
-    { id: 'fetch', onClick: () => handleRemoteAction('fetch') },
-    { id: 'pull', onClick: () => handleRemoteAction('pull') },
-    { id: 'push', onClick: () => handleRemoteAction('push') },
+    {
+      id: 'fetch',
+      onClick: () => handleRemoteAction('fetch'),
+      disabled: !repositoryStatus?.hasOrigin,
+    },
+    {
+      id: 'pull',
+      onClick: () => handleRemoteAction('pull'),
+      disabled: !repositoryStatus?.hasOrigin,
+    },
+    {
+      id: 'push',
+      onClick: () => handleRemoteAction('push'),
+      disabled: !repositoryStatus?.hasOrigin,
+    },
   ];
 
   const changesSidebar = (
@@ -360,20 +385,11 @@ export const TemplateRegistryVersionControlTab: React.FC = () => {
       ]}
       footer={(
         <div className="space-y-2 text-xs text-muted-foreground">
-          <div>{t('template.center.settings.versionControl.status.aheadBehind', {
-            ahead: status?.ahead ?? 0,
-            behind: status?.behind ?? 0,
-          })}</div>
-          <div>{t('template.center.settings.versionControl.status.changeCounts', {
-            staged: status?.stagedCount ?? 0,
-            unstaged: status?.unstagedCount ?? 0,
-            untracked: status?.untrackedCount ?? 0,
-          })}</div>
-          <div>
-            {status?.hasConflicts
-              ? t('template.center.settings.versionControl.status.hasConflicts')
-              : t('template.center.settings.versionControl.status.noConflicts')}
-          </div>
+          {!repositoryStatus.hasOrigin && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-800">
+              {t('template.center.settings.versionControl.remoteMissing.inline')}
+            </div>
+          )}
           <Button variant="outline" size="sm" className="mt-1 h-8 w-full" onClick={handleRebuild}>
             <RotateCcw className="mr-2 h-4 w-4" />
             {t('template.center.settings.versionControl.actions.rebuild')}
@@ -387,6 +403,27 @@ export const TemplateRegistryVersionControlTab: React.FC = () => {
     return (
       <div className="flex h-72 items-center justify-center">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!repositoryStatus?.isGitRepo) {
+    return (
+      <div className="flex h-full min-h-0 items-center justify-center p-6">
+        <div className="w-full max-w-xl space-y-4 rounded-lg border border-border bg-background p-6 text-center">
+          <GitBranch className="mx-auto h-10 w-10 text-muted-foreground" />
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold">
+              {t('template.center.settings.versionControl.setupRequired.title')}
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              {t('template.center.settings.versionControl.setupRequired.description')}
+            </p>
+          </div>
+          <Button onClick={onOpenRemoteSettings}>
+            {t('template.center.settings.versionControl.setupRequired.action')}
+          </Button>
+        </div>
       </div>
     );
   }

@@ -78,6 +78,56 @@ class TestRepositoryDetection:
             # Assert
             assert result is False
 
+    def test_repository_status_not_initialized_with_local_content(self, git_service, tmp_path):
+        """測試：未初始化且已有本地內容時禁止直接 clone"""
+        (tmp_path / "templates").mkdir()
+        (tmp_path / "templates" / "demo.yaml").write_text("name: demo\n")
+
+        result = git_service.get_repository_status()
+
+        assert result.is_git_repo is False
+        assert result.has_local_content is True
+        assert result.can_clone_safely is False
+        assert result.can_init_safely is True
+        assert result.clone_blocked_reason == "GIT_CLONE_TARGET_NOT_EMPTY"
+
+    def test_repository_status_initialized_without_origin(self, tmp_path):
+        """測試：已初始化但未設定 origin"""
+        repo = Repo.init(tmp_path)
+        (tmp_path / "README.md").write_text("hello\n")
+
+        with patch('app.services.template_git_service.get_settings') as mock_settings:
+            mock_settings.return_value.TEMPLATE_STORAGE_PATH = str(tmp_path)
+            service = TemplateGitService()
+            service.template_center_path = tmp_path
+            service._repo = repo
+
+        result = service.get_repository_status()
+
+        assert result.is_git_repo is True
+        assert result.has_origin is False
+        assert result.remote_url is None
+        assert result.can_clone_safely is False
+
+    def test_init_repository_creates_git_repo(self, git_service):
+        """測試：可從模板中心初始化 Git 倉庫"""
+        result = git_service.init_repository()
+
+        assert result.success is True
+        assert result.code == "GIT_REPOSITORY_INITIALIZED"
+        assert (git_service.template_center_path / ".git").exists()
+        assert git_service.get_repository_status().is_git_repo is True
+
+    def test_clone_repository_blocks_non_empty_uninitialized_directory(self, git_service, tmp_path):
+        """測試：非 Git 且已有內容時 clone 不會隱式覆蓋"""
+        (tmp_path / "existing.md").write_text("keep me\n")
+
+        result = git_service.clone_repository("https://example.com/repo.git")
+
+        assert result.success is False
+        assert result.code == "GIT_CLONE_TARGET_NOT_EMPTY"
+        assert (tmp_path / "existing.md").read_text() == "keep me\n"
+
 
 # ============================================================================
 # Git Status Tests
@@ -212,6 +262,17 @@ class TestTemplateVersionControlOperations:
         assert [item.path for item in changes.untracked] == ["templates/demo/new.md"]
         assert changes.untrackedTotal == 1
 
+    def test_diff_returns_unified_patch_for_untracked_file(self, tmp_path):
+        service = self._create_real_repo_service(tmp_path)
+        (tmp_path / "templates" / "demo" / "new.md").write_text("new\n")
+
+        diff = service.diff("templates/demo/new.md")
+
+        assert diff.path == "templates/demo/new.md"
+        assert "--- /dev/null" in diff.patch
+        assert "+++ b/templates/demo/new.md" in diff.patch
+        assert "+new" in diff.patch
+
     def test_stage_and_unstage_paths(self, tmp_path):
         service = self._create_real_repo_service(tmp_path)
         (tmp_path / "templates" / "demo" / "README.md").write_text("hello\nworld\n")
@@ -224,6 +285,25 @@ class TestTemplateVersionControlOperations:
         assert [item.path for item in changes_after_stage.staged] == ["templates/demo/README.md"]
         assert unstaged.unstaged == ["templates/demo/README.md"]
 
+    def test_staged_changes_show_before_first_commit(self, tmp_path):
+        repo = Repo.init(tmp_path)
+        (tmp_path / "templates" / "demo").mkdir(parents=True)
+        (tmp_path / "templates" / "demo" / "README.md").write_text("hello\n")
+        service = TemplateGitService()
+        service.template_center_path = tmp_path
+        service._repo = repo
+
+        service.stage(TemplateStageRequest(paths=["templates/demo/README.md"]))
+        changes = service.get_file_changes()
+        status = service.get_version_control_status()
+        diff = service.diff("templates/demo/README.md", head="INDEX")
+
+        assert [item.path for item in changes.staged] == ["templates/demo/README.md"]
+        assert changes.staged[0].status == "A"
+        assert status.stagedCount == 1
+        assert "+++ b/templates/demo/README.md" in diff.patch
+        assert "+hello" in diff.patch
+
     def test_commit_history_lists_new_commit(self, tmp_path):
         service = self._create_real_repo_service(tmp_path)
         (tmp_path / "templates" / "demo" / "README.md").write_text("hello\nworld\n")
@@ -235,6 +315,16 @@ class TestTemplateVersionControlOperations:
         assert isinstance(commits, TemplateCommitListResponse)
         assert commits.total == 2
         assert commits.items[0].message == "update demo"
+
+    def test_commit_history_is_empty_for_initialized_repo_without_commits(self, tmp_path):
+        service = TemplateGitService()
+        service.template_center_path = tmp_path
+        service._repo = Repo.init(tmp_path)
+
+        commits = service.list_commits()
+
+        assert commits.total == 0
+        assert commits.items == []
 
     def test_safe_repo_path_rejects_traversal(self, tmp_path):
         service = self._create_real_repo_service(tmp_path)

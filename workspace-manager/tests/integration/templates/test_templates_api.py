@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import uuid
+import zipfile
+from io import BytesIO
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -910,6 +912,18 @@ class TestTemplatesAPI:
         assert diff_response.status_code == status.HTTP_200_OK
         assert "+world" in diff_response.json()["patch"]
 
+        new_file = template_dir / "new.md"
+        new_file.write_text("new\n")
+        untracked_diff_response = client.get(
+            "/api/v1/templates/git/version-control/diff",
+            params={"path": "templates/demo/new.md"},
+        )
+        assert untracked_diff_response.status_code == status.HTTP_200_OK
+        untracked_patch = untracked_diff_response.json()["patch"]
+        assert "--- /dev/null" in untracked_patch
+        assert "+++ b/templates/demo/new.md" in untracked_patch
+        assert "+new" in untracked_patch
+
         stage_response = client.post(
             "/api/v1/templates/git/version-control/stage",
             json={"paths": ["templates/demo/README.md"]},
@@ -933,59 +947,70 @@ class TestTemplatesAPI:
         assert commit_files_response.json()["files"][0]["path"] == "templates/demo/README.md"
 
     @pytest.mark.integration
-    def test_tpl_046_marketplace_config(self, authenticated_client):
-        """TPL-046 Marketplace 配置測試"""
+    def test_tpl_045c_template_version_control_commits_empty_initialized_repo(self, authenticated_client):
+        """TPL-045C commit history handles an initialized repository before the first commit"""
         client, user = authenticated_client
+        repo_path = Path(os.environ["TEMPLATE_STORAGE_PATH"])
+        Repo.init(repo_path)
 
-        # 1. 獲取 Marketplace 配置
-        get_response = client.get("/api/v1/templates/marketplace/config")
-        if get_response.status_code != status.HTTP_404_NOT_FOUND:
-            assert get_response.status_code == status.HTTP_200_OK
+        commits_response = client.get("/api/v1/templates/git/version-control/commits")
 
-        # 2. 更新 Marketplace 配置
-        update_data = {
-            "name": "test-marketplace",
-            "owner": {
-                "name": "Test Owner",
-                "email": "test@example.com"
-            },
-            "metadata": {
-                "description": "Test marketplace",
-                "version": "1.0.0",
-                "homepage": "https://github.com/test/templates"
-            }
-        }
-        update_response = client.put(
-            "/api/v1/templates/marketplace/config",
-            json=update_data
-        )
-        if update_response.status_code != status.HTTP_404_NOT_FOUND:
-            assert update_response.status_code == status.HTTP_200_OK
+        assert commits_response.status_code == status.HTTP_200_OK
+        assert commits_response.json()["total"] == 0
+        assert commits_response.json()["items"] == []
 
     @pytest.mark.integration
-    def test_tpl_046b_marketplace_config_internal_error_is_localized(self, authenticated_client):
-        client, _ = authenticated_client
+    def test_tpl_045d_template_version_control_staged_changes_before_first_commit(self, authenticated_client):
+        """TPL-045D staged changes are visible before the first commit"""
+        client, user = authenticated_client
+        repo_path = Path(os.environ["TEMPLATE_STORAGE_PATH"])
+        Repo.init(repo_path)
+        template_dir = repo_path / "templates" / "demo"
+        template_dir.mkdir(parents=True)
+        (template_dir / "README.md").write_text("hello\n")
 
-        with patch(
-            "app.routers.templates.config.TemplateService.get_marketplace_config",
-            side_effect=RuntimeError("boom"),
-        ):
-            en_response = client.get("/api/v1/templates/marketplace/config")
-            assert en_response.status_code == status.HTTP_200_OK
-            assert en_response.json()["success"] is False
-            assert en_response.json()["message"] == "Failed to retrieve Marketplace configuration"
-            assert en_response.json()["error"] == "Marketplace configuration operation failed"
+        stage_response = client.post(
+            "/api/v1/templates/git/version-control/stage",
+            json={"paths": ["templates/demo/README.md"]},
+        )
+        assert stage_response.status_code == status.HTTP_200_OK
 
-        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
-        with patch(
-            "app.routers.templates.config.TemplateService.get_marketplace_config",
-            side_effect=RuntimeError("boom"),
-        ):
-            zh_response = client.get("/api/v1/templates/marketplace/config")
-            assert zh_response.status_code == status.HTTP_200_OK
-            assert zh_response.json()["success"] is False
-            assert zh_response.json()["message"] == "取得 Marketplace 配置失敗"
-            assert zh_response.json()["error"] == "Marketplace 配置操作失敗"
+        status_response = client.get("/api/v1/templates/git/version-control/status")
+        assert status_response.status_code == status.HTTP_200_OK
+        assert status_response.json()["stagedCount"] == 1
+
+        changes_response = client.get("/api/v1/templates/git/version-control/changes")
+        assert changes_response.status_code == status.HTTP_200_OK
+        assert changes_response.json()["staged"][0]["path"] == "templates/demo/README.md"
+
+        diff_response = client.get(
+            "/api/v1/templates/git/version-control/diff",
+            params={"path": "templates/demo/README.md", "head": "INDEX"},
+        )
+        assert diff_response.status_code == status.HTTP_200_OK
+        assert "+hello" in diff_response.json()["patch"]
+
+    @pytest.mark.integration
+    def test_tpl_046_marketplace_config(self, authenticated_client):
+        """TPL-046 Marketplace settings config API has been removed"""
+        client, user = authenticated_client
+
+        get_response = client.get("/api/v1/templates/marketplace/config")
+        update_response = client.put(
+            "/api/v1/templates/marketplace/config",
+            json={
+                "name": "test-marketplace",
+                "owner": {"name": "Test Owner", "email": "test@example.com"},
+                "metadata": {
+                    "description": "Test marketplace",
+                    "version": "1.0.0",
+                    "homepage": "https://github.com/test/templates",
+                },
+            },
+        )
+
+        assert get_response.status_code == status.HTTP_404_NOT_FOUND
+        assert update_response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.integration
     def test_tpl_047_ssh_keys_operations(self, authenticated_client):
@@ -1528,6 +1553,72 @@ class TestTemplatesAPI:
         # clone_response = client.post("/api/v1/templates/git/clone", json=clone_data)
 
     @pytest.mark.integration
+    def test_tpl_058b_git_repository_status_and_init(self, authenticated_client):
+        """TPL-058B Template Center Git repository lifecycle APIs"""
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.get_repository_status",
+            return_value={
+                "isGitRepo": False,
+                "currentBranch": None,
+                "remoteUrl": None,
+                "hasOrigin": False,
+                "hasLocalContent": True,
+                "canCloneSafely": False,
+                "canInitSafely": True,
+                "cloneBlockedReason": "GIT_CLONE_TARGET_NOT_EMPTY",
+            },
+        ):
+            status_response = client.get("/api/v1/templates/git/repository/status")
+            assert status_response.status_code == status.HTTP_200_OK
+            data = status_response.json()
+            assert data["isGitRepo"] is False
+            assert data["canCloneSafely"] is False
+            assert data["cloneBlockedReason"] == "GIT_CLONE_TARGET_NOT_EMPTY"
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.init_repository",
+            return_value=GitOperationResult(True, "GIT_REPOSITORY_INITIALIZED", "initialized"),
+        ):
+            init_response = client.post("/api/v1/templates/git/repository/init", json={})
+            assert init_response.status_code == status.HTTP_200_OK
+            data = init_response.json()
+            assert data["success"] is True
+            assert data["message"] == "Template Center Git repository initialized"
+
+    @pytest.mark.integration
+    def test_tpl_058c_git_repository_lifecycle_errors_are_localized(self, authenticated_client):
+        """TPL-058C repository lifecycle errors use stable codes and translations"""
+        client, _ = authenticated_client
+
+        with patch(
+            "app.routers.templates.git.TemplateGitService.init_repository",
+            return_value=GitOperationResult(False, "GIT_REPOSITORY_ALREADY_INITIALIZED", "already initialized"),
+        ):
+            init_response = client.post("/api/v1/templates/git/repository/init", json={})
+            assert init_response.status_code == status.HTTP_200_OK
+            data = init_response.json()
+            assert data["success"] is False
+            assert data["errorCode"] == "GIT_REPOSITORY_ALREADY_INITIALIZED"
+            assert data["error"] == "Template Center is already initialized as a Git repository"
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        with patch(
+            "app.routers.templates.git.TemplateGitService.set_remote_url",
+            return_value=GitOperationResult(False, "GIT_CLONE_TARGET_NOT_EMPTY", "not safe"),
+        ):
+            remote_response = client.post(
+                "/api/v1/templates/git/remote-url",
+                json={"url": "https://example.com/repo.git"},
+            )
+            assert remote_response.status_code == status.HTTP_200_OK
+            data = remote_response.json()
+            assert data["success"] is False
+            assert data["errorCode"] == "GIT_CLONE_TARGET_NOT_EMPTY"
+            assert data["error"] == "模板中心已有本地檔案。請先初始化目前 registry，或清空目錄後再 clone。"
+
+    @pytest.mark.integration
     def test_tpl_059_ssh_keys_full_operations(self, authenticated_client):
         """TPL-059 SSH Keys 完整操作"""
         client, user = authenticated_client
@@ -1643,6 +1734,31 @@ class TestTemplatesAPI:
         )
         assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
         assert zh_response.json()["detail"] == "僅允許上傳 ZIP 檔案"
+
+    @pytest.mark.integration
+    def test_tpl_062c_template_import_missing_manifest_is_localized(self, authenticated_client):
+        client, _ = authenticated_client
+        archive = BytesIO()
+        with zipfile.ZipFile(archive, "w") as zipf:
+            zipf.writestr(".claude-plugin/marketplace.json", '{"id":"legacy-template"}')
+        archive.seek(0)
+
+        en_response = client.post(
+            "/api/v1/templates/import",
+            files={"file": ("legacy-template.zip", archive.getvalue(), "application/zip")},
+        )
+        assert en_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert en_response.json()["detail"] == (
+            "Invalid template archive: missing .claude-plugin/manifest.json"
+        )
+
+        client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
+        zh_response = client.post(
+            "/api/v1/templates/import",
+            files={"file": ("legacy-template.zip", archive.getvalue(), "application/zip")},
+        )
+        assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
+        assert zh_response.json()["detail"] == "無效的模板檔案：缺少 .claude-plugin/manifest.json"
 
     @pytest.mark.integration
     def test_tpl_063_list_templates_with_filters(self, authenticated_client, test_data_factory):

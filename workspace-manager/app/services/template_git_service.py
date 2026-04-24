@@ -1,5 +1,6 @@
 """模板 Git 版本控制服務"""
 
+import difflib
 import json
 import logging
 import subprocess
@@ -16,6 +17,7 @@ from app.config.settings import get_settings
 from app.models.template_git import (
     GitStatus,
     GitUserConfig,
+    GitRepositoryStatus,
     TemplateBlobResponse,
     TemplateBranchCommitInfo,
     TemplateChangesResponse,
@@ -120,6 +122,74 @@ class TemplateGitService:
         """檢查是否為 Git 倉庫"""
         return self._get_repo() is not None
 
+    def _has_local_content(self) -> bool:
+        """檢查模板中心目錄是否已有使用者可見內容。"""
+        if not self.template_center_path.exists():
+            return False
+        ignored = {".git", ".gitkeep"}
+        return any(item.name not in ignored for item in self.template_center_path.iterdir())
+
+    def _origin_url(self, repo: Repo) -> Optional[str]:
+        try:
+            return repo.remotes.origin.url if "origin" in repo.remotes else None
+        except Exception:
+            return None
+
+    def _repository_branch(self, repo: Repo) -> Optional[str]:
+        try:
+            if not repo.head.is_valid():
+                return None
+            if repo.head.is_detached:
+                return repo.head.commit.hexsha[:7]
+            return repo.active_branch.name
+        except Exception:
+            return None
+
+    def get_repository_status(self) -> GitRepositoryStatus:
+        """取得模板中心 Git 倉庫生命週期狀態。"""
+        repo = self._get_repo()
+        has_local_content = self._has_local_content()
+        if repo is None:
+            return GitRepositoryStatus(
+                is_git_repo=False,
+                current_branch=None,
+                remote_url=None,
+                has_origin=False,
+                has_local_content=has_local_content,
+                can_clone_safely=not has_local_content,
+                can_init_safely=True,
+                clone_blocked_reason="GIT_CLONE_TARGET_NOT_EMPTY" if has_local_content else None,
+            )
+
+        remote_url = self._origin_url(repo)
+        return GitRepositoryStatus(
+            is_git_repo=True,
+            current_branch=self._repository_branch(repo),
+            remote_url=remote_url,
+            has_origin=bool(remote_url),
+            has_local_content=has_local_content,
+            can_clone_safely=False,
+            can_init_safely=False,
+            clone_blocked_reason="GIT_REPOSITORY_ALREADY_INITIALIZED",
+        )
+
+    def init_repository(self, remote_url: Optional[str] = None) -> GitOperationResult:
+        """初始化目前模板中心目錄為 Git 倉庫。"""
+        self.template_center_path.mkdir(parents=True, exist_ok=True)
+        if self.is_git_repository():
+            return self._operation_result(False, "GIT_REPOSITORY_ALREADY_INITIALIZED")
+
+        try:
+            repo = Repo.init(str(self.template_center_path))
+            self._repo = repo
+            if remote_url and remote_url.strip():
+                repo.create_remote("origin", remote_url.strip())
+            return self._operation_result(True, "GIT_REPOSITORY_INITIALIZED")
+        except Exception as e:
+            logger.error(f"初始化模板中心 Git 倉庫失敗: {e}")
+            self._repo = None
+            return self._operation_result(False, "GIT_REPOSITORY_INIT_FAILED")
+
     def _safe_repo_path(self, path: str) -> str:
         """Normalize a user supplied path and keep it inside the registry repo."""
         normalized = path.strip().replace("\\", "/").lstrip("/")
@@ -184,6 +254,24 @@ class TemplateGitService:
             additions=additions,
             deletions=deletions,
         )
+
+    def _staged_file_changes(self, repo: Repo) -> List[TemplateFileChange]:
+        """Return staged changes, including unborn-HEAD repositories."""
+        changes: List[TemplateFileChange] = []
+        try:
+            output = repo.git.diff("--cached", "--name-status")
+        except GitCommandError:
+            return changes
+
+        for line in output.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            status = parts[0]
+            path = parts[-1]
+            if path:
+                changes.append(self._file_change(repo, path, status[:1] or "M", cached=True))
+        return changes
 
     def _current_branch_name(self, repo: Repo) -> tuple[str, bool]:
         if repo.head.is_detached:
@@ -281,7 +369,7 @@ class TemplateGitService:
             )
         branch, detached = self._current_branch_name(repo)
         ahead, behind = self._tracking_delta_for_branch(repo, branch) if not detached else (0, 0)
-        staged = repo.index.diff("HEAD") if repo.head.is_valid() else repo.index.diff(None)
+        staged = self._staged_file_changes(repo)
         unstaged = repo.index.diff(None)
         conflicts, _ = self.check_conflicts()
         return TemplateVersionControlStatus(
@@ -301,15 +389,8 @@ class TemplateGitService:
         if repo is None:
             return TemplateChangesResponse()
 
-        staged: List[TemplateFileChange] = []
+        staged: List[TemplateFileChange] = self._staged_file_changes(repo)
         unstaged: List[TemplateFileChange] = []
-        try:
-            for diff_item in repo.index.diff("HEAD"):
-                path = diff_item.b_path or diff_item.a_path or ""
-                if path:
-                    staged.append(self._file_change(repo, path, diff_item.change_type or "M", cached=True))
-        except Exception:
-            pass
 
         try:
             for diff_item in repo.index.diff(None):
@@ -450,7 +531,7 @@ class TemplateGitService:
         if paths:
             safe_paths = self._safe_repo_paths(paths)
             repo.index.add(safe_paths)
-        if not repo.index.diff("HEAD"):
+        if not self._staged_file_changes(repo):
             raise ValueError("GIT_NO_CHANGES")
         commit = repo.index.commit(message)
         summary = self._commit_summary(repo, commit)
@@ -473,10 +554,13 @@ class TemplateGitService:
 
     def list_commits(self, page: int = 1, page_size: int = 20, branch: Optional[str] = None) -> TemplateCommitListResponse:
         repo = self._get_repo()
-        if repo is None:
+        if repo is None or not repo.head.is_valid():
             return TemplateCommitListResponse(page=page, pageSize=page_size, total=0, items=[])
         ref = branch or "HEAD"
-        commits = list(repo.iter_commits(ref))
+        try:
+            commits = list(repo.iter_commits(ref))
+        except GitCommandError:
+            return TemplateCommitListResponse(page=page, pageSize=page_size, total=0, items=[])
         start = (page - 1) * page_size
         end = start + page_size
         return TemplateCommitListResponse(
@@ -488,7 +572,7 @@ class TemplateGitService:
 
     def get_commit_files(self, commit_id: str) -> TemplateCommitFilesResponse:
         repo = self._get_repo()
-        if repo is None:
+        if repo is None or not repo.head.is_valid():
             return TemplateCommitFilesResponse(commitId=commit_id, files=[])
         commit = repo.commit(commit_id)
         parent = f"{commit.hexsha}^" if commit.parents else "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -519,12 +603,30 @@ class TemplateGitService:
         if repo is None:
             raise ValueError("GIT_REPO_NOT_FOUND")
         safe_path = self._safe_repo_path(path)
+        if head != "INDEX" and safe_path in repo.untracked_files:
+            patch = self._untracked_file_diff(safe_path)
+            return TemplateDiffResponse(path=safe_path, patch=patch, diff=patch, binary=False)
         args = []
         if head == "INDEX":
             args.append("--cached")
         args.extend(["--", safe_path])
         patch = repo.git.diff(*args)
         return TemplateDiffResponse(path=safe_path, patch=patch, diff=patch, binary="Binary files" in patch)
+
+    def _untracked_file_diff(self, path: str) -> str:
+        file_path = self.template_center_path / path
+        try:
+            content = file_path.read_text()
+        except UnicodeDecodeError:
+            return f"Binary files /dev/null and b/{path} differ\n"
+        lines = content.splitlines(keepends=True)
+        return "".join(difflib.unified_diff(
+            [],
+            lines,
+            fromfile="/dev/null",
+            tofile=f"b/{path}",
+            lineterm="",
+        ))
 
     def blob(self, path: str, revision: Optional[str] = None) -> TemplateBlobResponse:
         repo = self._get_repo()
@@ -903,7 +1005,7 @@ class TemplateGitService:
 
         return f"SHA256:{fingerprint}"
 
-    def clone_repository(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
+    def clone_repository(self, url: str, branch: Optional[str] = None, force: bool = False) -> GitOperationResult:
         """Clone 遠端倉庫到模板中心目錄
 
         Args:
@@ -947,6 +1049,8 @@ class TemplateGitService:
                 )
 
         # 目標目錄不是 Git 倉庫，執行 clone
+        if self._has_local_content() and not force:
+            return self._operation_result(False, "GIT_CLONE_TARGET_NOT_EMPTY")
         return self._clone_fresh(url, branch)
 
     def _clone_fresh(self, url: str, branch: Optional[str] = None) -> GitOperationResult:

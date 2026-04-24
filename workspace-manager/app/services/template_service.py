@@ -9,7 +9,6 @@
 - TemplateOutputStyleService: Output Style 檔案管理
 - TemplateFileService: 通用檔案操作（scripts/skills）
 - TemplateAgentsMdService: AGENTS.md 檔案管理
-- TemplateMarketplaceService: Marketplace 配置管理
 """
 
 from __future__ import annotations
@@ -57,7 +56,6 @@ from app.services.template_agents_service import TemplateAgentsService
 from app.services.template_output_style_service import TemplateOutputStyleService
 from app.services.template_file_service import TemplateFileService
 from app.services.template_agents_md_service import TemplateAgentsMdService
-from app.services.template_marketplace_service import TemplateMarketplaceService
 from app.services.template_feature_detection_service import TemplateFeatureDetectionService
 
 logger = logging.getLogger(__name__)
@@ -95,7 +93,6 @@ class TemplateService(TemplateBaseService):
         self.output_style_service = TemplateOutputStyleService(db)
         self.file_service = TemplateFileService(db)
         self.agents_md_service = TemplateAgentsMdService(db)
-        self.marketplace_service = TemplateMarketplaceService(db)
         self.feature_detection_service = TemplateFeatureDetectionService(db, self)
         self.canonical_service = TemplateCanonicalService(db)
 
@@ -769,24 +766,24 @@ class TemplateService(TemplateBaseService):
             except zipfile.BadZipFile as e:
                 raise ValueError("無效的模板檔案：ZIP 檔案已損壞或格式不正確") from e
 
-            # 讀取 plugin.json
-            plugin_json_path = self._find_import_plugin_json(extract_dir)
-            if not plugin_json_path.exists():
-                raise ValueError("無效的模板檔案：缺少 .claude-plugin/plugin.json")
+            # 讀取模板 package manifest。
+            package_manifest_path = self._find_import_package_manifest(extract_dir)
+            if not package_manifest_path.exists():
+                raise ValueError("無效的模板檔案：缺少 .claude-plugin/manifest.json")
 
             try:
-                plugin_data = json.loads(plugin_json_path.read_text(encoding="utf-8"))
+                manifest_data = json.loads(package_manifest_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as e:
-                raise ValueError("無效的模板檔案：plugin.json 不是合法的 JSON") from e
-            template_id = plugin_data.get("id")
+                raise ValueError("無效的模板檔案：manifest.json 不是合法的 JSON") from e
+            template_id = manifest_data.get("id")
 
             if not template_id:
-                raise ValueError("無效的模板檔案：plugin.json 缺少 id 欄位")
+                raise ValueError("無效的模板檔案：manifest.json 缺少 id 欄位")
             if not self._validate_template_id(template_id):
-                raise ValueError("無效的模板檔案：plugin.json 的 id 格式不合法")
+                raise ValueError("無效的模板檔案：manifest.json 的 id 格式不合法")
 
-            normalized_cli_type = self._normalize_import_cli_type(plugin_data.get("cli_type"))
-            normalized_status = self._normalize_import_status(plugin_data.get("status"))
+            normalized_cli_type = self._normalize_import_cli_type(manifest_data.get("cli_type"))
+            normalized_status = self._normalize_import_status(manifest_data.get("status"))
 
             # 檢查是否已存在
             existing = self._get_template(template_id)
@@ -797,34 +794,34 @@ class TemplateService(TemplateBaseService):
             if existing:
                 # 更新現有模板
                 db_template = existing
-                db_template.name = plugin_data.get("name", db_template.name)
-                db_template.description = plugin_data.get("description", db_template.description)
-                db_template.version = plugin_data.get("version", db_template.version)
+                db_template.name = manifest_data.get("name", db_template.name)
+                db_template.description = manifest_data.get("description", db_template.description)
+                db_template.version = manifest_data.get("version", db_template.version)
                 db_template.cli_type = normalized_cli_type or db_template.cli_type
                 db_template.status = normalized_status or db_template.status
-                db_template.keywords = plugin_data.get("keywords", db_template.keywords)
-                db_template.init_commands = plugin_data.get("init_commands", db_template.init_commands)
+                db_template.keywords = manifest_data.get("keywords", db_template.keywords)
+                db_template.init_commands = manifest_data.get("init_commands", db_template.init_commands)
                 db_template.updated_at = datetime.utcnow()
 
-                author = plugin_data.get("author", {})
+                author = manifest_data.get("author", {})
                 db_template.author_name = author.get("name", db_template.author_name)
                 db_template.author_email = author.get("email")
                 db_template.author_url = author.get("url")
             else:
                 # 建立新模板
-                author = plugin_data.get("author", {})
+                author = manifest_data.get("author", {})
                 db_template = TemplateDB(
                     id=template_id,
-                    name=plugin_data.get("name", "Unnamed Template"),
-                    description=plugin_data.get("description", ""),
+                    name=manifest_data.get("name", "Unnamed Template"),
+                    description=manifest_data.get("description", ""),
                     author_name=author.get("name", "Unknown"),
                     author_email=author.get("email"),
                     author_url=author.get("url"),
-                    version=plugin_data.get("version", "1.0.0"),
+                    version=manifest_data.get("version", "1.0.0"),
                     cli_type=normalized_cli_type or "claude-code",
                     status=normalized_status or "draft",
-                    keywords=plugin_data.get("keywords", []),
-                    init_commands=plugin_data.get("init_commands"),
+                    keywords=manifest_data.get("keywords", []),
+                    init_commands=manifest_data.get("init_commands"),
                     created_at=datetime.utcnow(),
                     updated_at=datetime.utcnow(),
                 )
@@ -836,7 +833,7 @@ class TemplateService(TemplateBaseService):
             except SQLAlchemyError as e:
                 self.db.rollback()
                 logger.error("匯入模板寫入資料庫失敗: %s", e, exc_info=True)
-                raise ValueError("模板 metadata 無效，請檢查 plugin.json 欄位內容")
+                raise ValueError("模板 package manifest 無效，請檢查 manifest.json 欄位內容")
 
             # 複製檔案到模板目錄
             template_dir = self._get_template_dir(template_id)
@@ -851,15 +848,20 @@ class TemplateService(TemplateBaseService):
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
 
-    def _find_import_plugin_json(self, extract_dir: Path) -> Path:
-        """找出匯入 ZIP 內的 plugin.json，支援直接位於根目錄或包一層模板目錄。"""
-        direct_path = extract_dir / ".claude-plugin" / "plugin.json"
+    def _find_import_package_manifest(self, extract_dir: Path) -> Path:
+        """找出匯入 ZIP 內的 package manifest，支援直接位於根目錄或包一層模板目錄。"""
+        direct_path = extract_dir / ".claude-plugin" / "manifest.json"
         if direct_path.exists():
             return direct_path
 
-        matches = list(extract_dir.glob("*/.claude-plugin/plugin.json"))
+        matches = list(extract_dir.glob("*/.claude-plugin/manifest.json"))
         if len(matches) == 1:
             return matches[0]
+
+        legacy_matches = list(extract_dir.glob(".claude-plugin/marketplace.json"))
+        legacy_matches.extend(extract_dir.glob("*/.claude-plugin/marketplace.json"))
+        if legacy_matches:
+            raise ValueError("無效的模板檔案：缺少 .claude-plugin/manifest.json")
 
         return direct_path
 
@@ -878,7 +880,7 @@ class TemplateService(TemplateBaseService):
             return normalized
 
         raise ValueError(
-            "無效的模板檔案：plugin.json 的 cli_type 不合法，"
+            "無效的模板檔案：manifest.json 的 cli_type 不合法，"
             "僅支援 claude-code、codex、gemini"
         )
 
@@ -894,7 +896,7 @@ class TemplateService(TemplateBaseService):
             return normalized
 
         raise ValueError(
-            "無效的模板檔案：plugin.json 的 status 不合法，"
+            "無效的模板檔案：manifest.json 的 status 不合法，"
             "僅支援 draft、released"
         )
 
@@ -1096,16 +1098,6 @@ class TemplateService(TemplateBaseService):
     def update_agents_md(self, template_id: str, content: str) -> None:
         """更新 AGENTS.md 檔案"""
         return self.agents_md_service.update_agents_md(template_id, content)
-
-    # ============ Marketplace 配置管理（委派給 marketplace_service） ============
-
-    def get_marketplace_config(self):
-        """取得 Marketplace 配置"""
-        return self.marketplace_service.get_marketplace_config()
-
-    def update_marketplace_config(self, config):
-        """更新 Marketplace 配置"""
-        return self.marketplace_service.update_marketplace_config(config)
 
     # ============ 內部載入方法（用於模板安裝） ============
 

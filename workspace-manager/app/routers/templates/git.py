@@ -14,6 +14,8 @@ from app.models import (
     GitCommitRequest,
     GitOperationResponse,
     GitRemoteUrlRequest,
+    GitRepositoryInitRequest,
+    GitRepositoryStatus,
     GitUserConfig,
     GitUserConfigResponse,
     SSHKeysUpdateRequest,
@@ -52,6 +54,14 @@ def _translate_git_result(translate, result) -> str:
         return translate("templates.git.no_changes_to_commit")
     if code == "GIT_REMOTE_URL_EMPTY":
         return translate("templates.git.remote_url_empty")
+    if code == "GIT_CLONE_TARGET_NOT_EMPTY":
+        return translate("templates.git.clone_target_not_empty")
+    if code == "GIT_REPOSITORY_ALREADY_INITIALIZED":
+        return translate("templates.git.repository_already_initialized")
+    if code == "GIT_REPOSITORY_INITIALIZED":
+        return translate("templates.git.repository_initialized")
+    if code == "GIT_REPOSITORY_INIT_FAILED":
+        return translate("templates.git.repository_init_failed")
     if code == "GIT_REPO_ACCESS_FAILED":
         return translate("templates.git.repo_access_failed")
     if code == "GIT_CLONE_TARGET_HAS_CHANGES":
@@ -122,6 +132,9 @@ def _translate_git_exception(translate, exc: Exception) -> str:
         "GIT_NO_CHANGES",
         "GIT_PATH_REQUIRED",
         "GIT_PATH_OUTSIDE_REPOSITORY",
+        "GIT_REPOSITORY_ALREADY_INITIALIZED",
+        "GIT_REPOSITORY_INIT_FAILED",
+        "GIT_CLONE_TARGET_NOT_EMPTY",
     }:
         result = type("Result", (), {"code": message, "params": {}, "message": message})()
         return _translate_git_result(translate, result)
@@ -134,6 +147,54 @@ def get_template_git_service() -> TemplateGitService:
 
 
 # ============ Git 版本控制 API ============
+
+
+@router.get(
+    "/git/repository/status",
+    response_model=GitRepositoryStatus,
+    summary="取得 Template Center Git 倉庫初始化狀態",
+    responses=build_responses(401, 500),
+)
+async def get_template_repository_status(
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> GitRepositoryStatus:
+    return git_service.get_repository_status()
+
+
+@router.post(
+    "/git/repository/init",
+    response_model=GitOperationResponse,
+    summary="初始化 Template Center Git 倉庫",
+    responses=build_responses(401, 422, 500),
+)
+async def init_template_repository(
+    request: Request,
+    payload: GitRepositoryInitRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    git_service: TemplateGitService = Depends(get_template_git_service),
+) -> GitOperationResponse:
+    translate = request.state.translate
+    try:
+        result = git_service.init_repository(remote_url=payload.remote_url)
+        if result.success:
+            return GitOperationResponse(
+                success=True,
+                message=_translate_git_result(translate, result),
+            )
+        return GitOperationResponse(
+            success=False,
+            message=translate("templates.git.repository_init_failed"),
+            error=_translate_git_result(translate, result),
+            error_code=result.code,
+        )
+    except Exception as e:
+        logger.error(f"初始化 Template Center Git 倉庫失敗: {e}")
+        return GitOperationResponse(
+            success=False,
+            message=translate("templates.git.repository_init_failed"),
+            error=_translate_git_exception(translate, e),
+        )
 
 
 @router.get(
@@ -334,7 +395,10 @@ async def fetch_template_version_control(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service),
 ) -> TemplateRemoteResponse:
-    return git_service.fetch(payload)
+    try:
+        return git_service.fetch(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
 
 
 @router.post(
@@ -348,7 +412,10 @@ async def pull_template_version_control(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service),
 ) -> TemplateRemoteResponse:
-    return git_service.pull(payload)
+    try:
+        return git_service.pull(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
 
 
 @router.post(
@@ -362,7 +429,10 @@ async def push_template_version_control(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service),
 ) -> TemplateRemoteResponse:
-    return git_service.push(payload)
+    try:
+        return git_service.push(payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail={"errorCode": str(exc), "message": str(exc)})
 
 @router.get(
     "/git/user-config",
@@ -593,6 +663,7 @@ def _clone_repository_background(
     task_id: str,
     url: str,
     branch: Optional[str],
+    force: bool,
     git_service: TemplateGitService,
     db: Session,
     translate_func,
@@ -614,7 +685,7 @@ def _clone_repository_background(
         )
 
         # 執行 clone
-        clone_result = git_service.clone_repository(url=url, branch=branch)
+        clone_result = git_service.clone_repository(url=url, branch=branch, force=force)
         success, message = clone_result
 
         if not success:
@@ -752,6 +823,7 @@ async def clone_git_repository(
         task_id=task_id,
         url=payload.url,
         branch=payload.branch,
+        force=payload.force,
         git_service=git_service,
         db=db,
         translate_func=translate,

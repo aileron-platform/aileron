@@ -49,6 +49,22 @@ export interface GitRemoteUrlRequest {
 export interface GitCloneRequest {
   url: string;
   branch?: string;
+  force?: boolean;
+}
+
+export interface GitRepositoryStatus {
+  isGitRepo: boolean;
+  currentBranch?: string | null;
+  remoteUrl?: string | null;
+  hasOrigin: boolean;
+  hasLocalContent: boolean;
+  canCloneSafely: boolean;
+  canInitSafely: boolean;
+  cloneBlockedReason?: string | null;
+}
+
+export interface GitRepositoryInitRequest {
+  remoteUrl?: string;
 }
 
 // ============ API 方法 ============
@@ -72,6 +88,20 @@ export async function updateGitUserConfig(request: GitUserConfigRequest): Promis
  */
 export async function setGitRemoteUrl(request: GitRemoteUrlRequest): Promise<GitOperationResponse> {
   return apiClient.post<GitOperationResponse>('/templates/git/remote-url', request);
+}
+
+/**
+ * 取得 Template Center Git 倉庫生命週期狀態
+ */
+export async function getRepositoryStatus(): Promise<GitRepositoryStatus> {
+  return apiClient.get<GitRepositoryStatus>('/templates/git/repository/status');
+}
+
+/**
+ * 初始化目前 Template Center registry 為 Git 倉庫
+ */
+export async function initRepository(request: GitRepositoryInitRequest = {}): Promise<GitOperationResponse> {
+  return apiClient.post<GitOperationResponse>('/templates/git/repository/init', request);
 }
 
 /**

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { GitBranch, GitPullRequest, CheckCircle2, Loader2, Lock } from 'lucide-react';
+import { AlertTriangle, GitBranch, GitPullRequest, CheckCircle2, Loader2, Save } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
@@ -8,16 +8,24 @@ import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useTaskProgress } from '@/shared/hooks/useTaskProgress';
 import { TaskProgressCard } from '@/shared/components/task-progress/TaskProgressCard';
-import type { GitUserConfigRequest, CloneStatus } from '@/shared/services/templateGitApi';
-import { getCloneProgress, checkCloneStatus } from '@/shared/services/templateGitApi';
+import type { GitRepositoryStatus, GitUserConfigRequest } from '@/shared/services/templateGitApi';
+import { getCloneProgress } from '@/shared/services/templateGitApi';
 
 interface GitUserConfigTabProps {
   value: GitUserConfigRequest | null;
   remoteUrl: string;
+  repositoryStatus: GitRepositoryStatus | null;
   onSave: (value: GitUserConfigRequest) => Promise<void> | void;
-  onCloneRepository: (url: string, branch?: string) => Promise<void> | void;
+  onSaveRemoteUrl: (remoteUrl: string) => Promise<void> | void;
+  onCloneRepository: (url: string, branch?: string) => Promise<{ task_id?: string } | void> | { task_id?: string } | void;
+  onInitRepository: () => Promise<void> | void;
+  onRepositoryStatusRefresh: () => Promise<GitRepositoryStatus> | void;
   isSaving?: boolean;
+  isSavingRemoteUrl?: boolean;
   isCloningRepository?: boolean;
+  isInitializingRepository?: boolean;
+  showRepositorySettings?: boolean;
+  showUserConfig?: boolean;
 }
 
 const emptyConfig: GitUserConfigRequest = {
@@ -28,45 +36,35 @@ const emptyConfig: GitUserConfigRequest = {
 export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
   value,
   remoteUrl,
+  repositoryStatus,
   onSave,
+  onSaveRemoteUrl,
   onCloneRepository,
+  onInitRepository,
+  onRepositoryStatusRefresh,
   isSaving,
-  isCloningRepository
+  isSavingRemoteUrl,
+  isCloningRepository,
+  isInitializingRepository,
+  showRepositorySettings = true,
+  showUserConfig = true
 }) => {
   const { t } = useI18n();
   const [formValue, setFormValue] = useState<GitUserConfigRequest>(emptyConfig);
   const [repoUrlValue, setRepoUrlValue] = useState<string>('');
   const [branchValue, setBranchValue] = useState<string>('');
-  const [cloneStatus, setCloneStatus] = useState<CloneStatus | null>(null);
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true);
 
   // 使用 useTaskProgress Hook 管理 clone 進度
   const {
     progress: taskProgress,
     isPolling,
+    startPolling,
     resetProgress: resetCloneProgress,
-  } = useTaskProgress(
-    null,
-    getCloneProgress
-  );
-
-  // 檢查倉庫狀態
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const response = await checkCloneStatus();
-        if (response.success && response.data) {
-          setCloneStatus(response.data);
-        }
-      } catch (error) {
-        // 靜默失敗，不顯示日誌
-      } finally {
-        setIsCheckingStatus(false);
-      }
-    };
-
-    void checkStatus();
-  }, []);
+  } = useTaskProgress(null, getCloneProgress, {
+    onComplete: () => {
+      void onRepositoryStatusRefresh();
+    },
+  });
 
   useEffect(() => {
     if (value) {
@@ -98,6 +96,9 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
     return Boolean(repoUrlValue.trim());
   }, [repoUrlValue]);
 
+  const isRemoteUrlDirty = repoUrlValue !== (remoteUrl ?? '');
+  const isRepositoryInitialized = Boolean(repositoryStatus?.isGitRepo);
+
   const handleChange = (key: keyof GitUserConfigRequest, nextValue: string) => {
     setFormValue((prev) => ({
       ...prev,
@@ -123,43 +124,46 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
     }
 
     try {
-      await onCloneRepository(repoUrlValue.trim(), branchValue.trim() || undefined);
-      // onCloneRepository 會在父組件中處理任務 ID 的設置
-      // 這裡只需要調用即可
+      const result = await onCloneRepository(repoUrlValue.trim(), branchValue.trim() || undefined);
+      if (result && result.task_id) {
+        startPolling(result.task_id);
+      } else {
+        await onRepositoryStatusRefresh();
+      }
     } catch (error) {
       // 錯誤由父組件的 toast 處理
     }
   };
 
+  const handleSaveRemoteUrl = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!isRepoUrlValid) {
+      return;
+    }
+    void onSaveRemoteUrl(repoUrlValue.trim());
+  };
+
   return (
     <div className="space-y-4">
-      {/* Clone Git 倉庫 */}
+      {/* Repository lifecycle */}
+      {showRepositorySettings && (!isRepositoryInitialized ? (
       <form onSubmit={handleCloneRepository}>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <GitPullRequest className="h-5 w-5" />
-              {t('template.center.settingsDialog.git.cloneRepo.title')}
+              {t('template.center.settingsDialog.git.repositorySetup.title')}
             </CardTitle>
             <CardDescription>
-              {t('template.center.settingsDialog.git.cloneRepo.description')}
+              {t('template.center.settingsDialog.git.repositorySetup.description')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 已 Clone 提示 */}
-            {cloneStatus?.is_cloned && (
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
-                  <div className="font-medium">
-                    {t('template.center.settingsDialog.git.cloneRepo.successAlertTitle')}
-                  </div>
-                  <div className="text-sm mt-1">
-                    {t('template.center.settingsDialog.git.cloneRepo.remoteLabel')}: {cloneStatus.remote_url}
-                  </div>
-                  <div className="text-sm">
-                    {t('template.center.settingsDialog.git.cloneRepo.branchStatusLabel')}: {cloneStatus.current_branch}
-                  </div>
+            {repositoryStatus?.hasLocalContent && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  {t('template.center.settingsDialog.git.repositorySetup.localContentWarning')}
                 </AlertDescription>
               </Alert>
             )}
@@ -174,11 +178,8 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
                   value={repoUrlValue}
                   placeholder={t('template.center.settingsDialog.git.cloneRepo.urlPlaceholder')}
                   onChange={(event) => setRepoUrlValue(event.target.value)}
-                  disabled={cloneStatus?.is_cloned || isCheckingStatus}
+                  disabled={isCloningRepository || isPolling}
                 />
-                {cloneStatus?.is_cloned && (
-                  <Lock className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                )}
               </div>
             </div>
 
@@ -191,7 +192,7 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
                 value={branchValue}
                 placeholder={t('template.center.settingsDialog.git.cloneRepo.branchPlaceholder')}
                 onChange={(event) => setBranchValue(event.target.value)}
-                disabled={cloneStatus?.is_cloned || isCheckingStatus}
+                disabled={isCloningRepository || isPolling}
               />
               <p className="text-xs text-muted-foreground">
                 {t('template.center.settingsDialog.git.cloneRepo.branchHelper')}
@@ -199,13 +200,30 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {t('template.center.settingsDialog.git.cloneRepo.helper')}
+              {repositoryStatus?.canCloneSafely
+                ? t('template.center.settingsDialog.git.cloneRepo.helper')
+                : t('template.center.settingsDialog.git.repositorySetup.cloneDisabledHelper')}
             </p>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isInitializingRepository || isCloningRepository || isPolling}
+                onClick={() => void onInitRepository()}
+              >
+                {isInitializingRepository ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {t('template.center.settingsDialog.git.repositorySetup.actions.initializing')}
+                  </>
+                ) : (
+                  t('template.center.settingsDialog.git.repositorySetup.actions.init')
+                )}
+              </Button>
               <Button
                 type="submit"
-                disabled={!isRepoUrlValid || isCloningRepository || isPolling || cloneStatus?.is_cloned || isCheckingStatus}
+                disabled={!isRepoUrlValid || !repositoryStatus?.canCloneSafely || isCloningRepository || isPolling}
               >
                 {isPolling ? (
                   <>
@@ -233,8 +251,75 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
           </CardContent>
         </Card>
       </form>
+      ) : (
+        <form onSubmit={handleSaveRemoteUrl}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GitPullRequest className="h-5 w-5" />
+                {t('template.center.settingsDialog.git.remote.title')}
+              </CardTitle>
+              <CardDescription>
+                {t('template.center.settingsDialog.git.remote.description')}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  <div className="font-medium">
+                    {t('template.center.settingsDialog.git.repositorySetup.initializedAlertTitle')}
+                  </div>
+                  <div className="text-sm mt-1">
+                    {t('template.center.settingsDialog.git.cloneRepo.branchStatusLabel')}: {repositoryStatus?.currentBranch || t('template.center.settingsDialog.git.remote.noBranch')}
+                  </div>
+                </AlertDescription>
+              </Alert>
+              {!repositoryStatus?.hasOrigin && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    {t('template.center.settingsDialog.git.remote.missingOrigin')}
+                  </AlertDescription>
+                </Alert>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="gitRepoUrl">
+                  {t('template.center.settingsDialog.git.remote.urlLabel')}
+                </Label>
+                <Input
+                  id="gitRepoUrl"
+                  value={repoUrlValue}
+                  placeholder={t('template.center.settingsDialog.git.cloneRepo.urlPlaceholder')}
+                  onChange={(event) => setRepoUrlValue(event.target.value)}
+                  disabled={isSavingRemoteUrl}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('template.center.settingsDialog.git.remote.helper')}
+              </p>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={!isRemoteUrlDirty || !isRepoUrlValid || isSavingRemoteUrl}>
+                  {isSavingRemoteUrl ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {t('template.center.settingsDialog.git.remote.actions.saving')}
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      {t('template.center.settingsDialog.git.remote.actions.save')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      ))}
 
       {/* Git 使用者設定 */}
+      {showUserConfig && (
       <form onSubmit={handleSubmitUserConfig}>
         <Card>
           <CardHeader>
@@ -286,6 +371,7 @@ export const GitUserConfigTab: React.FC<GitUserConfigTabProps> = ({
           </CardContent>
         </Card>
       </form>
+      )}
     </div>
   );
 };

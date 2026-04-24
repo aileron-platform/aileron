@@ -50,19 +50,19 @@ def _translate_template_install_error(translate, code: str, params: dict | None 
 def _translate_template_import_value_error(translate, error: str) -> str:
     if "ZIP 檔案已損壞或格式不正確" in error:
         return translate("templates.import.invalid_archive")
-    if "缺少 .claude-plugin/plugin.json" in error:
-        return translate("templates.import.missing_plugin_json")
-    if "plugin.json 不是合法的 JSON" in error:
-        return translate("templates.import.invalid_plugin_json")
-    if "plugin.json 缺少 id 欄位" in error:
-        return translate("templates.import.missing_plugin_id")
-    if "plugin.json 的 id 格式不合法" in error:
-        return translate("templates.import.invalid_plugin_id_format")
+    if "缺少 .claude-plugin/manifest.json" in error:
+        return translate("templates.import.missing_package_manifest")
+    if "manifest.json 不是合法的 JSON" in error:
+        return translate("templates.import.invalid_package_manifest")
+    if "manifest.json 缺少 id 欄位" in error:
+        return translate("templates.import.missing_package_manifest_id")
+    if "manifest.json 的 id 格式不合法" in error:
+        return translate("templates.import.invalid_package_manifest_id_format")
     if error.startswith("模板 '") and error.endswith("' 已存在，請使用覆蓋模式"):
         template_id = error[len("模板 '"):].split("' 已存在，請使用覆蓋模式", 1)[0]
         return translate("templates.import.already_exists", template_id=template_id)
-    if "模板 metadata 無效" in error:
-        return translate("templates.import.invalid_metadata")
+    if "模板 package manifest 無效" in error:
+        return translate("templates.import.invalid_package_manifest_metadata")
     return translate("templates.import_failed")
 
 
@@ -280,8 +280,8 @@ async def import_template(
 
     ZIP 檔案結構要求:
     - 必須包含一個 template_id 子目錄
-    - 子目錄中必須包含 marketplace.json
-    - marketplace.json 中的 id 必須與目錄名稱一致
+    - 子目錄中必須包含 .claude-plugin/manifest.json
+    - manifest.json 中的 id 必須與目錄名稱一致
     - template_id 不能與現有模板重複
     """
     translate = request.state.translate

@@ -73,6 +73,30 @@ class GitCloneRequest(BaseModel):
 
     url: str = Field(..., min_length=1, description="遠端倉庫 URL")
     branch: Optional[str] = Field(None, description="要 clone 的分支（可選）")
+    force: bool = Field(False, description="是否允許覆蓋既有本地內容")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GitRepositoryInitRequest(BaseModel):
+    """初始化模板中心 Git 倉庫請求"""
+
+    remote_url: Optional[str] = Field(None, alias="remoteUrl", description="初始化後要設定的 origin URL")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GitRepositoryStatus(BaseModel):
+    """模板中心 Git 倉庫生命週期狀態"""
+
+    is_git_repo: bool = Field(..., alias="isGitRepo", description="是否已初始化為 Git 倉庫")
+    current_branch: Optional[str] = Field(None, alias="currentBranch", description="目前分支")
+    remote_url: Optional[str] = Field(None, alias="remoteUrl", description="origin URL")
+    has_origin: bool = Field(False, alias="hasOrigin", description="是否已設定 origin")
+    has_local_content: bool = Field(False, alias="hasLocalContent", description="是否已有本地模板中心內容")
+    can_clone_safely: bool = Field(False, alias="canCloneSafely", description="是否可安全 clone")
+    can_init_safely: bool = Field(False, alias="canInitSafely", description="是否可安全 init")
+    clone_blocked_reason: Optional[str] = Field(None, alias="cloneBlockedReason", description="clone 被阻擋原因")
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -396,7 +396,7 @@ class TestTemplateImportExport:
         # 建立 ZIP 檔案
         zip_path = tmp_path / "test-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
-            plugin_data = {
+            manifest_data = {
                 "id": "imported-template",
                 "name": "Imported Template",
                 "description": "An imported template",
@@ -405,7 +405,7 @@ class TestTemplateImportExport:
                 "cli_type": "claude-code",
                 "status": "active"
             }
-            zipf.writestr(".claude-plugin/plugin.json", json.dumps(plugin_data))
+            zipf.writestr(".claude-plugin/manifest.json", json.dumps(manifest_data))
 
         # 建立 mock UploadFile
         mock_file = upload_file_factory("test-template.zip", zip_path.read_bytes())
@@ -434,8 +434,8 @@ class TestTemplateImportExport:
             mock_db_session.commit.assert_called()
 
     @pytest.mark.asyncio
-    async def test_import_template_missing_plugin_json(self, template_service, tmp_path):
-        """測試：匯入缺少 plugin.json 的模板失敗"""
+    async def test_import_template_missing_package_manifest(self, template_service, tmp_path):
+        """測試：匯入缺少 manifest.json 的模板失敗"""
         # Arrange
         zip_path = tmp_path / "invalid-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
@@ -446,22 +446,78 @@ class TestTemplateImportExport:
         mock_file.read = AsyncMock(return_value=zip_path.read_bytes())
 
         # Act & Assert
-        with pytest.raises(ValueError, match="缺少 .claude-plugin/plugin.json"):
+        with pytest.raises(ValueError, match="缺少 .claude-plugin/manifest.json"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
+    async def test_import_template_rejects_legacy_marketplace_json_only(
+        self, template_service, tmp_path, upload_file_factory
+    ):
+        """測試：只有 legacy marketplace.json 時會要求 manifest.json"""
+        zip_path = tmp_path / "legacy-marketplace-template.zip"
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.writestr(
+                ".claude-plugin/marketplace.json",
+                json.dumps({"id": "legacy-marketplace-template"}),
+            )
+
+        mock_file = upload_file_factory("legacy-marketplace-template.zip", zip_path.read_bytes())
+
+        with pytest.raises(ValueError, match="缺少 .claude-plugin/manifest.json"):
+            await template_service.import_template(mock_file)
+
+    @pytest.mark.asyncio
+    async def test_import_template_prefers_manifest_json_when_legacy_file_also_exists(
+        self, template_service, mock_db_session, tmp_path, upload_file_factory
+    ):
+        """測試：manifest.json 與 marketplace.json 並存時只使用 manifest.json"""
+        zip_path = tmp_path / "dual-manifest-template.zip"
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            zipf.writestr(
+                ".claude-plugin/manifest.json",
+                json.dumps({"id": "manifest-template", "name": "Manifest Template"}),
+            )
+            zipf.writestr(
+                ".claude-plugin/marketplace.json",
+                json.dumps({"id": "legacy-template", "name": "Legacy Template"}),
+            )
+
+        mock_file = upload_file_factory("dual-manifest-template.zip", zip_path.read_bytes())
+
+        created_templates: list[TemplateDB] = []
+        mock_db_session.add.side_effect = created_templates.append
+
+        with patch.object(template_service, "_get_template", return_value=None), \
+             patch.object(template_service, "_db_to_pydantic") as mock_convert:
+            mock_convert.side_effect = lambda db_template: Template(
+                id=db_template.id,
+                name=db_template.name,
+                description=db_template.description,
+                author=TemplateAuthor(name=db_template.author_name, email=db_template.author_email),
+                version=db_template.version,
+                cliType=db_template.cli_type,
+                status=db_template.status,
+            )
+
+            result = await template_service.import_template(mock_file)
+
+        assert result.id == "manifest-template"
+        assert result.name == "Manifest Template"
+        assert created_templates[0].id == "manifest-template"
+
+    @pytest.mark.asyncio
     async def test_import_template_missing_id(self, template_service, tmp_path, upload_file_factory):
-        """測試：plugin.json 缺少 id 時會失敗"""
+        """測試：manifest.json 缺少 id 時會失敗"""
         zip_path = tmp_path / "missing-id-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                ".claude-plugin/plugin.json",
+                ".claude-plugin/manifest.json",
                 json.dumps({"name": "Missing Id Template"}),
             )
 
         mock_file = upload_file_factory("missing-id-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="plugin.json 缺少 id 欄位"):
+        with pytest.raises(ValueError, match="manifest.json 缺少 id 欄位"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -477,7 +533,7 @@ class TestTemplateImportExport:
                 "description": "Updated description",
                 "author": {"name": "Updated Author", "email": "updated@example.com"},
             }
-            zipf.writestr(".claude-plugin/plugin.json", json.dumps(plugin_data))
+            zipf.writestr(".claude-plugin/manifest.json", json.dumps(plugin_data))
             zipf.writestr("commands/new-command.md", "content")
 
         existing_dir = tmp_path / "templates" / "test-template"
@@ -518,7 +574,7 @@ class TestTemplateImportExport:
         zip_path = tmp_path / "defaults-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                ".claude-plugin/plugin.json",
+                ".claude-plugin/manifest.json",
                 json.dumps({"id": "defaulted-template"}),
             )
 
@@ -562,7 +618,7 @@ class TestTemplateImportExport:
         zip_path = tmp_path / "legacy-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                ".claude-plugin/plugin.json",
+                ".claude-plugin/manifest.json",
                 json.dumps(
                     {
                         "id": "legacy-template",
@@ -608,7 +664,7 @@ class TestTemplateImportExport:
         zip_path = tmp_path / "nested-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                "nested-template/.claude-plugin/plugin.json",
+                "nested-template/.claude-plugin/manifest.json",
                 json.dumps({"id": "nested-template"}),
             )
 
@@ -638,7 +694,7 @@ class TestTemplateImportExport:
         zip_path = tmp_path / "claudecode-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                ".claude-plugin/plugin.json",
+                ".claude-plugin/manifest.json",
                 json.dumps({"id": "claudecode-template", "cli_type": "ClaudeCode"}),
             )
 
@@ -668,7 +724,7 @@ class TestTemplateImportExport:
         zip_path = tmp_path / "invalid-cli-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
-                ".claude-plugin/plugin.json",
+                ".claude-plugin/manifest.json",
                 json.dumps({"id": "invalid-cli-template", "cli_type": "foobar"}),
             )
 
@@ -681,14 +737,14 @@ class TestTemplateImportExport:
     async def test_import_template_rejects_invalid_json_with_friendly_message(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：非法 plugin.json 會回傳明確錯誤訊息"""
+        """測試：非法 manifest.json 會回傳明確錯誤訊息"""
         zip_path = tmp_path / "invalid-json-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
-            zipf.writestr(".claude-plugin/plugin.json", "{invalid json")
+            zipf.writestr(".claude-plugin/manifest.json", "{invalid json")
 
         mock_file = upload_file_factory("invalid-json-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="plugin.json 不是合法的 JSON"):
+        with pytest.raises(ValueError, match="manifest.json 不是合法的 JSON"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -820,8 +876,6 @@ class TestServiceDelegation:
             ("file_service", "search_files", "search_files", ("test-template", {"query": "test"}), ["match"]),
             ("agents_md_service", "get_agents_md", "get_agents_md", ("test-template",), "# Claude"),
             ("agents_md_service", "update_agents_md", "update_agents_md", ("test-template", "# Updated"), None),
-            ("marketplace_service", "get_marketplace_config", "get_marketplace_config", (), {"featured": []}),
-            ("marketplace_service", "update_marketplace_config", "update_marketplace_config", ({"featured": []},), {"saved": True}),
             ("commands_service", "load_commands", "_load_commands", ("test-template",), ["cmd"]),
             ("agents_service", "load_agents", "_load_agents", ("test-template",), ["agent"]),
             ("output_style_service", "load_output_style", "_load_output_style", ("test-template",), ["style"]),

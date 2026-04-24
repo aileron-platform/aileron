@@ -2,7 +2,7 @@
 
 该文件整合了所有模板相关的子路由，包括：
 - base: 基础 CRUD 操作和分类/功能查询
-- config: MCP、Hooks、Marketplace 配置管理
+- config: MCP、Hooks 配置管理
 - files: Commands、Agents、Output Style、AGENTS.md、通用文件管理
 - git: Git 版本控制和 SSH Keys 管理
 - install: 模板安装、导入、导出

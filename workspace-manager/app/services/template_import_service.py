@@ -57,33 +57,33 @@ class ClaudeImportAdapter(BaseTemplateImportAdapter):
     source_type = ImportSourceType.CLAUDE
 
     def matches(self, root: Path) -> bool:
-        return (root / ".claude-plugin" / "plugin.json").exists()
+        return (root / ".claude-plugin" / "manifest.json").exists()
 
     def load(self, root: Path) -> ImportedTemplate:
-        plugin_path = root / ".claude-plugin" / "plugin.json"
+        manifest_path = root / ".claude-plugin" / "manifest.json"
         try:
-            plugin_data = json.loads(plugin_path.read_text(encoding="utf-8"))
+            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise TemplateImportError("invalid_plugin_json") from exc
+            raise TemplateImportError("invalid_template_package_manifest_json") from exc
 
-        template_id = str(plugin_data.get("id") or "").strip()
+        template_id = str(manifest_data.get("id") or "").strip()
         if not template_id:
-            raise TemplateImportError("missing_plugin_id")
+            raise TemplateImportError("missing_template_package_manifest_id")
         if not _is_valid_template_id(template_id):
             raise TemplateImportError("invalid_template_id")
 
         metadata = ImportedTemplateMetadata(
             id=template_id,
-            name=plugin_data.get("name") or template_id,
-            description=plugin_data.get("description"),
-            version=str(plugin_data.get("version") or "1.0.0"),
+            name=manifest_data.get("name") or template_id,
+            description=manifest_data.get("description"),
+            version=str(manifest_data.get("version") or "1.0.0"),
             sourceType=self.source_type,
-            authorName=(plugin_data.get("author") or {}).get("name") or "Unknown",
-            authorEmail=(plugin_data.get("author") or {}).get("email"),
-            authorUrl=(plugin_data.get("author") or {}).get("url"),
-            status=plugin_data.get("status"),
-            keywords=list(plugin_data.get("keywords") or []),
-            initCommands=plugin_data.get("init_commands"),
+            authorName=(manifest_data.get("author") or {}).get("name") or "Unknown",
+            authorEmail=(manifest_data.get("author") or {}).get("email"),
+            authorUrl=(manifest_data.get("author") or {}).get("url"),
+            status=manifest_data.get("status"),
+            keywords=list(manifest_data.get("keywords") or []),
+            initCommands=manifest_data.get("init_commands"),
         )
 
         mcp_servers = _parse_claude_mcp(root / "mcp.json")
@@ -102,7 +102,8 @@ class ClaudeImportAdapter(BaseTemplateImportAdapter):
             resources=hook_assets + _collect_extra_resources(
                 root,
                 excluded={
-                    ".claude-plugin/plugin.json",
+                    ".claude-plugin/manifest.json",
+                    ".claude-plugin/marketplace.json",
                     "CLAUDE.md",
                     "mcp.json",
                     "hooks/hooks.json",
@@ -419,6 +420,8 @@ class TemplateImportService(TemplateBaseService):
             matched_root = adapter.find_root(source_root)
             if matched_root is not None:
                 return adapter.load(matched_root)
+        if _has_legacy_marketplace_manifest(source_root):
+            raise TemplateImportError("missing_template_package_manifest")
         raise TemplateImportError("unsupported_template_source")
 
 
@@ -448,6 +451,13 @@ def _candidate_roots(extract_dir: Path) -> Iterable[Path]:
     for child in sorted(extract_dir.iterdir()):
         if child.is_dir():
             yield child
+
+
+def _has_legacy_marketplace_manifest(source_root: Path) -> bool:
+    for candidate in _candidate_roots(source_root):
+        if (candidate / ".claude-plugin" / "marketplace.json").exists():
+            return True
+    return False
 
 
 def _is_valid_template_id(value: str) -> bool:

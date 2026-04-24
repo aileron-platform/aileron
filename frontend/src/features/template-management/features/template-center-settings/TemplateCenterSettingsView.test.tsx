@@ -8,21 +8,10 @@ const tMock = vi.hoisted(() => (key: string) => {
     'template.center.settingsDialog.title': 'Template center settings',
     'template.center.settingsDialog.description': 'Settings description',
     'template.center.settingsDialog.actions.back': 'Back',
-    'template.center.settingsDialog.actions.save': 'Save',
-    'template.center.settings.tabs.general': 'General',
     'template.center.settings.tabs.versionControl': 'Version Control',
     'template.center.settings.tabs.remote': 'Remote',
+    'template.center.settings.tabs.gitUser': 'Git User',
     'template.center.settings.tabs.sshKeys': 'SSH Keys',
-    'template.center.settingsDialog.basicInfo.title': 'Registry metadata',
-    'template.center.settingsDialog.basicInfo.nameLabel': 'Name',
-    'template.center.settingsDialog.basicInfo.versionLabel': 'Version',
-    'template.center.settingsDialog.basicInfo.descriptionLabel': 'Description',
-    'template.center.settingsDialog.basicInfo.descriptionPlaceholder': 'Description placeholder',
-    'template.center.settingsDialog.basicInfo.homepageLabel': 'Homepage',
-    'template.center.settingsDialog.basicInfo.homepagePlaceholder': 'Homepage placeholder',
-    'template.center.settingsDialog.owner.title': 'Owner',
-    'template.center.settingsDialog.owner.nameLabel': 'Owner name',
-    'template.center.settingsDialog.owner.emailLabel': 'Owner email',
   };
   return values[key] ?? key;
 });
@@ -33,28 +22,20 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/api/apiClient', () => ({
-  apiClient: {
-    get: vi.fn(async (path: string) => {
-      if (path === '/templates/marketplace/config') {
-        return {
-          success: true,
-          data: {
-            name: 'registry',
-            owner: { name: 'Owner', email: 'owner@example.com' },
-            metadata: { description: 'Registry description', version: '1.0.0', homepage: 'https://example.com' },
-          },
-        };
-      }
-      return { success: true };
-    }),
-    put: vi.fn(async () => ({ success: true })),
-  },
-}));
-
 vi.mock('@/shared/services/templateGitApi', () => ({
   checkCloneStatus: vi.fn(async () => ({ success: true, data: { remote_url: 'git@example.com:repo.git' } })),
+  getRepositoryStatus: vi.fn(async () => ({
+    isGitRepo: true,
+    currentBranch: 'main',
+    remoteUrl: 'git@example.com:repo.git',
+    hasOrigin: true,
+    hasLocalContent: true,
+    canCloneSafely: false,
+    canInitSafely: false,
+  })),
   getGitUserConfig: vi.fn(async () => ({ success: true, data: { userName: 'Owner', userEmail: 'owner@example.com' } })),
+  initRepository: vi.fn(async () => ({ success: true })),
+  setGitRemoteUrl: vi.fn(async () => ({ success: true })),
   updateGitUserConfig: vi.fn(async () => ({ success: true })),
   cloneRepository: vi.fn(async () => ({ success: true })),
 }));
@@ -72,17 +53,20 @@ vi.mock('./components/SSHKeysTab', () => ({
 }));
 
 describe('TemplateCenterSettingsView', () => {
-  it('renders the settings route sections with the new responsibility labels', async () => {
+  it('renders only current Git-centered settings sections', async () => {
     render(<TemplateCenterSettingsView />, {
       initialRoute: '/templates/templates/settings',
     });
 
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'General' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Version Control' })).toBeInTheDocument());
 
+    expect(screen.queryByRole('tab', { name: 'General' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Version Control' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Remote' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Git User' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'SSH Keys' })).toBeInTheDocument();
-    expect(screen.getByText('Registry metadata')).toBeInTheDocument();
-    expect(screen.getByText('Owner')).toBeInTheDocument();
+    expect(screen.getByTestId('template-version-control-tab')).toBeInTheDocument();
+    expect(screen.queryByText('Registry metadata')).not.toBeInTheDocument();
+    expect(screen.queryByText('Owner')).not.toBeInTheDocument();
   });
 });

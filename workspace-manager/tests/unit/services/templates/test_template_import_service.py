@@ -9,6 +9,7 @@ import pytest
 from app.models.template_canonical import CanonicalTarget
 from app.services.template_compiler_service import TemplateCompilerService
 from app.services.template_import_service import (
+    TemplateImportError,
     TemplateImportService,
     TemplateMigrationService,
 )
@@ -41,7 +42,7 @@ def test_import_claude_template_to_intermediate_model(import_service, tmp_path):
     (source_root / "skills" / "review-ui").mkdir(parents=True)
     (source_root / "hooks" / "scripts").mkdir(parents=True)
 
-    (source_root / ".claude-plugin" / "plugin.json").write_text(
+    (source_root / ".claude-plugin" / "manifest.json").write_text(
         json.dumps(
             {
                 "id": "frontend-review",
@@ -114,6 +115,40 @@ def test_import_claude_template_to_intermediate_model(import_service, tmp_path):
     assert imported.skills[0].id == "review-ui"
     assert imported.mcp_servers[0].id == "context7"
     assert imported.hooks[0].event == "PreToolUse"
+
+
+@pytest.mark.unit
+def test_import_claude_template_rejects_legacy_marketplace_json_only(import_service, tmp_path):
+    source_root = tmp_path / "claude-template"
+    (source_root / ".claude-plugin").mkdir(parents=True)
+    (source_root / ".claude-plugin" / "marketplace.json").write_text(
+        json.dumps({"id": "legacy-template"}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(TemplateImportError, match="missing_template_package_manifest"):
+        import_service.import_from_root(source_root)
+
+
+@pytest.mark.unit
+def test_import_claude_template_prefers_manifest_json_when_legacy_file_also_exists(
+    import_service, tmp_path
+):
+    source_root = tmp_path / "claude-template"
+    (source_root / ".claude-plugin").mkdir(parents=True)
+    (source_root / ".claude-plugin" / "manifest.json").write_text(
+        json.dumps({"id": "manifest-template", "name": "Manifest Template"}),
+        encoding="utf-8",
+    )
+    (source_root / ".claude-plugin" / "marketplace.json").write_text(
+        json.dumps({"id": "legacy-template", "name": "Legacy Template"}),
+        encoding="utf-8",
+    )
+
+    imported = import_service.import_from_root(source_root)
+
+    assert imported.metadata.id == "manifest-template"
+    assert imported.metadata.name == "Manifest Template"
 
 
 @pytest.mark.unit
@@ -310,7 +345,7 @@ def _build_claude_source(root: Path) -> tuple[CanonicalTarget, str]:
     (root / "commands").mkdir()
     (root / "agents").mkdir()
     (root / "skills" / "review-ui").mkdir(parents=True)
-    (root / ".claude-plugin" / "plugin.json").write_text(
+    (root / ".claude-plugin" / "manifest.json").write_text(
         json.dumps(
             {
                 "id": "frontend-review",

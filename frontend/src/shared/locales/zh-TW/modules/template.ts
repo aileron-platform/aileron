@@ -78,9 +78,9 @@ const template = {
     },
     settings: {
       tabs: {
-        general: '一般',
         versionControl: '版本控制',
         remote: '遠端',
+        gitUser: 'Git 使用者',
         sshKeys: 'SSH Keys',
       },
       versionControl: {
@@ -93,6 +93,15 @@ const template = {
         },
         registryStale: {
           description: 'Registry 內容可能已變更，建議重建模板索引以同步最新狀態。',
+        },
+        setupRequired: {
+          title: '需要先設定 Git 倉庫',
+          description: '請先初始化目前模板 registry，或從既有遠端 registry clone 後再使用版本控制。',
+          action: '開啟倉庫設定',
+        },
+        remoteMissing: {
+          description: '尚未設定 origin 遠端。你仍可使用本地 Git 操作，但 fetch、pull、push 需要先設定遠端 URL。',
+          inline: '未設定 origin，遠端同步動作已停用。',
         },
         status: {
           branch: '分支',
@@ -142,21 +151,33 @@ const template = {
     settingsDialog: {
       title: '設定模板中心',
       description: '設定模板中心的同步來源與基本資訊。',
-      basicInfo: {
-        title: '基本資訊',
-        nameLabel: '套件名稱',
-        versionLabel: '版本',
-        descriptionLabel: '描述',
-        descriptionPlaceholder: '輸入模板中心的描述內容...',
-        homepageLabel: '首頁 URL',
-        homepagePlaceholder: 'https://example.com',
-      },
-      owner: {
-        title: '擁有者資訊',
-        nameLabel: '擁有者名稱',
-        emailLabel: '擁有者 Email',
-      },
       git: {
+        repositorySetup: {
+          title: '倉庫設定',
+          description: '將目前模板 registry 初始化為 Git，或將既有遠端 registry clone 到空的模板中心。',
+          localContentWarning: '模板中心已有本地檔案。為避免覆蓋既有內容，已停用 clone；請改用初始化來保留並追蹤目前檔案。',
+          cloneDisabledHelper: 'Clone 僅可用於沒有本地檔案的模板中心。若要保留目前檔案，請使用初始化。',
+          initializedAlertTitle: 'Git 倉庫已初始化',
+          actions: {
+            init: '初始化倉庫',
+            initializing: '初始化中...',
+          },
+        },
+        remote: {
+          title: '遠端倉庫',
+          description: '設定現有 Git 倉庫的 origin，供 fetch、pull、push 使用。',
+          urlLabel: 'Origin URL',
+          helper: '此操作會更新倉庫 Git 設定中的 origin 遠端。',
+          missingOrigin: '尚未設定 origin。請新增遠端 URL 以啟用 fetch、pull、push。',
+          noBranch: '尚無分支',
+          validation: {
+            required: 'Origin URL 為必填',
+          },
+          actions: {
+            save: '儲存遠端',
+            saving: '儲存中...',
+          },
+        },
         userConfig: {
           title: 'Git 使用者資訊',
           description: '設定 Git 提交時使用的全域使用者名稱與 Email。',
@@ -258,15 +279,8 @@ const template = {
       unknownError: '未知錯誤',
       actions: {
         back: '返回模板中心',
-        save: '儲存',
-        saveProcessing: '儲存中...',
       },
       toasts: {
-        saved: {
-          title: '設定已儲存',
-          description: '模板中心設定已成功更新。',
-          sshKeysAutoSaved: 'SSH Keys 已自動儲存。',
-        },
         commitSuccess: {
           title: '提交成功',
           description: '變更已成功提交並推送到遠端。',
@@ -298,6 +312,22 @@ const template = {
         gitUserConfigFailed: {
           title: 'Git 使用者資訊更新失敗',
           description: '無法更新 Git 使用者資訊：{{error}}',
+        },
+        remoteUrlSaved: {
+          title: '遠端 URL 已儲存',
+          description: 'Origin 遠端已更新。',
+        },
+        remoteUrlFailed: {
+          title: '遠端 URL 儲存失敗',
+          description: '無法儲存遠端 URL：{{error}}',
+        },
+        initRepoSuccess: {
+          title: '倉庫已初始化',
+          description: '模板中心現在已由 Git 追蹤。',
+        },
+        initRepoFailed: {
+          title: '倉庫初始化失敗',
+          description: '無法初始化倉庫：{{error}}',
         },
         cloneRepoSuccess: {
           title: 'Clone 倉庫成功',

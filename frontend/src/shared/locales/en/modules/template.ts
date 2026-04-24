@@ -78,9 +78,9 @@ const template = {
     },
     settings: {
       tabs: {
-        general: 'General',
         versionControl: 'Version Control',
         remote: 'Remote',
+        gitUser: 'Git User',
         sshKeys: 'SSH Keys',
       },
       versionControl: {
@@ -93,6 +93,15 @@ const template = {
         },
         registryStale: {
           description: 'Registry content may have changed. Rebuild the template index to sync the latest state.',
+        },
+        setupRequired: {
+          title: 'Git repository setup required',
+          description: 'Initialize the current template registry or clone an existing registry before using version control.',
+          action: 'Open repository setup',
+        },
+        remoteMissing: {
+          description: 'No origin remote is configured yet. Local Git actions are available, but fetch, pull, and push require a remote URL.',
+          inline: 'Origin is not configured. Remote sync actions are disabled.',
         },
         status: {
           branch: 'Branch',
@@ -142,21 +151,33 @@ const template = {
     settingsDialog: {
       title: 'Configure template center',
       description: 'Manage synchronization sources and metadata for the template center.',
-      basicInfo: {
-        title: 'Package information',
-        nameLabel: 'Package name',
-        versionLabel: 'Version',
-        descriptionLabel: 'Description',
-        descriptionPlaceholder: 'Describe the bundled plugins or usage...',
-        homepageLabel: 'Homepage URL',
-        homepagePlaceholder: 'https://example.com',
-      },
-      owner: {
-        title: 'Owner details',
-        nameLabel: 'Owner name',
-        emailLabel: 'Owner email',
-      },
       git: {
+        repositorySetup: {
+          title: 'Repository setup',
+          description: 'Initialize the current template registry as Git, or clone an existing remote registry into an empty template center.',
+          localContentWarning: 'Local template files already exist. Clone is disabled to prevent replacing them; initialize the current registry instead.',
+          cloneDisabledHelper: 'Clone is available only when the template center has no local files. Use initialize to keep and track the current files.',
+          initializedAlertTitle: 'Git repository initialized',
+          actions: {
+            init: 'Initialize repository',
+            initializing: 'Initializing...',
+          },
+        },
+        remote: {
+          title: 'Remote repository',
+          description: 'Configure the existing Git repository origin used by fetch, pull, and push.',
+          urlLabel: 'Origin URL',
+          helper: 'This updates the origin remote in the repository Git configuration.',
+          missingOrigin: 'Origin is not configured. Add a remote URL to enable fetch, pull, and push.',
+          noBranch: 'No branch',
+          validation: {
+            required: 'Origin URL is required',
+          },
+          actions: {
+            save: 'Save remote',
+            saving: 'Saving...',
+          },
+        },
         userConfig: {
           title: 'Git User Information',
           description: 'Configure the global Git user name and email used for commits.',
@@ -258,15 +279,8 @@ const template = {
       unknownError: 'Unknown error',
       actions: {
         back: 'Back to Template Center',
-        save: 'Save',
-        saveProcessing: 'Saving...',
       },
       toasts: {
-        saved: {
-          title: 'Settings saved',
-          description: 'Template center settings have been updated.',
-          sshKeysAutoSaved: 'SSH Keys have been automatically saved.',
-        },
         commitSuccess: {
           title: 'Commit successful',
           description: 'Changes have been committed and pushed to remote.',
@@ -298,6 +312,22 @@ const template = {
         gitUserConfigFailed: {
           title: 'Failed to update Git user',
           description: 'Unable to update Git user information: {{error}}',
+        },
+        remoteUrlSaved: {
+          title: 'Remote URL saved',
+          description: 'Origin remote has been updated.',
+        },
+        remoteUrlFailed: {
+          title: 'Failed to save remote URL',
+          description: 'Unable to save remote URL: {{error}}',
+        },
+        initRepoSuccess: {
+          title: 'Repository initialized',
+          description: 'Template Center is now tracked by Git.',
+        },
+        initRepoFailed: {
+          title: 'Repository initialization failed',
+          description: 'Unable to initialize repository: {{error}}',
         },
         cloneRepoSuccess: {
           title: 'Clone successful',
