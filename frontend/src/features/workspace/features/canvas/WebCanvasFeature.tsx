@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ChevronDown,
   Maximize2,
+  MoreHorizontal,
   Minimize2,
   Monitor,
   RefreshCw,
@@ -12,6 +13,12 @@ import {
 
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Button } from '@/shared/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -188,6 +195,18 @@ export const WebCanvasFeature: React.FC = () => {
 
   const statusText = t(`workspace.canvas.webCanvas.types.${canvasType}`);
   const manifestText = t(`workspace.canvas.webCanvas.manifest.${manifestStatus}`);
+  const showStatusNotice = (
+    !isLoading
+    && healthStatus !== 'checking'
+    && healthStatus !== 'starting'
+    && healthStatus !== 'unhealthy'
+    && (canvasType === 'default' || manifestStatus === 'missing' || manifestStatus === 'invalid')
+  );
+  const statusNoticeDescriptionKey = manifestStatus === 'invalid'
+    ? 'workspace.canvas.webCanvas.statusNotice.invalidManifestDescription'
+    : manifestStatus === 'missing'
+      ? 'workspace.canvas.webCanvas.statusNotice.missingManifestDescription'
+      : 'workspace.canvas.webCanvas.statusNotice.defaultDescription';
 
   return (
     <div className={cn('flex h-full flex-col bg-background', isFullscreen && 'fixed inset-0 z-50 bg-background')}>
@@ -195,13 +214,7 @@ export const WebCanvasFeature: React.FC = () => {
         title={t('workspace.canvas.webCanvas.title')}
         icon={Monitor}
         info={
-          <div className="flex min-w-0 flex-1 items-center gap-2" ref={dropdownRef}>
-            <span className="shrink-0 rounded border px-2 py-1 text-xs text-muted-foreground">
-              {statusText}
-            </span>
-            <span className="shrink-0 rounded border px-2 py-1 text-xs text-muted-foreground">
-              {manifestText}
-            </span>
+          <div className="flex min-w-0 flex-1 items-center gap-2 pr-2" ref={dropdownRef}>
             <div className="relative min-w-[180px] flex-1">
               <Input
                 value={selectedPath}
@@ -246,26 +259,6 @@ export const WebCanvasFeature: React.FC = () => {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => handleAction('sync')}
-              disabled={isWorking}
-              title={t('workspace.canvas.webCanvas.actions.sync.label')}
-            >
-              <RefreshCw className={cn('h-3.5 w-3.5', isWorking && 'animate-spin')} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => handleAction('reset')}
-              disabled={isWorking}
-              title={t('workspace.canvas.webCanvas.actions.reset.label')}
-            >
-              <SendToBack className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
               onClick={reloadIframe}
               title={t('workspace.canvas.header.actions.refresh')}
             >
@@ -284,6 +277,39 @@ export const WebCanvasFeature: React.FC = () => {
             >
               {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  title={t('workspace.canvas.header.actions.menu')}
+                  aria-label={t('workspace.canvas.header.actions.menu')}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={isWorking}
+                  onSelect={() => {
+                    void handleAction('sync');
+                  }}
+                >
+                  <RefreshCw className={cn('mr-2 h-3.5 w-3.5', isWorking && 'animate-spin')} />
+                  {t('workspace.canvas.webCanvas.actions.sync.label')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={isWorking}
+                  onSelect={() => {
+                    void handleAction('reset');
+                  }}
+                >
+                  <SendToBack className="mr-2 h-3.5 w-3.5" />
+                  {t('workspace.canvas.webCanvas.actions.reset.label')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
@@ -309,6 +335,31 @@ export const WebCanvasFeature: React.FC = () => {
               <div className="text-lg font-semibold">{t('workspace.canvas.webCanvas.error.title')}</div>
               <div className="text-sm text-muted-foreground">
                 {healthMessage || t('workspace.canvas.webCanvas.error.defaultMessage')}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showStatusNotice && (
+          <div
+            className="pointer-events-none absolute left-4 top-4 z-[5] max-w-md rounded-md border bg-background/95 p-3 text-sm shadow-sm backdrop-blur"
+            role="status"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 space-y-1">
+                <div className="font-medium text-foreground">
+                  {t('workspace.canvas.webCanvas.statusNotice.title')}
+                </div>
+                <div className="text-muted-foreground">
+                  {t(statusNoticeDescriptionKey)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {t('workspace.canvas.webCanvas.statusNotice.details', {
+                    type: statusText,
+                    manifest: manifestText,
+                  })}
+                </div>
               </div>
             </div>
           </div>

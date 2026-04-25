@@ -34,6 +34,13 @@ const canvas = {
       title: 'Canvas unavailable',
       defaultMessage: 'Canvas is not ready. Sync or reset the Canvas and try again.',
     },
+    statusNotice: {
+      title: 'Canvas status',
+      defaultDescription: 'No directly renderable Web Canvas content has been detected yet.',
+      missingManifestDescription: 'No Canvas route manifest was found, so Canvas is shown in its default state.',
+      invalidManifestDescription: 'The Canvas route manifest has an issue. Fix it and sync Canvas again.',
+      details: 'Type: {{type}} · Manifest: {{manifest}}',
+    },
     actions: {
       missingWorkspace: 'Workspace information is incomplete.',
       unknownError: 'The Canvas action failed.',

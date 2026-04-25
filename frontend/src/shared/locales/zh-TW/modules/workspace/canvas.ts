@@ -34,6 +34,13 @@ const canvas = {
       title: 'Canvas 無法使用',
       defaultMessage: 'Canvas 尚未就緒，請同步或重置 Canvas 後再試。',
     },
+    statusNotice: {
+      title: 'Canvas 狀態提示',
+      defaultDescription: '目前尚未偵測到可直接呈現的 Web Canvas 內容。',
+      missingManifestDescription: '目前沒有找到 Canvas route manifest，Canvas 會以預設狀態顯示。',
+      invalidManifestDescription: 'Canvas route manifest 格式有問題，請修正後重新同步 Canvas。',
+      details: '類型：{{type}} · Manifest：{{manifest}}',
+    },
     actions: {
       missingWorkspace: '工作區資訊不完整。',
       unknownError: 'Canvas 操作失敗。',
