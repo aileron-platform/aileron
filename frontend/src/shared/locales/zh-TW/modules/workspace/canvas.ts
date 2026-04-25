@@ -87,6 +87,8 @@ const canvas = {
       cannotConnect: '無法連接到瀏覽器 Canvas，請確認 Chrome 容器正在運行',
       securityFailure: 'VNC 安全驗證失敗',
       noWorkspace: '找不到工作區資訊',
+      nekoConnectionFailed: 'Neko 連線失敗',
+      nekoWebsocketFailed: 'Neko WebSocket 連線失敗',
     },
   },
   usage: {

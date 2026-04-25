@@ -87,6 +87,8 @@ const canvas = {
       cannotConnect: 'Cannot connect to browser canvas, please check if Chrome container is running',
       securityFailure: 'VNC security verification failed',
       noWorkspace: 'Workspace information not found',
+      nekoConnectionFailed: 'Neko connection failed',
+      nekoWebsocketFailed: 'Neko WebSocket connection failed',
     },
   },
   usage: {

@@ -25,6 +25,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/features/workspace/features/canvas/lib/
+!frontend/src/features/workspace/features/canvas/lib/*.ts
 lib64/
 parts/
 sdist/

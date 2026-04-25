@@ -197,7 +197,7 @@ export const BrowserFeature: React.FC = () => {
               <div className="text-lg font-semibold">
                 {t('workspace.canvas.browser.error.connectionFailed')}
               </div>
-              <div className="text-sm text-muted-foreground">{streamError}</div>
+              <div className="text-sm text-muted-foreground">{t(streamError)}</div>
               <Button onClick={reconnect}>
                 <RotateCw className="h-4 w-4 mr-2" />
                 {t('workspace.canvas.browser.actions.retry')}
