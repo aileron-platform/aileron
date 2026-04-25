@@ -26,6 +26,19 @@ vi.mock('../../../providers/WorkspaceProvider', () => ({
 }));
 
 vi.mock('@/shared/api/apiClient', () => ({
+  ApiError: class ApiError extends Error {
+    readonly status: number;
+    readonly errorCode?: string;
+    readonly reason?: string;
+
+    constructor(message: string, status: number, errorCode?: string, reason?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.errorCode = errorCode;
+      this.reason = reason;
+    }
+  },
   ApiClient: vi.fn().mockImplementation(() => ({
     getBlob: vi.fn(async () => new Blob(['image'], { type: 'image/png' })),
     get: vi.fn(async () => ({ url: 'about:blank' })),

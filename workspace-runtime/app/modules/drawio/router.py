@@ -10,13 +10,36 @@ import logging
 
 from app.modules.file_system.service import FileService
 from app.modules.file_system.dependencies import get_file_service_sync
+from app.modules.file_system.exceptions import FileManagementException, FileNotFoundException
 from app.services.i18n_service import I18nService, get_i18n_service
 from app.config.settings import get_settings
+from app.modules.drawio.availability import get_drawio_availability
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(prefix="/drawio", tags=["Draw.io 整合"])
+
+
+def _translate(i18n: I18nService, key: str, **kwargs) -> str:
+    return i18n.translate(key, **kwargs)
+
+
+def _unavailable_detail(availability, translate: I18nService) -> dict:
+    return {
+        "code": "DRAWIO_UNAVAILABLE",
+        "reason": availability.reason,
+        "message": _translate(translate, "drawio.errors.service_unavailable"),
+    }
+
+
+async def _ensure_drawio_available(translate: I18nService) -> None:
+    availability = await get_drawio_availability(settings)
+    if not availability.available:
+        raise HTTPException(
+            status_code=503,
+            detail=_unavailable_detail(availability, translate),
+        )
 
 
 @router.get("/viewer")
@@ -41,15 +64,16 @@ async def get_drawio_viewer_url(
     """
     try:
         logger.info(f"Generating Draw.io URL for file: {file_path}, mode: {mode}")
+        await _ensure_drawio_available(translate)
 
         # 讀取檔案內容
-        file_response = file_service.read_file(file_path)
-        content = file_response.content
+        file_result = file_service.read_file(file_path)
+        content = file_result["content"]
         
         if not content or not content.strip():
             raise HTTPException(
                 status_code=400,
-                detail=translate("drawio.errors.empty_file")
+                detail=_translate(translate, "drawio.errors.empty_file")
             )
         
         # Draw.io 服務的外部 URL (瀏覽器可訪問)
@@ -95,17 +119,25 @@ async def get_drawio_viewer_url(
             "file_path": file_path
         })
         
-    except FileNotFoundError:
+    except HTTPException:
+        raise
+    except FileNotFoundException as e:
         logger.error(f"File not found: {file_path}")
         raise HTTPException(
             status_code=404,
-            detail=translate("drawio.errors.file_not_found", file_path=file_path)
+            detail=e.to_dict()
+        )
+    except FileManagementException as e:
+        logger.error(f"File management error generating Draw.io URL: {str(e)}")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.to_dict()
         )
     except Exception as e:
         logger.error(f"Error generating Draw.io URL: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=translate("drawio.errors.url_generation_failed", error=str(e))
+            detail=_translate(translate, "drawio.errors.url_generation_failed", error=str(e))
         )
 
 
@@ -131,12 +163,13 @@ async def save_drawio_file(
     """
     try:
         logger.info(f"Saving Draw.io file: {file_path}")
+        await _ensure_drawio_available(translate)
 
         # 驗證內容不為空
         if not content or not content.strip():
             raise HTTPException(
                 status_code=400,
-                detail=translate("drawio.errors.empty_content")
+                detail=_translate(translate, "drawio.errors.empty_content")
             )
 
         # 驗證是否為有效的 XML
@@ -145,7 +178,7 @@ async def save_drawio_file(
             logger.warning(f"Invalid Draw.io XML format for {file_path}")
             raise HTTPException(
                 status_code=400,
-                detail=translate("drawio.errors.invalid_xml")
+                detail=_translate(translate, "drawio.errors.invalid_xml")
             )
 
         # 保存檔案
@@ -155,16 +188,32 @@ async def save_drawio_file(
         
         return JSONResponse(content={
             "success": True,
-            "message": translate("drawio.save_success"),
+            "message": _translate(translate, "drawio.save_success"),
             "file_path": file_path
         })
         
     except HTTPException:
         raise
+    except FileManagementException as e:
+        logger.error(f"File management error saving Draw.io file: {str(e)}")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.to_dict()
+        )
     except Exception as e:
         logger.error(f"Error saving Draw.io file: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=translate("drawio.errors.save_failed", error=str(e))
+            detail=_translate(translate, "drawio.errors.save_failed", error=str(e))
         )
 
+
+@router.get("/availability")
+async def get_drawio_availability_endpoint():
+    """取得 Draw.io 整合可用性。"""
+    availability = await get_drawio_availability(settings)
+    return JSONResponse(content={
+        "available": availability.available,
+        "reason": availability.reason,
+        "checked_at": availability.checked_at.isoformat(),
+    })

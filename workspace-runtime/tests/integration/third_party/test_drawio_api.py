@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+import pytest
+
+from app.modules.drawio.availability import DrawioAvailability
 from app.modules.drawio.router import get_file_service_sync, get_i18n_service
+from app.modules.file_system.exceptions import FileNotFoundException, FileTooLargeException, InvalidPathException
 
 from .helpers import override_dependency
 
@@ -14,19 +20,19 @@ class DrawioFileServiceStub:
         self.content = content
         self.saved_request = None
         self.raise_missing = False
+        self.read_error = None
+        self.write_error = None
 
     def read_file(self, path: str, scope: str = None):  # pragma: no cover - 測試 stub
+        if self.read_error:
+            raise self.read_error
         if self.raise_missing:
-            raise FileNotFoundError(path)
-        # 返回一個具有 content 屬性的對象
-        class FileResponse:
-            def __init__(self, content, path, scope):
-                self.content = content
-                self.path = path
-                self.scope = scope
-        return FileResponse(self.content, path, scope)
+            raise FileNotFoundException(path)
+        return {"content": self.content, "path": path, "scope": scope}
 
     def write_file(self, request, scope: str = None, expected_version_id: str = None):  # pragma: no cover - 測試 stub
+        if self.write_error:
+            raise self.write_error
         # 處理 SaveFileRequest 或直接參數
         if hasattr(request, 'path') and hasattr(request, 'content'):
             path = request.path
@@ -67,6 +73,14 @@ class MockI18nService:
 _translation_service = MockI18nService()
 
 
+@pytest.fixture(autouse=True)
+def drawio_available(monkeypatch):
+    async def _available(settings, *, force_refresh=False):
+        return DrawioAvailability(True, None, datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _available)
+
+
 def test_drawio_viewer_generates_url(client):
     service = DrawioFileServiceStub(content="<mxfile>demo</mxfile>")
 
@@ -79,6 +93,7 @@ def test_drawio_viewer_generates_url(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["mode"] == "edit"
+    assert payload["file_path"] == "diagram.drawio"
     assert "draw" in payload["url"]  # URL contains draw (diagrams.net)
 
 
@@ -91,8 +106,7 @@ def test_drawio_viewer_empty_file_returns_error(client):
             params={"file_path": "diagram.drawio"},
         )
 
-    # 空檔案錯誤會被全域 exception middleware 轉換為 500 錯誤
-    assert response.status_code == 500
+    assert response.status_code == 400
     # 確認錯誤訊息與空檔案相關
     error_detail = response.json()["detail"]
     assert "empty_file" in error_detail
@@ -111,7 +125,64 @@ def test_drawio_viewer_file_not_found(client):
 
     assert response.status_code == 404
     error_detail = response.json()["detail"]
-    assert "file_not_found" in error_detail
+    assert error_detail["code"] == "FILE_NOT_FOUND"
+
+
+def test_drawio_viewer_invalid_path_returns_400(client):
+    """測試 viewer 非法路徑回 400 而不是 500"""
+    service = DrawioFileServiceStub()
+    service.read_error = InvalidPathException("../diagram.drawio", "path traversal")
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.get(
+            "/api/v1/drawio/viewer",
+            params={"file_path": "../diagram.drawio"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_PATH"
+
+
+def test_drawio_viewer_unavailable_returns_503(client, monkeypatch):
+    """測試 viewer 在 Draw.io 停用時回結構化 503"""
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(False, "DISABLED", datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+    service = DrawioFileServiceStub()
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.get(
+            "/api/v1/drawio/viewer",
+            params={"file_path": "diagram.drawio"},
+        )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "DRAWIO_UNAVAILABLE"
+    assert detail["reason"] == "DISABLED"
+
+
+def test_drawio_viewer_unreachable_returns_503(client, monkeypatch):
+    """測試 viewer 在 Draw.io container 不可達時回結構化 503"""
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(False, "UNREACHABLE", datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+    service = DrawioFileServiceStub()
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.get(
+            "/api/v1/drawio/viewer",
+            params={"file_path": "diagram.drawio"},
+        )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "DRAWIO_UNAVAILABLE"
+    assert detail["reason"] == "UNREACHABLE"
 
 
 def test_drawio_save_success(client):
@@ -166,3 +237,108 @@ def test_drawio_save_invalid_xml_error(client):
     assert response.status_code == 400
     error_detail = response.json()["detail"]
     assert "invalid_xml" in error_detail
+
+
+def test_drawio_save_invalid_path_returns_400(client):
+    """測試 save 非法路徑回 400 而不是 500"""
+    service = DrawioFileServiceStub()
+    service.write_error = InvalidPathException("../diagram.drawio", "path traversal")
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.post(
+            "/api/v1/drawio/save",
+            params={"file_path": "../diagram.drawio"},
+            json={"content": "<mxfile><diagram /></mxfile>"}
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "INVALID_PATH"
+
+
+def test_drawio_save_file_too_large_returns_413(client):
+    """測試 save 超大檔回 413 而不是 500"""
+    service = DrawioFileServiceStub()
+    service.write_error = FileTooLargeException("diagram.drawio", 10, 1)
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.post(
+            "/api/v1/drawio/save",
+            params={"file_path": "diagram.drawio"},
+            json={"content": "<mxfile><diagram /></mxfile>"}
+        )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["code"] == "FILE_TOO_LARGE"
+
+
+def test_drawio_save_unavailable_returns_503_without_write(client, monkeypatch):
+    """測試 save 在 Draw.io 不可用時不進入寫檔"""
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(False, "UNREACHABLE", datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+    service = DrawioFileServiceStub()
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.post(
+            "/api/v1/drawio/save",
+            params={"file_path": "diagram.drawio"},
+            json={"content": "<mxfile><diagram /></mxfile>"}
+        )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "DRAWIO_UNAVAILABLE"
+    assert detail["reason"] == "UNREACHABLE"
+    assert service.saved_request is None
+
+
+def test_drawio_save_disabled_returns_503_without_write(client, monkeypatch):
+    """測試 save 在 Draw.io 停用時不進入寫檔"""
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(False, "DISABLED", datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+    service = DrawioFileServiceStub()
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.post(
+            "/api/v1/drawio/save",
+            params={"file_path": "diagram.drawio"},
+            json={"content": "<mxfile><diagram /></mxfile>"}
+        )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["code"] == "DRAWIO_UNAVAILABLE"
+    assert detail["reason"] == "DISABLED"
+    assert service.saved_request is None
+
+
+@pytest.mark.parametrize(
+    ("available", "reason"),
+    [
+        (True, None),
+        (False, "DISABLED"),
+        (False, "UNREACHABLE"),
+    ],
+)
+def test_drawio_availability_endpoint_returns_state(client, monkeypatch, available, reason):
+    """測試 availability endpoint 回傳 helper 狀態"""
+
+    checked_at = datetime.now(timezone.utc)
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(available, reason, checked_at)
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+
+    response = client.get("/api/v1/drawio/availability")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["available"] is available
+    assert payload["reason"] == reason
+    assert payload["checked_at"] == checked_at.isoformat()

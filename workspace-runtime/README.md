@@ -40,6 +40,15 @@ Workspace Runtime runs inside each workspace and provides agent execution, files
 - dev server startup
 - debugging support
 
+### Draw.io Integration
+
+Draw.io is optional. `DRAWIO_ENABLED` defaults to `true` to preserve existing
+deployments; set it to `false` when a workspace does not run the Draw.io
+container. `DRAWIO_EXTERNAL_URL` is the browser-facing URL, while
+`DRAWIO_INTERNAL_URL` is used by runtime health checks. Tune
+`DRAWIO_HEALTHCHECK_TIMEOUT_SECONDS` and `DRAWIO_HEALTHCHECK_TTL_SECONDS` to
+control the health check timeout and cache duration.
+
 ## Stack
 
 - FastAPI

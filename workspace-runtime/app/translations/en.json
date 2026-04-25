@@ -42,6 +42,7 @@
   "drawio.errors.empty_file": "File content is empty",
   "drawio.errors.file_not_found": "File not found: {file_path}",
   "drawio.errors.url_generation_failed": "Failed to generate Draw.io URL: {error}",
+  "drawio.errors.service_unavailable": "Draw.io preview service is not enabled or cannot be reached.",
   "drawio.errors.empty_content": "Diagram content cannot be empty",
   "drawio.errors.invalid_xml": "Invalid Draw.io XML format",
   "drawio.errors.save_failed": "Failed to save Draw.io file: {error}",

@@ -42,6 +42,7 @@
   "drawio.errors.empty_file": "檔案內容為空",
   "drawio.errors.file_not_found": "找不到檔案：{file_path}",
   "drawio.errors.url_generation_failed": "生成 Draw.io URL 失敗：{error}",
+  "drawio.errors.service_unavailable": "Draw.io 預覽服務目前未啟用或無法連線。",
   "drawio.errors.empty_content": "圖表內容不能為空",
   "drawio.errors.invalid_xml": "無效的 Draw.io XML 格式",
   "drawio.errors.save_failed": "保存 Draw.io 檔案失敗：{error}",

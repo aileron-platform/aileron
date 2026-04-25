@@ -297,6 +297,13 @@ const fileManagement = {
       title: 'Diagram Loading Error',
       description: 'Unable to load Draw.io diagram. Please check the file format.',
     },
+    serviceUnavailable: {
+      title: 'Draw.io preview unavailable',
+      description: 'The file is shown as read-only XML because the Draw.io preview service is not available.',
+      disabled: 'The Draw.io preview service is not enabled in this workspace. The file is shown as read-only XML.',
+      unreachable: 'The Draw.io preview service cannot be reached right now. The file is shown as read-only XML.',
+      retry: 'Retry',
+    },
   },
 };
 

@@ -68,7 +68,7 @@ const formatValidationPath = (loc: unknown): string => {
   return path || 'request';
 };
 
-const extractErrorMessage = (errorData: any, status: number): { message: string; code?: string } => {
+const extractErrorMessage = (errorData: any, status: number): { message: string; code?: string; reason?: string } => {
   if (Array.isArray(errorData?.detail)) {
     const firstIssue = errorData.detail[0];
     if (firstIssue?.msg) {
@@ -87,6 +87,7 @@ const extractErrorMessage = (errorData: any, status: number): { message: string;
     return {
       message: errorData.detail.message || errorData.detail.error || `HTTP ${status}`,
       code: errorData.detail.errorCode ?? errorData.detail.error_code ?? errorData.detail.code,
+      reason: errorData.detail.reason,
     };
   }
 
@@ -105,12 +106,14 @@ const extractErrorMessage = (errorData: any, status: number): { message: string;
 class ApiError extends Error {
   readonly status: number;
   readonly errorCode?: string;
+  readonly reason?: string;
 
-  constructor(message: string, status: number, errorCode?: string) {
+  constructor(message: string, status: number, errorCode?: string, reason?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.errorCode = errorCode;
+    this.reason = reason;
   }
 }
 
@@ -232,12 +235,14 @@ class ApiClient {
     if (!response.ok) {
       let errorMessage: string;
       let errorCode: string | undefined;
+      let errorReason: string | undefined;
 
       try {
         const errorData = await response.json();
         const extracted = extractErrorMessage(errorData, response.status);
         errorMessage = extracted.message;
         errorCode = extracted.code;
+        errorReason = extracted.reason;
       } catch {
         errorMessage = response.statusText || `HTTP ${response.status}`;
       }
@@ -254,7 +259,7 @@ class ApiClient {
         logger.info(`401 Error: ${errorMessage}`, { errorCode });
       }
 
-      throw new ApiError(errorMessage, response.status, errorCode);
+      throw new ApiError(errorMessage, response.status, errorCode, errorReason);
     }
 
     if (response.status === 204) {

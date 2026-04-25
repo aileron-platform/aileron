@@ -8,7 +8,7 @@ import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('DrawioViewer');
 import { AlertCircle, Loader2, Download, Image as ImageIcon } from 'lucide-react';
-import { ApiClient } from '@/shared/api/apiClient';
+import { ApiClient, ApiError } from '@/shared/api/apiClient';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
@@ -33,6 +33,14 @@ interface DrawioMessage {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
+type DrawioFallbackReason = 'DISABLED' | 'UNREACHABLE' | null;
+
+const isDrawioUnavailable = (error: unknown): error is ApiError => {
+  return error instanceof ApiError
+    && error.status === 503
+    && error.errorCode === 'DRAWIO_UNAVAILABLE';
+};
+
 export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   content,
   filePath,
@@ -49,6 +57,8 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   const [drawioUrl, setDrawioUrl] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [fallbackReason, setFallbackReason] = useState<DrawioFallbackReason | undefined>(undefined);
+  const [reloadToken, setReloadToken] = useState(0);
 
   // 獲取 Draw.io URL（帶重試機制）
   useEffect(() => {
@@ -59,6 +69,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
 
       setIsLoading(true);
       setError('');
+      setFallbackReason(undefined);
 
       try {
         const client = new ApiClient({ baseUrl: runtimeBaseUrl });
@@ -69,6 +80,16 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
         setRetryCount(0); // 成功後重置重試計數
       } catch (err) {
         logger.error('Failed to load Draw.io URL', { error: err });
+        if (isDrawioUnavailable(err)) {
+          const reason = err.reason === 'DISABLED' || err.reason === 'UNREACHABLE'
+            ? err.reason
+            : null;
+          setFallbackReason(reason);
+          setDrawioUrl('');
+          setRetryCount(0);
+          return;
+        }
+
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
 
         // 如果還有重試次數，則自動重試
@@ -86,7 +107,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
     };
 
     fetchDrawioUrl();
-  }, [runtimeBaseUrl, filePath, content, retryCount]);
+  }, [runtimeBaseUrl, filePath, content, retryCount, reloadToken]);
 
   // 處理來自 Draw.io 的訊息
   const handleMessage = useCallback((evt: MessageEvent) => {
@@ -160,6 +181,13 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
       }
     } catch (err) {
       logger.error('Failed to save Draw.io file', { error: err });
+      if (isDrawioUnavailable(err)) {
+        const reason = err.reason === 'DISABLED' || err.reason === 'UNREACHABLE'
+          ? err.reason
+          : null;
+        setFallbackReason(reason);
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setIsSaving(false);
@@ -191,6 +219,12 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
       <Download className="h-4 w-4" />
     </Button>
   );
+
+  const fallbackDescriptionKey = fallbackReason === 'DISABLED'
+    ? 'workspace.fileManagement.drawio.serviceUnavailable.disabled'
+    : fallbackReason === 'UNREACHABLE'
+      ? 'workspace.fileManagement.drawio.serviceUnavailable.unreachable'
+      : 'workspace.fileManagement.drawio.serviceUnavailable.description';
 
   return (
     <div
@@ -225,7 +259,39 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
 
       {/* 內容區域 */}
       <div className="flex-1 relative overflow-hidden">
-        {error && (
+        {fallbackReason !== undefined ? (
+          <div className="flex h-full flex-col overflow-hidden bg-background">
+            <div className="border-b border-border bg-muted/40 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 gap-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium">
+                      {t('workspace.fileManagement.drawio.serviceUnavailable.title')}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {t(fallbackDescriptionKey)}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFallbackReason(undefined);
+                    setRetryCount(0);
+                    setReloadToken(prev => prev + 1);
+                  }}
+                >
+                  {t('workspace.fileManagement.drawio.serviceUnavailable.retry')}
+                </Button>
+              </div>
+            </div>
+            <pre className="m-0 flex-1 overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-foreground">
+              {content}
+            </pre>
+          </div>
+        ) : error && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/95 z-10">
             <div className="flex flex-col items-center gap-4 p-6 max-w-md text-center">
               <AlertCircle className="w-12 h-12 text-destructive" />
@@ -239,7 +305,9 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
                 variant="outline"
                 onClick={() => {
                   setError('');
+                  setDrawioUrl('');
                   setRetryCount(0); // 重置重試計數以觸發重新載入
+                  setReloadToken(prev => prev + 1);
                 }}
               >
                 {t('workspace.fileManagement.drawio.retry')}
@@ -253,7 +321,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
           </div>
         )}
 
-        {isLoading ? (
+        {fallbackReason !== undefined ? null : isLoading ? (
           <div className="flex items-center justify-center h-full">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />

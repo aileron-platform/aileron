@@ -138,6 +138,10 @@ class Settings(BaseSettings):
     PYTHON_VERSION: Optional[str] = Field(default=None, description="Python 版本")
 
     # === Draw.io 整合設定 ===
+    DRAWIO_ENABLED: bool = Field(
+        default=True,
+        description="Draw.io 容器整合是否啟用（預設啟用以維持既有部署相容）"
+    )
     DRAWIO_EXTERNAL_URL: str = Field(
         default="http://localhost:8083/draw",
         description="Draw.io 外部訪問 URL（瀏覽器可訪問）"
@@ -145,6 +149,14 @@ class Settings(BaseSettings):
     DRAWIO_INTERNAL_URL: str = Field(
         default="http://drawio:8080",
         description="Draw.io 內部訪問 URL（容器內部訪問）"
+    )
+    DRAWIO_HEALTHCHECK_TIMEOUT_SECONDS: float = Field(
+        default=1.5,
+        description="Draw.io 內部健康檢查逾時秒數"
+    )
+    DRAWIO_HEALTHCHECK_TTL_SECONDS: int = Field(
+        default=30,
+        description="Draw.io 健康檢查結果快取秒數"
     )
 
     @field_validator("ALLOWED_ORIGINS", mode="before")

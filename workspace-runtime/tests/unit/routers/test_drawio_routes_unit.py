@@ -7,7 +7,9 @@ from unittest.mock import Mock
 import pytest
 from fastapi import HTTPException
 
+from app.modules.drawio.availability import DrawioAvailability
 from app.modules.drawio.router import get_drawio_viewer_url, save_drawio_file
+from app.modules.file_system.exceptions import FileNotFoundException
 
 
 class MockFileService:
@@ -18,18 +20,27 @@ class MockFileService:
 
     def read_file(self, path: str, scope=None):
         if self.raise_error:
-            raise FileNotFoundError(path)
+            raise FileNotFoundException(path)
 
-        class FileResponse:
-            def __init__(self, content):
-                self.content = content
-
-        return FileResponse(self.content)
+        return {"content": self.content}
 
 
 class MockI18nService:
     def __call__(self, key: str, **kwargs):
         return f"{key}:{kwargs}" if kwargs else key
+
+    def translate(self, key: str, **kwargs):
+        return self(key, **kwargs)
+
+
+@pytest.fixture(autouse=True)
+def drawio_available(monkeypatch):
+    from datetime import datetime, timezone
+
+    async def _available(settings, *, force_refresh=False):
+        return DrawioAvailability(True, None, datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _available)
 
 
 @pytest.mark.asyncio
@@ -86,3 +97,25 @@ async def test_save_drawio_file_rejects_invalid_xml():
         )
 
     assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_get_drawio_viewer_url_raises_503_when_unavailable(monkeypatch):
+    from datetime import datetime, timezone
+
+    async def _unavailable(settings, *, force_refresh=False):
+        return DrawioAvailability(False, "DISABLED", datetime.now(timezone.utc))
+
+    monkeypatch.setattr("app.modules.drawio.router.get_drawio_availability", _unavailable)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_drawio_viewer_url(
+            file_path="test.drawio",
+            mode="view",
+            file_service=MockFileService(),
+            translate=MockI18nService(),
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["code"] == "DRAWIO_UNAVAILABLE"
+    assert exc_info.value.detail["reason"] == "DISABLED"
