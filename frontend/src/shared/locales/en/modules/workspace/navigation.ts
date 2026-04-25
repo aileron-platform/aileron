@@ -6,7 +6,7 @@ const navigation = {
       workspaceSettings: 'Workspace Settings',
       containerManagement: 'Container Management',
       automation: 'Automation',
-      canvas: 'Canvas',
+      canvas: 'Preview',
       claudeCodeSettings: 'Claude Code Settings',
       geminiSettings: 'Gemini Settings',
       opencodeSettings: 'OpenCode Settings',
@@ -48,12 +48,12 @@ const navigation = {
         settings: 'Basic Settings',
       },
       preview: {
-        sessionResult: 'Session Result',
-        webCanvas: 'Web Canvas',
+        sessionResult: 'Conversation Result',
+        webCanvas: 'Live Preview',
       },
       canvas: {
-        sessionResult: 'Session Result',
-        webCanvas: 'Web Canvas',
+        sessionResult: 'Conversation Result',
+        webCanvas: 'Live Preview',
       },
   },
 };

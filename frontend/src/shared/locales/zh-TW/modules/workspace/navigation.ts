@@ -6,7 +6,7 @@ const navigation = {
     workspaceSettings: '工作區設定',
     containerManagement: '容器管理',
     automation: '自動化任務',
-    canvas: 'Canvas',
+    canvas: '預覽畫面',
     claudeCodeSettings: 'Claude Code 設定',
     geminiSettings: 'Gemini 設定',
     opencodeSettings: 'OpenCode 設定',
@@ -49,11 +49,11 @@ const navigation = {
     },
     preview: {
       sessionResult: '對話結果',
-      webCanvas: 'Web Canvas',
+      webCanvas: '預覽畫面',
     },
     canvas: {
       sessionResult: '對話結果',
-      webCanvas: 'Web Canvas',
+      webCanvas: '預覽畫面',
     },
   },
 };
