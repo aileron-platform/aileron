@@ -37,7 +37,6 @@ def _create_owner_and_workspace(session_factory) -> tuple[str, str]:
             terminal_external_port=31004,
             browser_webrtc_external_port=36080,
             browser_cdp_external_port=39223,
-            canvas_external_port=33003,
             canvas_api_external_port=33013,
             env_vars=[],
             port_mappings=[],
