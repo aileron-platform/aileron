@@ -67,19 +67,19 @@ def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp
     repo_root = tmp_path
     (repo_root / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
 
-    def fake_run_command(
+    def fake_stream_command(
         args: list[str],
         *,
         cwd: Path | None = None,
         check: bool = True,
-        capture_output: bool = True,
         env: dict[str, str] | None = None,
+        action: str,
     ) -> subprocess.CompletedProcess[str]:
         commands.append(args)
         envs.append(env or {})
         return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(ops, "run_command", fake_run_command)
+    monkeypatch.setattr(ops, "stream_command", fake_stream_command)
     monkeypatch.setattr(ops, "ensure_host_storage_directories", lambda *_args, **_kwargs: None)
 
     ops.compose_up(repo_root, build=True, detach=True, env={"TEST_ENV": "1"})
