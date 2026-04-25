@@ -242,29 +242,7 @@ fi
 echo ""
 
 # ============================================================================
-# 9. 安裝工作區依賴
-# ============================================================================
-echo "📦 檢查並安裝工作區依賴..."
-if [ -d "/workspace" ] && [ -n "$(ls -A /workspace)" ]; then
-    cd /workspace
-    if [ -f "package.json" ]; then
-        echo "📦 發現 package.json，安裝 Node.js 依賴..."
-        npm install --legacy-peer-deps 2>/dev/null || npm install
-    fi
-    if [ -f "requirements.txt" ]; then
-        echo "📦 發現 requirements.txt，安裝 Python 依賴..."
-        /workspace-runtime/.venv/bin/pip install -r requirements.txt 2>/dev/null || true
-    fi
-    if [ -f "pyproject.toml" ]; then
-        echo "📦 發現 pyproject.toml，安裝 Python 依賴..."
-        /workspace-runtime/.venv/bin/pip install -e . 2>/dev/null || true
-    fi
-fi
-echo "✅ 工作區依賴檢查完成"
-echo ""
-
-# ============================================================================
-# 10. 設定 SSH 密鑰
+# 9. 設定 SSH 密鑰
 # ============================================================================
 if [ -n "${SSH_PUBLIC_KEY:-}" ] && [ -n "${SSH_PRIVATE_KEY:-}" ]; then
     echo "🔑 設定 SSH 訪問..."
@@ -283,7 +261,7 @@ fi
 echo ""
 
 # ============================================================================
-# 11. 設定日誌目錄
+# 10. 設定日誌目錄
 # ============================================================================
 echo "📋 設定日誌目錄..."
 mkdir -p /var/log/supervisor
@@ -292,7 +270,7 @@ echo "✅ 日誌目錄設定完成"
 echo ""
 
 # ============================================================================
-# 12. 建立 Terminal Service 快取目錄
+# 11. 建立 Terminal Service 快取目錄
 # ============================================================================
 echo "🔧 準備 Terminal Service 快取目錄..."
 mkdir -p "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}"
@@ -301,7 +279,7 @@ echo "✅ Terminal Service 將由 supervisord 啟動時自行解析 binary"
 echo ""
 
 # ============================================================================
-# 13. 啟動 Supervisor
+# 12. 啟動 Supervisor
 # ============================================================================
 echo "🎯 啟動服務管理器..."
 

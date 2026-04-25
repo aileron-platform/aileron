@@ -100,6 +100,11 @@ ENV MANAGER_URL=http://workspace-manager:8000
 CMD ["/app/scripts/start.sh"]
 ```
 
+Workspace runtime startup does not install project dependencies from `/workspace`.
+If a project needs dependencies, run the package manager explicitly after the
+workspace is available. Web Canvas dependencies are handled by the separate
+Canvas runtime from its `/web-canvas` snapshot.
+
 ### Local Development
 
 ```bash
