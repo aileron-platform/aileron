@@ -3,6 +3,8 @@
 
 FROM node:20-slim AS base
 
+ENV npm_config_cache=/home/developer/.npm
+
 # 安裝系統依賴
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -21,13 +23,19 @@ RUN usermod -l developer -d /home/developer -m node && \
 # 建立目錄結構
 # /workspace: 共享 volume（原始碼來源，唯讀參考）
 # /web-canvas: 容器內部工作目錄（rsync 原始碼 + 獨立 node_modules/.next）
-RUN mkdir -p /workspace /web-canvas /default-canvas /canvas-management /scripts /var/log/canvas && \
-    chown -R developer:developer /workspace /web-canvas /default-canvas /canvas-management /scripts /var/log/canvas
+RUN mkdir -p /workspace /web-canvas /default-canvas /canvas-management /opt/canvas-nextjs-template /scripts /var/log/canvas && \
+    chown -R developer:developer /workspace /web-canvas /default-canvas /canvas-management /opt/canvas-nextjs-template /scripts /var/log/canvas
 
 # 預裝常用 Next.js 套件到全域 npm cache（加速後續 npm install）
 # 所有 npm 操作統一使用 HOME=/home/developer，確保 cache 在 developer 可存取的路徑
 RUN HOME=/home/developer npm install -g npm@latest && \
     chown -R developer:developer /home/developer
+
+# 複製並安裝標準 Next.js Canvas template 依賴
+COPY --chown=developer:developer nextjs-template/ /opt/canvas-nextjs-template/
+WORKDIR /opt/canvas-nextjs-template
+RUN HOME=/home/developer npm ci && \
+    chown -R developer:developer /opt/canvas-nextjs-template /home/developer
 
 # 複製預設空白應用
 COPY --chown=developer:developer default-canvas/ /default-canvas/

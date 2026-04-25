@@ -22,6 +22,9 @@ const CANVAS_PORT = parseInt(process.env.PORT || "3003", 10);
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "/workspace";
 const WEB_CANVAS_DIR = "/web-canvas";
 const DEFAULT_CANVAS_DIR = "/default-canvas";
+const NEXTJS_TEMPLATE_DIR = process.env.NEXTJS_TEMPLATE_DIR || "/opt/canvas-nextjs-template";
+const NEXTJS_TEMPLATE_NODE_MODULES = path.join(NEXTJS_TEMPLATE_DIR, "node_modules");
+const NPM_CACHE_DIR = process.env.npm_config_cache || process.env.NPM_CONFIG_CACHE || "/home/developer/.npm";
 const LOG_LIMIT = 500;
 
 let rendererProcess = null;
@@ -35,6 +38,7 @@ let manifestStatus = "missing";
 let lastSyncAt = null;
 let lastResetAt = null;
 let lastPackageSignature = null;
+let currentDependencyStrategy = "none";
 const logs = [];
 
 function pushLog(scope, message) {
@@ -78,12 +82,24 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 
-function hasNextjsProject(dir) {
+function readPackageManifest(dir) {
   const pkgPath = path.join(dir, "package.json");
-  if (!fs.existsSync(pkgPath)) return false;
+  if (!fs.existsSync(pkgPath)) return null;
+  return readJson(pkgPath);
+}
+
+function mergedDependencies(pkg) {
+  return {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+}
+
+function hasNextjsProject(dir) {
   try {
-    const pkg = readJson(pkgPath);
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const pkg = readPackageManifest(dir);
+    if (!pkg) return false;
+    const deps = mergedDependencies(pkg);
     return Object.prototype.hasOwnProperty.call(deps, "next");
   } catch {
     return false;
@@ -243,10 +259,11 @@ function syncToCanvas(sourceDir) {
   lastSyncAt = new Date().toISOString();
 }
 
-function packageSignature(dir) {
+function dependencySignature(dir, strategy) {
   const files = ["package.json", "package-lock.json", "npm-shrinkwrap.json"];
   const hash = crypto.createHash("sha256");
   let found = false;
+  hash.update(`strategy:${strategy}`);
   for (const file of files) {
     const filePath = path.join(dir, file);
     if (fs.existsSync(filePath)) {
@@ -256,6 +273,77 @@ function packageSignature(dir) {
     }
   }
   return found ? hash.digest("hex") : null;
+}
+
+function classifyDependencyStrategy(execDir) {
+  let templatePkg;
+  let workspacePkg;
+  try {
+    templatePkg = readPackageManifest(NEXTJS_TEMPLATE_DIR);
+    workspacePkg = readPackageManifest(execDir);
+  } catch (err) {
+    return {
+      strategy: "custom",
+      reason: `package-read-error:${err.message}`,
+      extras: [],
+    };
+  }
+
+  if (!templatePkg || !workspacePkg || !fs.existsSync(NEXTJS_TEMPLATE_NODE_MODULES)) {
+    return {
+      strategy: "custom",
+      reason: "template-or-workspace-missing",
+      extras: [],
+    };
+  }
+
+  const standardDeps = mergedDependencies(templatePkg);
+  const workspaceDeps = mergedDependencies(workspacePkg);
+  const standardNames = Object.keys(standardDeps);
+  const incompatible = standardNames.filter((name) => workspaceDeps[name] !== standardDeps[name]);
+  if (incompatible.length > 0) {
+    return {
+      strategy: "custom",
+      reason: `incompatible:${incompatible.join(",")}`,
+      extras: [],
+    };
+  }
+
+  const extras = Object.keys(workspaceDeps).filter((name) => !Object.prototype.hasOwnProperty.call(standardDeps, name));
+  return {
+    strategy: extras.length === 0 && Object.keys(workspaceDeps).length === standardNames.length ? "standard" : "extended",
+    reason: extras.length === 0 ? "standard-contract" : "standard-plus-extra",
+    extras,
+  };
+}
+
+function removeNodeModules(nodeModulesPath) {
+  if (!fs.existsSync(nodeModulesPath)) return;
+  fs.rmSync(nodeModulesPath, { recursive: true, force: true });
+}
+
+function runNpmInstall(execDir) {
+  statusMessage = "Installing dependencies...";
+  pushLog("management", `Running npm install in ${execDir}`);
+  execSync("npm install", {
+    cwd: execDir,
+    timeout: 180000,
+    stdio: "pipe",
+    uid: 1000,
+    gid: 1000,
+    env: {
+      ...process.env,
+      HOME: "/home/developer",
+      npm_config_cache: NPM_CACHE_DIR,
+    },
+  });
+}
+
+function chownDeveloper(targetPath) {
+  execSync(`chown -R developer:developer "${targetPath}"`, {
+    timeout: 30000,
+    stdio: "pipe",
+  });
 }
 
 function scanNextjsRoutes(dir) {
@@ -399,24 +487,44 @@ async function startHtmlRenderer(detection) {
 
 function ensureDependencies(execDir) {
   const nodeModulesPath = path.join(execDir, "node_modules");
-  const signature = packageSignature(execDir);
-  const needsInstall = !fs.existsSync(nodeModulesPath) || (signature && signature !== lastPackageSignature);
-  if (!needsInstall) return;
+  const classification = execDir === WEB_CANVAS_DIR
+    ? classifyDependencyStrategy(execDir)
+    : { strategy: "custom", reason: "non-web-canvas", extras: [] };
+  const signature = dependencySignature(execDir, classification.strategy);
+  const needsInstall = !fs.existsSync(nodeModulesPath)
+    || !lastPackageSignature
+    || (signature && signature !== lastPackageSignature)
+    || currentDependencyStrategy !== classification.strategy;
+  if (!needsInstall) {
+    pushLog("management", `Dependency strategy ${classification.strategy} unchanged for ${execDir}`);
+    return;
+  }
 
-  statusMessage = "Installing dependencies...";
-  pushLog("management", `Running npm install in ${execDir}`);
-  execSync("npm install", {
-    cwd: execDir,
-    timeout: 180000,
-    stdio: "pipe",
-    uid: 1000,
-    gid: 1000,
-    env: {
-      ...process.env,
-      HOME: "/home/developer",
-      npm_config_cache: "/tmp/.npm-cache",
-    },
-  });
+  pushLog("management", `Dependency strategy for ${execDir}: ${classification.strategy} (${classification.reason})`);
+  currentDependencyStrategy = classification.strategy;
+
+  if (execDir === WEB_CANVAS_DIR && classification.strategy === "standard") {
+    removeNodeModules(nodeModulesPath);
+    fs.symlinkSync(NEXTJS_TEMPLATE_NODE_MODULES, nodeModulesPath, "dir");
+    pushLog("management", `Linked standard dependencies from ${NEXTJS_TEMPLATE_NODE_MODULES}`);
+  } else if (execDir === WEB_CANVAS_DIR && classification.strategy === "extended") {
+    removeNodeModules(nodeModulesPath);
+    statusMessage = "Seeding dependencies...";
+    pushLog("management", `Seeding standard dependencies for extended project; extras=${classification.extras.join(",") || "none"}`);
+    execSync(`cp -a "${NEXTJS_TEMPLATE_NODE_MODULES}" "${nodeModulesPath}"`, {
+      timeout: 120000,
+      stdio: "pipe",
+    });
+    chownDeveloper(nodeModulesPath);
+    runNpmInstall(execDir);
+  } else {
+    const existingNodeModules = fs.existsSync(nodeModulesPath) ? fs.lstatSync(nodeModulesPath) : null;
+    if (existingNodeModules?.isSymbolicLink()) {
+      removeNodeModules(nodeModulesPath);
+    }
+    runNpmInstall(execDir);
+  }
+
   lastPackageSignature = signature;
 }
 
@@ -550,6 +658,7 @@ app.get("/health", async (_req, res) => {
     renderer_running: healthy || processAlive,
     port_available: portAvailable,
     manifest_status: manifestStatus,
+    dependency_strategy: currentDependencyStrategy,
     message: healthy ? "Canvas is running" : statusMessage || "Canvas is not running",
     source: currentSource,
     last_sync_at: lastSyncAt,
@@ -566,6 +675,7 @@ app.get("/status", async (_req, res) => {
     portAvailable: await checkPort(CANVAS_PORT),
     currentSource,
     manifestStatus,
+    dependencyStrategy: currentDependencyStrategy,
     lastSyncAt,
     lastResetAt,
   });
