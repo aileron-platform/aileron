@@ -142,7 +142,7 @@ class TestMessage:
         assert message.content == [{"type": "text", "text": "Hello"}]
         assert message.metadata == {"source": "test"}
 
-    def test_message_get_content_canvas(self) -> None:
+    def test_message_get_content_preview(self) -> None:
         message = Message(
             id="msg-1",
             session_id="session-1",
@@ -150,4 +150,4 @@ class TestMessage:
             content=[{"type": "text", "text": "Hello world"}],
         )
 
-        assert message.get_content_canvas() == "Hello world"
+        assert message.get_content_preview() == "Hello world"

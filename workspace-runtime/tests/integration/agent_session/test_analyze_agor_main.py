@@ -166,7 +166,7 @@ class TestAnalyzeAgorMain:
             "tool_id": "read_001",
             "file_path": "/workspace/README.md",
             "status": "completed",
-            "content_canvas": "agor 是一個全棧AI開發者中樞...",
+            "content_preview": "agor 是一個全棧AI開發者中樞...",
             "key_sections": [
                 "概述",
                 "功能",

@@ -123,7 +123,7 @@ async def test_permission_request_lookup_and_to_entity() -> None:
         role="system",
         index=1,
         timestamp=now,
-        content_canvas="canvas",
+        content_preview="canvas",
         parent_tool_use_id=None,
         status=None,
         queue_position=None,
