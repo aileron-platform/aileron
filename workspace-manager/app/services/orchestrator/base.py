@@ -54,13 +54,13 @@ class ContainerOrchestrator(ABC):
         """創建 Chrome browser 容器（可選實作）"""
         raise NotImplementedError(f"{self.__class__.__name__} does not support Chrome runtime")
 
-    def create_nextjs_runtime(
+    def create_canvas_runtime(
         self,
         workspace: Any,
         context: RuntimeContext
     ) -> RuntimeInfo:
-        """創建 Next.js 預覽容器（可選實作）"""
-        raise NotImplementedError(f"{self.__class__.__name__} does not support Next.js runtime")
+        """創建 Canvas 容器（可選實作）"""
+        raise NotImplementedError(f"{self.__class__.__name__} does not support Canvas runtime")
 
     @abstractmethod
     def delete_workspace_runtime(self, workspace_id: str) -> bool:

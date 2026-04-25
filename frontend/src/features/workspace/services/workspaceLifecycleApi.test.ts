@@ -35,12 +35,12 @@ describe('workspaceLifecycleApi', () => {
     await workspaceLifecycleApi.restartRuntime('ws-123');
     await workspaceLifecycleApi.restartWorkspace('ws-123');
     await workspaceLifecycleApi.restartBrowserContainer('ws-123');
-    await workspaceLifecycleApi.restartNextjsContainer('ws-123');
+    await workspaceLifecycleApi.restartCanvasContainer('ws-123');
 
     expect(postMock).toHaveBeenNthCalledWith(1, '/workspaces/ws-123/rebuild');
     expect(postMock).toHaveBeenNthCalledWith(2, '/workspaces/ws-123/rebuild');
     expect(postMock).toHaveBeenNthCalledWith(3, '/workspaces/ws-123/rebuild');
     expect(postMock).toHaveBeenNthCalledWith(4, '/workspaces/ws-123/restart-browser');
-    expect(postMock).toHaveBeenNthCalledWith(5, '/workspaces/ws-123/restart-nextjs');
+    expect(postMock).toHaveBeenNthCalledWith(5, '/workspaces/ws-123/restart-canvas');
   });
 });

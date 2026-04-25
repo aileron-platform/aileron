@@ -170,13 +170,13 @@ This page lists all service environment variables. Docker mode sets them in `doc
 | `BROWSER_CDP_URL` | `http://workspace-browser-default-workspace:9223` | Chrome DevTools Protocol URL |
 | `BROWSER_WEBRTC_INTERNAL_URL` | `http://workspace-browser-default-workspace:6080` | WebRTC internal URL |
 
-### Next.js Container Discovery
+### Canvas Container Discovery
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXTJS_CONTAINER_NAME` | `workspace-nextjs-default-workspace` | Next.js container name |
-| `NEXTJS_INTERNAL_URL` | `http://workspace-nextjs-default-workspace:3003` | Next.js internal URL |
-| `NEXTJS_API_URL` | `http://workspace-nextjs-default-workspace:3013` | Next.js management API URL |
+| `CANVAS_CONTAINER_NAME` | `workspace-canvas-default-workspace` | Canvas container name |
+| `CANVAS_INTERNAL_URL` | `http://workspace-canvas-default-workspace:3003` | Canvas internal URL |
+| `CANVAS_API_URL` | `http://workspace-canvas-default-workspace:3013` | Canvas management API URL |
 
 ---
 
@@ -239,12 +239,12 @@ All `VITE_` variables are bundled into the frontend JavaScript. Never put secret
 
 ---
 
-## Workspace Next.js
+## Workspace Canvas
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WORKSPACE_ID` | `default-workspace` | Workspace ID |
-| `PORT` | `3003` | Next.js dev server port |
+| `PORT` | `3003` | Canvas renderer port |
 | `API_PORT` | `3013` | Management API port |
 | `WORKSPACE_DIR` | `/workspace` | Workspace directory |
 | `NODE_ENV` | `development` | Runtime environment |
@@ -275,13 +275,13 @@ In Kubernetes mode, the platform-config ConfigMap auto-injects these variables:
 | `PUBLIC_KEYCLOAK_URL` | Full Keycloak URL |
 | `PUBLIC_RUNTIME_HOST_PATTERN` | Runtime host pattern |
 | `PUBLIC_BROWSER_HOST_PATTERN` | Browser host pattern |
-| `PUBLIC_NEXTJS_HOST_PATTERN` | Next.js host pattern |
+| `PUBLIC_CANVAS_HOST_PATTERN` | Canvas host pattern |
 | `RUNTIME_PROVISIONER` | Provisioner type |
 | `RUNTIME_K8S_NAMESPACE` | Default K8s namespace |
 | `RUNTIME_K8S_ALLOWED_NAMESPACES` | Allowed namespaces |
 | `RUNTIME_K8S_SERVICE_TYPE` | Service type |
 | `RUNTIME_K8S_IMAGE` | Runtime image |
 | `RUNTIME_K8S_BROWSER_IMAGE` | Browser image |
-| `RUNTIME_K8S_NEXTJS_IMAGE` | Next.js image |
+| `RUNTIME_K8S_CANVAS_IMAGE` | Canvas image |
 | `CILIUM_ENABLED` | Whether Cilium is enabled |
 | `FIREWALL_DEFAULTS_CONFIGMAP_NAME` | Firewall defaults ConfigMap name |

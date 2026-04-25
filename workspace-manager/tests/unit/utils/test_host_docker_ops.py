@@ -50,7 +50,7 @@ def test_list_workspace_containers_filters_supported_prefixes(monkeypatch: pytes
         lambda _repo_root: [
             ops.DockerContainer("1", "workspace-runtime-abc"),
             ops.DockerContainer("2", "workspace-browser-abc"),
-            ops.DockerContainer("3", "workspace-nextjs-abc"),
+            ops.DockerContainer("3", "workspace-canvas-abc"),
             ops.DockerContainer("4", "workspace-manager"),
         ],
     )

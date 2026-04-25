@@ -492,20 +492,20 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
   }, [currentTabScope, getScopedTabState, revertFile]);
 
   // Mermaid 預覽操作
-  const isMermaidPreviewMode = useCallback((tabId: string) => {
-    return state.fileManagement.mermaidPreviewMode[tabId] ?? false;
-  }, [state.fileManagement.mermaidPreviewMode]);
+  const isMermaidCanvasMode = useCallback((tabId: string) => {
+    return state.fileManagement.mermaidCanvasMode[tabId] ?? false;
+  }, [state.fileManagement.mermaidCanvasMode]);
 
-  const toggleMermaidPreview = useCallback((tabId: string) => {
+  const toggleMermaidCanvas = useCallback((tabId: string) => {
     dispatch({ type: 'TOGGLE_MERMAID_PREVIEW', payload: tabId });
   }, []);
 
   // Markdown 預覽操作
-  const isMarkdownPreviewMode = useCallback((tabId: string) => {
-    return state.fileManagement.markdownPreviewMode[tabId] ?? false;
-  }, [state.fileManagement.markdownPreviewMode]);
+  const isMarkdownCanvasMode = useCallback((tabId: string) => {
+    return state.fileManagement.markdownCanvasMode[tabId] ?? false;
+  }, [state.fileManagement.markdownCanvasMode]);
 
-  const toggleMarkdownPreview = useCallback((tabId: string) => {
+  const toggleMarkdownCanvas = useCallback((tabId: string) => {
     dispatch({ type: 'TOGGLE_MARKDOWN_PREVIEW', payload: tabId });
   }, []);
 
@@ -516,11 +516,11 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
 
   // 檔案樹 Actions
 
-  // Preview 操作
+  // Canvas 操作
   const renderMarkdown = useCallback((content?: string) => {
-    const markdownContent = content ?? state.preview.markdownContent;
+    const markdownContent = content ?? state.canvas.markdownContent;
     return <MarkdownRenderer content={markdownContent} />;
-  }, [state.preview.markdownContent]);
+  }, [state.canvas.markdownContent]);
 
   // 組裝 Context Value
   const contextValue = useMemo<WorkspaceContextType>(
@@ -551,10 +551,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       },
       fileTreeState: fileTreeAdapter.state,
       fileTreeActions,
-      preview: {
-        subView: state.preview.subView,
-        markdownContent: state.preview.markdownContent,
-        rawContent: state.preview.rawContent,
+      canvas: {
+        subView: state.canvas.subView,
+        markdownContent: state.canvas.markdownContent,
+        rawContent: state.canvas.rawContent,
         renderMarkdown,
       },
       openFileInTab,
@@ -574,13 +574,13 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         revertFile,
         revertAllFiles,
       },
-      mermaidPreview: {
-        isPreviewMode: isMermaidPreviewMode,
-        togglePreview: toggleMermaidPreview,
+      mermaidCanvas: {
+        isCanvasMode: isMermaidCanvasMode,
+        toggleCanvas: toggleMermaidCanvas,
       },
-      markdownPreview: {
-        isPreviewMode: isMarkdownPreviewMode,
-        togglePreview: toggleMarkdownPreview,
+      markdownCanvas: {
+        isCanvasMode: isMarkdownCanvasMode,
+        toggleCanvas: toggleMarkdownCanvas,
       },
       toggleSecondColumn,
     }),
@@ -604,10 +604,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       reloadCurrentFile,
       revertFile,
       revertAllFiles,
-      isMermaidPreviewMode,
-      toggleMermaidPreview,
-      isMarkdownPreviewMode,
-      toggleMarkdownPreview,
+      isMermaidCanvasMode,
+      toggleMermaidCanvas,
+      isMarkdownCanvasMode,
+      toggleMarkdownCanvas,
       toggleSecondColumn,
     ]
   );

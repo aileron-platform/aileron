@@ -68,11 +68,11 @@ spec:
                 configMapKeyRef:
                   name: {{ include "aileron.fullname" . }}-platform-config
                   key: PUBLIC_BROWSER_HOST_PATTERN
-            - name: PUBLIC_NEXTJS_HOST_PATTERN
+            - name: PUBLIC_CANVAS_HOST_PATTERN
               valueFrom:
                 configMapKeyRef:
                   name: {{ include "aileron.fullname" . }}-platform-config
-                  key: PUBLIC_NEXTJS_HOST_PATTERN
+                  key: PUBLIC_CANVAS_HOST_PATTERN
             - name: WATCH_NAMESPACE
               valueFrom:
                 configMapKeyRef:

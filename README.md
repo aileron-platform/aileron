@@ -345,7 +345,7 @@ To expose the platform through public domains, configure:
 
 - `publicRouting.*` in Helm values
 - fixed DNS records for frontend / workspace-manager / keycloak
-- wildcard or equivalent DNS for workspace runtime / browser / nextjs services
+- wildcard or equivalent DNS for workspace runtime / browser / canvas services
 - valid TLS certificates
 
 ---
@@ -384,7 +384,7 @@ aileron/
 ├── workspace-terminal/    # Terminal / WebSocket service
 ├── workspace-operator/    # Kubernetes workspace operator
 ├── workspace-chrome/      # Browser integration module
-├── workspace-nextjs/      # Frontend integration module
+├── workspace-canvas/      # Frontend integration module
 ├── keycloak-realm/        # IAM configuration
 ├── scripts/               # Dev / test / ops scripts
 ├── openspec/              # OpenSpec changes and specs

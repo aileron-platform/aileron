@@ -6,7 +6,7 @@ import claudeCode from './claudeCode';
 import fileManagement from './fileManagement';
 import versionControl from './versionControl';
 import containerManagement from './containerManagement';
-import preview from './preview';
+import canvas from './canvas';
 import automation from './automation';
 import workspaceSettings from './workspaceSettings';
 import chat from './chat';
@@ -24,7 +24,7 @@ const workspace = {
   fileManagement,
   versionControl,
   containerManagement,
-  preview,
+  canvas,
   automation,
   workspaceSettings,
   chat,

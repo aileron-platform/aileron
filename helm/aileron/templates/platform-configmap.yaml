@@ -18,10 +18,10 @@ data:
   PUBLIC_KEYCLOAK_URL: {{ include "aileron.publicURL" (dict "template" .Values.publicRouting.keycloakHost "Values" .Values) | quote }}
   PUBLIC_RUNTIME_HOST_PATTERN: {{ .Values.publicRouting.runtimeHostPattern | quote }}
   PUBLIC_BROWSER_HOST_PATTERN: {{ .Values.publicRouting.browserHostPattern | quote }}
-  PUBLIC_NEXTJS_HOST_PATTERN: {{ .Values.publicRouting.nextjsHostPattern | quote }}
+  PUBLIC_CANVAS_HOST_PATTERN: {{ .Values.publicRouting.canvasHostPattern | quote }}
   PUBLIC_RUNTIME_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.runtimeHostPattern "Values" .Values) | quote }}
   PUBLIC_BROWSER_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.browserHostPattern "Values" .Values) | quote }}
-  PUBLIC_NEXTJS_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.nextjsHostPattern "Values" .Values) | quote }}
+  PUBLIC_CANVAS_WILDCARD_HOST: {{ include "aileron.publicWildcardHost" (dict "template" .Values.publicRouting.canvasHostPattern "Values" .Values) | quote }}
   RUNTIME_PROVISIONER: {{ .Values.kubernetes.provisioner | quote }}
   RUNTIME_K8S_NAMESPACE: {{ .Values.kubernetes.defaultNamespace | quote }}
   RUNTIME_K8S_ALLOWED_NAMESPACES: {{ join "," .Values.kubernetes.allowedNamespaces | quote }}
@@ -31,10 +31,10 @@ data:
   KNOWLEDGE_BASES_PVC_NAME: {{ .Values.kubernetes.knowledgeBases.pvcName | quote }}
   RUNTIME_K8S_IMAGE: {{ .Values.kubernetes.runtimeImage | quote }}
   RUNTIME_K8S_BROWSER_IMAGE: {{ .Values.kubernetes.browserImage | quote }}
-  RUNTIME_K8S_NEXTJS_IMAGE: {{ .Values.kubernetes.nextjsImage | quote }}
+  RUNTIME_K8S_CANVAS_IMAGE: {{ .Values.kubernetes.canvasImage | quote }}
   RUNTIME_K8S_RUNTIME_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.runtime.resources | toJson | quote }}
   RUNTIME_K8S_BROWSER_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.browser.resources | toJson | quote }}
-  RUNTIME_K8S_NEXTJS_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.nextjs.resources | toJson | quote }}
+  RUNTIME_K8S_CANVAS_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.canvas.resources | toJson | quote }}
   BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED: {{ ternary "true" "false" .Values.bootstrap.defaultWorkspace.enabled | quote }}
   BOOTSTRAP_DEFAULT_WORKSPACE_ID: {{ .Values.bootstrap.defaultWorkspace.id | quote }}
   BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL: {{ .Values.bootstrap.defaultWorkspace.ownerEmail | quote }}

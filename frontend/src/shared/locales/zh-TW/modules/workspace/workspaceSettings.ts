@@ -78,10 +78,10 @@ const workspaceSettings = {
     },
     components: {
       title: '服務狀態',
-      description: '顯示 runtime、browser 與 nextjs 的個別狀態與連線位址。',
+      description: '顯示 runtime、browser 與 canvas 的個別狀態與連線位址。',
       runtime: 'Runtime',
       browser: 'Browser',
-      nextjs: 'Next.js',
+      canvas: 'Canvas',
       fields: {
         internalUrl: '內部 URL',
         externalUrl: '外部 URL',
@@ -212,7 +212,7 @@ const workspaceSettings = {
     },
     lifecycle: {
       title: '生命週期操作',
-      description: '針對 runtime、browser、nextjs 或整體工作區發送重啟請求。',
+      description: '針對 runtime、browser、canvas 或整體工作區發送重啟請求。',
       operationState: {
         submitted: '已送出',
         processing: '進行中',
@@ -252,15 +252,15 @@ const workspaceSettings = {
           errorTitle: 'Browser 重啟失敗',
           errorDescription: '無法重啟 Browser，請稍後再試。',
         },
-        nextjs: {
-          title: '重啟 Next.js',
-          description: '重新啟動 Next.js workload，適合處理預覽服務異常。',
-          label: '重啟 Next.js',
-          loading: '重啟 Next.js 中...',
-          successTitle: 'Next.js 重啟已開始',
-          successDescription: 'Next.js 重啟請求已送出，請稍候片刻。',
-          errorTitle: 'Next.js 重啟失敗',
-          errorDescription: '無法重啟 Next.js，請稍後再試。',
+        canvas: {
+          title: '重啟 Canvas',
+          description: '重新啟動 Canvas workload，適合處理預覽服務異常。',
+          label: '重啟 Canvas',
+          loading: '重啟 Canvas 中...',
+          successTitle: 'Canvas 重啟已開始',
+          successDescription: 'Canvas 重啟請求已送出，請稍候片刻。',
+          errorTitle: 'Canvas 重啟失敗',
+          errorDescription: '無法重啟 Canvas，請稍後再試。',
         },
         workspace: {
           title: '重啟整體工作區',

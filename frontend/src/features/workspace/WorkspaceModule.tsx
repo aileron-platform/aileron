@@ -8,7 +8,7 @@
  * - 容器管理
  * - 任務系統
  * - Claude Code 設定
- * - 預覽功能
+ * - Canvas 功能
  */
 
 import React from 'react';
@@ -90,8 +90,8 @@ export const WorkspaceModule: React.FC = () => {
           } />
           <Route path="/claude-code-settings/*" element={<Navigate to="/workspaces/claude-code/settings" replace />} />
           
-          {/* 預覽功能 - 由 WorkspaceShell 處理 */}
-          <Route path="/preview/*" element={<div />} />
+          {/* Canvas 功能 - 由 WorkspaceShell 處理 */}
+          <Route path="/canvas/*" element={<div />} />
 
           {/* 404 */}
           <Route path="*" element={<div>功能不存在</div>} />

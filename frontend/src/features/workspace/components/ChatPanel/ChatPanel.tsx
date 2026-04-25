@@ -425,11 +425,11 @@ export const ChatPanel: React.FC = () => {
         return;
       }
 
-      dispatch({ type: 'SET_PREVIEW_SESSION_RESULT', payload: previewPayload });
-      dispatch({ type: 'SET_PREVIEW_SUB_VIEW', payload: 'session-result' });
-      dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'preview' });
-      dispatch({ type: 'ENSURE_NAVIGATION_ITEM_EXPANDED', payload: 'preview' });
-      navigate('/workspaces/preview/session-result');
+      dispatch({ type: 'SET_CANVAS_SESSION_RESULT', payload: previewPayload });
+      dispatch({ type: 'SET_CANVAS_SUB_VIEW', payload: 'session-result' });
+      dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'canvas' });
+      dispatch({ type: 'ENSURE_NAVIGATION_ITEM_EXPANDED', payload: 'canvas' });
+      navigate('/workspaces/canvas/session-result');
     },
     [dispatch, navigate, agentState.tasks]
   );
@@ -687,7 +687,7 @@ export const ChatPanel: React.FC = () => {
             isThinking={agentState.isThinking}
             runningTools={agentState.runningTools}
             onPreviewMessage={handleOpenMessagePreview}
-            previewLabel={t('workspace.chat.messages.openInPreview')}
+            previewLabel={t('workspace.chat.messages.openInCanvas')}
             onAskUserQuestionSubmit={handleAskUserQuestionSubmit}
             activeTaskId={agentState.activeTask?.task_id}
           />

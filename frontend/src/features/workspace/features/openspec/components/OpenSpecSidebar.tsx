@@ -24,7 +24,7 @@ import { useOpenSpecWorkspace } from '../OpenSpecWorkspaceContext';
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
-const truncateCommandPreview = (value: string, maxLength = 32) => {
+const truncateCommandCanvas = (value: string, maxLength = 32) => {
   const normalized = value.trim();
   if (normalized.length <= maxLength) {
     return normalized;
@@ -85,9 +85,9 @@ export const OpenSpecSidebar: React.FC = () => {
     () => currentStatus !== 'archived' && actions.some((action) => action.availability === 'enabled'),
     [actions, currentStatus],
   );
-  const recommendedCommandPreview = useMemo(
+  const recommendedCommandCanvas = useMemo(
     () => (sidebarRecommendedAction
-      ? truncateCommandPreview(sidebarRecommendedAction.draftTemplate)
+      ? truncateCommandCanvas(sidebarRecommendedAction.draftTemplate)
       : null),
     [sidebarRecommendedAction],
   );
@@ -337,7 +337,7 @@ export const OpenSpecSidebar: React.FC = () => {
                       className="max-w-[140px] shrink truncate font-mono text-[10px]"
                       title={sidebarRecommendedAction.draftTemplate.trim()}
                     >
-                      {recommendedCommandPreview}
+                      {recommendedCommandCanvas}
                     </span>
                   </div>
                   {sidebarRecommendedAction.recommendedReason ? (

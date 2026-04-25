@@ -52,7 +52,7 @@ OpenSpec is now integrated as a built-in workspace capability rather than just a
 | Multi-Agent Runtime Model | Claude Code is currently the most complete integration, with OpenCode, Gemini, and Codex support expanding over time |
 | OpenSpec Workflow | Browse OpenSpec documents natively in the workspace, track change state, and launch workflow actions from the chat composer |
 | Template-based Workspaces | Configure Slash Commands, MCP Servers, env vars, and install flows once, then reuse them across teams |
-| Multi-form Runtimes | Terminal (Go-based PTY), Chrome/Browser, and Next.js — all usable as agent-controllable execution surfaces |
+| Multi-form Runtimes | Terminal (Go-based PTY), Chrome/Browser, and Canvas Runtime — all usable as agent-controllable execution surfaces |
 | File Explorer & Git | Real-time file monitoring, version control operations, branch management |
 | Scheduler / Automation | Cron-based tasks can drive agent workflows; Claude Code currently has the most complete automation experience |
 | Keycloak OAuth2 / OIDC | Enterprise-grade authentication with SSO and role-based access |
@@ -89,7 +89,7 @@ If you're trying the project, contributions are welcome:
 - **Runtime**: Claude Code CLI / OpenSpec CLI, with broader multi-agent CLI integrations expanding over time
 - **Orchestrator**: Python + FastAPI (workspace-manager / workspace-runtime)
 - **Interface**: React-based Web UI, Go-based Web Terminal
-- **Integration**: Chrome Extension (WXT/MV3), Next.js Workspace, MCP Servers
+- **Integration**: Chrome Extension (WXT/MV3), Canvas Workspace, MCP Servers
 - **Platform**: Docker Compose, Kubernetes (Helm + workspace-operator), Cilium
 - **Infrastructure**: PostgreSQL, Redis, Keycloak
 

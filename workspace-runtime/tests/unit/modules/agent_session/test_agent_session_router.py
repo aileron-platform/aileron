@@ -207,7 +207,7 @@ async def test_queued_message_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         session_id="session-1",
         status=MessageStatus.QUEUED,
         queue_position=2,
-        content_preview="queued preview",
+        content_canvas="queued canvas",
         created_at=datetime.now(timezone.utc),
     )
     dispatching_message = SimpleNamespace(
@@ -215,7 +215,7 @@ async def test_queued_message_routes(monkeypatch: pytest.MonkeyPatch) -> None:
         session_id="session-1",
         status=MessageStatus.DISPATCHING,
         queue_position=1,
-        content_preview="dispatching preview",
+        content_canvas="dispatching canvas",
         created_at=datetime.now(timezone.utc),
     )
     message_service = AsyncMock()

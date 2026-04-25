@@ -38,10 +38,10 @@ def _apply_workspace_defaults(obj, owner=None):
         "runtime_internal_port": 3002,
         "runtime_external_port": None,
         "runtime_last_seen": None,
-        "web_preview_internal_port": 3003,
-        "web_preview_external_port": None,
-        "web_preview_internal_url": None,
-        "web_preview_external_url": None,
+        "canvas_internal_port": 3003,
+        "canvas_external_port": None,
+        "canvas_internal_url": None,
+        "canvas_external_url": None,
         "terminal_external_port": None,
         "terminal_external_url": None,
         "browser_container_id": None,
@@ -54,16 +54,16 @@ def _apply_workspace_defaults(obj, owner=None):
         "browser_webrtc_external_port": None,
         "browser_cdp_internal_port": 9223,
         "browser_cdp_external_port": None,
-        "nextjs_container_id": None,
-        "nextjs_status": "stopped",
-        "nextjs_created_at": None,
-        "nextjs_last_seen": None,
-        "nextjs_internal_url": None,
-        "nextjs_external_url": None,
-        "nextjs_internal_port": 3003,
-        "nextjs_external_port": None,
-        "nextjs_api_internal_port": 3013,
-        "nextjs_api_external_port": None,
+        "canvas_container_id": None,
+        "canvas_status": "stopped",
+        "canvas_created_at": None,
+        "canvas_last_seen": None,
+        "canvas_internal_url": None,
+        "canvas_external_url": None,
+        "canvas_internal_port": 3003,
+        "canvas_external_port": None,
+        "canvas_api_internal_port": 3013,
+        "canvas_api_external_port": None,
         "provisioner": "docker",
         "target_namespace": None,
         "runtime_resources": None,
@@ -148,16 +148,16 @@ def sample_workspace_db(user_factory):
     workspace.browser_webrtc_external_port = None
     workspace.browser_cdp_internal_port = 9223
     workspace.browser_cdp_external_port = None
-    workspace.nextjs_container_id = None
-    workspace.nextjs_status = "stopped"
-    workspace.nextjs_created_at = None
-    workspace.nextjs_last_seen = None
-    workspace.nextjs_internal_url = None
-    workspace.nextjs_external_url = None
-    workspace.nextjs_internal_port = 3003
-    workspace.nextjs_external_port = None
-    workspace.nextjs_api_internal_port = 3013
-    workspace.nextjs_api_external_port = None
+    workspace.canvas_container_id = None
+    workspace.canvas_status = "stopped"
+    workspace.canvas_created_at = None
+    workspace.canvas_last_seen = None
+    workspace.canvas_internal_url = None
+    workspace.canvas_external_url = None
+    workspace.canvas_internal_port = 3003
+    workspace.canvas_external_port = None
+    workspace.canvas_api_internal_port = 3013
+    workspace.canvas_api_external_port = None
     workspace.workspace_firewall_network_access_enabled = True
     workspace.workspace_firewall_domain_access_mode = "all"
     workspace.workspace_firewall_allowed_domains = []
@@ -168,10 +168,10 @@ def sample_workspace_db(user_factory):
     workspace.fallback_enabled = True
     workspace.workspace_path = "/workspace"
     workspace.acp_cli_args = []
-    workspace.web_preview_internal_port = 3003
-    workspace.web_preview_external_port = None
-    workspace.web_preview_internal_url = None
-    workspace.web_preview_external_url = None
+    workspace.canvas_internal_port = 3003
+    workspace.canvas_external_port = None
+    workspace.canvas_internal_url = None
+    workspace.canvas_external_url = None
     workspace.terminal_external_port = None
     workspace.terminal_external_url = None
     workspace.created_at = datetime.now()
@@ -218,15 +218,15 @@ class TestWorkspaceGet:
         assert result.components.runtime.phase == "running"
         assert result.components.runtime.external_url == "https://workspace.example.com"
         assert result.components.browser.phase == "running"
-        assert result.components.nextjs.phase == "stopped"
+        assert result.components.canvas.phase == "stopped"
         assert result.runtime_resources is None
         assert [item.name for item in result.system_port_mappings] == [
             "runtime",
             "terminal",
             "browser-webrtc",
             "browser-cdp",
-            "nextjs",
-            "nextjs-api",
+            "canvas",
+            "canvas-api",
         ]
         assert all(item.editable is False for item in result.system_port_mappings)
         assert result.firewall_available is True
@@ -271,11 +271,11 @@ class TestWorkspaceGet:
             workspace.browser_webrtc_external_url = (
                 "https://workspace-browser-workspace-123.example.com"
             )
-            workspace.nextjs_status = "stopped"
-            workspace.nextjs_external_url = (
-                "https://workspace-nextjs-workspace-123.example.com"
+            workspace.canvas_status = "stopped"
+            workspace.canvas_external_url = (
+                "https://workspace-canvas-workspace-123.example.com"
             )
-            workspace.web_preview_external_url = workspace.nextjs_external_url
+            workspace.canvas_external_url = workspace.canvas_external_url
 
         with patch(
             "app.services.workspace_service.WorkspaceCustomResourceService"
@@ -293,8 +293,8 @@ class TestWorkspaceGet:
         assert result.components.browser.external_url == (
             "https://workspace-browser-workspace-123.example.com"
         )
-        assert result.components.nextjs.external_url == (
-            "https://workspace-nextjs-workspace-123.example.com"
+        assert result.components.canvas.external_url == (
+            "https://workspace-canvas-workspace-123.example.com"
         )
         mock_sync_service.return_value.sync_workspace_record_status.assert_called_once_with(
             sample_workspace_db
@@ -1377,13 +1377,13 @@ class TestWorkspaceLifecycle:
         runtime_log.stage = "restarting"
         runtime_log.created_at = created_at
 
-        nextjs_log = Mock()
-        nextjs_log.stage = "nextjs_restarting"
-        nextjs_log.created_at = created_at
+        canvas_log = Mock()
+        canvas_log.stage = "canvas_restarting"
+        canvas_log.created_at = created_at
 
-        sample_workspace_db.runtime_logs = [runtime_log, nextjs_log]
+        sample_workspace_db.runtime_logs = [runtime_log, canvas_log]
 
         result = workspace_service._to_detail(sample_workspace_db)
 
         assert result.components.runtime.last_restart_requested_at == created_at
-        assert result.components.nextjs.last_restart_requested_at == created_at
+        assert result.components.canvas.last_restart_requested_at == created_at

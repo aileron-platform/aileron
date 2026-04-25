@@ -33,7 +33,7 @@ const containerManagement = {
     resources: {
       title: 'Runtime resources',
       description: 'Only Kubernetes workspaces can override runtime CPU and memory requests / limits.',
-      scope: 'workspace-browser and workspace-nextjs continue using the platform defaults from the Helm chart.',
+      scope: 'workspace-browser and workspace-canvas continue using the platform defaults from the Helm chart.',
       requests: {
         title: 'Requests',
       },
@@ -154,7 +154,7 @@ const containerManagement = {
     groups: {
       workspace: {
         title: 'Workspace network rules',
-        description: 'Applied to workspace-runtime and workspace-nextjs.',
+        description: 'Applied to workspace-runtime and workspace-canvas.',
       },
       browser: {
         title: 'Browser network rules',

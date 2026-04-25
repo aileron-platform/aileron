@@ -319,7 +319,7 @@ helm upgrade --install aileron ./helm/aileron \
 
 - `publicRouting.*` Helm values
 - frontend / workspace-manager / keycloak 的固定 DNS
-- workspace runtime / browser / nextjs 的 wildcard 或等效 DNS
+- workspace runtime / browser / canvas 的 wildcard 或等效 DNS
 - TLS 憑證
 
 ---
@@ -356,7 +356,7 @@ aileron/
 ├── workspace-terminal/    # Terminal / WebSocket service
 ├── workspace-operator/    # Kubernetes workspace operator
 ├── workspace-chrome/      # Browser integration module
-├── workspace-nextjs/      # Frontend integration module
+├── workspace-canvas/      # Frontend integration module
 ├── keycloak-realm/        # IAM configuration
 ├── scripts/               # Dev / test / ops scripts
 ├── openspec/              # OpenSpec changes and specs

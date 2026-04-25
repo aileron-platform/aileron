@@ -33,7 +33,7 @@ func defaultPublicRoutingConfig() PublicRoutingConfig {
 		KeycloakHost:         "keycloak.{baseDomain}",
 		RuntimeHostPattern:   "workspace-runtime-{workspaceId}.{baseDomain}",
 		BrowserHostPattern:   "workspace-browser-{workspaceId}.{baseDomain}",
-		NextjsHostPattern:    "workspace-nextjs-{workspaceId}.{baseDomain}",
+		CanvasHostPattern:    "workspace-canvas-{workspaceId}.{baseDomain}",
 	}
 }
 
@@ -62,9 +62,9 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 				Enabled: true,
 				Image:   "browser:test",
 			},
-			Nextjs: workspacev1alpha1.WorkspaceOptionalComponentSpec{
+			Canvas: workspacev1alpha1.WorkspaceOptionalComponentSpec{
 				Enabled: true,
-				Image:   "nextjs:test",
+				Image:   "canvas:test",
 			},
 			WorkspacePath: "/workspace",
 			KnowledgeBases: []workspacev1alpha1.WorkspaceKnowledgeBaseAttachment{
@@ -139,13 +139,13 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 
 	assertDeploymentImage(t, cl, "team-a", "workspace-runtime-ws-123", "runtime:test")
 	assertDeploymentImage(t, cl, "team-a", "workspace-browser-ws-123", "browser:test")
-	assertDeploymentImage(t, cl, "team-a", "workspace-nextjs-ws-123", "nextjs:test")
+	assertDeploymentImage(t, cl, "team-a", "workspace-canvas-ws-123", "canvas:test")
 	assertServiceExists(t, cl, "team-a", "workspace-runtime-ws-123")
 	assertServiceExists(t, cl, "team-a", "workspace-browser-ws-123")
-	assertServiceExists(t, cl, "team-a", "workspace-nextjs-ws-123")
+	assertServiceExists(t, cl, "team-a", "workspace-canvas-ws-123")
 	assertIngressHost(t, cl, "team-a", "workspace-runtime-ws-123", "workspace-runtime-ws-123.example.com", "nginx")
 	assertIngressHost(t, cl, "team-a", "workspace-browser-ws-123", "workspace-browser-ws-123.example.com", "nginx")
-	assertIngressHost(t, cl, "team-a", "workspace-nextjs-ws-123", "workspace-nextjs-ws-123.example.com", "nginx")
+	assertIngressHost(t, cl, "team-a", "workspace-canvas-ws-123", "workspace-canvas-ws-123.example.com", "nginx")
 	assertPVCExists(t, cl, "team-a", "workspace-pvc-ws-123")
 	assertDeploymentUsesPVC(t, cl, "team-a", "workspace-runtime-ws-123", "workspace-pvc-ws-123")
 	assertRuntimeDeploymentSecurityContext(t, cl, "team-a", "workspace-runtime-ws-123")
@@ -188,8 +188,8 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		if status.Components.Browser.Phase != "Reconciling" {
 			t.Fatalf("browser phase = %s, want Reconciling", status.Components.Browser.Phase)
 		}
-		if status.Components.Nextjs.Phase != "Reconciling" {
-			t.Fatalf("nextjs phase = %s, want Reconciling", status.Components.Nextjs.Phase)
+		if status.Components.Canvas.Phase != "Reconciling" {
+			t.Fatalf("canvas phase = %s, want Reconciling", status.Components.Canvas.Phase)
 		}
 		if status.Components.Runtime.InternalURL != "http://workspace-runtime-ws-123.team-a.svc.cluster.local:3002" {
 			t.Fatalf("unexpected runtime internal url: %s", status.Components.Runtime.InternalURL)
@@ -203,11 +203,11 @@ func TestWorkspaceReconcilerCreatesManagedDeploymentsAndServices(t *testing.T) {
 		if status.Components.Browser.ExternalURL != "https://workspace-browser-ws-123.example.com" {
 			t.Fatalf("unexpected browser external url: %s", status.Components.Browser.ExternalURL)
 		}
-		if status.Components.Nextjs.InternalURL != "http://workspace-nextjs-ws-123.team-a.svc.cluster.local:3003" {
-			t.Fatalf("unexpected nextjs internal url: %s", status.Components.Nextjs.InternalURL)
+		if status.Components.Canvas.InternalURL != "http://workspace-canvas-ws-123.team-a.svc.cluster.local:3003" {
+			t.Fatalf("unexpected canvas internal url: %s", status.Components.Canvas.InternalURL)
 		}
-		if status.Components.Nextjs.ExternalURL != "https://workspace-nextjs-ws-123.example.com" {
-			t.Fatalf("unexpected nextjs external url: %s", status.Components.Nextjs.ExternalURL)
+		if status.Components.Canvas.ExternalURL != "https://workspace-canvas-ws-123.example.com" {
+			t.Fatalf("unexpected canvas external url: %s", status.Components.Canvas.ExternalURL)
 		}
 		expectedWorkspaceDomains := []string{"github.com", "registry.npmjs.org"}
 		if !reflect.DeepEqual(status.Firewall.Workspace.EffectiveAllowedDomains, expectedWorkspaceDomains) {
@@ -240,7 +240,7 @@ func TestWorkspaceReconcilerOmitsKnowledgeBaseVolumeWhenNoAttachments(t *testing
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
 			WorkspacePath:   "/workspace",
 		},
 	}
@@ -294,7 +294,7 @@ func TestWorkspaceReconcilerUpdatesKnowledgeBaseMountsAfterSpecChange(t *testing
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
 			WorkspacePath:   "/workspace",
 			KnowledgeBases: []workspacev1alpha1.WorkspaceKnowledgeBaseAttachment{
 				{KBID: "kb-1", MountAlias: "docs", ReadOnly: false},
@@ -435,7 +435,7 @@ func TestReconcileReturnsRequeueWhenWorkspaceNotReady(t *testing.T) {
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "browser:test"},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "nextjs:test"},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "canvas:test"},
 			WorkspacePath:   "/workspace",
 		},
 	}
@@ -493,7 +493,7 @@ func TestWorkspaceReconcilerSkipsFirewallPoliciesWhenCiliumDisabled(t *testing.T
 				Image: "runtime:test",
 			},
 			Browser: workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
-			Nextjs:  workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
+			Canvas:  workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
 			Firewall: workspacev1alpha1.WorkspaceFirewallSpec{
 				Workspace: workspacev1alpha1.WorkspaceFirewallGroupSpec{
 					NetworkAccessEnabled: true,
@@ -575,7 +575,7 @@ func TestWorkspaceReconcilerUpdatesExistingDeploymentImages(t *testing.T) {
 				Image: "runtime:v2",
 			},
 			Browser:       workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
-			Nextjs:        workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
+			Canvas:        workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
 			WorkspacePath: "/workspace",
 			Firewall: workspacev1alpha1.WorkspaceFirewallSpec{
 				Workspace: workspacev1alpha1.WorkspaceFirewallGroupSpec{
@@ -677,7 +677,7 @@ func TestWorkspaceReconcilerDeleteCleansManagedResourcesAndRemovesFinalizer(t *t
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true},
 			WorkspacePath:   "/workspace",
 			Firewall: workspacev1alpha1.WorkspaceFirewallSpec{
 				Workspace: workspacev1alpha1.WorkspaceFirewallGroupSpec{
@@ -698,13 +698,13 @@ func TestWorkspaceReconcilerDeleteCleansManagedResourcesAndRemovesFinalizer(t *t
 		workspace,
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "workspace-runtime-ws-123", Namespace: "team-a"}},
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "workspace-browser-ws-123", Namespace: "team-a"}},
-		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "workspace-nextjs-ws-123", Namespace: "team-a"}},
+		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "workspace-canvas-ws-123", Namespace: "team-a"}},
 		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "workspace-runtime-ws-123", Namespace: "team-a"}},
 		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "workspace-browser-ws-123", Namespace: "team-a"}},
-		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "workspace-nextjs-ws-123", Namespace: "team-a"}},
+		&networkingv1.Ingress{ObjectMeta: metav1.ObjectMeta{Name: "workspace-canvas-ws-123", Namespace: "team-a"}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "workspace-runtime-ws-123", Namespace: "team-a"}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "workspace-browser-ws-123", Namespace: "team-a"}},
-		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "workspace-nextjs-ws-123", Namespace: "team-a"}},
+		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "workspace-canvas-ws-123", Namespace: "team-a"}},
 		&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: "workspace-pvc-ws-123", Namespace: "team-a"}},
 	}
 
@@ -730,13 +730,13 @@ func TestWorkspaceReconcilerDeleteCleansManagedResourcesAndRemovesFinalizer(t *t
 
 	assertObjectDeleted(t, cl, "team-a", "workspace-runtime-ws-123", &appsv1.Deployment{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-browser-ws-123", &appsv1.Deployment{})
-	assertObjectDeleted(t, cl, "team-a", "workspace-nextjs-ws-123", &appsv1.Deployment{})
+	assertObjectDeleted(t, cl, "team-a", "workspace-canvas-ws-123", &appsv1.Deployment{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-runtime-ws-123", &networkingv1.Ingress{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-browser-ws-123", &networkingv1.Ingress{})
-	assertObjectDeleted(t, cl, "team-a", "workspace-nextjs-ws-123", &networkingv1.Ingress{})
+	assertObjectDeleted(t, cl, "team-a", "workspace-canvas-ws-123", &networkingv1.Ingress{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-runtime-ws-123", &corev1.Service{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-browser-ws-123", &corev1.Service{})
-	assertObjectDeleted(t, cl, "team-a", "workspace-nextjs-ws-123", &corev1.Service{})
+	assertObjectDeleted(t, cl, "team-a", "workspace-canvas-ws-123", &corev1.Service{})
 	assertObjectDeleted(t, cl, "team-a", "workspace-pvc-ws-123", &corev1.PersistentVolumeClaim{})
 	assertUnstructuredDeleted(t, cl, "team-a", "ws-ws-123-workspace-egress", ciliumNetworkPolicyGVK)
 	assertUnstructuredDeleted(t, cl, "team-a", "ws-ws-123-browser-egress", ciliumNetworkPolicyGVK)
@@ -777,7 +777,7 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "browser:test"},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false, Image: "nextjs:test"},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false, Image: "canvas:test"},
 			WorkspacePath:   "/workspace",
 			Operations: workspacev1alpha1.WorkspaceOperationsSpec{
 				RestartWorkspaceAt: &restartWorkspaceAt,
@@ -825,9 +825,9 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 			Replicas:          1,
 		},
 	}
-	nextjsDeployment := &appsv1.Deployment{
+	canvasDeployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       "workspace-nextjs-ws-running",
+			Name:       "workspace-canvas-ws-running",
 			Namespace:  "team-a",
 			Generation: 1,
 		},
@@ -851,8 +851,8 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 			},
 		},
 	}
-	nextjsService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Name: "workspace-nextjs-ws-running", Namespace: "team-a"},
+	canvasService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "workspace-canvas-ws-running", Namespace: "team-a"},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{{Name: "http", Port: 3003}},
 		},
@@ -877,10 +877,10 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 			workspace,
 			runtimeDeployment,
 			browserDeployment,
-			nextjsDeployment,
+			canvasDeployment,
 			runtimeService,
 			browserService,
-			nextjsService,
+			canvasService,
 			pvc,
 			firewallDefaults,
 		).
@@ -918,8 +918,8 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 		if status.Components.Browser.Phase != "Running" {
 			t.Fatalf("browser phase = %s, want Running", status.Components.Browser.Phase)
 		}
-		if status.Components.Nextjs.Phase != "Disabled" {
-			t.Fatalf("nextjs phase = %s, want Disabled", status.Components.Nextjs.Phase)
+		if status.Components.Canvas.Phase != "Disabled" {
+			t.Fatalf("canvas phase = %s, want Disabled", status.Components.Canvas.Phase)
 		}
 		if status.Components.Runtime.ExternalURL != "https://workspace-runtime-ws-running.example.com" {
 			t.Fatalf("runtime external url = %s, want https://workspace-runtime-ws-running.example.com", status.Components.Runtime.ExternalURL)
@@ -927,8 +927,8 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 		if status.Components.Browser.ExternalURL != "https://workspace-browser-ws-running.example.com" {
 			t.Fatalf("browser external url = %s, want https://workspace-browser-ws-running.example.com", status.Components.Browser.ExternalURL)
 		}
-		if status.Components.Nextjs.ExternalURL != "https://workspace-nextjs-ws-running.example.com" {
-			t.Fatalf("nextjs external url = %s, want https://workspace-nextjs-ws-running.example.com", status.Components.Nextjs.ExternalURL)
+		if status.Components.Canvas.ExternalURL != "https://workspace-canvas-ws-running.example.com" {
+			t.Fatalf("canvas external url = %s, want https://workspace-canvas-ws-running.example.com", status.Components.Canvas.ExternalURL)
 		}
 		if status.Components.Runtime.LastRestartedAt == nil || status.Components.Runtime.LastRestartedAt.Unix() != restartRuntimeAt.Unix() {
 			t.Fatalf("runtime last restart = %v, want %v", status.Components.Runtime.LastRestartedAt, restartRuntimeAt)
@@ -936,8 +936,8 @@ func TestWorkspaceReconcilerStatusIncludesRestartMetadataAndRunningPhase(t *test
 		if status.Components.Browser.LastRestartedAt == nil || status.Components.Browser.LastRestartedAt.Unix() != restartBrowserAt.Unix() {
 			t.Fatalf("browser last restart = %v, want %v", status.Components.Browser.LastRestartedAt, restartBrowserAt)
 		}
-		if status.Components.Nextjs.LastRestartedAt == nil || status.Components.Nextjs.LastRestartedAt.Unix() != restartWorkspaceAt.Unix() {
-			t.Fatalf("nextjs last restart = %v, want %v", status.Components.Nextjs.LastRestartedAt, restartWorkspaceAt)
+		if status.Components.Canvas.LastRestartedAt == nil || status.Components.Canvas.LastRestartedAt.Unix() != restartWorkspaceAt.Unix() {
+			t.Fatalf("canvas last restart = %v, want %v", status.Components.Canvas.LastRestartedAt, restartWorkspaceAt)
 		}
 		expectedWorkspaceDomains := []string{"github.com", "registry.npmjs.org"}
 		if !reflect.DeepEqual(status.Firewall.Workspace.EffectiveAllowedDomains, expectedWorkspaceDomains) {
@@ -970,7 +970,7 @@ func TestWorkspaceReconcilerUpdatesWorkspaceFirewallPolicy(t *testing.T) {
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "browser:test"},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "nextjs:test"},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "canvas:test"},
 			WorkspacePath:   "/workspace",
 			Firewall: workspacev1alpha1.WorkspaceFirewallSpec{
 				Workspace: workspacev1alpha1.WorkspaceFirewallGroupSpec{
@@ -1055,7 +1055,7 @@ func TestWorkspaceReconcilerFallsBackToWorkspaceNamespaceAndSetsOwnerReferences(
 			Provisioner:   "kubernetes",
 			Runtime:       workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:       workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "browser:test"},
-			Nextjs:        workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "nextjs:test"},
+			Canvas:        workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "canvas:test"},
 			WorkspacePath: "/workspace",
 		},
 	}
@@ -1089,7 +1089,7 @@ func TestWorkspaceReconcilerFallsBackToWorkspaceNamespaceAndSetsOwnerReferences(
 	assertDeploymentImage(t, cl, "team-a", "workspace-runtime-ws-fallback", "runtime:test")
 	assertOwnerReferenceExists(t, cl, "team-a", "workspace-runtime-ws-fallback", &appsv1.Deployment{}, "Workspace", "workspace-fallback")
 	assertOwnerReferenceExists(t, cl, "team-a", "workspace-browser-ws-fallback", &appsv1.Deployment{}, "Workspace", "workspace-fallback")
-	assertOwnerReferenceExists(t, cl, "team-a", "workspace-nextjs-ws-fallback", &appsv1.Deployment{}, "Workspace", "workspace-fallback")
+	assertOwnerReferenceExists(t, cl, "team-a", "workspace-canvas-ws-fallback", &appsv1.Deployment{}, "Workspace", "workspace-fallback")
 	assertOwnerReferenceExists(t, cl, "team-a", "workspace-runtime-ws-fallback", &corev1.Service{}, "Workspace", "workspace-fallback")
 	assertOwnerReferenceExists(t, cl, "team-a", "workspace-pvc-ws-fallback", &corev1.PersistentVolumeClaim{}, "Workspace", "workspace-fallback")
 	assertWorkspaceStatus(t, cl, "team-a", "workspace-fallback", func(status workspacev1alpha1.WorkspaceStatus) {
@@ -1119,7 +1119,7 @@ func TestWorkspaceReconcilerPolicyWithoutAllowedDomainsOmitsFQDNEntries(t *testi
 			TargetNamespace: "team-a",
 			Runtime:         workspacev1alpha1.WorkspaceResourceSpec{Image: "runtime:test"},
 			Browser:         workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: true, Image: "browser:test"},
-			Nextjs:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
+			Canvas:          workspacev1alpha1.WorkspaceOptionalComponentSpec{Enabled: false},
 			WorkspacePath:   "/workspace",
 		},
 	}

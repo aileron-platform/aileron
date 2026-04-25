@@ -196,26 +196,26 @@ class RuntimeProvisionService:
                 f"Browser 容器啟動失敗: {exc}",
             )
 
-        # 6. 啟動 Next.js 容器
+        # 6. 啟動 Canvas 容器
         try:
-            self._log_event(workspace.id, "nextjs_starting", "開始建立 Next.js 容器")
-            nextjs_context = self._build_nextjs_runtime_context(workspace)
-            nextjs_result = orchestrator.create_nextjs_runtime(workspace, nextjs_context)
-            self._update_nextjs_runtime(workspace, nextjs_result)
+            self._log_event(workspace.id, "canvas_starting", "開始建立 Canvas 容器")
+            canvas_context = self._build_canvas_runtime_context(workspace)
+            canvas_result = orchestrator.create_canvas_runtime(workspace, canvas_context)
+            self._update_canvas_runtime(workspace, canvas_result)
             self._log_event(
                 workspace.id,
-                "nextjs_ready",
-                "Next.js 容器已就緒",
-                {"nextjs_identifier": nextjs_result.identifier, "nextjs_port": workspace.nextjs_external_port},
+                "canvas_ready",
+                "Canvas 容器已就緒",
+                {"canvas_identifier": canvas_result.identifier, "canvas_port": workspace.canvas_external_port},
             )
         except Exception as exc:
-            # Next.js 容器啟動失敗不應影響主 runtime
-            logger.error(f"Workspace {workspace.id}: Next.js 容器啟動失敗: {exc}", exc_info=True)
-            workspace.nextjs_status = "error"
+            # Canvas 容器啟動失敗不應影響主 runtime
+            logger.error(f"Workspace {workspace.id}: Canvas 容器啟動失敗: {exc}", exc_info=True)
+            workspace.canvas_status = "error"
             self._log_event(
                 workspace.id,
-                "nextjs_error",
-                f"Next.js 容器啟動失敗: {exc}",
+                "canvas_error",
+                f"Canvas 容器啟動失敗: {exc}",
             )
 
         job.status = "completed"
@@ -265,7 +265,7 @@ class RuntimeProvisionService:
             container_port=ports_config["default_internal_port"],
             host_port=workspace.runtime_external_port # 如果已有，則使用
         ))
-        # 注意: web_preview (3003) 已移至獨立的 workspace-nextjs 容器
+        # 注意: Canvas render server (3003) 已移至獨立的 workspace-canvas 容器
         port_mappings.append(PortMapping(
             container_port=ports_config["terminal_internal_port"],
             host_port=workspace.terminal_external_port
@@ -317,10 +317,10 @@ class RuntimeProvisionService:
             "KEYCLOAK_SERVER_URL": self.settings.KEYCLOAK_SERVER_URL,
             "KEYCLOAK_REALM": self.settings.KEYCLOAK_REALM,
             "KEYCLOAK_CLIENT_ID": self.settings.KEYCLOAK_CLIENT_ID,
-            # Next.js container 連接資訊（用於服務發現）
-            "NEXTJS_CONTAINER_NAME": f"workspace-nextjs-{workspace.id}",
-            "NEXTJS_INTERNAL_URL": workspace.nextjs_internal_url or f"http://workspace-nextjs-{workspace.id}:3003",
-            "NEXTJS_API_URL": f"http://workspace-nextjs-{workspace.id}:3013",
+            # Canvas container 連接資訊（用於服務發現）
+            "CANVAS_CONTAINER_NAME": f"workspace-canvas-{workspace.id}",
+            "CANVAS_INTERNAL_URL": workspace.canvas_internal_url or f"http://workspace-canvas-{workspace.id}:3003",
+            "CANVAS_API_URL": f"http://workspace-canvas-{workspace.id}:3013",
         }
 
         if workspace.git_url:
@@ -357,13 +357,13 @@ class RuntimeProvisionService:
     def _build_ports_config(self, workspace: db_models.Workspace) -> dict[str, Any]:
         """構建端口配置字典 (用於模板渲染)"""
         default_port = workspace.runtime_internal_port or 3002
-        web_preview_port = workspace.web_preview_internal_port or 3003
+        canvas_port = workspace.canvas_internal_port or 3003
         terminal_port = 3004
 
         mappings = []
         for mapping in workspace.port_mappings or []:
             container_port = int(mapping.get("container_port", default_port))
-            if container_port in [default_port, web_preview_port, terminal_port]:
+            if container_port in [default_port, canvas_port, terminal_port]:
                 continue
             mappings.append({
                 "container_port": container_port,
@@ -373,7 +373,7 @@ class RuntimeProvisionService:
 
         return {
             "default_internal_port": default_port,
-            "web_preview_internal_port": web_preview_port,
+            "canvas_internal_port": canvas_port,
             "terminal_internal_port": terminal_port,
             "mappings": mappings,
         }
@@ -455,24 +455,24 @@ class RuntimeProvisionService:
             workspace.runtime_external_port = self._find_available_port()
             allocated.append(workspace.runtime_external_port)
 
-        # Web preview port
-        if not workspace.web_preview_external_port:
-            workspace.web_preview_external_port = self._find_available_port(
+        # Canvas render server port
+        if not workspace.canvas_external_port:
+            workspace.canvas_external_port = self._find_available_port(
                 exclude={workspace.runtime_external_port}
             )
-            allocated.append(workspace.web_preview_external_port)
+            allocated.append(workspace.canvas_external_port)
 
         # Terminal port
         if not workspace.terminal_external_port:
             workspace.terminal_external_port = self._find_available_port(
-                exclude={workspace.runtime_external_port, workspace.web_preview_external_port}
+                exclude={workspace.runtime_external_port, workspace.canvas_external_port}
             )
             allocated.append(workspace.terminal_external_port)
 
         # Browser WebRTC (neko) port
         if not workspace.browser_webrtc_external_port:
             workspace.browser_webrtc_external_port = self._find_available_browser_webrtc_port(
-                exclude={workspace.runtime_external_port, workspace.web_preview_external_port,
+                exclude={workspace.runtime_external_port, workspace.canvas_external_port,
                          workspace.terminal_external_port}
             )
             allocated.append(workspace.browser_webrtc_external_port)
@@ -480,39 +480,32 @@ class RuntimeProvisionService:
         # Browser CDP port
         if not workspace.browser_cdp_external_port:
             workspace.browser_cdp_external_port = self._find_available_port(
-                exclude={workspace.runtime_external_port, workspace.web_preview_external_port,
+                exclude={workspace.runtime_external_port, workspace.canvas_external_port,
                          workspace.terminal_external_port, workspace.browser_webrtc_external_port}
             )
             allocated.append(workspace.browser_cdp_external_port)
 
         # 收集已分配的 port 以避免衝突
-        all_allocated = {workspace.runtime_external_port, workspace.web_preview_external_port,
+        all_allocated = {workspace.runtime_external_port, workspace.canvas_external_port,
                          workspace.terminal_external_port, workspace.browser_webrtc_external_port,
                          workspace.browser_cdp_external_port}
 
-        # Next.js container port (dev server)
-        if not workspace.nextjs_external_port:
-            workspace.nextjs_external_port = self._find_available_port(exclude=all_allocated)
-            allocated.append(workspace.nextjs_external_port)
-            all_allocated.add(workspace.nextjs_external_port)
-
-        # Next.js management API port
-        if not workspace.nextjs_api_external_port:
-            workspace.nextjs_api_external_port = self._find_available_port(exclude=all_allocated)
-            allocated.append(workspace.nextjs_api_external_port)
+        # Canvas management API port
+        if not workspace.canvas_api_external_port:
+            workspace.canvas_api_external_port = self._find_available_port(exclude=all_allocated)
+            allocated.append(workspace.canvas_api_external_port)
 
         # 更新 URL
         workspace.runtime_external_url = f"http://localhost:{workspace.runtime_external_port}"
-        workspace.web_preview_external_url = f"http://localhost:{workspace.web_preview_external_port}"
         workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
         workspace.browser_webrtc_external_url = f"http://localhost:{workspace.browser_webrtc_external_port}"
-        workspace.nextjs_external_url = f"http://localhost:{workspace.nextjs_external_port}"
+        workspace.canvas_external_url = f"http://localhost:{workspace.canvas_external_port}"
 
         if allocated:
             logger.info(f"Workspace {workspace.id}: 分配固定 ports: runtime={workspace.runtime_external_port}, "
-                       f"web_preview={workspace.web_preview_external_port}, terminal={workspace.terminal_external_port}, "
+                       f"canvas={workspace.canvas_external_port}, terminal={workspace.terminal_external_port}, "
                        f"browser_webrtc={workspace.browser_webrtc_external_port}, browser_cdp={workspace.browser_cdp_external_port}, "
-                       f"nextjs={workspace.nextjs_external_port}, nextjs_api={workspace.nextjs_api_external_port}")
+                       f"canvas_api={workspace.canvas_api_external_port}")
             self.db.flush()
 
     def _find_available_port(self, exclude: set[int] = None, protocol: str = "tcp") -> int:
@@ -621,14 +614,6 @@ class RuntimeProvisionService:
                     f"使用固定 port 以保持一致性。"
                 )
 
-        # Web Preview - 只在尚未分配時更新
-        web_preview_port = workspace.web_preview_internal_port or 3003
-        web_key = f"{web_preview_port}/tcp"
-        if web_key in ports_mapping:
-            if not workspace.web_preview_external_url:
-                workspace.web_preview_external_url = f"http://localhost:{workspace.web_preview_external_port}"
-            workspace.web_preview_internal_url = f"http://{runtime_info.extra_info.get('container_name')}:{web_preview_port}"
-
         # Terminal - 只在尚未分配時更新
         terminal_port = 3004
         term_key = f"{terminal_port}/tcp"
@@ -708,8 +693,8 @@ class RuntimeProvisionService:
         workspace.browser_status = "running"
         workspace.browser_last_seen = datetime.utcnow()
 
-    def _build_nextjs_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
-        """構建 Next.js Runtime Context"""
+    def _build_canvas_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
+        """構建 Canvas Runtime Context"""
         from app.services.container_image_service import get_container_image_service
         image_service = get_container_image_service()
 
@@ -719,12 +704,12 @@ class RuntimeProvisionService:
         # 確保 workspace 目錄存在
         host_workspace.mkdir(parents=True, exist_ok=True)
 
-        nextjs_container_name = f"workspace-nextjs-{workspace.id}"
+        canvas_container_name = f"workspace-canvas-{workspace.id}"
 
-        # Port mappings: 3003 (dev server) + 3013 (management API)
+        # Port mappings: 3003 (render server) + 3013 (management API)
         port_mappings = [
-            PortMapping(container_port=3003, host_port=workspace.nextjs_external_port, protocol="tcp"),
-            PortMapping(container_port=3013, host_port=workspace.nextjs_api_external_port, protocol="tcp"),
+            PortMapping(container_port=3003, host_port=workspace.canvas_external_port, protocol="tcp"),
+            PortMapping(container_port=3013, host_port=workspace.canvas_api_external_port, protocol="tcp"),
         ]
 
         # 掛載相同的 workspace 目錄
@@ -740,6 +725,7 @@ class RuntimeProvisionService:
         return RuntimeContext(
             environment={
                 "WORKSPACE_ID": workspace.id,
+                "CONTAINER_NAME": canvas_container_name,
                 "PORT": "3003",
                 "API_PORT": "3013",
                 "WORKSPACE_DIR": "/workspace",
@@ -749,24 +735,20 @@ class RuntimeProvisionService:
             ports=port_mappings,
             network=network,
             labels={
-                "image": image_service.get_nextjs_image_name(),
+                "image": image_service.get_canvas_image_name(),
                 "command": None,
                 "working_dir": "/workspace"
             }
         )
 
-    def _update_nextjs_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
-        """更新 Next.js Runtime 狀態"""
-        workspace.nextjs_container_id = runtime_info.identifier
-        workspace.nextjs_internal_url = runtime_info.internal_url
-        workspace.nextjs_external_url = runtime_info.external_url or f"http://localhost:{workspace.nextjs_external_port}"
-        workspace.nextjs_status = "running"
-        workspace.nextjs_last_seen = datetime.utcnow()
-        workspace.nextjs_created_at = datetime.utcnow()
-
-        # 更新 web_preview URL 指向 nextjs 容器（向後相容）
-        workspace.web_preview_external_url = workspace.nextjs_external_url
-        workspace.web_preview_internal_url = workspace.nextjs_internal_url
+    def _update_canvas_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
+        """更新 Canvas Runtime 狀態"""
+        workspace.canvas_container_id = runtime_info.identifier
+        workspace.canvas_internal_url = runtime_info.internal_url
+        workspace.canvas_external_url = runtime_info.external_url or f"http://localhost:{workspace.canvas_external_port}"
+        workspace.canvas_status = "running"
+        workspace.canvas_last_seen = datetime.utcnow()
+        workspace.canvas_created_at = datetime.utcnow()
 
 
 def run_runtime_provision_task(workspace_id: str) -> None:

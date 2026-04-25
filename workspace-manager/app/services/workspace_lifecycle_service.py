@@ -60,9 +60,9 @@ class WorkspaceLifecycleService:
             else:
                 logger.warning(f"Workspace {workspace_id} 沒有關聯的 runtime container")
 
-            # 刪除 Next.js 容器
-            if workspace.nextjs_container_id:
-                self._stop_and_remove_container(workspace.nextjs_container_id, workspace_id)
+            # 刪除 Canvas 容器
+            if workspace.canvas_container_id:
+                self._stop_and_remove_container(workspace.canvas_container_id, workspace_id)
 
             # 3. 刪除掛載的資料目錄
             self._cleanup_workspace_volumes(workspace_id)
@@ -196,13 +196,13 @@ class WorkspaceLifecycleService:
             except Exception as update_error:
                 logger.error(f"更新 Browser 錯誤狀態失敗: {update_error}")
 
-    def restart_nextjs_task(self, workspace_id: str) -> None:
-        """背景任務：重建 Next.js 容器（使用最新 image）
+    def restart_canvas_task(self, workspace_id: str) -> None:
+        """背景任務：重建 Canvas 容器（使用最新 image）
 
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"開始重建 Next.js 容器: {workspace_id}")
+        logger.info(f"開始重建 Canvas 容器: {workspace_id}")
 
         try:
             workspace = self.db.get(db_models.Workspace, workspace_id)
@@ -211,39 +211,39 @@ class WorkspaceLifecycleService:
                 return
 
             if workspace.provisioner == "kubernetes":
-                self._restart_kubernetes_nextjs(workspace)
+                self._restart_kubernetes_canvas(workspace)
                 return
 
-            self._log_event(workspace_id, "nextjs_restarting", "開始重建 Next.js 容器")
+            self._log_event(workspace_id, "canvas_restarting", "開始重建 Canvas 容器")
 
-            if workspace.nextjs_container_id:
+            if workspace.canvas_container_id:
                 new_id = self._recreate_container(
-                    workspace.nextjs_container_id, workspace_id
+                    workspace.canvas_container_id, workspace_id
                 )
 
                 if new_id:
-                    workspace.nextjs_container_id = new_id
-                workspace.nextjs_status = "running"
-                self._log_event(workspace_id, "nextjs_running", "Next.js 容器重建成功")
+                    workspace.canvas_container_id = new_id
+                workspace.canvas_status = "running"
+                self._log_event(workspace_id, "canvas_running", "Canvas 容器重建成功")
                 self.db.commit()
 
-                logger.info(f"成功重建 Next.js 容器: {workspace_id}")
+                logger.info(f"成功重建 Canvas 容器: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} 沒有關聯的 Next.js 容器")
-                self._log_event(workspace_id, "nextjs_error", "沒有關聯的 Next.js 容器")
+                logger.warning(f"Workspace {workspace_id} 沒有關聯的 Canvas 容器")
+                self._log_event(workspace_id, "canvas_error", "沒有關聯的 Canvas 容器")
 
         except Exception as e:
-            logger.exception(f"重建 Next.js 容器 {workspace_id} 失敗: {e}")
+            logger.exception(f"重建 Canvas 容器 {workspace_id} 失敗: {e}")
             self.db.rollback()
 
             try:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
-                    workspace.nextjs_status = "error"
-                    self._log_event(workspace_id, "nextjs_error", f"重建失敗: {str(e)}")
+                    workspace.canvas_status = "error"
+                    self._log_event(workspace_id, "canvas_error", f"重建失敗: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"更新 Next.js 錯誤狀態失敗: {update_error}")
+                logger.error(f"更新 Canvas 錯誤狀態失敗: {update_error}")
 
     def _build_fresh_environment(self, workspace: db_models.Workspace) -> list[str]:
         """從資料庫構建最新的環境變數（用於 container rebuild）
@@ -285,12 +285,12 @@ class WorkspaceLifecycleService:
         service = WorkspaceCustomResourceService(self.db)
         service.request_browser_restart(workspace.id)
 
-    def _restart_kubernetes_nextjs(self, workspace: db_models.Workspace) -> None:
-        """重啟 Kubernetes nextjs workload。"""
+    def _restart_kubernetes_canvas(self, workspace: db_models.Workspace) -> None:
+        """重啟 Kubernetes canvas workload。"""
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
         service = WorkspaceCustomResourceService(self.db)
-        service.request_nextjs_restart(workspace.id)
+        service.request_canvas_restart(workspace.id)
 
     def _recreate_container(self, container_id: str, workspace_id: str, *, env_override: list[str] | None = None) -> Optional[str]:
         """重新建立 Docker container（使用最新 image）
@@ -548,8 +548,8 @@ def run_restart_browser_task(workspace_id: str) -> None:
         db.close()
 
 
-def run_restart_nextjs_task(workspace_id: str) -> None:
-    """背景任務入口：重啟 Next.js 容器
+def run_restart_canvas_task(workspace_id: str) -> None:
+    """背景任務入口：重啟 Canvas 容器
 
     Args:
         workspace_id: Workspace ID
@@ -559,7 +559,7 @@ def run_restart_nextjs_task(workspace_id: str) -> None:
     db = SessionLocal()
     try:
         service = WorkspaceLifecycleService(db)
-        service.restart_nextjs_task(workspace_id)
+        service.restart_canvas_task(workspace_id)
     finally:
         db.close()
 
@@ -569,5 +569,5 @@ __all__ = [
     "run_delete_workspace_task",
     "run_restart_workspace_task",
     "run_restart_browser_task",
-    "run_restart_nextjs_task",
+    "run_restart_canvas_task",
 ]

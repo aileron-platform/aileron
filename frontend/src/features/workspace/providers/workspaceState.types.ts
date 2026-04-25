@@ -36,7 +36,7 @@ export type WorkspaceFeature =
   | 'gemini'
   | 'opencode'
   | 'codex'
-  | 'preview';
+  | 'canvas';
 
 // 佈局模式類型
 export type LayoutMode = 'three-column' | 'four-column';
@@ -64,8 +64,8 @@ export interface WorkspaceState {
     activeTabId: string | null;
     modifiedTabs: string[]; // 修改過的標籤頁ID
     originalContents: Record<string, string>; // 原始檔案內容
-    mermaidPreviewMode: Record<string, boolean>; // Mermaid 預覽模式狀態
-    markdownPreviewMode: Record<string, boolean>; // Markdown 預覽模式狀態
+    mermaidCanvasMode: Record<string, boolean>; // Mermaid 預覽模式狀態
+    markdownCanvasMode: Record<string, boolean>; // Markdown 預覽模式狀態
   };
 
   // Workspace 層級的 tab 狀態持久化
@@ -105,8 +105,8 @@ export interface WorkspaceState {
     subView: string;
   };
 
-  preview: {
-    subView: 'session-result' | 'web-preview';
+  canvas: {
+    subView: 'session-result' | 'web-canvas';
     markdownContent: string;
     rawContent?: any; // 預覽用的 usage context（raw SDK / task usage / metadata）
   };
@@ -138,16 +138,16 @@ export type WorkspaceAction =
   | { type: 'SET_CONTAINER_MANAGEMENT_SUB_VIEW'; payload: 'runtime' | 'firewall' | 'terminal' | 'browser' }
   | { type: 'SET_CLAUDE_CODE_SUB_VIEW'; payload: WorkspaceState['claudeCodeSettings']['subView'] }
   | { type: 'SET_AGENT_TOOL_SUB_VIEW'; payload: string }
-  | { type: 'SET_PREVIEW_SUB_VIEW'; payload: WorkspaceState['preview']['subView'] }
+  | { type: 'SET_CANVAS_SUB_VIEW'; payload: WorkspaceState['canvas']['subView'] }
   | {
-      type: 'SET_PREVIEW_SESSION_RESULT';
+      type: 'SET_CANVAS_SESSION_RESULT';
       payload: {
         markdownContent: string;
-        rawContent?: WorkspaceState['preview']['rawContent'];
+        rawContent?: WorkspaceState['canvas']['rawContent'];
       };
     }
-  | { type: 'SET_PREVIEW_MARKDOWN'; payload: string }
-  | { type: 'SET_PREVIEW_RAW_CONTENT'; payload: any }
+  | { type: 'SET_CANVAS_MARKDOWN'; payload: string }
+  | { type: 'SET_CANVAS_RAW_CONTENT'; payload: any }
   | { type: 'OPEN_FILE_TAB'; payload: WorkspaceTab & { scope?: WorkspaceTabScope } }
   | { type: 'CLOSE_FILE_TAB'; payload: { tabId: string; scope?: WorkspaceTabScope } }
   | { type: 'CLOSE_ALL_TABS'; payload?: { scope?: WorkspaceTabScope } }
@@ -230,7 +230,7 @@ export interface WorkspaceComponentStatusResponse {
 export interface WorkspaceComponentsResponse {
   runtime?: WorkspaceComponentStatusResponse;
   browser?: WorkspaceComponentStatusResponse;
-  nextjs?: WorkspaceComponentStatusResponse;
+  canvas?: WorkspaceComponentStatusResponse;
 }
 
 export interface WorkspaceResourceValuesResponse {
@@ -251,10 +251,6 @@ export interface WorkspaceRuntimeStatus {
   internalPort?: number;
   externalPort?: number | null;
   lastSeen?: string | null;
-  webPreviewInternalPort?: number;
-  webPreviewExternalPort?: number | null;
-  webPreviewInternalUrl?: string | null;
-  webPreviewExternalUrl?: string | null;
   terminalExternalPort?: number | null;
   terminalExternalUrl?: string | null;
   // Browser container fields
@@ -273,17 +269,21 @@ export interface WorkspaceRuntimeStatus {
   browserCdpInternalPort?: number;
   browserCdpExternalPort?: number | null;
 
-  // Next.js container fields
-  nextjsContainerId?: string | null;
-  nextjsStatus?: 'stopped' | 'starting' | 'running' | 'error' | 'restarting';
-  nextjsCreatedAt?: string | null;
-  nextjsLastSeen?: string | null;
-  nextjsInternalUrl?: string | null;
-  nextjsExternalUrl?: string | null;
-  nextjsInternalPort?: number;
-  nextjsExternalPort?: number | null;
-  nextjsApiInternalPort?: number;
-  nextjsApiExternalPort?: number | null;
+  // Canvas container fields
+  canvasContainerId?: string | null;
+  canvasStatus?: 'stopped' | 'starting' | 'running' | 'error' | 'restarting';
+  canvasCreatedAt?: string | null;
+  canvasLastSeen?: string | null;
+  canvasInternalUrl?: string | null;
+  canvasExternalUrl?: string | null;
+  canvasInternalPort?: number;
+  canvasExternalPort?: number | null;
+  canvasApiInternalPort?: number;
+  canvasApiExternalPort?: number | null;
+  canvasType?: 'html' | 'nextjs' | 'default';
+  canvasManifestStatus?: 'missing' | 'valid' | 'invalid';
+  canvasLastSyncAt?: string | null;
+  canvasLastResetAt?: string | null;
 }
 
 export interface WorkspaceDetailResponse {
@@ -456,10 +456,10 @@ export interface WorkspaceContextType {
   fileTreeState: FileTreeState;
   fileTreeActions: FileTreeActions;
 
-  preview: {
-    subView: WorkspaceState['preview']['subView'];
-    markdownContent: WorkspaceState['preview']['markdownContent'];
-    rawContent?: WorkspaceState['preview']['rawContent'];
+  canvas: {
+    subView: WorkspaceState['canvas']['subView'];
+    markdownContent: WorkspaceState['canvas']['markdownContent'];
+    rawContent?: WorkspaceState['canvas']['rawContent'];
     renderMarkdown: (content?: string) => React.ReactNode;
   };
 
@@ -485,24 +485,24 @@ export interface WorkspaceContextType {
   };
 
   // Mermaid 預覽操作
-  mermaidPreview: {
-    isPreviewMode: (tabId: string) => boolean;
-    togglePreview: (tabId: string) => void;
+  mermaidCanvas: {
+    isCanvasMode: (tabId: string) => boolean;
+    toggleCanvas: (tabId: string) => void;
   };
 
   // Markdown 預覽操作
-  markdownPreview: {
-    isPreviewMode: (tabId: string) => boolean;
-    togglePreview: (tabId: string) => void;
+  markdownCanvas: {
+    isCanvasMode: (tabId: string) => boolean;
+    toggleCanvas: (tabId: string) => void;
   };
 
   // 佈局操作
   toggleSecondColumn: () => void;
 }
 
-// ===== Preview 相關類型 =====
+// ===== Canvas 相關類型 =====
 
-export interface PreviewSyncResponse {
+export interface CanvasSyncResponse {
   workspaceId: string;
   operationId: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
@@ -510,7 +510,7 @@ export interface PreviewSyncResponse {
   startedAt: string;
 }
 
-export interface PreviewSyncStatusResponse {
+export interface CanvasSyncStatusResponse {
   workspaceId: string;
   operationId: string;
   status: 'pending' | 'running' | 'completed' | 'failed';

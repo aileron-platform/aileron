@@ -168,10 +168,20 @@ class Workspace(Base):
     runtime_status: Mapped[str] = mapped_column(Text, default="stopped")
     runtime_last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
-    web_preview_internal_port: Mapped[int] = mapped_column(Integer, default=3003)
-    web_preview_external_port: Mapped[Optional[int]] = mapped_column(Integer)
-    web_preview_internal_url: Mapped[Optional[str]] = mapped_column(Text)
-    web_preview_external_url: Mapped[Optional[str]] = mapped_column(Text)
+    canvas_container_id: Mapped[Optional[str]] = mapped_column(Text)
+    canvas_status: Mapped[str] = mapped_column(Text, default="stopped")
+    canvas_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    canvas_last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    canvas_internal_url: Mapped[Optional[str]] = mapped_column(Text)
+    canvas_external_url: Mapped[Optional[str]] = mapped_column(Text)
+    canvas_internal_port: Mapped[int] = mapped_column(Integer, default=3003)
+    canvas_external_port: Mapped[Optional[int]] = mapped_column(Integer)
+    canvas_api_internal_port: Mapped[int] = mapped_column(Integer, default=3013)
+    canvas_api_external_port: Mapped[Optional[int]] = mapped_column(Integer)
+    canvas_type: Mapped[str] = mapped_column(Text, default="default")
+    canvas_manifest_status: Mapped[str] = mapped_column(Text, default="missing")
+    canvas_last_sync_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    canvas_last_reset_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     terminal_external_port: Mapped[Optional[int]] = mapped_column(Integer)
     terminal_external_url: Mapped[Optional[str]] = mapped_column(Text)
@@ -208,22 +218,6 @@ class Workspace(Base):
     # Browser CDP fields
     browser_cdp_internal_port: Mapped[int] = mapped_column(Integer, default=9223)
     browser_cdp_external_port: Mapped[Optional[int]] = mapped_column(Integer)
-
-    # Next.js container fields
-    nextjs_container_id: Mapped[Optional[str]] = mapped_column(Text)
-    nextjs_status: Mapped[str] = mapped_column(Text, default="stopped")
-    nextjs_created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    nextjs_last_seen: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-
-    # Next.js URL/port fields
-    nextjs_internal_url: Mapped[Optional[str]] = mapped_column(Text)
-    nextjs_external_url: Mapped[Optional[str]] = mapped_column(Text)
-    nextjs_internal_port: Mapped[int] = mapped_column(Integer, default=3003)
-    nextjs_external_port: Mapped[Optional[int]] = mapped_column(Integer)
-
-    # Next.js management API port
-    nextjs_api_internal_port: Mapped[int] = mapped_column(Integer, default=3013)
-    nextjs_api_external_port: Mapped[Optional[int]] = mapped_column(Integer)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, nullable=False
@@ -280,8 +274,16 @@ class Workspace(Base):
             name="workspaces_browser_status_check",
         ),
         CheckConstraint(
-            "nextjs_status IN ('stopped', 'starting', 'running', 'error', 'restarting')",
-            name="workspaces_nextjs_status_check",
+            "canvas_status IN ('stopped', 'starting', 'running', 'error', 'restarting')",
+            name="workspaces_canvas_status_check",
+        ),
+        CheckConstraint(
+            "canvas_type IN ('html', 'nextjs', 'default')",
+            name="workspaces_canvas_type_check",
+        ),
+        CheckConstraint(
+            "canvas_manifest_status IN ('missing', 'valid', 'invalid')",
+            name="workspaces_canvas_manifest_status_check",
         ),
     )
 

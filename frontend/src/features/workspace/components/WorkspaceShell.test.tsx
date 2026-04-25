@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
     versionControl: { subView: 'changes', selectedGitContextId: null },
     workspaceSettings: { subView: 'basic' },
     containerManagement: { subView: 'runtime' },
-    preview: { subView: 'web-preview' },
+    canvas: { subView: 'web-canvas' },
     expandedNavigationItems: [],
     fileTreeShowHiddenEntries: false,
   },
@@ -150,7 +150,7 @@ describe('WorkspaceShell', () => {
     mocks.workspaceState.currentFeature = 'custom-feature';
     mocks.workspaceState.chatExpanded = false;
     mocks.workspaceState.rightChatCollapsed = false;
-    mocks.workspaceState.preview.subView = 'web-preview';
+    mocks.workspaceState.canvas.subView = 'web-canvas';
     mocks.workspaceState.versionControl.subView = 'changes';
   });
 

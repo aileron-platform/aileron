@@ -30,7 +30,7 @@ from app.modules.agent_session.routers import (
 )
 from app.modules.agent_session.websocket import websocket_router as agent_websocket_router
 from app.modules.file_system import router as file_system_router
-from app.modules.preview import router as preview_router
+from app.modules.canvas import router as canvas_router
 from app.modules.version_control import router as version_control_router
 from app.modules.cli_settings import router as cli_settings_router
 from app.modules.client_browser_relay import router as client_browser_relay_router
@@ -254,7 +254,7 @@ app.include_router(claude_code_router, prefix="/api/v1")
 app.include_router(cli_settings_router, prefix="/api/v1")
 app.include_router(internal_router, prefix="/api/v1")
 app.include_router(file_system_router, prefix="/api/v1")
-app.include_router(preview_router, prefix="/api/v1")
+app.include_router(canvas_router, prefix="/api/v1")
 app.include_router(version_control_router, prefix="/api/v1")
 app.include_router(openspec_router, prefix="/api/v1")
 

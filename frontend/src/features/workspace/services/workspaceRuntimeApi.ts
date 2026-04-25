@@ -557,69 +557,104 @@ export const batchDownloadFiles = async (
   return await client.post(withContextId('/api/v1/files/batch-download', contextId), { paths, archiveFormat });
 };
 
-/**
- * Next.js 路由相關類型
- */
-export interface NextJsRoute {
+export type CanvasType = 'html' | 'nextjs' | 'default';
+export type CanvasManifestStatus = 'missing' | 'valid' | 'invalid';
+
+export interface CanvasRoute {
   path: string;
+  file?: string | null;
 }
 
-export interface NextJsRoutesResponse {
+export interface CanvasRoutesResponse {
   workspaceId: string;
-  routes: NextJsRoute[];
+  type: CanvasType;
+  manifestStatus: CanvasManifestStatus;
+  defaultPath: string;
+  routes: CanvasRoute[];
   total: number;
   scannedAt: string;
 }
 
-/**
- * 獲取 Next.js 路由列表
- */
-export const fetchNextJsRoutes = async (
-  runtimeBaseUrl: string,
-  workspaceId: string
-): Promise<NextJsRoutesResponse> => {
-  const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.get(`/api/v1/workspaces/${workspaceId}/preview/nextjs/routes`);
-};
+export interface CanvasDetectResponse {
+  workspaceId: string;
+  type: CanvasType;
+  manifestStatus: CanvasManifestStatus;
+  defaultPath: string;
+  routes: CanvasRoute[];
+  error?: string | null;
+  detectedAt: string;
+}
 
-/**
- * 同步 /workspace 到 /web-preview
- */
-export const syncPreview = async (
-  runtimeBaseUrl: string,
-  workspaceId: string,
-  force: boolean = false
-): Promise<any> => {
-  const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.post(`/api/v1/workspaces/${workspaceId}/preview/sync`, { force });
-};
-
-/**
- * 查詢預覽同步狀態
- */
-export const fetchPreviewSyncStatus = async (
-  runtimeBaseUrl: string,
-  workspaceId: string,
-  operationId: string
-): Promise<any> => {
-  const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.get(`/api/v1/workspaces/${workspaceId}/preview/sync/${operationId}`);
-};
-
-/**
- * 檢查預覽服務健康狀態
- */
-export const checkPreviewHealth = async (
-  runtimeBaseUrl: string,
-  workspaceId: string
-): Promise<{
-  status: 'healthy' | 'unhealthy' | 'standby' | 'starting' | 'checking';
-  nextjs_running: boolean;
-  port_available: boolean;
+export interface CanvasHealthResponse {
+  workspaceId: string;
+  status: 'healthy' | 'unhealthy' | 'standby' | 'starting' | 'checking' | string;
+  type?: CanvasType | null;
+  manifestStatus?: CanvasManifestStatus | null;
+  rendererRunning: boolean;
+  portAvailable: boolean;
   message: string;
   source?: string | null;
-  workspace_has_nextjs?: boolean;
-}> => {
+}
+
+export interface CanvasActionResponse {
+  workspaceId: string;
+  status: string;
+  type?: CanvasType | null;
+  manifestStatus?: CanvasManifestStatus | null;
+  message: string;
+}
+
+export interface CanvasLogsResponse {
+  workspaceId: string;
+  logs: string[];
+  rendererLogs: string[];
+  total: number;
+}
+
+export const fetchCanvasDetect = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasDetectResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.get(`/api/v1/workspaces/${workspaceId}/preview/health`);
+  return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/detect`);
+};
+
+export const fetchCanvasRoutes = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasRoutesResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/routes`);
+};
+
+export const syncCanvas = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasActionResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/sync`);
+};
+
+export const resetCanvas = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasActionResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/reset`);
+};
+
+export const fetchCanvasLogs = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasLogsResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/logs`);
+};
+
+export const checkCanvasHealth = async (
+  runtimeBaseUrl: string,
+  workspaceId: string
+): Promise<CanvasHealthResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/health`);
 };

@@ -215,9 +215,9 @@ jobs:
             context: workspace-chrome
             file: workspace-chrome/Dockerfile.webrtc
             target: ""
-          - name: workspace-nextjs
-            context: workspace-nextjs
-            file: workspace-nextjs/Dockerfile
+          - name: workspace-canvas
+            context: workspace-canvas
+            file: workspace-canvas/Dockerfile
             target: ""
           - name: workspace-operator
             context: workspace-operator

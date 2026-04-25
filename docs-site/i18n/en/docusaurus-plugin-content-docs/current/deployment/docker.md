@@ -45,7 +45,7 @@ In Docker mode, `docker compose` manages the following services:
                               │        │
                     ┌─────────▼──┐ ┌───▼──────────┐
                     │  Browser   │ │ Workspace     │
-                    │  (neko)    │ │ Next.js :3003 │
+                    │  (neko)    │ │ Canvas :3003 │
                     │  :6080     │ └───────────────┘
                     └────────────┘
         ┌──────────────────────────────────────┐
@@ -64,7 +64,7 @@ In Docker mode, `docker compose` manages the following services:
 | **workspace-manager** | Local build | Core management service: workspace CRUD, templates, automation scheduling |
 | **workspace-runtime** | Local build | Agent runtime: Claude Code is currently the most complete integration, alongside built-in OpenSpec CLI, file monitoring, Git, and system monitoring |
 | **workspace-browser** | Local build | WebRTC browser (based on neko) with CDP remote debugging support |
-| **workspace-nextjs** | Local build | Next.js preview service for live frontend previews |
+| **workspace-canvas** | Local build | Canvas runtime service for live frontend previews |
 | **frontend** | Local build | React + Vite dev server |
 | **drawio** | `jgraph/drawio` | Embedded diagram editor |
 
@@ -140,7 +140,7 @@ Keycloak has a 60-second `start_period`. If you log in before it completes, the 
 | Draw.io | `http://localhost:8083` | Diagram editor |
 | Flower | `http://localhost:5555` | Celery task monitoring |
 | Browser WebSocket | `http://localhost:6080` | neko WebRTC signaling |
-| Next.js Preview | `http://localhost:3003` | Next.js dev server |
+| Canvas Runtime | `http://localhost:3003` | Canvas renderer |
 
 ## Environment Variables
 
@@ -348,7 +348,7 @@ All services have health checks configured:
 | workspace-manager | HTTP `/health` | 30s | — |
 | workspace-runtime | HTTP `/health` | 30s | — |
 | workspace-browser | HTTP `/health` | 30s | — |
-| workspace-nextjs | HTTP `/health` | 15s | — |
+| workspace-canvas | HTTP `/health` | 15s | — |
 | frontend | HTTP `/` | 30s | — |
 
 ## Docker vs Kubernetes Responsibilities

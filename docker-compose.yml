@@ -270,10 +270,10 @@ services:
       - BROWSER_CONTAINER_NAME=workspace-browser-default-workspace
       - BROWSER_CDP_URL=http://workspace-browser-default-workspace:9223
       - BROWSER_WEBRTC_INTERNAL_URL=http://workspace-browser-default-workspace:6080
-      # Next.js Container Discovery (獨立 nextjs 容器)
-      - NEXTJS_CONTAINER_NAME=workspace-nextjs-default-workspace
-      - NEXTJS_INTERNAL_URL=http://workspace-nextjs-default-workspace:3003
-      - NEXTJS_API_URL=http://workspace-nextjs-default-workspace:3013
+      # Canvas Container Discovery (獨立 canvas 容器)
+      - CANVAS_CONTAINER_NAME=workspace-canvas-default-workspace
+      - CANVAS_INTERNAL_URL=http://workspace-canvas-default-workspace:3003
+      - CANVAS_API_URL=http://workspace-canvas-default-workspace:3013
     ports:
       - "3002:3002"   # FastAPI (固定端口)
       - "3004:3004"   # Terminal Service (固定端口)
@@ -283,7 +283,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace-runtime:/workspace-runtime  # Mount 整個專案目錄（包含 tests 目錄，用於整合測試）
       - /workspace-runtime/.venv  # 阻擋 host (macOS) venv 蓋過容器內 Linux venv
-      - /workspace-runtime/web-preview/node_modules  # 避免 node_modules 被覆蓋
+      - /workspace-runtime/web-canvas/node_modules  # 避免 node_modules 被覆蓋
       - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
@@ -344,12 +344,12 @@ services:
       timeout: 10s
       retries: 3
 
-  # Workspace Next.js Preview (for default-workspace)
-  workspace-nextjs:
+  # Workspace Canvas (for default-workspace)
+  workspace-canvas:
     build:
-      context: ./workspace-nextjs
-    image: ${WORKSPACE_NEXTJS_IMAGE:-ailerondocker/workspace-nextjs:dev-arm64}
-    container_name: workspace-nextjs-default-workspace
+      context: ./workspace-canvas
+    image: ${WORKSPACE_CANVAS_IMAGE:-ailerondocker/workspace-canvas:dev-arm64}
+    container_name: workspace-canvas-default-workspace
     restart: unless-stopped
     environment:
       - WORKSPACE_ID=default-workspace
@@ -358,7 +358,7 @@ services:
       - WORKSPACE_DIR=/workspace
       - NODE_ENV=development
     ports:
-      - "3003:3003"     # Next.js dev server
+      - "3003:3003"     # Canvas render server
       - "3013:3013"     # Management API
     volumes:
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace

@@ -185,16 +185,16 @@ class DockerOrchestrator(ContainerOrchestrator):
             logger.error(f"Failed to delete Browser container {browser_container_name}: {e}", exc_info=True)
             # 不拋出異常，因為主容器已刪除成功
 
-        # 同時刪除 Next.js 容器
-        nextjs_container_name = f"workspace-nextjs-{workspace_id}"
+        # 同時刪除 Canvas 容器
+        canvas_container_name = f"workspace-canvas-{workspace_id}"
         try:
-            nextjs_container = self.client.containers.get(nextjs_container_name)
-            nextjs_container.remove(force=True)
-            logger.info(f"Deleted Next.js container {nextjs_container_name}")
+            canvas_container = self.client.containers.get(canvas_container_name)
+            canvas_container.remove(force=True)
+            logger.info(f"Deleted Canvas container {canvas_container_name}")
         except docker.errors.NotFound:
             pass
         except Exception as e:
-            logger.error(f"Failed to delete Next.js container {nextjs_container_name}: {e}", exc_info=True)
+            logger.error(f"Failed to delete Canvas container {canvas_container_name}: {e}", exc_info=True)
 
         return True
 
@@ -287,10 +287,10 @@ class DockerOrchestrator(ContainerOrchestrator):
             logger.error(f"Unexpected error creating Browser container: {e}")
             raise ContainerCreationError(f"Unexpected error: {e}")
 
-    def create_nextjs_runtime(self, workspace: Any, context: RuntimeContext) -> RuntimeInfo:
-        """建立 Next.js 容器"""
+    def create_canvas_runtime(self, workspace: Any, context: RuntimeContext) -> RuntimeInfo:
+        """建立 Canvas 容器"""
         try:
-            container_name = f"workspace-nextjs-{workspace.id}"
+            container_name = f"workspace-canvas-{workspace.id}"
 
             # 1. 準備端口配置
             ports_config = {}
@@ -321,7 +321,7 @@ class DockerOrchestrator(ContainerOrchestrator):
             # 6. 清理舊容器
             try:
                 old_container = self.client.containers.get(container_name)
-                logger.info(f"Removing existing Next.js container {container_name}")
+                logger.info(f"Removing existing Canvas container {container_name}")
                 old_container.remove(force=True)
             except docker.errors.NotFound:
                 pass
@@ -329,10 +329,10 @@ class DockerOrchestrator(ContainerOrchestrator):
             # 7. 獲取 image
             image = context.labels.get('image')
             if not image:
-                raise ContainerCreationError("Next.js image not specified in context labels")
+                raise ContainerCreationError("Canvas image not specified in context labels")
 
             # 8. 啟動容器
-            logger.info(f"Starting Next.js container {container_name} with image {image}")
+            logger.info(f"Starting Canvas container {container_name} with image {image}")
 
             container = self.client.containers.run(
                 image=image,
@@ -348,7 +348,7 @@ class DockerOrchestrator(ContainerOrchestrator):
             # 9. 獲取運行時信息
             container.reload()
 
-            # 構建 internal_url 和 external_url（使用 Next.js dev server 端口 3003）
+            # 構建 internal_url 和 external_url（使用 Canvas render server 端口 3003）
             default_port = 3003
             internal_url = f"http://{container_name}:{default_port}"
 
@@ -383,7 +383,7 @@ class DockerOrchestrator(ContainerOrchestrator):
             logger.error(f"Docker API error: {e}")
             raise ContainerCreationError(f"Docker API error: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error creating Next.js container: {e}")
+            logger.error(f"Unexpected error creating Canvas container: {e}")
             raise ContainerCreationError(f"Unexpected error: {e}")
 
     def get_runtime_status(self, workspace_id: str) -> RuntimeStatus:

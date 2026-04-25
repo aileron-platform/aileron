@@ -83,8 +83,8 @@ def sample_workspace():
     workspace.runtime = "python:3.9"
     workspace.runtime_internal_port = 3002
     workspace.runtime_external_port = 8080
-    workspace.web_preview_internal_port = 3003
-    workspace.web_preview_external_port = 8081
+    workspace.canvas_internal_port = 3003
+    workspace.canvas_external_port = 8081
     workspace.terminal_external_port = 8082
     workspace.runtime_status = "pending"
     workspace.env_vars = [
@@ -289,7 +289,7 @@ class TestRuntimeProvisionService:
         self, provision_service, sample_workspace
     ):
         sample_workspace.runtime_external_port = 3002
-        sample_workspace.web_preview_external_port = 3003
+        sample_workspace.canvas_external_port = 3003
         sample_workspace.terminal_external_port = 3004
         sample_workspace.browser_webrtc_external_port = 52330
         sample_workspace.browser_cdp_external_port = 9223
@@ -309,12 +309,12 @@ class TestRuntimeProvisionService:
         self, provision_service, sample_workspace
     ) -> None:
         sample_workspace.runtime_external_port = None
-        sample_workspace.web_preview_external_port = None
+        sample_workspace.canvas_external_port = None
         sample_workspace.terminal_external_port = None
         sample_workspace.browser_webrtc_external_port = None
         sample_workspace.browser_cdp_external_port = None
-        sample_workspace.nextjs_external_port = None
-        sample_workspace.nextjs_api_external_port = None
+        sample_workspace.canvas_external_port = None
+        sample_workspace.canvas_api_external_port = None
 
         ports = iter([31002, 31003, 31004, 52330, 39223, 33003, 33013])
         with patch.object(provision_service, "_find_available_port", side_effect=lambda *args, **kwargs: next(ports)):
@@ -420,7 +420,7 @@ class TestRuntimeProvisionService:
         # Assert
         assert sample_workspace.runtime_id == "c-123"
         assert sample_workspace.runtime_external_port == 8080
-        assert sample_workspace.web_preview_external_port == 8081
+        assert sample_workspace.canvas_external_port == 8081
         assert sample_workspace.terminal_external_port == 8082
         assert isinstance(sample_workspace.runtime_mounted_kb_signature, str)
         assert len(sample_workspace.runtime_mounted_kb_signature) == 64

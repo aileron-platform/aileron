@@ -140,9 +140,9 @@ kubectl get pods -n workspace-system
 kubectl describe pod workspace-runtime-<id> -n workspace-system
 ```
 
-### Preview Stuck Loading
+### Canvas Stuck Loading
 
-**Symptom**: Next.js Preview or Runtime screen shows a perpetual loading spinner.
+**Symptom**: Canvas Runtime or Runtime screen shows a perpetual loading spinner.
 
 **Possible causes**:
 1. WebSocket connection failure (timeout too short)

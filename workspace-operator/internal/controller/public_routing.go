@@ -15,7 +15,7 @@ type PublicRoutingConfig struct {
 	KeycloakHost         string
 	RuntimeHostPattern   string
 	BrowserHostPattern   string
-	NextjsHostPattern    string
+	CanvasHostPattern    string
 }
 
 func LoadPublicRoutingConfigFromEnv() (PublicRoutingConfig, error) {
@@ -28,7 +28,7 @@ func LoadPublicRoutingConfigFromEnv() (PublicRoutingConfig, error) {
 		KeycloakHost:         strings.TrimSpace(os.Getenv("PUBLIC_KEYCLOAK_HOST")),
 		RuntimeHostPattern:   strings.TrimSpace(os.Getenv("PUBLIC_RUNTIME_HOST_PATTERN")),
 		BrowserHostPattern:   strings.TrimSpace(os.Getenv("PUBLIC_BROWSER_HOST_PATTERN")),
-		NextjsHostPattern:    strings.TrimSpace(os.Getenv("PUBLIC_NEXTJS_HOST_PATTERN")),
+		CanvasHostPattern:    strings.TrimSpace(os.Getenv("PUBLIC_CANVAS_HOST_PATTERN")),
 	}
 
 	if config.Scheme == "" {
@@ -52,8 +52,8 @@ func LoadPublicRoutingConfigFromEnv() (PublicRoutingConfig, error) {
 	if config.BrowserHostPattern == "" {
 		config.BrowserHostPattern = "workspace-browser-{workspaceId}.{baseDomain}"
 	}
-	if config.NextjsHostPattern == "" {
-		config.NextjsHostPattern = "workspace-nextjs-{workspaceId}.{baseDomain}"
+	if config.CanvasHostPattern == "" {
+		config.CanvasHostPattern = "workspace-canvas-{workspaceId}.{baseDomain}"
 	}
 
 	if err := config.Validate(); err != nil {
@@ -70,7 +70,7 @@ func (c PublicRoutingConfig) Validate() error {
 		return fmt.Errorf("PUBLIC_BASE_DOMAIN must not be empty")
 	}
 
-	for _, template := range []string{c.RuntimeHostPattern, c.BrowserHostPattern, c.NextjsHostPattern} {
+	for _, template := range []string{c.RuntimeHostPattern, c.BrowserHostPattern, c.CanvasHostPattern} {
 		if !strings.Contains(template, "{workspaceId}") {
 			return fmt.Errorf("workspace host pattern must include '{workspaceId}'")
 		}
@@ -91,7 +91,7 @@ func (c PublicRoutingConfig) Validate() error {
 	if _, err := c.ResolveHost(c.BrowserHostPattern, "sample"); err != nil {
 		return err
 	}
-	if _, err := c.ResolveHost(c.NextjsHostPattern, "sample"); err != nil {
+	if _, err := c.ResolveHost(c.CanvasHostPattern, "sample"); err != nil {
 		return err
 	}
 

@@ -12,8 +12,10 @@ from app.models.knowledge_base import KnowledgeBaseAttachmentMode, KnowledgeBase
 
 # Browser 容器狀態類型
 BrowserStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
-# Next.js 容器狀態類型
-NextjsStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
+# Canvas 容器狀態類型
+CanvasStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
+CanvasType = Literal['html', 'nextjs', 'default']
+CanvasManifestStatus = Literal['missing', 'valid', 'invalid']
 ProvisionerType = Literal['docker', 'kubernetes']
 FirewallDomainAccessMode = Literal['all', 'specific']
 WorkspaceShareRole = Literal['viewer', 'editor', 'manager']
@@ -82,10 +84,6 @@ class RuntimeStatus(CamelModel):
     internal_port: int = Field(3002, alias="internalPort")
     external_port: Optional[int] = Field(None, alias="externalPort")
     last_seen: Optional[datetime] = Field(None, alias="lastSeen")
-    web_preview_internal_port: int = Field(3003, alias="webPreviewInternalPort")
-    web_preview_external_port: Optional[int] = Field(None, alias="webPreviewExternalPort")
-    web_preview_internal_url: Optional[str] = Field(None, alias="webPreviewInternalUrl")
-    web_preview_external_url: Optional[str] = Field(None, alias="webPreviewExternalUrl")
     terminal_external_port: Optional[int] = Field(None, alias="terminalExternalPort")
     terminal_external_url: Optional[str] = Field(None, alias="terminalExternalUrl")
 
@@ -105,21 +103,25 @@ class RuntimeStatus(CamelModel):
     browser_cdp_internal_port: int = Field(9223, alias="browserCdpInternalPort")
     browser_cdp_external_port: Optional[int] = Field(None, alias="browserCdpExternalPort")
 
-    # Next.js container fields
-    nextjs_container_id: Optional[str] = Field(None, alias="nextjsContainerId")
-    nextjs_status: NextjsStatusType = Field("stopped", alias="nextjsStatus")
-    nextjs_created_at: Optional[datetime] = Field(None, alias="nextjsCreatedAt")
-    nextjs_last_seen: Optional[datetime] = Field(None, alias="nextjsLastSeen")
+    # Canvas container fields
+    canvas_container_id: Optional[str] = Field(None, alias="canvasContainerId")
+    canvas_status: CanvasStatusType = Field("stopped", alias="canvasStatus")
+    canvas_created_at: Optional[datetime] = Field(None, alias="canvasCreatedAt")
+    canvas_last_seen: Optional[datetime] = Field(None, alias="canvasLastSeen")
 
-    # Next.js URL/port fields
-    nextjs_internal_url: Optional[str] = Field(None, alias="nextjsInternalUrl")
-    nextjs_external_url: Optional[str] = Field(None, alias="nextjsExternalUrl")
-    nextjs_internal_port: int = Field(3003, alias="nextjsInternalPort")
-    nextjs_external_port: Optional[int] = Field(None, alias="nextjsExternalPort")
+    # Canvas URL/port fields
+    canvas_internal_url: Optional[str] = Field(None, alias="canvasInternalUrl")
+    canvas_external_url: Optional[str] = Field(None, alias="canvasExternalUrl")
+    canvas_internal_port: int = Field(3003, alias="canvasInternalPort")
+    canvas_external_port: Optional[int] = Field(None, alias="canvasExternalPort")
 
-    # Next.js management API port
-    nextjs_api_internal_port: int = Field(3013, alias="nextjsApiInternalPort")
-    nextjs_api_external_port: Optional[int] = Field(None, alias="nextjsApiExternalPort")
+    # Canvas management API port and detection state
+    canvas_api_internal_port: int = Field(3013, alias="canvasApiInternalPort")
+    canvas_api_external_port: Optional[int] = Field(None, alias="canvasApiExternalPort")
+    canvas_type: CanvasType = Field("default", alias="canvasType")
+    canvas_manifest_status: CanvasManifestStatus = Field("missing", alias="canvasManifestStatus")
+    canvas_last_sync_at: Optional[datetime] = Field(None, alias="canvasLastSyncAt")
+    canvas_last_reset_at: Optional[datetime] = Field(None, alias="canvasLastResetAt")
 
 
 class WorkspaceComponentStatus(CamelModel):
@@ -135,7 +137,7 @@ class WorkspaceComponentStatus(CamelModel):
 class WorkspaceComponents(CamelModel):
     runtime: WorkspaceComponentStatus = Field(default_factory=WorkspaceComponentStatus)
     browser: WorkspaceComponentStatus = Field(default_factory=WorkspaceComponentStatus)
-    nextjs: WorkspaceComponentStatus = Field(default_factory=WorkspaceComponentStatus)
+    canvas: WorkspaceComponentStatus = Field(default_factory=WorkspaceComponentStatus)
 
 
 class FirewallRuleConfig(CamelModel):

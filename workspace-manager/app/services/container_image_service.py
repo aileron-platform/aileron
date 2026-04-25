@@ -37,7 +37,7 @@ class ContainerImageConfig(BaseModel):
     version: str = Field(default="1.0", description="配置檔版本")
     default_image: str = Field(..., description="預設映像 ID")
     browser_image: str = Field(default="ailerondocker/workspace-chrome:dev", description="Browser 容器映像")
-    nextjs_image: str = Field(default="ailerondocker/workspace-nextjs:dev", description="Next.js 容器映像")
+    canvas_image: str = Field(default="ailerondocker/workspace-canvas:dev", description="Canvas 容器映像")
     images: List[ContainerImage] = Field(default_factory=list, description="映像列表")
 
 
@@ -156,9 +156,9 @@ class ContainerImageService:
         """取得 Browser 容器映像名稱"""
         return self.config.browser_image
 
-    def get_nextjs_image_name(self) -> str:
-        """取得 Next.js 容器映像名稱"""
-        return self.config.nextjs_image
+    def get_canvas_image_name(self) -> str:
+        """取得 Canvas 容器映像名稱"""
+        return self.config.canvas_image
 
     def validate_image_id(self, image_id: str) -> bool:
         """
@@ -177,4 +177,3 @@ class ContainerImageService:
 def get_container_image_service() -> ContainerImageService:
     """取得容器映像服務實例（單例）"""
     return ContainerImageService()
-

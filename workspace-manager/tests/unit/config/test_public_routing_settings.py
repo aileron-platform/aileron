@@ -30,7 +30,7 @@ def test_public_routing_replaces_base_domain_placeholder() -> None:
         PUBLIC_KEYCLOAK_HOST="keycloak.{baseDomain}",
         PUBLIC_RUNTIME_HOST_PATTERN="workspace-runtime-{workspaceId}.{baseDomain}",
         PUBLIC_BROWSER_HOST_PATTERN="workspace-browser-{workspaceId}.{baseDomain}",
-        PUBLIC_NEXTJS_HOST_PATTERN="workspace-nextjs-{workspaceId}.{baseDomain}",
+        PUBLIC_CANVAS_HOST_PATTERN="workspace-canvas-{workspaceId}.{baseDomain}",
     )
 
     assert settings.build_public_url(settings.PUBLIC_FRONTEND_HOST) == "https://aileron.example.com"
@@ -75,7 +75,7 @@ def test_allowed_origins_list_includes_public_frontend_hosts() -> None:
         PUBLIC_KEYCLOAK_HOST="keycloak.{baseDomain}",
         PUBLIC_RUNTIME_HOST_PATTERN="workspace-runtime-{workspaceId}.{baseDomain}",
         PUBLIC_BROWSER_HOST_PATTERN="workspace-browser-{workspaceId}.{baseDomain}",
-        PUBLIC_NEXTJS_HOST_PATTERN="workspace-nextjs-{workspaceId}.{baseDomain}",
+        PUBLIC_CANVAS_HOST_PATTERN="workspace-canvas-{workspaceId}.{baseDomain}",
     )
 
     assert settings.allowed_origins_list == [

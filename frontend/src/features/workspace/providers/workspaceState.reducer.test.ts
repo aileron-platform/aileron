@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { workspaceReducer } from './workspaceState.reducer';
 import { initialState } from './workspaceState.constants';
 
-describe('workspaceReducer preview state', () => {
-  it('updates markdown and raw preview content atomically for session results', () => {
+describe('workspaceReducer canvas state', () => {
+  it('updates markdown and raw canvas content atomically for session results', () => {
     const nextState = workspaceReducer(initialState, {
-      type: 'SET_PREVIEW_SESSION_RESULT',
+      type: 'SET_CANVAS_SESSION_RESULT',
       payload: {
         markdownContent: '# Final answer',
         rawContent: {
@@ -19,7 +19,7 @@ describe('workspaceReducer preview state', () => {
       },
     });
 
-    expect(nextState.preview).toEqual({
+    expect(nextState.canvas).toEqual({
       subView: 'session-result',
       markdownContent: '# Final answer',
       rawContent: {

@@ -14,7 +14,7 @@ import {
   getContainerManagementSubView,
   getClaudeCodeSubView,
   getAgentToolSubView,
-  getPreviewSubView,
+  getCanvasSubView,
   getLayoutModeForFeature,
   initialState,
 } from '../providers/workspaceState.constants';
@@ -62,9 +62,9 @@ export const useWorkspaceRouteSync = (
           ? getAgentToolSubView(location.pathname)
           : '',
       },
-      preview: {
-        ...initialState.preview,
-        subView: getPreviewSubView(location.pathname),
+      canvas: {
+        ...initialState.canvas,
+        subView: getCanvasSubView(location.pathname),
       },
     };
   }, [location.pathname]);
@@ -107,10 +107,10 @@ export const useWorkspaceRouteSync = (
       if (subView !== state.agentToolSettings.subView) {
         dispatch({ type: 'SET_AGENT_TOOL_SUB_VIEW', payload: subView });
       }
-    } else if (currentFeature === 'preview') {
-      const subView = getPreviewSubView(location.pathname);
-      if (subView !== state.preview.subView) {
-        dispatch({ type: 'SET_PREVIEW_SUB_VIEW', payload: subView });
+    } else if (currentFeature === 'canvas') {
+      const subView = getCanvasSubView(location.pathname);
+      if (subView !== state.canvas.subView) {
+        dispatch({ type: 'SET_CANVAS_SUB_VIEW', payload: subView });
       }
     }
   }, [location.pathname, state, dispatch]);

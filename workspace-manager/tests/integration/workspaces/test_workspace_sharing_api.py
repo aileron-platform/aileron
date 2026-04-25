@@ -37,7 +37,7 @@ def _create_workspace(
     *,
     owner_id: str,
     name: str = "Shared Workspace",
-    nextjs_container_id: str | None = None,
+    canvas_container_id: str | None = None,
 ) -> str:
     with session_factory() as session:
         workspace = db_models.Workspace(
@@ -52,7 +52,7 @@ def _create_workspace(
             workspace_firewall_allowed_domains=[],
             browser_firewall_allowed_domains=[],
             acp_cli_args=[],
-            nextjs_container_id=nextjs_container_id,
+            canvas_container_id=canvas_container_id,
         )
         session.add(workspace)
         session.commit()
@@ -370,35 +370,35 @@ def test_only_owner_can_delete_workspace_and_manager_can_rebuild(
 
 
 @pytest.mark.integration
-def test_restart_nextjs_returns_localized_messages(
+def test_restart_canvas_returns_localized_messages(
     test_app,
     create_user,
     monkeypatch,
 ):
     client, session_factory = test_app
     owner = create_user(username="owner")
-    workspace_without_nextjs = _create_workspace(session_factory, owner_id=owner.id)
-    workspace_with_nextjs = _create_workspace(
+    workspace_without_canvas = _create_workspace(session_factory, owner_id=owner.id)
+    workspace_with_canvas = _create_workspace(
         session_factory,
         owner_id=owner.id,
-        name="Nextjs Workspace",
-        nextjs_container_id="nextjs-container-1",
+        name="Canvas Workspace",
+        canvas_container_id="canvas-container-1",
     )
     _authenticate_as(client, monkeypatch, owner)
 
-    missing_response = client.post(f"/api/v1/workspaces/{workspace_without_nextjs}/restart-nextjs")
+    missing_response = client.post(f"/api/v1/workspaces/{workspace_without_canvas}/restart-canvas")
 
-    with patch("app.routers.workspaces.run_restart_nextjs_task") as mock_restart:
-        with patch("app.routers.workspaces.WorkspaceService.mark_nextjs_restarting", return_value=True):
-            success_response = client.post(f"/api/v1/workspaces/{workspace_with_nextjs}/restart-nextjs")
+    with patch("app.routers.workspaces.run_restart_canvas_task") as mock_restart:
+        with patch("app.routers.workspaces.WorkspaceService.mark_canvas_restarting", return_value=True):
+            success_response = client.post(f"/api/v1/workspaces/{workspace_with_canvas}/restart-canvas")
 
     assert missing_response.status_code == 400
-    assert missing_response.json()["detail"] == "No restartable Next.js container found for this workspace"
+    assert missing_response.json()["detail"] == "No restartable Canvas container found for this workspace"
     assert success_response.status_code == 202
-    assert success_response.json()["message"] == "Next.js container restart started"
-    assert success_response.json()["workspaceId"] == workspace_with_nextjs
+    assert success_response.json()["message"] == "Canvas container restart started"
+    assert success_response.json()["workspaceId"] == workspace_with_canvas
     assert success_response.json()["status"] == "restarting"
-    mock_restart.assert_called_once_with(workspace_with_nextjs)
+    mock_restart.assert_called_once_with(workspace_with_canvas)
 
 
 @pytest.mark.integration

@@ -35,7 +35,7 @@ import type {
 const logger = createLogger('WorkspaceResetSettings');
 
 interface WorkspaceLifecycleAction {
-  key: 'runtime' | 'browser' | 'nextjs' | 'workspace';
+  key: 'runtime' | 'browser' | 'canvas' | 'workspace';
   title: string;
   description: string;
   label: string;
@@ -192,8 +192,8 @@ export const WorkspaceResetSettings: React.FC = () => {
           return detail?.components?.runtime?.phase;
         case 'browser':
           return detail?.components?.browser?.phase;
-        case 'nextjs':
-          return detail?.components?.nextjs?.phase;
+        case 'canvas':
+          return detail?.components?.canvas?.phase;
         case 'workspace':
           return detail?.overallPhase;
         default:
@@ -318,7 +318,7 @@ export const WorkspaceResetSettings: React.FC = () => {
   const lifecycleActions = useMemo<WorkspaceLifecycleAction[]>(() => {
     const runtimePhase = workspaceDetail?.components?.runtime?.phase;
     const browserPhase = workspaceDetail?.components?.browser?.phase;
-    const nextjsPhase = workspaceDetail?.components?.nextjs?.phase;
+    const canvasPhase = workspaceDetail?.components?.canvas?.phase;
     const overallPhase = workspaceDetail?.overallPhase;
 
     return [
@@ -357,20 +357,20 @@ export const WorkspaceResetSettings: React.FC = () => {
           ),
       },
       {
-        key: 'nextjs',
-        title: t('workspace.workspaceSettings.reset.lifecycle.actions.nextjs.title'),
-        description: t('workspace.workspaceSettings.reset.lifecycle.actions.nextjs.description'),
-        label: t('workspace.workspaceSettings.reset.lifecycle.actions.nextjs.label'),
-        loadingLabel: t('workspace.workspaceSettings.reset.lifecycle.actions.nextjs.loading'),
-        phase: nextjsPhase,
+        key: 'canvas',
+        title: t('workspace.workspaceSettings.reset.lifecycle.actions.canvas.title'),
+        description: t('workspace.workspaceSettings.reset.lifecycle.actions.canvas.description'),
+        label: t('workspace.workspaceSettings.reset.lifecycle.actions.canvas.label'),
+        loadingLabel: t('workspace.workspaceSettings.reset.lifecycle.actions.canvas.loading'),
+        phase: canvasPhase,
         onExecute: async () =>
           executeLifecycleAction(
-            'nextjs',
-            () => workspaceLifecycleApi.restartNextjsContainer(workspaceId),
-            'workspace.workspaceSettings.reset.lifecycle.actions.nextjs.successTitle',
-            'workspace.workspaceSettings.reset.lifecycle.actions.nextjs.successDescription',
-            'workspace.workspaceSettings.reset.lifecycle.actions.nextjs.errorTitle',
-            'workspace.workspaceSettings.reset.lifecycle.actions.nextjs.errorDescription',
+            'canvas',
+            () => workspaceLifecycleApi.restartCanvasContainer(workspaceId),
+            'workspace.workspaceSettings.reset.lifecycle.actions.canvas.successTitle',
+            'workspace.workspaceSettings.reset.lifecycle.actions.canvas.successDescription',
+            'workspace.workspaceSettings.reset.lifecycle.actions.canvas.errorTitle',
+            'workspace.workspaceSettings.reset.lifecycle.actions.canvas.errorDescription',
           ),
       },
       {

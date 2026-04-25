@@ -78,10 +78,10 @@ const workspaceSettings = {
     },
     components: {
       title: 'Component status',
-      description: 'Shows runtime, browser, and Next.js status with their current URLs.',
+      description: 'Shows runtime, browser, and Canvas status with their current URLs.',
       runtime: 'Runtime',
       browser: 'Browser',
-      nextjs: 'Next.js',
+      canvas: 'Canvas',
       fields: {
         internalUrl: 'Internal URL',
         externalUrl: 'External URL',
@@ -212,7 +212,7 @@ const workspaceSettings = {
     },
     lifecycle: {
       title: 'Lifecycle actions',
-      description: 'Send restart requests for runtime, browser, Next.js, or the whole workspace.',
+      description: 'Send restart requests for runtime, browser, Canvas, or the whole workspace.',
       operationState: {
         submitted: 'Submitted',
         processing: 'In progress',
@@ -252,15 +252,15 @@ const workspaceSettings = {
           errorTitle: 'Browser restart failed',
           errorDescription: 'Failed to restart the browser. Please try again later.',
         },
-        nextjs: {
-          title: 'Restart Next.js',
-          description: 'Restart the Next.js workload when the preview service becomes unstable.',
-          label: 'Restart Next.js',
-          loading: 'Restarting Next.js...',
-          successTitle: 'Next.js restart started',
-          successDescription: 'The Next.js restart request has been submitted.',
-          errorTitle: 'Next.js restart failed',
-          errorDescription: 'Failed to restart Next.js. Please try again later.',
+        canvas: {
+          title: 'Restart Canvas',
+          description: 'Restart the Canvas workload when the preview service becomes unstable.',
+          label: 'Restart Canvas',
+          loading: 'Restarting Canvas...',
+          successTitle: 'Canvas restart started',
+          successDescription: 'The Canvas restart request has been submitted.',
+          errorTitle: 'Canvas restart failed',
+          errorDescription: 'Failed to restart Canvas. Please try again later.',
         },
         workspace: {
           title: 'Restart workspace',

@@ -5,7 +5,7 @@ const labels = {
   containerManagement: 'Container Management',
   automation: 'Automation',
   claudeCodeSettings: 'Claude Code Settings',
-  preview: 'Preview',
+  canvas: 'Canvas',
 };
 
 export default labels;

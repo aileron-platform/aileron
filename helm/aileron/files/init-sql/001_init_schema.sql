@@ -123,12 +123,22 @@ CREATE TABLE IF NOT EXISTS workspaces (
     runtime_status text DEFAULT 'stopped' CHECK (runtime_status IN ('stopped', 'starting', 'running', 'error', 'deleting', 'restarting')),
     runtime_created_at timestamp with time zone,
     runtime_last_seen timestamp with time zone,
-    web_preview_internal_port integer DEFAULT 3003,
-    web_preview_external_port integer,
+    canvas_container_id text,
+    canvas_status text DEFAULT 'stopped' CHECK (canvas_status IN ('stopped', 'starting', 'running', 'error', 'restarting')),
+    canvas_created_at timestamp with time zone,
+    canvas_last_seen timestamp with time zone,
+    canvas_internal_url text,
+    canvas_external_url text,
+    canvas_internal_port integer DEFAULT 3003,
+    canvas_external_port integer,
+    canvas_api_internal_port integer DEFAULT 3013,
+    canvas_api_external_port integer,
+    canvas_type text DEFAULT 'default' CHECK (canvas_type IN ('html', 'nextjs', 'default')),
+    canvas_manifest_status text DEFAULT 'missing' CHECK (canvas_manifest_status IN ('missing', 'valid', 'invalid')),
+    canvas_last_sync_at timestamp with time zone,
+    canvas_last_reset_at timestamp with time zone,
     terminal_external_port integer,
     terminal_external_url text,
-    web_preview_internal_url text,
-    web_preview_external_url text,
     provisioner text DEFAULT 'docker' CHECK (provisioner IN ('docker', 'kubernetes')),
     target_namespace text,
     workspace_firewall_network_access_enabled boolean DEFAULT true,
@@ -160,22 +170,6 @@ CREATE TABLE IF NOT EXISTS workspaces (
     -- Browser CDP fields
     browser_cdp_internal_port integer DEFAULT 9223,
     browser_cdp_external_port integer,
-
-    -- Next.js container fields
-    nextjs_container_id text,
-    nextjs_status text DEFAULT 'stopped' CHECK (nextjs_status IN ('stopped', 'starting', 'running', 'error', 'restarting')),
-    nextjs_created_at timestamp with time zone,
-    nextjs_last_seen timestamp with time zone,
-
-    -- Next.js URL/port fields
-    nextjs_internal_url text,
-    nextjs_external_url text,
-    nextjs_internal_port integer DEFAULT 3003,
-    nextjs_external_port integer,
-
-    -- Next.js management API port
-    nextjs_api_internal_port integer DEFAULT 3013,
-    nextjs_api_external_port integer,
 
     -- Workspace settings
     language varchar(10) DEFAULT 'zh-TW' CHECK (language IN ('en', 'zh-TW')),
@@ -216,12 +210,22 @@ COMMENT ON COLUMN workspaces.runtime_external_port IS '主機映射的外部端�
 COMMENT ON COLUMN workspaces.runtime_status IS '容器運行狀態';
 COMMENT ON COLUMN workspaces.runtime_created_at IS '容器建立時間';
 COMMENT ON COLUMN workspaces.runtime_last_seen IS '容器最後活動時間';
-COMMENT ON COLUMN workspaces.web_preview_internal_port IS 'Web Preview 服務內部端口（預設 3003）';
-COMMENT ON COLUMN workspaces.web_preview_external_port IS 'Web Preview 服務外部映射端口';
+COMMENT ON COLUMN workspaces.canvas_container_id IS 'Canvas 容器 ID';
+COMMENT ON COLUMN workspaces.canvas_status IS 'Canvas 容器運行狀態';
+COMMENT ON COLUMN workspaces.canvas_created_at IS 'Canvas 容器建立時間';
+COMMENT ON COLUMN workspaces.canvas_last_seen IS 'Canvas 容器最後活動時間';
+COMMENT ON COLUMN workspaces.canvas_internal_url IS 'Canvas 容器內部通信 URL';
+COMMENT ON COLUMN workspaces.canvas_external_url IS 'Canvas 容器外部訪問 URL';
+COMMENT ON COLUMN workspaces.canvas_internal_port IS 'Canvas render server 內部端口（預設 3003）';
+COMMENT ON COLUMN workspaces.canvas_external_port IS 'Canvas render server 外部映射端口';
+COMMENT ON COLUMN workspaces.canvas_api_internal_port IS 'Canvas 管理 API 內部端口（預設 3013）';
+COMMENT ON COLUMN workspaces.canvas_api_external_port IS 'Canvas 管理 API 外部映射端口';
+COMMENT ON COLUMN workspaces.canvas_type IS 'Canvas 最近偵測類型（html / nextjs / default）';
+COMMENT ON COLUMN workspaces.canvas_manifest_status IS 'Canvas manifest 狀態（missing / valid / invalid）';
+COMMENT ON COLUMN workspaces.canvas_last_sync_at IS 'Canvas 最近同步時間';
+COMMENT ON COLUMN workspaces.canvas_last_reset_at IS 'Canvas 最近 reset 時間';
 COMMENT ON COLUMN workspaces.terminal_external_port IS 'Terminal 服務外部映射端口';
 COMMENT ON COLUMN workspaces.terminal_external_url IS 'Terminal 服務外部訪問 URL';
-COMMENT ON COLUMN workspaces.web_preview_internal_url IS 'Web Preview 服務內部訪問 URL';
-COMMENT ON COLUMN workspaces.web_preview_external_url IS 'Web Preview 服務外部訪問 URL';
 COMMENT ON COLUMN workspaces.provisioner IS '工作區佈建模式（docker / kubernetes）';
 COMMENT ON COLUMN workspaces.target_namespace IS 'Kubernetes 模式下目標部署 namespace';
 COMMENT ON COLUMN workspaces.workspace_firewall_network_access_enabled IS 'workspace 組網路存取權限開關';
@@ -246,17 +250,6 @@ COMMENT ON COLUMN workspaces.browser_webrtc_internal_port IS 'Browser WebRTC (ne
 COMMENT ON COLUMN workspaces.browser_webrtc_external_port IS 'Browser WebRTC (neko) 主機映射端口';
 COMMENT ON COLUMN workspaces.browser_cdp_internal_port IS 'Browser CDP 內部端口（預設 9223）';
 COMMENT ON COLUMN workspaces.browser_cdp_external_port IS 'Browser CDP 外部映射端口';
-COMMENT ON COLUMN workspaces.nextjs_container_id IS 'Next.js 容器 ID';
-COMMENT ON COLUMN workspaces.nextjs_status IS 'Next.js 容器運行狀態';
-COMMENT ON COLUMN workspaces.nextjs_created_at IS 'Next.js 容器建立時間';
-COMMENT ON COLUMN workspaces.nextjs_last_seen IS 'Next.js 容器最後活動時間';
-COMMENT ON COLUMN workspaces.nextjs_internal_url IS 'Next.js 容器內部通信 URL';
-COMMENT ON COLUMN workspaces.nextjs_external_url IS 'Next.js 容器外部訪問 URL';
-COMMENT ON COLUMN workspaces.nextjs_internal_port IS 'Next.js 內部端口（預設 3003）';
-COMMENT ON COLUMN workspaces.nextjs_external_port IS 'Next.js 主機映射端口';
-COMMENT ON COLUMN workspaces.nextjs_api_internal_port IS 'Next.js 管理 API 內部端口（預設 3013）';
-COMMENT ON COLUMN workspaces.nextjs_api_external_port IS 'Next.js 管理 API 外部映射端口';
-
 -- Table: workspace_shares
 CREATE TABLE IF NOT EXISTS workspace_shares (
     id varchar(64) PRIMARY KEY,

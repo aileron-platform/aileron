@@ -45,7 +45,7 @@ Base image：
 - `ailerondocker/workspace-ui`
 - `ailerondocker/workspace-manager`
 - `ailerondocker/workspace-chrome`
-- `ailerondocker/workspace-nextjs`
+- `ailerondocker/workspace-canvas`
 - `ailerondocker/workspace-operator`
 
 Runtime：

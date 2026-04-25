@@ -32,13 +32,13 @@ def _create_owner_and_workspace(session_factory) -> tuple[str, str]:
             runtime_status="stopped",
             runtime_internal_port=3002,
             runtime_external_port=31002,
-            web_preview_internal_port=3003,
-            web_preview_external_port=31003,
+            canvas_internal_port=3003,
+            canvas_external_port=31003,
             terminal_external_port=31004,
             browser_webrtc_external_port=36080,
             browser_cdp_external_port=39223,
-            nextjs_external_port=33003,
-            nextjs_api_external_port=33013,
+            canvas_external_port=33003,
+            canvas_api_external_port=33013,
             env_vars=[],
             port_mappings=[],
             workspace_firewall_allowed_domains=[],
@@ -70,7 +70,7 @@ class _FakeOrchestrator:
                 "container_name": f"workspace-runtime-{workspace.id}",
                 "ports": {
                     "3002/tcp": workspace.runtime_external_port,
-                    "3003/tcp": workspace.web_preview_external_port,
+                    "3003/tcp": workspace.canvas_external_port,
                     "3004/tcp": workspace.terminal_external_port,
                 },
             },
@@ -88,13 +88,13 @@ class _FakeOrchestrator:
             platform="docker",
         )
 
-    def create_nextjs_runtime(self, workspace, context):
+    def create_canvas_runtime(self, workspace, context):
         return RuntimeInfo(
-            identifier=f"nextjs-{workspace.id}",
+            identifier=f"canvas-{workspace.id}",
             workspace_id=workspace.id,
             status=RuntimeStatusType.RUNNING,
-            internal_url=f"http://workspace-nextjs-{workspace.id}:3003",
-            external_url=f"http://localhost:{workspace.nextjs_external_port}",
+            internal_url=f"http://workspace-canvas-{workspace.id}:3003",
+            external_url=f"http://localhost:{workspace.canvas_external_port}",
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             platform="docker",
@@ -166,7 +166,7 @@ def test_runtime_provision_mounts_and_detaches_knowledge_base(
         {
             "get_docker_image_name": lambda _self, _runtime: "workspace-runtime:test",
             "get_browser_image_name": lambda _self: "workspace-browser:test",
-            "get_nextjs_image_name": lambda _self: "workspace-nextjs:test",
+            "get_canvas_image_name": lambda _self: "workspace-canvas:test",
         },
     )()
 
@@ -244,7 +244,7 @@ def test_runtime_provision_clears_tombstoned_knowledge_base_attachment_on_start(
         {
             "get_docker_image_name": lambda _self, _runtime: "workspace-runtime:test",
             "get_browser_image_name": lambda _self: "workspace-browser:test",
-            "get_nextjs_image_name": lambda _self: "workspace-nextjs:test",
+            "get_canvas_image_name": lambda _self: "workspace-canvas:test",
         },
     )()
 
@@ -315,7 +315,7 @@ def test_restart_workspace_rebuild_uses_latest_knowledge_base_attachments(
         {
             "get_docker_image_name": lambda _self, _runtime: "workspace-runtime:test",
             "get_browser_image_name": lambda _self: "workspace-browser:test",
-            "get_nextjs_image_name": lambda _self: "workspace-nextjs:test",
+            "get_canvas_image_name": lambda _self: "workspace-canvas:test",
         },
     )()
 

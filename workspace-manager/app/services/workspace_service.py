@@ -584,6 +584,18 @@ class WorkspaceService:
             updated_at=workspace.updated_at,
         )
 
+    @staticmethod
+    def _canvas_type_or_default(value: object) -> str:
+        return value if value in {"html", "nextjs", "default"} else "default"
+
+    @staticmethod
+    def _canvas_manifest_status_or_default(value: object) -> str:
+        return value if value in {"missing", "valid", "invalid"} else "missing"
+
+    @staticmethod
+    def _datetime_or_none(value: object) -> Optional[datetime]:
+        return value if isinstance(value, datetime) else None
+
     def _to_detail(
         self,
         workspace: db_models.Workspace,
@@ -601,10 +613,6 @@ class WorkspaceService:
             internal_port=workspace.runtime_internal_port,
             external_port=workspace.runtime_external_port,
             last_seen=workspace.runtime_last_seen,
-            web_preview_internal_port=workspace.web_preview_internal_port,
-            web_preview_external_port=workspace.web_preview_external_port,
-            web_preview_internal_url=workspace.web_preview_internal_url,
-            web_preview_external_url=workspace.web_preview_external_url,
             terminal_external_port=workspace.terminal_external_port,
             terminal_external_url=workspace.terminal_external_url,
             # Browser 相關欄位
@@ -620,17 +628,27 @@ class WorkspaceService:
             # Browser CDP 欄位
             browser_cdp_internal_port=workspace.browser_cdp_internal_port,
             browser_cdp_external_port=workspace.browser_cdp_external_port,
-            # Next.js 容器欄位
-            nextjs_container_id=workspace.nextjs_container_id,
-            nextjs_status=workspace.nextjs_status,
-            nextjs_created_at=workspace.nextjs_created_at,
-            nextjs_last_seen=workspace.nextjs_last_seen,
-            nextjs_internal_url=workspace.nextjs_internal_url,
-            nextjs_external_url=workspace.nextjs_external_url,
-            nextjs_internal_port=workspace.nextjs_internal_port,
-            nextjs_external_port=workspace.nextjs_external_port,
-            nextjs_api_internal_port=workspace.nextjs_api_internal_port,
-            nextjs_api_external_port=workspace.nextjs_api_external_port,
+            # Canvas 容器欄位
+            canvas_container_id=workspace.canvas_container_id,
+            canvas_status=workspace.canvas_status,
+            canvas_created_at=workspace.canvas_created_at,
+            canvas_last_seen=workspace.canvas_last_seen,
+            canvas_internal_url=workspace.canvas_internal_url,
+            canvas_external_url=workspace.canvas_external_url,
+            canvas_internal_port=workspace.canvas_internal_port,
+            canvas_external_port=workspace.canvas_external_port,
+            canvas_api_internal_port=workspace.canvas_api_internal_port,
+            canvas_api_external_port=workspace.canvas_api_external_port,
+            canvas_type=self._canvas_type_or_default(getattr(workspace, "canvas_type", None)),
+            canvas_manifest_status=self._canvas_manifest_status_or_default(
+                getattr(workspace, "canvas_manifest_status", None)
+            ),
+            canvas_last_sync_at=self._datetime_or_none(
+                getattr(workspace, "canvas_last_sync_at", None)
+            ),
+            canvas_last_reset_at=self._datetime_or_none(
+                getattr(workspace, "canvas_last_reset_at", None)
+            ),
         )
         # Keep both firewall groups in the API response because the manager stores a
         # symmetric configuration surface across provisioners. Verified enforcement
@@ -916,18 +934,18 @@ class WorkspaceService:
                 "Browser CDP proxy",
             ),
             (
-                "nextjs",
-                workspace.nextjs_internal_port,
-                workspace.nextjs_external_port,
+                "canvas",
+                workspace.canvas_internal_port,
+                workspace.canvas_external_port,
                 "tcp",
-                "Next.js preview",
+                "Canvas render server",
             ),
             (
-                "nextjs-api",
-                workspace.nextjs_api_internal_port,
-                workspace.nextjs_api_external_port,
+                "canvas-api",
+                workspace.canvas_api_internal_port,
+                workspace.canvas_api_external_port,
                 "tcp",
-                "Next.js management API",
+                "Canvas management API",
             ),
         ]
 
@@ -1014,12 +1032,12 @@ class WorkspaceService:
                 last_seen=workspace.browser_last_seen,
                 last_restart_requested_at=restart_metadata["browser"],
             ),
-            nextjs=WorkspaceComponentStatus(
-                phase=workspace.nextjs_status,
-                internal_url=workspace.nextjs_internal_url,
-                external_url=workspace.nextjs_external_url,
-                last_seen=workspace.nextjs_last_seen,
-                last_restart_requested_at=restart_metadata["nextjs"],
+            canvas=WorkspaceComponentStatus(
+                phase=workspace.canvas_status,
+                internal_url=workspace.canvas_internal_url,
+                external_url=workspace.canvas_external_url,
+                last_seen=workspace.canvas_last_seen,
+                last_restart_requested_at=restart_metadata["canvas"],
             ),
         )
 
@@ -1030,28 +1048,28 @@ class WorkspaceService:
         restart_metadata: dict[str, Optional[datetime]] = {
             "runtime": None,
             "browser": None,
-            "nextjs": None,
+            "canvas": None,
         }
 
         for job in workspace.runtime_jobs or []:
             if job.operation == "restart_workspace_custom_resource":
                 restart_metadata["runtime"] = restart_metadata["runtime"] or job.scheduled_at
                 restart_metadata["browser"] = restart_metadata["browser"] or job.scheduled_at
-                restart_metadata["nextjs"] = restart_metadata["nextjs"] or job.scheduled_at
+                restart_metadata["canvas"] = restart_metadata["canvas"] or job.scheduled_at
             elif job.operation == "restart_runtime_custom_resource":
                 restart_metadata["runtime"] = restart_metadata["runtime"] or job.scheduled_at
             elif job.operation == "restart_browser_custom_resource":
                 restart_metadata["browser"] = restart_metadata["browser"] or job.scheduled_at
-            elif job.operation == "restart_nextjs_custom_resource":
-                restart_metadata["nextjs"] = restart_metadata["nextjs"] or job.scheduled_at
+            elif job.operation == "restart_canvas_custom_resource":
+                restart_metadata["canvas"] = restart_metadata["canvas"] or job.scheduled_at
 
         for log in workspace.runtime_logs or []:
             if log.stage == "restarting" and restart_metadata["runtime"] is None:
                 restart_metadata["runtime"] = log.created_at
             elif log.stage == "browser_restarting" and restart_metadata["browser"] is None:
                 restart_metadata["browser"] = log.created_at
-            elif log.stage == "nextjs_restarting" and restart_metadata["nextjs"] is None:
-                restart_metadata["nextjs"] = log.created_at
+            elif log.stage == "canvas_restarting" and restart_metadata["canvas"] is None:
+                restart_metadata["canvas"] = log.created_at
 
         return restart_metadata
 
@@ -1162,13 +1180,13 @@ class WorkspaceService:
         self.db.commit()
         return True
 
-    def mark_nextjs_restarting(
+    def mark_canvas_restarting(
         self,
         workspace_id: str,
         *,
         current_user_id: Optional[str] = None,
     ) -> bool:
-        """標記 Next.js 容器為重啟中狀態"""
+        """標記 Canvas 容器為重啟中狀態"""
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False
@@ -1178,7 +1196,7 @@ class WorkspaceService:
             minimum_role="manager",
         )
 
-        workspace.nextjs_status = "restarting"
+        workspace.canvas_status = "restarting"
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         return True

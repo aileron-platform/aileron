@@ -298,7 +298,7 @@ const chat = {
     loadMore: '載入更舊的訊息',
     loadMoreWithCount: '載入更舊的訊息 (共 {{count}} 則訊息)',
     loadingMore: '載入更舊的訊息...',
-    openInPreview: '在預覽畫面開啟結果',
+    openInCanvas: '在 Canvas 開啟結果',
   },
   queue: {
     title: '排隊中的訊息 ({{count}}/{{max}})',

@@ -95,14 +95,14 @@ class TestCoreInitFiles:
         with pytest.raises(AttributeError):
             _ = files.nonexistent
 
-    def test_preview_init_router(self):
-        """Test lazy loading of preview router."""
-        from app.modules import preview
-        router = preview.router
+    def test_canvas_init_router(self):
+        """Test lazy loading of canvas router."""
+        from app.modules import canvas
+        router = canvas.router
         assert router is not None
 
         with pytest.raises(AttributeError):
-            _ = preview.nonexistent
+            _ = canvas.nonexistent
 
     def test_version_control_init_router(self):
         """Test lazy loading of version_control router."""

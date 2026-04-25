@@ -252,39 +252,39 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         },
       };
 
-    case 'SET_PREVIEW_SUB_VIEW':
+    case 'SET_CANVAS_SUB_VIEW':
       return {
         ...state,
-        preview: {
-          ...state.preview,
+        canvas: {
+          ...state.canvas,
           subView: action.payload,
         },
       };
 
-    case 'SET_PREVIEW_SESSION_RESULT':
+    case 'SET_CANVAS_SESSION_RESULT':
       return {
         ...state,
-        preview: {
-          ...state.preview,
+        canvas: {
+          ...state.canvas,
           markdownContent: action.payload.markdownContent,
           rawContent: action.payload.rawContent,
         },
       };
 
-    case 'SET_PREVIEW_MARKDOWN':
+    case 'SET_CANVAS_MARKDOWN':
       return {
         ...state,
-        preview: {
-          ...state.preview,
+        canvas: {
+          ...state.canvas,
           markdownContent: action.payload,
         },
       };
 
-    case 'SET_PREVIEW_RAW_CONTENT':
+    case 'SET_CANVAS_RAW_CONTENT':
       return {
         ...state,
-        preview: {
-          ...state.preview,
+        canvas: {
+          ...state.canvas,
           rawContent: action.payload,
         },
       };
@@ -391,9 +391,9 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         ...state,
         fileManagement: {
           ...state.fileManagement,
-          mermaidPreviewMode: {
-            ...state.fileManagement.mermaidPreviewMode,
-            [action.payload]: !state.fileManagement.mermaidPreviewMode[action.payload],
+          mermaidCanvasMode: {
+            ...state.fileManagement.mermaidCanvasMode,
+            [action.payload]: !state.fileManagement.mermaidCanvasMode[action.payload],
           },
         },
       };
@@ -403,9 +403,9 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         ...state,
         fileManagement: {
           ...state.fileManagement,
-          markdownPreviewMode: {
-            ...state.fileManagement.markdownPreviewMode,
-            [action.payload]: !state.fileManagement.markdownPreviewMode[action.payload],
+          markdownCanvasMode: {
+            ...state.fileManagement.markdownCanvasMode,
+            [action.payload]: !state.fileManagement.markdownCanvasMode[action.payload],
           },
         },
       };

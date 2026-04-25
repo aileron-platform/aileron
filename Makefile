@@ -9,7 +9,7 @@
         build-workspace-chrome push-workspace-chrome rebuild-workspace-chrome \
         build-workspace-manager push-workspace-manager rebuild-workspace-manager \
         build-workspace-runtime push-workspace-runtime rebuild-workspace-runtime \
-        build-workspace-nextjs push-workspace-nextjs rebuild-workspace-nextjs \
+        build-workspace-canvas push-workspace-canvas rebuild-workspace-canvas \
         build-workspace-operator push-workspace-operator rebuild-workspace-operator \
         rebuild-platform-images
 
@@ -35,7 +35,7 @@ WORKSPACE_UI_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-ui:$(IMAGE_TAG)
 WORKSPACE_CHROME_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-chrome:$(IMAGE_TAG)
 WORKSPACE_MANAGER_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-manager:$(IMAGE_TAG)
 WORKSPACE_RUNTIME_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-runtime:$(IMAGE_TAG)
-WORKSPACE_NEXTJS_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-nextjs:$(IMAGE_TAG)
+WORKSPACE_CANVAS_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-canvas:$(IMAGE_TAG)
 WORKSPACE_OPERATOR_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-operator:$(IMAGE_TAG)
 
 ifeq ($(RUNTIME_BASE),lite)
@@ -290,20 +290,20 @@ push-workspace-runtime: ## 📤 推送 workspace-runtime image
 rebuild-workspace-runtime: rebuild-runtime-base build-workspace-runtime push-workspace-runtime ## 🔁 重建並推送 workspace-runtime image
 	@echo "$(GREEN)✅ workspace-runtime rebuild 完成$(NC)"
 
-build-workspace-nextjs: ## 🏗️ 建置 workspace-nextjs image
-	@echo "$(GREEN)🏗️ 建置 workspace-nextjs image...$(NC)"
-	@echo "  Image: $(CYAN)$(WORKSPACE_NEXTJS_IMAGE)$(NC)"
-	@docker build -t $(WORKSPACE_NEXTJS_IMAGE) -f workspace-nextjs/Dockerfile workspace-nextjs
-	@echo "$(GREEN)✅ workspace-nextjs 建置完成$(NC)"
+build-workspace-canvas: ## 🏗️ 建置 workspace-canvas image
+	@echo "$(GREEN)🏗️ 建置 workspace-canvas image...$(NC)"
+	@echo "  Image: $(CYAN)$(WORKSPACE_CANVAS_IMAGE)$(NC)"
+	@docker build -t $(WORKSPACE_CANVAS_IMAGE) -f workspace-canvas/Dockerfile workspace-canvas
+	@echo "$(GREEN)✅ workspace-canvas 建置完成$(NC)"
 
-push-workspace-nextjs: ## 📤 推送 workspace-nextjs image
-	@echo "$(GREEN)📤 推送 workspace-nextjs image...$(NC)"
-	@echo "  Image: $(CYAN)$(WORKSPACE_NEXTJS_IMAGE)$(NC)"
-	@docker push $(WORKSPACE_NEXTJS_IMAGE)
-	@echo "$(GREEN)✅ workspace-nextjs 推送完成$(NC)"
+push-workspace-canvas: ## 📤 推送 workspace-canvas image
+	@echo "$(GREEN)📤 推送 workspace-canvas image...$(NC)"
+	@echo "  Image: $(CYAN)$(WORKSPACE_CANVAS_IMAGE)$(NC)"
+	@docker push $(WORKSPACE_CANVAS_IMAGE)
+	@echo "$(GREEN)✅ workspace-canvas 推送完成$(NC)"
 
-rebuild-workspace-nextjs: build-workspace-nextjs push-workspace-nextjs ## 🔁 重建並推送 workspace-nextjs image
-	@echo "$(GREEN)✅ workspace-nextjs rebuild 完成$(NC)"
+rebuild-workspace-canvas: build-workspace-canvas push-workspace-canvas ## 🔁 重建並推送 workspace-canvas image
+	@echo "$(GREEN)✅ workspace-canvas rebuild 完成$(NC)"
 
 build-workspace-operator: ## 🏗️ 建置 workspace-operator image
 	@echo "$(GREEN)🏗️ 建置 workspace-operator image...$(NC)"
@@ -320,7 +320,7 @@ push-workspace-operator: ## 📤 推送 workspace-operator image
 rebuild-workspace-operator: build-workspace-operator push-workspace-operator ## 🔁 重建並推送 workspace-operator image
 	@echo "$(GREEN)✅ workspace-operator rebuild 完成$(NC)"
 
-rebuild-platform-images: rebuild-workspace-manager rebuild-workspace-runtime rebuild-workspace-chrome rebuild-workspace-nextjs rebuild-workspace-ui rebuild-workspace-operator ## 🔁 重建並推送所有平台 image
+rebuild-platform-images: rebuild-workspace-manager rebuild-workspace-runtime rebuild-workspace-chrome rebuild-workspace-canvas rebuild-workspace-ui rebuild-workspace-operator ## 🔁 重建並推送所有平台 image
 	@echo "$(GREEN)✅ 所有平台 image rebuild 完成$(NC)"
 
 ##@ 內部命令 (不要直接調用)

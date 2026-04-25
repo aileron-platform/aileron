@@ -298,7 +298,7 @@ const chat = {
     loadMore: 'Load older messages',
     loadMoreWithCount: 'Load older messages ({{count}} total messages)',
     loadingMore: 'Loading older messages...',
-    openInPreview: 'Open in preview',
+    openInCanvas: 'Open in Canvas',
   },
   queue: {
     title: 'Queued Messages ({{count}}/{{max}})',

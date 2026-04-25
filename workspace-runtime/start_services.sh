@@ -327,7 +327,7 @@ echo "📊 活動服務："
 echo "   - FastAPI:          http://localhost:3002"
 echo "   - SSH:              localhost:22"
 echo "   - Terminal Service: http://localhost:3004"
-echo "   - Next.js Preview:  http://localhost:3003 (可選)"
+echo "   - Canvas Runtime:  http://localhost:3003 (可選)"
 echo ""
 
 # nodaemon=true：前台運行，保持容器活動

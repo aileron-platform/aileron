@@ -159,7 +159,7 @@ These are the actual `resources.requests` / `resources.limits` currently observe
 | `aileron-aileron-redis` | `redis` | Not set | Not set |
 | `workspace-runtime-default-workspace` | `runtime` | Not set | Not set |
 | `workspace-browser-default-workspace` | `browser` | Not set | Not set |
-| `workspace-nextjs-default-workspace` | `nextjs` | Not set | Not set |
+| `workspace-canvas-default-workspace` | `canvas` | Not set | Not set |
 
 :::note
 At the moment, only `workspace-manager` has explicit requests / limits in the live cluster. The other platform services and the current default workspace deployments do not yet set container resources in their Pod specs.
@@ -183,7 +183,7 @@ At the moment, only `workspace-manager` has explicit requests / limits in the li
 |-----------|-------------|-----------|----------------|--------------|
 | Runtime | 500m | 2000m | 512Mi | 2Gi |
 | Browser (neko) | 1000m | 2000m | 1Gi | 2Gi |
-| Next.js | 250m | 1000m | 256Mi | 512Mi |
+| Canvas Runtime | 250m | 1000m | 256Mi | 512Mi |
 
 ### Resource configuration entry points in the chart
 
@@ -235,7 +235,7 @@ kubernetes:
         limits:
           cpu: 2000m
           memory: 2Gi
-    nextjs:
+    canvas:
       resources:
         requests:
           cpu: 500m
@@ -246,7 +246,7 @@ kubernetes:
 ```
 
 :::caution Chart defaults vs live cluster
-Although `kubernetes.workspaceDefaults.*.resources` already has defaults in the chart, and the current `aileron-aileron-platform-config` ConfigMap contains the corresponding JSON values, the existing `workspace-runtime-default-workspace`, `workspace-browser-default-workspace`, and `workspace-nextjs-default-workspace` Deployments still show `resources: {}`. Treat the actual Deployment / Pod spec as the source of truth when verifying resource enforcement.
+Although `kubernetes.workspaceDefaults.*.resources` already has defaults in the chart, and the current `aileron-aileron-platform-config` ConfigMap contains the corresponding JSON values, the existing `workspace-runtime-default-workspace`, `workspace-browser-default-workspace`, and `workspace-canvas-default-workspace` Deployments still show `resources: {}`. Treat the actual Deployment / Pod spec as the source of truth when verifying resource enforcement.
 :::
 
 ```yaml
@@ -275,7 +275,7 @@ Inspect the current workspace Deployments:
 ```bash
 kubectl get deploy workspace-runtime-default-workspace \
   workspace-browser-default-workspace \
-  workspace-nextjs-default-workspace \
+  workspace-canvas-default-workspace \
   -n aileron -o yaml
 ```
 
@@ -283,7 +283,7 @@ Inspect whether the workspace default resources are present in platform config:
 
 ```bash
 kubectl get configmap aileron-aileron-platform-config -n aileron \
-  -o jsonpath='{.data.RUNTIME_K8S_RUNTIME_RESOURCES}{"\n"}{.data.RUNTIME_K8S_BROWSER_RESOURCES}{"\n"}{.data.RUNTIME_K8S_NEXTJS_RESOURCES}{"\n"}'
+  -o jsonpath='{.data.RUNTIME_K8S_RUNTIME_RESOURCES}{"\n"}{.data.RUNTIME_K8S_BROWSER_RESOURCES}{"\n"}{.data.RUNTIME_K8S_CANVAS_RESOURCES}{"\n"}'
 ```
 
 ### Storage Planning

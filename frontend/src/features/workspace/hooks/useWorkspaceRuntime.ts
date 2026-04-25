@@ -20,10 +20,6 @@ export interface RuntimeStatus {
   internalPort: number;
   externalPort: number | null;
   lastSeen: string | null;
-  webPreviewInternalPort: number;
-  webPreviewExternalPort: number | null;
-  webPreviewInternalUrl: string | null;
-  webPreviewExternalUrl: string | null;
   terminalExternalPort: number | null;
   terminalExternalUrl: string | null;
   // Browser container fields

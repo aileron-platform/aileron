@@ -54,13 +54,13 @@ describe('useWorkspaceDeleteFallback', () => {
   it('removes workspace-scoped queries for the deleted workspace identity', async () => {
     const queryClient = createTestQueryClient();
     queryClient.setQueryData(['chat', 'ws-a'], { id: 'deleted' });
-    queryClient.setQueryData(['preview', 'https://runtime-a.example'], { id: 'runtime' });
+    queryClient.setQueryData(['canvas', 'https://runtime-a.example'], { id: 'runtime' });
     queryClient.setQueryData(['chat', 'ws-b'], { id: 'kept' });
 
     await cleanupDeletedWorkspaceQueries(queryClient, 'ws-a', 'https://runtime-a.example');
 
     expect(queryClient.getQueryData(['chat', 'ws-a'])).toBeUndefined();
-    expect(queryClient.getQueryData(['preview', 'https://runtime-a.example'])).toBeUndefined();
+    expect(queryClient.getQueryData(['canvas', 'https://runtime-a.example'])).toBeUndefined();
     expect(queryClient.getQueryData(['chat', 'ws-b'])).toEqual({ id: 'kept' });
   });
 

@@ -105,19 +105,19 @@ const OpenSpecCustomizationFeature = React.lazy(() =>
 
 
 const SessionResultFeature = React.lazy(() =>
-  import('../features/preview/SessionResultFeature').then((module) => ({
+  import('../features/canvas/SessionResultFeature').then((module) => ({
     default: module.SessionResultFeature,
   })),
 );
 
-const WebPreviewFeature = React.lazy(() =>
-  import('../features/preview/WebPreviewFeature').then((module) => ({
-    default: module.WebPreviewFeature,
+const WebCanvasFeature = React.lazy(() =>
+  import('../features/canvas/WebCanvasFeature').then((module) => ({
+    default: module.WebCanvasFeature,
   })),
 );
 
 const BrowserFeature = React.lazy(() =>
-  import('../features/preview').then((module) => ({
+  import('../features/canvas').then((module) => ({
     default: module.BrowserFeature,
   })),
 );
@@ -537,20 +537,20 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         </React.Suspense>
       );
     }
-    if (state.currentFeature === 'preview') {
-      const subView = state.preview.subView;
+    if (state.currentFeature === 'canvas') {
+      const subView = state.canvas.subView;
       return (
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入預覽功能...
+              {t('workspace.canvas.header.loading')}
             </div>
           }
         >
           {subView === 'session-result' ? (
             <SessionResultFeature />
           ) : (
-            <WebPreviewFeature />
+            <WebCanvasFeature />
           )}
         </React.Suspense>
       );

@@ -32,7 +32,7 @@ const containerManagement = {
     resources: {
       title: '執行環境資源配置',
       description: '僅 Kubernetes 工作區可覆寫執行環境的 CPU 與記憶體 requests / limits。',
-      scope: 'workspace-browser 與 workspace-nextjs 仍使用 Helm chart 的平台預設資源。',
+      scope: 'workspace-browser 與 workspace-canvas 仍使用 Helm chart 的平台預設資源。',
       requests: {
         title: '資源請求',
       },
@@ -151,7 +151,7 @@ const containerManagement = {
     groups: {
       workspace: {
         title: '工作區網路規則',
-        description: '套用到 workspace-runtime 與 workspace-nextjs。',
+        description: '套用到 workspace-runtime 與 workspace-canvas。',
       },
       browser: {
         title: '瀏覽器網路規則',

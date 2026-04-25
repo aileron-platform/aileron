@@ -67,9 +67,9 @@ export const WorkspaceSidebar: React.FC = () => {
         (item.id === 'container-management' && state.containerManagement.subView === subItem.id) ||
         (item.id === 'claude-code' && state.claudeCodeSettings.subView === subItem.id) ||
         (AGENT_NAVIGATION_IDS.includes(item.id) && item.id !== 'claude-code' && state.agentToolSettings.subView === subItem.id) ||
-        (item.id === 'preview' && state.preview.subView === subItem.id));
+        (item.id === 'canvas' && state.canvas.subView === subItem.id));
   }, [state.currentFeature, state.versionControl.subView, state.openspec.subView, state.workspaceSettings.subView,
-  state.containerManagement.subView, state.claudeCodeSettings.subView, state.agentToolSettings.subView, state.preview.subView]);
+  state.containerManagement.subView, state.claudeCodeSettings.subView, state.agentToolSettings.subView, state.canvas.subView]);
 
   // 清除延遲關閉的定時器
   const clearHideTimeout = () => {

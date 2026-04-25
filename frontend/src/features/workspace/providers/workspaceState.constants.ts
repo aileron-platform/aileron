@@ -24,8 +24,8 @@ export const initialState: WorkspaceState = {
     activeTabId: null,
     modifiedTabs: [],
     originalContents: {},
-    mermaidPreviewMode: {},
-    markdownPreviewMode: {},
+    mermaidCanvasMode: {},
+    markdownCanvasMode: {},
   },
 
   workspaceTabsCache: {},
@@ -74,7 +74,7 @@ export const initialState: WorkspaceState = {
     subView: '',
   },
 
-  preview: {
+  canvas: {
     subView: 'session-result',
     markdownContent: '',
   },
@@ -82,7 +82,7 @@ export const initialState: WorkspaceState = {
 
 // 根據路由路徑決定當前功能的輔助函數
 export const getFeatureFromPath = (pathname: string): WorkspaceFeature => {
-  if (pathname.includes('/preview')) return 'preview';
+  if (pathname.includes('/canvas')) return 'canvas';
   if (pathname.includes('/version-control')) return 'version-control';
   if (pathname.includes('/openspec')) return 'openspec';
   if (pathname.includes('/workspace-settings')) return 'workspace-settings';
@@ -162,8 +162,8 @@ export const getAgentToolSubView = (pathname: string): string => {
 };
 
 // 根據路由路徑決定預覽子視圖
-export const getPreviewSubView = (pathname: string): WorkspaceState['preview']['subView'] => {
-  if (pathname.includes('/web-preview')) return 'web-preview';
+export const getCanvasSubView = (pathname: string): WorkspaceState['canvas']['subView'] => {
+  if (pathname.includes('/web-canvas')) return 'web-canvas';
   return 'session-result'; // 預設值
 };
 

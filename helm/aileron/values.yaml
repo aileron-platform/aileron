@@ -24,7 +24,7 @@ publicRouting:
   keycloakHost: "keycloak.{baseDomain}"
   runtimeHostPattern: "workspace-runtime-{workspaceId}.{baseDomain}"
   browserHostPattern: "workspace-browser-{workspaceId}.{baseDomain}"
-  nextjsHostPattern: "workspace-nextjs-{workspaceId}.{baseDomain}"
+  canvasHostPattern: "workspace-canvas-{workspaceId}.{baseDomain}"
 
 kubernetes:
   enabled: true
@@ -47,7 +47,7 @@ kubernetes:
     storageClassName: hostpath
   runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
   browserImage: ailerondocker/workspace-browser:latest-amd64
-  nextjsImage: ailerondocker/workspace-nextjs:latest-amd64
+  canvasImage: ailerondocker/workspace-canvas:latest-amd64
   # 留空時預設只 watch Helm release 所在 namespace，避免多個 release 互相 reconcile。
   watchNamespace: ""
   workspaceDefaults:
@@ -67,7 +67,7 @@ kubernetes:
         limits:
           cpu: 2000m
           memory: 2Gi
-    nextjs:
+    canvas:
       resources:
         requests:
           cpu: 500m

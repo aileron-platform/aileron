@@ -11,7 +11,7 @@ func TestPublicRoutingConfigValidate(t *testing.T) {
 		KeycloakHost:         "keycloak.{baseDomain}",
 		RuntimeHostPattern:   "workspace-runtime-{workspaceId}.{baseDomain}",
 		BrowserHostPattern:   "workspace-browser-{workspaceId}.{baseDomain}",
-		NextjsHostPattern:    "workspace-nextjs-{workspaceId}.{baseDomain}",
+		CanvasHostPattern:    "workspace-canvas-{workspaceId}.{baseDomain}",
 	}
 
 	if err := config.Validate(); err != nil {
@@ -28,7 +28,7 @@ func TestPublicRoutingConfigValidateRejectsMissingWorkspaceIDPlaceholder(t *test
 		KeycloakHost:         "keycloak.{baseDomain}",
 		RuntimeHostPattern:   "workspace-runtime.example.com",
 		BrowserHostPattern:   "workspace-browser-{workspaceId}.{baseDomain}",
-		NextjsHostPattern:    "workspace-nextjs-{workspaceId}.{baseDomain}",
+		CanvasHostPattern:    "workspace-canvas-{workspaceId}.{baseDomain}",
 	}
 
 	if err := config.Validate(); err == nil {
@@ -45,7 +45,7 @@ func TestPublicRoutingConfigResolveHost(t *testing.T) {
 		KeycloakHost:         "keycloak.{baseDomain}",
 		RuntimeHostPattern:   "workspace-runtime-{workspaceId}.{baseDomain}",
 		BrowserHostPattern:   "workspace-browser-{workspaceId}.{baseDomain}",
-		NextjsHostPattern:    "workspace-nextjs-{workspaceId}.{baseDomain}",
+		CanvasHostPattern:    "workspace-canvas-{workspaceId}.{baseDomain}",
 	}
 
 	host, err := config.ResolveHost(config.RuntimeHostPattern, "ws-123")
@@ -66,7 +66,7 @@ func TestPublicRoutingConfigResolveHostRequiresWorkspaceID(t *testing.T) {
 		KeycloakHost:         "keycloak.{baseDomain}",
 		RuntimeHostPattern:   "workspace-runtime-{workspaceId}.{baseDomain}",
 		BrowserHostPattern:   "workspace-browser-{workspaceId}.{baseDomain}",
-		NextjsHostPattern:    "workspace-nextjs-{workspaceId}.{baseDomain}",
+		CanvasHostPattern:    "workspace-canvas-{workspaceId}.{baseDomain}",
 	}
 
 	if _, err := config.ResolveHost(config.RuntimeHostPattern, ""); err == nil {

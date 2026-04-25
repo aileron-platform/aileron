@@ -6,9 +6,9 @@ version: "1.0"
 # 預設映像（與資料庫預設值保持一致）
 default_image: "universal"
 
-# 支援容器映像（Browser、Next.js 等輔助容器）
+# 支援容器映像（Browser、Canvas 等輔助容器）
 browser_image: "ailerondocker/workspace-chrome:dev-arm64"
-nextjs_image: "ailerondocker/workspace-nextjs:dev-arm64"
+canvas_image: "ailerondocker/workspace-canvas:dev-arm64"
 
 # 可用的容器映像列表
 images:

@@ -18,7 +18,7 @@ const { getMock, putMock, toastMock, reloadMock, tMock } = vi.hoisted(() => ({
       'workspace.workspaceSettings.basic.metadata.fields.access': 'Access',
       'workspace.workspaceSettings.basic.components.runtime': 'Runtime',
       'workspace.workspaceSettings.basic.components.browser': 'Browser',
-      'workspace.workspaceSettings.basic.components.nextjs': 'Next.js',
+      'workspace.workspaceSettings.basic.components.canvas': 'Canvas',
       'workspace.workspaceSettings.access.badges.owned': 'Owned',
       'workspace.workspaceSettings.access.badges.shared': `Shared · ${String(options?.role ?? '')}`,
       'workspace.workspaceSettings.access.roles.viewer': 'viewer',
@@ -83,9 +83,9 @@ describe('WorkspaceBasicSettings', () => {
           phase: 'Running',
           internalUrl: 'http://browser.team-a.svc.cluster.local:6080',
         },
-        nextjs: {
+        canvas: {
           phase: 'Disabled',
-          internalUrl: 'http://nextjs.team-a.svc.cluster.local:3003',
+          internalUrl: 'http://canvas.team-a.svc.cluster.local:3003',
         },
       },
     });

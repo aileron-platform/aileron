@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
     containerManagement: { subView: 'overview' },
     claudeCodeSettings: { subView: 'memory' },
     agentToolSettings: { subView: 'agents' },
-    preview: { subView: 'browser' },
+    canvas: { subView: 'browser' },
   },
   summary: {
     workspaceId: 'ws-1',

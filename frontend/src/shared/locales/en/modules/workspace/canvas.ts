@@ -1,0 +1,111 @@
+const canvas = {
+  header: {
+    title: 'Canvas',
+    actions: {
+      fullscreen: {
+        enter: 'Enter full screen canvas',
+        exit: 'Exit full screen canvas',
+      },
+      refresh: 'Refresh',
+      menu: 'Menu',
+    },
+    loading: 'Loading Canvas...',
+  },
+  sessionResult: {
+    title: 'Session Result',
+    emptyMessage: 'No session results available in Canvas',
+  },
+  webCanvas: {
+    title: 'Web Canvas',
+    routePlaceholder: 'Select or enter a route',
+    iframeTitle: 'Workspace Web Canvas',
+    loading: 'Loading Canvas...',
+    types: {
+      html: 'HTML',
+      nextjs: 'Next.js',
+      default: 'Default',
+    },
+    manifest: {
+      missing: 'No manifest',
+      valid: 'Manifest ready',
+      invalid: 'Manifest error',
+    },
+    error: {
+      title: 'Canvas unavailable',
+      defaultMessage: 'Canvas is not ready. Sync or reset the Canvas and try again.',
+    },
+    actions: {
+      missingWorkspace: 'Workspace information is incomplete.',
+      unknownError: 'The Canvas action failed.',
+      errorTitle: 'Canvas action failed',
+      sync: {
+        label: 'Sync Canvas',
+        successTitle: 'Canvas synced',
+        successDescription: 'The Canvas snapshot has been updated.',
+        errorTitle: 'Canvas sync failed',
+      },
+      reset: {
+        label: 'Reset Canvas',
+        successTitle: 'Canvas reset',
+        successDescription: 'The Canvas snapshot has been rebuilt.',
+        errorTitle: 'Canvas reset failed',
+      },
+    },
+  },
+  browser: {
+    title: 'Chrome Browser',
+    actions: {
+      reload: 'Reload',
+      retry: 'Retry',
+      restartContainer: 'Restart Container',
+    },
+    loading: 'Loading...',
+    connecting: 'Connecting...',
+    notReady: {
+      title: 'Browser Not Started',
+      description: 'Chrome browser container is not available',
+      hint: 'Tip: Chrome browser starts with the workspace runtime',
+    },
+    restart: {
+      started: 'Restarting Chrome',
+      inProgress: 'Restarting Chrome Browser',
+      description: 'Chrome container restart has started, please wait...',
+      failed: 'Restart Failed',
+    },
+    error: {
+      status: 'Browser status error',
+      notStarted: 'Browser not started',
+      connection: 'Cannot connect to browser',
+      connectionFailed: 'Connection Failed',
+      cannotConnect: 'Cannot connect to browser canvas, please check if Chrome container is running',
+      securityFailure: 'VNC security verification failed',
+      noWorkspace: 'Workspace information not found',
+    },
+  },
+  usage: {
+    stats: 'Stats',
+    totalTokens: 'Total Tokens',
+    input: 'Input',
+    output: 'Output',
+    details: 'Details',
+    cost: 'Cost',
+    costUnavailable: 'Cost unavailable',
+    notAvailable: 'Not available',
+    cache: 'Cache',
+    tier: 'Service Tier',
+    duration: 'Duration',
+    provider: 'Provider',
+    model: 'Model',
+    models: 'Model Breakdown',
+    modelCount: '{{count}} models',
+    modelCost: 'Cost',
+    dialog: {
+      title: 'Usage Details',
+      description: 'Complete usage statistics for this response',
+    },
+    cacheRead: 'Read',
+    cacheWrite: 'Write',
+  },
+};
+
+export default canvas;

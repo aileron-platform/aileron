@@ -39,7 +39,7 @@ title: Kubernetes Mode
               │ PostgreSQL │               ┌──────▼───────┐
               │ StatefulSet│               │ Runtime Pod  │
               └────────────┘               │ Browser Pod  │
-              ┌────────────┐               │ Next.js Pod  │
+              ┌────────────┐               │ Canvas Pod  │
               │   Redis    │               │ Service      │
               │ StatefulSet│               │ Ingress      │
               └────────────┘               │ CiliumPolicy │
@@ -169,7 +169,7 @@ Kubernetes mode uses host-based routing (subdomain style) rather than path-based
 Current behavior:
 
 - Helm creates one platform Ingress for Frontend, Workspace Manager, and Keycloak
-- `workspace-operator` creates one separate Ingress each for `workspace-runtime`, `workspace-browser`, and `workspace-nextjs` whenever a workspace is created
+- `workspace-operator` creates one separate Ingress each for `workspace-runtime`, `workspace-browser`, and `workspace-canvas` whenever a workspace is created
 
 So workspace traffic is not routed through a single wildcard Ingress rule. The operator expands the host patterns with `workspaceId` and creates explicit Ingress hosts.
 
@@ -184,7 +184,7 @@ So workspace traffic is not routed through a single wildcard Ingress rule. The o
 | `publicRouting.keycloakHost` | `keycloak.{baseDomain}` | Keycloak host |
 | `publicRouting.runtimeHostPattern` | `workspace-runtime-{workspaceId}.{baseDomain}` | Runtime host pattern |
 | `publicRouting.browserHostPattern` | `workspace-browser-{workspaceId}.{baseDomain}` | Browser host pattern |
-| `publicRouting.nextjsHostPattern` | `workspace-nextjs-{workspaceId}.{baseDomain}` | Next.js host pattern |
+| `publicRouting.canvasHostPattern` | `workspace-canvas-{workspaceId}.{baseDomain}` | Canvas host pattern |
 
 `{baseDomain}` and `{workspaceId}` are placeholders that Helm templates resolve at deploy time.
 
@@ -203,7 +203,7 @@ helm upgrade --install aileron helm/aileron \
   --set publicRouting.keycloakHost='keycloak.{baseDomain}' \
   --set publicRouting.runtimeHostPattern='workspace-runtime-{workspaceId}.{baseDomain}' \
   --set publicRouting.browserHostPattern='workspace-browser-{workspaceId}.{baseDomain}' \
-  --set publicRouting.nextjsHostPattern='workspace-nextjs-{workspaceId}.{baseDomain}'
+  --set publicRouting.canvasHostPattern='workspace-canvas-{workspaceId}.{baseDomain}'
 ```
 
 Public host mapping:
@@ -215,13 +215,13 @@ Public host mapping:
 | Keycloak | `https://keycloak.example.com` |
 | Workspace Runtime | `https://workspace-runtime-<workspaceId>.example.com` |
 | Workspace Browser | `https://workspace-browser-<workspaceId>.example.com` |
-| Workspace Next.js | `https://workspace-nextjs-<workspaceId>.example.com` |
+| Workspace Canvas | `https://workspace-canvas-<workspaceId>.example.com` |
 
 Each new workspace gets its own set of URLs from these patterns. For example, `default-workspace` becomes:
 
 - `workspace-runtime-default-workspace.example.com`
 - `workspace-browser-default-workspace.example.com`
-- `workspace-nextjs-default-workspace.example.com`
+- `workspace-canvas-default-workspace.example.com`
 
 ## DNS & TLS Requirements
 
@@ -288,7 +288,7 @@ Internal URL examples:
 http://workspace-manager.<namespace>.svc.cluster.local:3001
 http://workspace-runtime-<workspaceId>.<namespace>.svc.cluster.local:3002
 http://workspace-browser-<workspaceId>.<namespace>.svc.cluster.local:6080
-http://workspace-nextjs-<workspaceId>.<namespace>.svc.cluster.local:3003
+http://workspace-canvas-<workspaceId>.<namespace>.svc.cluster.local:3003
 ```
 
 The workspace-routing ConfigMap records the full routing contract, including service name templates and port mappings:
@@ -297,10 +297,10 @@ The workspace-routing ConfigMap records the full routing contract, including ser
 |---------|-------|
 | `RUNTIME_SERVICE_NAME_TEMPLATE` | `workspace-runtime-{workspaceId}` |
 | `BROWSER_SERVICE_NAME_TEMPLATE` | `workspace-browser-{workspaceId}` |
-| `NEXTJS_SERVICE_NAME_TEMPLATE` | `workspace-nextjs-{workspaceId}` |
+| `CANVAS_SERVICE_NAME_TEMPLATE` | `workspace-canvas-{workspaceId}` |
 | `RUNTIME_SERVICE_PORT` | `3002` |
 | `BROWSER_SERVICE_PORT` | `6080` |
-| `NEXTJS_SERVICE_PORT` | `3003` |
+| `CANVAS_SERVICE_PORT` | `3003` |
 
 ## Workspace CRD
 
@@ -323,9 +323,9 @@ spec:
   browser:
     enabled: true
     image: ailerondocker/workspace-browser:latest
-  nextjs:
+  canvas:
     enabled: true
-    image: ailerondocker/workspace-nextjs:latest
+    image: ailerondocker/workspace-canvas:latest
   workspacePath: /workspace
   targetNamespace: workspace-system
   git:
@@ -360,7 +360,7 @@ The Operator writes workspace status to `.status`:
 | `status.components.runtime.internalUrl` | Runtime internal URL |
 | `status.components.runtime.externalUrl` | Runtime external URL |
 | `status.components.browser.*` | Browser pod phase and URLs |
-| `status.components.nextjs.*` | Next.js pod phase and URLs |
+| `status.components.canvas.*` | Canvas pod phase and URLs |
 | `status.firewall.*.effectiveAllowedDomains` | Effective domain allowlist |
 
 ### Operations Triggers
@@ -373,7 +373,7 @@ spec:
     restartWorkspaceAt: "2026-04-09T10:00:00Z"   # Restart entire workspace
     restartRuntimeAt: "2026-04-09T10:00:00Z"      # Restart runtime only
     restartBrowserAt: "2026-04-09T10:00:00Z"      # Restart browser only
-    restartNextjsAt: "2026-04-09T10:00:00Z"       # Restart nextjs only
+    restartCanvasAt: "2026-04-09T10:00:00Z"       # Restart canvas only
 ```
 
 ## Kubernetes Settings
@@ -389,7 +389,7 @@ spec:
 | `kubernetes.pvcName` | `RUNTIME_K8S_PVC_NAME` | `workspace-runtime-pvc` | PVC name |
 | `kubernetes.runtimeImage` | `RUNTIME_K8S_IMAGE` | `ailerondocker/workspace-runtime:latest` | Runtime image |
 | `kubernetes.browserImage` | `RUNTIME_K8S_BROWSER_IMAGE` | `ailerondocker/workspace-browser:latest` | Browser image |
-| `kubernetes.nextjsImage` | `RUNTIME_K8S_NEXTJS_IMAGE` | `ailerondocker/workspace-nextjs:latest` | Next.js image |
+| `kubernetes.canvasImage` | `RUNTIME_K8S_CANVAS_IMAGE` | `ailerondocker/workspace-canvas:latest` | Canvas image |
 | `kubernetes.watchNamespace` | `WATCH_NAMESPACE` | _(empty, all namespaces)_ | Operator watch namespace |
 
 ### Overriding Namespace and Allowlist
@@ -670,7 +670,7 @@ The Helm chart auto-generates Ingress rules for:
 - Keycloak (`keycloakHost`)
 
 :::note
-Dynamic workspace Ingresses (runtime, browser, nextjs) are created by the Operator during reconciliation. Each workspace gets its own hosts and Ingress objects, separate from the Helm-managed platform Ingress.
+Dynamic workspace Ingresses (runtime, browser, canvas) are created by the Operator during reconciliation. Each workspace gets its own hosts and Ingress objects, separate from the Helm-managed platform Ingress.
 :::
 
 ## Firewall Defaults

@@ -12,7 +12,7 @@ Current scope:
 
 Planned additions:
 
-- reconcile runtime, nextjs, and browser Deployments
+- reconcile runtime, canvas, and browser Deployments
 - reconcile Services and PVCs
 - reconcile Cilium network policies
 - write richer status information

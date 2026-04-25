@@ -64,7 +64,7 @@ from app.services.workspace_lifecycle_service import (
     run_delete_workspace_task,
     run_restart_workspace_task,
     run_restart_browser_task,
-    run_restart_nextjs_task,
+    run_restart_canvas_task,
 )
 
 logger = logging.getLogger(__name__)
@@ -280,27 +280,27 @@ _RUNTIME_LOG_STAGE_KEYS = {
     "provisioned": "workspace.runtime_log.provisioned",
     "browser_starting": "workspace.runtime_log.browser_starting",
     "browser_ready": "workspace.runtime_log.browser_ready",
-    "nextjs_starting": "workspace.runtime_log.nextjs_starting",
-    "nextjs_ready": "workspace.runtime_log.nextjs_ready",
+    "canvas_starting": "workspace.runtime_log.canvas_starting",
+    "canvas_ready": "workspace.runtime_log.canvas_ready",
     "completed": "workspace.runtime_log.completed",
     "browser_restarting": "workspace.runtime_log.browser_restarting",
     "browser_running": "workspace.runtime_log.browser_running",
-    "nextjs_restarting": "workspace.runtime_log.nextjs_restarting",
-    "nextjs_running": "workspace.runtime_log.nextjs_running",
+    "canvas_restarting": "workspace.runtime_log.canvas_restarting",
+    "canvas_running": "workspace.runtime_log.canvas_running",
 }
 
 _RUNTIME_LOG_EXACT_KEYS = {
     "沒有關聯的 Browser 容器": "workspace.runtime_log.browser_not_found",
     "No Browser container found for this workspace": "workspace.runtime_log.browser_not_found",
-    "沒有關聯的 Next.js 容器": "workspace.runtime_log.nextjs_not_found",
-    "No Next.js container found for this workspace": "workspace.runtime_log.nextjs_not_found",
+    "沒有關聯的 Canvas 容器": "workspace.runtime_log.canvas_not_found",
+    "No Canvas container found for this workspace": "workspace.runtime_log.canvas_not_found",
 }
 
 _RUNTIME_LOG_PREFIX_KEYS = (
     ("Browser 容器啟動失敗: ", "workspace.runtime_log.browser_error"),
     ("Browser container startup failed: ", "workspace.runtime_log.browser_error"),
-    ("Next.js 容器啟動失敗: ", "workspace.runtime_log.nextjs_error"),
-    ("Next.js container startup failed: ", "workspace.runtime_log.nextjs_error"),
+    ("Canvas 容器啟動失敗: ", "workspace.runtime_log.canvas_error"),
+    ("Canvas container startup failed: ", "workspace.runtime_log.canvas_error"),
     ("重建失敗: ", "workspace.runtime_log.rebuild_error"),
     ("Rebuild failed: ", "workspace.runtime_log.rebuild_error"),
     ("已刪除目錄: ", "workspace.runtime_log.volume_removed"),
@@ -761,18 +761,18 @@ def restart_browser(
 
 
 @router.post(
-    "/{workspace_id}/restart-nextjs",
+    "/{workspace_id}/restart-canvas",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="重啟 Next.js 容器",
+    summary="重啟 Canvas 容器",
     responses=build_responses(400, 404, 500),
 )
-def restart_nextjs(
+def restart_canvas(
     workspace_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict:
-    """重啟工作區的 Next.js 容器
+    """重啟工作區的 Canvas 容器
 
     Args:
         workspace_id: Workspace ID
@@ -793,20 +793,20 @@ def restart_nextjs(
 
         if (
             workspace.provisioner != "kubernetes"
-            and not workspace.runtime_status.nextjs_container_id
+            and not workspace.runtime_status.canvas_container_id
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=request.state.translate("workspace.nextjs.not_found"),
+                detail=request.state.translate("workspace.canvas.not_found"),
             )
 
-        if not service.mark_nextjs_restarting(
+        if not service.mark_canvas_restarting(
             workspace_id,
             current_user_id=current_user_id,
         ):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=request.state.translate("workspace.nextjs.restart_failed"),
+                detail=request.state.translate("workspace.canvas.restart_failed"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -814,10 +814,10 @@ def restart_nextjs(
             detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
-    background_tasks.add_task(run_restart_nextjs_task, workspace_id)
+    background_tasks.add_task(run_restart_canvas_task, workspace_id)
 
     return {
-        "message": request.state.translate("workspace.nextjs.restart_started"),
+        "message": request.state.translate("workspace.canvas.restart_started"),
         "workspaceId": workspace_id,
         "status": "restarting"
     }

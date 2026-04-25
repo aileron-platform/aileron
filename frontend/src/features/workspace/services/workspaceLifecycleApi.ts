@@ -42,9 +42,9 @@ export interface RestartRuntimeResponse {
 }
 
 /**
- * 重啟 Next.js 容器回應
+ * 重啟 Canvas 容器回應
  */
-export interface RestartNextjsResponse {
+export interface RestartCanvasResponse {
   message: string;
   workspaceId: string;
   status: string;
@@ -116,13 +116,13 @@ export const workspaceLifecycleApi = {
   },
 
   /**
-   * 重啟工作區的 Next.js 容器
+   * 重啟工作區的 Canvas 容器
    *
    * @param workspaceId - Workspace ID
    * @returns 重啟操作回應
    */
-  async restartNextjsContainer(workspaceId: string): Promise<RestartNextjsResponse> {
-    return await apiClient.post<RestartNextjsResponse>(`/workspaces/${workspaceId}/restart-nextjs`);
+  async restartCanvasContainer(workspaceId: string): Promise<RestartCanvasResponse> {
+    return await apiClient.post<RestartCanvasResponse>(`/workspaces/${workspaceId}/restart-canvas`);
   },
 };
 

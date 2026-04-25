@@ -225,7 +225,7 @@ export const WorkspaceBasicSettings: React.FC = () => {
     !isDirty;
 
   const componentItems = useMemo<Array<{
-    key: 'runtime' | 'browser' | 'nextjs';
+    key: 'runtime' | 'browser' | 'canvas';
     label: string;
     value: WorkspaceComponentStatusResponse | undefined;
   }>>(() => [
@@ -240,9 +240,9 @@ export const WorkspaceBasicSettings: React.FC = () => {
       value: workspaceDetail?.components?.browser,
     },
     {
-      key: 'nextjs',
-      label: t('workspace.workspaceSettings.basic.components.nextjs'),
-      value: workspaceDetail?.components?.nextjs,
+      key: 'canvas',
+      label: t('workspace.workspaceSettings.basic.components.canvas'),
+      value: workspaceDetail?.components?.canvas,
     },
   ], [t, workspaceDetail]);
 

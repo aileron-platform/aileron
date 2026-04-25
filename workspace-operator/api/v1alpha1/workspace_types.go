@@ -38,7 +38,7 @@ type WorkspaceOperationsSpec struct {
 	RestartWorkspaceAt *metav1.Time `json:"restartWorkspaceAt,omitempty"`
 	RestartRuntimeAt   *metav1.Time `json:"restartRuntimeAt,omitempty"`
 	RestartBrowserAt   *metav1.Time `json:"restartBrowserAt,omitempty"`
-	RestartNextjsAt    *metav1.Time `json:"restartNextjsAt,omitempty"`
+	RestartCanvasAt    *metav1.Time `json:"restartCanvasAt,omitempty"`
 }
 
 type WorkspaceFirewallGroupSpec struct {
@@ -59,7 +59,7 @@ type WorkspaceSpec struct {
 	TargetNamespace string                             `json:"targetNamespace,omitempty"`
 	Runtime         WorkspaceResourceSpec              `json:"runtime"`
 	Browser         WorkspaceOptionalComponentSpec     `json:"browser"`
-	Nextjs          WorkspaceOptionalComponentSpec     `json:"nextjs"`
+	Canvas          WorkspaceOptionalComponentSpec     `json:"canvas"`
 	Git             WorkspaceGitSpec                   `json:"git,omitempty"`
 	WorkspacePath   string                             `json:"workspacePath"`
 	EnvVars         []WorkspaceEnvVar                  `json:"envVars,omitempty"`
@@ -78,7 +78,7 @@ type WorkspaceComponentStatus struct {
 type WorkspaceComponentsStatus struct {
 	Runtime WorkspaceComponentStatus `json:"runtime,omitempty"`
 	Browser WorkspaceComponentStatus `json:"browser,omitempty"`
-	Nextjs  WorkspaceComponentStatus `json:"nextjs,omitempty"`
+	Canvas  WorkspaceComponentStatus `json:"canvas,omitempty"`
 }
 
 type WorkspaceFirewallGroupStatus struct {

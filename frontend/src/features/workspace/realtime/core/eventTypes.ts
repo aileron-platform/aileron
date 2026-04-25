@@ -52,7 +52,7 @@ export type ToolEvent =
 
 // Queue 事件
 export type QueueEvent =
-    | { type: 'messages queued'; session_id: string; data: { message_id: string; queue_position: number; content_preview?: string } }
+    | { type: 'messages queued'; session_id: string; data: { message_id: string; queue_position: number; content_canvas?: string } }
     | { type: 'message:dequeued'; session_id: string; data: { message_id: string; queue_position: number; reason: string } };
 
 // Task 一般事件

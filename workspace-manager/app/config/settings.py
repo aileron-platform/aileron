@@ -135,9 +135,9 @@ class Settings(BaseSettings):
         default="ailerondocker/workspace-chrome:latest-amd64",
         description="Browser 使用的容器映像",
     )
-    RUNTIME_K8S_NEXTJS_IMAGE: str = Field(
-        default="ailerondocker/workspace-nextjs:latest-amd64",
-        description="Next.js 使用的容器映像",
+    RUNTIME_K8S_CANVAS_IMAGE: str = Field(
+        default="ailerondocker/workspace-canvas:latest-amd64",
+        description="Canvas 使用的容器映像",
     )
     RUNTIME_K8S_RUNTIME_RESOURCES: Annotated[dict, NoDecode] = Field(
         default_factory=lambda: {
@@ -153,12 +153,12 @@ class Settings(BaseSettings):
         },
         description="Kubernetes browser 預設資源配置",
     )
-    RUNTIME_K8S_NEXTJS_RESOURCES: Annotated[dict, NoDecode] = Field(
+    RUNTIME_K8S_CANVAS_RESOURCES: Annotated[dict, NoDecode] = Field(
         default_factory=lambda: {
             "requests": {"cpu": "500m", "memory": "1Gi"},
             "limits": {"cpu": "2000m", "memory": "2Gi"},
         },
-        description="Kubernetes nextjs 預設資源配置",
+        description="Kubernetes canvas 預設資源配置",
     )
     CILIUM_ENABLED: bool = Field(
         default=False,
@@ -192,9 +192,9 @@ class Settings(BaseSettings):
         default="workspace-browser-{workspaceId}.{baseDomain}",
         description="Workspace Browser 對外 host pattern",
     )
-    PUBLIC_NEXTJS_HOST_PATTERN: str = Field(
-        default="workspace-nextjs-{workspaceId}.{baseDomain}",
-        description="Workspace Next.js 對外 host pattern",
+    PUBLIC_CANVAS_HOST_PATTERN: str = Field(
+        default="workspace-canvas-{workspaceId}.{baseDomain}",
+        description="Workspace Canvas 對外 host pattern",
     )
     FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS: Annotated[List[str], NoDecode] = Field(
         default_factory=list,
@@ -415,7 +415,7 @@ class Settings(BaseSettings):
         "PUBLIC_KEYCLOAK_HOST",
         "PUBLIC_RUNTIME_HOST_PATTERN",
         "PUBLIC_BROWSER_HOST_PATTERN",
-        "PUBLIC_NEXTJS_HOST_PATTERN",
+        "PUBLIC_CANVAS_HOST_PATTERN",
         mode="before",
     )
     @classmethod
@@ -434,7 +434,7 @@ class Settings(BaseSettings):
             raise ValueError("PUBLIC_SCHEME must be either 'http' or 'https'")
         return normalized
 
-    @field_validator("PUBLIC_RUNTIME_HOST_PATTERN", "PUBLIC_BROWSER_HOST_PATTERN", "PUBLIC_NEXTJS_HOST_PATTERN")
+    @field_validator("PUBLIC_RUNTIME_HOST_PATTERN", "PUBLIC_BROWSER_HOST_PATTERN", "PUBLIC_CANVAS_HOST_PATTERN")
     @classmethod
     def validate_workspace_host_patterns(cls, v: str) -> str:
         """驗證 workspace host pattern 必須包含 workspaceId。"""
@@ -467,7 +467,7 @@ class Settings(BaseSettings):
     @field_validator(
         "RUNTIME_K8S_RUNTIME_RESOURCES",
         "RUNTIME_K8S_BROWSER_RESOURCES",
-        "RUNTIME_K8S_NEXTJS_RESOURCES",
+        "RUNTIME_K8S_CANVAS_RESOURCES",
         mode="before",
     )
     @classmethod
@@ -488,7 +488,7 @@ class Settings(BaseSettings):
         self.resolve_public_host(self.PUBLIC_KEYCLOAK_HOST)
         self.resolve_public_host(self.PUBLIC_RUNTIME_HOST_PATTERN, workspace_id="sample")
         self.resolve_public_host(self.PUBLIC_BROWSER_HOST_PATTERN, workspace_id="sample")
-        self.resolve_public_host(self.PUBLIC_NEXTJS_HOST_PATTERN, workspace_id="sample")
+        self.resolve_public_host(self.PUBLIC_CANVAS_HOST_PATTERN, workspace_id="sample")
         return self
 
     def resolve_public_host(self, template: str, workspace_id: Optional[str] = None) -> str:

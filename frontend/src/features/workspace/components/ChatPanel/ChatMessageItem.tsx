@@ -145,7 +145,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
               onClick={() => onOpenPreview?.(message)}
             >
               <Eye className="mr-1 h-3.5 w-3.5" />
-              {previewLabel || '在預覽畫面開啟結果'}
+              {previewLabel}
             </Button>
           </div>
         </div>

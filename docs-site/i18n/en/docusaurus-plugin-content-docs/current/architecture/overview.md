@@ -40,7 +40,7 @@ Today, Claude Code provides the most complete agent experience in the platform, 
 ┌──────────▼──────────┐        │                      │
 │  Workspace Runtime  │        │  workspace-terminal  │
 │  (FastAPI)          │◄──────►│  workspace-chrome    │
-│  per workspace      │        │  workspace-nextjs    │
+│  per workspace      │        │  workspace-canvas    │
 │  Agent Runtime API  │        │                      │
 │  OpenSpec / Sessions│        │                      │
 │  File Watch / Git   │        └──────────────────────┘
@@ -95,7 +95,7 @@ Runs inside each workspace container (FastAPI) and handles:
 |---------|-------------|
 | `workspace-terminal` | Provides terminal access in the browser |
 | `workspace-chrome` | Headless Chromium for browser preview |
-| `workspace-nextjs` | Optional Next.js dev server |
+| `workspace-canvas` | Optional Canvas renderer |
 
 ## Directory Layout
 
@@ -106,7 +106,7 @@ aileron/
 ├── workspace-runtime/      # Workspace execution environment (Python/FastAPI)
 ├── workspace-terminal/     # Terminal service
 ├── workspace-chrome/       # Chrome browser service
-├── workspace-nextjs/       # Next.js service
+├── workspace-canvas/       # Canvas service
 ├── workspace-operator/     # Kubernetes operator
 ├── helm/                   # Helm chart (Kubernetes deployment)
 ├── keycloak-realm/         # Keycloak realm configuration

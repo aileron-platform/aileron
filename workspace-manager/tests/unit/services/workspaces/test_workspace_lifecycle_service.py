@@ -62,8 +62,8 @@ def sample_workspace():
     workspace.runtime_status = "running"
     workspace.browser_container_id = "browser-container-abc"
     workspace.browser_status = "running"
-    workspace.nextjs_container_id = None
-    workspace.nextjs_status = "stopped"
+    workspace.canvas_container_id = None
+    workspace.canvas_status = "stopped"
     workspace.setup_script = None
     return workspace
 
@@ -239,7 +239,7 @@ class TestDeleteWorkspace:
 
         mock_service.request_browser_restart.assert_called_once_with("workspace-123")
 
-    def test_restart_kubernetes_nextjs_uses_custom_resource_service(
+    def test_restart_kubernetes_canvas_uses_custom_resource_service(
         self, lifecycle_service, sample_workspace
     ):
         with patch(
@@ -247,9 +247,9 @@ class TestDeleteWorkspace:
         ) as mock_service_cls:
             mock_service = mock_service_cls.return_value
 
-            lifecycle_service._restart_kubernetes_nextjs(sample_workspace)
+            lifecycle_service._restart_kubernetes_canvas(sample_workspace)
 
-        mock_service.request_nextjs_restart.assert_called_once_with("workspace-123")
+        mock_service.request_canvas_restart.assert_called_once_with("workspace-123")
 
 
 # ============================================================================
@@ -327,14 +327,14 @@ class TestRestartWorkspace:
 
         mock_restart_k8s.assert_called_once_with(sample_workspace)
 
-    def test_restart_kubernetes_nextjs_dispatches_to_k8s_handler(
+    def test_restart_kubernetes_canvas_dispatches_to_k8s_handler(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
         sample_workspace.provisioner = "kubernetes"
         mock_db_session.get.return_value = sample_workspace
 
-        with patch.object(lifecycle_service, "_restart_kubernetes_nextjs") as mock_restart_k8s:
-            lifecycle_service.restart_nextjs_task("workspace-123")
+        with patch.object(lifecycle_service, "_restart_kubernetes_canvas") as mock_restart_k8s:
+            lifecycle_service.restart_canvas_task("workspace-123")
 
         mock_restart_k8s.assert_called_once_with(sample_workspace)
 

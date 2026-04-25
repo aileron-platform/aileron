@@ -32,7 +32,7 @@ def mock_settings(tmp_path: Path):
     settings.RUNTIME_K8S_CR_NAMESPACE = "aileron"
     settings.RUNTIME_K8S_IMAGE = "ailerondocker/workspace-runtime:latest"
     settings.RUNTIME_K8S_BROWSER_IMAGE = "ailerondocker/workspace-browser:latest"
-    settings.RUNTIME_K8S_NEXTJS_IMAGE = "ailerondocker/workspace-nextjs:latest"
+    settings.RUNTIME_K8S_CANVAS_IMAGE = "ailerondocker/workspace-canvas:latest"
     settings.RUNTIME_K8S_RUNTIME_RESOURCES = {
         "requests": {"cpu": "500m", "memory": "2Gi"},
         "limits": {"cpu": "2000m", "memory": "4Gi"},
@@ -41,7 +41,7 @@ def mock_settings(tmp_path: Path):
         "requests": {"cpu": "500m", "memory": "1Gi"},
         "limits": {"cpu": "2000m", "memory": "2Gi"},
     }
-    settings.RUNTIME_K8S_NEXTJS_RESOURCES = {
+    settings.RUNTIME_K8S_CANVAS_RESOURCES = {
         "requests": {"cpu": "500m", "memory": "1Gi"},
         "limits": {"cpu": "2000m", "memory": "2Gi"},
     }
@@ -99,8 +99,8 @@ def test_build_workspace_custom_resource_manifest(custom_resource_service, sampl
     assert manifest["spec"]["runtime"]["resources"]["limits"]["memory"] == "4Gi"
     assert manifest["spec"]["browser"]["image"] == "ailerondocker/workspace-browser:latest"
     assert manifest["spec"]["browser"]["resources"]["limits"]["memory"] == "2Gi"
-    assert manifest["spec"]["nextjs"]["image"] == "ailerondocker/workspace-nextjs:latest"
-    assert manifest["spec"]["nextjs"]["resources"]["requests"]["memory"] == "1Gi"
+    assert manifest["spec"]["canvas"]["image"] == "ailerondocker/workspace-canvas:latest"
+    assert manifest["spec"]["canvas"]["resources"]["requests"]["memory"] == "1Gi"
     assert "portMappings" not in manifest["spec"]
     assert manifest["spec"]["firewall"]["workspace"]["networkAccessEnabled"] is True
     assert manifest["spec"]["firewall"]["workspace"]["domainAccessMode"] == "specific"
@@ -265,7 +265,7 @@ def test_request_workspace_restart_updates_manifest_operations(
     assert operations["restartWorkspaceAt"]
     assert operations["restartRuntimeAt"]
     assert operations["restartBrowserAt"]
-    assert operations["restartNextjsAt"]
+    assert operations["restartCanvasAt"]
     mock_apply.assert_called_once()
 
 
@@ -296,7 +296,7 @@ def test_request_browser_restart_updates_only_browser_operation(
     assert operations["restartBrowserAt"]
     assert "restartWorkspaceAt" not in operations
     assert "restartRuntimeAt" not in operations
-    assert "restartNextjsAt" not in operations
+    assert "restartCanvasAt" not in operations
     mock_apply.assert_called_once()
 
 
@@ -342,11 +342,11 @@ def test_sync_workspace_record_status_persists_internal_and_external_urls(
     sample_workspace.browser_status = "starting"
     sample_workspace.browser_webrtc_internal_url = None
     sample_workspace.browser_webrtc_external_url = None
-    sample_workspace.nextjs_status = "starting"
-    sample_workspace.nextjs_internal_url = None
-    sample_workspace.nextjs_external_url = None
-    sample_workspace.web_preview_internal_url = None
-    sample_workspace.web_preview_external_url = None
+    sample_workspace.canvas_status = "starting"
+    sample_workspace.canvas_internal_url = None
+    sample_workspace.canvas_external_url = None
+    sample_workspace.canvas_internal_url = None
+    sample_workspace.canvas_external_url = None
     mock_api = MagicMock()
     mock_api.get_namespaced_custom_object.return_value = {
         "status": {
@@ -362,10 +362,10 @@ def test_sync_workspace_record_status_persists_internal_and_external_urls(
                     "internalUrl": "http://workspace-browser-123.team-a.svc.cluster.local:6080",
                     "externalUrl": "https://workspace-browser-workspace-123.example.com",
                 },
-                "nextjs": {
+                "canvas": {
                     "phase": "Disabled",
-                    "internalUrl": "http://workspace-nextjs-123.team-a.svc.cluster.local:3003",
-                    "externalUrl": "https://workspace-nextjs-workspace-123.example.com",
+                    "internalUrl": "http://workspace-canvas-123.team-a.svc.cluster.local:3003",
+                    "externalUrl": "https://workspace-canvas-workspace-123.example.com",
                 },
             },
         }
@@ -391,15 +391,15 @@ def test_sync_workspace_record_status_persists_internal_and_external_urls(
     assert sample_workspace.browser_webrtc_external_url == (
         "https://workspace-browser-workspace-123.example.com"
     )
-    assert sample_workspace.nextjs_status == "stopped"
-    assert sample_workspace.nextjs_internal_url == (
-        "http://workspace-nextjs-123.team-a.svc.cluster.local:3003"
+    assert sample_workspace.canvas_status == "stopped"
+    assert sample_workspace.canvas_internal_url == (
+        "http://workspace-canvas-123.team-a.svc.cluster.local:3003"
     )
-    assert sample_workspace.nextjs_external_url == (
-        "https://workspace-nextjs-workspace-123.example.com"
+    assert sample_workspace.canvas_external_url == (
+        "https://workspace-canvas-workspace-123.example.com"
     )
-    assert sample_workspace.web_preview_internal_url == sample_workspace.nextjs_internal_url
-    assert sample_workspace.web_preview_external_url == sample_workspace.nextjs_external_url
+    assert sample_workspace.canvas_internal_url == sample_workspace.canvas_internal_url
+    assert sample_workspace.canvas_external_url == sample_workspace.canvas_external_url
     custom_resource_service.db.commit.assert_called()
 
 
@@ -424,15 +424,15 @@ def test_sync_default_workspace_record_status_uses_control_plane_urls(
     workspace.browser_webrtc_external_url = None
     workspace.browser_webrtc_internal_port = 6080
     workspace.browser_webrtc_external_port = None
-    workspace.nextjs_status = "starting"
-    workspace.nextjs_internal_url = None
-    workspace.nextjs_external_url = None
-    workspace.nextjs_internal_port = 3003
-    workspace.nextjs_external_port = None
-    workspace.web_preview_internal_url = None
-    workspace.web_preview_external_url = None
-    workspace.web_preview_internal_port = 3003
-    workspace.web_preview_external_port = None
+    workspace.canvas_status = "starting"
+    workspace.canvas_internal_url = None
+    workspace.canvas_external_url = None
+    workspace.canvas_internal_port = 3003
+    workspace.canvas_external_port = None
+    workspace.canvas_internal_url = None
+    workspace.canvas_external_url = None
+    workspace.canvas_internal_port = 3003
+    workspace.canvas_external_port = None
     workspace.terminal_external_url = None
     workspace.terminal_external_port = None
     workspace.updated_at = datetime.utcnow()
@@ -452,10 +452,10 @@ def test_sync_default_workspace_record_status_uses_control_plane_urls(
                     "internalUrl": "http://workspace-browser-default-workspace.workspace-system.svc.cluster.local:6080",
                     "externalUrl": "https://workspace-browser-default-workspace.example.com",
                 },
-                "nextjs": {
+                "canvas": {
                     "phase": "Running",
-                    "internalUrl": "http://workspace-nextjs-default-workspace.workspace-system.svc.cluster.local:3003",
-                    "externalUrl": "https://workspace-nextjs-default-workspace.example.com",
+                    "internalUrl": "http://workspace-canvas-default-workspace.workspace-system.svc.cluster.local:3003",
+                    "externalUrl": "https://workspace-canvas-default-workspace.example.com",
                 },
             },
         }
@@ -474,11 +474,11 @@ def test_sync_default_workspace_record_status_uses_control_plane_urls(
     assert workspace.browser_webrtc_internal_url == (
         "http://workspace-browser-default-workspace.workspace-system.svc.cluster.local:6080"
     )
-    assert workspace.nextjs_internal_url == (
-        "http://workspace-nextjs-default-workspace.workspace-system.svc.cluster.local:3003"
+    assert workspace.canvas_internal_url == (
+        "http://workspace-canvas-default-workspace.workspace-system.svc.cluster.local:3003"
     )
-    assert workspace.web_preview_external_url == (
-        "https://workspace-nextjs-default-workspace.example.com"
+    assert workspace.canvas_external_url == (
+        "https://workspace-canvas-default-workspace.example.com"
     )
     assert workspace.terminal_external_url == (
         "https://workspace-runtime-default-workspace.example.com"

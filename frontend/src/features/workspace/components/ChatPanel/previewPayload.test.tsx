@@ -3,7 +3,7 @@ import { render, screen } from '@/__tests__/utils/render';
 
 import { buildSessionResultPreviewPayload } from './previewPayload';
 import type { AgentMessage, AgentTask } from './agentSessionTypes';
-import { UsageStats } from '../../features/preview/UsageStats';
+import { UsageStats } from '../../features/canvas/UsageStats';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
@@ -71,7 +71,7 @@ describe('buildSessionResultPreviewPayload', () => {
 
     render(<UsageStats rawContent={payload?.rawContent} />);
 
-    expect(screen.getByText('workspace.preview.usage.stats')).toBeInTheDocument();
+    expect(screen.getByText('workspace.canvas.usage.stats')).toBeInTheDocument();
     expect(screen.getByText('15')).toBeInTheDocument();
   });
 

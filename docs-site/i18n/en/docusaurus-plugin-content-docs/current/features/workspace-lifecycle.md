@@ -68,7 +68,7 @@ Each workspace includes the following containers/services:
 | `workspace-runtime` | Main execution environment (FastAPI + Claude Code) |
 | `workspace-terminal` | In-browser terminal |
 | `workspace-chrome` | Headless Chrome (browser preview) |
-| `workspace-nextjs` (optional) | Next.js dev server |
+| `workspace-canvas` (optional) | Canvas renderer |
 
 ## Firewall Configuration
 
@@ -106,7 +106,7 @@ Deletes the workspace and all associated resources. Docker and Kubernetes modes 
 The following services can be restarted individually:
 - `runtime`
 - `browser`
-- `nextjs`
+- `canvas`
 
 ## Kubernetes Workspace Resources
 
@@ -114,7 +114,7 @@ In Kubernetes mode, the workspace-operator reconciles the following resources fo
 
 - Runtime Pod / Deployment
 - Browser Pod / Deployment
-- Next.js Pod / Deployment (optional)
+- Canvas Pod / Deployment (optional)
 - Services
 - PersistentVolumeClaim (PVC)
 - Cilium NetworkPolicy (firewall)

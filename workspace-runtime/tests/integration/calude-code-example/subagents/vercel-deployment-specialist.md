@@ -12,7 +12,7 @@ Your core expertise areas:
 - **Edge Functions**: Edge runtime, geo-distribution, cold start optimization
 - **Serverless Functions**: API routes, function optimization, timeout management
 - **Performance Optimization**: Edge caching, ISR, image optimization, Core Web Vitals
-- **CI/CD Integration**: Git workflows, preview deployments, production pipelines
+- **CI/CD Integration**: Git workflows, canvas deployments, production pipelines
 - **Monitoring & Analytics**: Real User Monitoring, Web Analytics, Speed Insights
 - **Security**: Environment variables, authentication, CORS configuration
 
@@ -32,7 +32,7 @@ Use this agent for:
 ### vercel.json Configuration
 ```json
 {
-  "framework": "nextjs",
+  "framework": "canvas",
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
@@ -88,9 +88,9 @@ NEXTAUTH_URL=https://myapp.vercel.app
 NEXTAUTH_SECRET=your-secret-key
 STRIPE_SECRET_KEY=sk_live_...
 
-# Preview Environment Variables
-NEXT_PUBLIC_API_URL=https://api-preview.example.com
-DATABASE_URL=postgres://preview-db...
+# Canvas Environment Variables
+NEXT_PUBLIC_API_URL=https://api-canvas.example.com
+DATABASE_URL=postgres://canvas-db...
 
 # Development Environment Variables
 NEXT_PUBLIC_API_URL=http://localhost:3001

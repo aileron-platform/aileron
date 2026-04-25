@@ -74,7 +74,7 @@ async def test_create_message_serializes_tool_uses_and_updates_first_title(
     payload = message_service.message_repo.create.await_args.args[0]
     assert payload["session_id"] == "session-1"
     assert payload["task_id"] == "task-1"
-    assert payload["content_preview"] == "hello\x00world"
+    assert payload["content_canvas"] == "hello\x00world"
     assert '"tool_uses"' in payload["data"]
     assert "\\u0000" in payload["data"]
     message_service.session_repo.increment_message_count.assert_awaited_once_with("session-1")
@@ -223,15 +223,15 @@ async def test_queue_methods_delegate_to_repository(message_service: MessageServ
     assert "queued_at" in queued_metadata
 
 
-def test_json_helpers_and_content_preview(message_service: MessageService) -> None:
+def test_json_helpers_and_content_canvas(message_service: MessageService) -> None:
     assert message_service._json_dumps({"text": "a\x00b"}) == '{"text": "a\\u0000b"}'
     assert message_service._json_loads(None) == {}
     assert message_service._json_loads("not-json") == {}
-    assert message_service._get_content_preview("hello world") == "hello world"
-    assert message_service._get_content_preview([{"type": "text", "text": "from block"}]) == "from block"
-    assert message_service._get_content_preview({"request_id": "req-1", "tool_name": "bash"}) == "Permission request: bash"
-    assert message_service._get_content_preview({"text": "inline"}) == "inline"
-    assert message_service._get_content_preview({"other": "x"}) == ""
+    assert message_service._get_content_canvas("hello world") == "hello world"
+    assert message_service._get_content_canvas([{"type": "text", "text": "from block"}]) == "from block"
+    assert message_service._get_content_canvas({"request_id": "req-1", "tool_name": "bash"}) == "Permission request: bash"
+    assert message_service._get_content_canvas({"text": "inline"}) == "inline"
+    assert message_service._get_content_canvas({"other": "x"}) == ""
 
 
 @pytest.mark.asyncio

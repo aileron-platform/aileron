@@ -26,13 +26,13 @@ from pathlib import Path
 WORKSPACE_CONTAINER_PREFIXES = (
     "workspace-runtime-",
     "workspace-browser-",
-    "workspace-nextjs-",
+    "workspace-canvas-",
 )
 PROJECT_IMAGE_REFS = (
     "ailerondocker/workspace-manager:dev",
     "ailerondocker/workspace-runtime:dev",
     "ailerondocker/workspace-chrome:dev",
-    "ailerondocker/workspace-nextjs:dev",
+    "ailerondocker/workspace-canvas:dev",
     "ailerondocker/workspace-ui:dev",
 )
 DATA_DIRS = (
@@ -303,7 +303,7 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "WORKSPACE_MANAGER_IMAGE": f"ailerondocker/workspace-manager:{profile.service_tag}",
             "WORKSPACE_RUNTIME_IMAGE": f"ailerondocker/workspace-runtime:{profile.runtime_tag}",
             "WORKSPACE_CHROME_IMAGE": f"ailerondocker/workspace-chrome:{profile.service_tag}",
-            "WORKSPACE_NEXTJS_IMAGE": f"ailerondocker/workspace-nextjs:{profile.service_tag}",
+            "WORKSPACE_CANVAS_IMAGE": f"ailerondocker/workspace-canvas:{profile.service_tag}",
             "WORKSPACE_UI_IMAGE": f"ailerondocker/workspace-ui:{profile.service_tag}",
             "WORKSPACE_RUNTIME_BASE_IMAGE": profile.runtime_base_image,
             "WORKSPACE_RUNTIME_JAVA_HOME": "/usr/lib/jvm/openjdk-21",

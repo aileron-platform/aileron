@@ -35,7 +35,7 @@ spec:
                 - provisioner
                 - runtime
                 - browser
-                - nextjs
+                - canvas
                 - workspacePath
                 - firewall
               properties:
@@ -71,7 +71,7 @@ spec:
                     resources:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
-                nextjs:
+                canvas:
                   type: object
                   properties:
                     enabled:
@@ -130,7 +130,7 @@ spec:
                     restartBrowserAt:
                       type: string
                       format: date-time
-                    restartNextjsAt:
+                    restartCanvasAt:
                       type: string
                       format: date-time
                 firewall:
@@ -212,7 +212,7 @@ spec:
                         lastRestartedAt:
                           type: string
                           format: date-time
-                    nextjs:
+                    canvas:
                       type: object
                       properties:
                         phase:

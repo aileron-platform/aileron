@@ -44,9 +44,9 @@ def test_create_default_workspace_creates_record_in_docker_mode(
         assert workspace.runtime_internal_url == "http://workspace-runtime-default-workspace:3002"
         assert workspace.browser_webrtc_external_url == "http://localhost:52330"
         assert workspace.browser_webrtc_external_port == 52330
-        assert workspace.nextjs_container_id == "workspace-nextjs-default-workspace"
-        assert workspace.nextjs_internal_url == "http://workspace-nextjs-default-workspace:3003"
-        assert workspace.web_preview_internal_url == workspace.nextjs_internal_url
+        assert workspace.canvas_container_id == "workspace-canvas-default-workspace"
+        assert workspace.canvas_internal_url == "http://workspace-canvas-default-workspace:3003"
+        assert workspace.canvas_internal_url == workspace.canvas_internal_url
 
 
 @pytest.mark.unit
@@ -111,7 +111,7 @@ def test_create_default_workspace_creates_kubernetes_record_when_enabled(
         assert workspace.runtime_status == "starting"
         assert workspace.target_namespace == "workspace-system"
         assert workspace.runtime_internal_url is None
-        assert workspace.nextjs_internal_url is None
+        assert workspace.canvas_internal_url is None
 
 
 @pytest.mark.unit
@@ -196,7 +196,7 @@ def test_create_default_workspace_reconciles_existing_docker_default_workspace(
                 branch="main",
                 runtime_status="running",
                 browser_status="running",
-                nextjs_status="running",
+                canvas_status="running",
                 browser_webrtc_internal_port=6080,
                 browser_webrtc_external_url="http://localhost:6080",
                 browser_webrtc_external_port=6080,
@@ -246,7 +246,7 @@ def test_create_default_workspace_does_not_mutate_existing_kubernetes_default_wo
                 branch="main",
                 runtime_status="starting",
                 browser_status="starting",
-                nextjs_status="starting",
+                canvas_status="starting",
                 browser_webrtc_internal_port=6080,
                 browser_webrtc_external_url=None,
                 browser_webrtc_external_port=None,

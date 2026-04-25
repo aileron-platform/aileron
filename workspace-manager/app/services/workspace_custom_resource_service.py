@@ -27,7 +27,7 @@ _RESTART_OPERATION_FIELDS = {
     "workspace": "restartWorkspaceAt",
     "runtime": "restartRuntimeAt",
     "browser": "restartBrowserAt",
-    "nextjs": "restartNextjsAt",
+    "canvas": "restartCanvasAt",
 }
 
 _KUBERNETES_PHASE_TO_DB_STATUS = {
@@ -215,13 +215,13 @@ class WorkspaceCustomResourceService:
             status_message="已寫入 Kubernetes browser 重啟意圖",
         )
 
-    def request_nextjs_restart(self, workspace_id: str) -> None:
-        """寫入 nextjs restart intent。"""
+    def request_canvas_restart(self, workspace_id: str) -> None:
+        """寫入 canvas restart intent。"""
         self._request_restart_operation(
             workspace_id,
-            component="nextjs",
-            status_stage="nextjs_restarting",
-            status_message="已寫入 Kubernetes nextjs 重啟意圖",
+            component="canvas",
+            status_stage="canvas_restarting",
+            status_message="已寫入 Kubernetes canvas 重啟意圖",
         )
 
     def sync_workspace_status(self, workspace_id: str) -> bool:
@@ -286,18 +286,13 @@ class WorkspaceCustomResourceService:
         )
         self._apply_component_status(
             workspace,
-            component_status=components.get("nextjs"),
-            phase_attr="nextjs_status",
-            internal_url_attr="nextjs_internal_url",
-            external_url_attr="nextjs_external_url",
-            internal_port_attr="nextjs_internal_port",
-            external_port_attr="nextjs_external_port",
+            component_status=components.get("canvas"),
+            phase_attr="canvas_status",
+            internal_url_attr="canvas_internal_url",
+            external_url_attr="canvas_external_url",
+            internal_port_attr="canvas_internal_port",
+            external_port_attr="canvas_external_port",
         )
-
-        workspace.web_preview_internal_url = workspace.nextjs_internal_url
-        workspace.web_preview_external_url = workspace.nextjs_external_url
-        workspace.web_preview_internal_port = workspace.nextjs_internal_port
-        workspace.web_preview_external_port = workspace.nextjs_external_port
 
         # In k8s, the Go terminal service (port 3004) shares the runtime Ingress host.
         # The operator adds a /ws/terminal path rule that routes to port 3004,
@@ -337,10 +332,10 @@ class WorkspaceCustomResourceService:
                     "imageKey": workspace.runtime,
                     "resources": self._runtime_resources_spec(workspace),
                 },
-                "nextjs": {
+                "canvas": {
                     "enabled": True,
-                    "image": self.settings.RUNTIME_K8S_NEXTJS_IMAGE,
-                    "resources": self.settings.RUNTIME_K8S_NEXTJS_RESOURCES,
+                    "image": self.settings.RUNTIME_K8S_CANVAS_IMAGE,
+                    "resources": self.settings.RUNTIME_K8S_CANVAS_RESOURCES,
                 },
                 "browser": {
                     "enabled": True,
@@ -447,7 +442,7 @@ class WorkspaceCustomResourceService:
                 operations[_RESTART_OPERATION_FIELDS["workspace"]] = restart_at
                 operations[_RESTART_OPERATION_FIELDS["runtime"]] = restart_at
                 operations[_RESTART_OPERATION_FIELDS["browser"]] = restart_at
-                operations[_RESTART_OPERATION_FIELDS["nextjs"]] = restart_at
+                operations[_RESTART_OPERATION_FIELDS["canvas"]] = restart_at
             else:
                 operations[_RESTART_OPERATION_FIELDS[component]] = restart_at
 
@@ -500,8 +495,8 @@ class WorkspaceCustomResourceService:
             workspace.runtime_status = "error"
         if component in {"workspace", "browser"}:
             workspace.browser_status = "error"
-        if component in {"workspace", "nextjs"}:
-            workspace.nextjs_status = "error"
+        if component in {"workspace", "canvas"}:
+            workspace.canvas_status = "error"
 
     def _write_manifest(self, workspace: db_models.Workspace, manifest: dict) -> Path:
         output_dir = self._manifest_dir(workspace)

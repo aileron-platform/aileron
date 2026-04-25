@@ -32,13 +32,13 @@ describe('ChatMessageItem', () => {
         allMessages={[baseMessage]}
         isLastAssistant
         onOpenPreview={vi.fn()}
-        previewLabel="Open in preview"
+        previewLabel="Open in Canvas"
         activeTaskId="task-1"
         hasActiveResponseLifecycle
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Open in preview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open in Canvas' })).not.toBeInTheDocument();
   });
 
   it('shows preview after the assistant response lifecycle has finalized', () => {
@@ -48,13 +48,13 @@ describe('ChatMessageItem', () => {
         allMessages={[baseMessage]}
         isLastAssistant
         onOpenPreview={vi.fn()}
-        previewLabel="Open in preview"
+        previewLabel="Open in Canvas"
         activeTaskId={null}
         hasActiveResponseLifecycle={false}
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'Open in preview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open in Canvas' })).toBeInTheDocument();
   });
 
   it('does not let a last assistant message without task binding preview during active lifecycle', () => {
@@ -70,12 +70,12 @@ describe('ChatMessageItem', () => {
         allMessages={[tasklessMessage]}
         isLastAssistant
         onOpenPreview={vi.fn()}
-        previewLabel="Open in preview"
+        previewLabel="Open in Canvas"
         activeTaskId="task-1"
         hasActiveResponseLifecycle
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'Open in preview' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open in Canvas' })).not.toBeInTheDocument();
   });
 });

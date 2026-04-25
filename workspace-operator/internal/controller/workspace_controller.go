@@ -31,7 +31,7 @@ const workspaceFinalizer = "platform.aileron.io/workspace-finalizer"
 const (
 	runtimeComponent = "workspace-runtime"
 	browserComponent = "workspace-browser"
-	nextjsComponent  = "workspace-nextjs"
+	canvasComponent  = "workspace-canvas"
 	pvcComponent     = "workspace-pvc"
 )
 
@@ -139,22 +139,22 @@ func (r *WorkspaceReconciler) Reconcile(
 		logger.Error(err, "unable to reconcile browser ingress")
 		return ctrl.Result{}, err
 	}
-	if err := r.reconcileNextjsDeployment(ctx, &workspace, targetNamespace); err != nil {
-		logger.Error(err, "unable to reconcile nextjs deployment")
+	if err := r.reconcileCanvasDeployment(ctx, &workspace, targetNamespace); err != nil {
+		logger.Error(err, "unable to reconcile canvas deployment")
 		return ctrl.Result{}, err
 	}
-	if err := r.reconcileNextjsService(ctx, &workspace, targetNamespace); err != nil {
-		logger.Error(err, "unable to reconcile nextjs service")
+	if err := r.reconcileCanvasService(ctx, &workspace, targetNamespace); err != nil {
+		logger.Error(err, "unable to reconcile canvas service")
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileComponentIngress(
 		ctx,
 		&workspace,
 		targetNamespace,
-		nextjsComponent,
-		workspace.Spec.Nextjs.Enabled,
+		canvasComponent,
+		workspace.Spec.Canvas.Enabled,
 	); err != nil {
-		logger.Error(err, "unable to reconcile nextjs ingress")
+		logger.Error(err, "unable to reconcile canvas ingress")
 		return ctrl.Result{}, err
 	}
 
@@ -375,12 +375,12 @@ func (r *WorkspaceReconciler) reconcileBrowserService(
 	return err
 }
 
-func (r *WorkspaceReconciler) reconcileNextjsDeployment(
+func (r *WorkspaceReconciler) reconcileCanvasDeployment(
 	ctx context.Context,
 	workspace *workspacev1alpha1.Workspace,
 	namespace string,
 ) error {
-	name := resourceName(nextjsComponent, workspace.Spec.WorkspaceID)
+	name := resourceName(canvasComponent, workspace.Spec.WorkspaceID)
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -389,9 +389,9 @@ func (r *WorkspaceReconciler) reconcileNextjsDeployment(
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, deployment, func() error {
-		labels := componentLabels(workspace, nextjsComponent, "workspace")
+		labels := componentLabels(workspace, canvasComponent, "workspace")
 		replicas := int32(0)
-		if workspace.Spec.Nextjs.Enabled {
+		if workspace.Spec.Canvas.Enabled {
 			replicas = 1
 		}
 		deployment.Labels = labels
@@ -413,8 +413,8 @@ func (r *WorkspaceReconciler) reconcileNextjsDeployment(
 		}
 		// 建立容器規格
 		container := corev1.Container{
-			Name:  "nextjs",
-			Image: resolveOptionalImage(workspace.Spec.Nextjs.Image, "ailerondocker/workspace-nextjs:latest"),
+			Name:  "canvas",
+			Image: resolveOptionalImage(workspace.Spec.Canvas.Image, "ailerondocker/workspace-canvas:latest"),
 			Ports: []corev1.ContainerPort{
 				{Name: "http", ContainerPort: 3003},
 				{Name: "api", ContainerPort: 3013},
@@ -427,8 +427,8 @@ func (r *WorkspaceReconciler) reconcileNextjsDeployment(
 			},
 		}
 		// 套用資源配置
-		if workspace.Spec.Nextjs.Resources != nil {
-			container.Resources = *workspace.Spec.Nextjs.Resources
+		if workspace.Spec.Canvas.Resources != nil {
+			container.Resources = *workspace.Spec.Canvas.Resources
 		}
 		deployment.Spec.Template.Spec.Containers = []corev1.Container{container}
 		return nil
@@ -436,12 +436,12 @@ func (r *WorkspaceReconciler) reconcileNextjsDeployment(
 	return err
 }
 
-func (r *WorkspaceReconciler) reconcileNextjsService(
+func (r *WorkspaceReconciler) reconcileCanvasService(
 	ctx context.Context,
 	workspace *workspacev1alpha1.Workspace,
 	namespace string,
 ) error {
-	name := resourceName(nextjsComponent, workspace.Spec.WorkspaceID)
+	name := resourceName(canvasComponent, workspace.Spec.WorkspaceID)
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -450,7 +450,7 @@ func (r *WorkspaceReconciler) reconcileNextjsService(
 	}
 
 	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, svc, func() error {
-		labels := componentLabels(workspace, nextjsComponent, "workspace")
+		labels := componentLabels(workspace, canvasComponent, "workspace")
 		svc.Labels = labels
 		if err := r.setOwnerReferenceIfSameNamespace(workspace, svc); err != nil {
 			return err
@@ -622,8 +622,8 @@ func (r *WorkspaceReconciler) componentIngressSpec(component string, workspaceID
 	case browserComponent:
 		host, err := r.PublicRouting.ResolveHost(r.PublicRouting.BrowserHostPattern, workspaceID)
 		return host, 6080, err
-	case nextjsComponent:
-		host, err := r.PublicRouting.ResolveHost(r.PublicRouting.NextjsHostPattern, workspaceID)
+	case canvasComponent:
+		host, err := r.PublicRouting.ResolveHost(r.PublicRouting.CanvasHostPattern, workspaceID)
 		return host, 3003, err
 	default:
 		return "", 0, fmt.Errorf("unsupported ingress component: %s", component)
@@ -757,13 +757,13 @@ func (r *WorkspaceReconciler) deleteManagedResources(
 	}{
 		{name: resourceName(runtimeComponent, workspace.Spec.WorkspaceID), obj: &networkingv1.Ingress{}},
 		{name: resourceName(browserComponent, workspace.Spec.WorkspaceID), obj: &networkingv1.Ingress{}},
-		{name: resourceName(nextjsComponent, workspace.Spec.WorkspaceID), obj: &networkingv1.Ingress{}},
+		{name: resourceName(canvasComponent, workspace.Spec.WorkspaceID), obj: &networkingv1.Ingress{}},
 		{name: resourceName(runtimeComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
 		{name: resourceName(browserComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
-		{name: resourceName(nextjsComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
+		{name: resourceName(canvasComponent, workspace.Spec.WorkspaceID), obj: &corev1.Service{}},
 		{name: resourceName(runtimeComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
 		{name: resourceName(browserComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
-		{name: resourceName(nextjsComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
+		{name: resourceName(canvasComponent, workspace.Spec.WorkspaceID), obj: &appsv1.Deployment{}},
 		{name: resourceName(pvcComponent, workspace.Spec.WorkspaceID), obj: &corev1.PersistentVolumeClaim{}},
 	}
 
@@ -891,14 +891,14 @@ func (r *WorkspaceReconciler) populateWorkspaceStatus(
 		return err
 	}
 
-	nextjsStatus, err := r.buildComponentStatus(
+	canvasStatus, err := r.buildComponentStatus(
 		ctx,
 		workspace,
 		namespace,
-		nextjsComponent,
-		workspace.Spec.Nextjs.Enabled,
+		canvasComponent,
+		workspace.Spec.Canvas.Enabled,
 		3003,
-		workspace.Spec.Operations.RestartNextjsAt,
+		workspace.Spec.Operations.RestartCanvasAt,
 	)
 	if err != nil {
 		return err
@@ -907,7 +907,7 @@ func (r *WorkspaceReconciler) populateWorkspaceStatus(
 	workspace.Status.Components = workspacev1alpha1.WorkspaceComponentsStatus{
 		Runtime: runtimeStatus,
 		Browser: browserStatus,
-		Nextjs:  nextjsStatus,
+		Canvas:  canvasStatus,
 	}
 	workspace.Status.Phase = calculateWorkspacePhase(
 		workspace.Spec,
@@ -977,8 +977,8 @@ func calculateWorkspacePhase(
 	if spec.Browser.Enabled {
 		requiredPhases = append(requiredPhases, components.Browser.Phase)
 	}
-	if spec.Nextjs.Enabled {
-		requiredPhases = append(requiredPhases, components.Nextjs.Phase)
+	if spec.Canvas.Enabled {
+		requiredPhases = append(requiredPhases, components.Canvas.Phase)
 	}
 
 	allRunning := true
@@ -1090,8 +1090,8 @@ func (r *WorkspaceReconciler) componentExternalURL(component string, workspaceID
 		template = r.PublicRouting.RuntimeHostPattern
 	case browserComponent:
 		template = r.PublicRouting.BrowserHostPattern
-	case nextjsComponent:
-		template = r.PublicRouting.NextjsHostPattern
+	case canvasComponent:
+		template = r.PublicRouting.CanvasHostPattern
 	default:
 		return ""
 	}
