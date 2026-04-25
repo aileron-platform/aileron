@@ -10,8 +10,6 @@ import {
   ZoomIn,
   ZoomOut,
   RefreshCw,
-  Maximize2,
-  Minimize2,
   Download,
   Copy,
   Check,
@@ -51,6 +49,7 @@ import {
   toggleOpenSpecTask,
 } from '../../openspec/utils/openSpecMarkdown';
 import { useOpenSpecWorkspace } from '../../openspec/OpenSpecWorkspaceContext';
+import { FileFocusToolbar } from './FileFocusToolbar';
 
 const logger = createLogger('MarkdownViewer');
 
@@ -59,6 +58,8 @@ interface MarkdownViewerProps {
   fileName: string;
   filePath?: string;
   className?: string;
+  isFocusMode?: boolean;
+  onExitFocusMode?: () => void;
 }
 
 type HeadingIdResolver = (text: string, level: number) => string | undefined;
@@ -118,6 +119,8 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   fileName,
   filePath,
   className,
+  isFocusMode = false,
+  onExitFocusMode,
 }) => {
   const { t } = useI18n();
   const processedContent = useMemo(() => preprocessMarkdown(content), [content]);
@@ -128,7 +131,6 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const { actions: openSpecActions, ensureLoaded: ensureOpenSpecLoaded } = useOpenSpecWorkspace();
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editContent, setEditContent] = useState(content);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -327,11 +329,6 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     } catch (err) {
       logger.error('Failed to copy content', { error: err });
     }
-  };
-
-  // 放大模式控制
-  const handleFullscreen = () => {
-    setIsExpanded(!isExpanded);
   };
 
   // 切換編輯模式
@@ -917,17 +914,167 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
     return renderDefaultMarkdown();
   };
 
+  const toolbarActions = (
+    <>
+      {isEditMode ? (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSave}
+            title={t('workspace.fileManagement.markdown.save')}
+          >
+            <Save className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCancelEdit}
+            title={t('workspace.fileManagement.markdown.cancel')}
+          >
+            <X className="w-4 h-4" />
+          </Button>
+
+          <div className="w-px h-4 bg-border mx-1" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleToggleEditMode}
+            title={t('workspace.fileManagement.markdown.switchToPreview')}
+          >
+            <Eye className="w-4 h-4" />
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomOut}
+            disabled={zoom <= 0.5}
+            title={t('workspace.fileManagement.markdown.zoomOut')}
+          >
+            <ZoomOut className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleResetZoom}
+            title={t('workspace.fileManagement.markdown.resetZoom')}
+          >
+            <span className="text-xs min-w-[3rem] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomIn}
+            disabled={zoom >= 2}
+            title={t('workspace.fileManagement.markdown.zoomIn')}
+          >
+            <ZoomIn className="w-4 h-4" />
+          </Button>
+
+          <div className="w-px h-4 bg-border mx-1" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title={isRefreshing
+              ? t('workspace.fileManagement.markdown.refreshing')
+              : t('workspace.fileManagement.markdown.refresh')}
+            aria-label={isRefreshing
+              ? t('workspace.fileManagement.markdown.refreshing')
+              : t('workspace.fileManagement.markdown.refresh')}
+          >
+            <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCopy}
+            disabled={!content}
+            title={t('workspace.fileManagement.markdown.copy')}
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-green-500" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDownload}
+            disabled={!content}
+            title={t('workspace.fileManagement.markdown.download')}
+          >
+            <Download className="w-4 h-4" />
+          </Button>
+
+          <div className="w-px h-4 bg-border mx-1" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsSpecOutlineVisible((prev) => !prev)}
+            title={
+              isSpecOutlineVisible
+                ? t('workspace.openspec.spec.hideToc')
+                : t('workspace.openspec.spec.showToc')
+            }
+            aria-label={
+              isSpecOutlineVisible
+                ? t('workspace.openspec.spec.hideToc')
+                : t('workspace.openspec.spec.showToc')
+            }
+            className={openSpecKind === 'spec' ? '' : 'hidden'}
+          >
+            <ListTree className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleToggleEditMode}
+            title={t('workspace.fileManagement.markdown.edit')}
+          >
+            <Edit3 className="w-4 h-4" />
+          </Button>
+        </>
+      )}
+    </>
+  );
+
   return (
     <div
       id="markdown-preview-container"
       className={cn(
         'h-full flex flex-col bg-background',
-        isExpanded && 'fixed inset-0 z-50',
         className,
       )}
     >
       {/* 工具列 */}
-      <div className="h-10 px-3 border-b border-border flex items-center justify-between bg-card flex-shrink-0">
+      {isFocusMode && onExitFocusMode ? (
+        <FileFocusToolbar
+          icon={openSpecKind === 'tasks' ? <CheckSquare className="w-4 h-4" /> : openSpecKind === 'spec' ? <ListTree className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+          title={fileName}
+          subtitle={filePath}
+          actions={toolbarActions}
+          exitLabel={t('workspace.fileManagement.focus.exit')}
+          onExit={onExitFocusMode}
+        />
+      ) : (
+        <div className="h-10 px-3 border-b border-border flex items-center justify-between bg-card flex-shrink-0">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {openSpecKind === 'tasks' ? (
             <CheckSquare className="w-4 h-4" />
@@ -940,153 +1087,10 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          {isEditMode ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleSave}
-                title={t('workspace.fileManagement.markdown.save')}
-              >
-                <Save className="w-4 h-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCancelEdit}
-                title={t('workspace.fileManagement.markdown.cancel')}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-
-              <div className="w-px h-4 bg-border mx-1" />
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleEditMode}
-                title={t('workspace.fileManagement.markdown.switchToPreview')}
-              >
-                <Eye className="w-4 h-4" />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleZoomOut}
-                disabled={zoom <= 0.5}
-                title={t('workspace.fileManagement.markdown.zoomOut')}
-              >
-                <ZoomOut className="w-4 h-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleResetZoom}
-                title={t('workspace.fileManagement.markdown.resetZoom')}
-              >
-                <span className="text-xs min-w-[3rem] text-center">
-                  {Math.round(zoom * 100)}%
-                </span>
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleZoomIn}
-                disabled={zoom >= 2}
-                title={t('workspace.fileManagement.markdown.zoomIn')}
-              >
-                <ZoomIn className="w-4 h-4" />
-              </Button>
-
-              <div className="w-px h-4 bg-border mx-1" />
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                title={isRefreshing
-                  ? t('workspace.fileManagement.markdown.refreshing')
-                  : t('workspace.fileManagement.markdown.refresh')}
-                aria-label={isRefreshing
-                  ? t('workspace.fileManagement.markdown.refreshing')
-                  : t('workspace.fileManagement.markdown.refresh')}
-              >
-                <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                disabled={!content}
-                title={t('workspace.fileManagement.markdown.copy')}
-              >
-                {copied ? (
-                  <Check className="w-4 h-4 text-green-500" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDownload}
-                disabled={!content}
-                title={t('workspace.fileManagement.markdown.download')}
-              >
-                <Download className="w-4 h-4" />
-              </Button>
-
-              <div className="w-px h-4 bg-border mx-1" />
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsSpecOutlineVisible((prev) => !prev)}
-                title={
-                  isSpecOutlineVisible
-                    ? t('workspace.openspec.spec.hideToc')
-                    : t('workspace.openspec.spec.showToc')
-                }
-                aria-label={
-                  isSpecOutlineVisible
-                    ? t('workspace.openspec.spec.hideToc')
-                    : t('workspace.openspec.spec.showToc')
-                }
-                className={openSpecKind === 'spec' ? '' : 'hidden'}
-              >
-                <ListTree className="w-4 h-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleEditMode}
-                title={t('workspace.fileManagement.markdown.edit')}
-              >
-                <Edit3 className="w-4 h-4" />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleFullscreen}
-                title={isExpanded ? t('workspace.fileManagement.markdown.exitExpanded') : t('workspace.fileManagement.markdown.expand')}
-              >
-                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </Button>
-            </>
-          )}
+          {toolbarActions}
         </div>
       </div>
+      )}
 
       {contextualOpenSpecActions.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-border bg-primary/5 px-3 py-2">

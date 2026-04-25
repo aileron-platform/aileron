@@ -38,6 +38,7 @@ const {
       'workspace.fileManagement.markdown.refreshFailed': '重新載入 Markdown 失敗',
       'workspace.fileManagement.markdown.empty': '空白內容',
       'workspace.fileManagement.markdown.linkOpenFailed': '無法開啟連結檔案',
+      'workspace.fileManagement.focus.exit': '離開檔案專注模式',
       'workspace.openspec.tasks.summary': '已完成 {{done}} / {{total}}',
       'workspace.openspec.tasks.nextIncomplete': '下一個未完成項目',
       'workspace.openspec.tasks.noTasks': '沒有工作項',
@@ -297,6 +298,23 @@ describe('MarkdownViewer', () => {
     );
 
     expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
+
+  it('uses the shared focus toolbar and removes the duplicate expand control', () => {
+    const onExitFocusMode = vi.fn();
+
+    render(
+      <MarkdownViewer
+        content="# Guide"
+        fileName="guide.md"
+        filePath="/docs/guide.md"
+        isFocusMode
+        onExitFocusMode={onExitFocusMode}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '離開檔案專注模式' })).toBeInTheDocument();
+    expect(screen.queryByTitle('workspace.fileManagement.markdown.expand')).not.toBeInTheDocument();
   });
 
   it('shows an error when an internal workspace path cannot be opened', async () => {

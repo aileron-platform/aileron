@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     rightChatCollapsed: false,
     rightChatWidth: 420,
     chatExpanded: false,
+    fileManagementEditorExpanded: false,
     currentFeature: 'custom-feature',
     claudeCodeSettings: { subView: 'claude-md' },
     agentToolSettings: { subView: '' },
@@ -149,6 +150,7 @@ describe('WorkspaceShell', () => {
     mocks.chatMountCount = 0;
     mocks.workspaceState.currentFeature = 'custom-feature';
     mocks.workspaceState.chatExpanded = false;
+    mocks.workspaceState.fileManagementEditorExpanded = false;
     mocks.workspaceState.rightChatCollapsed = false;
     mocks.workspaceState.canvas.subView = 'web-canvas';
     mocks.workspaceState.versionControl.subView = 'changes';
@@ -203,5 +205,21 @@ describe('WorkspaceShell', () => {
 
     expect(screen.getByLabelText('chat-draft')).toHaveValue('fullscreen me');
     expect(mocks.chatMountCount).toBe(1);
+  });
+
+  it('lets file management editor occupy the workspace when expanded', () => {
+    mocks.workspaceState.currentFeature = 'file-management';
+    mocks.workspaceState.fileManagementEditorExpanded = true;
+
+    render(
+      <WorkspaceShell secondColumn={<div data-testid="custom-second-column">second-column</div>}>
+        <div data-testid="custom-main-content">main-content</div>
+      </WorkspaceShell>,
+    );
+
+    expect(screen.queryByTestId('custom-second-column')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('global-navigation')).not.toBeInTheDocument();
+    expect(screen.getByTestId('custom-main-content')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-third-column')).toHaveStyle({ minWidth: '0' });
   });
 });

@@ -8,8 +8,6 @@ import mermaid from 'mermaid';
 import {
   ZoomIn,
   ZoomOut,
-  Maximize2,
-  Minimize2,
   Download,
   RefreshCw,
   AlertCircle,
@@ -20,6 +18,7 @@ import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { createLogger } from '@/shared/services/logger';
+import { FileFocusToolbar } from './FileFocusToolbar';
 
 const logger = createLogger('MermaidViewer');
 
@@ -27,12 +26,16 @@ interface MermaidViewerProps {
   content: string;
   fileName: string;
   className?: string;
+  isFocusMode?: boolean;
+  onExitFocusMode?: () => void;
 }
 
 export const MermaidViewer: React.FC<MermaidViewerProps> = ({
   content,
   fileName,
-  className
+  className,
+  isFocusMode = false,
+  onExitFocusMode,
 }) => {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,7 +44,6 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
   const [isRendering, setIsRendering] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   // 初始化 Mermaid
   useEffect(() => {
@@ -137,21 +139,83 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
     }
   };
 
-  // 放大模式控制 (不使用瀏覽器全螢幕,而是 CSS fixed 定位)
-  const handleFullscreen = () => {
-    setIsExpanded(!isExpanded);
-  };
+  const toolbarActions = (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomOut}
+        disabled={zoom <= 0.3}
+        title={t('workspace.fileManagement.mermaid.zoomOut')}
+      >
+        <ZoomOut className="w-4 h-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleResetZoom}
+        title={t('workspace.fileManagement.mermaid.resetZoom')}
+      >
+        <span className="text-xs font-mono">{Math.round(zoom * 100)}%</span>
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomIn}
+        disabled={zoom >= 3}
+        title={t('workspace.fileManagement.mermaid.zoomIn')}
+      >
+        <ZoomIn className="w-4 h-4" />
+      </Button>
+
+      <div className="w-px h-4 bg-border mx-1" />
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleCopySvg}
+        disabled={!svg}
+        title={t('workspace.fileManagement.mermaid.copySvg')}
+      >
+        {copied ? (
+          <Check className="w-4 h-4 text-green-500" />
+        ) : (
+          <Copy className="w-4 h-4" />
+        )}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleDownload}
+        disabled={!svg}
+        title={t('workspace.fileManagement.mermaid.download')}
+      >
+        <Download className="w-4 h-4" />
+      </Button>
+    </>
+  );
 
   return (
     <div
       ref={containerRef}
       className={cn(
         "h-full flex flex-col bg-background",
-        isExpanded && "fixed inset-0 z-50",
         className
       )}
     >
       {/* 工具列 */}
+      {isFocusMode && onExitFocusMode ? (
+        <FileFocusToolbar
+          title={fileName}
+          subtitle={t('workspace.fileManagement.mermaid.title')}
+          actions={toolbarActions}
+          exitLabel={t('workspace.fileManagement.focus.exit')}
+          onExit={onExitFocusMode}
+        />
+      ) : (
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-foreground">
@@ -163,71 +227,10 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomOut}
-            disabled={zoom <= 0.3}
-            title={t('workspace.fileManagement.mermaid.zoomOut')}
-          >
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleResetZoom}
-            title={t('workspace.fileManagement.mermaid.resetZoom')}
-          >
-            <span className="text-xs font-mono">{Math.round(zoom * 100)}%</span>
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomIn}
-            disabled={zoom >= 3}
-            title={t('workspace.fileManagement.mermaid.zoomIn')}
-          >
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-
-          <div className="w-px h-4 bg-border mx-1" />
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopySvg}
-            disabled={!svg}
-            title={t('workspace.fileManagement.mermaid.copySvg')}
-          >
-            {copied ? (
-              <Check className="w-4 h-4 text-green-500" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            disabled={!svg}
-            title={t('workspace.fileManagement.mermaid.download')}
-          >
-            <Download className="w-4 h-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleFullscreen}
-            title={isExpanded ? t('workspace.fileManagement.mermaid.exitExpanded') : t('workspace.fileManagement.mermaid.expand')}
-          >
-            {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </Button>
+          {toolbarActions}
         </div>
       </div>
+      )}
 
       {/* 圖表顯示區域 */}
       <div className="flex-1 overflow-auto bg-background">
@@ -277,4 +280,3 @@ export const MermaidViewer: React.FC<MermaidViewerProps> = ({
     </div>
   );
 };
-

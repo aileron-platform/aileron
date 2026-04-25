@@ -193,6 +193,10 @@ const fileManagement = {
       revertFailed: 'Revert failed',
       someFilesSaveFailed: 'Some files failed to save',
     },
+    layout: {
+      expand: 'Expand editor pane',
+      collapse: 'Collapse editor pane',
+    },
     dialogs: {
       revertTitle: 'Revert File',
       revertMessage: 'Are you sure you want to discard all unsaved changes to this file? This action cannot be undone.',
@@ -217,6 +221,10 @@ const fileManagement = {
       lineCount: '{{count}} lines',
       modified: 'Modified',
     },
+  },
+  focus: {
+    enter: 'Focus active file',
+    exit: 'Exit file focus mode',
   },
   mermaid: {
     title: 'Mermaid Diagram',

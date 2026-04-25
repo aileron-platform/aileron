@@ -52,6 +52,7 @@ export interface WorkspaceState {
   rightChatCollapsed: boolean;
   rightChatWidth: number;
   chatExpanded: boolean;
+  fileManagementEditorExpanded: boolean;
   fileTreeShowHiddenEntries: boolean;
 
   // 導航選單展開狀態
@@ -120,10 +121,12 @@ export type WorkspaceAction =
   | { type: 'TOGGLE_SECOND_COLUMN' }
   | { type: 'TOGGLE_RIGHT_CHAT' }
   | { type: 'TOGGLE_CHAT_EXPANDED' }
+  | { type: 'TOGGLE_FILE_MANAGEMENT_EDITOR_EXPANDED' }
   | { type: 'SET_SIDEBAR_COLLAPSED'; payload: boolean }
   | { type: 'SET_SECOND_COLUMN_COLLAPSED'; payload: boolean }
   | { type: 'SET_RIGHT_CHAT_COLLAPSED'; payload: boolean }
   | { type: 'SET_CHAT_EXPANDED'; payload: boolean }
+  | { type: 'SET_FILE_MANAGEMENT_EDITOR_EXPANDED'; payload: boolean }
   | { type: 'TOGGLE_NAVIGATION_ITEM'; payload: string }
   | { type: 'ENSURE_NAVIGATION_ITEM_EXPANDED'; payload: string }
   | { type: 'SET_SIDEBAR_WIDTH'; payload: number }
@@ -452,6 +455,8 @@ export interface WorkspaceContextType {
   };
   layout: {
     secondColumnCollapsed: boolean;
+    fileManagementEditorExpanded: boolean;
+    fileManagementFocusMode: boolean;
   };
   fileTreeState: FileTreeState;
   fileTreeActions: FileTreeActions;
@@ -498,6 +503,8 @@ export interface WorkspaceContextType {
 
   // 佈局操作
   toggleSecondColumn: () => void;
+  toggleFileManagementEditorExpanded: () => void;
+  toggleFileManagementFocusMode: () => void;
 }
 
 // ===== Canvas 相關類型 =====

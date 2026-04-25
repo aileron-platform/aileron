@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, X, FileText, ChevronLeft, ChevronRight, Save, RotateCcw } from 'lucide-react';
+import { Loader2, X, FileText, ChevronLeft, ChevronRight, Save, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { getFileIcon, getFileLanguage, isMermaidFile, isMarkdownFile, isDrawioFile } from '../utils/fileIconUtils';
 import { formatFileSize, isImageFile } from '../utils/fileTypeUtils';
@@ -17,6 +17,7 @@ import { ImageViewer } from './ImageViewer';
 import { DrawioViewer } from './DrawioViewer';
 import { CodeEditor, type CodeEditorRef } from './CodeEditor';
 import { EditorToolbar } from './EditorToolbar';
+import { FileFocusToolbar } from './FileFocusToolbar';
 import { createLogger } from '@/shared/services/logger';
 import { useToast } from '@/shared/components/ui/use-toast';
 
@@ -27,11 +28,13 @@ export const FileEditor: React.FC = () => {
   const {
     workspace,
     workspaceRuntime,
+    layout,
     closeTab,
     switchToTab,
     closeAllTabs,
     fileTreeActions: actions,
-    fileEditor
+    fileEditor,
+    toggleFileManagementEditorExpanded,
   } = useWorkspace();
   const { t } = useI18n();
   const { toast } = useToast();
@@ -57,6 +60,22 @@ export const FileEditor: React.FC = () => {
   const activeEditorRef = useRef<CodeEditorRef | null>(null);
 
   const activeTab = workspace.openTabs.find(tab => tab.id === workspace.activeTabId);
+  const isFocusMode = layout.fileManagementFocusMode ?? layout.fileManagementEditorExpanded;
+  const focusModeLabel = isFocusMode
+    ? t('workspace.fileManagement.focus.exit')
+    : t('workspace.fileManagement.focus.enter');
+  const editorExpansionControl = (
+    <button
+      type="button"
+      className="flex h-full w-9 flex-shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      onClick={toggleFileManagementEditorExpanded}
+      disabled={!activeTab}
+      aria-label={focusModeLabel}
+      title={focusModeLabel}
+    >
+      {isFocusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+    </button>
+  );
 
   // 更新當前活動編輯器的 ref
   useEffect(() => {
@@ -385,9 +404,39 @@ export const FileEditor: React.FC = () => {
     };
   };
 
+  const renderCodeFocusToolbar = () => {
+    if (!activeTab) {
+      return null;
+    }
+
+    const stats = getFileStats(activeTab.content || '');
+    const isModified = fileEditor.modifiedTabs.includes(activeTab.id);
+
+    return (
+      <FileFocusToolbar
+        icon={getFileIcon(activeTab.name)}
+        title={activeTab.name}
+        subtitle={activeTab.path}
+        exitLabel={t('workspace.fileManagement.focus.exit')}
+        onExit={toggleFileManagementEditorExpanded}
+        metadata={
+          <>
+            <span>{getFileLanguage(activeTab.name)}</span>
+            <span>{stats.formattedSize}</span>
+            <span>{t('workspace.fileManagement.editor.status.lineCount', { count: stats.lines })}</span>
+            {isModified ? (
+              <span className="text-primary">{t('workspace.fileManagement.editor.status.modified')}</span>
+            ) : null}
+          </>
+        }
+      />
+    );
+  };
+
   return (
     <div className="h-full flex flex-col">
       {/* 標籤頁列表 - 始終顯示，包含選單，高度統一為 h-10 = 40px */}
+      {!isFocusMode && (
       <div className="h-10 flex border-b border-border bg-card relative" style={{ overflowY: 'visible' }}>
         {/* 左側捲動箭頭 */}
         {showLeftScroll && (
@@ -438,7 +487,7 @@ export const FileEditor: React.FC = () => {
         {/* 右側捲動箭頭 */}
         {showRightScroll && (
           <button
-            className="absolute right-28 top-0 z-20 h-full px-1 bg-gradient-to-l from-muted/80 to-transparent hover:from-muted flex items-center justify-center transition-colors"
+            className="absolute right-36 top-0 z-20 h-full px-1 bg-gradient-to-l from-muted/80 to-transparent hover:from-muted flex items-center justify-center transition-colors"
             onClick={() => scrollTabs('right')}
             aria-label="Scroll tabs right"
           >
@@ -447,7 +496,7 @@ export const FileEditor: React.FC = () => {
         )}
 
         {/* 編輯器工具列 - 只有當有標籤頁時才顯示 */}
-        {workspace.openTabs.length > 0 && (
+        {workspace.openTabs.length > 0 ? (
           <EditorToolbar
             activeTabId={workspace.activeTabId}
             modifiedTabs={fileEditor.modifiedTabs}
@@ -460,9 +509,15 @@ export const FileEditor: React.FC = () => {
             onRevealInTree={handleRevealInTree}
             onCloseAll={handleCloseAllTabs}
             onSaveAndCloseAll={closeAllAndSave}
+            editorExpansionControl={editorExpansionControl}
           />
+        ) : (
+          <div className="flex h-full items-center border-l border-border">
+            {editorExpansionControl}
+          </div>
         )}
       </div>
+      )}
 
       {/* 檔案內容區域 */}
       {workspace.openTabs.length === 0 ? (
@@ -502,12 +557,16 @@ export const FileEditor: React.FC = () => {
                     <ImageViewer
                       filePath={tab.path}
                       fileName={tab.name}
+                      isFocusMode={isFocusMode}
+                      onExitFocusMode={toggleFileManagementEditorExpanded}
                     />
                   ) : isDrawio ? (
                     <DrawioViewer
                       content={content}
                       filePath={tab.path}
                       runtimeBaseUrl={workspaceRuntime.runtimeBaseUrl || ''}
+                      isFocusMode={isFocusMode}
+                      onExitFocusMode={toggleFileManagementEditorExpanded}
                       onSave={(newContent) => {
                         fileEditor.updateTabContent(tab.id, newContent);
                         fileEditor.setTabModified(tab.id, true);
@@ -517,33 +576,42 @@ export const FileEditor: React.FC = () => {
                     <MermaidViewer
                       content={content}
                       fileName={tab.name}
+                      isFocusMode={isFocusMode}
+                      onExitFocusMode={toggleFileManagementEditorExpanded}
                     />
                   ) : isMarkdown ? (
                     <MarkdownViewer
                       content={content}
                       fileName={tab.name}
                       filePath={tab.path}
+                      isFocusMode={isFocusMode}
+                      onExitFocusMode={toggleFileManagementEditorExpanded}
                     />
                   ) : (
-                    <CodeEditor
-                      ref={(ref) => {
-                        editorRefsMap.current.set(tab.id, ref);
-                        if (isActive) {
-                          activeEditorRef.current = ref;
-                        }
-                      }}
-                      filePath={tab.id}
-                      fileName={tab.name}
-                      content={content}
-                      visible={isActive}
-                      onContentChange={(newContent) => {
-                        fileEditor.updateTabContent(tab.id, newContent);
-                      }}
-                      onModifiedChange={(isModified) => {
-                        fileEditor.setTabModified(tab.id, isModified);
-                      }}
-                      originalContent={fileEditor.originalContents[tab.id] || ''}
-                    />
+                    <div className="flex h-full min-h-0 flex-col">
+                      {isFocusMode && isActive ? renderCodeFocusToolbar() : null}
+                      <div className="min-h-0 flex-1">
+                        <CodeEditor
+                          ref={(ref) => {
+                            editorRefsMap.current.set(tab.id, ref);
+                            if (isActive) {
+                              activeEditorRef.current = ref;
+                            }
+                          }}
+                          filePath={tab.id}
+                          fileName={tab.name}
+                          content={content}
+                          visible={isActive}
+                          onContentChange={(newContent) => {
+                            fileEditor.updateTabContent(tab.id, newContent);
+                          }}
+                          onModifiedChange={(isModified) => {
+                            fileEditor.setTabModified(tab.id, isModified);
+                          }}
+                          originalContent={fileEditor.originalContents[tab.id] || ''}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               );
@@ -551,7 +619,7 @@ export const FileEditor: React.FC = () => {
           </div>
 
           {/* 狀態列 - 只顯示當前活動標籤的狀態 */}
-          {activeTab && (
+          {activeTab && !isFocusMode && (
             <div className="h-8 px-4 bg-muted/30 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1">

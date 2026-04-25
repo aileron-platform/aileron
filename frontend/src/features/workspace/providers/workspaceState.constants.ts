@@ -15,6 +15,7 @@ export const initialState: WorkspaceState = {
   rightChatCollapsed: false,
   rightChatWidth: 400,
   chatExpanded: false,
+  fileManagementEditorExpanded: false,
   fileTreeShowHiddenEntries: false,
   expandedNavigationItems: ['claude-code'],
 

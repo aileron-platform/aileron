@@ -42,6 +42,7 @@ interface EditorToolbarProps {
   onRevealInTree: (tabId: string) => void;
   onCloseAll: () => void;
   onSaveAndCloseAll: () => void;
+  editorExpansionControl?: React.ReactNode;
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -56,6 +57,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onRevealInTree,
   onCloseAll,
   onSaveAndCloseAll,
+  editorExpansionControl,
 }) => {
   const { t } = useI18n();
   const [showSaveMenu, setShowSaveMenu] = useState(false);
@@ -161,26 +163,6 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   return (
     <>
       <div className="flex items-center h-full border-l border-border">
-        {/* 復原按鈕 */}
-        <button
-          className="px-1.5 h-full text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleUndo}
-          disabled={!activeTabId}
-          title={t('workspace.fileManagement.editor.toolbar.undo')}
-        >
-          <Undo2 className="w-3.5 h-3.5" />
-        </button>
-
-        {/* 重做按鈕 */}
-        <button
-          className="px-1.5 h-full text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleRedo}
-          disabled={!activeTabId}
-          title={t('workspace.fileManagement.editor.toolbar.redo')}
-        >
-          <Redo2 className="w-3.5 h-3.5" />
-        </button>
-
         {/* 儲存下拉選單按鈕 */}
         <button
           ref={saveButtonRef}
@@ -191,6 +173,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <Save className="w-3.5 h-3.5" />
           <ChevronDown className="w-2.5 h-2.5" />
         </button>
+
+        {editorExpansionControl}
 
         {/* 更多選單按鈕 */}
         <button
@@ -288,6 +272,36 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* 復原 */}
+          <button
+            className="w-full px-3 py-2 text-left text-xs border-none bg-transparent cursor-pointer flex items-center text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => {
+              handleUndo();
+              setShowMoreMenu(false);
+              setMoreMenuPosition(null);
+            }}
+            disabled={!activeTabId}
+          >
+            <Undo2 className="w-3.5 h-3.5 mr-2" />
+            {t('workspace.fileManagement.editor.toolbar.undo')}
+          </button>
+
+          {/* 重做 */}
+          <button
+            className="w-full px-3 py-2 text-left text-xs border-none bg-transparent cursor-pointer flex items-center text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => {
+              handleRedo();
+              setShowMoreMenu(false);
+              setMoreMenuPosition(null);
+            }}
+            disabled={!activeTabId}
+          >
+            <Redo2 className="w-3.5 h-3.5 mr-2" />
+            {t('workspace.fileManagement.editor.toolbar.redo')}
+          </button>
+
+          <div className="border-t border-border my-1" />
+
           {/* 複製檔案路徑 */}
           <button
             className="w-full px-3 py-2 text-left text-xs border-none bg-transparent cursor-pointer flex items-center text-popover-foreground hover:bg-accent hover:text-accent-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

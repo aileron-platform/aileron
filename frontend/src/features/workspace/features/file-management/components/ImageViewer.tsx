@@ -10,12 +10,10 @@ const logger = createLogger('ImageViewer');
 import {
   ZoomIn,
   ZoomOut,
-  Maximize2,
   Download,
   RefreshCw,
   AlertCircle,
   RotateCw,
-  Minimize2,
   Image as ImageIcon
 } from 'lucide-react';
 import { ApiClient } from '@/shared/api/apiClient';
@@ -23,17 +21,22 @@ import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
+import { FileFocusToolbar } from './FileFocusToolbar';
 
 interface ImageViewerProps {
   filePath: string;
   fileName: string;
   className?: string;
+  isFocusMode?: boolean;
+  onExitFocusMode?: () => void;
 }
 
 export const ImageViewer: React.FC<ImageViewerProps> = ({
   filePath,
   fileName,
-  className
+  className,
+  isFocusMode = false,
+  onExitFocusMode,
 }) => {
   const { t } = useI18n();
   const { workspaceRuntime } = useWorkspace();
@@ -45,7 +48,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   // 保存當前的 blob URL，用於清理
@@ -167,11 +169,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     setRotation(prev => (prev + 90) % 360);
   };
 
-  // 放大模式控制 (不使用瀏覽器全螢幕,而是 CSS fixed 定位)
-  const handleToggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
-
   // 下載圖片
   const handleDownload = () => {
     if (!imageUrl) return;
@@ -193,16 +190,85 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const toolbarActions = (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomOut}
+        disabled={zoom <= 0.25}
+        title={t('workspace.fileManagement.image.zoomOut')}
+      >
+        <ZoomOut className="h-4 w-4" />
+      </Button>
+
+      <span className="text-xs text-muted-foreground min-w-[3rem] text-center">
+        {Math.round(zoom * 100)}%
+      </span>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomIn}
+        disabled={zoom >= 5}
+        title={t('workspace.fileManagement.image.zoomIn')}
+      >
+        <ZoomIn className="h-4 w-4" />
+      </Button>
+
+      <div className="w-px h-4 bg-border mx-1" />
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleRotate}
+        title={t('workspace.fileManagement.image.rotate')}
+      >
+        <RotateCw className="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleResetZoom}
+        title={t('workspace.fileManagement.image.reset')}
+      >
+        <RefreshCw className="h-4 w-4" />
+      </Button>
+
+      <div className="w-px h-4 bg-border mx-1" />
+
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleDownload}
+        title={t('workspace.fileManagement.image.download')}
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+    </>
+  );
+
   return (
     <div 
       ref={containerRef}
       className={cn(
         "h-full flex flex-col bg-muted/10",
-        isFullscreen && "fixed inset-0 z-50 bg-background",
         className
       )}
     >
       {/* 工具列 */}
+      {isFocusMode && onExitFocusMode ? (
+        <FileFocusToolbar
+          icon={<ImageIcon className="h-4 w-4" />}
+          title={fileName}
+          subtitle={filePath}
+          metadata={imageDimensions ? <span>{imageDimensions.width} × {imageDimensions.height}</span> : null}
+          actions={toolbarActions}
+          exitLabel={t('workspace.fileManagement.focus.exit')}
+          onExit={onExitFocusMode}
+        />
+      ) : (
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-muted-foreground" />
@@ -215,71 +281,10 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomOut}
-            disabled={zoom <= 0.25}
-            title={t('workspace.fileManagement.image.zoomOut')}
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          
-          <span className="text-xs text-muted-foreground min-w-[3rem] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomIn}
-            disabled={zoom >= 5}
-            title={t('workspace.fileManagement.image.zoomIn')}
-          >
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-
-          <div className="w-px h-4 bg-border mx-1" />
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleRotate}
-            title={t('workspace.fileManagement.image.rotate')}
-          >
-            <RotateCw className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleResetZoom}
-            title={t('workspace.fileManagement.image.reset')}
-          >
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-
-          <div className="w-px h-4 bg-border mx-1" />
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleFullscreen}
-            title={isFullscreen ? t('workspace.fileManagement.image.exitExpanded') : t('workspace.fileManagement.image.expand')}
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            title={t('workspace.fileManagement.image.download')}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
+          {toolbarActions}
         </div>
       </div>
+      )}
 
       {/* 圖片顯示區域 */}
       <div className="flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,_rgb(var(--muted-foreground)_/_0.15)_1px,_transparent_0)] [background-size:20px_20px]">
@@ -319,4 +324,3 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
     </div>
   );
 };
-

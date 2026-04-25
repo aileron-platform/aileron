@@ -69,6 +69,9 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         ...state,
         currentFeature: action.payload,
         layoutMode: getLayoutModeForFeature(action.payload),
+        fileManagementEditorExpanded: action.payload === 'file-management'
+          ? state.fileManagementEditorExpanded
+          : false,
       };
 
     case 'SET_LAYOUT_MODE':
@@ -101,6 +104,12 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
         chatExpanded: !state.chatExpanded,
       };
 
+    case 'TOGGLE_FILE_MANAGEMENT_EDITOR_EXPANDED':
+      return {
+        ...state,
+        fileManagementEditorExpanded: !state.fileManagementEditorExpanded,
+      };
+
     case 'SET_SIDEBAR_COLLAPSED':
       return {
         ...state,
@@ -123,6 +132,12 @@ export const workspaceReducer = (state: WorkspaceState, action: WorkspaceAction)
       return {
         ...state,
         chatExpanded: action.payload,
+      };
+
+    case 'SET_FILE_MANAGEMENT_EDITOR_EXPANDED':
+      return {
+        ...state,
+        fileManagementEditorExpanded: action.payload,
       };
 
     case 'TOGGLE_NAVIGATION_ITEM':

@@ -193,6 +193,10 @@ const fileManagement = {
       revertFailed: '還原失敗',
       someFilesSaveFailed: '部分檔案儲存失敗',
     },
+    layout: {
+      expand: '展開編輯器欄',
+      collapse: '縮回編輯器欄',
+    },
     dialogs: {
       revertTitle: '還原檔案',
       revertMessage: '確定要捨棄此檔案所有未儲存的變更嗎？此操作無法復原。',
@@ -217,6 +221,10 @@ const fileManagement = {
       lineCount: '{{count}} 行',
       modified: '已修改',
     },
+  },
+  focus: {
+    enter: '專注檢視目前檔案',
+    exit: '離開檔案專注模式',
   },
   mermaid: {
     title: 'Mermaid 圖表',

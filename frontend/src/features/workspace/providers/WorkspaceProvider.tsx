@@ -514,6 +514,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
     dispatch({ type: 'TOGGLE_SECOND_COLUMN' });
   }, []);
 
+  const toggleFileManagementEditorExpanded = useCallback(() => {
+    dispatch({ type: 'TOGGLE_FILE_MANAGEMENT_EDITOR_EXPANDED' });
+  }, []);
+
   // 檔案樹 Actions
 
   // Canvas 操作
@@ -548,6 +552,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       },
       layout: {
         secondColumnCollapsed: state.secondColumnCollapsed,
+        fileManagementEditorExpanded: state.fileManagementEditorExpanded,
+        fileManagementFocusMode: state.fileManagementEditorExpanded,
       },
       fileTreeState: fileTreeAdapter.state,
       fileTreeActions,
@@ -583,6 +589,8 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
         toggleCanvas: toggleMarkdownCanvas,
       },
       toggleSecondColumn,
+      toggleFileManagementEditorExpanded,
+      toggleFileManagementFocusMode: toggleFileManagementEditorExpanded,
     }),
     [
       state,
@@ -609,6 +617,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children, 
       isMarkdownCanvasMode,
       toggleMarkdownCanvas,
       toggleSecondColumn,
+      toggleFileManagementEditorExpanded,
     ]
   );
 

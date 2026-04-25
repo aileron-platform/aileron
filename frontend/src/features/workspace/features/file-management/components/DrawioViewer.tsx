@@ -7,17 +7,20 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('DrawioViewer');
-import { AlertCircle, Loader2, Maximize2, Minimize2, Download, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, Loader2, Download, Image as ImageIcon } from 'lucide-react';
 import { ApiClient } from '@/shared/api/apiClient';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
+import { FileFocusToolbar } from './FileFocusToolbar';
 
 interface DrawioViewerProps {
   content: string;
   filePath: string;
   runtimeBaseUrl: string;
   className?: string;
+  isFocusMode?: boolean;
+  onExitFocusMode?: () => void;
   onSave?: (newContent: string) => void;
 }
 
@@ -35,6 +38,8 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   filePath,
   runtimeBaseUrl,
   className,
+  isFocusMode = false,
+  onExitFocusMode,
   onSave
 }) => {
   const { t } = useI18n();
@@ -44,7 +49,6 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   const [drawioUrl, setDrawioUrl] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const [isExpanded, setIsExpanded] = useState(false);
 
   // 獲取 Draw.io URL（帶重試機制）
   useEffect(() => {
@@ -162,11 +166,6 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
     }
   };
 
-  // 切換放大模式
-  const handleToggleExpand = () => {
-    setIsExpanded(!isExpanded);
-  };
-
   // 下載圖表
   const handleDownload = () => {
     if (!content) return;
@@ -181,16 +180,37 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const toolbarActions = (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={handleDownload}
+      disabled={!content}
+      title={t('workspace.fileManagement.drawio.download')}
+    >
+      <Download className="h-4 w-4" />
+    </Button>
+  );
+
   return (
     <div
       id="drawio-viewer-container"
       className={cn(
         'flex flex-col h-full bg-background',
-        isExpanded && 'fixed inset-0 z-50',
         className
       )}
     >
       {/* 工具列 */}
+      {isFocusMode && onExitFocusMode ? (
+        <FileFocusToolbar
+          icon={<ImageIcon className="h-4 w-4" />}
+          title={filePath.split('/').pop() || filePath}
+          subtitle={filePath}
+          actions={toolbarActions}
+          exitLabel={t('workspace.fileManagement.focus.exit')}
+          onExit={onExitFocusMode}
+        />
+      ) : (
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-2">
           <ImageIcon className="h-4 w-4 text-muted-foreground" />
@@ -198,26 +218,10 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            disabled={!content}
-            title={t('workspace.fileManagement.drawio.download')}
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleToggleExpand}
-            title={isExpanded ? t('workspace.fileManagement.drawio.exitExpanded') : t('workspace.fileManagement.drawio.expand')}
-          >
-            {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
+          {toolbarActions}
         </div>
       </div>
+      )}
 
       {/* 內容區域 */}
       <div className="flex-1 relative overflow-hidden">

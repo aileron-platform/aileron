@@ -230,6 +230,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   const isAgentToolFourColumn = isAgentToolFeatureActive && ['slash-commands', 'skills'].includes(state.agentToolSettings.subView);
 
   const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isScriptsView || isMemoryView || isAgentToolFourColumn;
+  const isFileManagementEditorExpanded =
+    state.currentFeature === 'file-management' && state.fileManagementEditorExpanded;
 
   useEffect(() => {
     if (!isSkillsView) {
@@ -564,7 +566,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     const mainColumns = (
       <>
         {/* 第一欄：功能導航列表 */}
-        <div className={`bg-background border-r border-border transition-all duration-300 ${state.chatExpanded ? 'hidden' : ''
+        <div className={`bg-background border-r border-border transition-all duration-300 ${(state.chatExpanded || isFileManagementEditorExpanded) ? 'hidden' : ''
           } flex flex-col relative`}
           style={{
             width: state.sidebarCollapsed ? '64px' : `${state.sidebarWidth}px`
@@ -582,8 +584,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         </div>
 
         {/* 第二欄：功能特定內容（四欄模式或三欄模式的特定情況顯示） */}
-        {(!isThreeColumn || isFourColumnView) && (
+        {(!isThreeColumn || isFourColumnView) && !isFileManagementEditorExpanded && (
           <div
+            data-testid="workspace-second-column"
             className="bg-background border-r border-border overflow-hidden flex flex-col transition-all duration-300 relative"
             style={{
               width: state.secondColumnCollapsed ? '64px' : `${state.secondColumnWidth}px`,
@@ -628,8 +631,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         )}
 
         <div
+          data-testid="workspace-third-column"
           className="bg-background border-r border-border transition-all duration-300 flex flex-col relative"
-          style={{ flex: '1 1 0', minWidth: '400px' }}
+          style={{ flex: '1 1 0', minWidth: isFileManagementEditorExpanded ? '0' : '400px' }}
         >
           <div className="flex-1 overflow-hidden flex flex-col">
             <div className="flex-1 overflow-hidden">
@@ -667,7 +671,9 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           {wrappedMainColumns}
         </div>
         <div
-          className={`bg-background transition-all duration-300 relative ${state.chatExpanded
+          className={`bg-background transition-all duration-300 relative ${isFileManagementEditorExpanded
+            ? 'hidden'
+            : state.chatExpanded
             ? 'fixed inset-0 z-40'
             : `flex-shrink-0 ${state.rightChatCollapsed ? 'w-12' : ''}`
             }`}
@@ -769,8 +775,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <ChatPanelStateProvider>
           <OpenSpecWorkspaceProvider>
             <div className="h-screen w-screen flex flex-col bg-background">
-              {/* Header - 保持與原始設計完全相同 */}
-              <GlobalNavigation />
+              {/* Header - 檔案管理編輯器展開時隱藏，讓第三欄佔滿整個畫面 */}
+              {!isFileManagementEditorExpanded && <GlobalNavigation />}
 
               {/* 主要Layout區域 - 填滿剩餘空間 */}
               {renderContent()}
