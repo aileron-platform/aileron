@@ -157,13 +157,24 @@ def run_command(
     )
 
 
-def raise_for_result(result: subprocess.CompletedProcess[str], *, action: str) -> None:
-    if result.returncode == 0:
-        return
-    details = (result.stderr or result.stdout or "").strip()
-    if details:
-        raise OpsError(f"{action} failed:\n{details}")
-    raise OpsError(f"{action} failed with exit code {result.returncode}")
+def stream_command(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+    action: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run a long command inheriting parent stdio so the user sees progress in real time."""
+    result = subprocess.run(
+        args,
+        cwd=str(cwd) if cwd else None,
+        env=env,
+        check=False,
+    )
+    if check and result.returncode != 0:
+        raise OpsError(f"{action} failed (exit code {result.returncode})")
+    return result
 
 
 def ensure_docker_available() -> None:
@@ -386,20 +397,23 @@ def compose_down(repo_root: Path, *, env: dict[str, str] | None = None) -> None:
         print_warning("未找到 docker-compose.yml，跳過 compose down。")
         return
     print_info("停止 docker compose 服務...")
-    result = run_command(
+    stream_command(
         ["docker", "compose", "down", "--remove-orphans"],
         cwd=repo_root,
-        check=False,
         env=env,
+        action="docker compose down",
     )
-    raise_for_result(result, action="docker compose down")
     print_success("docker compose 服務已停止")
 
 
 def compose_pull(repo_root: Path, *, env: dict[str, str]) -> None:
     print_info("先從 registry 拉取對應 image...")
-    result = run_command(["docker", "compose", "pull"], cwd=repo_root, check=False, env=env)
-    raise_for_result(result, action="docker compose pull")
+    stream_command(
+        ["docker", "compose", "pull"],
+        cwd=repo_root,
+        env=env,
+        action="docker compose pull",
+    )
     print_success("docker compose pull 已完成")
 
 
@@ -420,8 +434,7 @@ def compose_up(
     if build:
         command.append("--build")
     print_info("啟動 docker compose 服務...")
-    result = run_command(command, cwd=repo_root, check=False, env=env)
-    raise_for_result(result, action="docker compose up")
+    stream_command(command, cwd=repo_root, env=env, action="docker compose up")
     print_success("docker compose 啟動命令已送出")
 
 
@@ -559,7 +572,7 @@ def run_test_command(
 
     pytest_command = build_pytest_command(config, effective_test_path, extra_args)
     start_time = time.monotonic()
-    result = run_command(
+    result = stream_command(
         [
             "docker",
             "exec",
@@ -570,20 +583,16 @@ def run_test_command(
         ],
         cwd=repo_root,
         check=False,
+        action="pytest in container",
     )
     duration = int(time.monotonic() - start_time)
-    output = result.stdout or ""
-    if result.stderr:
-        output = f"{output}\n{result.stderr}".strip()
 
     if result.returncode == 0:
         print_success("測試執行完成")
     else:
-        print_warning("測試命令返回非零狀態，請檢查輸出")
+        print_warning("測試命令返回非零狀態，請檢查上方輸出")
 
     print_info(f"執行時間：{duration} 秒")
-    if output:
-        print(output)
 
     if not is_mounted:
         print_info(
