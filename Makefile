@@ -38,6 +38,12 @@ WORKSPACE_RUNTIME_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-runtime:$(IMAGE_TA
 WORKSPACE_CANVAS_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-canvas:$(IMAGE_TAG)
 WORKSPACE_OPERATOR_IMAGE ?= $(REGISTRY)/$(NAMESPACE)/workspace-operator:$(IMAGE_TAG)
 
+ifneq ($(filter dev-%,$(IMAGE_TAG)),)
+WORKSPACE_UI_DOCKERFILE ?= frontend/Dockerfile.dev
+else
+WORKSPACE_UI_DOCKERFILE ?= frontend/Dockerfile
+endif
+
 ifeq ($(RUNTIME_BASE),lite)
 WORKSPACE_RUNTIME_BASE_IMAGE ?= $(RUNTIME_BASE_LITE_IMAGE)
 else
@@ -226,7 +232,8 @@ rebuild-runtime-base: ## 🔁 依 RUNTIME_BASE 重建並推送 workspace-runtime
 build-workspace-ui: ## 🏗️ 建置 workspace-ui image
 	@echo "$(GREEN)🏗️ 建置 workspace-ui image...$(NC)"
 	@echo "  Image: $(CYAN)$(WORKSPACE_UI_IMAGE)$(NC)"
-	@docker build -t $(WORKSPACE_UI_IMAGE) -f frontend/Dockerfile frontend
+	@echo "  Dockerfile: $(CYAN)$(WORKSPACE_UI_DOCKERFILE)$(NC)"
+	@docker build -t $(WORKSPACE_UI_IMAGE) -f $(WORKSPACE_UI_DOCKERFILE) frontend
 	@echo "$(GREEN)✅ workspace-ui 建置完成$(NC)"
 
 push-workspace-ui: ## 📤 推送 workspace-ui image

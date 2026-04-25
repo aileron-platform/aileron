@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import { loader } from '@monaco-editor/react';
 import { useI18n } from '../../hooks/useI18n';
+import { disableMonacoDiagnostics } from './disableMonacoDiagnostics';
 
 /**
  * MonacoInitializer - Monaco Editor 初始化組件
  * 
  * 負責配置 Monaco Editor 的全域設定，例如：
  * - 語言/地區設定 (Localization)
+ * - 僅保留語法高亮，不顯示語法/語意診斷
  * - CDN 配置 (如果有需要)
  */
 export const MonacoInitializer: React.FC = () => {
@@ -26,6 +28,10 @@ export const MonacoInitializer: React.FC = () => {
                     '*': monacoLocale,
                 },
             },
+        });
+
+        void loader.init().then((monaco) => {
+            disableMonacoDiagnostics(monaco);
         });
     }, [currentLanguage]);
 

@@ -3,7 +3,7 @@
  * 為單個檔案提供獨立的編輯器實例
  */
 
-import React, { useRef, useMemo, useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useMemo, forwardRef, useImperativeHandle } from 'react';
 import Editor, { OnMount, OnChange } from '@monaco-editor/react';
 import { dispatchAddCodeReferenceEvent } from '../../../components/ChatPanel/chatEvents';
 import { FileText } from 'lucide-react';
@@ -41,7 +41,6 @@ export const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({
   originalContent,
 }, ref) => {
   const editorRef = useRef<any>(null);
-  const monacoRef = useRef<any>(null);
   const lastSelectionRef = useRef<string | null>(null);
   const { state } = useApp();
 
@@ -65,10 +64,9 @@ export const CodeEditor = forwardRef<CodeEditorRef, CodeEditorProps>(({
   }, [content]);
 
   // 處理編輯器掛載
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
+  const handleEditorDidMount: OnMount = (editor) => {
     try {
       editorRef.current = editor;
-      monacoRef.current = monaco;
 
       // 監聽選取範圍變更
       editor.onDidChangeCursorSelection((e) => {

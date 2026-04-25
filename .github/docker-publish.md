@@ -81,5 +81,6 @@ Runtime：
 - `workspace-runtime` 會依 flavor 引用不同 base image：
   - `codex` -> 直接從 Docker Hub 拉取 `ailerondocker/codex-universal:latest-<arch>`
   - `lite` -> `workspace-runtime-base-lite:<channel>-<arch>`
+- `workspace-ui` 的 `dev-*` tag 是本地開發用途，使用 `frontend/Dockerfile.dev` 啟動 Vite dev server；`latest-*` tag 則使用 `frontend/Dockerfile` 建置 nginx 靜態站台。
 - workflow 目前只負責發布 image，不會自動修改 `docker-compose.yml`、Helm values 或程式內的預設 image tag。
 - `codex-universal` 由 `aileron-platform/codex-universal` repository 的獨立 workflow 負責建置與發布。

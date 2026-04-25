@@ -205,24 +205,34 @@ jobs:
         image:
           - name: workspace-ui
             context: frontend
-            file: frontend/Dockerfile
-            target: ""
+            dev_file: frontend/Dockerfile.dev
+            latest_file: frontend/Dockerfile
+            dev_target: ""
+            latest_target: ""
           - name: workspace-manager
             context: workspace-manager
-            file: workspace-manager/Dockerfile
-            target: production
+            dev_file: workspace-manager/Dockerfile
+            latest_file: workspace-manager/Dockerfile
+            dev_target: production
+            latest_target: production
           - name: workspace-chrome
             context: workspace-chrome
-            file: workspace-chrome/Dockerfile.webrtc
-            target: ""
+            dev_file: workspace-chrome/Dockerfile.webrtc
+            latest_file: workspace-chrome/Dockerfile.webrtc
+            dev_target: ""
+            latest_target: ""
           - name: workspace-canvas
             context: workspace-canvas
-            file: workspace-canvas/Dockerfile
-            target: ""
+            dev_file: workspace-canvas/Dockerfile
+            latest_file: workspace-canvas/Dockerfile
+            dev_target: ""
+            latest_target: ""
           - name: workspace-operator
             context: workspace-operator
-            file: workspace-operator/Dockerfile
-            target: ""
+            dev_file: workspace-operator/Dockerfile
+            latest_file: workspace-operator/Dockerfile
+            dev_target: ""
+            latest_target: ""
         platform:
           - os: linux
             arch: amd64
@@ -256,49 +266,83 @@ jobs:
 
           image="${{ env.REGISTRY }}/${{ env.NAMESPACE }}/${{ matrix.image.name }}"
           arch="${{ matrix.platform.arch }}"
-          tags=""
+          dev_tags=""
+          latest_tags=""
 
           if [ "${{ needs.resolve-config.outputs.publish_dev }}" = "true" ]; then
-            tags="${tags}${image}:dev-${arch}"$'\n'
+            dev_tags="${dev_tags}${image}:dev-${arch}"$'\n'
           fi
 
           if [ "${{ needs.resolve-config.outputs.publish_latest }}" = "true" ]; then
-            tags="${tags}${image}:latest-${arch}"$'\n'
+            latest_tags="${latest_tags}${image}:latest-${arch}"$'\n'
           fi
 
           {
-            echo "tags<<EOF"
-            printf "%s" "${tags}"
+            echo "dev_tags<<EOF"
+            printf "%s" "${dev_tags}"
+            echo
+            echo "EOF"
+            echo "latest_tags<<EOF"
+            printf "%s" "${latest_tags}"
             echo
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Build and push service image with target
-        if: ${{ matrix.image.target != '' }}
+      - name: Build and push dev service image with target
+        if: ${{ needs.resolve-config.outputs.publish_dev == 'true' && matrix.image.dev_target != '' }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.file }}
-          target: ${{ matrix.image.target }}
+          file: ${{ matrix.image.dev_file }}
+          target: ${{ matrix.image.dev_target }}
           platforms: ${{ matrix.platform.value }}
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
-          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          tags: ${{ steps.tags.outputs.dev_tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-dev-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-dev-${{ matrix.platform.arch }}
           provenance: false
           sbom: false
 
-      - name: Build and push service image without target
-        if: ${{ matrix.image.target == '' }}
+      - name: Build and push dev service image without target
+        if: ${{ needs.resolve-config.outputs.publish_dev == 'true' && matrix.image.dev_target == '' }}
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.image.context }}
-          file: ${{ matrix.image.file }}
+          file: ${{ matrix.image.dev_file }}
           platforms: ${{ matrix.platform.value }}
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
-          cache-from: type=gha,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
-          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-${{ matrix.platform.arch }}
+          tags: ${{ steps.tags.outputs.dev_tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-dev-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-dev-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+      - name: Build and push latest service image with target
+        if: ${{ needs.resolve-config.outputs.publish_latest == 'true' && matrix.image.latest_target != '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.latest_file }}
+          target: ${{ matrix.image.latest_target }}
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.latest_tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-latest-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-latest-${{ matrix.platform.arch }}
+          provenance: false
+          sbom: false
+
+      - name: Build and push latest service image without target
+        if: ${{ needs.resolve-config.outputs.publish_latest == 'true' && matrix.image.latest_target == '' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.image.context }}
+          file: ${{ matrix.image.latest_file }}
+          platforms: ${{ matrix.platform.value }}
+          push: true
+          tags: ${{ steps.tags.outputs.latest_tags }}
+          cache-from: type=gha,scope=service-${{ matrix.image.name }}-latest-${{ matrix.platform.arch }}
+          cache-to: type=gha,mode=max,scope=service-${{ matrix.image.name }}-latest-${{ matrix.platform.arch }}
           provenance: false
           sbom: false
 
