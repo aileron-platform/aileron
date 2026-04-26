@@ -70,7 +70,7 @@ router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-bases"])
 _KB_ERROR_EXAMPLES = {
     400: {
         "invalidFileType": {
-            "summary": "白名單副檔名限制",
+            "summary": "Whitelisted file extension restriction",
             "value": {
                 "detail": {
                     "code": "INVALID_FILE_TYPE",
@@ -86,7 +86,7 @@ _KB_ERROR_EXAMPLES = {
     },
     404: {
         "tombstonedKnowledgeBase": {
-            "summary": "已 tombstone 的 KB 不可再讀取",
+            "summary": "Tombstoned KB cannot be accessed",
             "value": {
                 "detail": {
                     "code": "KB_NOT_FOUND",
@@ -98,7 +98,7 @@ _KB_ERROR_EXAMPLES = {
     },
     409: {
         "quotaExceeded": {
-            "summary": "KB 配額超限",
+            "summary": "KB quota exceeded",
             "value": {
                 "detail": {
                     "code": "KB_QUOTA_EXCEEDED",
@@ -113,7 +113,7 @@ _KB_ERROR_EXAMPLES = {
             },
         },
         "duplicateAttachment": {
-            "summary": "重複 attach 同一個 KB",
+            "summary": "Duplicate attachment of the same KB",
             "value": {
                 "detail": {
                     "code": "KB_ALREADY_ATTACHED",
@@ -123,7 +123,7 @@ _KB_ERROR_EXAMPLES = {
             },
         },
         "aliasConflict": {
-            "summary": "mount alias 衝突",
+            "summary": "Mount alias conflict",
             "value": {
                 "detail": {
                     "code": "KB_MOUNT_ALIAS_CONFLICT",
@@ -133,7 +133,7 @@ _KB_ERROR_EXAMPLES = {
             },
         },
         "knowledgeBaseInUse": {
-            "summary": "KB 仍被 workspace 掛載",
+            "summary": "KB still mounted by workspace",
             "value": {
                 "detail": {
                     "code": "KB_IN_USE",
@@ -145,7 +145,7 @@ _KB_ERROR_EXAMPLES = {
     },
     413: {
         "fileTooLarge": {
-            "summary": "單檔超過大小限制",
+            "summary": "Single file size limit exceeded",
             "value": {
                 "detail": {
                     "code": "FILE_TOO_LARGE",
@@ -162,11 +162,11 @@ _KB_ERROR_EXAMPLES = {
 }
 
 _KB_ERROR_DESCRIPTIONS = {
-    400: "Knowledge base 請求不合法，例如白名單副檔名限制或路徑格式錯誤。`detail.message` 會依請求語系本地化。",
-    403: "目前使用者沒有對 knowledge base 或 workspace 的操作權限。`detail.message` 會依請求語系本地化。",
-    404: "指定 knowledge base、share 或 attachment 不存在，或 KB 已 tombstone。`detail.message` 會依請求語系本地化。",
-    409: "Knowledge base 狀態衝突，例如配額超限、重複 attach、alias 衝突或 KB 仍被掛載。`detail.message` 會依請求語系本地化。",
-    413: "上傳或寫入的單一檔案超過 `KB_SINGLE_FILE_SIZE_LIMIT`。`detail.message` 會依請求語系本地化。",
+    400: "Knowledge base request is invalid, such as whitelisted file extension restriction or path format error. `detail.message` will be localized according to request language.",
+    403: "Current user does not have operation permission on knowledge base or workspace. `detail.message` will be localized according to request language.",
+    404: "Specified knowledge base, share, or attachment does not exist, or KB is tombstoned. `detail.message` will be localized according to request language.",
+    409: "Knowledge base status conflict, such as quota exceeded, duplicate attachment, alias conflict, or KB still mounted. `detail.message` will be localized according to request language.",
+    413: "Single uploaded or written file exceeds `KB_SINGLE_FILE_SIZE_LIMIT`. `detail.message` will be localized according to request language.",
 }
 
 
@@ -392,7 +392,7 @@ def _localize_file_management_error(exc: FileManagementException) -> dict:
 @router.get(
     "",
     response_model=KnowledgeBaseListResponse,
-    summary="列出目前使用者可見的 knowledge bases",
+    summary="List knowledge bases visible to current user",
     responses=_build_kb_responses(401, 500),
 )
 def list_knowledge_bases(
@@ -407,7 +407,7 @@ def list_knowledge_bases(
     "",
     response_model=KnowledgeBaseDetail,
     status_code=status.HTTP_201_CREATED,
-    summary="建立 knowledge base",
+    summary="Create knowledge base",
     responses=_build_kb_responses(400, 401, 409, 500),
 )
 def create_knowledge_base(
@@ -432,7 +432,7 @@ def create_knowledge_base(
 @router.get(
     "/{kb_id}",
     response_model=KnowledgeBaseDetail,
-    summary="取得 knowledge base 詳情",
+    summary="Get knowledge base details",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def get_knowledge_base(
@@ -451,7 +451,7 @@ def get_knowledge_base(
 @router.patch(
     "/{kb_id}",
     response_model=KnowledgeBaseDetail,
-    summary="更新 knowledge base",
+    summary="Update knowledge base",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def update_knowledge_base(
@@ -475,7 +475,7 @@ def update_knowledge_base(
 @router.delete(
     "/{kb_id}",
     response_model=KnowledgeBaseDetail,
-    summary="刪除 knowledge base",
+    summary="Delete knowledge base",
     responses=_build_kb_responses(401, 403, 404, 409, 500),
 )
 def delete_knowledge_base(
@@ -496,13 +496,13 @@ def delete_knowledge_base(
 @router.get(
     "/{kb_id}/files/tree",
     response_model=FileTreeResponse,
-    summary="取得 knowledge base 檔案樹",
+    summary="Get knowledge base file tree",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def get_knowledge_base_file_tree(
     kb_id: str,
     request: Request,
-    path: str = Query("/", description="相對路徑"),
+    path: str = Query("/", description="Relative path"),
     include_hidden: bool = Query(False, alias="includeHidden"),
     max_depth: int = Query(1, alias="maxDepth", ge=1, le=5),
     current_user_id: str = Depends(get_current_user_id),
@@ -523,7 +523,7 @@ def get_knowledge_base_file_tree(
 @router.get(
     "/{kb_id}/files/content",
     response_model=FileContentResponse,
-    summary="讀取 knowledge base 檔案內容",
+    summary="Read knowledge base FileContent",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def get_knowledge_base_file_content(
@@ -541,7 +541,7 @@ def get_knowledge_base_file_content(
 
 @router.put(
     "/{kb_id}/files/content",
-    summary="寫入 knowledge base 檔案內容",
+    summary="Write knowledge base FileContent",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
 )
 def put_knowledge_base_file_content(
@@ -565,7 +565,7 @@ def put_knowledge_base_file_content(
 @router.post(
     "/{kb_id}/files",
     response_model=FileUploadResponse | dict,
-    summary="建立資料夾或上傳檔案到 knowledge base",
+    summary="Create folder or upload files to knowledge base",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
 )
 async def post_knowledge_base_files(
@@ -601,7 +601,7 @@ async def post_knowledge_base_files(
 
 @router.patch(
     "/{kb_id}/files",
-    summary="移動或重新命名 knowledge base 檔案",
+    summary="Move or rename knowledge base file",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def patch_knowledge_base_files(
@@ -625,7 +625,7 @@ def patch_knowledge_base_files(
 
 @router.post(
     "/{kb_id}/files/copy",
-    summary="複製 knowledge base 檔案或資料夾",
+    summary="Copy knowledge base file or folder",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
 )
 def copy_knowledge_base_files(
@@ -651,7 +651,7 @@ def copy_knowledge_base_files(
 
 @router.delete(
     "/{kb_id}/files",
-    summary="刪除 knowledge base 檔案或資料夾",
+    summary="Delete knowledge base file or folder",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def delete_knowledge_base_files(
@@ -676,7 +676,7 @@ def delete_knowledge_base_files(
 @router.get(
     "/{kb_id}/shares",
     response_model=KnowledgeBaseShareListResponse,
-    summary="列出 knowledge base shares",
+    summary="List knowledge base shares",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def list_knowledge_base_shares(
@@ -696,7 +696,7 @@ def list_knowledge_base_shares(
     "/{kb_id}/shares",
     response_model=KnowledgeBaseShareSummary,
     status_code=status.HTTP_201_CREATED,
-    summary="建立 knowledge base share",
+    summary="Create knowledge base share",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def create_knowledge_base_share(
@@ -721,7 +721,7 @@ def create_knowledge_base_share(
 @router.patch(
     "/{kb_id}/shares/{share_id}",
     response_model=KnowledgeBaseShareSummary,
-    summary="更新 knowledge base share",
+    summary="Update knowledge base share",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def update_knowledge_base_share(
@@ -742,7 +742,7 @@ def update_knowledge_base_share(
 @router.delete(
     "/{kb_id}/shares/{share_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 knowledge base share",
+    summary="Delete knowledge base share",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def delete_knowledge_base_share(
@@ -761,7 +761,7 @@ def delete_knowledge_base_share(
 @router.get(
     "/{kb_id}/attachments",
     response_model=KnowledgeBaseAttachmentListResponse,
-    summary="列出 knowledge base attachments",
+    summary="List knowledge base attachments",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def list_knowledge_base_attachments(
@@ -783,7 +783,7 @@ def list_knowledge_base_attachments(
     "/{kb_id}/attachments",
     response_model=KnowledgeBaseAttachmentSummary,
     status_code=status.HTTP_201_CREATED,
-    summary="建立 knowledge base attachment",
+    summary="Create knowledge base attachment",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def create_knowledge_base_attachment(
@@ -809,7 +809,7 @@ def create_knowledge_base_attachment(
 @router.patch(
     "/{kb_id}/attachments/{attachment_id}",
     response_model=KnowledgeBaseAttachmentSummary,
-    summary="更新 knowledge base attachment",
+    summary="Update knowledge base attachment",
     responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def update_knowledge_base_attachment(
@@ -835,7 +835,7 @@ def update_knowledge_base_attachment(
 @router.delete(
     "/{kb_id}/attachments/{attachment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 knowledge base attachment",
+    summary="Delete knowledge base attachment",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
 def delete_knowledge_base_attachment(

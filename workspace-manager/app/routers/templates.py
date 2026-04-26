@@ -1,11 +1,11 @@
-"""模板路由 - 主入口
+"""Template routes - Main entry
 
-该文件整合了所有模板相关的子路由，包括：
-- base: 基础 CRUD 操作和分类/功能查询
-- config: MCP、Hooks 配置管理
-- files: Commands、Agents、Output Style、AGENTS.md、通用文件管理
-- git: Git 版本控制和 SSH Keys 管理
-- install: 模板安装、导入、导出
+This file integrates all template-related sub-routes, including:
+- base: Basic CRUD operations and category/feature queries
+- config: MCP and Hooks configuration management
+- files: Commands, Agents, Output Style, AGENTS.md, and general file management
+- git: Git version control and SSH key management
+- install: Template installation, import, and export
 """
 
 from fastapi import APIRouter
@@ -18,23 +18,23 @@ from app.routers.templates import (
     install_router,
 )
 
-# 创建主路由
-router = APIRouter(prefix="/templates", tags=["模板"])
+# Create main route
+router = APIRouter(prefix="/templates", tags=["Template"])
 
-# 整合所有子路由
-# 基础 CRUD 和分类/功能查询路由（无额外前缀）
+# Integrate all sub-routes
+# Basic CRUD and category/feature query routes (no additional prefix)
 router.include_router(base_router)
 
-# 配置管理路由（无额外前缀）
+# Config management routes (no additional prefix)
 router.include_router(config_router)
 
-# 文件管理路由（无额外前缀）
+# File management routes (no additional prefix)
 router.include_router(files_router)
 
-# Git 和 SSH Keys 管理路由（无额外前缀）
+# Git and SSH keys management routes (no additional prefix)
 router.include_router(git_router)
 
-# 模板安装/导入/导出路由（无额外前缀）
+# Template installation/import/export routes (no additional prefix)
 router.include_router(install_router)
 
 

@@ -1,14 +1,14 @@
-"""字串處理工具函數"""
+"""String utility functions"""
 
 
 def snake_case(value: str) -> str:
-    """將 camelCase 或 PascalCase 轉換為 snake_case
+    """Convert camelCase or PascalCase to snake_case
 
     Args:
-        value: 要轉換的字串
+        value: String to convert
 
     Returns:
-        snake_case 格式的字串
+        String in snake_case format
 
     Examples:
         >>> snake_case("firstName")

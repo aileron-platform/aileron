@@ -1,4 +1,4 @@
-"""Workspace Manager Pydantic 模型匯出"""
+"""Workspace Manager Pydantic model exports"""
 
 from .auth import AuthStatus, LoginRequest, RefreshRequest, TokenResponse
 from .oauth import (

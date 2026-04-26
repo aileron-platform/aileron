@@ -1,4 +1,4 @@
-"""模板基础 CRUD 路由"""
+"""Template basic CRUD routes"""
 
 import logging
 from typing import Optional
@@ -61,7 +61,7 @@ DEFAULT_TEMPLATE_CATEGORY_METADATA = {
     },
 }
 
-# canonical feature key 正規化
+# Canonical feature key normalization
 _CAMEL_MAP = {
     "commands": "commands",
     "agentsMd": "agentsMd",
@@ -71,10 +71,10 @@ _CAMEL_MAP = {
 
 
 def _translate_template_base_value_error(translate, error: str) -> str:
-    if error.startswith("模板代號 '") and error.endswith("' 已存在，請使用其他代號"):
-        template_id = error[len("模板代號 '"):].split("' 已存在，請使用其他代號", 1)[0]
+    if error.startswith("Template ID '") and error.endswith("' already exists, please use another ID"):
+        template_id = error[len("Template ID '"):].split("' already exists, please use another ID", 1)[0]
         return translate("templates.base.id_already_exists", template_id=template_id)
-    if "模板代號必須使用 kebab-case 格式" in error:
+    if "Template ID must use kebab-case format" in error:
         return translate("templates.base.invalid_template_id")
     return error
 
@@ -99,29 +99,29 @@ def _normalize_category(category: TemplateCategory) -> TemplateCategory:
 
 
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
-    """取得模板服務實例"""
+    """Get template service instance"""
     return TemplateService(db)
 
 
 @router.get(
     "/",
     response_model=TemplateListResponse,
-    summary="列出模板",
+    summary="List templates",
     responses=build_responses(401, 422, 500),
 )
 async def list_templates(
     request: Request,
-    category: Optional[str] = Query(default=None, description="分類篩選"),
-    cli_type: Optional[str] = Query(default=None, description="CLI 類型篩選"),
-    keywords: Optional[str] = Query(default=None, description="關鍵字篩選（逗號分隔）"),
-    search: Optional[str] = Query(default=None, description="搜尋關鍵字"),
-    features: Optional[str] = Query(default=None, description="Feature 篩選（逗號分隔）"),
-    page: int = Query(default=1, ge=1, description="頁碼"),
-    limit: int = Query(default=20, ge=1, le=100, description="每頁數量"),
+    category: Optional[str] = Query(default=None, description="Category filter"),
+    cli_type: Optional[str] = Query(default=None, description="CLI type filter"),
+    keywords: Optional[str] = Query(default=None, description="Keyword filter (comma-separated)"),
+    search: Optional[str] = Query(default=None, description="Search keyword"),
+    features: Optional[str] = Query(default=None, description="Feature filter (comma-separated)"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=20, ge=1, le=100, description="Items per page"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
 ) -> TemplateListResponse:
-    """取得模板列表（支援篩選和分頁）"""
+    """Get template list (supports filtering and pagination)"""
     return service.list(
         category=category,
         cli_type=cli_type,
@@ -137,7 +137,7 @@ async def list_templates(
     "/",
     response_model=Template,
     status_code=status.HTTP_201_CREATED,
-    summary="建立模板",
+    summary="Create template",
     responses=build_responses(401, 422, 500),
 )
 async def create_template(
@@ -146,7 +146,7 @@ async def create_template(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> Template:
-    """建立新模板"""
+    """Create new template"""
     try:
         return service.create(payload)
     except ValueError as e:
@@ -159,18 +159,19 @@ async def create_template(
 @router.get(
     "/features",
     response_model=TemplateFeatureListResponse,
-    summary="依 CLI 類型取得可用功能清單",
+    summary="Get available features by CLI type",
     responses=build_responses(401, 422, 500),
 )
 async def list_features_by_cli(
     request: Request,
     cli_type: Optional[str] = Query(
-        default=None, description="CLI 類型（claude-code/codex/gemini，可為 all 或省略）"
+        default=None, description="CLI type (claude-code/codex/gemini, can be all or omitted)"
     ),
     db: Session = Depends(get_db),
 ) -> TemplateFeatureListResponse:
-    """從資料庫讀取並回傳對應 CLI 類型可使用的功能鍵列表（依 sort_order 排序）。
-    回傳的鍵為前端使用的 camelCase。
+    """
+    Read from database and return feature key list usable by corresponding CLI type (sorted by sort_order).
+    Returned keys are in camelCase for frontend use.
     """
     if cli_type in (None, "all"):
         sql = text(
@@ -201,14 +202,14 @@ async def list_features_by_cli(
 @router.get(
     "/categories",
     response_model=TemplateCategoryListResponse,
-    summary="列出模板分類",
+    summary="List template categories",
     responses=build_responses(401, 500),
 )
 async def list_categories(
     request: Request,
     db: Session = Depends(get_db),
 ) -> TemplateCategoryListResponse:
-    """取得所有模板分類（依 sort_order 排序）"""
+    """Get all template categories (sorted by sort_order)"""
     from app.db.models import TemplateCategory as TemplateCategoryDB
 
     categories = (
@@ -218,7 +219,7 @@ async def list_categories(
         .all()
     )
 
-    # 使用 from_attributes 自動轉換
+    # Use from_attributes for auto-conversion
     items = [_normalize_category(TemplateCategory.model_validate(cat)) for cat in categories]
 
     return TemplateCategoryListResponse(items=items)
@@ -227,7 +228,7 @@ async def list_categories(
 @router.get(
     "/{template_id}",
     response_model=Template,
-    summary="取得模板",
+    summary="Get template",
     responses=build_responses(401, 404, 500),
 )
 async def get_template(
@@ -236,7 +237,7 @@ async def get_template(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> Template:
-    """取得指定模板"""
+    """Get specified template"""
     template = service.get(template_id)
     if not template:
         translate = request.state.translate
@@ -250,7 +251,7 @@ async def get_template(
 @router.put(
     "/{template_id}",
     response_model=Template,
-    summary="更新模板",
+    summary="Update template",
     responses=build_responses(401, 404, 422, 500),
 )
 async def update_template(
@@ -260,7 +261,7 @@ async def update_template(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
 ) -> Template:
-    """更新模板基本資訊"""
+    """Update template basic information"""
     template = service.update(template_id, payload)
     if not template:
         translate = request.state.translate
@@ -274,7 +275,7 @@ async def update_template(
 @router.put(
     "/{template_id}/canonical",
     response_model=Template,
-    summary="更新 canonical 模板",
+    summary="Update canonical template",
     responses=build_responses(401, 404, 422, 500),
 )
 async def update_canonical_template(
@@ -284,7 +285,7 @@ async def update_canonical_template(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
 ) -> Template:
-    """以 canonical template tree 更新模板。"""
+    """Update template with canonical template tree."""
     template = service.update_canonical(template_id, payload)
     if not template:
         translate = request.state.translate
@@ -298,7 +299,7 @@ async def update_canonical_template(
 @router.delete(
     "/{template_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除模板",
+    summary="Delete template",
     responses=build_responses(401, 404, 500),
 )
 async def delete_template(
@@ -307,7 +308,7 @@ async def delete_template(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板"""
+    """Delete specified template"""
     success = service.delete(template_id)
     if not success:
         translate = request.state.translate
@@ -317,12 +318,12 @@ async def delete_template(
         )
 
 
-# ============ Feature 索引相關端點 ============
+# ============ Feature Index Endpoints ============
 
 @router.get(
     "/{template_id}/features",
     response_model=TemplateFeatureInfo,
-    summary="查詢模板已索引 Feature",
+    summary="Query template indexed features",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_features(
@@ -332,11 +333,11 @@ async def get_template_features(
     service: TemplateService = Depends(get_template_service),
     db: Session = Depends(get_db)
 ) -> TemplateFeatureInfo:
-    """查詢模板已索引的 Feature 列表
+    """Query template's indexed feature list
 
-    用於前端獲取模板的 Feature 資訊
+    Used for frontend to get template feature information
     """
-    # 檢查模板是否存在
+    # Check if template exists
     template = service.get(template_id)
     if not template:
         translate = request.state.translate
@@ -345,10 +346,10 @@ async def get_template_features(
             detail=translate("templates.not_found")
         )
 
-    # 查詢已索引的 Feature
+    # Query indexed features
     features = service.feature_detection_service.get_template_features(template_id)
 
-    # 查詢索引時間
+    # Query index time
     from app.db.models import TemplateFeatureMapping
     mapping = db.query(TemplateFeatureMapping).filter(
         TemplateFeatureMapping.template_id == template_id
@@ -366,22 +367,22 @@ async def get_template_features(
 @router.get(
     "/features/stats",
     response_model=FeatureStatsResponse,
-    summary="取得 Feature 統計資訊",
+    summary="Get feature statistics",
     responses=build_responses(401, 422, 500),
 )
 async def get_feature_stats(
     request: Request,
-    cli_type: Optional[str] = Query(default=None, description="CLI 類型篩選"),
+    cli_type: Optional[str] = Query(default=None, description="CLI type filter"),
     db: Session = Depends(get_db)
 ) -> FeatureStatsResponse:
-    """取得 Feature 統計資訊
+    """Get feature statistics
 
-    顯示每個 Feature 有多少模板支援
+    Display how many templates support each feature
     """
     from app.db.models import TemplateFeature, TemplateFeatureMapping, Template as TemplateDB
     from sqlalchemy import func
 
-    # 建立基本查詢
+    # Create base query
     query = db.query(
         TemplateFeature.feature_key,
         TemplateFeature.feature_name,
@@ -394,7 +395,7 @@ async def get_feature_stats(
         TemplateFeature.is_active == True
     )
 
-    # 如果有 CLI 類型篩選，加入條件
+    # Add CLI type filter condition if provided
     if cli_type:
         query = query.join(
             TemplateDB,
@@ -403,7 +404,7 @@ async def get_feature_stats(
             TemplateDB.cli_type == cli_type
         )
 
-    # 按 Feature 分組並排序
+    # Group by feature and sort
     results = query.group_by(
         TemplateFeature.id,
         TemplateFeature.feature_key,
@@ -414,10 +415,10 @@ async def get_feature_stats(
         TemplateFeature.sort_order
     ).all()
 
-    # 轉換為回應格式
+    # Convert to response format
     stats = {}
     for result in results:
-        # 將 snake_case 轉換為 camelCase
+        # Convert snake_case to camelCase
         feature_key = _to_camel_feature(result.feature_key)
         stats[feature_key] = FeatureStatItem(
             name=result.feature_name,

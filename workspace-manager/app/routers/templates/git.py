@@ -1,4 +1,4 @@
-"""模板 Git 版本控制和 SSH Keys 管理路由"""
+"""Template Git version control and SSH keys management routes"""
 
 import logging
 from typing import Optional
@@ -123,7 +123,7 @@ def _translate_git_result(translate, result) -> str:
 
 def _translate_git_exception(translate, exc: Exception) -> str:
     message = str(exc)
-    if message in {"SSH_PRIVATE_KEY_INVALID", "SSH_PUBLIC_KEY_INVALID", "私鑰格式不正確", "公鑰格式不正確"}:
+    if message in {"SSH_PRIVATE_KEY_INVALID", "SSH_PUBLIC_KEY_INVALID", "Private key format is incorrect", "Public key format is incorrect"}:
         return translate("templates.ssh_keys_invalid_format")
     if message == "SSH_KEY_GENERATION_FAILED":
         return translate("git.ssh_key_gen_failed_simple")
@@ -142,17 +142,17 @@ def _translate_git_exception(translate, exc: Exception) -> str:
 
 
 def get_template_git_service() -> TemplateGitService:
-    """取得模板 Git 服務實例"""
+    """Get template git service instance"""
     return TemplateGitService()
 
 
-# ============ Git 版本控制 API ============
+# ============ Git version control API =============
 
 
 @router.get(
     "/git/repository/status",
     response_model=GitRepositoryStatus,
-    summary="取得 Template Center Git 倉庫初始化狀態",
+    summary="Get Template Center Git repository initialization status",
     responses=build_responses(401, 500),
 )
 async def get_template_repository_status(
@@ -165,7 +165,7 @@ async def get_template_repository_status(
 @router.post(
     "/git/repository/init",
     response_model=GitOperationResponse,
-    summary="初始化 Template Center Git 倉庫",
+    summary="Initialize Template Center Git repository",
     responses=build_responses(401, 422, 500),
 )
 async def init_template_repository(
@@ -189,7 +189,7 @@ async def init_template_repository(
             error_code=result.code,
         )
     except Exception as e:
-        logger.error(f"初始化 Template Center Git 倉庫失敗: {e}")
+        logger.error(f"Initialize Template Center Git repository failed: {e}")
         return GitOperationResponse(
             success=False,
             message=translate("templates.git.repository_init_failed"),
@@ -200,7 +200,7 @@ async def init_template_repository(
 @router.get(
     "/git/version-control/status",
     response_model=TemplateVersionControlStatus,
-    summary="取得 Template Center file-level Git 狀態",
+    summary="Get Template Center file-level Git status",
     responses=build_responses(401, 500),
 )
 async def get_template_version_control_status(
@@ -213,7 +213,7 @@ async def get_template_version_control_status(
 @router.get(
     "/git/version-control/changes",
     response_model=TemplateChangesResponse,
-    summary="取得 Template Center file-level Git 變更",
+    summary="Get Template Center file-level Git changes",
     responses=build_responses(401, 422, 500),
 )
 async def get_template_version_control_changes(
@@ -228,7 +228,7 @@ async def get_template_version_control_changes(
 @router.get(
     "/git/version-control/branches",
     response_model=TemplateVersionControlBranchListResponse,
-    summary="取得 Template Center Git 分支列表",
+    summary="Get Template Center Git branch list",
     responses=build_responses(401, 500),
 )
 async def list_template_version_control_branches(
@@ -241,7 +241,7 @@ async def list_template_version_control_branches(
 @router.post(
     "/git/version-control/branches/{branch_name:path}/checkout",
     response_model=TemplateCheckoutResponse,
-    summary="切換或建立 Template Center Git 分支",
+    summary="Switch to or create Template Center Git branch",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def checkout_template_version_control_branch(
@@ -259,7 +259,7 @@ async def checkout_template_version_control_branch(
 @router.post(
     "/git/version-control/stage",
     response_model=TemplateStageResponse,
-    summary="暫存 Template Center Git 檔案",
+    summary="Stage Template Center Git files",
     responses=build_responses(400, 401, 422, 500),
 )
 async def stage_template_version_control_changes(
@@ -276,7 +276,7 @@ async def stage_template_version_control_changes(
 @router.post(
     "/git/version-control/unstage",
     response_model=TemplateUnstageResponse,
-    summary="取消暫存 Template Center Git 檔案",
+    summary="Unstage Template Center Git files",
     responses=build_responses(400, 401, 422, 500),
 )
 async def unstage_template_version_control_changes(
@@ -293,7 +293,7 @@ async def unstage_template_version_control_changes(
 @router.post(
     "/git/version-control/discard",
     response_model=TemplateDiscardResponse,
-    summary="捨棄 Template Center Git 檔案變更",
+    summary="Discard Template Center Git file changes",
     responses=build_responses(400, 401, 422, 500),
 )
 async def discard_template_version_control_changes(
@@ -310,7 +310,7 @@ async def discard_template_version_control_changes(
 @router.post(
     "/git/version-control/commit",
     response_model=TemplateCommitResponse,
-    summary="提交 Template Center Git 變更",
+    summary="Commit Template Center Git changes",
     responses=build_responses(400, 401, 422, 500),
 )
 async def commit_template_version_control_changes(
@@ -327,7 +327,7 @@ async def commit_template_version_control_changes(
 @router.get(
     "/git/version-control/commits",
     response_model=TemplateCommitListResponse,
-    summary="列出 Template Center Git 提交歷史",
+    summary="List Template Center Git commit history",
     responses=build_responses(401, 422, 500),
 )
 async def list_template_version_control_commits(
@@ -343,7 +343,7 @@ async def list_template_version_control_commits(
 @router.get(
     "/git/version-control/commits/{commit_id}/files",
     response_model=TemplateCommitFilesResponse,
-    summary="取得 Template Center Git 提交檔案",
+    summary="Get Template Center Git commit files",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_version_control_commit_files(
@@ -357,7 +357,7 @@ async def get_template_version_control_commit_files(
 @router.get(
     "/git/version-control/diff",
     response_model=TemplateDiffResponse,
-    summary="取得 Template Center Git 檔案差異",
+    summary="Get Template Center Git file diff",
     responses=build_responses(401, 422, 500),
 )
 async def get_template_version_control_diff(
@@ -372,7 +372,7 @@ async def get_template_version_control_diff(
 @router.get(
     "/git/version-control/blob",
     response_model=TemplateBlobResponse,
-    summary="讀取 Template Center Git 檔案內容",
+    summary="Read Template Center Git file content",
     responses=build_responses(401, 422, 500),
 )
 async def get_template_version_control_blob(
@@ -387,7 +387,7 @@ async def get_template_version_control_blob(
 @router.post(
     "/git/version-control/fetch",
     response_model=TemplateRemoteResponse,
-    summary="Fetch Template Center Git 遠端引用",
+    summary="Fetch Template Center Git remote references",
     responses=build_responses(400, 401, 422, 500),
 )
 async def fetch_template_version_control(
@@ -404,7 +404,7 @@ async def fetch_template_version_control(
 @router.post(
     "/git/version-control/pull",
     response_model=TemplateRemoteResponse,
-    summary="Pull Template Center Git 遠端變更",
+    summary="Pull Template Center Git remote changes",
     responses=build_responses(400, 401, 422, 500),
 )
 async def pull_template_version_control(
@@ -421,7 +421,7 @@ async def pull_template_version_control(
 @router.post(
     "/git/version-control/push",
     response_model=TemplateRemoteResponse,
-    summary="Push Template Center Git 變更",
+    summary="Push Template Center Git changes",
     responses=build_responses(400, 401, 422, 500),
 )
 async def push_template_version_control(
@@ -437,7 +437,7 @@ async def push_template_version_control(
 @router.get(
     "/git/user-config",
     response_model=GitUserConfigResponse,
-    summary="取得 Git 使用者資訊",
+    summary="Get Git user information",
     responses=build_responses(401, 500),
 )
 async def get_git_user_config(
@@ -445,13 +445,13 @@ async def get_git_user_config(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ) -> GitUserConfigResponse:
-    """取得 git config --global 設定的使用者資訊"""
+    """Get user information from git config --global settings"""
 
     try:
         config = git_service.get_user_config()
         return GitUserConfigResponse(success=True, data=config)
     except Exception as e:
-        logger.error(f"取得 Git 使用者資訊失敗: {e}")
+        logger.error(f"Get Git user information failed: {e}")
         translate = request.state.translate
         return GitUserConfigResponse(
             success=False,
@@ -462,7 +462,7 @@ async def get_git_user_config(
 @router.post(
     "/git/user-config",
     response_model=GitOperationResponse,
-    summary="更新 Git 使用者資訊",
+    summary="Update Git user information",
     responses=build_responses(401, 422, 500),
 )
 async def update_git_user_config(
@@ -471,7 +471,7 @@ async def update_git_user_config(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ) -> GitOperationResponse:
-    """更新 git config --global 的使用者資訊"""
+    """Update user information in git config --global"""
 
     try:
         translate = request.state.translate
@@ -492,7 +492,7 @@ async def update_git_user_config(
             error_code=result.code,
         )
     except Exception as e:
-        logger.error(f"更新 Git 使用者資訊失敗: {e}")
+        logger.error(f"Update Git user information failed: {e}")
         translate = request.state.translate
         return GitOperationResponse(
             success=False,
@@ -504,7 +504,7 @@ async def update_git_user_config(
 @router.post(
     "/git/remote-url",
     response_model=GitOperationResponse,
-    summary="設定 Git 遠端倉庫 URL",
+    summary="Set Git remote repository URL",
     responses=build_responses(401, 422, 500),
 )
 async def set_git_remote_url(
@@ -513,7 +513,7 @@ async def set_git_remote_url(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ) -> GitOperationResponse:
-    """設定或更新 Git 遠端倉庫 URL (origin)"""
+    """Set or update Git remote repository URL (origin)"""
 
     try:
         translate = request.state.translate
@@ -531,7 +531,7 @@ async def set_git_remote_url(
             error_code=result.code,
         )
     except Exception as e:
-        logger.error(f"設定遠端倉庫 URL 失敗: {e}")
+        logger.error(f"Set remote repository URL failed: {e}")
         translate = request.state.translate
         return GitOperationResponse(
             success=False,
@@ -546,7 +546,7 @@ def _rebuild_templates_background(
     db: Session,
     translate_func,
 ) -> None:
-    """後台執行重建模板資料庫任務"""
+    """Background task: Rebuild template database"""
     from app.services.task_progress_service import get_task_progress_service, TaskStatus
     from app.services.template_service import TemplateService
     from sqlalchemy import text
@@ -554,7 +554,7 @@ def _rebuild_templates_background(
     progress_service = get_task_progress_service()
 
     try:
-        # 更新狀態為執行中
+        # Update status to executing
         progress_service.update_progress(
             task_id,
             progress=10,
@@ -562,13 +562,13 @@ def _rebuild_templates_background(
             status=TaskStatus.RUNNING,
         )
 
-        # 清除所有舊的模板資料
+        # Clear all old template data
         try:
             db.execute(text("DELETE FROM templates"))
             db.commit()
-            logger.info("已清除所有舊的模板資料")
+            logger.info("Cleared all old template data")
         except Exception as e:
-            logger.error(f"清除模板資料失敗: {e}")
+            logger.error(f"Clear template data failed: {e}")
             progress_service.set_error(
                 task_id,
                 translate_func("templates.rebuild_clear_failed_simple")
@@ -581,7 +581,7 @@ def _rebuild_templates_background(
             message=translate_func("templates.rebuild_scanning")
         )
 
-        # 掃描並同步模板到資料庫
+        # Scan and sync templates to database
         try:
             sync_result = git_service.scan_and_sync_templates()
             sync_success, sync_message, templates = sync_result
@@ -593,7 +593,7 @@ def _rebuild_templates_background(
 
                 for idx, template_info in enumerate(templates):
                     try:
-                        # 計算進度 (30-95%)
+                        # Calculate progress (30-95%)
                         progress = 30 + int((idx / total_templates) * 65)
                         progress_service.update_progress(
                             task_id,
@@ -606,7 +606,7 @@ def _rebuild_templates_background(
                             ),
                         )
 
-                        # 建立新的模板記錄
+                        # Create new template record
                         from app.models import TemplateCreate, TemplateAuthor
 
                         template_author = TemplateAuthor(
@@ -628,10 +628,10 @@ def _rebuild_templates_background(
                         synced_count += 1
 
                     except Exception as e:
-                        logger.error(f"同步模板 {template_info.get('id')} 失敗: {e}")
+                        logger.error(f"Sync template {template_info.get('id')} failed: {e}")
                         continue
 
-                # 完成
+                # Complete
                 progress_service.set_completed(
                     task_id,
                     result={
@@ -645,14 +645,14 @@ def _rebuild_templates_background(
                     _translate_git_result(translate_func, sync_result) or translate_func("templates.rebuild_scan_failed")
                 )
         except Exception as e:
-            logger.error(f"掃描模板失敗: {e}")
+            logger.error(f"Scan template failed: {e}")
             progress_service.set_error(
                 task_id,
                 translate_func("templates.rebuild_scan_failed")
             )
 
     except Exception as e:
-        logger.error(f"重建模板資料庫任務失敗: {e}")
+        logger.error(f"Rebuild template database task failed: {e}")
         progress_service.set_error(
             task_id,
             translate_func("templates.rebuild_task_failed_simple")
@@ -668,7 +668,7 @@ def _clone_repository_background(
     db: Session,
     translate_func,
 ) -> None:
-    """後台執行 clone 任務"""
+    """Background task: Clone task"""
     from app.services.task_progress_service import get_task_progress_service, TaskStatus
     from app.services.template_service import TemplateService
     from app.models import TemplateUpdate, TemplateCreate, TemplateAuthor
@@ -676,7 +676,7 @@ def _clone_repository_background(
     progress_service = get_task_progress_service()
 
     try:
-        # 更新狀態為執行中
+        # Update status to executing
         progress_service.update_progress(
             task_id,
             progress=10,
@@ -684,7 +684,7 @@ def _clone_repository_background(
             status=TaskStatus.RUNNING,
         )
 
-        # 執行 clone
+        # Execution clone
         clone_result = git_service.clone_repository(url=url, branch=branch, force=force)
         success, message = clone_result
 
@@ -698,7 +698,7 @@ def _clone_repository_background(
             message=translate_func("templates.clone_complete_scanning")
         )
 
-        # 掃描並同步模板到資料庫
+        # Scan and sync templates to database
         try:
             sync_result = git_service.scan_and_sync_templates()
             sync_success, sync_message, templates = sync_result
@@ -710,7 +710,7 @@ def _clone_repository_background(
 
                 for idx, template_info in enumerate(templates):
                     try:
-                        # 計算進度 (50-95%)
+                        # Calculate progress (50-95%)
                         progress = 50 + int((idx / total_templates) * 45)
                         progress_service.update_progress(
                             task_id,
@@ -723,11 +723,11 @@ def _clone_repository_background(
                             ),
                         )
 
-                        # 檢查模板是否已存在
+                        # Check if template already exists
                         existing = template_service.get(template_info["id"])
 
                         if existing:
-                            # 更新現有模板
+                            # Update existing template
                             update_payload = TemplateUpdate(
                                 name=template_info["name"],
                                 description=template_info["description"],
@@ -742,9 +742,9 @@ def _clone_repository_background(
                                 ),
                             )
                             template_service.update(template_info["id"], update_payload)
-                            logger.info(f"已更新模板: {template_info['id']}")
+                            logger.info(f"Updated template: {template_info['id']}")
                         else:
-                            # 建立新模板
+                            # Create new template
                             create_payload = TemplateCreate(
                                 template_id=template_info["id"],
                                 name=template_info["name"],
@@ -760,43 +760,43 @@ def _clone_repository_background(
                                 ),
                             )
                             template_service.create(create_payload)
-                            logger.info(f"已建立新模板: {template_info['id']}")
+                            logger.info(f"Created new template: {template_info['id']}")
 
                         synced_count += 1
                     except Exception as e:
-                        logger.error(f"同步模板 {template_info['id']} 失敗: {e}", exc_info=True)
+                        logger.error(f"Sync template {template_info['id']} failed: {e}", exc_info=True)
 
-                # 完成
+                # Complete
                 result_message = translate_func("templates.clone_success", message=_translate_git_result(translate_func, clone_result), count=synced_count)
                 progress_service.set_completed(
                     task_id,
                     result={"message": result_message, "synced_count": synced_count},
                 )
             else:
-                # 掃描失敗但 clone 成功
-                logger.warning(f"掃描模板失敗: {sync_message}")
+                # Scan failed but clone succeeded
+                logger.warning(f"Scan template failed: {sync_message}")
                 progress_service.set_completed(
                     task_id,
                     result={"message": _translate_git_result(translate_func, clone_result), "synced_count": 0},
                 )
 
         except Exception as e:
-            logger.error(f"同步模板到資料庫失敗: {e}", exc_info=True)
-            # 即使同步失敗，clone 已成功
+            logger.error(f"Sync template to database failed: {e}", exc_info=True)
+            # Even if sync fails, clone succeeded
             progress_service.set_completed(
                 task_id,
                 result={"message": _translate_git_result(translate_func, clone_result), "synced_count": 0},
             )
 
     except Exception as e:
-        logger.error(f"Clone 倉庫失敗: {e}", exc_info=True)
+        logger.error(f"Clone repository failed: {e}", exc_info=True)
         progress_service.set_error(task_id, _translate_git_exception(translate_func, e))
 
 
 @router.post(
     "/git/clone",
     response_model=dict,
-    summary="Clone Git 遠端倉庫（後台任務）",
+    summary="Clone Git remote repository (background task)",
     responses=build_responses(401, 422, 500),
 )
 async def clone_git_repository(
@@ -807,9 +807,9 @@ async def clone_git_repository(
     git_service: TemplateGitService = Depends(get_template_git_service),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Clone 或更新遠端 Git 倉庫到模板中心目錄（後台執行）
+    """Clone or update remote Git repository to template center directory (background execution)
 
-    返回任務 ID，可用於查詢進度
+    Returns task ID which can be used to query progress
     """
     from app.services.task_progress_service import get_task_progress_service
 
@@ -817,7 +817,7 @@ async def clone_git_repository(
     task_id = progress_service.create_task("clone_repository")
     translate = request.state.translate
 
-    # 添加後台任務
+    # Add background task
     background_tasks.add_task(
         _clone_repository_background,
         task_id=task_id,
@@ -839,7 +839,7 @@ async def clone_git_repository(
 @router.get(
     "/git/clone/progress/{task_id}",
     response_model=dict,
-    summary="查詢 Clone 任務進度",
+    summary="Query clone task progress",
     responses=build_responses(401, 404, 500),
 )
 async def get_clone_progress(
@@ -847,7 +847,7 @@ async def get_clone_progress(
     task_id: str,
     current_user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    """查詢 Clone 任務的進度"""
+    """Query clone task progress"""
     from app.services.task_progress_service import get_task_progress_service
 
     progress_service = get_task_progress_service()
@@ -869,7 +869,7 @@ async def get_clone_progress(
 @router.get(
     "/git/clone/status",
     response_model=dict,
-    summary="檢查倉庫是否已 Clone",
+    summary="Check if repository has been cloned",
     responses=build_responses(401, 500),
 )
 async def check_clone_status(
@@ -877,7 +877,7 @@ async def check_clone_status(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service),
 ) -> dict:
-    """檢查模板中心倉庫是否已 clone"""
+    """Check if template center repository has been cloned"""
     is_cloned = git_service.is_git_repository()
 
     status_info = {
@@ -898,7 +898,7 @@ async def check_clone_status(
 @router.post(
     "/rebuild",
     response_model=dict,
-    summary="重建資料庫模板資料（後台任務）",
+    summary="Rebuild database template data (background task)",
     responses=build_responses(401, 500),
 )
 async def rebuild_templates(
@@ -908,15 +908,15 @@ async def rebuild_templates(
     git_service: TemplateGitService = Depends(get_template_git_service),
     db: Session = Depends(get_db),
 ) -> dict:
-    """重建資料庫模板資料，會刪除所有舊資料並從 plugin.json 重新建立（後台執行）
+    """Rebuild database template data, will delete all old data and recreate from plugin.json (background execution)
 
-    返回任務 ID，可用於查詢進度
+    Returns task ID which can be used to query progress
     """
     from app.services.task_progress_service import get_task_progress_service
 
     translate = request.state.translate
 
-    # 檢查是否已 clone
+    # Check if already cloned
     if not git_service.is_git_repository():
         return {
             "success": False,
@@ -926,7 +926,7 @@ async def rebuild_templates(
     progress_service = get_task_progress_service()
     task_id = progress_service.create_task("rebuild_templates")
 
-    # 添加後台任務
+    # Add background task
     background_tasks.add_task(
         _rebuild_templates_background,
         task_id=task_id,
@@ -945,7 +945,7 @@ async def rebuild_templates(
 @router.get(
     "/rebuild/progress/{task_id}",
     response_model=dict,
-    summary="查詢重建任務進度",
+    summary="Query rebuild task progress",
     responses=build_responses(401, 404, 500),
 )
 async def get_rebuild_progress(
@@ -953,7 +953,7 @@ async def get_rebuild_progress(
     task_id: str,
     current_user_id: str = Depends(get_current_user_id),
 ) -> dict:
-    """查詢重建任務的進度"""
+    """Query rebuild task progress"""
     from app.services.task_progress_service import get_task_progress_service
 
     progress_service = get_task_progress_service()
@@ -972,12 +972,12 @@ async def get_rebuild_progress(
     }
 
 
-# ============ SSH Keys 管理 API ============
+# ============ SSH Keys Management API ============
 
 
 @router.get(
     "/marketplace/ssh-keys",
-    summary="取得模板中心的 SSH Keys",
+    summary="Get template center SSH keys",
     responses=build_responses(401, 500),
 )
 async def get_template_center_ssh_keys(
@@ -985,7 +985,7 @@ async def get_template_center_ssh_keys(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ):
-    """取得模板中心的 SSH Keys 資訊"""
+    """Get template center SSH keys information"""
     try:
         ssh_keys = git_service.get_ssh_keys()
         return {
@@ -993,7 +993,7 @@ async def get_template_center_ssh_keys(
             "data": ssh_keys,
         }
     except Exception as e:
-        logger.error(f"取得 SSH Keys 失敗: {e}")
+        logger.error(f"Get SSH keys failed: {e}")
         translate = request.state.translate
         return {
             "success": False,
@@ -1003,7 +1003,7 @@ async def get_template_center_ssh_keys(
 
 @router.post(
     "/marketplace/ssh-keys/generate",
-    summary="產生新的 SSH Key Pair",
+    summary="Generate new SSH key pair",
     responses=build_responses(401, 500),
 )
 async def generate_template_center_ssh_keys(
@@ -1011,7 +1011,7 @@ async def generate_template_center_ssh_keys(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ):
-    """產生新的 SSH Key Pair 並儲存到 ~/.ssh 目錄"""
+    """Generate new SSH key pair and save to ~/.ssh directory"""
     try:
         translate = request.state.translate
         ssh_keys = git_service.generate_ssh_keys()
@@ -1021,7 +1021,7 @@ async def generate_template_center_ssh_keys(
             "message": translate("templates.ssh_keys_gen_success")
         }
     except Exception as e:
-        logger.error(f"產生 SSH Keys 失敗: {e}")
+        logger.error(f"Generate SSH keys failed: {e}")
         translate = request.state.translate
         return {
             "success": False,
@@ -1032,7 +1032,7 @@ async def generate_template_center_ssh_keys(
 
 @router.put(
     "/marketplace/ssh-keys",
-    summary="更新 SSH Keys",
+    summary="Update SSH keys",
     responses=build_responses(401, 422, 500),
 )
 async def update_template_center_ssh_keys(
@@ -1041,7 +1041,7 @@ async def update_template_center_ssh_keys(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ):
-    """更新模板中心的 SSH Keys"""
+    """Update template center SSH keys"""
     try:
         translate = request.state.translate
         ssh_keys = git_service.update_ssh_keys(
@@ -1054,7 +1054,7 @@ async def update_template_center_ssh_keys(
             "message": translate("templates.ssh_keys_update_success")
         }
     except ValueError as e:
-        logger.error(f"更新 SSH Keys 失敗（格式錯誤）: {e}")
+        logger.error(f"Update SSH keys failed (format error): {e}")
         translate = request.state.translate
         return {
             "success": False,
@@ -1062,7 +1062,7 @@ async def update_template_center_ssh_keys(
             "message": translate("templates.ssh_keys_invalid_format")
         }
     except Exception as e:
-        logger.error(f"更新 SSH Keys 失敗: {e}")
+        logger.error(f"Update SSH keys failed: {e}")
         translate = request.state.translate
         return {
             "success": False,
@@ -1073,7 +1073,7 @@ async def update_template_center_ssh_keys(
 
 @router.delete(
     "/marketplace/ssh-keys",
-    summary="刪除 SSH Keys",
+    summary="Delete SSH keys",
     responses=build_responses(401, 500),
 )
 async def delete_template_center_ssh_keys(
@@ -1081,7 +1081,7 @@ async def delete_template_center_ssh_keys(
     current_user_id: str = Depends(get_current_user_id),
     git_service: TemplateGitService = Depends(get_template_git_service)
 ):
-    """刪除模板中心的 SSH Keys"""
+    """Delete template center SSH keys"""
     try:
         translate = request.state.translate
         git_service.delete_ssh_keys()
@@ -1090,7 +1090,7 @@ async def delete_template_center_ssh_keys(
             "message": translate("templates.ssh_keys_delete_success")
         }
     except Exception as e:
-        logger.error(f"刪除 SSH Keys 失敗: {e}")
+        logger.error(f"Delete SSH keys failed: {e}")
         translate = request.state.translate
         return {
             "success": False,

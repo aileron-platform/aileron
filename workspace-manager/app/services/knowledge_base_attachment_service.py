@@ -1,4 +1,4 @@
-"""Knowledge base attachment 服務。"""
+"""Knowledge base attachment service."""
 
 from __future__ import annotations
 
@@ -18,14 +18,14 @@ from app.services.knowledge_base_service import (
 )
 from app.services.workspace_service import WorkspaceService
 
-KB_ATTACHMENT_NOT_FOUND_MESSAGE = "知識庫掛載不存在"
-KB_ALREADY_ATTACHED_MESSAGE = "知識庫已掛載到此工作區"
-KB_MOUNT_ALIAS_CONFLICT_MESSAGE = "知識庫掛載別名已存在"
-WORKSPACE_NOT_FOUND_MESSAGE = "工作區不存在"
+KB_ATTACHMENT_NOT_FOUND_MESSAGE = "Knowledge base attachment does not exist"
+KB_ALREADY_ATTACHED_MESSAGE = "Knowledge base already attached to this workspace"
+KB_MOUNT_ALIAS_CONFLICT_MESSAGE = "Knowledge base mount alias already exists"
+WORKSPACE_NOT_FOUND_MESSAGE = "Workspace does not exist"
 
 
 class KnowledgeBaseAttachmentService:
-    """處理 workspace 與 knowledge base 掛載。"""
+    """Handle workspace and knowledge base attachment."""
 
     def __init__(self, db: Session) -> None:
         self.db = db

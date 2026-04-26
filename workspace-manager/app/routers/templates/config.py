@@ -1,4 +1,4 @@
-"""模板配置管理路由（MCP、Hooks）"""
+"""Template configuration management routes (MCP, Hooks)"""
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -17,17 +17,17 @@ router = APIRouter()
 
 
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
-    """取得模板服務實例"""
+    """Get template service instance"""
     return TemplateService(db)
 
 
-# ============ MCP 配置管理 ============
+# ============ MCP configuration management ============
 
 
 @router.get(
     "/{template_id}/mcp",
     response_model=McpConfigResponse,
-    summary="取得 MCP 配置",
+    summary="Get MCP Configuration",
     responses=build_responses(401, 404, 500),
 )
 async def get_mcp_config(
@@ -36,7 +36,7 @@ async def get_mcp_config(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> McpConfigResponse:
-    """取得模板的 MCP 配置"""
+    """Get template MCP configuration"""
     config = service.get_mcp_config(template_id)
     if not config:
         translate = request.state.translate
@@ -50,7 +50,7 @@ async def get_mcp_config(
 @router.put(
     "/{template_id}/mcp",
     response_model=McpConfigResponse,
-    summary="更新 MCP 配置",
+    summary="Update MCP Configuration",
     responses=build_responses(401, 404, 422, 500),
 )
 async def update_mcp_config(
@@ -60,7 +60,7 @@ async def update_mcp_config(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
 ) -> McpConfigResponse:
-    """更新模板的 MCP 配置"""
+    """Update template MCP configuration"""
     config = service.update_mcp_config(template_id, payload)
     if not config:
         translate = request.state.translate
@@ -71,13 +71,13 @@ async def update_mcp_config(
     return config
 
 
-# ============ Hooks 配置管理 ============
+# ============ Hooks configuration management =============
 
 
 @router.get(
     "/{template_id}/hooks",
     response_model=HooksConfigResponse,
-    summary="取得 Hooks 配置",
+    summary="Get Hooks Configuration",
     responses=build_responses(401, 404, 500),
 )
 async def get_hooks_config(
@@ -86,7 +86,7 @@ async def get_hooks_config(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> HooksConfigResponse:
-    """取得模板的 Hooks 配置"""
+    """Get template's hooks configuration"""
     config = service.get_hooks_config(template_id)
     if not config:
         translate = request.state.translate
@@ -100,7 +100,7 @@ async def get_hooks_config(
 @router.put(
     "/{template_id}/hooks",
     response_model=HooksConfigResponse,
-    summary="更新 Hooks 配置",
+    summary="Update Hooks Configuration",
     responses=build_responses(401, 404, 422, 500),
 )
 async def update_hooks_config(
@@ -110,7 +110,7 @@ async def update_hooks_config(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
 ) -> HooksConfigResponse:
-    """更新模板的 Hooks 配置"""
+    """Update template's hooks configuration"""
     config = service.update_hooks_config(template_id, payload)
     if not config:
         translate = request.state.translate

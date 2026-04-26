@@ -1,4 +1,4 @@
-"""認證相關模型"""
+"""Authentication related models"""
 
 from typing import Optional
 
@@ -6,30 +6,30 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
-    """登入請求"""
+    """Login request"""
 
-    email: EmailStr = Field(description="使用者電子郵件")
-    password: str = Field(min_length=6, description="登入密碼")
+    email: EmailStr = Field(description="User email")
+    password: str = Field(min_length=6, description="Login password")
 
 
 class RefreshRequest(BaseModel):
-    """刷新權杖請求"""
+    """Refresh token request"""
 
-    refresh_token: str = Field(min_length=10, description="刷新權杖")
+    refresh_token: str = Field(min_length=10, description="Refresh token")
 
 
 class TokenResponse(BaseModel):
-    """登入成功回傳的權杖資訊"""
+    """Token information returned on successful login"""
 
-    access_token: str = Field(description="存取權杖")
-    refresh_token: str = Field(description="刷新權杖")
-    token_type: str = Field(default="bearer", description="權杖類型")
-    expires_in: int = Field(default=1800, description="存取權杖有效時間 (秒)")
+    access_token: str = Field(description="Access token")
+    refresh_token: str = Field(description="Refresh token")
+    token_type: str = Field(default="bearer", description="Token type")
+    expires_in: int = Field(default=1800, description="Access token validity time (seconds)")
 
 
 class AuthStatus(BaseModel):
-    """認證狀態回應"""
+    """Authentication status response"""
 
-    authenticated: bool = Field(description="是否通過認證")
-    user_id: Optional[str] = Field(default=None, description="使用者 ID")
-    email: Optional[EmailStr] = Field(default=None, description="使用者電子郵件")
+    authenticated: bool = Field(description="Whether authenticated")
+    user_id: Optional[str] = Field(default=None, description="User ID")
+    email: Optional[EmailStr] = Field(default=None, description="User email")

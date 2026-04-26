@@ -1,4 +1,4 @@
-"""Knowledge base 檔案服務。"""
+"""Knowledge base file service."""
 
 from __future__ import annotations
 
@@ -31,19 +31,19 @@ from app.services.knowledge_base_service import KnowledgeBaseAccessDeniedError, 
 
 logger = logging.getLogger(__name__)
 
-KB_CONTENT_CONFLICT_MESSAGE = "檔案內容版本衝突"
-KB_TOO_MANY_UPLOADS_MESSAGE = "上傳檔案數量超過限制"
-KB_UPLOAD_SUCCESS_MESSAGE = "檔案上傳完成"
-KB_MISSING_FILENAME_REASON = "缺少檔名"
-KB_NOT_A_FILE_REASON = "不是檔案"
-KB_PATH_TRAVERSAL_REASON = "偵測到非法路徑"
-KB_INVALID_FILE_TYPE_MESSAGE = "不支援的檔案副檔名"
-KB_QUOTA_EXCEEDED_MESSAGE = "知識庫容量配額不足"
-KB_OWNER_QUOTA_EXCEEDED_MESSAGE = "使用者知識庫總容量配額不足"
+KB_CONTENT_CONFLICT_MESSAGE = "File content version conflict"
+KB_TOO_MANY_UPLOADS_MESSAGE = "Number of uploaded files exceeds limit"
+KB_UPLOAD_SUCCESS_MESSAGE = "File upload complete"
+KB_MISSING_FILENAME_REASON = "Missing filename"
+KB_NOT_A_FILE_REASON = "Not a file"
+KB_PATH_TRAVERSAL_REASON = "Invalid path detected"
+KB_INVALID_FILE_TYPE_MESSAGE = "Unsupported file extension"
+KB_QUOTA_EXCEEDED_MESSAGE = "Knowledge base storage quota exceeded"
+KB_OWNER_QUOTA_EXCEEDED_MESSAGE = "User knowledge base total storage quota exceeded"
 
 
 class KnowledgeBaseFileService:
-    """處理 knowledge base 檔案與資料夾操作。"""
+    """Handle knowledge base file and folder operations."""
 
     SKIP_DIRECTORIES = {
         ".git",
@@ -315,7 +315,7 @@ class KnowledgeBaseFileService:
                 total=len(files),
                 succeeded=0,
                 failed=len(files),
-                message=f"{KB_TOO_MANY_UPLOADS_MESSAGE}（最多 {self.MAX_UPLOAD_FILES} 個）",
+                message=f"{KB_TOO_MANY_UPLOADS_MESSAGE} (max {self.MAX_UPLOAD_FILES} files)",
             )
 
         target_dir = self._resolve_path(kb.id, target_path)
@@ -501,7 +501,7 @@ class KnowledgeBaseFileService:
 
     def _ensure_write_access(self, access_role: str, path: str) -> None:
         if access_role not in {"owner", "manager", "editor"}:
-            raise KnowledgeBaseAccessDeniedError(f"知識庫無寫入權限: {path}")
+            raise KnowledgeBaseAccessDeniedError(f"Knowledge base does not have write permission: {path}")
 
     def _update_kb_size(self, kb: db_models.KnowledgeBase, delta_bytes: int) -> None:
         kb.current_size_bytes = max(0, kb.current_size_bytes + delta_bytes)

@@ -1,4 +1,4 @@
-"""Knowledge base 核心服務。"""
+"""Knowledge base core service."""
 
 from __future__ import annotations
 
@@ -20,22 +20,22 @@ _VALID_KB_ROLES = ("owner", "manager", "editor", "viewer")
 _WRITE_ROLES = {"owner", "manager", "editor"}
 _MANAGE_ROLES = {"owner", "manager"}
 
-KB_OWNER_NOT_FOUND_MESSAGE = "知識庫擁有者不存在"
-KB_SLUG_REQUIRED_MESSAGE = "知識庫 slug 不可為空"
-KB_NOT_FOUND_MESSAGE = "知識庫不存在"
-KB_ACCESS_DENIED_MESSAGE = "沒有知識庫存取權限"
-KB_PERMISSION_DENIED_MESSAGE = "知識庫權限不足"
-KB_IN_USE_MESSAGE = "知識庫仍被工作區掛載"
-KB_SLUG_CONFLICT_MESSAGE = "知識庫 slug 已存在"
-KB_UNKNOWN_ROLE_MESSAGE = "未知的知識庫角色"
-KB_SHARE_OWNER_FORBIDDEN_MESSAGE = "不可將知識庫分享給擁有者"
-KB_SHARE_INVALID_ROLE_MESSAGE = "無效的知識庫分享角色"
-KB_SHARE_CONFLICT_MESSAGE = "知識庫分享已存在"
-KB_SHARE_NOT_FOUND_MESSAGE = "知識庫分享不存在"
+KB_OWNER_NOT_FOUND_MESSAGE = "Knowledge base owner does not exist"
+KB_SLUG_REQUIRED_MESSAGE = "Knowledge base slug cannot be empty"
+KB_NOT_FOUND_MESSAGE = "Knowledge base does not exist"
+KB_ACCESS_DENIED_MESSAGE = "No knowledge base access permission"
+KB_PERMISSION_DENIED_MESSAGE = "Insufficient knowledge base permissions"
+KB_IN_USE_MESSAGE = "Knowledge base is still mounted by workspace"
+KB_SLUG_CONFLICT_MESSAGE = "Knowledge base slug already exists"
+KB_UNKNOWN_ROLE_MESSAGE = "Unknown knowledge base role"
+KB_SHARE_OWNER_FORBIDDEN_MESSAGE = "Cannot share knowledge base with owner"
+KB_SHARE_INVALID_ROLE_MESSAGE = "Invalid knowledge base sharing role"
+KB_SHARE_CONFLICT_MESSAGE = "Knowledge base share already exists"
+KB_SHARE_NOT_FOUND_MESSAGE = "Knowledge base share does not exist"
 
 
 class KnowledgeBaseError(ValueError):
-    """知識庫基礎錯誤。"""
+    """Knowledge base base error."""
 
     def __init__(self, message: str, *, code: str = "KB_INVALID_REQUEST", params: dict | None = None) -> None:
         super().__init__(message)
@@ -44,7 +44,7 @@ class KnowledgeBaseError(ValueError):
 
 
 class KnowledgeBaseAccessDeniedError(PermissionError):
-    """知識庫權限不足。"""
+    """Insufficient knowledge base permissions."""
 
     def __init__(self, message: str, *, code: str = "KB_ACCESS_DENIED", params: dict | None = None) -> None:
         super().__init__(message)
@@ -53,7 +53,7 @@ class KnowledgeBaseAccessDeniedError(PermissionError):
 
 
 class KnowledgeBaseNotFoundError(LookupError):
-    """知識庫不存在或已 tombstone。"""
+    """Knowledge base does not exist or is tombstoned."""
 
     def __init__(self, message: str, *, code: str = "KB_NOT_FOUND", params: dict | None = None) -> None:
         super().__init__(message)
@@ -62,7 +62,7 @@ class KnowledgeBaseNotFoundError(LookupError):
 
 
 class KnowledgeBaseConflictError(KnowledgeBaseError):
-    """知識庫資源衝突。"""
+    """Knowledge base resource conflict."""
 
     def __init__(self, message: str, *, code: str = "KB_CONFLICT", params: dict | None = None) -> None:
         super().__init__(message, code=code, params=params)
@@ -74,7 +74,7 @@ class KnowledgeBaseAccessContext:
 
 
 def normalize_kb_slug(value: str) -> str:
-    """將 KB slug 正規化為小寫 dash 格式。"""
+    """Normalize KB slug to lowercase dash format."""
     normalized = _SLUG_SANITIZER.sub("-", value.strip().lower()).strip("-")
     if not normalized:
         raise KnowledgeBaseError(KB_SLUG_REQUIRED_MESSAGE, code="KB_INVALID_SLUG")
@@ -84,7 +84,7 @@ def normalize_kb_slug(value: str) -> str:
 def compute_attachment_signature(
     attachments: list[db_models.WorkspaceKnowledgeBaseAttachment],
 ) -> str:
-    """計算 workspace desired knowledge base attachments 的穩定簽章。"""
+    """Calculate stable signature for workspace desired knowledge base attachments."""
     payload = [
         {
             "kb_id": attachment.kb_id,
@@ -102,7 +102,7 @@ def compute_attachment_signature(
 
 
 class KnowledgeBaseService:
-    """負責管理 knowledge base 與基本授權判斷。"""
+    """Manage knowledge base and basic authorization determination."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -282,7 +282,7 @@ class KnowledgeBaseService:
 
 
 class KnowledgeBaseSharingService:
-    """知識庫分享管理服務。"""
+    """Knowledge base sharing management service."""
 
     def __init__(self, db: Session) -> None:
         self.db = db

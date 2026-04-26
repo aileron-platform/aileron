@@ -1,4 +1,4 @@
-"""多來源模板匯入與 canonical 正規化服務。"""
+"""Multi-source template import and canonical normalization service."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from app.services.template_base_service import TemplateBaseService
 
 
 class TemplateImportError(ValueError):
-    """模板匯入錯誤。"""
+    """Template import error."""
 
 
 class BaseTemplateImportAdapter(ABC):
@@ -252,7 +252,7 @@ class OpenCodeImportAdapter(BaseTemplateImportAdapter):
 
 
 class CanonicalNormalizer:
-    """將匯入結果落成 canonical template tree。"""
+    """Convert import result to canonical template tree."""
 
     def write_template(self, imported: ImportedTemplate, destination_root: Path) -> Path:
         template_root = destination_root
@@ -388,7 +388,7 @@ class CanonicalNormalizer:
 
 
 class TemplateImportService(TemplateBaseService):
-    """多來源模板匯入入口。"""
+    """Multi-source template import entry point."""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
@@ -426,7 +426,7 @@ class TemplateImportService(TemplateBaseService):
 
 
 class TemplateMigrationService(TemplateBaseService):
-    """將既有模板來源批次轉為 canonical template tree。"""
+    """Batch convert existing template sources to canonical template tree."""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)

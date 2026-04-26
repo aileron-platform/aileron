@@ -1,4 +1,4 @@
-"""模板配置模型（MCP、Hooks、Commands 和 Agents）"""
+"""Template configuration models (MCP, Hooks, Commands and Agents)"""
 
 from datetime import datetime
 from enum import Enum
@@ -7,11 +7,11 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-# ============ MCP 模型 ============
+# ============ MCP Models ============
 
 
 class McpTransportType(str, Enum):
-    """MCP 伺服器傳輸協定"""
+    """MCP server transport protocol"""
 
     STDIO = "stdio"
     HTTP = "http"
@@ -19,236 +19,236 @@ class McpTransportType(str, Enum):
 
 
 class McpServerConfig(BaseModel):
-    """MCP 伺服器配置"""
+    """MCP server configuration"""
 
-    description: str = Field(description="MCP 伺服器描述")
-    type: McpTransportType = Field(default=McpTransportType.STDIO, description="傳輸型態")
-    command: Optional[str] = Field(default=None, description="執行命令（stdio）")
-    args: Optional[List[str]] = Field(default=None, description="命令參數")
-    env: Optional[Dict[str, str]] = Field(default=None, description="環境變數")
-    url: Optional[str] = Field(default=None, description="伺服器 URL（http/sse）")
-    headers: Optional[Dict[str, str]] = Field(default=None, description="HTTP 標頭")
+    description: str = Field(description="MCP server description")
+    type: McpTransportType = Field(default=McpTransportType.STDIO, description="Transport type")
+    command: Optional[str] = Field(default=None, description="Execution command (stdio)")
+    args: Optional[List[str]] = Field(default=None, description="Command parameters")
+    env: Optional[Dict[str, str]] = Field(default=None, description="Environment variables")
+    url: Optional[str] = Field(default=None, description="Server URL (http/sse)")
+    headers: Optional[Dict[str, str]] = Field(default=None, description="HTTP headers")
 
     model_config = {"use_enum_values": True}
 
 
 class McpConfigResponse(BaseModel):
-    """MCP 配置回應"""
+    """MCP configuration response"""
 
-    template_id: str = Field(description="模板 ID", alias="templateId")
+    template_id: str = Field(description="Template ID", alias="templateId")
     mcp_servers: Dict[str, McpServerConfig] = Field(
-        default_factory=dict, description="MCP 伺服器配置", alias="mcpServers"
+        default_factory=dict, description="MCP server configuration", alias="mcpServers"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class McpConfigUpdateRequest(BaseModel):
-    """MCP 配置更新請求"""
+    """MCP configuration update request"""
 
     mcp_servers: Dict[str, McpServerConfig] = Field(
-        description="MCP 伺服器配置", alias="mcpServers"
+        description="MCP server configuration", alias="mcpServers"
     )
 
     model_config = {"populate_by_name": True}
 
 
-# ============ Hooks 模型 ============
+# ============ Hooks Models ============
 
 
 class HookExecution(BaseModel):
-    """Hook 執行配置"""
+    """Hook execution configuration"""
 
-    type: str = Field(default="command", description="執行類型")
-    command: str = Field(description="執行命令")
-    timeout: int = Field(default=30, description="逾時秒數")
+    type: str = Field(default="command", description="Execution type")
+    command: str = Field(description="Execution command")
+    timeout: int = Field(default=30, description="Timeout in seconds")
 
 
 class HookRule(BaseModel):
-    """Hook 規則"""
+    """Hook rule"""
 
-    matcher: str = Field(default="*", description="事件匹配器")
-    hooks: List[HookExecution] = Field(default_factory=list, description="執行配置列表")
+    matcher: str = Field(default="*", description="Event matcher")
+    hooks: List[HookExecution] = Field(default_factory=list, description="Execution configuration list")
 
 
 class HooksConfigResponse(BaseModel):
-    """Hooks 配置回應"""
+    """Hooks configuration response"""
 
-    template_id: str = Field(description="模板 ID", alias="templateId")
-    hooks: Dict[str, List[HookRule]] = Field(default_factory=dict, description="事件映射")
+    template_id: str = Field(description="Template ID", alias="templateId")
+    hooks: Dict[str, List[HookRule]] = Field(default_factory=dict, description="Event mapping")
 
     model_config = {"populate_by_name": True}
 
 
 class HooksConfigUpdateRequest(BaseModel):
-    """Hooks 配置更新請求"""
+    """Hooks configuration update request"""
 
-    hooks: Dict[str, List[HookRule]] = Field(description="事件映射")
+    hooks: Dict[str, List[HookRule]] = Field(description="Event mapping")
 
     model_config = {"populate_by_name": True}
 
 
-# ============ Commands 模型 ============
+# ============ Commands Models ============
 
 
 class TemplateCommandFile(BaseModel):
-    """模板 Command 檔案資訊"""
+    """Template command file information"""
 
-    file_name: str = Field(description="檔案名稱")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateCommandContent(BaseModel):
-    """模板 Command 檔案內容"""
+    """Template command file content"""
 
-    file_name: str = Field(description="檔案名稱")
-    content: str = Field(description="檔案內容")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    content: str = Field(description="File content")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateCommandCreateRequest(BaseModel):
-    """建立 Command 檔案請求"""
+    """Create command file request"""
 
-    file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
-    content: str = Field(description="檔案內容")
+    file_name: str = Field(alias="fileName", description="File name (must end with .md)")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateCommandUpdateRequest(BaseModel):
-    """更新 Command 檔案請求"""
+    """Update command file request"""
 
-    content: str = Field(description="檔案內容")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateCommandResponse(BaseModel):
-    """Command 操作回應"""
+    """Command operation response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateCommandContent] = Field(default=None, description="Command 檔案資料")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: Optional[TemplateCommandContent] = Field(default=None, description="Command file data")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 
 class TemplateCommandListResponse(BaseModel):
-    """Command 檔案列表回應"""
+    """Command file list response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: List[TemplateCommandFile] = Field(default_factory=list, description="檔案列表")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: List[TemplateCommandFile] = Field(default_factory=list, description="File list")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 
-# ============ Agents 模型 ============
+# ============ Agents Models ============
 
 
 class TemplateAgentFile(BaseModel):
-    """模板 Agent 檔案資訊"""
+    """Template agent file information"""
 
-    file_name: str = Field(description="檔案名稱")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateAgentContent(BaseModel):
-    """模板 Agent 檔案內容"""
+    """Template agent file content"""
 
-    file_name: str = Field(description="檔案名稱")
-    content: str = Field(description="檔案內容")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    content: str = Field(description="File content")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateAgentCreateRequest(BaseModel):
-    """建立 Agent 檔案請求"""
+    """Create agent file request"""
 
-    file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
-    content: str = Field(description="檔案內容")
+    file_name: str = Field(alias="fileName", description="File name (must end with .md)")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateAgentUpdateRequest(BaseModel):
-    """更新 Agent 檔案請求"""
+    """Update agent file request"""
 
-    content: str = Field(description="檔案內容")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateAgentResponse(BaseModel):
-    """Agent 操作回應"""
+    """Agent operation response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateAgentContent] = Field(default=None, description="Agent 檔案資料")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: Optional[TemplateAgentContent] = Field(default=None, description="Agent file data")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 
 class TemplateAgentListResponse(BaseModel):
-    """Agent 檔案列表回應"""
+    """Agent file list response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: List[TemplateAgentFile] = Field(default_factory=list, description="檔案列表")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: List[TemplateAgentFile] = Field(default_factory=list, description="File list")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 
-# ============ Output Style 模型 ============
+# ============ Output Style Models ============
 
 
 class TemplateOutputStyleFile(BaseModel):
-    """模板 Output Style 檔案資訊"""
+    """Template output style file information"""
 
-    file_name: str = Field(description="檔案名稱")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateOutputStyleContent(BaseModel):
-    """模板 Output Style 檔案內容"""
+    """Template output style file content"""
 
-    file_name: str = Field(description="檔案名稱")
-    content: str = Field(description="檔案內容")
-    size: int = Field(description="檔案大小（位元組）")
-    last_modified: datetime = Field(description="最後修改時間")
+    file_name: str = Field(description="File name")
+    content: str = Field(description="File content")
+    size: int = Field(description="File size (bytes)")
+    last_modified: datetime = Field(description="Last modification time")
 
 
 class TemplateOutputStyleCreateRequest(BaseModel):
-    """建立 Output Style 檔案請求"""
+    """Create output style file request"""
 
-    file_name: str = Field(alias="fileName", description="檔案名稱（必須以 .md 結尾）")
-    content: str = Field(description="檔案內容")
+    file_name: str = Field(alias="fileName", description="File name (must end with .md)")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateOutputStyleUpdateRequest(BaseModel):
-    """更新 Output Style 檔案請求"""
+    """Update output style file request"""
 
-    content: str = Field(description="檔案內容")
+    content: str = Field(description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class TemplateOutputStyleResponse(BaseModel):
-    """Output Style 操作回應"""
+    """Output style operation response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: Optional[TemplateOutputStyleContent] = Field(default=None, description="Output Style 檔案資料")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: Optional[TemplateOutputStyleContent] = Field(default=None, description="Output style file data")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 
 class TemplateOutputStyleListResponse(BaseModel):
-    """Output Style 檔案列表回應"""
+    """Output style file list response"""
 
-    success: bool = Field(description="操作是否成功")
-    data: List[TemplateOutputStyleFile] = Field(default_factory=list, description="檔案列表")
-    message: Optional[str] = Field(default=None, description="操作訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    success: bool = Field(description="Whether operation succeeded")
+    data: List[TemplateOutputStyleFile] = Field(default_factory=list, description="File list")
+    message: Optional[str] = Field(default=None, description="Operation message")
+    error: Optional[str] = Field(default=None, description="Error message")
 

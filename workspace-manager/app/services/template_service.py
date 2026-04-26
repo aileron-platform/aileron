@@ -1,14 +1,14 @@
-"""模板服務 - 整合所有模板相關功能的主服務
+"""TemplateService - Main service integrating all template-related features
 
-這個服務整合了以下子服務：
-- TemplateBaseService: 基礎方法和路徑管理
-- TemplateMcpService: MCP 配置管理
-- TemplateHooksService: Hooks 配置管理
-- TemplateCommandsService: Commands 檔案管理
-- TemplateAgentsService: Agents 檔案管理
-- TemplateOutputStyleService: Output Style 檔案管理
-- TemplateFileService: 通用檔案操作（scripts/skills）
-- TemplateAgentsMdService: AGENTS.md 檔案管理
+This service integrates the following sub-services:
+- TemplateBaseService: Basic methods and path management
+- TemplateMcpService: MCP configuration management
+- TemplateHooksService: Hooks configuration management
+- TemplateCommandsService: Commands file management
+- TemplateAgentsService: Agents file management
+- TemplateOutputStyleService: Output style file management
+- TemplateFileService: Common file operations (scripts/skills)
+- TemplateAgentsMdService: AGENTS.md file management
 """
 
 from __future__ import annotations
@@ -70,22 +70,22 @@ LEGACY_TEMPLATE_STATUS_MAP = {
 
 
 class TemplateService(TemplateBaseService):
-    """管理工作區範本與配置（資料庫 + 檔案系統）
+    """Manage workspace templates and configuration (database + file system)
 
-    整合所有模板相關功能，包括：
-    - 模板 CRUD 操作
-    - MCP 配置管理
-    - Hooks 配置管理
-    - Commands 檔案管理
-    - Agents 檔案管理
-    - Output Styles 檔案管理
-    - 檔案系統操作
-    - 模板匯入/匯出
+    Integrate all template-related features, including:
+    - Template CRUD operations
+    - MCP configuration management
+    - Hooks configuration management
+    - Commands file management
+    - Agents file management
+    - Output styles file management
+    - File system operations
+    - Template import/export
     """
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
-        # 初始化子服務
+        # Initialize sub-services
         self.mcp_service = TemplateMcpService(db)
         self.hooks_service = TemplateHooksService(db)
         self.commands_service = TemplateCommandsService(db)
@@ -96,7 +96,7 @@ class TemplateService(TemplateBaseService):
         self.feature_detection_service = TemplateFeatureDetectionService(db, self)
         self.canonical_service = TemplateCanonicalService(db)
 
-    # ============ 模板 CRUD 操作 ============
+    # ============ Template CRUD Operation ============
 
     def list(
         self,
@@ -108,31 +108,31 @@ class TemplateService(TemplateBaseService):
         page: int = 1,
         limit: int = 20,
     ) -> TemplateListResponse:
-        """列出所有模板（支援篩選和分頁）"""
+        """List all templates (supports filtering and pagination)"""
         from app.db.models import TemplateFeature, TemplateFeatureMapping
         from sqlalchemy import func
 
         query = self.db.query(TemplateDB)
 
-        # 篩選條件
+        # Filter conditions
         if category:
             query = query.filter(TemplateDB.category == category)
         if cli_type:
             query = query.filter(TemplateDB.cli_type == cli_type)
         if keywords:
-            # 關鍵字篩選（逗號分隔）
+            # Keyword filter (comma-separated)
             keyword_list = [t.strip() for t in keywords.split(",") if t.strip()]
             for keyword in keyword_list:
                 query = query.filter(TemplateDB.keywords.contains([keyword]))
         if search:
-            # 搜尋名稱或描述
+            # Search name or description
             search_pattern = f"%{search}%"
             query = query.filter(
                 (TemplateDB.name.ilike(search_pattern))
                 | (TemplateDB.description.ilike(search_pattern))
             )
 
-        # Feature 篩選（支援多個 Feature 的 AND 邏輯）
+        # Feature filter (supports AND logic for multiple features)
         if features:
             feature_list = [f.strip() for f in features.split(",") if f.strip()]
 
@@ -145,10 +145,10 @@ class TemplateService(TemplateBaseService):
             }
 
             for feature_key in feature_list:
-                # 轉換為 snake_case
+                # Convert to snake_case
                 db_feature_key = _SNAKE_MAP.get(feature_key, feature_key)
 
-                # 子查詢：找出擁有此 Feature 的模板 ID
+                # Sub-query: Find template IDs with this feature
                 subquery = self.db.query(TemplateFeatureMapping.template_id).join(
                     TemplateFeature,
                     TemplateFeatureMapping.feature_id == TemplateFeature.id
@@ -158,17 +158,17 @@ class TemplateService(TemplateBaseService):
                     TemplateFeatureMapping.is_enabled == True
                 ).subquery()
 
-                # 主查詢只保留在子查詢結果中的模板
+                # Main query only keeps templates in sub-query results
                 query = query.filter(TemplateDB.id.in_(subquery))
 
-        # 總數
+        # Total count
         total = query.count()
 
-        # 分頁
+        # Pagination
         offset = (page - 1) * limit
         db_templates = query.order_by(TemplateDB.created_at.desc()).offset(offset).limit(limit).all()
 
-        # 轉換為 Pydantic 模型
+        # Convert to Pydantic model
         items = [self._db_to_pydantic(t) for t in db_templates]
 
         total_pages = (total + limit - 1) // limit if limit > 0 else 1
@@ -178,27 +178,27 @@ class TemplateService(TemplateBaseService):
         )
 
     def get(self, template_id: str) -> Optional[Template]:
-        """取得單一模板"""
+        """Get single template"""
         db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
         if not db_template:
             return None
         return self._db_to_pydantic(db_template)
 
     def create(self, payload: TemplateCreate) -> Template:
-        """建立新模板"""
-        # 使用 template_id 欄位作為模板代號
+        """Create new template"""
+        # Use template_id column as template identifier
         template_id = payload.template_id
 
-        # 檢查模板 ID 是否已存在
+# Check if template ID already exists
         existing = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
         if existing:
-            raise ValueError(f"模板代號 '{template_id}' 已存在，請使用其他代號")
+            raise ValueError(f"Template ID '{template_id}' already exists, please use another ID")
 
-        # 驗證模板代號格式（kebab-case，必須以字母開頭，只能英文）
+# Check template ID format (kebab-case, must start with letter, English only)
         if not re.match(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$', template_id):
-            raise ValueError("模板代號必須使用 kebab-case 格式（以小寫英文字母開頭，僅包含小寫英文、數字和連字號）")
+            raise ValueError("Template IDmust use kebab-case format (start with lowercase letter, only contain lowercase letters, numbers and hyphens)")
 
-        # 建立資料庫記錄
+# AddDatabaseRecord
         db_template = TemplateDB(
             id=template_id,
             name=payload.name,
@@ -219,43 +219,43 @@ class TemplateService(TemplateBaseService):
         self.db.commit()
         self.db.refresh(db_template)
 
-        # 建立檔案系統結構
+# Add file system structure
         try:
             self._create_template_structure(template_id, payload)
         except Exception as e:
-            # 如果檔案系統建立失敗，回滾資料庫
-            logger.error(f"建立模板檔案結構失敗: {e}")
+            # If file system creation fails, rollback database
+            logger.error(f"Failed to create template file structure: {e}")
             self.db.delete(db_template)
             self.db.commit()
             raise
 
-        # 自動索引 Feature（失敗不阻斷）
+        # Auto-index features (failure does not block)
         try:
             self.feature_detection_service.index_features(template_id)
             logger.info(f"Successfully indexed features for template {template_id}")
         except Exception as e:
             logger.error(f"Feature indexing failed for template {template_id}: {e}", exc_info=True)
-            # 不拋出例外，允許模板建立成功
+            # Do not raise exception, allow template creation to succeed
 
         return self._db_to_pydantic(db_template)
 
     def update(self, template_id: str, payload: TemplateUpdate) -> Optional[Template]:
-        """更新模板基本資訊"""
+        """Update template basic information"""
         db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
         if not db_template:
             return None
 
-        # 更新欄位
+# UpdateColumn
         update_data = payload.model_dump(exclude_none=True, by_alias=False)
         author_data = update_data.pop("author", None)
 
-        # 欄位名稱映射：API (camelCase) -> DB (snake_case)
+        # Column name mapping: API (camelCase) -> DB (snake_case)
         field_mapping = {
             "categoryId": "category",
         }
 
         for field, value in update_data.items():
-            # 使用映射後的欄位名稱
+            # Use mapped column name
             db_field = field_mapping.get(field, field)
             setattr(db_template, db_field, value)
 
@@ -268,18 +268,18 @@ class TemplateService(TemplateBaseService):
         self.db.commit()
         self.db.refresh(db_template)
 
-        # 自動重新索引 Feature（失敗不阻斷）
+        # Auto re-index features (failure does not block)
         try:
             self.feature_detection_service.index_features(template_id)
             logger.info(f"Successfully re-indexed features for template {template_id}")
         except Exception as e:
             logger.error(f"Feature re-indexing failed for template {template_id}: {e}", exc_info=True)
-            # 不拋出例外，允許模板更新成功
+            # Allow update to succeed even if feature re-indexing fails
 
         return self._db_to_pydantic(db_template)
 
     def update_canonical(self, template_id: str, payload: TemplateCanonicalUpdate) -> Optional[Template]:
-        """更新 canonical template tree 與 metadata。"""
+        """Update canonical template metadata"""
         db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
         if not db_template:
             return None
@@ -310,44 +310,44 @@ class TemplateService(TemplateBaseService):
         return self._db_to_pydantic(db_template)
 
     def delete(self, template_id: str) -> bool:
-        """刪除模板（資料庫 + 檔案系統）"""
+        """Delete template (database + file system)"""
         db_template = self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
         if not db_template:
             return False
 
-        # 刪除資料庫記錄
+# RemoveDatabaseRecord
         self.db.delete(db_template)
         self.db.commit()
 
-        # 刪除檔案系統目錄
+# RemoveFileSystemDirectory
         try:
             self._delete_template_structure(template_id)
         except Exception as e:
-            logger.error(f"刪除模板檔案結構失敗: {e}")
-            # 即使檔案刪除失敗，資料庫已刪除，返回成功
+            logger.error(f"Failed to delete template file structure: {e}")
+            # Even if file deletion fails, database already deleted, return success
 
         return True
 
     def index_features(self, template_id: str):
-        """手動觸發模板的 Feature 索引
+        """Manually trigger template feature indexing
 
-        用於：
-        - 管理員修復不一致
-        - 批次更新索引
-        - 從其他系統匯入模板後重建索引
+        Used for:
+        - Admin fixing inconsistencies
+        - Batch update indexes
+        - Rebuild indexes after importing templates from other systems
 
         Args:
-            template_id: 模板 ID
+            template_id: Template ID
 
         Returns:
-            FeatureIndexResult: 索引結果
+            FeatureIndexResult: Index result
         """
         return self.feature_detection_service.index_features(template_id)
 
-    # ============ 模板結構管理 ============
+    # ============ Template Structure Management ============
 
     def _create_template_structure(self, template_id: str, payload: TemplateCreate) -> None:
-        """建立模板檔案系統結構"""
+        """Create template file system structure"""
         template_dir = self._resolve_template_dir(template_id)
         template_dir.mkdir(parents=True, exist_ok=True)
         for directory in ("skills", "commands", "agents", "hooks", "mcp", "resources"):
@@ -388,13 +388,13 @@ class TemplateService(TemplateBaseService):
         )
 
     def _delete_template_structure(self, template_id: str) -> None:
-        """刪除模板檔案系統結構"""
+        """Delete template file system structure"""
         template_dir = self._get_template_dir(template_id)
         if template_dir.exists():
             shutil.rmtree(template_dir)
 
     def _db_to_pydantic(self, db_template: TemplateDB) -> Template:
-        """將資料庫模型轉換為 Pydantic 模型（包含完整配置）"""
+        """Convert database model to Pydantic model (including full configuration)"""
         canonical_root = self._resolve_template_dir(db_template.id)
         if (canonical_root / "template.yaml").exists():
             try:
@@ -403,7 +403,7 @@ class TemplateService(TemplateBaseService):
             except Exception as e:
                 logger.error("Load canonical template failed for %s: %s", db_template.id, e, exc_info=True)
 
-        # 載入各項配置
+        # Load various configurations
         mcp_config = self.mcp_service.load_mcp_servers(db_template.id)
         hooks_config = self.hooks_service.load_hooks(db_template.id)
         commands = self.commands_service.load_commands(db_template.id)
@@ -412,7 +412,7 @@ class TemplateService(TemplateBaseService):
         files = self.file_service.load_files(db_template.id)
         skills = self.file_service.load_skills(db_template.id)
 
-        # 載入 AGENTS.md 內容
+        # Load AGENTS.md Content
         agents_md = self.agents_md_service.get_agents_md(db_template.id)
 
         return Template(
@@ -717,10 +717,10 @@ class TemplateService(TemplateBaseService):
         body = content.lstrip("\n")
         return f"---\n{frontmatter_text}\n---\n\n{body}\n"
 
-    # ============ 模板匯入/匯出 ============
+    # ============ TemplateImport/Export ============
 
     def export_template(self, template_id: str) -> Optional[Path]:
-        """匯出模板為 ZIP 檔案"""
+        """Export template as ZIP file"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None
@@ -729,7 +729,7 @@ class TemplateService(TemplateBaseService):
         if not template_dir.exists():
             return None
 
-        # 建立臨時 ZIP 檔案
+# Add temporary ZIP file
         temp_dir = Path(tempfile.mkdtemp())
         zip_path = temp_dir / f"{template_id}.zip"
 
@@ -742,57 +742,57 @@ class TemplateService(TemplateBaseService):
 
             return zip_path
         except Exception as e:
-            logger.error(f"匯出模板失敗: {e}")
+            logger.error(f"ExportTemplateFailed: {e}")
             if zip_path.exists():
                 zip_path.unlink()
             return None
 
     async def import_template(self, file: UploadFile, overwrite: bool = False) -> Template:
-        """匯入模板 ZIP 檔案"""
-        # 建立臨時目錄
+        """Import template ZIP file"""
+        # Add temporary directory
         temp_dir = Path(tempfile.mkdtemp())
 
         try:
-            # 儲存上傳的檔案
+            # Save uploaded file
             zip_path = temp_dir / file.filename
             content = await file.read()
             zip_path.write_bytes(content)
 
-            # 解壓縮
+            # Extract ZIP
             extract_dir = temp_dir / "extracted"
             try:
                 with zipfile.ZipFile(zip_path, "r") as zipf:
                     zipf.extractall(extract_dir)
             except zipfile.BadZipFile as e:
-                raise ValueError("無效的模板檔案：ZIP 檔案已損壞或格式不正確") from e
+                raise ValueError("Invalid template file: ZIP file is corrupted or invalid format") from e
 
-            # 讀取模板 package manifest。
+            # ReadTemplate package manifest。
             package_manifest_path = self._find_import_package_manifest(extract_dir)
             if not package_manifest_path.exists():
-                raise ValueError("無效的模板檔案：缺少 .claude-plugin/manifest.json")
+                raise ValueError("Invalid template file: missing .claude-plugin/manifest.json")
 
             try:
                 manifest_data = json.loads(package_manifest_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError as e:
-                raise ValueError("無效的模板檔案：manifest.json 不是合法的 JSON") from e
+                raise ValueError("Invalid template file: manifest.json is not valid JSON") from e
             template_id = manifest_data.get("id")
 
             if not template_id:
-                raise ValueError("無效的模板檔案：manifest.json 缺少 id 欄位")
+                raise ValueError("Invalid template file: manifest.json missing id field")
             if not self._validate_template_id(template_id):
-                raise ValueError("無效的模板檔案：manifest.json 的 id 格式不合法")
+                raise ValueError("Invalid template file: manifest.json id format is invalid")
 
             normalized_cli_type = self._normalize_import_cli_type(manifest_data.get("cli_type"))
             normalized_status = self._normalize_import_status(manifest_data.get("status"))
 
-            # 檢查是否已存在
+            # Check if template already exists
             existing = self._get_template(template_id)
             if existing and not overwrite:
-                raise ValueError(f"模板 '{template_id}' 已存在，請使用覆蓋模式")
+                raise ValueError(f"Template '{template_id}' already exists, please use overwrite mode")
 
-            # 建立或更新資料庫記錄
+            # Add or update database record
             if existing:
-                # 更新現有模板
+                # Update existing template
                 db_template = existing
                 db_template.name = manifest_data.get("name", db_template.name)
                 db_template.description = manifest_data.get("description", db_template.description)
@@ -808,7 +808,7 @@ class TemplateService(TemplateBaseService):
                 db_template.author_email = author.get("email")
                 db_template.author_url = author.get("url")
             else:
-                # 建立新模板
+                # Add new template
                 author = manifest_data.get("author", {})
                 db_template = TemplateDB(
                     id=template_id,
@@ -832,10 +832,10 @@ class TemplateService(TemplateBaseService):
                 self.db.refresh(db_template)
             except SQLAlchemyError as e:
                 self.db.rollback()
-                logger.error("匯入模板寫入資料庫失敗: %s", e, exc_info=True)
-                raise ValueError("模板 package manifest 無效，請檢查 manifest.json 欄位內容")
+                logger.error("ImportTemplateWriteDatabaseFailed: %s", e, exc_info=True)
+                raise ValueError("Template package manifest is invalid, please check manifest.json field content")
 
-            # 複製檔案到模板目錄
+            # Copy files to template directory
             template_dir = self._get_template_dir(template_id)
             if template_dir.exists():
                 shutil.rmtree(template_dir)
@@ -844,12 +844,12 @@ class TemplateService(TemplateBaseService):
             return self._db_to_pydantic(db_template)
 
         finally:
-            # 清理臨時目錄
+            # Clean up temporary directory
             if temp_dir.exists():
                 shutil.rmtree(temp_dir)
 
     def _find_import_package_manifest(self, extract_dir: Path) -> Path:
-        """找出匯入 ZIP 內的 package manifest，支援直接位於根目錄或包一層模板目錄。"""
+        """Find package manifest in import ZIP, supports both root directory and nested template directory"""
         direct_path = extract_dir / ".claude-plugin" / "manifest.json"
         if direct_path.exists():
             return direct_path
@@ -861,12 +861,12 @@ class TemplateService(TemplateBaseService):
         legacy_matches = list(extract_dir.glob(".claude-plugin/marketplace.json"))
         legacy_matches.extend(extract_dir.glob("*/.claude-plugin/marketplace.json"))
         if legacy_matches:
-            raise ValueError("無效的模板檔案：缺少 .claude-plugin/manifest.json")
+            raise ValueError("Invalid template file: missing .claude-plugin/manifest.json")
 
         return direct_path
 
     def _normalize_import_cli_type(self, cli_type: Optional[str]) -> Optional[str]:
-        """正規化匯入模板的 cli_type，避免 legacy 值造成資料庫錯誤。"""
+        """Normalize cli_type of imported template to avoid legacy values causing database errors."""
         if not cli_type:
             return None
 
@@ -880,12 +880,12 @@ class TemplateService(TemplateBaseService):
             return normalized
 
         raise ValueError(
-            "無效的模板檔案：manifest.json 的 cli_type 不合法，"
-            "僅支援 claude-code、codex、gemini"
+            "Invalid template file: manifest.json cli_type is invalid, "
+            "only supports claude-code, codex, gemini"
         )
 
     def _normalize_import_status(self, status: Optional[str]) -> Optional[str]:
-        """正規化匯入模板的 status，兼容舊版 active/published。"""
+        """Normalize status of imported template, compatible with legacy active/published."""
         if not status:
             return None
 
@@ -896,108 +896,108 @@ class TemplateService(TemplateBaseService):
             return normalized
 
         raise ValueError(
-            "無效的模板檔案：manifest.json 的 status 不合法，"
-            "僅支援 draft、released"
+            "Invalid template file: manifest.json status is invalid, "
+            "only supports draft, released"
         )
 
 
-    # ============ MCP 配置管理（委派給 mcp_service） ============
+    # ============ MCP Configuration Management (delegated to mcp_service) ============
 
     def get_mcp_config(self, template_id: str):
-        """取得 MCP 配置"""
+        """Get MCP configuration"""
         return self.mcp_service.get_mcp_config(template_id)
 
     def update_mcp_config(self, template_id: str, request):
-        """更新 MCP 配置"""
+        """Update MCP configuration"""
         return self.mcp_service.update_mcp_config(template_id, request)
 
-    # ============ Hooks 配置管理（委派給 hooks_service） ============
+    # ============ Hooks Configuration Management (delegated to hooks_service) ============
 
     def get_hooks_config(self, template_id: str):
-        """取得 Hooks 配置"""
+        """Get Hooks configuration"""
         return self.hooks_service.get_hooks_config(template_id)
 
     def update_hooks_config(self, template_id: str, request):
-        """更新 Hooks 配置"""
+        """Update Hooks configuration"""
         return self.hooks_service.update_hooks_config(template_id, request)
 
-    # ============ Commands 管理（委派給 commands_service） ============
+    # ============ Commands Management (delegated to commands_service) ============
 
     def get_commands_files(self, template_id: str):
-        """取得 Commands 檔案列表"""
+        """Get Commands file list"""
         return self.commands_service.get_commands_files(template_id)
 
     def get_command_file_content(self, template_id: str, file_name: str):
-        """取得 Slash Command 檔案內容"""
+        """Get Slash Command file content"""
         return self.commands_service.get_command_file_content(template_id, file_name)
 
     def create_command_file(self, template_id: str, request):
-        """建立 Slash Command 檔案"""
+        """Create Slash Command file"""
         return self.commands_service.create_command_file(template_id, request)
 
     def update_command_file(self, template_id: str, file_name: str, request):
-        """更新 Slash Command 檔案"""
+        """Update Slash Command file"""
         return self.commands_service.update_command_file(template_id, file_name, request)
 
     def delete_command_file(self, template_id: str, file_name: str):
-        """刪除 Slash Command 檔案"""
+        """Delete Slash Command file"""
         return self.commands_service.delete_command_file(template_id, file_name)
 
-    # ============ Agents 管理（委派給 agents_service） ============
+    # ============ Agents Management (delegated to agents_service) ============
 
     def get_agents_files(self, template_id: str):
-        """取得 Agents 檔案列表"""
+        """Get Agents file list"""
         return self.agents_service.get_agents_files(template_id)
 
     def get_agent_file_content(self, template_id: str, file_name: str):
-        """取得 Agent 檔案內容"""
+        """Get Agent file content"""
         return self.agents_service.get_agent_file_content(template_id, file_name)
 
     def create_agent_file(self, template_id: str, request):
-        """建立 Agent 檔案"""
+        """Create Agent file"""
         return self.agents_service.create_agent_file(template_id, request)
 
     def update_agent_file(self, template_id: str, file_name: str, request):
-        """更新 Agent 檔案"""
+        """Update Agent file"""
         return self.agents_service.update_agent_file(template_id, file_name, request)
 
     def delete_agent_file(self, template_id: str, file_name: str):
-        """刪除 Agent 檔案"""
+        """Delete Agent file"""
         return self.agents_service.delete_agent_file(template_id, file_name)
 
-    # ============ Output Styles 管理（委派給 output_style_service） ============
+    # ============ Output Styles Management (delegated to output_style_service) ============
 
     def get_output_style_files(self, template_id: str):
-        """取得 Output Styles 檔案列表"""
+        """Get Output Styles file list"""
         return self.output_style_service.get_output_style_files(template_id)
 
     def get_output_style_file_content(self, template_id: str, file_name: str):
-        """取得 Output Style 檔案內容"""
+        """Get Output Style file content"""
         return self.output_style_service.get_output_style_file_content(template_id, file_name)
 
     def create_output_style_file(self, template_id: str, request):
-        """建立 Output Style 檔案"""
+        """Create Output Style file"""
         return self.output_style_service.create_output_style_file(template_id, request)
 
     def update_output_style_file(self, template_id: str, file_name: str, request):
-        """更新 Output Style 檔案"""
+        """Update Output Style file"""
         return self.output_style_service.update_output_style_file(template_id, file_name, request)
 
     def delete_output_style_file(self, template_id: str, file_name: str):
-        """刪除 Output Style 檔案"""
+        """Delete Output Style file"""
         return self.output_style_service.delete_output_style_file(template_id, file_name)
 
-    # ============ 檔案管理（委派給 file_service） ============
+    # ============ File Management (delegated to file_service) ============
 
     @staticmethod
     def _request_value(request, key: str, default=None):
-        """同時支援 Pydantic request 與 dict 風格存取"""
+        """Support both Pydantic request and dict-style access"""
         if isinstance(request, dict):
             return request.get(key, default)
         return getattr(request, key, default)
 
     def get_template_files(self, template_id: str, path: Optional[str] = None, include_content: bool = False, max_depth: int = -1, base_path: str = "scripts"):
-        """取得模板檔案樹"""
+        """Get template file tree"""
         resolved_depth = 99 if max_depth < 0 else max_depth
         return self.file_service.get_tree(
             template_id,
@@ -1008,11 +1008,11 @@ class TemplateService(TemplateBaseService):
         )
 
     def get_file_content(self, template_id: str, path: str, base_path: str = "scripts"):
-        """取得檔案內容"""
+        """Get file content"""
         return self.file_service.read_file(template_id, path, scope=base_path)
 
     def create_file_or_directory(self, template_id: str, request, base_path: str = "scripts"):
-        """建立檔案或目錄"""
+        """Create file or directory"""
         return self.file_service.create_entry(
             template_id,
             self._request_value(request, "path"),
@@ -1022,7 +1022,7 @@ class TemplateService(TemplateBaseService):
         )
 
     def update_file_content(self, template_id: str, request, base_path: str = "scripts"):
-        """更新檔案內容"""
+        """Update file content"""
         return self.file_service.write_file(
             template_id,
             self._request_value(request, "path"),
@@ -1032,11 +1032,11 @@ class TemplateService(TemplateBaseService):
         )
 
     async def upload_files(self, template_id: str, target_path: str, files: List[UploadFile], overwrite: bool = False, base_path: str = "scripts"):
-        """上傳檔案"""
+        """Upload files"""
         return await self.file_service.upload_files(template_id, target_path, files, overwrite, base_path)
 
     def rename_file(self, template_id: str, request, base_path: str = "scripts"):
-        """重命名檔案或目錄"""
+        """Rename file or directory"""
         old_path = Path(self._request_value(request, "old_path"))
         new_path = str(old_path.with_name(self._request_value(request, "new_name")))
         return self.file_service.move_entry(
@@ -1048,7 +1048,7 @@ class TemplateService(TemplateBaseService):
         )
 
     def move_file(self, template_id: str, request, base_path: str = "scripts"):
-        """移動檔案或目錄"""
+        """Move file or directory"""
         return self.file_service.move_entry(
             template_id,
             self._request_value(request, "source_path"),
@@ -1058,7 +1058,7 @@ class TemplateService(TemplateBaseService):
         )
 
     def copy_file(self, template_id: str, request, base_path: str = "scripts"):
-        """複製檔案或目錄"""
+        """Copy file or directory"""
         return self.file_service.copy_entry(
             template_id,
             self._request_value(request, "source_path"),
@@ -1068,7 +1068,7 @@ class TemplateService(TemplateBaseService):
         )
 
     def delete_file(self, template_id: str, file_path: str, recursive: bool = False, base_path: str = "scripts"):
-        """刪除檔案或目錄"""
+        """Delete file or directory"""
         return self.file_service.delete_entry(
             template_id,
             file_path,
@@ -1077,7 +1077,7 @@ class TemplateService(TemplateBaseService):
         )
 
     def batch_delete_files(self, template_id: str, request, base_path: str = "scripts"):
-        """批次刪除檔案"""
+        """Batch delete files"""
         return self.file_service.batch_delete(
             template_id,
             self._request_value(request, "paths", []),
@@ -1086,43 +1086,43 @@ class TemplateService(TemplateBaseService):
         )
 
     def search_files(self, template_id: str, request):
-        """搜尋檔案"""
+        """Search files"""
         return self.file_service.search_files(template_id, request)
 
-    # ============ AGENTS.md 管理（委派給 agents_md_service） ============
+    # ============ AGENTS.md Management (delegated to agents_md_service) ============
 
     def get_agents_md(self, template_id: str) -> str:
-        """取得 AGENTS.md 檔案內容"""
+        """Get AGENTS.md file content"""
         return self.agents_md_service.get_agents_md(template_id)
 
     def update_agents_md(self, template_id: str, content: str) -> None:
-        """更新 AGENTS.md 檔案"""
+        """Update AGENTS.md file"""
         return self.agents_md_service.update_agents_md(template_id, content)
 
-    # ============ 內部載入方法（用於模板安裝） ============
+    # ============ Internal Load Methods (for Template Installation) ============
 
     def _load_commands(self, template_id: str):
-        """載入 Commands 配置"""
+        """Load Commands configuration"""
         return self.commands_service.load_commands(template_id)
 
     def _load_agents(self, template_id: str):
-        """載入 Agents 配置"""
+        """Load Agents configuration"""
         return self.agents_service.load_agents(template_id)
 
     def _load_output_style(self, template_id: str):
-        """載入 Output Styles 配置"""
+        """Load Output Styles configuration"""
         return self.output_style_service.load_output_style(template_id)
 
     def _load_mcp_servers(self, template_id: str):
-        """載入 MCP Servers 配置"""
+        """Load MCP Servers configuration"""
         return self.mcp_service.load_mcp_servers(template_id)
 
     def _load_hooks(self, template_id: str):
-        """載入 Hooks 配置"""
+        """Load Hooks configuration"""
         return self.hooks_service.load_hooks(template_id)
 
     def _load_files(self, template_id: str):
-        """載入 Files 配置"""
+        """Load Files configuration"""
         return self.file_service.load_files(template_id)
 
 

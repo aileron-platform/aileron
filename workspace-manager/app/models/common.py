@@ -1,4 +1,4 @@
-"""共用模型"""
+"""Common models"""
 
 from datetime import datetime
 from typing import Optional
@@ -7,16 +7,16 @@ from pydantic import BaseModel, Field
 
 
 class APIResponse(BaseModel):
-    """標準 API 回應格式"""
+    """Standard API response format"""
 
-    status: str = Field(default="success", description="回應狀態")
-    message: Optional[str] = Field(default=None, description="提示訊息")
+    status: str = Field(default="success", description="Response status")
+    message: Optional[str] = Field(default=None, description="Message")
 
 
 class TimestampMixin(BaseModel):
-    """帶有建立與更新時間欄位的模型"""
+    """Model with created and updated timestamp fields"""
 
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="建立時間")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新時間")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation time")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Update time")
 
     model_config = {"from_attributes": True}

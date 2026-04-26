@@ -7,22 +7,22 @@ class PathResolver:
     @staticmethod
     def resolve_path(path: str) -> str:
         """
-        解析並標準化路徑
-        處理:
-        1. 相對路徑 -> 絕對路徑
-        2. Windows 路徑在 WSL 中的轉換
-        3. 用戶主目錄擴展
+        Parse and normalize path
+        Handle:
+        1. Relative path -> Absolute path
+        2. Windows path conversion in WSL
+        3. User home directory expansion
         """
         if not path:
             return path
             
-        # 擴展用戶主目錄
+        # Expand user home directory
         expanded_path = os.path.expanduser(path)
         
-        # 轉換為絕對路徑
+        # Convert to absolute path
         abs_path = os.path.abspath(expanded_path)
         
-        # 如果在 WSL 中運行，且路徑是 Windows 格式 (e.g. C:\Users\...)
+        # If running in WSL and path is Windows format (e.g. C:\Users\...)
         if PlatformDetector.is_wsl() and re.match(r'^[a-zA-Z]:\\', abs_path):
             return PathResolver._windows_to_wsl(abs_path)
             
@@ -31,13 +31,13 @@ class PathResolver:
     @staticmethod
     def _windows_to_wsl(windows_path: str) -> str:
         r"""
-        將 Windows 路徑轉換為 WSL 路徑
+        Convert Windows path to WSL path
         C:\Users\Name -> /mnt/c/Users/Name
         """
-        # 替換反斜槓
+        # Replace backslashes
         path = windows_path.replace('\\', '/')
         
-        # 提取盤符
+        # Extract drive letter
         match = re.match(r'^([a-zA-Z]):/(.*)', path)
         if match:
             drive_letter = match.group(1).lower()
@@ -49,24 +49,24 @@ class PathResolver:
     @staticmethod
     def resolve_volume_source(source_path: str, runtime_provisioner: str = "docker") -> str:
         """
-        解析 Volume 掛載源路徑
-        
+        Parse volume mount source path
+
         Args:
-            source_path: 源路徑
-            runtime_provisioner: docker 或 kubernetes
+            source_path: Source path
+            runtime_provisioner: docker or kubernetes
 
         Returns:
-            適合該運行時的路徑
+            Path suitable for the runtime
         """
-        # 如果是命名 volume (不包含 / 或 \ 或 .)
+        # If is named volume (does not contain / or \ or .)
         if not any(c in source_path for c in ['/', '\\', '.']):
             return source_path
             
         resolved_path = PathResolver.resolve_path(source_path)
         
-        # 特殊情況: Docker Desktop on Windows (通過 WSL 調用)
-        # 如果我們在 WSL 中，但使用的是 Docker Desktop (Windows)，
-        # Docker Desktop 期望的是 Windows 路徑還是 WSL 路徑?
-        # 通常 Docker Desktop for Windows 處理 /mnt/c/... 路徑會自動映射
+        # Special case: Docker Desktop on Windows (called through WSL)
+        # If we are in WSL, but using Docker Desktop (Windows),
+        # Does Docker Desktop expect Windows path or WSL path?
+        # Usually Docker Desktop for Windows handles /mnt/c/... paths with auto-mapping
         
         return resolved_path

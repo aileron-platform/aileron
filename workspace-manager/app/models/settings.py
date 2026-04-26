@@ -1,4 +1,4 @@
-"""Settings 模組的 Pydantic 模型"""
+"""Pydantic models for Settings Module"""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ class ClaudeCodeEnvironmentVariable(CamelModel):
 
 
 class OAuthAccountInfo(CamelModel):
-    """OAuth 帳戶資訊"""
+    """OAuth account information"""
     account_uuid: Optional[str] = Field(None, alias="accountUuid")
     email_address: Optional[str] = Field(None, alias="emailAddress")
     organization_uuid: Optional[str] = Field(None, alias="organizationUuid")
@@ -87,29 +87,29 @@ class OAuthAccountInfo(CamelModel):
 
 
 class ClaudeCodeSettings(CamelModel):
-    # 認證方式：subscription 或 apikey
+    # Authentication method: subscription or apikey
     auth_method: str = Field("subscription", alias="authMethod")
 
-    # Subscription 認證相關
+    # Subscription authentication related
     subscription_auth_code: Optional[str] = Field(None, alias="subscriptionAuthCode")
     subscription_access_token: Optional[str] = Field(None, alias="subscriptionAccessToken")
     subscription_refresh_token: Optional[str] = Field(None, alias="subscriptionRefreshToken")
-    subscription_expires_at: Optional[int] = Field(None, alias="subscriptionExpiresAt", description="過期時間（毫秒時間戳）")
+    subscription_expires_at: Optional[int] = Field(None, alias="subscriptionExpiresAt", description="Expiration time (millisecond timestamp)")
     oauth_account: Optional[OAuthAccountInfo] = Field(None, alias="oauthAccount")
 
-    # API Key 認證相關
+    # API key authentication related
     auth_key: Optional[str] = Field(None, alias="authKey")
-    api_provider: Optional[str] = Field(None, alias="apiProvider")  # Anthropic, AWS Bedrock, Google Vertex AI, 其他
+    api_provider: Optional[str] = Field(None, alias="apiProvider")  # Anthropic, AWS Bedrock, Google Vertex AI, Other
 
-    # 統一的模型選擇欄位（不論 subscription 或 apikey 都使用這個）
+    # Unified model selection field (used by both subscription and apikey)
     model: Optional[str] = Field(None, alias="model")
 
-    # 環境變數設定
+    # EnvironmentVariableSettings
     environment_variables: list[ClaudeCodeEnvironmentVariable] = Field(
         default_factory=list, alias="environmentVariables"
     )
 
-    # 原有的設定保持向下相容
+    # Legacy settings for backward compatibility
     selected_provider: Optional[str] = Field(None, alias="selectedProvider")
     available_models: list[ClaudeModelInfo] = Field(default_factory=list, alias="availableModels")
     available_providers: list[ClaudeProviderInfo] = Field(
@@ -146,7 +146,7 @@ class UserSettingsUpdate(CamelModel):
 
 
 class SSHKeyPairResponse(CamelModel):
-    """SSH Key Pair 產生回應"""
+    """SSH key pair generation response"""
     public_key: str = Field(..., alias="publicKey")
     private_key: str = Field(..., alias="privateKey")
     fingerprint: str

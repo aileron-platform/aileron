@@ -1,4 +1,4 @@
-"""自動化任務資料模型"""
+"""Automation task data models"""
 
 from __future__ import annotations
 
@@ -11,43 +11,43 @@ from pydantic import BaseModel, ConfigDict, Field
 JobStatus = Literal["active", "paused", "failed", "draft"]
 JobTrigger = Literal["cron", "manual", "webhook"]
 JobExecutionStatus = Literal[
-    "queued",      # 已加入 Celery 佇列，等待 Worker 處理
-    "waiting",     # 等待工作區鎖釋放（排隊中）
-    "running",     # 正在執行
-    "success",     # 執行成功
-    "failed",      # 執行失敗
-    "cancelled",   # 已取消（使用者主動取消）
-    "timeout"      # 執行超時
+    "queued",
+    "waiting",
+    "running",
+    "success",
+    "failed",
+    "cancelled",
+    "timeout"
 ]
 
 
 class JobNotificationSettings(BaseModel):
-    """任務通知設定"""
+    """Task notification settings"""
 
-    email: bool = Field(default=False, description="是否啟用 Email 通知")
-    slack: bool = Field(default=False, description="是否啟用 Slack 通知")
-    webhook: bool = Field(default=False, description="是否啟用 Webhook 通知")
+    email: bool = Field(default=False, description="Enable email notifications")
+    slack: bool = Field(default=False, description="Enable Slack notifications")
+    webhook: bool = Field(default=False, description="Enable webhook notifications")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobBase(BaseModel):
-    """自動化任務共用欄位"""
+    """Automation task common fields"""
 
-    name: str = Field(description="任務名稱")
-    description: str = Field(description="任務描述")
-    owner: str = Field(description="負責人")
-    user_id: str = Field(alias="userId", description="建立任務的使用者 ID")
-    workspace_id: str = Field(alias="workspaceId", description="目標工作區 ID")
-    prompt: str = Field(description="任務提示或內容")
-    status: JobStatus = Field(description="任務狀態")
-    trigger: JobTrigger = Field(description="觸發條件")
-    schedule: str = Field(description="排程表達式")
-    tags: list[str] = Field(default_factory=list, description="標籤")
+    name: str = Field(description="Task name")
+    description: str = Field(description="Task description")
+    owner: str = Field(description="Owner")
+    user_id: str = Field(alias="userId", description="User ID who created the task")
+    workspace_id: str = Field(alias="workspaceId", description="Target workspace ID")
+    prompt: str = Field(description="Task prompt or content")
+    status: JobStatus = Field(description="Task status")
+    trigger: JobTrigger = Field(description="Trigger condition")
+    schedule: str = Field(description="Schedule expression")
+    tags: list[str] = Field(default_factory=list, description="Tags")
     notifications: JobNotificationSettings = Field(
-        default_factory=JobNotificationSettings, description="通知設定"
+        default_factory=JobNotificationSettings, description="Notification settings"
     )
-    metadata: dict[str, Any] = Field(default_factory=dict, description="任務額外設定")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional task settings")
     webhook_api_key: Optional[str] = Field(
         default=None, alias="webhookApiKey", description="Webhook API Key"
     )
@@ -56,33 +56,33 @@ class JobBase(BaseModel):
 
 
 class JobCreateRequest(JobBase):
-    """建立自動化任務請求"""
+    """Create automation task request"""
 
     pass
 
 
 class JobUpdateRequest(BaseModel):
-    """更新自動化任務請求"""
+    """Update automation task request"""
 
-    name: Optional[str] = Field(default=None, description="任務名稱")
-    description: Optional[str] = Field(default=None, description="任務描述")
-    owner: Optional[str] = Field(default=None, description="負責人")
+    name: Optional[str] = Field(default=None, description="Task name")
+    description: Optional[str] = Field(default=None, description="Task description")
+    owner: Optional[str] = Field(default=None, description="Owner")
     user_id: Optional[str] = Field(
-        default=None, alias="userId", description="建立任務的使用者 ID"
+        default=None, alias="userId", description="User ID who created the task"
     )
     workspace_id: Optional[str] = Field(
-        default=None, alias="workspaceId", description="目標工作區 ID"
+        default=None, alias="workspaceId", description="Target workspace ID"
     )
-    prompt: Optional[str] = Field(default=None, description="任務提示或內容")
-    status: Optional[JobStatus] = Field(default=None, description="任務狀態")
-    trigger: Optional[JobTrigger] = Field(default=None, description="觸發條件")
-    schedule: Optional[str] = Field(default=None, description="排程表達式")
-    tags: Optional[list[str]] = Field(default=None, description="標籤")
+    prompt: Optional[str] = Field(default=None, description="Task prompt or content")
+    status: Optional[JobStatus] = Field(default=None, description="Task status")
+    trigger: Optional[JobTrigger] = Field(default=None, description="Trigger condition")
+    schedule: Optional[str] = Field(default=None, description="Schedule expression")
+    tags: Optional[list[str]] = Field(default=None, description="Tags")
     notifications: Optional[JobNotificationSettings] = Field(
-        default=None, description="通知設定"
+        default=None, description="Notification settings"
     )
     metadata: Optional[dict[str, Any]] = Field(
-        default=None, description="任務額外設定"
+        default=None, description="Additional task settings"
     )
     webhook_api_key: Optional[str] = Field(
         default=None, alias="webhookApiKey", description="Webhook API Key"
@@ -92,191 +92,191 @@ class JobUpdateRequest(BaseModel):
 
 
 class AutomationJob(JobBase):
-    """自動化任務回應"""
+    """Automation task response"""
 
-    id: str = Field(description="任務 ID")
+    id: str = Field(description="Task ID")
     workspace_name: Optional[str] = Field(
-        default=None, alias="workspaceName", description="工作區名稱"
+        default=None, alias="workspaceName", description="Workspace name"
     )
-    created_at: datetime = Field(alias="createdAt", description="建立時間")
-    updated_at: datetime = Field(alias="updatedAt", description="更新時間")
+    created_at: datetime = Field(alias="createdAt", description="Creation time")
+    updated_at: datetime = Field(alias="updatedAt", description="Update time")
     last_run_at: Optional[datetime] = Field(
-        default=None, alias="lastRunAt", description="最後執行時間"
+        default=None, alias="lastRunAt", description="Last execution time"
     )
     next_run_at: Optional[datetime] = Field(
-        default=None, alias="nextRunAt", description="下一次執行時間"
+        default=None, alias="nextRunAt", description="Next execution time"
     )
     success_rate: float = Field(
-        default=0.0, alias="successRate", description="成功率 (0~1)"
+        default=0.0, alias="successRate", description="Success rate (0~1)"
     )
     failure_rate: float = Field(
-        default=0.0, alias="failureRate", description="失敗率 (0~1)"
+        default=0.0, alias="failureRate", description="Failure rate (0~1)"
     )
     total_executions: int = Field(
-        default=0, alias="totalExecutions", description="總執行次數"
+        default=0, alias="totalExecutions", description="Total execution count"
     )
     average_duration: int = Field(
-        default=0, alias="averageDuration", description="平均執行時間 (秒)"
+        default=0, alias="averageDuration", description="Average execution time (seconds)"
     )
     last_duration: Optional[int] = Field(
-        default=None, alias="lastDuration", description="最近一次執行時間 (秒)"
+        default=None, alias="lastDuration", description="Last execution time (seconds)"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobListResponse(BaseModel):
-    """自動化任務列表回應"""
+    """Automation task list response"""
 
-    items: list[AutomationJob] = Field(description="任務清單")
-    total: int = Field(description="總筆數")
+    items: list[AutomationJob] = Field(description="Task list")
+    total: int = Field(description="Total count")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class AutomationMetrics(BaseModel):
-    """自動化統計資訊"""
+    """Automation statistics"""
 
-    active_count: int = Field(alias="activeCount", description="啟用中的任務數")
-    paused_count: int = Field(alias="pausedCount", description="暫停的任務數")
-    failed_count: int = Field(alias="failedCount", description="失敗執行次數總和")
-    draft_count: int = Field(alias="draftCount", description="草稿任務數")
-    success_rate: float = Field(alias="successRate", description="整體成功率")
+    active_count: int = Field(alias="activeCount", description="Active task count")
+    paused_count: int = Field(alias="pausedCount", description="Paused task count")
+    failed_count: int = Field(alias="failedCount", description="Total failed executions")
+    draft_count: int = Field(alias="draftCount", description="Draft task count")
+    success_rate: float = Field(alias="successRate", description="Overall success rate")
     running_executions: int = Field(
-        alias="runningExecutions", description="執行中的任務數"
+        alias="runningExecutions", description="Running task count"
     )
     queued_executions: int = Field(
-        alias="queuedExecutions", description="佇列中的任務數"
+        alias="queuedExecutions", description="Queued task count"
     )
     average_duration: float = Field(
-        alias="averageDuration", description="平均執行時間 (秒)"
+        alias="averageDuration", description="Average execution time (seconds)"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobExecution(BaseModel):
-    """任務執行紀錄"""
+    """Task execution record"""
 
-    id: str = Field(description="執行 ID")
-    job_id: str = Field(alias="jobId", description="對應任務 ID")
-    status: JobExecutionStatus = Field(description="執行狀態")
-    trigger: JobTrigger = Field(description="觸發來源")
+    id: str = Field(description="Execution ID")
+    job_id: str = Field(alias="jobId", description="Corresponding task ID")
+    status: JobExecutionStatus = Field(description="Execution status")
+    trigger: JobTrigger = Field(description="Trigger source")
     started_at: Optional[datetime] = Field(
-        default=None, alias="startedAt", description="開始時間"
+        default=None, alias="startedAt", description="Start time"
     )
     finished_at: Optional[datetime] = Field(
-        default=None, alias="finishedAt", description="完成時間"
+        default=None, alias="finishedAt", description="Completion time"
     )
     duration: Optional[int] = Field(
-        default=None, description="執行耗時 (秒)", ge=0
+        default=None, description="Execution duration (seconds)", ge=0
     )
     session_id: Optional[str] = Field(
-        default=None, alias="sessionId", description="對應的工作區 Session ID"
+        default=None, alias="sessionId", description="Corresponding workspace Session ID"
     )
     error_message: Optional[str] = Field(
-        default=None, alias="errorMessage", description="錯誤訊息"
+        default=None, alias="errorMessage", description="Error message"
     )
     execution_metadata: Optional[dict] = Field(
-        default=None, alias="executionMetadata", description="執行元數據（包含錯誤詳情等）"
+        default=None, alias="executionMetadata", description="Execution metadata (includes error details, etc.)"
     )
-    summary: str = Field(description="執行摘要")
+    summary: str = Field(description="Execution summary")
     queue_position: Optional[int] = Field(
-        default=None, alias="queuePosition", description="排隊位置（1-based）"
+        default=None, alias="queuePosition", description="Queue position (1-based)"
     )
     queued_at: Optional[datetime] = Field(
-        default=None, alias="queuedAt", description="加入佇列時間"
+        default=None, alias="queuedAt", description="Queued time"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobExecutionListResponse(BaseModel):
-    """任務執行紀錄列表回應"""
+    """Task execution record list response"""
 
-    items: list[JobExecution] = Field(description="執行紀錄清單")
-    total: int = Field(description="總筆數")
+    items: list[JobExecution] = Field(description="Execution record list")
+    total: int = Field(description="Total count")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobExecutionCreateRequest(BaseModel):
-    """新增執行紀錄請求"""
+    """Create execution record request"""
 
-    status: JobExecutionStatus = Field(description="執行狀態")
-    trigger: JobTrigger = Field(description="觸發來源")
-    summary: str = Field(description="執行摘要")
-    duration: Optional[int] = Field(default=None, description="執行耗時 (秒)", ge=0)
+    status: JobExecutionStatus = Field(description="Execution status")
+    trigger: JobTrigger = Field(description="Trigger source")
+    summary: str = Field(description="Execution summary")
+    duration: Optional[int] = Field(default=None, description="Execution duration (seconds)", ge=0)
     session_id: Optional[str] = Field(
-        default=None, alias="sessionId", description="對應的工作區 Session ID"
+        default=None, alias="sessionId", description="Corresponding workspace Session ID"
     )
     error_message: Optional[str] = Field(
-        default=None, alias="errorMessage", description="錯誤訊息"
+        default=None, alias="errorMessage", description="Error message"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobStatusUpdate(BaseModel):
-    """更新任務狀態請求"""
+    """Update task status request"""
 
-    status: JobStatus = Field(description="新的任務狀態")
+    status: JobStatus = Field(description="New task status")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobCalendarEvent(BaseModel):
-    """任務行事曆事件"""
+    """Task calendar event"""
 
-    id: str = Field(description="事件 ID")
-    job_id: str = Field(alias="jobId", description="任務 ID")
-    title: str = Field(description="顯示名稱")
-    start: datetime = Field(description="開始時間")
-    end: datetime = Field(description="結束時間")
-    status: JobExecutionStatus = Field(description="預期狀態")
+    id: str = Field(description="Event ID")
+    job_id: str = Field(alias="jobId", description="Task ID")
+    title: str = Field(description="Display name")
+    start: datetime = Field(description="Start time")
+    end: datetime = Field(description="End time")
+    status: JobExecutionStatus = Field(description="Expected status")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class JobCalendarResponse(BaseModel):
-    """任務行事曆事件回應"""
+    """Task calendar event response"""
 
-    items: list[JobCalendarEvent] = Field(description="行事曆事件清單")
-    total: int = Field(description="總筆數")
+    items: list[JobCalendarEvent] = Field(description="Calendar event list")
+    total: int = Field(description="Total count")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class QueuePosition(BaseModel):
-    """佇列位置資訊"""
+    """Queue position information"""
 
-    execution_id: str = Field(alias="executionId", description="執行記錄 ID")
-    position: int = Field(description="排隊位置（1-based）")
-    total: int = Field(description="佇列總長度")
+    execution_id: str = Field(alias="executionId", description="Execution record ID")
+    position: int = Field(description="Queue position (1-based)")
+    total: int = Field(description="Queue total length")
     estimated_wait_seconds: Optional[int] = Field(
-        default=None, alias="estimatedWaitSeconds", description="預估等待時間（秒）"
+        default=None, alias="estimatedWaitSeconds", description="Estimated wait time (seconds)"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class WorkspaceQueueResponse(BaseModel):
-    """工作區佇列回應"""
+    """Workspace queue response"""
 
-    workspace_id: str = Field(alias="workspaceId", description="工作區 ID")
-    queue_length: int = Field(alias="queueLength", description="佇列長度")
-    executions: list[JobExecution] = Field(description="排隊中的執行記錄")
+    workspace_id: str = Field(alias="workspaceId", description="Workspace ID")
+    queue_length: int = Field(alias="queueLength", description="Queue length")
+    executions: list[JobExecution] = Field(description="Queued execution records")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class ExecutionCancelResponse(BaseModel):
-    """取消執行回應"""
+    """Cancel execution response"""
 
-    execution_id: str = Field(alias="executionId", description="執行記錄 ID")
-    status: str = Field(description="當前狀態")
-    message: str = Field(description="回應訊息")
-    cancelled: bool = Field(description="是否成功取消")
+    execution_id: str = Field(alias="executionId", description="Execution record ID")
+    status: str = Field(description="Current status")
+    message: str = Field(description="Response message")
+    cancelled: bool = Field(description="Successfully cancelled")
 
     model_config = ConfigDict(populate_by_name=True)
 

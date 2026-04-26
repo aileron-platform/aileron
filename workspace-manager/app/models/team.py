@@ -1,4 +1,4 @@
-"""團隊模型"""
+"""Team models"""
 
 from typing import Optional
 
@@ -8,37 +8,37 @@ from .common import TimestampMixin
 
 
 class TeamBase(BaseModel):
-    """團隊基本欄位"""
+    """Team basic fields"""
 
-    name: str = Field(description="團隊名稱")
-    description: Optional[str] = Field(default=None, description="團隊描述")
-    avatar_url: Optional[str] = Field(default=None, description="團隊頭像")
+    name: str = Field(description="Team name")
+    description: Optional[str] = Field(default=None, description="Team description")
+    avatar_url: Optional[str] = Field(default=None, description="Team avatar")
 
 
 class TeamCreate(TeamBase):
-    """建立團隊請求"""
+    """Create team request"""
 
-    owner_id: str = Field(description="擁有者使用者 ID")
+    owner_id: str = Field(description="Owner user ID")
 
 
 class TeamUpdate(BaseModel):
-    """更新團隊請求"""
+    """Update team request"""
 
-    name: Optional[str] = Field(default=None, description="團隊名稱")
-    description: Optional[str] = Field(default=None, description="團隊描述")
-    avatar_url: Optional[str] = Field(default=None, description="團隊頭像")
+    name: Optional[str] = Field(default=None, description="Team name")
+    description: Optional[str] = Field(default=None, description="Team description")
+    avatar_url: Optional[str] = Field(default=None, description="Team avatar")
 
 
 class Team(TeamBase, TimestampMixin):
-    """團隊回應模型"""
+    """Team response model"""
 
-    id: str = Field(description="團隊 ID")
-    owner_id: str = Field(description="擁有者使用者 ID")
-    member_count: int = Field(default=1, description="團隊成員數量")
+    id: str = Field(description="Team ID")
+    owner_id: str = Field(description="Owner user ID")
+    member_count: int = Field(default=1, description="Team member count")
 
 
 class TeamListResponse(BaseModel):
-    """團隊列表回應"""
+    """Team list response"""
 
     items: list[Team]
     total: int

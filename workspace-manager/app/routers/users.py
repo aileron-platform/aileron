@@ -1,4 +1,4 @@
-"""使用者路由"""
+"""UserRoute"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -8,21 +8,21 @@ from app.services import get_user_service
 from app.services.user_service import UserService
 from app.services.user_profile_service import UserProfileService, get_user_profile_service
 
-router = APIRouter(prefix="/users", tags=["使用者"])
+router = APIRouter(prefix="/users", tags=["User"])
 
 
 @router.get(
     "/",
     response_model=UserListResponse,
-    summary="列出使用者",
+    summary="List users",
     responses=build_responses(500),
 )
 async def list_users(
-    query: str | None = Query(default=None, description="使用 email、username 或 display name 搜尋"),
-    limit: int | None = Query(default=None, ge=1, le=50, description="限制回傳筆數"),
+    query: str | None = Query(default=None, description="Search by email, username, or display name"),
+    limit: int | None = Query(default=None, ge=1, le=50, description="Limit number of results"),
     service: UserService = Depends(get_user_service),
 ) -> UserListResponse:
-    """取得使用者列表"""
+    """Get user list."""
     return service.list(query=query, limit=limit)
 
 
@@ -30,7 +30,7 @@ async def list_users(
     "/",
     response_model=User,
     status_code=status.HTTP_201_CREATED,
-    summary="建立使用者",
+    summary="Create user",
     responses=build_responses(409, 422, 500),
 )
 async def create_user(
@@ -38,7 +38,7 @@ async def create_user(
     request: Request,
     service: UserService = Depends(get_user_service),
 ) -> User:
-    """建立新使用者"""
+    """Create new user."""
     try:
         return service.create(payload)
     except ValueError as exc:
@@ -51,7 +51,7 @@ async def create_user(
 @router.get(
     "/{user_id}",
     response_model=User,
-    summary="取得使用者",
+    summary="Get user",
     responses=build_responses(404, 500),
 )
 async def get_user(
@@ -59,7 +59,7 @@ async def get_user(
     request: Request,
     service: UserService = Depends(get_user_service),
 ) -> User:
-    """取得指定使用者"""
+    """Get specified user."""
     user = service.get(user_id)
     if not user:
         raise HTTPException(
@@ -72,7 +72,7 @@ async def get_user(
 @router.put(
     "/{user_id}",
     response_model=User,
-    summary="更新使用者",
+    summary="Update user",
     responses=build_responses(404, 422, 500),
 )
 async def update_user(
@@ -81,7 +81,7 @@ async def update_user(
     request: Request,
     service: UserService = Depends(get_user_service),
 ) -> User:
-    """更新使用者資料"""
+    """Update user data."""
     user = service.update(user_id, payload)
     if not user:
         raise HTTPException(
@@ -94,7 +94,7 @@ async def update_user(
 @router.patch(
     "/{user_id}",
     response_model=User,
-    summary="部分更新使用者",
+    summary="Partially update user",
     responses=build_responses(404, 422, 500),
 )
 async def patch_user(
@@ -103,7 +103,7 @@ async def patch_user(
     request: Request,
     service: UserService = Depends(get_user_service),
 ) -> User:
-    """部分更新使用者資料"""
+    """Partially update user data."""
     user = service.update(user_id, payload)
     if not user:
         raise HTTPException(
@@ -116,7 +116,7 @@ async def patch_user(
 @router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除使用者",
+    summary="Delete user",
     responses=build_responses(404, 500),
 )
 async def delete_user(
@@ -124,7 +124,7 @@ async def delete_user(
     request: Request,
     service: UserService = Depends(get_user_service),
 ) -> None:
-    """刪除指定使用者"""
+    """Delete specified user."""
     user = service.get(user_id)
     if not user:
         raise HTTPException(
@@ -137,7 +137,7 @@ async def delete_user(
 @router.get(
     "/{user_id}/profile",
     response_model=UserProfileResponse,
-    summary="取得使用者個人檔案",
+    summary="Get user profile",
     responses=build_responses(404, 500),
 )
 async def get_user_profile(
@@ -145,7 +145,7 @@ async def get_user_profile(
     request: Request,
     service: UserProfileService = Depends(get_user_profile_service),
 ) -> UserProfileResponse:
-    """取得指定使用者的個人檔案"""
+    """Get specified user profile."""
     profile = service.get_profile(user_id)
     if not profile:
         raise HTTPException(
@@ -158,7 +158,7 @@ async def get_user_profile(
 @router.put(
     "/{user_id}/profile",
     response_model=UserProfileResponse,
-    summary="更新使用者個人檔案",
+    summary="Update user profile",
     responses=build_responses(404, 422, 500),
 )
 async def update_user_profile(
@@ -167,8 +167,8 @@ async def update_user_profile(
     request: Request,
     service: UserProfileService = Depends(get_user_profile_service),
 ) -> UserProfileResponse:
-    """更新指定使用者的個人檔案"""
-    # 取得 access token 以同步 Keycloak
+    """Update specified user profile."""
+    # Get access token to sync with Keycloak
     access_token = None
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):

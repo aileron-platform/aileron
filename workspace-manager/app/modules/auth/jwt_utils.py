@@ -1,8 +1,8 @@
 """
-JWT 驗證工具類
+JWT verification utility class
 
-提供 Keycloak JWT token 的驗證和解析功能。
-支援使用 JWKS (JSON Web Key Set) 動態獲取公鑰進行 token 驗證。
+Provides JWT token verification and parsing features for Keycloak.
+Supports using JWKS (JSON Web Key Set) to dynamically fetch public keys for token verification.
 """
 
 import logging
@@ -19,52 +19,52 @@ logger = logging.getLogger(__name__)
 
 
 class JWTValidationError(Exception):
-    """JWT 驗證失敗異常"""
+    """JWT verification failed exception"""
     pass
 
 
 class JWKSFetchError(Exception):
-    """JWKS 獲取失敗異常"""
+    """JWKS fetch failed exception"""
     pass
 
 
 class JWTUtils:
-    """JWT 驗證工具類
+    """JWT verification utility class
 
-    提供完整的 JWT token 驗證功能：
-    - 從 Keycloak 獲取 JWKS (公鑰集)
-    - 驗證 token 簽名
-    - 解析 token payload
-    - 驗證 token 過期時間、issuer、audience
-    - 快取 JWKS 避免頻繁請求
+    Provides complete JWT token verification features:
+    - Fetch JWKS (public key set) from Keycloak
+    - Verify token signature
+    - Parse token payload
+    - Verify token expiry time, issuer, and audience
+    - Cache JWKS to avoid frequent requests
     """
 
     def __init__(self):
-        """初始化 JWT 驗證工具"""
+        """Initialize JWT verification utility"""
         self.config = get_keycloak_config()
         self.jwks_cache: Optional[Dict[str, Any]] = None
         self.jwks_cache_time: Optional[datetime] = None
 
     async def fetch_jwks(self) -> Dict[str, Any]:
-        """從 Keycloak 獲取 JWKS (JSON Web Key Set)
+        """Get JWKS (JSON Web Key Set) from Keycloak
 
         Returns:
-            JWKS 字典，包含公鑰信息
+            JWKS dictionary containing public key information
 
         Raises:
-            JWKSFetchError: 當 JWKS 獲取失敗時
+            JWKSFetchError: When JWKS fetch fails
         """
         if not self.config.enabled:
             raise JWKSFetchError("Authentication is not enabled")
 
-        # 檢查快取是否有效
+        # Check if cache is valid
         if self.jwks_cache is not None:
             cache_age = (datetime.now(timezone.utc) - self.jwks_cache_time).total_seconds()
             if cache_age < self.config.jwks_cache_ttl:
                 logger.debug("Using cached JWKS")
                 return self.jwks_cache
 
-        # 從 Keycloak 獲取最新的 JWKS
+        # Get latest JWKS from Keycloak
         jwks_url = self.config.jwks_url
         if not jwks_url:
             raise JWKSFetchError("JWKS URL not configured")
@@ -75,7 +75,7 @@ class JWTUtils:
                 response.raise_for_status()
                 jwks_data = response.json()
 
-            # 更新快取
+            # Update cache
             self.jwks_cache = jwks_data
             self.jwks_cache_time = datetime.now(timezone.utc)
 
@@ -90,31 +90,31 @@ class JWTUtils:
             raise JWKSFetchError(f"Unexpected error fetching JWKS from {jwks_url}: {e}")
 
     def get_public_key(self, token: str) -> Dict[str, Any]:
-        """從 token 中獲取 kid (key ID) 並從 JWKS 中找到對應的公鑰
+        """Get kid (key ID) from token and find corresponding public key from JWKS
 
         Args:
-            token: JWT token 字符串
+            token: JWT token string
 
         Returns:
-            公鑰字典
+            Public key dictionary
 
         Raises:
-            JWKSFetchError: 當無法獲取 JWKS 時
-            JWTValidationError: 當無法找到對應公鑰時
+            JWKSFetchError: When unable to fetch JWKS
+            JWTValidationError: When unable to find corresponding public key
         """
         try:
-            # 從 token header 中獲取 kid
+            # Get kid from token header
             headers = jwt.get_unverified_headers(token)
             kid = headers.get('kid')
 
             if not kid:
                 raise JWTValidationError("Token header missing 'kid' field")
 
-            # 獲取 JWKS
+            # Get JWKS
             jwks_data = self.jwks_cache
             if not jwks_data:
-                # 這裡我們使用同步方式獲取 JWKS
-                # 在 FastAPI 路由中應該使用異步版本
+                # We use synchronous method to get JWKS here
+                # Should use async version in FastAPI routes
                 import asyncio
                 try:
                     loop = asyncio.get_event_loop()
@@ -124,7 +124,7 @@ class JWTUtils:
 
                 jwks_data = loop.run_until_complete(self.fetch_jwks())
 
-            # 從 JWKS 中找到對應的公鑰
+            # Find corresponding public key from JWKS
             for key in jwks_data.get('keys', []):
                 if key.get('kid') == kid:
                     return key
@@ -139,34 +139,34 @@ class JWTUtils:
         token: str,
         verify_audience: bool = True
     ) -> Dict[str, Any]:
-        """解碼並驗證 JWT token
+        """Decode and verify JWT token
 
         Args:
-            token: JWT token 字符串
-            verify_audience: 是否驗證 audience
+            token: JWT token string
+            verify_audience: Whether to verify audience
 
         Returns:
-            解碼後的 token payload
+            Decoded token payload
 
         Raises:
-            JWTValidationError: 當 token 驗證失敗時
+            JWTValidationError: When token verification fails
         """
         if not self.config.enabled:
-            # 認證未啟用，不驗證 token
+            # Authentication not enabled, do not verify token
             logger.warning("Authentication is disabled, skipping token validation")
             return {}
 
         try:
-            # 獲取公鑰
+            # Get public key
             public_key = self.get_public_key(token)
 
-            # 將 JWK 轉換為 PEM 格式
+            # Convert JWK to PEM format
             rsa_key = jwk.construct(public_key)
             public_key_pem = rsa_key.to_pem()
 
-            # 驗證並解碼 token
-            # Keycloak 使用 'azp' (authorized party) 而不是 'aud' 來標識客戶端
-            # 因此我們關閉 audience 驗證，而是手動驗證 azp 字段
+            # Validate and decode token
+# Keycloak uses 'azp' (authorized party) instead of 'aud' to identify client
+            # Therefore we disable audience verification and manually verify azp field
             payload = jwt.decode(
                 token,
                 public_key_pem,
@@ -176,12 +176,12 @@ class JWTUtils:
                     'verify_exp': True,
                     'verify_nbf': True,
                     'verify_iat': True,
-                    'verify_aud': False,  # Keycloak 使用 azp 而不是 aud
+                    'verify_aud': False,  # Keycloak uses azp instead of aud
                 },
                 audience=self.config.client_id if verify_audience else None,
             )
 
-            # 手動驗證 azp (authorized party) 字段
+            # Manually verify azp (authorized party) field
             if verify_audience and payload.get('azp') != self.config.client_id:
                 raise JWTValidationError(
                     f"Token not issued for this client. "
@@ -203,28 +203,28 @@ class JWTUtils:
         token: str,
         verify_audience: bool = True
     ) -> Dict[str, Any]:
-        """異步解碼並驗證 JWT token
+        """Asynchronously decode and verify JWT token
 
         Args:
-            token: JWT token 字符串
-            verify_audience: 是否驗證 audience
+            token: JWT token string
+            verify_audience: Whether to verify audience
 
         Returns:
-            解碼後的 token payload
+            Decoded token payload
 
         Raises:
-            JWTValidationError: 當 token 驗證失敗時
+            JWTValidationError: When token verification fails
         """
         if not self.config.enabled:
             logger.warning("Authentication is disabled, skipping token validation")
             return {}
 
         try:
-            # 先確保 JWKS 已獲取
+            # Ensure JWKS is fetched first
             if self.jwks_cache is None:
                 await self.fetch_jwks()
 
-            # 使用同步方法解碼（因為 jose 庫不支持異步）
+            # Use synchronous method to decode (because jose library doesn't support async)
             return self.decode_token(token, verify_audience)
 
         except JWTValidationError:
@@ -234,15 +234,15 @@ class JWTUtils:
             raise JWTValidationError(f"Token validation failed: {e}")
 
     def get_token_claims(self, token: str) -> Dict[str, Any]:
-        """獲取 token 的 claims（不驗證簽名）
+        """Get token claims (without signature verification)
 
-        注意：此方法僅用於調試，不應用於生產環境
+        Note: This method is only for debugging, do not use in production environment
 
         Args:
-            token: JWT token 字符串
+            token: JWT token string
 
         Returns:
-            Token claims 字典
+            Token claims dictionary
         """
         try:
             return jwt.get_unverified_claims(token)
@@ -250,13 +250,13 @@ class JWTUtils:
             raise JWTValidationError(f"Failed to get token claims: {e}")
 
     def validate_token_expiry(self, payload: Dict[str, Any]) -> bool:
-        """驗證 token 過期時間
+        """Verify token expiry time
 
         Args:
             payload: Token payload
 
         Returns:
-            True 如果 token 未過期，False 如果已過期
+            True if token is not expired, False if expired
         """
         if not self.config.enabled:
             return True
@@ -269,21 +269,21 @@ class JWTUtils:
         return exp > current_time
 
     def clear_jwks_cache(self):
-        """清除 JWKS 快取"""
+        """Clear JWKS cache"""
         self.jwks_cache = None
         self.jwks_cache_time = None
         logger.info("JWKS cache cleared")
 
 
-# 單例實例
+# Singleton instance
 _jwt_utils_instance: Optional[JWTUtils] = None
 
 
 def get_jwt_utils() -> JWTUtils:
-    """獲取 JWTUtils 單例實例
+    """Get JWTUtils singleton instance
 
     Returns:
-        JWTUtils 實例
+        JWTUtils instance
     """
     global _jwt_utils_instance
     if _jwt_utils_instance is None:
@@ -292,7 +292,7 @@ def get_jwt_utils() -> JWTUtils:
 
 
 def clear_jwt_utils_cache():
-    """清除 JWTUtils 快取"""
+    """Clear JWTUtils cache"""
     global _jwt_utils_instance
     if _jwt_utils_instance is not None:
         _jwt_utils_instance.clear_jwks_cache()

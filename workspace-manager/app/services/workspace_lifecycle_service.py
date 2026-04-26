@@ -1,4 +1,4 @@
-"""Workspace 生命週期管理服務"""
+"""Workspace lifecycle management service"""
 
 from __future__ import annotations
 
@@ -18,203 +18,203 @@ logger = logging.getLogger(__name__)
 
 
 class WorkspaceLifecycleService:
-    """負責 Workspace 的刪除和重啟操作"""
+    """Responsible for workspace deletion and restart operations"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
-        # 動態獲取 settings，確保在測試環境中使用正確的配置
+        # Dynamically get settings to ensure correct configuration in test environment
         self.settings = get_settings()
 
     def delete_workspace_task(self, workspace_id: str) -> None:
-        """背景任務：刪除 workspace
+        """Background task: Delete workspace
         
-        步驟：
-        1. 讀取 workspace 資料
-        2. 停止並刪除 container
-        3. 刪除掛載的資料目錄
-        4. 刪除資料庫記錄
-        5. 記錄日誌
+        Step：
+        1. Read workspace Data
+        2. Stop and delete container
+        3. Delete mounted data directory
+        4. DeleteDatabaseRecord
+        5. Record log
         
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"開始刪除 workspace: {workspace_id}")
+        logger.info(f"BeginDelete workspace: {workspace_id}")
         
         try:
-            # 1. 讀取 workspace 資料
+            # 1. Read workspace Data
             workspace = self.db.get(db_models.Workspace, workspace_id)
             if not workspace:
-                logger.error(f"Workspace {workspace_id} 不存在")
+                logger.error(f"Workspace {workspace_id} does not exist")
                 return
 
             if workspace.provisioner == "kubernetes":
                 self._delete_kubernetes_workspace(workspace)
                 return
             
-            # 記錄刪除日誌
-            self._log_event(workspace_id, "deleting", "開始刪除 workspace")
+            # Record deletion log
+            self._log_event(workspace_id, "deleting", "BeginDelete workspace")
             
-            # 2. 停止並刪除 containers
+            # 2. Stop and delete containers
             if workspace.runtime_container_id:
                 self._stop_and_remove_container(workspace.runtime_container_id, workspace_id)
             else:
-                logger.warning(f"Workspace {workspace_id} 沒有關聯的 runtime container")
+                logger.warning(f"Workspace {workspace_id} no associated runtime container")
 
-            # 刪除 Canvas 容器
+            # Delete Canvas Container
             if workspace.canvas_container_id:
                 self._stop_and_remove_container(workspace.canvas_container_id, workspace_id)
 
-            # 3. 刪除掛載的資料目錄
+            # 3. Delete mounted data directories
             self._cleanup_workspace_volumes(workspace_id)
             
-            # 4. 刪除資料庫記錄（cascade delete 會自動刪除關聯資料）
+            # 4. Delete database record (cascade delete will automatically delete related data)
             self.db.delete(workspace)
             self.db.commit()
             
-            logger.info(f"成功刪除 workspace: {workspace_id}")
+            logger.info(f"SuccessDelete workspace: {workspace_id}")
             
         except Exception as e:
-            logger.exception(f"刪除 workspace {workspace_id} 失敗: {e}")
+            logger.exception(f"Delete workspace {workspace_id} Failed: {e}")
             self.db.rollback()
             
-            # 嘗試更新狀態為 error（如果 workspace 還存在）
+            # Try to update status to error (if workspace still exists)
             try:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.runtime_status = "error"
-                    self._log_event(workspace_id, "error", f"刪除失敗: {str(e)}")
+                    self._log_event(workspace_id, "error", f"DeleteFailed: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"更新錯誤狀態失敗: {update_error}")
+                logger.error(f"UpdateErrorStatusFailed: {update_error}")
 
     def restart_workspace_task(self, workspace_id: str) -> None:
-        """背景任務：重建 workspace container（使用最新 image）
+        """Background task: Rebuild workspace container (using latest image)
 
-        步驟：
-        1. 讀取 workspace 資料
-        2. 重建 container（停止舊容器 → 以相同配置建立新容器）
-        3. 更新狀態和 container ID
+        Step：
+        1. Read workspace Data
+        2. rebuild container (stop old container → create new container with same configuration)
+        3. update status and container ID
 
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"開始重建 workspace container: {workspace_id}")
+        logger.info(f"Begin rebuilding workspace container: {workspace_id}")
 
         try:
-            # 1. 讀取 workspace 資料
+            # 1. Read workspace Data
             workspace = self.db.get(db_models.Workspace, workspace_id)
             if not workspace:
-                logger.error(f"Workspace {workspace_id} 不存在")
+                logger.error(f"Workspace {workspace_id} does not exist")
                 return
 
             if workspace.provisioner == "kubernetes":
                 self._restart_kubernetes_workspace(workspace)
                 return
 
-            # 記錄重啟日誌
-            self._log_event(workspace_id, "restarting", "開始重建 workspace container")
+            # Record restart log
+            self._log_event(workspace_id, "restarting", "Begin rebuilding workspace container")
             if workspace.runtime_container_id:
                 from app.services.runtime_provision_service import RuntimeProvisionService
 
                 RuntimeProvisionService(self.db).execute_runtime_provision(workspace_id)
-                logger.info(f"成功重建 workspace container: {workspace_id}")
+                logger.info(f"Successfully rebuilt workspace container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} 沒有關聯的 container")
-                self._log_event(workspace_id, "error", "沒有關聯的 container")
+                logger.warning(f"Workspace {workspace_id} no associated container")
+                self._log_event(workspace_id, "error", "no associated container")
 
         except Exception as e:
-            logger.exception(f"重建 workspace container {workspace_id} 失敗: {e}")
+            logger.exception(f"Rebuild workspace container {workspace_id} failed: {e}")
             self.db.rollback()
 
-            # 更新狀態為 error
+            # Update status to error
             try:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.runtime_status = "error"
-                    self._log_event(workspace_id, "error", f"重建失敗: {str(e)}")
+                    self._log_event(workspace_id, "error", f"rebuild failed: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"更新錯誤狀態失敗: {update_error}")
+                logger.error(f"UpdateErrorStatusFailed: {update_error}")
 
     def restart_browser_task(self, workspace_id: str) -> None:
-        """背景任務：重建 Browser 容器（使用最新 image）
+        """Background task: Rebuild browser container (using latest image)
 
-        步驟：
-        1. 讀取 workspace 資料
-        2. 取得 browser_container_id
-        3. 重建 container
-        4. 更新 browser_status 和 container ID
+        Step：
+        1. Read workspace Data
+        2. Get browser_container_id
+        3. Rebuild container
+        4. Update browser_status and container ID
 
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"開始重建 Browser 容器: {workspace_id}")
+        logger.info(f"Begin rebuilding browser container: {workspace_id}")
 
         try:
-            # 1. 讀取 workspace 資料
+            # 1. Read workspace Data
             workspace = self.db.get(db_models.Workspace, workspace_id)
             if not workspace:
-                logger.error(f"Workspace {workspace_id} 不存在")
+                logger.error(f"Workspace {workspace_id} does not exist")
                 return
 
             if workspace.provisioner == "kubernetes":
                 self._restart_kubernetes_browser(workspace)
                 return
 
-            # 記錄重啟日誌
-            self._log_event(workspace_id, "browser_restarting", "開始重建 Browser 容器")
+            # Record restart log
+            self._log_event(workspace_id, "browser_restarting", "Begin rebuilding browser container")
 
-            # 2. 重建 container
+            # 2. Rebuild container
             if workspace.browser_container_id:
                 new_id = self._recreate_container(
                     workspace.browser_container_id, workspace_id
                 )
 
-                # 更新 container ID 和 Browser 狀態
+                # Update container ID and browser status
                 if new_id:
                     workspace.browser_container_id = new_id
                 workspace.browser_status = "running"
-                self._log_event(workspace_id, "browser_running", "Browser 容器重建成功")
+                self._log_event(workspace_id, "browser_running", "Browser container rebuild succeeded")
                 self.db.commit()
 
-                logger.info(f"成功重建 Browser 容器: {workspace_id}")
+                logger.info(f"Successfully rebuilt browser container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} 沒有關聯的 Browser 容器")
-                self._log_event(workspace_id, "browser_error", "沒有關聯的 Browser 容器")
+                logger.warning(f"Workspace {workspace_id} No associated browser container")
+                self._log_event(workspace_id, "browser_error", "No associated browser container")
 
         except Exception as e:
-            logger.exception(f"重建 Browser 容器 {workspace_id} 失敗: {e}")
+            logger.exception(f"Rebuild browser container {workspace_id} failed: {e}")
             self.db.rollback()
 
-            # 更新 Browser 狀態為 error
+            # Update browser status to error
             try:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.browser_status = "error"
-                    self._log_event(workspace_id, "browser_error", f"重建失敗: {str(e)}")
+                    self._log_event(workspace_id, "browser_error", f"rebuild failed: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"更新 Browser 錯誤狀態失敗: {update_error}")
+                logger.error(f"Update Browser ErrorStatusFailed: {update_error}")
 
     def restart_canvas_task(self, workspace_id: str) -> None:
-        """背景任務：重建 Canvas 容器（使用最新 image）
+        """Background task: Rebuild canvas container (using latest image)
 
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"開始重建 Canvas 容器: {workspace_id}")
+        logger.info(f"Begin rebuilding canvas container: {workspace_id}")
 
         try:
             workspace = self.db.get(db_models.Workspace, workspace_id)
             if not workspace:
-                logger.error(f"Workspace {workspace_id} 不存在")
+                logger.error(f"Workspace {workspace_id} does not exist")
                 return
 
             if workspace.provisioner == "kubernetes":
                 self._restart_kubernetes_canvas(workspace)
                 return
 
-            self._log_event(workspace_id, "canvas_restarting", "開始重建 Canvas 容器")
+            self._log_event(workspace_id, "canvas_restarting", "Begin rebuilding canvas container")
 
             if workspace.canvas_container_id:
                 new_id = self._recreate_container(
@@ -224,35 +224,35 @@ class WorkspaceLifecycleService:
                 if new_id:
                     workspace.canvas_container_id = new_id
                 workspace.canvas_status = "running"
-                self._log_event(workspace_id, "canvas_running", "Canvas 容器重建成功")
+                self._log_event(workspace_id, "canvas_running", "Canvas container rebuild succeeded")
                 self.db.commit()
 
-                logger.info(f"成功重建 Canvas 容器: {workspace_id}")
+                logger.info(f"Successfully rebuilt canvas container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} 沒有關聯的 Canvas 容器")
-                self._log_event(workspace_id, "canvas_error", "沒有關聯的 Canvas 容器")
+                logger.warning(f"Workspace {workspace_id} No associated canvas container")
+                self._log_event(workspace_id, "canvas_error", "No associated canvas container")
 
         except Exception as e:
-            logger.exception(f"重建 Canvas 容器 {workspace_id} 失敗: {e}")
+            logger.exception(f"Rebuild canvas container {workspace_id} failed: {e}")
             self.db.rollback()
 
             try:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.canvas_status = "error"
-                    self._log_event(workspace_id, "canvas_error", f"重建失敗: {str(e)}")
+                    self._log_event(workspace_id, "canvas_error", f"rebuild failed: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"更新 Canvas 錯誤狀態失敗: {update_error}")
+                logger.error(f"Update Canvas ErrorStatusFailed: {update_error}")
 
     def _build_fresh_environment(self, workspace: db_models.Workspace) -> list[str]:
-        """從資料庫構建最新的環境變數（用於 container rebuild）
+        """Build latest environment variables from database (for container rebuild)"""
 
-        使用 RuntimeProvisionService 的邏輯來構建完整的環境變數，
-        確保 rebuild 時使用的是資料庫中最新的設定。
+        Use RuntimeProvisionService logic to build complete environment variables，
+        ensure using latest settings from database during rebuild。
 
         Returns:
-            Docker 格式的環境變數列表 ["KEY=VALUE", ...]
+            Docker format environment variable list ["KEY=VALUE", ...]
         """
         from app.services.runtime_provision_service import RuntimeProvisionService
         provision_service = RuntimeProvisionService(self.db)
@@ -260,50 +260,50 @@ class WorkspaceLifecycleService:
         return [f"{k}={v}" for k, v in env_dict.items()]
 
     def _delete_kubernetes_workspace(self, workspace: db_models.Workspace) -> None:
-        """刪除 Kubernetes workspace。
+        """Delete Kubernetes workspace。
 
-        透過 Workspace 自訂資源服務刪除 manifest 與對應資料。
+        Through workspace custom resource service delete manifest and corresponding data。
         """
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
         service = WorkspaceCustomResourceService(self.db)
         deleted = service.delete_workspace_custom_resource(workspace.id)
         if not deleted:
-            raise ValueError(f"Workspace {workspace.id} 刪除失敗")
+            raise ValueError(f"Workspace {workspace.id} DeleteFailed")
 
     def _restart_kubernetes_workspace(self, workspace: db_models.Workspace) -> None:
-        """重啟 Kubernetes runtime workload。"""
+        """Restart Kubernetes runtime workload."""
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
         service = WorkspaceCustomResourceService(self.db)
         service.request_workspace_restart(workspace.id)
 
     def _restart_kubernetes_browser(self, workspace: db_models.Workspace) -> None:
-        """重啟 Kubernetes browser workload。"""
+        """Restart Kubernetes browser workload."""
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
         service = WorkspaceCustomResourceService(self.db)
         service.request_browser_restart(workspace.id)
 
     def _restart_kubernetes_canvas(self, workspace: db_models.Workspace) -> None:
-        """重啟 Kubernetes canvas workload。"""
+        """Restart Kubernetes canvas workload."""
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
         service = WorkspaceCustomResourceService(self.db)
         service.request_canvas_restart(workspace.id)
 
     def _recreate_container(self, container_id: str, workspace_id: str, *, env_override: list[str] | None = None) -> Optional[str]:
-        """重新建立 Docker container（使用最新 image）
+        """Recreate docker container (use latest image)
 
-        停止並移除舊容器，以相同配置建立新容器，確保使用最新的 image 層。
+        Stop and remove old container, create new container with same configuration, ensure using latest image layers。
 
         Args:
             container_id: Container ID
-            workspace_id: Workspace ID (用於日誌)
-            env_override: 環境變數覆蓋列表（Docker 格式 ["KEY=VALUE", ...]）
+            workspace_id: Workspace ID (for logging)
+            env_override: Environment variable override list (Docker format ["KEY=VALUE", ...])
 
         Returns:
-            新容器的 ID，若失敗則為 None
+            New container ID, or None if failed
         """
         try:
             client = docker.from_env()
@@ -311,9 +311,9 @@ class WorkspaceLifecycleService:
             try:
                 container = client.containers.get(container_id)
             except docker.errors.NotFound:
-                logger.error(f"Container {container_id} 不存在")
-                self._log_event(workspace_id, "container_not_found", f"Container {container_id} 不存在")
-                raise ValueError(f"Container {container_id} 不存在")
+                logger.error(f"Container {container_id} does not exist")
+                self._log_event(workspace_id, "container_not_found", f"Container {container_id} does not exist")
+                raise ValueError(f"Container {container_id} does not exist")
 
             name = container.name
             attrs = container.attrs
@@ -323,18 +323,18 @@ class WorkspaceLifecycleService:
 
             logger.info(f"Recreating container {name} ({container_id[:12]}) with image {image}")
             self._log_event(workspace_id, "container_recreating",
-                            f"正在重建容器 {name}，使用最新 image: {image}")
+                            f"Rebuilding container {name}, use latest image: {image}")
 
-            # 取得網路配置
+            # GetNetworkConfiguration
             networks = attrs.get("NetworkSettings", {}).get("Networks", {})
             network_name = next(iter(networks), None)
 
-            # 停止並移除舊容器
+            # Stop and remove old container
             container.stop(timeout=10)
             container.remove(force=True)
             logger.info(f"Old container {container_id[:12]} removed")
 
-            # 建立 host_config（保留原始配置）
+            # Create host_config (preserve original configuration)
             log_cfg = host_config.get("LogConfig", {})
             restart_pol = host_config.get("RestartPolicy", {})
 
@@ -355,21 +355,21 @@ class WorkspaceLifecycleService:
 
             new_host_config = client.api.create_host_config(**hc_kwargs)
 
-            # 建立網路配置
+            # CreateNetworkConfiguration
             networking_config = None
             if network_name:
                 networking_config = client.api.create_networking_config({
                     network_name: client.api.create_endpoint_config()
                 })
 
-            # 解析 ExposedPorts 為 docker-py 格式
+            # Parse exposed ports to docker-py format
             exposed = config.get("ExposedPorts") or {}
             ports_list = []
             for port_key in exposed:
                 parts = port_key.split("/")
                 ports_list.append((int(parts[0]), parts[1] if len(parts) > 1 else "tcp"))
 
-            # 建立新容器（保留原始配置）
+            # Create new container (preserve original configuration)
             volumes_list = list((config.get("Volumes") or {}).keys()) or None
 
             container_dict = client.api.create_container(
@@ -385,75 +385,75 @@ class WorkspaceLifecycleService:
                 networking_config=networking_config,
             )
 
-            # 啟動新容器
+            # Start new container
             new_id = container_dict["Id"]
             client.api.start(new_id)
 
             logger.info(f"New container {new_id[:12]} created and started for workspace {workspace_id}")
             self._log_event(workspace_id, "container_recreated",
-                            f"新容器已建立: {new_id[:12]}")
+                            f"New container created: {new_id[:12]}")
 
             return new_id
 
         except docker.errors.APIError as e:
-            logger.error(f"Docker API 錯誤: {e}")
-            self._log_event(workspace_id, "container_error", f"Docker API 錯誤: {str(e)}")
+            logger.error(f"Docker API Error: {e}")
+            self._log_event(workspace_id, "container_error", f"Docker API Error: {str(e)}")
             raise
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Recreate container 失敗: {e}")
-            self._log_event(workspace_id, "container_error", f"Recreate container 失敗: {str(e)}")
+            logger.error(f"Recreate container Failed: {e}")
+            self._log_event(workspace_id, "container_error", f"Recreate container Failed: {str(e)}")
             raise
 
     def _stop_and_remove_container(self, container_id: str, workspace_id: str) -> None:
-        """停止並刪除 Docker container
+        """Stop and delete Docker container
 
         Args:
             container_id: Container ID
-            workspace_id: Workspace ID (用於日誌)
+            workspace_id: Workspace ID (for logging)
         """
         try:
             client = docker.from_env()
 
             try:
                 container = client.containers.get(container_id)
-                logger.debug(f"停止 container {container_id}")
+                logger.debug(f"Stop container {container_id}")
 
-                # 停止 container（給予 10 秒優雅關閉時間）
+                # Stop container (give 10 seconds graceful shutdown time)
                 container.stop(timeout=10)
-                logger.debug(f"Container {container_id} 已停止")
+                logger.debug(f"Container {container_id} stopped")
 
-                # 刪除 container
+                # Delete container
                 container.remove(force=True)
-                logger.info(f"Container {container_id} 已刪除")
+                logger.info(f"Container {container_id} deleted")
 
-                self._log_event(workspace_id, "container_removed", f"已刪除 container: {container_id}")
+                self._log_event(workspace_id, "container_removed", f"Deleted container: {container_id}")
 
             except docker.errors.NotFound:
-                logger.warning(f"Container {container_id} 不存在，可能已被刪除")
-                self._log_event(workspace_id, "container_not_found", f"Container {container_id} 不存在")
+                logger.warning(f"Container {container_id} does not exist，may have been deleted")
+                self._log_event(workspace_id, "container_not_found", f"Container {container_id} does not exist")
 
             except docker.errors.APIError as e:
-                logger.error(f"Docker API 錯誤: {e}")
-                self._log_event(workspace_id, "container_error", f"Docker API 錯誤: {str(e)}")
-                # 不拋出異常，繼續執行後續步驟
+                logger.error(f"Docker API Error: {e}")
+                self._log_event(workspace_id, "container_error", f"Docker API Error: {str(e)}")
+                # Do not raise exception, continue executing subsequent steps
 
         except Exception as e:
-            logger.error(f"停止/刪除 container 失敗: {e}")
-            self._log_event(workspace_id, "container_error", f"停止/刪除 container 失敗: {str(e)}")
-            # 不拋出異常，繼續執行後續步驟
+            logger.error(f"Stop/Delete container Failed: {e}")
+            self._log_event(workspace_id, "container_error", f"Stop/Delete container Failed: {str(e)}")
+            # Do not raise exception, continue executing subsequent steps
 
     def _cleanup_workspace_volumes(self, workspace_id: str) -> None:
-        """清理 workspace 掛載的資料目錄
+        """Clean up workspace mounted data directories
         
         Args:
             workspace_id: Workspace ID
         """
-        # 將 UUID 中的橫線替換為下底線
+        # Replace hyphens in UUID with underscores
         safe_workspace_id = workspace_id.replace('-', '_')
 
-        # 定義需要刪除的目錄
+        # Define directories to delete
         directories_to_remove = [
             Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id,
             Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id,
@@ -463,26 +463,26 @@ class WorkspaceLifecycleService:
         for directory in directories_to_remove:
             try:
                 if directory.exists():
-                    logger.debug(f"刪除目錄: {directory}")
+                    logger.debug(f"DeleteDirectory: {directory}")
                     shutil.rmtree(directory)
-                    logger.debug(f"成功刪除目錄: {directory}")
-                    self._log_event(workspace_id, "volume_removed", f"已刪除目錄: {directory}")
+                    logger.debug(f"SuccessDeleteDirectory: {directory}")
+                    self._log_event(workspace_id, "volume_removed", f"Deleted directory: {directory}")
                 else:
-                    logger.debug(f"目錄不存在: {directory}")
+                    logger.debug(f"Directorydoes not exist: {directory}")
                     
             except Exception as e:
-                logger.error(f"刪除目錄 {directory} 失敗: {e}")
-                self._log_event(workspace_id, "volume_error", f"刪除目錄失敗: {directory} - {str(e)}")
-                # 不拋出異常，繼續刪除其他目錄
+                logger.error(f"DeleteDirectory {directory} Failed: {e}")
+                self._log_event(workspace_id, "volume_error", f"DeleteDirectoryFailed: {directory} - {str(e)}")
+                # Do not raise exception, continue deleting other directories
 
     def _log_event(self, workspace_id: str, stage: str, message: str, metadata: Optional[dict] = None) -> None:
-        """記錄 workspace 操作日誌
+        """Record workspace operation log
 
         Args:
             workspace_id: Workspace ID
-            stage: 操作階段
-            message: 日誌訊息
-            metadata: 額外的元數據
+            stage: OperationPhase
+            message: Log message
+            metadata: Additional metadata
         """
         try:
             log_entry = db_models.WorkspaceRuntimeLog(
@@ -495,13 +495,13 @@ class WorkspaceLifecycleService:
             self.db.add(log_entry)
             self.db.commit()
         except Exception as e:
-            logger.error(f"記錄日誌失敗: {e}")
+            logger.error(f"Record logFailed: {e}")
             self.db.rollback()
-            # 不拋出異常，避免影響主流程
+            # Don't raise exception to avoid affecting main process
 
 
 def run_delete_workspace_task(workspace_id: str) -> None:
-    """背景任務入口：刪除 workspace
+    """Background task entry: Delete workspace
     
     Args:
         workspace_id: Workspace ID
@@ -517,7 +517,7 @@ def run_delete_workspace_task(workspace_id: str) -> None:
 
 
 def run_restart_workspace_task(workspace_id: str) -> None:
-    """背景任務入口：重啟 workspace container
+    """Background task entry: Restart workspace container
 
     Args:
         workspace_id: Workspace ID
@@ -533,7 +533,7 @@ def run_restart_workspace_task(workspace_id: str) -> None:
 
 
 def run_restart_browser_task(workspace_id: str) -> None:
-    """背景任務入口：重啟 Browser 容器
+    """Background task entry: Restart browser container
 
     Args:
         workspace_id: Workspace ID
@@ -549,7 +549,7 @@ def run_restart_browser_task(workspace_id: str) -> None:
 
 
 def run_restart_canvas_task(workspace_id: str) -> None:
-    """背景任務入口：重啟 Canvas 容器
+    """Background task entry: Restart canvas container
 
     Args:
         workspace_id: Workspace ID

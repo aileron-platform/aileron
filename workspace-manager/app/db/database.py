@@ -1,4 +1,4 @@
-"""資料庫連線和配置"""
+"""Database connection and configuration"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ settings = get_settings()
 
 
 def _create_engine() -> Engine:
-    """建立資料庫引擎，針對 SQLite 進行特殊處理"""
+    """Create database engine, special handling for SQLite"""
 
     database_url = settings.DATABASE_URL
     if database_url.startswith("sqlite"):
@@ -37,18 +37,18 @@ def _create_engine() -> Engine:
     )
 
 
-# 創建資料庫引擎
+# Create database engine
 engine = _create_engine()
 
-# 創建 Session
+# Create session
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# 創建 Base
+# Create base
 Base = declarative_base()
 
 
 def get_db() -> Generator[Session, None, None]:
-    """獲取資料庫 session"""
+    """GetDatabase session"""
     db = SessionLocal()
     try:
         yield db
@@ -57,12 +57,12 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
-    """創建資料庫表"""
-    from app.db import models  # noqa: F401 - 確保模型已載入
+    """Create database tables"""
+    from app.db import models  # noqa: F401 - Ensure models are loaded
 
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("資料庫表創建成功")
-    except Exception as exc:  # pragma: no cover - 真實錯誤需向外拋出
-        logger.error("資料庫表創建失敗: %s", exc)
+        logger.info("Database tables created successfully")
+    except Exception as exc:  # pragma: no cover - Real errors need to be raised
+        logger.error("Database table creation failed: %s", exc)
         raise

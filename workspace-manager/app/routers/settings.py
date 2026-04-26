@@ -1,4 +1,4 @@
-"""Settings API 路由"""
+"""Settings API Route"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def _translate_settings_error(translate, error: str, *, operation: str) -> str:
 @router.get(
     "/users/{user_id}/settings",
     response_model=UserSettingsResponse,
-    summary="取得使用者設定",
+    summary="GetUserSettings",
     responses=build_responses(404, 500),
 )
 def get_settings(
@@ -51,7 +51,7 @@ def get_settings(
 @router.put(
     "/users/{user_id}/settings",
     response_model=UserSettingsResponse,
-    summary="更新使用者設定",
+    summary="UpdateUserSettings",
     responses=build_responses(404, 422, 500),
 )
 async def update_settings(
@@ -61,7 +61,7 @@ async def update_settings(
     background_tasks: BackgroundTasks,
     service: SettingsService = Depends(get_settings_service),
 ) -> UserSettingsResponse:
-    # 1. 取得舊設定用於變更檢測
+    # 1. Get old settings for change detection
     old_settings = service.get_settings(user_id)
     if not old_settings:
         raise HTTPException(
@@ -69,7 +69,7 @@ async def update_settings(
             detail=request.state.translate("user.not_found")
         )
 
-    # 2. 更新資料庫設定（同步，立即完成）
+    # 2. Update database settings (sync, complete immediately)
     updated_settings = service.update_settings(user_id, payload)
     if not updated_settings:
         raise HTTPException(
@@ -77,11 +77,11 @@ async def update_settings(
             detail=request.state.translate("user.not_found")
         )
 
-    # 3. 檢測實際變更
+    # 3. Detect actual changes
     payload_data = payload.model_dump(exclude_unset=True, by_alias=True)
     changes = service.detect_setting_changes(old_settings, payload_data)
 
-    # 4. 如果有變更，背景同步到 workspace-runtime（非阻塞）
+    # 4. If changed, background sync to workspace-runtime (non-blocking)
     if changes:
         background_tasks.add_task(
             _sync_settings_to_runtimes,
@@ -89,13 +89,13 @@ async def update_settings(
             changes,
         )
 
-    # 5. 立即回應前端
+    # 5. Immediately respond to frontend
     return UserSettingsResponse(data=updated_settings)
 
 
 @router.post(
     "/users/{user_id}/settings/sync",
-    summary="同步設定到所有 Workspace",
+    summary="Sync settings to all workspaces",
     responses=build_responses(401, 403, 404, 500),
 )
 async def sync_settings_to_workspaces(
@@ -105,18 +105,18 @@ async def sync_settings_to_workspaces(
     service: SettingsService = Depends(get_settings_service),
     db: Session = Depends(get_db),
 ):
-    """手動同步設定到所有運行中的 workspace"""
+    """Manually sync settings to all running workspaces"""
     from app.services.sync_service import SyncService
     from app.db.models import User
 
-    # 檢查用戶權限
+    # Check user permission
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=request.state.translate("access_denied")
         )
 
-    # 取得用戶設定
+    # Get user settings
     user = db.get(User, user_id)
     if not user or not user.settings:
         raise HTTPException(
@@ -124,7 +124,7 @@ async def sync_settings_to_workspaces(
             detail=request.state.translate("user.settings_not_found")
         )
 
-    # 取得語言設定
+    # Get language settings
     language = getattr(request.state, "language", "zh-TW")
 
     try:
@@ -143,7 +143,7 @@ async def sync_settings_to_workspaces(
 
 @router.post(
     "/users/{user_id}/settings/sync/{workspace_id}",
-    summary="同步設定到指定 Workspace",
+    summary="Sync settings to specified workspace",
     responses=build_responses(401, 403, 404, 500),
 )
 async def sync_settings_to_workspace(
@@ -154,18 +154,18 @@ async def sync_settings_to_workspace(
     service: SettingsService = Depends(get_settings_service),
     db: Session = Depends(get_db),
 ):
-    """同步設定到指定的 workspace"""
+    """Sync settings to specified workspace"""
     from app.services.sync_service import SyncService
     from app.db.models import User, Workspace
 
-    # 檢查用戶權限
+    # Check user permission
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=request.state.translate("access_denied")
         )
 
-    # 取得用戶設定
+    # Get user settings
     user = db.get(User, user_id)
     if not user or not user.settings:
         raise HTTPException(
@@ -173,7 +173,7 @@ async def sync_settings_to_workspace(
             detail=request.state.translate("user.settings_not_found")
         )
 
-    # 取得 workspace 並檢查權限
+    # Get workspace and check permissions
     workspace = db.get(Workspace, workspace_id)
     if not workspace:
         raise HTTPException(
@@ -187,20 +187,15 @@ async def sync_settings_to_workspace(
             detail=request.state.translate("access_denied")
         )
 
-    # 取得語言設定
+    # Get language settings
     language = getattr(request.state, "language", "zh-TW")
 
     try:
         sync_result = await SyncService.sync_settings_to_runtime(workspace, user.settings, language)
 
-        # 檢查同步結果
+        # Check sync result
         return {
-            "success": not any(
-                not r["success"]
-                and "無" not in r["message"]
-                and "沒有" not in r["message"]
-                for r in sync_result.values()
-            ),
+            "success": all(r["success"] for r in sync_result.values()),
             "workspace_id": workspace.id,
             "workspace_name": workspace.name,
             "details": sync_result,
@@ -215,7 +210,7 @@ async def sync_settings_to_workspace(
 @router.post(
     "/users/{user_id}/ssh-keys/generate",
     response_model=SSHKeyPairResponse,
-    summary="產生並儲存 SSH Key Pair",
+    summary="Generate and save SSH key pair",
     responses=build_responses(404, 500),
 )
 def generate_ssh_keys(
@@ -223,7 +218,7 @@ def generate_ssh_keys(
     request: Request,
     service: SettingsService = Depends(get_settings_service),
 ) -> SSHKeyPairResponse:
-    """產生新的 SSH Key Pair 並自動儲存到使用者設定"""
+    """Generate new SSH key pair and automatically save to user settings"""
     try:
         ssh_keys = service.generate_and_save_ssh_keys(user_id)
         if not ssh_keys:
@@ -242,25 +237,25 @@ def generate_ssh_keys(
 
 
 async def _sync_settings_to_runtimes(user_id: str, changes: dict):
-    """背景任務：同步設定到所有 workspace-runtime"""
+    """Background task: Sync settings to all workspace-runtimes."""
     import logging
 
     logger = logging.getLogger(__name__)
-    logger.info(f"開始背景同步設定 - user_id: {user_id}, changes: {list(changes.keys())}")
+    logger.info(f"Starting background settings sync - user_id: {user_id}, changes: {list(changes.keys())}")
 
     db = SessionLocal()
     try:
-        # 創建新的資料庫連線用於背景任務
+        # Create new database connection for background task
         sync_service = RuntimeSyncService(db)
         result = await sync_service.sync_settings_to_runtimes(user_id, changes)
 
         if result["success"]:
-            logger.info(f"設定同步成功 - user_id: {user_id}, 成功: {result['success_count']}, 失敗: {result['error_count']}")
+            logger.info(f"Settings sync succeeded - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}")
         else:
-            logger.error(f"設定同步有錯誤 - user_id: {user_id}, 成功: {result['success_count']}, 失敗: {result['error_count']}")
+            logger.error(f"Settings sync had errors - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}")
 
     except Exception as e:
-        logger.error(f"背景同步設定失敗 - user_id: {user_id}, error: {e}")
+        logger.error(f"Background settings sync failed - user_id: {user_id}, error: {e}")
     finally:
         db.close()
 

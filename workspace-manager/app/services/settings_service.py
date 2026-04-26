@@ -1,4 +1,4 @@
-"""使用者設定服務"""
+"""UserSettingsService"""
 
 from __future__ import annotations
 
@@ -39,12 +39,12 @@ DEFAULT_PROVIDERS = [
 
 
 class SettingsService:
-    """處理使用者個人資料與設定"""
+    """Handle user personal data and settings"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    # -- 個人資料 ---------------------------------------------------------
+    # -- Personal data ---------------------------------------------------------
 
     def get_profile(self, user_id: str) -> Optional[UserProfile]:
         user = self.db.get(db_models.User, user_id)
@@ -71,7 +71,7 @@ class SettingsService:
         if payload.avatar_url is not None:
             user.avatar_url = payload.avatar_url
 
-        # 自動計算 display_name
+        # Auto-calculate display_name
         fn = user.first_name or ""
         ln = user.last_name or ""
         user.display_name = f"{fn} {ln}".strip() or user.username
@@ -81,7 +81,7 @@ class SettingsService:
         self.db.refresh(user)
         return self.get_profile(user_id)
 
-    # -- 使用者設定 -------------------------------------------------------
+    # -- UserSettings -------------------------------------------------------
 
     def get_settings(self, user_id: str) -> Optional[UserSettings]:
         user = self.db.get(db_models.User, user_id)
@@ -106,7 +106,7 @@ class SettingsService:
             settings.general_settings = self._merge_dict(
                 settings.general_settings or {}, data["general"]
             )
-            # 標記 JSONB 欄位已修改
+            # Mark JSONB column as modified
             flag_modified(settings, "general_settings")
 
         if "ssh" in data and isinstance(data["ssh"], dict):
@@ -124,10 +124,10 @@ class SettingsService:
                         last_rotated_at.replace("Z", "+00:00")
                     )
                 except (ValueError, TypeError):
-                    # 如果日期格式錯誤，保持原值
+                    # If date format error, keep original value
                     pass
 
-            # 如果 SSH key 有變更，同步寫入檔案系統
+            # If SSH key changed, sync to file system
             if (settings.ssh_private_key != old_private_key or
                 settings.ssh_public_key != old_public_key):
                 if settings.ssh_private_key and settings.ssh_public_key:
@@ -137,25 +137,25 @@ class SettingsService:
                             settings.ssh_public_key
                         )
                     except Exception as e:
-                        logger.warning(f"無法將 SSH key 寫入檔案系統: {e}")
+                        logger.warning(f"Failed to write SSH key to filesystem: {e}")
 
         if "claudeCode" in data and isinstance(data["claudeCode"], dict):
             claude_data = data["claudeCode"]
 
-            # 處理基本設定
+            # Handle basic settings
             if "authKey" in claude_data:
                 settings.claude_auth_key = claude_data["authKey"]
-            # 統一使用 model 欄位,但也支援舊的 selectedModel
+            # Unify use model column, but also support legacy selectedModel
             if "model" in claude_data:
                 settings.claude_selected_model = claude_data["model"]
             if "selectedProvider" in claude_data:
                 settings.claude_selected_provider = claude_data["selectedProvider"]
 
-            # 處理新的設定欄位，存儲在additional_settings中
+            # Handle new settings column, stored in additional_settings
             additional_settings = settings.additional_settings or {}
             claude_additional = additional_settings.get("claudeCode", {})
 
-            # 更新新的ClaudeCode設定欄位
+            # Update new ClaudeCodeSettings column
             if "authMethod" in claude_data:
                 claude_additional["authMethod"] = claude_data["authMethod"]
             if "subscriptionAuthCode" in claude_data:
@@ -179,7 +179,7 @@ class SettingsService:
 
             additional_settings["claudeCode"] = claude_additional
             settings.additional_settings = additional_settings
-            # 標記 JSONB 欄位已修改
+            # Mark JSONB column as modified
             flag_modified(settings, "additional_settings")
 
         if "git" in data and isinstance(data["git"], dict):
@@ -197,15 +197,15 @@ class SettingsService:
         return self._build_user_settings(settings)
 
     def detect_setting_changes(self, old_settings: UserSettings, new_data: dict) -> dict:
-        """檢測哪些設定實際發生變更"""
+        """Detect which settings actually changed"""
         changes = {}
 
-        # 檢測 SSH 設定變更
+        # Detect SSH settings changes
         if "ssh" in new_data:
             ssh_data = new_data["ssh"]
             old_ssh = old_settings.ssh
 
-            # 比較 SSH 金鑰是否有變更
+            # Compare if SSH keys changed
             if (ssh_data.get("privateKey") != old_ssh.private_key or
                 ssh_data.get("publicKey") != old_ssh.public_key):
                 changes["ssh"] = {
@@ -213,33 +213,33 @@ class SettingsService:
                     "publicKey": ssh_data.get("publicKey")
                 }
 
-        # 檢測 Claude Code 設定變更
+        # Detect Claude Code settings changes
         if "claudeCode" in new_data:
             claude_data = new_data["claudeCode"]
             old_claude = old_settings.claude_code
 
-            # 檢查是否有任何變更
+            # Check if there are any changes
             has_changes = False
             claude_changes = {}
 
-            # 比較認證方式
+            # Compare authentication method
             if claude_data.get("authMethod") != old_claude.auth_method:
                 has_changes = True
                 claude_changes["authMethod"] = claude_data.get("authMethod")
 
-            # 比較 OAuth tokens
+            # Compare OAuth tokens
             if claude_data.get("subscriptionAccessToken") != old_claude.subscription_access_token:
                 has_changes = True
                 claude_changes["subscriptionAccessToken"] = claude_data.get("subscriptionAccessToken")
                 claude_changes["subscriptionRefreshToken"] = claude_data.get("subscriptionRefreshToken")
                 claude_changes["subscriptionExpiresAt"] = claude_data.get("subscriptionExpiresAt")
 
-            # 比較 API Key
+            # Compare API Key
             if claude_data.get("authKey") != old_claude.auth_key:
                 has_changes = True
                 claude_changes["authKey"] = claude_data.get("authKey")
 
-            # 比較環境變數
+            # CompareEnvironmentVariable
             new_env_vars = claude_data.get("environmentVariables", [])
             old_env_vars = old_claude.environment_variables
             if self._env_vars_changed(old_env_vars, new_env_vars):
@@ -249,12 +249,12 @@ class SettingsService:
             if has_changes:
                 changes["claudeCode"] = claude_changes
 
-        # 檢測 Git 設定變更
+        # Detect Git settings changes
         if "git" in new_data:
             git_data = new_data["git"]
             old_git = old_settings.git
 
-            # 比較 Git 使用者資訊是否有變更
+            # Compare if Git user information changed
             if (git_data.get("userName") != old_git.user_name or
                 git_data.get("userEmail") != old_git.user_email):
                 changes["git"] = {
@@ -265,17 +265,17 @@ class SettingsService:
         return changes
 
     def _env_vars_changed(self, old_vars: list, new_vars: list) -> bool:
-        """比較環境變數列表是否有變更"""
+        """Compare if environment variable list changed"""
         if len(old_vars) != len(new_vars):
             return True
 
-        # 轉換為字典以便比較
+        # Convert to dictionary for comparison
         old_dict = {var.key: var.value for var in old_vars}
         new_dict = {var.get("key"): var.get("value") for var in new_vars if var.get("key")}
 
         return old_dict != new_dict
 
-    # -- 私有函式 ---------------------------------------------------------
+    # -- Private functions ---------------------------------------------------------
 
     def _get_or_create_settings(self, user: db_models.User) -> db_models.UserSetting:
         settings = user.settings
@@ -307,18 +307,18 @@ class SettingsService:
 
         claude_models = self._list_active_models()
 
-        # 從additional_settings中讀取新的ClaudeCode設定
+        # Read new ClaudeCodeSettings from additional_settings
         additional_settings = settings.additional_settings or {}
         claude_additional = additional_settings.get("claudeCode", {})
 
-        # 處理 oauthAccount
+        # Handle oauthAccount
         oauth_account = None
         oauth_account_data = claude_additional.get("oauthAccount")
         if oauth_account_data:
             from app.models.settings import OAuthAccountInfo
             oauth_account = OAuthAccountInfo(**oauth_account_data)
 
-        # 處理 subscription_expires_at：將空字符串轉換為 None
+        # Handle subscription_expires_at: convert empty string to None
         subscription_expires_at = claude_additional.get("subscriptionExpiresAt")
         if subscription_expires_at == "":
             subscription_expires_at = None
@@ -329,7 +329,7 @@ class SettingsService:
             selected_provider=settings.claude_selected_provider,
             available_models=claude_models,
             available_providers=DEFAULT_PROVIDERS,
-            # 新增的設定欄位
+            # Added settings column
             auth_method=claude_additional.get("authMethod", "subscription"),
             subscription_auth_code=claude_additional.get("subscriptionAuthCode") or None,
             subscription_access_token=claude_additional.get("subscriptionAccessToken") or None,
@@ -375,21 +375,21 @@ class SettingsService:
                 merged[key] = value
         return merged
 
-    # -- SSH Key 管理 -----------------------------------------------------
+    # -- SSH Key management -----------------------------------------------------
 
     def generate_and_save_ssh_keys(self, user_id: str) -> Optional[SSHKeyPairResponse]:
-        """產生新的 SSH Key Pair 並儲存到使用者設定"""
+        """Generate new SSH key pair and save to user settings"""
         user = self.db.get(db_models.User, user_id)
         if not user:
             return None
 
-        # 產生 SSH Key Pair
+        # Generate SSH key pair
         private_key, public_key = self._generate_ssh_key_pair()
 
-        # 計算 fingerprint
+        # Calculate fingerprint
         fingerprint = self._calculate_ssh_fingerprint(public_key)
 
-        # 儲存到資料庫
+        # Save to database
         settings = self._get_or_create_settings(user)
         settings.ssh_private_key = private_key
         settings.ssh_public_key = public_key
@@ -399,13 +399,13 @@ class SettingsService:
         self.db.commit()
         self.db.refresh(settings)
 
-        # 同時將 SSH key 寫入到 workspace-manager 的 ~/.ssh 目錄
-        # 這樣 workspace-manager 可以使用這些 key 來 clone 私有倉庫
+        # Also write SSH key to workspace-manager's ~/.ssh directory
+        # So workspace-manager can use these keys to clone private repositories
         try:
             self._write_ssh_keys_to_filesystem(private_key, public_key)
         except Exception as e:
-            logger.warning(f"無法將 SSH key 寫入檔案系統: {e}")
-            # 不影響主要流程，繼續執行
+            logger.warning(f"Failed to write SSH key to filesystem: {e}")
+            # Do not affect main process, continue execution
 
         return SSHKeyPairResponse(
             public_key=public_key,
@@ -416,16 +416,16 @@ class SettingsService:
 
     @staticmethod
     def _generate_ssh_key_pair() -> tuple[str, str]:
-        """使用 ssh-keygen 產生 SSH Key Pair"""
+        """Generate SSH key pair using ssh-keygen"""
         with tempfile.TemporaryDirectory() as tmpdir:
             key_path = Path(tmpdir) / "id_rsa"
 
-            # 使用 ssh-keygen 產生金鑰
-            # -t rsa: 使用 RSA 演算法
-            # -b 4096: 4096 位元金鑰長度
-            # -f: 指定輸出檔案
-            # -N "": 不設定密碼
-            # -C: 註解（使用時間戳記）
+            # Use ssh-keygen to generate keys
+            # -t rsa: Use RSA algorithm
+            # -b 4096: 4096-bit key length
+            # -f: Specify output file
+            # -N "": No password
+            # -C: Comment (use timestamp)
             subprocess.run(
                 [
                     "ssh-keygen",
@@ -440,18 +440,18 @@ class SettingsService:
                 text=True,
             )
 
-            # 讀取私鑰
+            # Read private key
             private_key = key_path.read_text()
 
-            # 讀取公鑰
+            # Read public key
             public_key = (key_path.with_suffix(".pub")).read_text().strip()
 
             return private_key, public_key
 
     @staticmethod
     def _calculate_ssh_fingerprint(public_key: str) -> str:
-        """計算 SSH 公鑰的 fingerprint (SHA256)"""
-        # 取得公鑰的 base64 部分
+        """Calculate SSH public key fingerprint (SHA256)"""
+        # Get base64 part of public key
         parts = public_key.split()
         if len(parts) < 2:
             return ""
@@ -459,10 +459,10 @@ class SettingsService:
         import base64
         key_data = base64.b64decode(parts[1])
 
-        # 計算 SHA256 hash
+        # Calculate SHA256 hash
         sha256_hash = hashlib.sha256(key_data).digest()
 
-        # 轉換為 base64 並移除 padding
+        # Convert to base64 and remove padding
         fingerprint = base64.b64encode(sha256_hash).decode().rstrip("=")
 
         return f"SHA256:{fingerprint}"
@@ -470,41 +470,41 @@ class SettingsService:
     @staticmethod
     def _write_ssh_keys_to_filesystem(private_key: str, public_key: str) -> None:
         """
-        將 SSH key 寫入到 workspace-manager 的檔案系統
+        Write SSH keys to workspace-manager filesystem
 
-        這樣 workspace-manager 可以使用這些 key 來認證 Git 操作
+        This allows workspace-manager to use these keys for Git authentication
 
         Args:
-            private_key: SSH 私鑰內容
-            public_key: SSH 公鑰內容
+            private_key: SSH private key content
+            public_key: SSH public key content
         """
-        # 確定 SSH 目錄路徑
+        # Determine SSH directory path
         ssh_dir = Path.home() / ".ssh"
         ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-        # 寫入私鑰
+        # Write private key
         private_key_path = ssh_dir / "id_rsa"
         private_key_content = private_key
         if not private_key_content.endswith('\n'):
             private_key_content += '\n'
         private_key_path.write_text(private_key_content)
         private_key_path.chmod(0o600)
-        logger.info(f"SSH 私鑰已寫入: {private_key_path}")
+        logger.info(f"SSH private key written: {private_key_path}")
 
-        # 寫入公鑰
+        # Write public key
         public_key_path = ssh_dir / "id_rsa.pub"
         public_key_content = public_key
         if not public_key_content.endswith('\n'):
             public_key_content += '\n'
         public_key_path.write_text(public_key_content)
         public_key_path.chmod(0o644)
-        logger.info(f"SSH 公鑰已寫入: {public_key_path}")
+        logger.info(f"SSH public key written: {public_key_path}")
 
-        # 設定 known_hosts（避免首次連線時的提示）
+        # Configure known_hosts (avoid prompts on first connection)
         known_hosts_path = ssh_dir / "known_hosts"
         if not known_hosts_path.exists():
             known_hosts_path.touch(mode=0o644)
-            logger.info(f"已建立 known_hosts: {known_hosts_path}")
+            logger.info(f"Created known_hosts: {known_hosts_path}")
 
 
 __all__ = ["SettingsService"]

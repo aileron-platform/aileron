@@ -1,4 +1,4 @@
-"""Runtime 同步服務 - 負責將設定同步到 workspace-runtime"""
+"""Runtime synchronization service - Responsible for syncing settings to workspace-runtime"""
 
 from __future__ import annotations
 
@@ -16,25 +16,25 @@ logger = logging.getLogger(__name__)
 
 
 class RuntimeSyncService:
-    """Runtime 同步服務"""
+    """Runtime synchronization service"""
 
     def __init__(self, db: Session):
         self.db = db
-        self.internal_api_token = "dev-internal-token"  # TODO: 從設定檔讀取
+        self.internal_api_token = "dev-internal-token"  # TODO: Read from settings file
         self.timeout = 30.0
 
     async def sync_settings_to_runtimes(self, user_id: str, changes: dict) -> Dict[str, any]:
-        """同步設定到所有相關的 workspace-runtime"""
-        logger.info(f"開始同步設定到 runtime，user_id: {user_id}, changes: {list(changes.keys())}")
+        """Sync settings to all related workspace-runtimes"""
+        logger.info(f"Begin syncing settings to runtime, user_id: {user_id}, changes: {list(changes.keys())}")
 
-        # 取得使用者的所有 workspace-runtime
+        # Get all workspace-runtimes for user
         runtimes = await self._get_user_workspace_runtimes(user_id)
 
         if not runtimes:
-            logger.warning(f"未找到 user {user_id} 的 workspace-runtime")
+            logger.warning(f"No workspace-runtime found for user {user_id}")
             return {"success": True, "synced_runtimes": 0, "total_tasks": 0, "results": []}
 
-        # 並發呼叫所有 runtime
+        # Concurrently call all runtimes
         tasks = []
         for runtime in runtimes:
             runtime_tasks = []
@@ -54,25 +54,25 @@ class RuntimeSyncService:
                     self._sync_git_settings(runtime["url"], changes["git"], runtime["workspace_id"])
                 )
 
-            # 將每個 runtime 的所有任務組合
+            # Combine all tasks from each runtime
             if runtime_tasks:
                 tasks.extend(runtime_tasks)
 
         if not tasks:
-            logger.info("沒有需要同步的變更")
+            logger.info("No changes to sync")
             return {"success": True, "synced_runtimes": len(runtimes), "total_tasks": 0, "results": []}
 
-        # 等待所有同步完成
+        # Wait for all syncs to complete
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 分析結果
+        # Analyze results
         success_count = 0
         error_count = 0
         detailed_results = []
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error(f"同步任務 {i} 失敗: {result}")
+                logger.error(f"Sync task {i} failed: {result}")
                 error_count += 1
                 detailed_results.append({
                     "task_index": i,
@@ -80,7 +80,7 @@ class RuntimeSyncService:
                     "error": str(result)
                 })
             else:
-                logger.info(f"同步任務 {i} 成功: {result}")
+                logger.info(f"Sync task {i} succeeded: {result}")
                 success_count += 1
                 detailed_results.append({
                     "task_index": i,
@@ -98,8 +98,8 @@ class RuntimeSyncService:
         }
 
     async def _get_running_runtimes(self) -> List[Dict[str, str]]:
-        """取得所有運行中的 workspace-runtime 資訊"""
-        # 查詢所有運行中的 workspace
+        """Get all running workspace-runtime information"""
+        # Query all running workspaces
         stmt = (
             select(db_models.Workspace)
             .where(db_models.Workspace.runtime_status == "running")
@@ -115,12 +115,12 @@ class RuntimeSyncService:
                     "url": workspace.runtime_external_url
                 })
 
-        logger.info(f"找到 {len(runtimes)} 個運行中的 workspace-runtime")
+        logger.info(f"Found {len(runtimes)} running workspace-runtimes")
         return runtimes
 
     async def _get_user_workspace_runtimes(self, user_id: str) -> List[Dict[str, str]]:
-        """取得使用者的所有 workspace-runtime 資訊"""
-        # 查詢使用者的所有 workspace
+        """Get all workspace-runtime information for user"""
+        # Query all workspaces for user
         stmt = (
             select(db_models.Workspace)
             .where(db_models.Workspace.owner_id == user_id)
@@ -137,11 +137,11 @@ class RuntimeSyncService:
                     "url": workspace.runtime_external_url
                 })
 
-        logger.info(f"找到 {len(runtimes)} 個運行中的 workspace-runtime")
+        logger.info(f"Found {len(runtimes)} running workspace-runtimes")
         return runtimes
 
     async def _sync_ssh_keys(self, runtime_url: str, ssh_data: dict, workspace_id: str) -> Dict[str, any]:
-        """同步 SSH Keys 到指定的 runtime"""
+        """Sync SSH keys to specified runtime"""
         url = f"{runtime_url}/internal/settings/ssh-keys"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
@@ -156,7 +156,7 @@ class RuntimeSyncService:
                 response.raise_for_status()
                 result = response.json()
 
-            logger.info(f"SSH Keys 同步成功 - workspace: {workspace_id}")
+            logger.info(f"SSH keys sync succeeded - workspace: {workspace_id}")
             return {
                 "type": "ssh_keys",
                 "workspace_id": workspace_id,
@@ -166,11 +166,11 @@ class RuntimeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"SSH Keys 同步失敗 - workspace: {workspace_id}, error: {e}")
+            logger.error(f"SSH keys sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"SSH sync failed for {workspace_id}: {e}")
 
     async def _sync_claude_code(self, runtime_url: str, claude_data: dict, workspace_id: str) -> Dict[str, any]:
-        """同步 Claude Code 設定到指定的 runtime"""
+        """Sync Claude Code settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/claude-code"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
@@ -189,7 +189,7 @@ class RuntimeSyncService:
                 response.raise_for_status()
                 result = response.json()
 
-            logger.info(f"Claude Code 同步成功 - workspace: {workspace_id}")
+            logger.info(f"Claude Code sync succeeded - workspace: {workspace_id}")
             return {
                 "type": "claude_code",
                 "workspace_id": workspace_id,
@@ -199,11 +199,11 @@ class RuntimeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Claude Code 同步失敗 - workspace: {workspace_id}, error: {e}")
+            logger.error(f"Claude Code sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Claude Code sync failed for {workspace_id}: {e}")
 
     async def _sync_git_settings(self, runtime_url: str, git_data: dict, workspace_id: str) -> Dict[str, any]:
-        """同步 Git 設定到指定的 runtime"""
+        """Sync Git settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/git"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
@@ -218,7 +218,7 @@ class RuntimeSyncService:
                 response.raise_for_status()
                 result = response.json()
 
-            logger.info(f"Git 設定同步成功 - workspace: {workspace_id}")
+            logger.info(f"Git settings sync succeeded - workspace: {workspace_id}")
             return {
                 "type": "git_settings",
                 "workspace_id": workspace_id,
@@ -228,23 +228,23 @@ class RuntimeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Git 設定同步失敗 - workspace: {workspace_id}, error: {e}")
+            logger.error(f"Git settings sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Git sync failed for {workspace_id}: {e}")
 
     async def sync_firewall_to_runtime(
         self, workspace_id: str, firewall_config: dict
     ) -> Dict[str, any]:
-        """同步防火牆設定到指定 workspace 的 runtime"""
-        logger.info(f"開始同步防火牆設定到 workspace: {workspace_id}")
+        """Sync firewall settings to specified workspace runtime"""
+        logger.info(f"Begin syncing firewall settings to workspace: {workspace_id}")
 
-        # 獲取 workspace 的 runtime URL
+        # Get workspace runtime URL
         runtimes = await self._get_running_runtimes()
         target_runtime = next(
             (r for r in runtimes if r["workspace_id"] == workspace_id), None
         )
 
         if not target_runtime:
-            logger.warning(f"Workspace {workspace_id} 的 runtime 未運行，跳過同步")
+            logger.warning(f"Runtime of workspace {workspace_id} is not running, skip sync")
             return {
                 "type": "firewall",
                 "workspace_id": workspace_id,
@@ -259,7 +259,7 @@ class RuntimeSyncService:
     async def _sync_firewall(
         self, runtime_url: str, firewall_data: dict, workspace_id: str
     ) -> Dict[str, any]:
-        """同步防火牆設定到指定的 runtime"""
+        """Sync firewall settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/firewall"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
@@ -282,7 +282,7 @@ class RuntimeSyncService:
                 response.raise_for_status()
                 result = response.json()
 
-            logger.info(f"防火牆設定同步成功 - workspace: {workspace_id}")
+            logger.info(f"Firewall settings sync succeeded - workspace: {workspace_id}")
             return {
                 "type": "firewall",
                 "workspace_id": workspace_id,
@@ -294,7 +294,7 @@ class RuntimeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"防火牆設定同步失敗 - workspace: {workspace_id}, error: {e}")
+            logger.error(f"Firewall settings sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Firewall sync failed for {workspace_id}: {e}")
 
 

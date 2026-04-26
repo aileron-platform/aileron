@@ -1,4 +1,4 @@
-"""模板 Agents 檔案管理服務"""
+"""Template agents file management service"""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateAgentsService(TemplateBaseService):
-    """處理模板的 Agents 檔案管理"""
+    """Handle template agents file management"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
     def get_agents_files(self, template_id: str) -> TemplateAgentListResponse:
-        """取得模板的 agents 檔案列表"""
+        """Get template agents file list"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateAgentListResponse,
@@ -52,7 +52,7 @@ class TemplateAgentsService(TemplateBaseService):
                 message=f"Found {len(files)} agent files",
             )
         except Exception as e:
-            logger.error(f"讀取 agents 檔案列表失敗: {e}")
+            logger.error(f"Failed to read agents file list: {e}")
             return TemplateAgentListResponse(
                 success=False,
                 data=[],
@@ -60,7 +60,7 @@ class TemplateAgentsService(TemplateBaseService):
             )
 
     def get_agent_file_content(self, template_id: str, file_name: str) -> TemplateAgentResponse:
-        """取得單個 agent 檔案內容"""
+        """GetSingle agent FileContent"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateAgentResponse,
@@ -81,15 +81,15 @@ class TemplateAgentsService(TemplateBaseService):
                 message="Agent file loaded successfully",
             )
         except Exception as e:
-            logger.error(f"讀取 agent 檔案內容失敗: {e}")
+            logger.error(f"Read agent FileContentFailed: {e}")
             return TemplateAgentResponse(
                 success=False,
                 error=f"Failed to read agent file: {str(e)}",
             )
 
     def create_agent_file(self, template_id: str, request: TemplateAgentCreateRequest) -> TemplateAgentResponse:
-        """建立新的 agent 檔案"""
-        # 標準化檔案名稱（自動補上 .md）
+        """Create new agent file"""
+        # Standardize file name (auto-append .md)
         normalized_file_name = self._normalize_file_name(request.file_name)
 
         _, error_response = self._validate_template_and_filename(
@@ -114,7 +114,7 @@ class TemplateAgentsService(TemplateBaseService):
             if error_message:
                 return TemplateAgentResponse(success=False, error=error_message)
 
-            # 更新 plugin.json
+            # Update plugin.json
             self._update_plugin_json(template_id)
 
             return TemplateAgentResponse(
@@ -123,14 +123,14 @@ class TemplateAgentsService(TemplateBaseService):
                 message="Agent file created successfully",
             )
         except Exception as e:
-            logger.error(f"建立 agent 檔案失敗: {e}")
+            logger.error(f"Create agent FileFailed: {e}")
             return TemplateAgentResponse(
                 success=False,
                 error=f"Failed to create agent file: {str(e)}",
             )
 
     def update_agent_file(self, template_id: str, file_name: str, request: TemplateAgentUpdateRequest) -> TemplateAgentResponse:
-        """更新現有的 agent 檔案"""
+        """Update existing agent file"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateAgentResponse,
@@ -158,14 +158,14 @@ class TemplateAgentsService(TemplateBaseService):
                 message="Agent file updated successfully",
             )
         except Exception as e:
-            logger.error(f"更新 agent 檔案失敗: {e}")
+            logger.error(f"Update agent FileFailed: {e}")
             return TemplateAgentResponse(
                 success=False,
                 error=f"Failed to update agent file: {str(e)}",
             )
 
     def delete_agent_file(self, template_id: str, file_name: str) -> TemplateAgentResponse:
-        """刪除 agent 檔案"""
+        """Delete agent File"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateAgentResponse,
@@ -181,7 +181,7 @@ class TemplateAgentsService(TemplateBaseService):
         try:
             agent_file.unlink()
 
-            # 更新 plugin.json
+            # Update plugin.json
             self._update_plugin_json(template_id)
 
             return TemplateAgentResponse(
@@ -189,14 +189,14 @@ class TemplateAgentsService(TemplateBaseService):
                 message="Agent file deleted successfully",
             )
         except Exception as e:
-            logger.error(f"刪除 agent 檔案失敗: {e}")
+            logger.error(f"Delete agent FileFailed: {e}")
             return TemplateAgentResponse(
                 success=False,
                 error=f"Failed to delete agent file: {str(e)}",
             )
 
     def load_agents(self, template_id: str) -> List:
-        """載入 Agents 配置"""
+        """Load Agents Configuration"""
         from app.models.template import TemplateAgent
 
         agents_dir = self._get_template_dir(template_id) / "agents"
@@ -208,7 +208,7 @@ class TemplateAgentsService(TemplateBaseService):
             for file_path in agents_dir.glob("*.md"):
                 content = file_path.read_text(encoding="utf-8")
 
-                # 提取 description
+                # Extract description
                 description = self._extract_yaml_description(content)
 
                 agents.append(TemplateAgent(
@@ -220,7 +220,7 @@ class TemplateAgentsService(TemplateBaseService):
 
             return agents
         except Exception as e:
-            logger.error(f"載入 Agents 配置失敗: {e}")
+            logger.error(f"Load Agents ConfigurationFailed: {e}")
             return []
 
 

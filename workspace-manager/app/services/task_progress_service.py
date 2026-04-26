@@ -1,4 +1,4 @@
-"""任務進度追蹤服務"""
+"""Task progress tracking service"""
 
 import logging
 import uuid
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskStatus(str, Enum):
-    """任務狀態"""
+    """TaskStatus"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -21,7 +21,7 @@ class TaskStatus(str, Enum):
 
 @dataclass
 class TaskProgress:
-    """任務進度信息"""
+    """Task progress information"""
     task_id: str
     status: TaskStatus = TaskStatus.PENDING
     progress: int = 0  # 0-100
@@ -33,7 +33,7 @@ class TaskProgress:
     result: Optional[Dict] = None
 
     def to_dict(self) -> Dict:
-        """轉換為字典"""
+        """Convert to dictionary"""
         return {
             "task_id": self.task_id,
             "status": self.status.value,
@@ -48,20 +48,20 @@ class TaskProgress:
 
 
 class TaskProgressService:
-    """任務進度管理服務"""
+    """Task progress management service"""
 
     def __init__(self):
         self._tasks: Dict[str, TaskProgress] = {}
 
     def create_task(self, task_type: str = "default") -> str:
-        """建立新任務並返回任務 ID"""
+        """Create new task and return task ID"""
         task_id = str(uuid.uuid4())
         self._tasks[task_id] = TaskProgress(task_id=task_id)
-        logger.info(f"建立任務: {task_id}")
+        logger.info(f"CreateTask: {task_id}")
         return task_id
 
     def get_progress(self, task_id: str) -> Optional[TaskProgress]:
-        """取得任務進度"""
+        """Get task progress"""
         return self._tasks.get(task_id)
 
     def update_progress(
@@ -71,9 +71,9 @@ class TaskProgressService:
         message: str = "",
         status: Optional[TaskStatus] = None,
     ) -> bool:
-        """更新任務進度"""
+        """Update task progress"""
         if task_id not in self._tasks:
-            logger.warning(f"任務不存在: {task_id}")
+            logger.warning(f"Task does not exist: {task_id}")
             return False
 
         task = self._tasks[task_id]
@@ -87,11 +87,11 @@ class TaskProgressService:
             elif status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
                 task.completed_at = datetime.utcnow()
 
-        logger.debug(f"更新任務進度: {task_id} - {task.progress}%")
+        logger.debug(f"Update task progress: {task_id} - {task.progress}%")
         return True
 
     def set_error(self, task_id: str, error: str) -> bool:
-        """設定任務錯誤"""
+        """Set task error"""
         if task_id not in self._tasks:
             return False
 
@@ -99,11 +99,11 @@ class TaskProgressService:
         task.error = error
         task.status = TaskStatus.FAILED
         task.completed_at = datetime.utcnow()
-        logger.error(f"任務失敗: {task_id} - {error}")
+        logger.error(f"Task failed: {task_id} - {error}")
         return True
 
     def set_completed(self, task_id: str, result: Optional[Dict] = None) -> bool:
-        """標記任務為完成"""
+        """Mark task as completed"""
         if task_id not in self._tasks:
             return False
 
@@ -112,11 +112,11 @@ class TaskProgressService:
         task.progress = 100
         task.completed_at = datetime.utcnow()
         task.result = result
-        logger.info(f"任務完成: {task_id}")
+        logger.info(f"Task completed: {task_id}")
         return True
 
     def cleanup_old_tasks(self, max_age_seconds: int = 3600) -> int:
-        """清理舊任務（預設 1 小時）"""
+        """Clean up old tasks (default 1 hour)"""
         now = datetime.utcnow()
         to_delete = []
 
@@ -130,17 +130,17 @@ class TaskProgressService:
             del self._tasks[task_id]
 
         if to_delete:
-            logger.info(f"清理了 {len(to_delete)} 個舊任務")
+            logger.info(f"Cleaned up {len(to_delete)} old tasks")
 
         return len(to_delete)
 
 
-# 全局任務進度服務實例
+# Global task progress service instance
 _task_progress_service: Optional[TaskProgressService] = None
 
 
 def get_task_progress_service() -> TaskProgressService:
-    """取得全局任務進度服務實例"""
+    """Get global task progress service instance"""
     global _task_progress_service
     if _task_progress_service is None:
         _task_progress_service = TaskProgressService()

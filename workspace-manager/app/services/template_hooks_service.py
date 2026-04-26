@@ -1,4 +1,4 @@
-"""模板 Hooks 配置服務"""
+"""Template Hooks ConfigurationService"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateHooksService(TemplateBaseService):
-    """處理模板的 Hooks 配置管理"""
+    """Handle template hooks configuration management"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
@@ -25,7 +25,7 @@ class TemplateHooksService(TemplateBaseService):
         return self._resolve_template_dir(template_id) / "hooks"
 
     def get_hooks_config(self, template_id: str) -> Optional[HooksConfigResponse]:
-        """取得模板的 Hooks 配置"""
+        """Get template hooks configuration"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None
@@ -59,13 +59,13 @@ class TemplateHooksService(TemplateBaseService):
                 )
             return HooksConfigResponse(template_id=template_id, hooks=hooks_map)
         except Exception as e:
-            logger.error(f"讀取 Hooks 配置失敗: {e}")
+            logger.error(f"Failed to read hooks configuration: {e}")
             return HooksConfigResponse(template_id=template_id, hooks={})
 
     def update_hooks_config(
         self, template_id: str, payload: HooksConfigUpdateRequest
     ) -> Optional[HooksConfigResponse]:
-        """更新模板的 Hooks 配置"""
+        """Update template hooks configuration"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None
@@ -93,14 +93,14 @@ class TemplateHooksService(TemplateBaseService):
                             yaml.safe_dump(hook_payload, allow_unicode=True, sort_keys=False),
                             encoding="utf-8",
                         )
-            logger.info(f"已更新模板 {template_id} 的 Hooks 配置")
+            logger.info(f"Updated hooks configuration for template {template_id}")
             return HooksConfigResponse(template_id=template_id, hooks=payload.hooks)
         except Exception as e:
-            logger.error(f"更新 Hooks 配置失敗: {e}")
+            logger.error(f"Failed to update hooks configuration: {e}")
             raise
 
     def load_hooks(self, template_id: str) -> List:
-        """載入 Hooks 配置"""
+        """Load Hooks Configuration"""
         from app.models.template import TemplateHook
 
         hooks_dir = self._get_hooks_dir(template_id)
@@ -127,7 +127,7 @@ class TemplateHooksService(TemplateBaseService):
 
             return hooks
         except Exception as e:
-            logger.error(f"載入 Hooks 配置失敗: {e}")
+            logger.error(f"Load Hooks ConfigurationFailed: {e}")
             return []
 
 

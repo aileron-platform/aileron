@@ -1,7 +1,7 @@
 """
-應用程式配置設定
+Application configuration settings
 
-支援多環境配置，從環境變數或 .env 檔案載入設定
+Supports multi-environment configuration, loading settings from environment variables or .env files
 """
 
 import json
@@ -14,58 +14,58 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """應用程式設定類別"""
+    """Application settings class"""
 
-    # === 應用程式基本設定 ===
-    APP_NAME: str = Field(default="Aileron - Workspace Manager", description="應用程式名稱")
-    VERSION: str = Field(default="1.0.0", description="應用程式版本")
-    DEBUG: bool = Field(default=False, description="除錯模式")
-    ENV: str = Field(default="production", description="執行環境")
+    # === Application basic settings ===
+    APP_NAME: str = Field(default="Aileron - Workspace Manager", description="Application name")
+    VERSION: str = Field(default="1.0.0", description="Application version")
+    DEBUG: bool = Field(default=False, description="Debug mode")
+    ENV: str = Field(default="production", description="Execution environment")
 
-    # === 伺服器設定 ===
-    HOST: str = Field(default="0.0.0.0", description="伺服器主機")
-    PORT: int = Field(default=3001, description="伺服器端口")
+    # === ServerSettings ===
+    HOST: str = Field(default="0.0.0.0", description="Server host")
+    PORT: int = Field(default=3001, description="Server port")
 
-    # === 資料庫設定 ===
+    # === DatabaseSettings ===
     DATABASE_URL: str = Field(
         default="postgresql://postgres:password@localhost:5432/aileron",
-        description="資料庫連線 URL"
+        description="Database connection URL"
     )
-    DATABASE_ECHO: bool = Field(default=False, description="是否顯示 SQL 查詢")
-    DATABASE_POOL_SIZE: int = Field(default=10, description="資料庫連線池大小")
-    DATABASE_MAX_OVERFLOW: int = Field(default=20, description="資料庫連線池最大溢位")
+    DATABASE_ECHO: bool = Field(default=False, description="Whether to echo SQL queries")
+    DATABASE_POOL_SIZE: int = Field(default=10, description="Database connection pool size")
+    DATABASE_MAX_OVERFLOW: int = Field(default=20, description="Database connection pool max overflow")
 
-    # === Redis 設定 ===
+    # === Redis Settings ===
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis 連線 URL"
+        description="Redis connection URL"
     )
-    REDIS_CACHE_TTL: int = Field(default=3600, description="Redis 快取過期時間（秒）")
+    REDIS_CACHE_TTL: int = Field(default=3600, description="Redis cache expiry time (seconds)")
 
-    # === CORS 設定 ===
+    # === CORS Settings ===
     ALLOWED_ORIGINS: str = Field(
         default="http://localhost:3000,http://localhost:3001,http://localhost:8082,http://localhost:8083",
-        description="允許的 CORS 來源（逗號分隔）"
+        description="Allowed CORS origins (comma-separated)"
     )
 
-    # === Docker 設定 ===
-    DOCKER_HOST: Optional[str] = Field(default=None, description="Docker 主機")
-    DOCKER_NETWORK: str = Field(default="aileron", description="Docker 網路名稱")
-    WORKSPACE_IMAGE_PREFIX: str = Field(default="aidh-workspace", description="工作區映像前綴")
+    # === Docker Settings ===
+    DOCKER_HOST: Optional[str] = Field(default=None, description="Docker host")
+    DOCKER_NETWORK: str = Field(default="aileron", description="Docker network name")
+    WORKSPACE_IMAGE_PREFIX: str = Field(default="aidh-workspace", description="Workspace image prefix")
 
-    # === Runtime 佈建設定 ===
+    # === Runtime provisioning settings ===
     RUNTIME_PROVISIONER: Literal["docker", "kubernetes"] = Field(
-        default="docker", description="Runtime 佈建策略"
+        default="docker", description="Runtime provisioning strategy"
     )
     PLATFORM: str = Field(
-        default="linux", description="運行平台 (linux/mac/windows)"
+        default="linux", description="Runtime platform (linux/mac/windows)"
     )
     RUNTIME_SCRIPT_ROOT: str = Field(
-        default="/data/init-scripts", description="Runtime 產生腳本輸出根目錄"
+        default="/data/init-scripts", description="Runtime generated scripts output root directory"
     )
     HOST_WORKSPACES_DIR: str = Field(
         default="/var/lib/aileron/workspaces",
-        description="主機上掛載 workspace 檔案的目錄",
+        description="Host directory to mount workspace files",
     )
     HOST_WORKSPACE_SCRIPTS_DIR: str = Field(
         default="/var/lib/aileron/workspace-scripts",
@@ -93,182 +93,182 @@ class Settings(BaseSettings):
     )
     HOST_KNOWLEDGE_BASES_DIR: str = Field(
         default="/var/lib/aileron/knowledge-bases",
-        description="主機上掛載 knowledge base 檔案的目錄",
+        description="Host directory to mount knowledge base files",
     )
     MANAGER_KNOWLEDGE_BASES_DIR: str = Field(
         default="/host/knowledge-bases",
-        description="Knowledge base 資料目錄 mounted inside workspace-manager",
+        description="Knowledge base data directory mounted inside workspace-manager",
     )
     RUNTIME_RESERVED_PORTS: Annotated[List[int], NoDecode] = Field(
-        default_factory=lambda: [3002], description="預留不可使用的容器埠"
+        default_factory=lambda: [3002], description="Reserved container ports that cannot be used"
     )
-    RUNTIME_AUTO_RETRY: bool = Field(default=True, description="佈建失敗時是否自動重試")
-    RUNTIME_MAX_RETRIES: int = Field(default=3, description="背景任務最大重試次數")
+    RUNTIME_AUTO_RETRY: bool = Field(default=True, description="Auto-retry on provisioning failure")
+    RUNTIME_MAX_RETRIES: int = Field(default=3, description="Maximum retry count for background tasks")
 
-    # === Kubernetes 策略相關設定 ===
-    RUNTIME_K8S_NAMESPACE: str = Field(default="default", description="部署 Namespace")
+    # === Kubernetes policy related settings ===
+    RUNTIME_K8S_NAMESPACE: str = Field(default="default", description="Deploy namespace")
     RUNTIME_K8S_CR_NAMESPACE: Optional[str] = Field(
         default=None,
-        description="Workspace 自訂資源建立所在的 namespace；未設定時沿用部署 namespace",
+        description="Namespace for workspace custom resource creation; defaults to deploy namespace if not set",
     )
     RUNTIME_K8S_ALLOWED_NAMESPACES: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: ["default"],
-        description="允許使用者選擇的 Kubernetes Namespace 清單",
+        description="Allowed Kubernetes namespace list for users to choose from",
     )
     RUNTIME_K8S_SERVICE_TYPE: str = Field(
-        default="ClusterIP", description="Service 類型"
+        default="ClusterIP", description="Service type"
     )
     RUNTIME_K8S_NODE_PORT: Optional[int] = Field(
-        default=None, description="若使用 NodePort，指定外部埠號"
+        default=None, description="External port number if using NodePort"
     )
     RUNTIME_K8S_NODE_ADDRESS: str = Field(
-        default="127.0.0.1", description="NodePort 服務對外位址"
+        default="127.0.0.1", description="NodePort service external address"
     )
     RUNTIME_K8S_PVC_NAME: str = Field(
-        default="workspace-runtime-pvc", description="Workspace PVC 名稱"
+        default="workspace-runtime-pvc", description="Workspace PVC name"
     )
     RUNTIME_K8S_IMAGE: str = Field(
         default="ailerondocker/workspace-runtime:latest-lite-amd64",
-        description="Runtime 使用的容器映像",
+        description="Container image used by runtime",
     )
     RUNTIME_K8S_BROWSER_IMAGE: str = Field(
         default="ailerondocker/workspace-chrome:latest-amd64",
-        description="Browser 使用的容器映像",
+        description="Container image used by browser",
     )
     RUNTIME_K8S_CANVAS_IMAGE: str = Field(
         default="ailerondocker/workspace-canvas:latest-amd64",
-        description="Canvas 使用的容器映像",
+        description="Container image used by canvas",
     )
     RUNTIME_K8S_RUNTIME_RESOURCES: Annotated[dict, NoDecode] = Field(
         default_factory=lambda: {
             "requests": {"cpu": "500m", "memory": "2Gi"},
             "limits": {"cpu": "2000m", "memory": "4Gi"},
         },
-        description="Kubernetes runtime 預設資源配置",
+        description="Kubernetes runtime default resource configuration",
     )
     RUNTIME_K8S_BROWSER_RESOURCES: Annotated[dict, NoDecode] = Field(
         default_factory=lambda: {
             "requests": {"cpu": "500m", "memory": "1Gi"},
             "limits": {"cpu": "2000m", "memory": "2Gi"},
         },
-        description="Kubernetes browser 預設資源配置",
+        description="Kubernetes browser default resource configuration",
     )
     RUNTIME_K8S_CANVAS_RESOURCES: Annotated[dict, NoDecode] = Field(
         default_factory=lambda: {
             "requests": {"cpu": "500m", "memory": "1Gi"},
             "limits": {"cpu": "2000m", "memory": "2Gi"},
         },
-        description="Kubernetes canvas 預設資源配置",
+        description="Kubernetes canvas default resource configuration",
     )
     CILIUM_ENABLED: bool = Field(
         default=False,
-        description="是否啟用 Cilium 與 firewall 功能",
+        description="Is Cilium-based firewall feature enabled",
     )
     PUBLIC_SCHEME: str = Field(
         default="http",
-        description="平台公開網址使用的 scheme",
+        description="Scheme used for public URLs",
     )
     PUBLIC_BASE_DOMAIN: str = Field(
         default="aileron.localhost",
-        description="平台公開網址的 base domain",
+        description="Base domain for public URLs",
     )
     PUBLIC_FRONTEND_HOST: str = Field(
         default="aileron.{baseDomain}",
-        description="Frontend 對外固定 host 模板",
+        description="Frontend public fixed host template",
     )
     PUBLIC_WORKSPACE_MANAGER_HOST: str = Field(
         default="workspace-manager.{baseDomain}",
-        description="Workspace Manager 對外固定 host 模板",
+        description="Workspace Manager public fixed host template",
     )
     PUBLIC_KEYCLOAK_HOST: str = Field(
         default="keycloak.{baseDomain}",
-        description="Keycloak 對外固定 host 模板",
+        description="Keycloak public fixed host template",
     )
     PUBLIC_RUNTIME_HOST_PATTERN: str = Field(
         default="workspace-runtime-{workspaceId}.{baseDomain}",
-        description="Workspace Runtime 對外 host pattern",
+        description="Workspace runtime public host pattern",
     )
     PUBLIC_BROWSER_HOST_PATTERN: str = Field(
         default="workspace-browser-{workspaceId}.{baseDomain}",
-        description="Workspace Browser 對外 host pattern",
+        description="Workspace browser public host pattern",
     )
     PUBLIC_CANVAS_HOST_PATTERN: str = Field(
         default="workspace-canvas-{workspaceId}.{baseDomain}",
-        description="Workspace Canvas 對外 host pattern",
+        description="Workspace canvas public host pattern",
     )
     FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS: Annotated[List[str], NoDecode] = Field(
         default_factory=list,
-        description="平台預設的 workspace firewall 允許網域清單",
+        description="Platform default workspace firewall allowed domain list",
     )
     FIREWALL_DEFAULTS_BROWSER_ALLOWED_DOMAINS: Annotated[List[str], NoDecode] = Field(
         default_factory=list,
-        description="平台預設的 browser firewall 允許網域清單",
+        description="Platform default browser firewall allowed domain list",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED: bool = Field(
         default=False,
-        description="是否在 Kubernetes 模式下 bootstrap 預設 workspace",
+        description="Whether to bootstrap default workspace in Kubernetes mode",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_ID: str = Field(
         default="default-workspace",
-        description="bootstrap 預設 workspace ID",
+        description="Bootstrap default workspace ID",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_OWNER_EMAIL: str = Field(
         default="admin@aileron.com",
-        description="bootstrap 預設 workspace owner email",
+        description="Bootstrap default workspace owner email",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_GIT_URL: str = Field(
         default="",
-        description="bootstrap 預設 workspace git URL",
+        description="Bootstrap default workspace git URL",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_BRANCH: str = Field(
         default="main",
-        description="bootstrap 預設 workspace branch",
+        description="Bootstrap default workspace branch",
     )
     BOOTSTRAP_DEFAULT_WORKSPACE_TARGET_NAMESPACE: Optional[str] = Field(
         default=None,
-        description="bootstrap 預設 workspace target namespace；未設定時沿用 RUNTIME_K8S_NAMESPACE",
+        description="Bootstrap default workspace target namespace; defaults to RUNTIME_K8S_NAMESPACE if not set",
     )
 
-    # === Celery 設定 ===
+    # === Celery Settings ===
     CELERY_BROKER_URL: str = Field(
         default="redis://localhost:6379/1",
-        description="Celery Broker URL"
+        description="Celery broker URL"
     )
     CELERY_RESULT_BACKEND: str = Field(
         default="redis://localhost:6379/1",
-        description="Celery 結果後端"
+        description="Celery result backend"
     )
 
-    # === 檔案儲存設定 ===
-    UPLOAD_DIR: str = Field(default="./uploads", description="檔案上傳目錄")
-    MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大檔案大小（位元組）")
+    # === FileSaveSettings ===
+    UPLOAD_DIR: str = Field(default="./uploads", description="File upload directory")
+    MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="Maximum file size (bytes)")
     ALLOWED_FILE_TYPES: str = Field(
         default=".zip,.tar.gz,.tar,.py,.js,.ts,.json,.md",
-        description="允許的檔案類型（逗號分隔）"
+        description="Allowed file types (comma-separated)"
     )
 
-    # === 模板中心設定 ===
+    # === Template center settings ===
     TEMPLATE_STORAGE_PATH: str = Field(
         default="/data/template-center",
-        description="模板儲存路徑"
+        description="Template storage path"
     )
 
-    # === 檔案管理設定 ===
+    # === File management settings ===
     FILE_TREE_MAX_DEPTH: int = Field(
         default=10,
-        description="檔案樹掃描最大深度（預設 10 層）"
+        description="Maximum depth for file tree scan (default 10 levels)"
     )
     DEFAULT_USER_KB_QUOTA_BYTES: int = Field(
         default=5 * 1024 * 1024 * 1024,
-        description="每個使用者擁有的全部 knowledge bases 預設總配額（bytes）",
+        description="Total knowledge base default quota per user (bytes)",
     )
     DEFAULT_KB_QUOTA_BYTES: int = Field(
         default=512 * 1024 * 1024,
-        description="單一 knowledge base 預設配額（bytes）",
+        description="Default quota per single knowledge base (bytes)",
     )
     KB_SINGLE_FILE_SIZE_LIMIT: int = Field(
         default=50 * 1024 * 1024,
-        description="Knowledge base 單檔大小上限（bytes）",
+        description="Knowledge base single file size limit (bytes)",
     )
     KB_ALLOWED_EXTENSIONS: Annotated[List[str], NoDecode] = Field(
         default_factory=lambda: [
@@ -305,52 +305,52 @@ class Settings(BaseSettings):
             ".svg",
             ".webp",
         ],
-        description="Knowledge base 允許的副檔名白名單",
+        description="Knowledge base allowed file extension whitelist",
     )
     KB_TOMBSTONE_RETENTION_HOURS: int = Field(
         default=24,
-        description="Knowledge base tombstone 保留時間（小時）",
+        description="Knowledge base tombstone retention time (hours)",
     )
 
-    # === 日誌設定 ===
-    LOG_LEVEL: str = Field(default="INFO", description="日誌等級")
+    # === Logging settings ===
+    LOG_LEVEL: str = Field(default="INFO", description="Log level")
     LOG_FORMAT: str = Field(
         default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        description="日誌格式"
+        description="Log format"
     )
 
-    # === 監控與健康檢查設定 ===
-    HEALTH_CHECK_TIMEOUT: int = Field(default=30, description="健康檢查超時時間（秒）")
+    # === Monitoring and health check settings ===
+    HEALTH_CHECK_TIMEOUT: int = Field(default=30, description="Health check timeout (seconds)")
 
-    # === Internal API 設定 ===
+    # === Internal API Settings ===
     INTERNAL_API_TOKEN: str = Field(
         default="dev-internal-token",
-        description="Internal API 認證 Token"
+        description="Internal API authentication token"
     )
 
-    # === Keycloak 設定 ===
+    # === Keycloak Settings ===
     KEYCLOAK_SERVER_URL: str = Field(
         default="http://aileron-keycloak-dev:8080",
-        description="Keycloak 伺服器 URL（Docker 網路內部地址）"
+        description="Keycloak server URL (internal Docker network address)"
     )
     KEYCLOAK_REALM: str = Field(
         default="aileron",
-        description="Keycloak Realm 名稱"
+        description="Keycloak realm name"
     )
     KEYCLOAK_CLIENT_ID: str = Field(
         default="aileron-frontend",
-        description="Keycloak Client ID"
+        description="Keycloak client ID"
     )
 
     @property
     def allowed_origins_list(self) -> List[str]:
-        """取得 CORS 來源清單"""
+        """Get CORS origin list"""
         origins: list[str] = []
 
         if isinstance(self.ALLOWED_ORIGINS, str):
-            # 移除可能的引號
+            # Remove possible quotes
             v = self.ALLOWED_ORIGINS.strip().strip('"').strip("'")
-            # 檢查是否為 JSON 格式
+            # Check if is JSON format
             if v.startswith('[') and v.endswith(']'):
                 import json
                 try:
@@ -372,12 +372,12 @@ class Settings(BaseSettings):
                 "http://localhost:8082",
             ])
 
-        # 保留順序去重
+        # Deduplicate while preserving order
         return list(dict.fromkeys(origins))
 
     @property
     def allowed_file_types_list(self) -> List[str]:
-        """取得允許的檔案類型清單"""
+        """Get allowed file type list"""
         if isinstance(self.ALLOWED_FILE_TYPES, str):
             return [file_type.strip() for file_type in self.ALLOWED_FILE_TYPES.split(",") if file_type.strip()]
         return [".zip", ".tar.gz", ".tar", ".py", ".js", ".ts", ".json", ".md"]
@@ -385,7 +385,7 @@ class Settings(BaseSettings):
     @field_validator("RUNTIME_RESERVED_PORTS", mode="before")
     @classmethod
     def parse_reserved_ports(cls, v):
-        """解析預留埠號清單"""
+        """Parse reserved port list"""
         if isinstance(v, str):
             return [int(port.strip()) for port in v.split(",") if port.strip()]
         return v
@@ -393,7 +393,7 @@ class Settings(BaseSettings):
     @field_validator("BROWSER_WEBRTC_RESERVED_UDP_RANGES", mode="before")
     @classmethod
     def parse_browser_webrtc_reserved_udp_ranges(cls, v):
-        """解析 Browser WebRTC 要避開的 UDP 區間"""
+        """Parse Browser WebRTC UDP ranges to avoid"""
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
@@ -401,7 +401,7 @@ class Settings(BaseSettings):
     @field_validator("RUNTIME_K8S_ALLOWED_NAMESPACES", mode="before")
     @classmethod
     def parse_k8s_allowed_namespaces(cls, v):
-        """解析允許的 Kubernetes namespace 清單"""
+        """Parse allowed Kubernetes namespace list"""
         if isinstance(v, str):
             namespaces = [namespace.strip() for namespace in v.split(",") if namespace.strip()]
             return namespaces or ["default"]
@@ -420,7 +420,7 @@ class Settings(BaseSettings):
     )
     @classmethod
     def normalize_public_routing_values(cls, v):
-        """正規化 public routing 設定字串。"""
+        """Normalize public routing settings strings."""
         if isinstance(v, str):
             return v.strip()
         return v
@@ -428,7 +428,7 @@ class Settings(BaseSettings):
     @field_validator("PUBLIC_SCHEME")
     @classmethod
     def validate_public_scheme(cls, v: str) -> str:
-        """限制公開網址 scheme。"""
+        """Validate public URL scheme."""
         normalized = v.lower()
         if normalized not in {"http", "https"}:
             raise ValueError("PUBLIC_SCHEME must be either 'http' or 'https'")
@@ -437,7 +437,7 @@ class Settings(BaseSettings):
     @field_validator("PUBLIC_RUNTIME_HOST_PATTERN", "PUBLIC_BROWSER_HOST_PATTERN", "PUBLIC_CANVAS_HOST_PATTERN")
     @classmethod
     def validate_workspace_host_patterns(cls, v: str) -> str:
-        """驗證 workspace host pattern 必須包含 workspaceId。"""
+        """Verify workspace host pattern must include workspaceId."""
         if "{workspaceId}" not in v:
             raise ValueError("workspace host pattern must include '{workspaceId}'")
         return v
@@ -449,7 +449,7 @@ class Settings(BaseSettings):
     )
     @classmethod
     def parse_firewall_default_domains(cls, v):
-        """解析平台預設 firewall 網域清單"""
+        """Parse platform default firewall domain list."""
         if isinstance(v, str):
             return [domain.strip() for domain in v.split(",") if domain.strip()]
         return v
@@ -457,7 +457,7 @@ class Settings(BaseSettings):
     @field_validator("KB_ALLOWED_EXTENSIONS", mode="before")
     @classmethod
     def parse_kb_allowed_extensions(cls, v):
-        """解析 KB 允許副檔名清單。"""
+        """Parse KB allowed extension list."""
         if isinstance(v, str):
             return [extension.strip().lower() for extension in v.split(",") if extension.strip()]
         if isinstance(v, list):
@@ -472,14 +472,14 @@ class Settings(BaseSettings):
     )
     @classmethod
     def parse_k8s_component_resources(cls, v):
-        """解析 Kubernetes component resources JSON。"""
+        """Parse Kubernetes component resources JSON."""
         if isinstance(v, str):
             return json.loads(v)
         return v
 
     @model_validator(mode="after")
     def validate_public_routing_templates(self) -> "Settings":
-        """驗證 public routing 所需欄位與模板。"""
+        """Verify public routing required fields and templates."""
         if not self.PUBLIC_BASE_DOMAIN:
             raise ValueError("PUBLIC_BASE_DOMAIN must not be empty")
 
@@ -492,7 +492,7 @@ class Settings(BaseSettings):
         return self
 
     def resolve_public_host(self, template: str, workspace_id: Optional[str] = None) -> str:
-        """將 public host 模板解析成實際 host。"""
+        """Resolve public host template to actual host."""
         host = template.replace("{baseDomain}", self.PUBLIC_BASE_DOMAIN)
         if "{workspaceId}" in host:
             if not workspace_id:
@@ -506,27 +506,27 @@ class Settings(BaseSettings):
         return host
 
     def build_public_url(self, template: str, workspace_id: Optional[str] = None) -> str:
-        """組合完整 public URL。"""
+        """Build complete public URL."""
         return f"{self.PUBLIC_SCHEME}://{self.resolve_public_host(template, workspace_id=workspace_id)}"
 
     @property
     def database_url_async(self) -> str:
-        """取得非同步資料庫連線 URL"""
+        """Get async database connection URL."""
         return self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
 
     @property
     def is_development(self) -> bool:
-        """是否為開發環境"""
+        """Check if environment is development."""
         return self.ENV.lower() in ["development", "dev"]
 
     @property
     def is_production(self) -> bool:
-        """是否為生產環境"""
+        """Check if environment is production."""
         return self.ENV.lower() in ["production", "prod"]
 
     @property
     def is_testing(self) -> bool:
-        """是否為測試環境"""
+        """Check if environment is testing."""
         return self.ENV.lower() in ["testing", "test"]
 
     model_config = SettingsConfigDict(
@@ -535,28 +535,28 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore",
         env_ignore_empty=True,
-        # 禁用 JSON 自動解析，讓 validator 處理
+        # Disable automatic JSON parsing, let validators handle it
         env_parse_none_str="null"
     )
 
 
 @lru_cache()
 def get_settings() -> Settings:
-    """取得應用程式設定（帶快取）"""
+    """Get application settings (cached)."""
     return Settings()
 
 
-# 便利函數
+# Utility functions
 def get_database_url() -> str:
-    """取得資料庫連線 URL"""
+    """Get database connection URL."""
     return get_settings().DATABASE_URL
 
 
 def get_redis_url() -> str:
-    """取得 Redis 連線 URL"""
+    """Get Redis Connection URL"""
     return get_settings().REDIS_URL
 
 
 def is_debug_mode() -> bool:
-    """是否為除錯模式"""
+    """Check if debug mode is enabled."""
     return get_settings().DEBUG

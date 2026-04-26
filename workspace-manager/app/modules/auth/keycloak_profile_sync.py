@@ -1,8 +1,8 @@
 """
 Keycloak Profile Sync Service
 
-透過 Keycloak Account REST API 將使用者 Profile 變更同步回 Keycloak。
-使用使用者自己的 access token，不需要 admin service account。
+Syncs user profile changes back to Keycloak via Keycloak Account REST API.
+Uses user's own access token, no admin service account required.
 """
 
 import logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class KeycloakProfileSync:
-    """將 Profile 變更同步回 Keycloak Account API"""
+    """Sync profile changes back to Keycloak account API"""
 
     def __init__(self):
         self.config = get_keycloak_config()
@@ -27,21 +27,21 @@ class KeycloakProfileSync:
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
     ) -> bool:
-        """將 firstName/lastName 同步回 Keycloak
+        """Sync firstName/lastName back to Keycloak
 
         Args:
-            access_token: 使用者的 access token
-            first_name: 新的 firstName（None 表示不更新）
-            last_name: 新的 lastName（None 表示不更新）
+            access_token: User's access token
+            first_name: New firstName (None means don't update)
+            last_name: New lastName (None means don't update)
 
         Returns:
-            True 表示同步成功，False 表示失敗
+            True means sync succeeded, False means failed
         """
         if not self.config.enabled:
             logger.debug("Auth not enabled, skipping Keycloak profile sync")
             return True
 
-        # 組裝要更新的欄位
+        # Assemble fields to update
         payload = {}
         if first_name is not None:
             payload["firstName"] = first_name
@@ -55,7 +55,7 @@ class KeycloakProfileSync:
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-                # 先 GET 當前 profile 以保留其他欄位
+                # First GET current profile to preserve other fields
                 get_response = await client.get(
                     account_url,
                     headers={
@@ -74,7 +74,7 @@ class KeycloakProfileSync:
                         f"{get_response.status_code}, proceeding with partial update"
                     )
 
-                # POST 更新 profile
+                # POST to update profile
                 response = await client.post(
                     account_url,
                     headers={
@@ -102,7 +102,7 @@ class KeycloakProfileSync:
             return False
 
 
-# 單例
+# Singleton
 _keycloak_profile_sync: Optional[KeycloakProfileSync] = None
 
 

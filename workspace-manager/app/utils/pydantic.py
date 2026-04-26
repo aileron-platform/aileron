@@ -1,4 +1,4 @@
-"""Pydantic 輔助工具"""
+"""Pydantic utility functions"""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pydantic.config import ConfigDict
 
 
 def to_camel(string: str) -> str:
-    """將字串轉換為 camelCase"""
+    """Convert string to camelCase"""
 
     parts = string.split("_")
     if not parts:
@@ -16,7 +16,7 @@ def to_camel(string: str) -> str:
 
 
 class CamelModel(BaseModel):
-    """使用 camelCase 輸出且支援 ORM 的模型基底"""
+    """Base model with camelCase output and ORM support"""
 
     model_config = ConfigDict(
         alias_generator=to_camel,

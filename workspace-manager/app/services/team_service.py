@@ -1,4 +1,4 @@
-"""團隊服務"""
+"""TeamService"""
 
 from __future__ import annotations
 
@@ -9,21 +9,21 @@ from app.models import Team, TeamCreate, TeamListResponse, TeamUpdate
 
 
 class TeamService:
-    """管理團隊及其成員資訊"""
+    """Manage team and member information"""
 
     def __init__(self) -> None:
         self._teams: Dict[str, Team] = {}
 
     def list(self) -> TeamListResponse:
-        """列出所有團隊"""
+        """List all teams"""
         return TeamListResponse(items=list(self._teams.values()), total=len(self._teams))
 
     def get(self, team_id: str) -> Optional[Team]:
-        """取得單一團隊"""
+        """Get single team"""
         return self._teams.get(team_id)
 
     def create(self, payload: TeamCreate) -> Team:
-        """建立新團隊"""
+        """Create new team"""
         team_id = str(uuid4())
         team = Team(
             id=team_id,
@@ -37,7 +37,7 @@ class TeamService:
         return team
 
     def update(self, team_id: str, payload: TeamUpdate) -> Optional[Team]:
-        """更新團隊資訊"""
+        """Update team information"""
         team = self._teams.get(team_id)
         if not team:
             return None
@@ -49,7 +49,7 @@ class TeamService:
         return team
 
     def delete(self, team_id: str) -> None:
-        """刪除團隊"""
+        """DeleteTeam"""
         self._teams.pop(team_id, None)
 
 

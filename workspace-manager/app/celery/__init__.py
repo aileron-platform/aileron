@@ -1,3 +1,3 @@
 """
-Celery 相關模組
+Celery related modules
 """

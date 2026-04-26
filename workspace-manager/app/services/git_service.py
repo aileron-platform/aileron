@@ -1,4 +1,4 @@
-"""Git 相關服務"""
+"""Git related service"""
 
 from __future__ import annotations
 
@@ -21,51 +21,51 @@ class GitBranchLookupError(RuntimeError):
 
 
 class GitService:
-    """處理 Git 相關操作的服務"""
+    """Service handling Git related operations"""
 
     def __init__(self, ssh_key_path: Optional[Path] = None):
         """
-        初始化 Git 服務
-        
+        Initialize Git Service
+
         Args:
-            ssh_key_path: SSH 私鑰路徑，用於認證私有倉庫
+            ssh_key_path: SSH private key path, used for authenticating private repositories
         """
         self.ssh_key_path = ssh_key_path
 
     def get_remote_branches(self, git_url: str) -> List[str]:
         """
-        獲取遠端 Git repository 的分支列表
+        Get branch list of remote Git repository
 
         Args:
             git_url: Git repository URL
 
         Returns:
-            分支名稱列表
+            List of branch names
 
         Raises:
-            ValueError: 當 Git URL 無效或無法訪問時
-            RuntimeError: 當 git 命令執行失敗時
+            ValueError: When Git URL is invalid or inaccessible
+            RuntimeError: When git command execution fails
         """
         if not git_url or not git_url.strip():
-            raise GitBranchLookupError("Git URL 不能為空", code="WORKSPACE_SETUP_GIT_EMPTY_URL")
+            raise GitBranchLookupError("Git URL cannot be empty", code="WORKSPACE_SETUP_GIT_EMPTY_URL")
 
-        # 清理 URL（移除換行符和空白）
+        # Clean URL (remove newlines and whitespace)
         git_url = git_url.strip()
 
-        # 驗證 Git URL 格式
+        # Validate Git URL format
         if not self._is_valid_git_url(git_url):
-            raise GitBranchLookupError(f"無效的 Git URL: {git_url}", code="WORKSPACE_SETUP_GIT_INVALID_URL", params={"gitUrl": git_url})
+            raise GitBranchLookupError(f"Invalid Git URL: {git_url}", code="WORKSPACE_SETUP_GIT_INVALID_URL", params={"gitUrl": git_url})
 
         try:
-            # 準備環境變數
+            # Prepare environment variables
             env = self._prepare_git_env()
             
-            # 使用 git ls-remote 獲取遠端分支
-            # --heads 只列出分支（不包含 tags）
+            # Use git ls-remote to get remote branches
+            # --heads only list branches (exclude tags)
             cmd = ["git", "ls-remote", "--heads", git_url]
             
-            logger.info(f"執行 git ls-remote: {git_url}")
-            
+            logger.info(f"Executing git ls-remote: {git_url}")
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -77,57 +77,57 @@ class GitService:
 
             if result.returncode != 0:
                 error_msg = result.stderr.strip()
-                logger.error(f"git ls-remote 失敗: {error_msg}")
-                
-                # 提供更友善的錯誤訊息
-                if "Authentication failed" in error_msg or "Permission denied" in error_msg:
-                    raise GitBranchLookupError("認證失敗，請確認 SSH key 設定正確或使用公開倉庫", code="WORKSPACE_SETUP_GIT_AUTH_FAILED")
-                elif "Could not resolve host" in error_msg:
-                    raise GitBranchLookupError("無法解析主機名稱，請檢查網路連線", code="WORKSPACE_SETUP_GIT_RESOLVE_FAILED")
-                elif "Repository not found" in error_msg:
-                    raise GitBranchLookupError("找不到 repository，請確認 URL 是否正確", code="WORKSPACE_SETUP_GIT_REPOSITORY_NOT_FOUND")
-                else:
-                    raise GitBranchLookupError(f"無法獲取分支列表: {error_msg}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
+                logger.error(f"git ls-remote failed: {error_msg}")
 
-            # 解析輸出
+                # Provide more friendly error message
+                if "Authentication failed" in error_msg or "Permission denied" in error_msg:
+                    raise GitBranchLookupError("Authentication failed, please confirm SSH key settings are correct or use public repository", code="WORKSPACE_SETUP_GIT_AUTH_FAILED")
+                elif "Could not resolve host" in error_msg:
+                    raise GitBranchLookupError("Cannot resolve host name, please check network connection", code="WORKSPACE_SETUP_GIT_RESOLVE_FAILED")
+                elif "Repository not found" in error_msg:
+                    raise GitBranchLookupError("Repository not found, please confirm URL is correct", code="WORKSPACE_SETUP_GIT_REPOSITORY_NOT_FOUND")
+                else:
+                    raise GitBranchLookupError(f"Cannot get branch list: {error_msg}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
+
+            # Parse output
             branches = self._parse_ls_remote_output(result.stdout)
-            
-            logger.info(f"成功獲取 {len(branches)} 個分支: {branches}")
+
+            logger.info(f"Successfully got {len(branches)} branches: {branches}")
             return branches
 
         except subprocess.TimeoutExpired:
-            logger.error(f"git ls-remote 超時: {git_url}")
-            raise GitBranchLookupError("獲取分支列表超時，請稍後再試", code="WORKSPACE_SETUP_GIT_TIMEOUT")
+            logger.error(f"git ls-remote timeout: {git_url}")
+            raise GitBranchLookupError("Get branch list timeout, please try again later", code="WORKSPACE_SETUP_GIT_TIMEOUT")
         except Exception as e:
             if isinstance(e, GitBranchLookupError):
                 raise
-            logger.error(f"獲取分支列表時發生錯誤: {e}")
-            raise GitBranchLookupError(f"獲取分支列表失敗: {str(e)}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
+            logger.error(f"Error occurred while getting branch list: {e}")
+            raise GitBranchLookupError(f"Get branch list failed: {str(e)}", code="WORKSPACE_SETUP_GIT_FETCH_FAILED")
 
     def _is_valid_git_url(self, url: str) -> bool:
         """
-        驗證 Git URL 格式
+        Verify Git URL format
 
-        支援的格式：
+        Supported formats:
         - https://github.com/user/repo.git
-        - https://github.com/user/repo (不帶 .git)
+        - https://github.com/user/repo (without .git)
         - git@github.com:user/repo.git
-        - git@github.com:user/repo (不帶 .git)
+        - git@github.com:user/repo (without .git)
         - git@ssh.dev.azure.com:v3/org/project/repo (Azure DevOps)
         - ssh://git@github.com/user/repo.git
         """
-        # HTTPS 格式 (.git 可選)
+        # HTTPS format (.git optional)
         if url.startswith(("http://", "https://")):
             return self._is_valid_https_git_url(url)
 
-        # SSH 格式 (git@host:path，.git 可選)
-        # 支援一般格式: git@github.com:user/repo.git 或 git@github.com:user/repo
+        # SSH format (git@host:path, .git optional)
+        # Support common format: git@github.com:user/repo.git or git@github.com:user/repo
         ssh_pattern = r"^git@[a-zA-Z0-9\-._]+:[a-zA-Z0-9\-._/]+(\.git)?$"
 
-        # Azure DevOps SSH 格式: git@ssh.dev.azure.com:v3/org/project/repo
+        # Azure DevOps SSH format: git@ssh.dev.azure.com:v3/org/project/repo
         azure_ssh_pattern = r"^git@ssh\.dev\.azure\.com:v3/[a-zA-Z0-9\-._]+/[a-zA-Z0-9\-._]+/[a-zA-Z0-9\-._]+(\.git)?$"
 
-        # SSH URL 格式 (ssh://git@host/path，.git 可選)
+        # SSH URL format (ssh://git@host/path, .git optional)
         ssh_url_pattern = r"^ssh://git@[a-zA-Z0-9\-._]+/[a-zA-Z0-9\-._/]+(\.git)?$"
 
         return bool(
@@ -137,7 +137,7 @@ class GitService:
         )
 
     def _is_valid_https_git_url(self, url: str) -> bool:
-        """驗證 HTTPS Git URL，允許省略 .git 但排除常見的非 repository 路徑."""
+        """Verify HTTPS Git URL, allow omitting .git but exclude common non-repository paths."""
         parsed = urlparse(url)
 
         if parsed.scheme not in {"http", "https"}:
@@ -173,34 +173,34 @@ class GitService:
         return True
 
     def _prepare_git_env(self) -> dict:
-        """準備 Git 命令的環境變數"""
+        """Prepare environment variables for Git commands"""
         import os
         
         env = os.environ.copy()
         
-        # 如果有提供 SSH key，設定 GIT_SSH_COMMAND
+        # If SSH key provided, set GIT_SSH_COMMAND
         if self.ssh_key_path and self.ssh_key_path.exists():
-            # 使用指定的 SSH key，並禁用 host key 檢查（開發環境）
+            # Use specified SSH key and disable host key checking (development environment)
             ssh_cmd = (
                 f"ssh -i {self.ssh_key_path} "
                 f"-o StrictHostKeyChecking=no "
                 f"-o UserKnownHostsFile=/dev/null"
             )
             env["GIT_SSH_COMMAND"] = ssh_cmd
-            logger.debug(f"使用 SSH key: {self.ssh_key_path}")
+            logger.debug(f"Use SSH key: {self.ssh_key_path}")
         
         return env
 
     def _parse_ls_remote_output(self, output: str) -> List[str]:
         """
-        解析 git ls-remote 的輸出
-        
-        輸出格式範例：
+        Parse git ls-remote output
+
+        Output format example:
         abc123...  refs/heads/main
         def456...  refs/heads/develop
-        
+
         Returns:
-            分支名稱列表（不包含 refs/heads/ 前綴）
+            List of branch names (without refs/heads/ prefix)
         """
         branches = []
         
@@ -208,14 +208,14 @@ class GitService:
             if not line:
                 continue
                 
-            # 每行格式: <commit-hash>\t<ref-name>
+            # Line format: <commit-hash>\t<ref-name>
             parts = line.split("\t")
             if len(parts) != 2:
                 continue
                 
             ref_name = parts[1].strip()
             
-            # 只處理 refs/heads/ 開頭的（分支）
+            # Only handle refs/heads/ prefix (branches)
             if ref_name.startswith("refs/heads/"):
                 branch_name = ref_name.replace("refs/heads/", "")
                 branches.append(branch_name)
@@ -225,13 +225,13 @@ class GitService:
 
 def get_git_service(ssh_key_path: Optional[Path] = None) -> GitService:
     """
-    獲取 GitService 實例
-    
+    Get GitService instance
+
     Args:
-        ssh_key_path: SSH 私鑰路徑
-        
+        ssh_key_path: SSH private key path
+
     Returns:
-        GitService 實例
+        GitService instance
     """
     return GitService(ssh_key_path=ssh_key_path)
 

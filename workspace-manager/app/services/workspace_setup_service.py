@@ -1,4 +1,4 @@
-"""Workspace 初始化與同步服務"""
+"""Workspace initialization and synchronization service"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 _TASK_DEFINITIONS: Dict[str, str] = {
     "ssh": "SSH Keys",
     "claudeCode": "Claude Code",
-    "git": "Git 設定",
+    "git": "Git Settings",
 }
 
 _STATUS_SUCCESS = "success"
@@ -34,23 +34,23 @@ class WorkspaceSetupError(ValueError):
 
 
 class WorkspaceSetupService:
-    """負責處理 Workspace 建立後的初始化同步流程"""
+    """Handle workspace initialization and synchronization process after creation"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
     async def run_initial_sync(self, workspace_id: str) -> WorkspaceSetupStatus:
-        """執行新建 Workspace 的初始同步任務"""
+        """Execute initial synchronization task for newly created workspace"""
         workspace = self._get_workspace(workspace_id)
         if not workspace.runtime_internal_url:
-            raise WorkspaceSetupError("Workspace runtime 尚未就緒，無法執行同步", code="WORKSPACE_SETUP_SYNC_RUNTIME_NOT_READY")
+            raise WorkspaceSetupError("Workspace runtime not ready, cannot execute synchronization", code="WORKSPACE_SETUP_SYNC_RUNTIME_NOT_READY")
 
         user_settings = workspace.owner.settings if workspace.owner else None
         if not user_settings:
-            logger.info("用戶 %s 尚未設定個人設定，略過同步", workspace.owner_id)
+            logger.info("User %s has not configured personal settings yet, skip synchronization", workspace.owner_id)
             tasks = [
                 self._create_task_status(
-                    key, _STATUS_SKIPPED, "沒有可同步的設定"
+                    key, _STATUS_SKIPPED, "No settings to synchronize"
                 )
                 for key in _TASK_DEFINITIONS
             ]
@@ -60,7 +60,7 @@ class WorkspaceSetupService:
                 tasks=tasks,
             )
 
-        logger.info("開始執行 workspace %s 的初始同步", workspace.id)
+        logger.info("Begin initial synchronization for workspace %s", workspace.id)
         sync_result = await SyncService.sync_settings_to_runtime(workspace, user_settings)
 
         tasks = []
@@ -81,23 +81,23 @@ class WorkspaceSetupService:
                 self._create_task_status(
                     key,
                     status,
-                    message or f"{display_name} 同步尚未完成",
+                    message or f"{display_name} synchronization not yet complete",
                 )
             )
 
         completed = all(task.status in {_STATUS_SUCCESS, _STATUS_SKIPPED} for task in tasks)
         logger.info(
-            "完成 workspace %s 初始同步，完成狀態：%s",
+            "Workspace %s initial synchronization completed, completion status: %s",
             workspace.id,
             completed,
         )
         return WorkspaceSetupStatus(workspace_id=workspace.id, completed=completed, tasks=tasks)
 
     async def fetch_runtime_status(self, workspace_id: str) -> WorkspaceSetupStatus:
-        """從 workspace-runtime 查詢目前各初始化項目的狀態"""
+        """Query current status of each initialization item from workspace-runtime"""
         workspace = self._get_workspace(workspace_id)
         if not workspace.runtime_internal_url:
-            raise WorkspaceSetupError("Workspace runtime 尚未就緒，無法查詢狀態", code="WORKSPACE_SETUP_STATUS_RUNTIME_NOT_READY")
+            raise WorkspaceSetupError("Workspace runtime not ready, cannot query status", code="WORKSPACE_SETUP_STATUS_RUNTIME_NOT_READY")
 
         base_url = workspace.runtime_internal_url.rstrip("/")
         headers = {
@@ -116,7 +116,7 @@ class WorkspaceSetupService:
         for key in _TASK_DEFINITIONS:
             detail = checks.get(key) or {}
             status = detail.get("status", _STATUS_PENDING)
-            message = detail.get("message", "") or "等待同步結果"
+            message = detail.get("message", "") or "Waiting for synchronization result"
             if status not in {_STATUS_SUCCESS, _STATUS_FAILED, _STATUS_PENDING, _STATUS_SKIPPED}:
                 status = _STATUS_PENDING
 
@@ -128,7 +128,7 @@ class WorkspaceSetupService:
     def _get_workspace(self, workspace_id: str) -> db_models.Workspace:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            raise WorkspaceSetupError(f"Workspace {workspace_id} 不存在", code="WORKSPACE_NOT_FOUND", params={"workspaceId": workspace_id})
+            raise WorkspaceSetupError(f"Workspace {workspace_id} does not exist", code="WORKSPACE_NOT_FOUND", params={"workspaceId": workspace_id})
         return workspace
 
     def _create_task_status(self, key: str, status: str, message: str) -> WorkspaceSetupTaskStatus:
@@ -142,7 +142,7 @@ class WorkspaceSetupService:
     @staticmethod
     def _is_skipped_message(message: str) -> bool:
         lowered = message or ""
-        return any(keyword in lowered for keyword in ["沒有", "無", "未設定"])
+        return any(keyword in lowered for keyword in ["no", "none", "not configured"])
 
 
 __all__ = ["WorkspaceSetupService"]

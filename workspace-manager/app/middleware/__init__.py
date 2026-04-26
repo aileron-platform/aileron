@@ -1,4 +1,4 @@
-"""中間件模組。"""
+"""Middleware module."""
 
 from .i18n import I18nMiddleware
 

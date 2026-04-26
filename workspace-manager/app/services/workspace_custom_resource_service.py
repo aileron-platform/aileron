@@ -1,4 +1,4 @@
-"""Workspace 自訂資源管理服務。"""
+"""Workspace custom resource management service."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ _STATUS_SYNC_INTERVAL_SECONDS = 1.0
 
 
 class WorkspaceCustomResourceService:
-    """負責產生並更新 Kubernetes Workspace 自訂資源描述。"""
+    """Responsible for generating and updating Kubernetes workspace custom resource descriptions."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -53,11 +53,11 @@ class WorkspaceCustomResourceService:
     def apply_workspace_custom_resource(self, workspace_id: str) -> None:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            logger.error("Workspace %s 不存在，無法產生自訂資源", workspace_id)
+            logger.error("Workspace %s does not exist, cannot generate custom resource", workspace_id)
             return
 
         if workspace.provisioner != "kubernetes":
-            logger.info("Workspace %s 非 kubernetes 模式，跳過自訂資源同步", workspace_id)
+            logger.info("Workspace %s is not kubernetes mode, skip custom resource synchronization", workspace_id)
             return
 
         job = db_models.WorkspaceRuntimeJob(
@@ -75,7 +75,7 @@ class WorkspaceCustomResourceService:
         self._log_event(
             workspace.id,
             "queued",
-            "已排入 Kubernetes Workspace 自訂資源同步",
+            "Queued Kubernetes workspace custom resource synchronization",
             {"jobId": job.id},
         )
         self.db.commit()
@@ -83,7 +83,7 @@ class WorkspaceCustomResourceService:
         try:
             job.status = "provisioning"
             job.started_at = datetime.utcnow()
-            self._log_event(workspace.id, "provisioning", "開始產生 Kubernetes Workspace 自訂資源")
+            self._log_event(workspace.id, "provisioning", "Begin generating Kubernetes workspace custom resource")
 
             manifest = self._build_workspace_custom_resource(workspace)
             manifest_path = self._write_manifest(workspace, manifest)
@@ -95,7 +95,7 @@ class WorkspaceCustomResourceService:
             self._log_event(
                 workspace.id,
                 "completed",
-                "Kubernetes Workspace 自訂資源已更新",
+                "Kubernetes workspace custom resource updated",
                 {
                     "manifestPath": str(manifest_path),
                     "crNamespace": manifest["metadata"]["namespace"],
@@ -103,8 +103,8 @@ class WorkspaceCustomResourceService:
                 },
             )
             self.db.commit()
-        except Exception as exc:  # pragma: no cover - 實際錯誤需紀錄
-            logger.exception("更新 Workspace 自訂資源失敗: %s", workspace.id)
+        except Exception as exc:  # pragma: no cover - actual errors need logging
+            logger.exception("Failed to update workspace custom resource: %s", workspace.id)
             self.db.rollback()
             workspace = self.db.get(db_models.Workspace, workspace_id)
             job = self.db.get(db_models.WorkspaceRuntimeJob, job.id)
@@ -118,7 +118,7 @@ class WorkspaceCustomResourceService:
             self._log_event(
                 workspace.id,
                 "failed",
-                "Kubernetes Workspace 自訂資源同步失敗",
+                "Kubernetes workspace custom resource synchronization failed",
                 {"error": str(exc)},
             )
             self.db.commit()
@@ -126,11 +126,11 @@ class WorkspaceCustomResourceService:
     def delete_workspace_custom_resource(self, workspace_id: str) -> bool:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            logger.error("Workspace %s 不存在，無法刪除自訂資源", workspace_id)
+            logger.error("Workspace %s does not exist, cannot delete custom resource", workspace_id)
             return False
 
         if workspace.provisioner != "kubernetes":
-            logger.info("Workspace %s 非 kubernetes 模式，跳過自訂資源刪除", workspace_id)
+            logger.info("Workspace %s is not kubernetes mode, skip custom resource deletion", workspace_id)
             return False
 
         job = db_models.WorkspaceRuntimeJob(
@@ -147,7 +147,7 @@ class WorkspaceCustomResourceService:
         self._log_event(
             workspace.id,
             "deleting",
-            "開始刪除 Kubernetes Workspace 自訂資源",
+            "Begin deleting Kubernetes workspace custom resource",
             {"jobId": job.id},
         )
         self.db.commit()
@@ -163,14 +163,14 @@ class WorkspaceCustomResourceService:
             self._log_event(
                 workspace.id,
                 "deleted",
-                "Kubernetes Workspace 自訂資源已刪除",
+                "Kubernetes workspace custom resource deleted",
                 {"manifestPath": str(manifest_path)},
             )
             self.db.delete(workspace)
             self.db.commit()
             return True
         except Exception as exc:  # pragma: no cover
-            logger.exception("刪除 Workspace 自訂資源失敗: %s", workspace.id)
+            logger.exception("Failed to delete workspace custom resource: %s", workspace.id)
             self.db.rollback()
             workspace = self.db.get(db_models.Workspace, workspace_id)
             job = self.db.get(db_models.WorkspaceRuntimeJob, job.id)
@@ -182,58 +182,58 @@ class WorkspaceCustomResourceService:
                 self._log_event(
                     workspace.id,
                     "error",
-                    "Kubernetes Workspace 自訂資源刪除失敗",
+                    "Kubernetes workspace custom resource deletion failed",
                     {"error": str(exc)},
                 )
                 self.db.commit()
             raise
 
     def request_workspace_restart(self, workspace_id: str) -> None:
-        """寫入整體 workspace restart intent。"""
+        """Write overall workspace restart intent."""
         self._request_restart_operation(
             workspace_id,
             component="workspace",
             status_stage="restarting",
-            status_message="已寫入 Kubernetes workspace 重啟意圖",
+            status_message="Wrote Kubernetes workspace restart intent",
         )
 
     def request_runtime_restart(self, workspace_id: str) -> None:
-        """寫入 runtime restart intent。"""
+        """Write runtime restart intent."""
         self._request_restart_operation(
             workspace_id,
             component="runtime",
             status_stage="restarting",
-            status_message="已寫入 Kubernetes runtime 重啟意圖",
+            status_message="Wrote Kubernetes runtime restart intent",
         )
 
     def request_browser_restart(self, workspace_id: str) -> None:
-        """寫入 browser restart intent。"""
+        """Write browser restart intent."""
         self._request_restart_operation(
             workspace_id,
             component="browser",
             status_stage="browser_restarting",
-            status_message="已寫入 Kubernetes browser 重啟意圖",
+            status_message="Wrote Kubernetes browser restart intent",
         )
 
     def request_canvas_restart(self, workspace_id: str) -> None:
-        """寫入 canvas restart intent。"""
+        """Write canvas restart intent."""
         self._request_restart_operation(
             workspace_id,
             component="canvas",
             status_stage="canvas_restarting",
-            status_message="已寫入 Kubernetes canvas 重啟意圖",
+            status_message="Wrote Kubernetes canvas restart intent",
         )
 
     def sync_workspace_status(self, workspace_id: str) -> bool:
-        """從 Kubernetes Workspace CR status 同步工作區 URL 與階段資訊。"""
+        """Sync workspace URL and phase information from Kubernetes workspace CR status."""
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            logger.warning("Workspace %s 不存在，無法同步 CR status", workspace_id)
+            logger.warning("Workspace %s does not exist, cannot sync CR status", workspace_id)
             return False
         return self.sync_workspace_record_status(workspace)
 
     def sync_workspace_record_status(self, workspace: db_models.Workspace) -> bool:
-        """將既有 Workspace ORM 物件與 Kubernetes CR status 對齊。"""
+        """Align existing workspace ORM object with Kubernetes CR status."""
         if workspace.provisioner != "kubernetes":
             return False
 
@@ -251,7 +251,7 @@ class WorkspaceCustomResourceService:
         except ApiException as exc:
             if exc.status == 404:
                 logger.info(
-                    "Workspace CR %s/%s 尚未存在，跳過狀態同步",
+                    "Workspace CR %s/%s does not exist yet, skip status synchronization",
                     cr_namespace,
                     metadata_name,
                 )
@@ -404,15 +404,15 @@ class WorkspaceCustomResourceService:
     ) -> None:
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
-            logger.error("Workspace %s 不存在，無法寫入重啟意圖", workspace_id)
+            logger.error("Workspace %s does not exist, cannot write restart intent", workspace_id)
             return
 
         if workspace.provisioner != "kubernetes":
-            logger.info("Workspace %s 非 kubernetes 模式，跳過重啟意圖寫入", workspace_id)
+            logger.info("Workspace %s is not kubernetes mode, skip restart intent write", workspace_id)
             return
 
         if component not in _RESTART_OPERATION_FIELDS:
-            raise ValueError(f"不支援的 Kubernetes restart component: {component}")
+            raise ValueError(f"Unsupported Kubernetes restart component: {component}")
 
         job = db_models.WorkspaceRuntimeJob(
             id=str(uuid4()),
@@ -453,7 +453,7 @@ class WorkspaceCustomResourceService:
             self._log_event(
                 workspace.id,
                 "completed",
-                "Kubernetes Workspace 重啟意圖已更新",
+                "Kubernetes workspace restart intent updated",
                 {
                     "component": component,
                     "manifestPath": str(manifest_path),
@@ -462,7 +462,7 @@ class WorkspaceCustomResourceService:
             )
             self.db.commit()
         except Exception as exc:  # pragma: no cover
-            logger.exception("寫入 Workspace 重啟意圖失敗: %s", workspace.id)
+            logger.exception("Failed to write workspace restart intent: %s", workspace.id)
             self.db.rollback()
             workspace = self.db.get(db_models.Workspace, workspace_id)
             job = self.db.get(db_models.WorkspaceRuntimeJob, job.id)
@@ -474,7 +474,7 @@ class WorkspaceCustomResourceService:
                 self._log_event(
                     workspace.id,
                     "error",
-                    "Kubernetes Workspace 重啟意圖更新失敗",
+                    "Kubernetes workspace restart intent update failed",
                     {"component": component, "error": str(exc)},
                 )
                 self.db.commit()
@@ -576,7 +576,7 @@ class WorkspaceCustomResourceService:
                     return True
             except Exception:
                 logger.exception(
-                    "同步 Workspace CR 狀態失敗: %s (attempt=%s/%s)",
+                    "Failed to sync workspace CR status: %s (attempt=%s/%s)",
                     workspace_id,
                     attempt,
                     max_attempts,
@@ -586,7 +586,7 @@ class WorkspaceCustomResourceService:
                 time.sleep(interval_seconds)
 
         logger.warning(
-            "Workspace CR 狀態尚未同步回資料庫: %s (attempts=%s)",
+            "Workspace CR status not yet synced to database: %s (attempts=%s)",
             workspace_id,
             max_attempts,
         )
@@ -679,7 +679,7 @@ class WorkspaceCustomResourceService:
 
 
 def run_apply_workspace_custom_resource_task(workspace_id: str) -> None:
-    """背景任務入口：開啟新的資料庫連線並產生 Workspace CR manifest。"""
+    """Background task entry: Open new database connection and generate workspace CR manifest."""
 
     from app.db.database import SessionLocal
 

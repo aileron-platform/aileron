@@ -1,7 +1,7 @@
 """
-日誌配置模組
+Logging configuration module
 
-提供結構化日誌配置，支援不同環境的日誌輸出
+Provides structured logging configuration with support for different environment outputs
 """
 
 import logging
@@ -16,9 +16,9 @@ settings = get_settings()
 
 
 def setup_logging() -> None:
-    """設定應用程式日誌配置"""
+    """Setup application logging configuration"""
 
-    # 日誌配置字典
+    # Logging configuration dictionary
     log_dir = Path("logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -66,13 +66,13 @@ def setup_logging() -> None:
             },
         },
         "loggers": {
-            # 應用程式日誌
+            # Application logging
             "app": {
                 "level": settings.LOG_LEVEL,
                 "handlers": ["console", "app_file", "error_file"],
                 "propagate": False,
             },
-            # FastAPI 日誌
+            # FastAPI logging
             "uvicorn": {
                 "level": "INFO",
                 "handlers": ["console"],
@@ -83,19 +83,19 @@ def setup_logging() -> None:
                 "handlers": ["console"],
                 "propagate": False,
             },
-            # SQLAlchemy 日誌
+            # SQLAlchemy logging
             "sqlalchemy.engine": {
                 "level": "WARN" if not settings.DEBUG else "INFO",
                 "handlers": ["console"],
                 "propagate": False,
             },
-            # Docker 日誌
+            # Docker logging
             "docker": {
                 "level": "INFO",
                 "handlers": ["console", "app_file"],
                 "propagate": False,
             },
-            # Celery 日誌
+            # Celery logging
             "celery": {
                 "level": "INFO",
                 "handlers": ["console", "app_file"],
@@ -108,46 +108,46 @@ def setup_logging() -> None:
         },
     }
 
-    # 在生產環境中，移除檔案處理器（使用容器日誌）
+    # In production environment, remove file handler (use container logging)
     if settings.is_production:
         for logger_config in logging_config["loggers"].values():
             logger_config["handlers"] = ["console"]
         logging_config["root"]["handlers"] = ["console"]
 
-    # 套用日誌配置
+    # Apply logging configuration
     logging.config.dictConfig(logging_config)
 
-    # 設定根日誌記錄器
+    # Setup root logger
     logger = logging.getLogger("app")
-    logger.info(f"日誌系統已初始化 - 等級: {settings.LOG_LEVEL}, 環境: {settings.ENV}")
+    logger.info(f"Logging system initialized - Level: {settings.LOG_LEVEL}, Environment: {settings.ENV}")
 
 
 def get_logger(name: str) -> logging.Logger:
-    """取得指定名稱的日誌記錄器"""
+    """Get logger with specified name"""
     return logging.getLogger(f"app.{name}")
 
 
-# 建立不同用途的日誌記錄器
+# Create loggers for different purposes
 def get_api_logger() -> logging.Logger:
-    """取得 API 日誌記錄器"""
+    """Get API logger"""
     return get_logger("api")
 
 
 def get_db_logger() -> logging.Logger:
-    """取得資料庫日誌記錄器"""
+    """Get database logger"""
     return get_logger("database")
 
 
 def get_docker_logger() -> logging.Logger:
-    """取得 Docker 日誌記錄器"""
+    """Get Docker logger"""
     return get_logger("docker")
 
 
 def get_celery_logger() -> logging.Logger:
-    """取得 Celery 日誌記錄器"""
+    """Get Celery logger"""
     return get_logger("celery")
 
 
 def get_auth_logger() -> logging.Logger:
-    """取得認證日誌記錄器"""
+    """Get authentication logger"""
     return get_logger("auth")

@@ -14,13 +14,13 @@ from .models import RuntimeInfo, RuntimeStatus, RuntimeContext, ResourceRequirem
 logger = logging.getLogger(__name__)
 
 class DockerOrchestrator(ContainerOrchestrator):
-    """Docker 容器編排器"""
+    """Docker container orchestrator"""
 
     def __init__(self, settings):
         self.settings = settings
         try:
-            # 使用 settings 中的 DOCKER_HOST (如果有的話)
-            # 這裡假設 settings 可能有 DOCKER_HOST，如果沒有則依賴環境變數
+            # Use DOCKER_HOST from settings (if available)
+            # Assume settings may have DOCKER_HOST, if not then rely on environment variable
             self.client = docker.from_env()
         except Exception as e:
             logger.error(f"Failed to initialize Docker client: {e}")
@@ -30,14 +30,14 @@ class DockerOrchestrator(ContainerOrchestrator):
         try:
             container_name = f"workspace-runtime-{workspace.id}"
             
-            # 1. 準備端口配置
+            # 1. Prepare port configuration
             ports_config = {}
             for port_mapping in context.ports:
                 key = f"{port_mapping.container_port}/{port_mapping.protocol}"
-                # 如果 host_port 為 None，Docker 會自動分配
+                # If host_port is None, Docker will auto-assign
                 ports_config[key] = port_mapping.host_port
 
-            # 2. 準備 Volume 配置
+            # 2. Prepare volume configuration
             volumes_config = {}
             for volume in context.volumes:
                 volumes_config[volume.source] = {
@@ -47,15 +47,15 @@ class DockerOrchestrator(ContainerOrchestrator):
                     # standard docker-py bind mount dict: {'bind': '/mnt/vol1', 'mode': 'rw'}
                 }
 
-            # 3. 準備環境變數
+            # 3. Prepare environment variables
             environment = context.environment.copy()
 
-            # 4. 準備資源限制 (如果有)
+            # 4. Prepare resource limits (if any)
             # Docker SDK run parameters for resources:
             # nano_cpus, mem_limit, etc.
-            # 這裡暫時簡化，僅傳遞基本配置
+            # Simplified here, only pass basic configuration
             
-            # 5. 網絡配置
+            # 5. Network configuration
             network_mode = context.network.network_mode if context.network else "bridge"
             network = context.network.network_name if context.network else None
 
@@ -65,7 +65,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                 config={'max-size': '10m', 'max-file': '3'}
             )
 
-            # 7. 清理舊容器
+            # 7. Clean up old container
             try:
                 old_container = self.client.containers.get(container_name)
                 logger.info(f"Removing existing container {container_name}")
@@ -73,15 +73,15 @@ class DockerOrchestrator(ContainerOrchestrator):
             except docker.errors.NotFound:
                 pass
 
-            # 8. 啟動容器
+            # 8. StartContainer
             logger.info(f"Starting container {container_name} with image {context.labels.get('image', 'unknown')}")
             
-            # 提取 image，如果 context.labels 中沒有，則需要從其他地方獲取
-            # 這裡假設調用者會把 image 放在 labels 中，或者我們需要一個明確的 image 參數?
-            # RuntimeContext 沒有 image 字段? 
-            # 檢查 models.py -> RuntimeContext 沒有 image。
-            # 但 RuntimeSpec (in plan) had it. 
-            # 讓我們檢查 models.py again.
+            # Extract image, if not in context.labels, need to get from elsewhere
+            # Assume caller will put image in labels, or do we need an explicit image parameter?
+            # RuntimeContext has no image field? 
+            # Check models.py -> RuntimeContext has no image.
+            # But RuntimeSpec (in plan) had it. 
+            # Let us check models.py again.
             # models.py: RuntimeContext definition does NOT have image.
             # But the caller (RuntimeProvisionService) knows the image.
             # We should probably add image to RuntimeContext or pass it separately?
@@ -107,28 +107,28 @@ class DockerOrchestrator(ContainerOrchestrator):
                 network=network,
                 # network_mode=network_mode, # network and network_mode can conflict
                 log_config=log_config,
-                cap_add=["NET_ADMIN"], # 保留原有的 cap_add
+                cap_add=["NET_ADMIN"], # Keep original cap_add
                 command=context.labels.get("command"), # Optional command override
                 working_dir=context.labels.get("working_dir"),
             )
 
-            # 9. 獲取運行時信息
+            # 9. Get runtime information
             container.reload()
             
-            # 解析映射後的端口
+            # Parse mapped ports
             # container.ports example: {'3002/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '32768'}]}
             
-            # 構建 internal_url (使用容器名和默認端口)
-            # 假設第一個端口是主服務端口
+            # Build internal_url (using container name and default port)
+            # Assume first port is main service port
             default_port = context.ports[0].container_port if context.ports else 80
             internal_url = f"http://{container_name}:{default_port}"
             
-            # 構建 external_url
+            # Build external_url
             external_url = None
             ports_mapping = {}
             
             if context.ports:
-                # 遍歷所有端口映射
+                # Iterate through all port mappings
                 for port_mapping in context.ports:
                     port_key = f"{port_mapping.container_port}/{port_mapping.protocol}"
                     bindings = container.ports.get(port_key)
@@ -136,7 +136,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                         host_port = int(bindings[0]['HostPort'])
                         ports_mapping[port_key] = host_port
                         
-                        # 如果是默認端口，設置 external_url
+                        # If default port, set external_url
                         if port_mapping.container_port == default_port:
                             external_url = f"http://localhost:{host_port}"
 
@@ -168,24 +168,24 @@ class DockerOrchestrator(ContainerOrchestrator):
             container = self.client.containers.get(container_name)
             container.remove(force=True)
         except docker.errors.NotFound:
-            pass  # 視為成功
+            pass  # Consider as success
         except Exception as e:
             logger.error(f"Failed to delete container {container_name}: {e}")
             raise ContainerDeletionError(f"Failed to delete container: {e}")
 
-        # 同時刪除 Browser 容器
+        # Also delete browser container
         browser_container_name = f"workspace-browser-{workspace_id}"
         try:
             browser_container = self.client.containers.get(browser_container_name)
             browser_container.remove(force=True)
             logger.info(f"Deleted Browser container {browser_container_name}")
         except docker.errors.NotFound:
-            pass  # Browser 容器不存在，視為成功
+            pass  # Browser container does not exist, consider as success
         except Exception as e:
             logger.error(f"Failed to delete Browser container {browser_container_name}: {e}", exc_info=True)
-            # 不拋出異常，因為主容器已刪除成功
+            # Do not raise exception, because main container already deleted successfully
 
-        # 同時刪除 Canvas 容器
+        # Also delete canvas container
         canvas_container_name = f"workspace-canvas-{workspace_id}"
         try:
             canvas_container = self.client.containers.get(canvas_container_name)
@@ -199,17 +199,17 @@ class DockerOrchestrator(ContainerOrchestrator):
         return True
 
     def create_chrome_runtime(self, workspace: Any, context: RuntimeContext) -> RuntimeInfo:
-        """建立 Browser 容器"""
+        """Create Browser Container"""
         try:
             container_name = f"workspace-browser-{workspace.id}"
 
-            # 1. 準備端口配置
+            # 1. Prepare port configuration
             ports_config = {}
             for port_mapping in context.ports:
                 key = f"{port_mapping.container_port}/{port_mapping.protocol}"
                 ports_config[key] = port_mapping.host_port
 
-            # 2. 準備 Volume 配置
+            # 2. Prepare volume configuration
             volumes_config = {}
             for volume in context.volumes:
                 volumes_config[volume.source] = {
@@ -217,10 +217,10 @@ class DockerOrchestrator(ContainerOrchestrator):
                     "mode": "rw" if not volume.read_only else "ro",
                 }
 
-            # 3. 準備環境變數
+            # 3. Prepare environment variables
             environment = context.environment.copy()
 
-            # 4. 網絡配置
+            # 4. Network configuration
             network = context.network.network_name if context.network else None
 
             # 5. Log Config
@@ -229,7 +229,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                 config={'max-size': '10m', 'max-file': '3'}
             )
 
-            # 6. 清理舊容器
+            # 6. Clean up old container
             try:
                 old_container = self.client.containers.get(container_name)
                 logger.info(f"Removing existing Browser container {container_name}")
@@ -237,12 +237,12 @@ class DockerOrchestrator(ContainerOrchestrator):
             except docker.errors.NotFound:
                 pass
 
-            # 7. 獲取 image
+            # 7. Get image
             image = context.labels.get('image')
             if not image:
                 raise ContainerCreationError("Browser image not specified in context labels")
 
-            # 8. 啟動容器
+            # 8. StartContainer
             logger.info(f"Starting Browser container {container_name} with image {image}")
 
             container = self.client.containers.run(
@@ -254,13 +254,13 @@ class DockerOrchestrator(ContainerOrchestrator):
                 environment=environment,
                 network=network,
                 log_config=log_config,
-                shm_size='2147483648',  # 2GB，Chrome 需要足夠的 /dev/shm 空間
+                shm_size='2147483648',  # 2GB, Chrome needs sufficient /dev/shm space
             )
 
-            # 9. 獲取運行時信息
+            # 9. Get runtime information
             container.reload()
 
-            # 構建 internal_url 和 external_url
+            # Build internal_url and external_url
             default_port = 6080  # neko WebRTC
             internal_url = f"http://{container_name}:{default_port}"
             external_url = f"http://localhost:{context.ports[0].host_port}"
@@ -288,17 +288,17 @@ class DockerOrchestrator(ContainerOrchestrator):
             raise ContainerCreationError(f"Unexpected error: {e}")
 
     def create_canvas_runtime(self, workspace: Any, context: RuntimeContext) -> RuntimeInfo:
-        """建立 Canvas 容器"""
+        """Create Canvas Container"""
         try:
             container_name = f"workspace-canvas-{workspace.id}"
 
-            # 1. 準備端口配置
+            # 1. Prepare port configuration
             ports_config = {}
             for port_mapping in context.ports:
                 key = f"{port_mapping.container_port}/{port_mapping.protocol}"
                 ports_config[key] = port_mapping.host_port
 
-            # 2. 準備 Volume 配置
+            # 2. Prepare volume configuration
             volumes_config = {}
             for volume in context.volumes:
                 volumes_config[volume.source] = {
@@ -306,10 +306,10 @@ class DockerOrchestrator(ContainerOrchestrator):
                     "mode": "rw" if not volume.read_only else "ro",
                 }
 
-            # 3. 準備環境變數
+            # 3. Prepare environment variables
             environment = context.environment.copy()
 
-            # 4. 網絡配置
+            # 4. Network configuration
             network = context.network.network_name if context.network else None
 
             # 5. Log Config
@@ -318,7 +318,7 @@ class DockerOrchestrator(ContainerOrchestrator):
                 config={'max-size': '10m', 'max-file': '3'}
             )
 
-            # 6. 清理舊容器
+            # 6. Clean up old container
             try:
                 old_container = self.client.containers.get(container_name)
                 logger.info(f"Removing existing Canvas container {container_name}")
@@ -326,12 +326,12 @@ class DockerOrchestrator(ContainerOrchestrator):
             except docker.errors.NotFound:
                 pass
 
-            # 7. 獲取 image
+            # 7. Get image
             image = context.labels.get('image')
             if not image:
                 raise ContainerCreationError("Canvas image not specified in context labels")
 
-            # 8. 啟動容器
+            # 8. StartContainer
             logger.info(f"Starting Canvas container {container_name} with image {image}")
 
             container = self.client.containers.run(
@@ -345,14 +345,14 @@ class DockerOrchestrator(ContainerOrchestrator):
                 log_config=log_config,
             )
 
-            # 9. 獲取運行時信息
+            # 9. Get runtime information
             container.reload()
 
-            # 構建 internal_url 和 external_url（使用 Canvas render server 端口 3003）
+            # Build internal_url and external_url (use Canvas render server port 3003)
             default_port = 3003
             internal_url = f"http://{container_name}:{default_port}"
 
-            # 從 port mappings 中找到 3003 的 external port
+            # Find external port for 3003 from port mappings
             external_url = None
             ports_mapping = {}
             for port_mapping in context.ports:

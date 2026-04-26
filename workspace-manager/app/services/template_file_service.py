@@ -1,6 +1,6 @@
-"""模板檔案管理服務 - 重構版本
+"""Template file management service - Refactored version
 
-使用統一的檔案管理 API 結構，將 base_path 改為 scope
+Uses unified file management API structure, replaces base_path with scope
 """
 
 from __future__ import annotations
@@ -46,26 +46,26 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateFileService(TemplateBaseService):
-    """處理模板的檔案系統操作（使用統一的 scope 機制）
-    
-    Scope 定義：
-    - skills: 模板的 skills 目錄
-    - scripts: 模板的 scripts 目錄
+    """Handles template file system operations (using unified scope constraint)
+
+    Scope definitions:
+    - skills: Template skills directory
+    - scripts: Template scripts directory
     """
 
-    # 有效的 scope 值
+    # Valid scope values
     VALID_SCOPES = {"skills", "scripts"}
 
-    # 跳過的目錄
+    # Directories to skip
     SKIP_DIRECTORIES = {
         "node_modules", ".git", "__pycache__", ".venv", "venv",
         ".next", "dist", "build", ".cache", ".pytest_cache"
     }
 
-    # 最大檔案大小（10MB）
+    # Maximum file size (10MB)
     MAX_FILE_SIZE = 10 * 1024 * 1024
 
-    # 上傳相關常數
+    # Upload-related constants
     MAX_UPLOAD_FILES = 50
     ALLOWED_EXTENSIONS = {
         ".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml",
@@ -81,19 +81,19 @@ class TemplateFileService(TemplateBaseService):
         super().__init__(db)
 
     def _validate_scope(self, scope: Optional[str]) -> str:
-        """驗證並返回有效的 scope
-        
+        """Validate and return valid scope
+
         Args:
-            scope: 範圍識別
-            
+            scope: Scope identifier
+
         Returns:
-            有效的 scope
-            
+            Valid scope
+
         Raises:
-            InvalidScopeException: 無效的 scope
+            InvalidScopeException: Invalid scope
         """
         if not scope:
-            scope = "scripts"  # 預設為 scripts
+            scope = "scripts"  # Default to scripts
         
         if scope not in self.VALID_SCOPES:
             raise InvalidScopeException(f"Invalid scope: {scope}. Must be 'skills' or 'scripts'")
@@ -101,39 +101,39 @@ class TemplateFileService(TemplateBaseService):
         return scope
 
     def _validate_path(self, path: str) -> str:
-        """驗證路徑安全性
+        """Verify path security
         
         Args:
-            path: 相對路徑
+            path: relative path
             
         Returns:
-            驗證後的路徑
+            Verified path
             
         Raises:
-            InvalidPathException: 無效的路徑
+            InvalidPathException: invalid path
         """
         if not path:
             return ""
         
-        # 移除開頭的斜線
+        # Remove leading slash
         path = path.lstrip("/")
         
-        # 檢查路徑穿越
+        # Check path traversal
         if ".." in path or path.startswith("/"):
             raise InvalidPathException(path, "Path traversal detected")
         
         return path
 
     def _resolve_path(self, template_id: str, scope: str, relative_path: str) -> Path:
-        """解析完整的檔案系統路徑
+        """Parse complete file system path
         
         Args:
-            template_id: 模板 ID
-            scope: 範圍識別
-            relative_path: 相對路徑
+            template_id: Template ID
+            scope: scope identifier
+            relative_path: relative path
             
         Returns:
-            完整的檔案系統路徑
+            complete file system path
         """
         template_dir = self._get_template_dir(template_id)
         scope_dir = template_dir / scope
@@ -152,17 +152,17 @@ class TemplateFileService(TemplateBaseService):
         max_depth: int = 1,
         current_depth: int = 0
     ) -> List[FileNode]:
-        """掃描目錄並建立檔案樹
+        """Scan directory and create file tree
         
         Args:
-            directory: 要掃描的目錄
-            base_path: 基礎路徑（用於計算相對路徑）
-            include_hidden: 是否包含隱藏檔
-            max_depth: 最大深度
-            current_depth: 當前深度
+            directory: directory to scan
+            base_path: base path (for calculating relative path)
+            include_hidden: whether to include hidden files
+            max_depth: maximum depth
+            current_depth: current depth
             
         Returns:
-            檔案節點列表
+            FileNode list
         """
         if not directory.exists() or not directory.is_dir():
             return []
@@ -173,32 +173,32 @@ class TemplateFileService(TemplateBaseService):
             entries = sorted(directory.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
             
             for entry in entries:
-                # 跳過隱藏檔
+                # Skip hidden files
                 if not include_hidden and entry.name.startswith("."):
                     continue
                 
-                # 跳過特定目錄
+                # Skip specific directories
                 if entry.is_dir() and entry.name in self.SKIP_DIRECTORIES:
                     continue
                 
-                # 計算相對路徑
+                # Calculate relative path
                 try:
                     rel_path = entry.relative_to(base_path)
                     path_str = "/" + str(rel_path).replace("\\", "/")
                 except ValueError:
                     continue
                 
-                # 取得檔案資訊
+                # GetFileInformation
                 stat = entry.stat()
                 updated_at = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
                 
-                # 建立節點
+                # CreateNode
                 node = FileNode(
                     id=path_str,
                     name=entry.name,
                     path=path_str,
                     type="directory" if entry.is_dir() else "file",
-                    scope=None,  # Template files 不使用 scope 在節點中
+                    scope=None,  # Template files do not use scope in node
                     size=stat.st_size if entry.is_file() else 0,
                     updatedAt=updated_at,
                     depth=current_depth,
@@ -206,7 +206,7 @@ class TemplateFileService(TemplateBaseService):
                     hasChildren=False
                 )
                 
-                # 如果是目錄且未達最大深度，遞迴掃描
+                # If directory and max depth not reached, recursive scan
                 if entry.is_dir():
                     if current_depth < max_depth:
                         node.children = self._scan_directory(
@@ -233,30 +233,30 @@ class TemplateFileService(TemplateBaseService):
         include_hidden: bool = False,
         max_depth: int = 1
     ) -> FileTreeResponse:
-        """取得檔案樹
+        """Get file tree
         
         Args:
-            template_id: 模板 ID
-            path: 目標路徑
-            scope: 範圍識別 (skills/scripts)
-            include_hidden: 是否包含隱藏檔
-            max_depth: 最大深度
+            template_id: Template ID
+            path: target path
+            scope: scope identifier (skills/scripts)
+            include_hidden: whether to include hidden files
+            max_depth: maximum depth
             
         Returns:
-            檔案樹回應
+            File tree response
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
         
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
         
-        # 解析路徑
+        # ParsePath
         fs_path = self._resolve_path(template_id, scope, path)
         
-        # 確保目錄存在
+        # Ensure directory exists
         if not fs_path.exists():
             fs_path.mkdir(parents=True, exist_ok=True)
             return FileTreeResponse(
@@ -266,7 +266,7 @@ class TemplateFileService(TemplateBaseService):
                 total=0
             )
         
-        # 掃描目錄
+        # ScanDirectory
         base_path = self._get_template_dir(template_id) / scope
         nodes = self._scan_directory(fs_path, base_path, include_hidden, max_depth, 0)
         
@@ -283,25 +283,25 @@ class TemplateFileService(TemplateBaseService):
         path: str,
         scope: Optional[str] = None
     ) -> FileContentResponse:
-        """讀取檔案內容
+        """ReadFileContent
         
         Args:
-            template_id: 模板 ID
-            path: 檔案路徑
-            scope: 範圍識別
+            template_id: Template ID
+            path: FilePath
+            scope: scope identifier
             
         Returns:
-            檔案內容回應
+            FileContentResponse
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
         
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
         
-        # 解析路徑
+        # ParsePath
         fs_path = self._resolve_path(template_id, scope, path)
         
         if not fs_path.exists():
@@ -310,19 +310,19 @@ class TemplateFileService(TemplateBaseService):
         if not fs_path.is_file():
             raise InvalidPathException(path, "Not a file")
         
-        # 檢查檔案大小
+        # Check file size
         file_size = fs_path.stat().st_size
         if file_size > self.MAX_FILE_SIZE:
             raise FileTooLargeException(path, file_size, self.MAX_FILE_SIZE)
         
-        # 讀取內容
+        # ReadContent
         try:
             content = fs_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
-            # 如果不是 UTF-8，嘗試其他編碼
+            # If not UTF-8, try other encodings
             content = fs_path.read_text(encoding="latin-1")
         
-        # 計算版本 ID 和內容雜湊
+        # Calculate version ID and content hash
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         version_id = content_hash[:16]
         
@@ -346,35 +346,35 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         expected_version_id: Optional[str] = None
     ) -> Dict:
-        """寫入檔案內容
+        """WriteFileContent
 
         Args:
-            template_id: 模板 ID
-            path: 檔案路徑
-            content: 檔案內容
-            scope: 範圍識別
-            expected_version_id: 預期版本ID（衝突檢測）
+            template_id: Template ID
+            path: FilePath
+            content: FileContent
+            scope: scope identifier
+            expected_version_id: expected version ID (conflict detection)
 
         Returns:
-            操作結果
+            OperationResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析路徑
+        # ParsePath
         fs_path = self._resolve_path(template_id, scope, path)
 
-        # 檢查檔案大小
+        # Check file size
         content_size = len(content.encode("utf-8"))
         if content_size > self.MAX_FILE_SIZE:
             raise FileTooLargeException(path, content_size, self.MAX_FILE_SIZE)
 
-        # 如果檔案存在且提供了 expected_version_id，檢查版本
+        # If file exists and expected_version_id provided, check version
         if fs_path.exists() and expected_version_id:
             current_content = fs_path.read_text(encoding="utf-8")
             current_hash = hashlib.sha256(current_content.encode("utf-8")).hexdigest()
@@ -384,13 +384,13 @@ class TemplateFileService(TemplateBaseService):
                 from app.core.file_management.exceptions import ContentConflictException
                 raise ContentConflictException(path, expected_version_id, current_version)
 
-        # 確保父目錄存在
+        # Ensure parent directory exists
         fs_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 寫入檔案
+        # WriteFile
         fs_path.write_text(content, encoding="utf-8")
 
-        # 計算新的版本 ID
+        # Calculate new version ID
         content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
         version_id = content_hash[:16]
 
@@ -410,27 +410,27 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         content: Optional[str] = ""
     ) -> Dict:
-        """建立檔案或目錄
+        """Create file or directory
 
         Args:
-            template_id: 模板 ID
-            path: 路徑
-            entry_type: 類型 (file/directory)
-            scope: 範圍識別
-            content: 檔案內容（僅檔案）
+            template_id: Template ID
+            path: Path
+            entry_type: Type (file/directory)
+            scope: scope identifier
+            content: file content (file only)
 
         Returns:
-            操作結果
+            OperationResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析路徑
+        # ParsePath
         fs_path = self._resolve_path(template_id, scope, path)
 
         if fs_path.exists():
@@ -445,10 +445,10 @@ class TemplateFileService(TemplateBaseService):
                 "type": "directory"
             }
         else:  # file
-            # 確保父目錄存在
+            # Ensure parent directory exists
             fs_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # 寫入內容
+            # WriteContent
             fs_path.write_text(content or "", encoding="utf-8")
 
             return {
@@ -464,26 +464,26 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         recursive: bool = False
     ) -> Dict:
-        """刪除檔案或目錄
+        """Delete file or directory
 
         Args:
-            template_id: 模板 ID
-            path: 路徑
-            scope: 範圍識別
-            recursive: 是否遞迴刪除
+            template_id: Template ID
+            path: Path
+            scope: scope identifier
+            recursive: whether to recursively delete
 
         Returns:
-            操作結果
+            OperationResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析路徑
+        # ParsePath
         fs_path = self._resolve_path(template_id, scope, path)
 
         if not fs_path.exists():
@@ -508,27 +508,27 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         overwrite: bool = False
     ) -> Dict:
-        """複製檔案或目錄
+        """Copy file or directory
 
         Args:
-            template_id: 模板 ID
-            source_path: 來源路徑
-            dest_path: 目標路徑
-            scope: 範圍識別
-            overwrite: 是否覆蓋
+            template_id: Template ID
+            source_path: source path
+            dest_path: target path
+            scope: scope identifier
+            overwrite: whether to overwrite
 
         Returns:
-            操作結果
+            OperationResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析路徑
+        # ParsePath
         source_fs_path = self._resolve_path(template_id, scope, source_path)
         dest_fs_path = self._resolve_path(template_id, scope, dest_path)
 
@@ -538,10 +538,10 @@ class TemplateFileService(TemplateBaseService):
         if dest_fs_path.exists() and not overwrite:
             raise FileAlreadyExistsException(dest_path, scope)
 
-        # 確保目標父目錄存在
+        # Ensure target parent directory exists
         dest_fs_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 複製
+        # Copy
         if source_fs_path.is_dir():
             if dest_fs_path.exists() and overwrite:
                 shutil.rmtree(dest_fs_path)
@@ -562,27 +562,27 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         overwrite: bool = False
     ) -> Dict:
-        """移動檔案或目錄
+        """Move file or directory
 
         Args:
-            template_id: 模板 ID
-            source_path: 來源路徑
-            dest_path: 目標路徑
-            scope: 範圍識別
-            overwrite: 是否覆蓋
+            template_id: Template ID
+            source_path: source path
+            dest_path: target path
+            scope: scope identifier
+            overwrite: whether to overwrite
 
         Returns:
-            操作結果
+            OperationResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析路徑
+        # ParsePath
         source_fs_path = self._resolve_path(template_id, scope, source_path)
         dest_fs_path = self._resolve_path(template_id, scope, dest_path)
 
@@ -592,10 +592,10 @@ class TemplateFileService(TemplateBaseService):
         if dest_fs_path.exists() and not overwrite:
             raise FileAlreadyExistsException(dest_path, scope)
 
-        # 確保目標父目錄存在
+        # Ensure target parent directory exists
         dest_fs_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 移動
+        # Move
         if dest_fs_path.exists() and overwrite:
             if dest_fs_path.is_dir():
                 shutil.rmtree(dest_fs_path)
@@ -616,16 +616,16 @@ class TemplateFileService(TemplateBaseService):
         scope: Optional[str] = None,
         recursive: bool = False
     ) -> BatchOperationResponse:
-        """批次刪除檔案
+        """Batch delete files
 
         Args:
-            template_id: 模板 ID
-            paths: 路徑列表
-            scope: 範圍識別
-            recursive: 是否遞迴刪除
+            template_id: Template ID
+            paths: path list
+            scope: scope identifier
+            recursive: whether to recursively delete
 
         Returns:
-            批次操作回應
+            batch operation response
         """
         results = []
         success_count = 0
@@ -654,26 +654,26 @@ class TemplateFileService(TemplateBaseService):
         )
 
     def _validate_filename(self, filename: str) -> bool:
-        """驗證檔案名稱
+        """Verify file name
 
         Args:
-            filename: 檔案名稱
+            filename: file name
 
         Returns:
-            是否有效
+            whether valid
         """
         if not filename:
             return False
 
-        # 不允許路徑分隔符
+        # Do not allow path separators
         if "/" in filename or "\\" in filename:
             return False
 
-        # 不允許特殊字元
+        # Do not allow special characters
         if re.search(r'[<>:"|?*]', filename):
             return False
 
-        # 不允許以點開頭（隱藏檔）
+        # Do not allow starting with dot (hidden files)
         if filename.startswith("."):
             return False
 
@@ -687,27 +687,27 @@ class TemplateFileService(TemplateBaseService):
         overwrite: bool = False,
         scope: Optional[str] = None
     ) -> FileUploadResponse:
-        """上傳檔案
+        """Upload file
 
         Args:
-            template_id: 模板 ID
-            target_path: 目標目錄路徑
-            files: 上傳的檔案列表
-            overwrite: 是否覆蓋
-            scope: 範圍識別
+            template_id: Template ID
+            target_path: target directory path
+            files: list of uploaded files
+            overwrite: whether to overwrite
+            scope: scope identifier
 
         Returns:
-            上傳結果
+            upload result
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 檢查檔案數量
+        # Check file count
         if len(files) > self.MAX_UPLOAD_FILES:
             return FileUploadResponse(
                 success=False,
@@ -718,7 +718,7 @@ class TemplateFileService(TemplateBaseService):
                 message=f"Too many files (max {self.MAX_UPLOAD_FILES})"
             )
 
-        # 解析目標目錄
+        # Parse target directory
         target_dir = self._resolve_path(template_id, scope, target_path)
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -728,7 +728,7 @@ class TemplateFileService(TemplateBaseService):
 
         for upload_file in files:
             try:
-                # 驗證檔案名稱
+                # Validate file name
                 if not self._validate_filename(upload_file.filename):
                     results.append(UploadedFileInfo(
                         filename=upload_file.filename,
@@ -740,7 +740,7 @@ class TemplateFileService(TemplateBaseService):
                     failed += 1
                     continue
 
-                # 檢查副檔名
+                # Check file extension
                 file_ext = Path(upload_file.filename).suffix.lower()
                 if file_ext and file_ext not in self.ALLOWED_EXTENSIONS:
                     results.append(UploadedFileInfo(
@@ -755,7 +755,7 @@ class TemplateFileService(TemplateBaseService):
 
                 file_path = target_dir / upload_file.filename
 
-                # 檢查是否已存在
+                # Check if already exists
                 if file_path.exists() and not overwrite:
                     results.append(UploadedFileInfo(
                         filename=upload_file.filename,
@@ -767,7 +767,7 @@ class TemplateFileService(TemplateBaseService):
                     failed += 1
                     continue
 
-                # 讀取並檢查大小
+                # Read and check size
                 content = await upload_file.read()
                 if len(content) > self.MAX_FILE_SIZE:
                     results.append(UploadedFileInfo(
@@ -780,10 +780,10 @@ class TemplateFileService(TemplateBaseService):
                     failed += 1
                     continue
 
-                # 寫入檔案
+                # WriteFile
                 file_path.write_bytes(content)
 
-                # 計算相對路徑
+                # Calculate relative path
                 scope_dir = self._get_template_dir(template_id) / scope
                 relative_path = "/" + str(file_path.relative_to(scope_dir)).replace("\\", "/")
 
@@ -796,7 +796,7 @@ class TemplateFileService(TemplateBaseService):
                 succeeded += 1
 
             except Exception as e:
-                logger.error(f"上傳檔案失敗 {upload_file.filename}: {e}")
+                logger.error(f"file upload failed {upload_file.filename}: {e}")
                 results.append(UploadedFileInfo(
                     filename=upload_file.filename,
                     path="",
@@ -821,25 +821,25 @@ class TemplateFileService(TemplateBaseService):
         request: FileSearchRequest,
         scope: Optional[str] = None
     ) -> FileSearchResponse:
-        """搜尋檔案
+        """SearchFile
 
         Args:
-            template_id: 模板 ID
-            request: 搜尋請求
-            scope: 範圍識別
+            template_id: Template ID
+            request: SearchRequest
+            scope: scope identifier
 
         Returns:
-            搜尋結果
+            SearchResult
         """
-        # 驗證模板
+        # ValidateTemplate
         db_template = self._get_template(template_id)
         if not db_template:
             raise FileNotFoundException(f"Template {template_id}")
 
-        # 驗證 scope
+        # Validate scope
         scope = self._validate_scope(scope)
 
-        # 解析搜尋目錄
+        # ParseSearchDirectory
         search_dir = self._get_template_dir(template_id) / scope
 
         if not search_dir.exists():
@@ -859,17 +859,17 @@ class TemplateFileService(TemplateBaseService):
                 if len(results) >= request.maxResults:
                     break
 
-                # 跳過特定目錄
+                # Skip specific directories
                 if any(skip_dir in item.parts for skip_dir in self.SKIP_DIRECTORIES):
                     continue
 
-                # 計算相對路徑
+                # Calculate relative path
                 relative_path = "/" + str(item.relative_to(search_dir)).replace("\\", "/")
 
-                # 檔案名稱匹配
+                # File name matches
                 name_match = query_lower in item.name.lower()
 
-                # 檔案類型篩選
+                # FileTypeFilter
                 if request.fileTypes and item.is_file():
                     if item.suffix not in request.fileTypes:
                         continue
@@ -880,7 +880,7 @@ class TemplateFileService(TemplateBaseService):
                         if item.stat().st_size < self.MAX_FILE_SIZE:
                             content = item.read_text(encoding="utf-8")
                             if query_lower in content.lower():
-                                # 提取匹配的行
+                                # Extract matching lines
                                 lines = content.split('\n')
                                 for i, line in enumerate(lines):
                                     if query_lower in line.lower():
@@ -888,7 +888,7 @@ class TemplateFileService(TemplateBaseService):
                                         if len(content_matches) >= 3:
                                             break
                     except Exception as e:
-                        logger.debug(f"無法讀取檔案內容 {item}: {e}")
+                        logger.debug(f"cannot read file content {item}: {e}")
 
                 if name_match or content_matches:
                     stat_info = item.stat()
@@ -909,14 +909,14 @@ class TemplateFileService(TemplateBaseService):
                 total=len(results)
             )
         except Exception as e:
-            logger.error(f"搜尋失敗: {e}")
+            logger.error(f"SearchFailed: {e}")
             raise FileManagementException(
                 code="SEARCH_FAILED",
                 message=f"Search failed: {str(e)}",
                 status_code=500
             )
     def load_files(self, template_id: str) -> List:
-        """載入檔案結構 (scripts 目錄)"""
+        """Load file structure (scripts directory)"""
         from app.models.template import TemplateFileNode
 
         files_dir = self._get_template_dir(template_id) / "scripts"
@@ -935,7 +935,7 @@ class TemplateFileService(TemplateBaseService):
                             path=str(item.relative_to(files_dir)),
                             type="file",
                             size=item.stat().st_size,
-                            content=item.read_text(encoding="utf-8", errors="ignore") if item.stat().st_size < 1024 * 1024 else None,  # 限制 1MB
+                            content=item.read_text(encoding="utf-8", errors="ignore") if item.stat().st_size < 1024 * 1024 else None,  # Limit 1MB
                         ))
                     elif item.is_dir():
                         children = build_file_tree(item, node_id)
@@ -947,14 +947,14 @@ class TemplateFileService(TemplateBaseService):
                             children=children,
                         ))
             except Exception as e:
-                logger.error(f"載入檔案節點失敗 {path}: {e}")
+                logger.error(f"LoadFileNodeFailed {path}: {e}")
 
             return nodes
 
         return build_file_tree(files_dir)
 
     def load_skills(self, template_id: str) -> List:
-        """載入檔案結構 (skills 目錄)"""
+        """Load file structure (skills directory)"""
         from app.models.template import TemplateFileNode
 
         skills_dir = self._get_template_dir(template_id) / "skills"
@@ -973,7 +973,7 @@ class TemplateFileService(TemplateBaseService):
                             path=str(item.relative_to(skills_dir)),
                             type="file",
                             size=item.stat().st_size,
-                            content=item.read_text(encoding="utf-8", errors="ignore") if item.stat().st_size < 1024 * 1024 else None,  # 限制 1MB
+                            content=item.read_text(encoding="utf-8", errors="ignore") if item.stat().st_size < 1024 * 1024 else None,  # Limit 1MB
                         ))
                     elif item.is_dir():
                         children = build_file_tree(item, node_id)
@@ -985,7 +985,7 @@ class TemplateFileService(TemplateBaseService):
                             children=children,
                         ))
             except Exception as e:
-                logger.error(f"載入檔案節點失敗 {path}: {e}")
+                logger.error(f"LoadFileNodeFailed {path}: {e}")
 
             return nodes
 

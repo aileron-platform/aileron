@@ -1,4 +1,4 @@
-"""自動化任務相關路由"""
+"""Automation task related routes"""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from app.services.automation_service import (
 )
 
 
-router = APIRouter(prefix="/automation", tags=["自動化"])
+router = APIRouter(prefix="/automation", tags=["Automation"])
 logger = get_logger(__name__)
 
 
@@ -50,7 +50,7 @@ def _translate_automation_error(translate: Callable[..., str], exc: Exception) -
 @router.get(
     "/jobs",
     response_model=JobListResponse,
-    summary="列出自動化任務",
+    summary="List automation tasks",
     responses=build_responses(500),
 )
 async def list_jobs(service: AutomationService = Depends(get_automation_service)) -> JobListResponse:
@@ -61,7 +61,7 @@ async def list_jobs(service: AutomationService = Depends(get_automation_service)
     "/jobs",
     response_model=AutomationJob,
     status_code=status.HTTP_201_CREATED,
-    summary="建立自動化任務",
+    summary="CreateAutomation task",
     responses=build_responses(422, 500),
 )
 async def create_job(
@@ -74,7 +74,7 @@ async def create_job(
 @router.get(
     "/jobs/{job_id}",
     response_model=AutomationJob,
-    summary="取得自動化任務",
+    summary="GetAutomation task",
     responses=build_responses(404, 500),
 )
 async def get_job(
@@ -94,7 +94,7 @@ async def get_job(
 @router.patch(
     "/jobs/{job_id}",
     response_model=AutomationJob,
-    summary="更新自動化任務",
+    summary="UpdateAutomation task",
     responses=build_responses(404, 422, 500),
 )
 async def update_job(
@@ -115,7 +115,7 @@ async def update_job(
 @router.delete(
     "/jobs/{job_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除自動化任務",
+    summary="DeleteAutomation task",
     responses=build_responses(404, 500),
 )
 async def delete_job(
@@ -135,7 +135,7 @@ async def delete_job(
 @router.post(
     "/jobs/{job_id}/status",
     response_model=AutomationJob,
-    summary="更新任務狀態",
+    summary="UpdateTaskStatus",
     responses=build_responses(404, 422, 500),
 )
 async def update_job_status(
@@ -157,7 +157,7 @@ async def update_job_status(
     "/jobs/{job_id}/execute",
     response_model=JobExecution,
     status_code=status.HTTP_201_CREATED,
-    summary="立即執行自動化任務",
+    summary="Execute automation task immediately",
     responses=build_responses(400, 404, 500, 503),
 )
 async def execute_job_now(
@@ -183,7 +183,7 @@ async def execute_job_now(
             detail=_translate_automation_error(request.state.translate, exc),
         )
     except Exception as exc:
-        logger.exception("執行自動化任務 %s 時發生未預期的錯誤", job_id)
+        logger.exception("Unexpected error while executing automation task %s", job_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=request.state.translate("automation.execution_failed_simple")
@@ -194,7 +194,7 @@ async def execute_job_now(
     "/jobs/{job_id}/executions",
     response_model=JobExecution,
     status_code=status.HTTP_201_CREATED,
-    summary="建立新的任務執行",
+    summary="Create new task execution",
     responses=build_responses(404, 422, 500),
 )
 async def create_execution(
@@ -223,12 +223,12 @@ async def create_execution(
 @router.get(
     "/executions",
     response_model=JobExecutionListResponse,
-    summary="列出任務執行紀錄",
+    summary="List task execution records",
     responses=build_responses(422, 500),
 )
 async def list_executions(
-    job_id: Optional[str] = Query(default=None, alias="jobId", description="自動化任務 ID"),
-    limit: Optional[int] = Query(default=None, ge=0, le=100, description="限制回傳數量"),
+    job_id: Optional[str] = Query(default=None, alias="jobId", description="Automation task ID"),
+    limit: Optional[int] = Query(default=None, ge=0, le=100, description="Limit number of results"),
     service: AutomationService = Depends(get_automation_service),
 ) -> JobExecutionListResponse:
     return service.list_executions(job_id=job_id, limit=limit)
@@ -236,7 +236,7 @@ async def list_executions(
 
 @router.get(
     "/executions/{execution_id}/logs",
-    summary="獲取執行日誌",
+    summary="Get execution logs",
     responses=build_responses(404, 500),
 )
 async def get_execution_logs(
@@ -244,13 +244,13 @@ async def get_execution_logs(
     request: Request,
     service: AutomationService = Depends(get_automation_service),
 ) -> dict[str, Any]:
-    """獲取執行日誌
+    """Get execution logs
 
     Args:
-        execution_id: 執行記錄 ID
+        execution_id: Execution record ID
 
     Returns:
-        包含日誌列表和總數的字典
+        Dictionary containing log list and total count
     """
     execution_record = service.get_execution_record(execution_id)
     if not execution_record:
@@ -259,7 +259,7 @@ async def get_execution_logs(
             detail=request.state.translate("automation.execution_not_found", execution_id=execution_id),
         )
 
-    # 從 execution_metadata 中提取日誌
+    # Extract logs from execution_metadata
     metadata = execution_record.execution_metadata or {}
     logs = metadata.get("execution_logs", [])
 
@@ -277,7 +277,7 @@ async def get_execution_logs(
 @router.get(
     "/metrics",
     response_model=AutomationMetrics,
-    summary="取得自動化統計資訊",
+    summary="Get automation statistics",
     responses=build_responses(500),
 )
 async def get_metrics(service: AutomationService = Depends(get_automation_service)) -> AutomationMetrics:
@@ -287,7 +287,7 @@ async def get_metrics(service: AutomationService = Depends(get_automation_servic
 @router.get(
     "/calendar",
     response_model=JobCalendarResponse,
-    summary="取得任務行事曆事件",
+    summary="Get task calendar events",
     responses=build_responses(500),
 )
 async def get_calendar(service: AutomationService = Depends(get_automation_service)) -> JobCalendarResponse:
@@ -298,7 +298,7 @@ async def get_calendar(service: AutomationService = Depends(get_automation_servi
     "/webhook/{job_id}",
     response_model=JobExecution,
     status_code=status.HTTP_201_CREATED,
-    summary="透過 Webhook 觸發自動化任務",
+    summary="Trigger automation task via webhook",
     responses=build_responses(400, 401, 404, 500, 503),
 )
 async def trigger_webhook(
@@ -308,12 +308,12 @@ async def trigger_webhook(
     service: AutomationService = Depends(get_automation_service),
 ) -> JobExecution:
     """
-    透過 Webhook 觸發自動化任務執行
+    Trigger automation task execution via webhook
 
-    需要在 Header 中提供正確的 X-API-Key
+    Requires valid X-API-Key in header
     """
     try:
-        # 驗證 API Key
+        # Validate API Key
         job = service.get_job(job_id)
         if not job:
             raise HTTPException(
@@ -339,11 +339,11 @@ async def trigger_webhook(
                 detail=request.state.translate("automation.webhook_invalid_api_key")
             )
 
-        # 執行任務
+        # Execute task
         execution = service.enqueue_execution(
             job_id=job_id,
             trigger="webhook",
-            summary="透過 Webhook 觸發執行"
+            summary="Triggered execution via webhook"
         )
 
         if not execution:
@@ -352,7 +352,7 @@ async def trigger_webhook(
                 detail=request.state.translate("automation.execution_create_failed")
             )
 
-        # 觸發 Celery 任務執行
+        # Trigger Celery task execution
         from app.celery.app import celery_app
         celery_app.send_task("automation.run_job", args=[job_id, execution.id])
 
@@ -361,7 +361,7 @@ async def trigger_webhook(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("Webhook 觸發任務 %s 時發生未預期的錯誤", job_id)
+        logger.exception("Unexpected error while triggering webhook task %s", job_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=request.state.translate("automation.trigger_failed_simple")
@@ -371,7 +371,7 @@ async def trigger_webhook(
 @router.get(
     "/workspaces/{workspace_id}/queue",
     response_model=WorkspaceQueueResponse,
-    summary="查詢工作區佇列",
+    summary="Query workspace queue",
     responses=build_responses(500),
 )
 async def get_workspace_queue(
@@ -379,20 +379,20 @@ async def get_workspace_queue(
     request: Request,
     service: AutomationService = Depends(get_automation_service),
 ) -> WorkspaceQueueResponse:
-    """查詢指定工作區的任務佇列
+    """Query task queue for specified workspace
 
     Args:
-        workspace_id: 工作區 ID
-        service: 自動化服務
+        workspace_id: Workspace ID
+        service: Automation service
 
     Returns:
-        工作區佇列資訊
+        Workspace queue information
     """
     try:
         result = service.get_workspace_queue(workspace_id)
         return WorkspaceQueueResponse(**result)
     except Exception as exc:
-        logger.exception("查詢工作區佇列 %s 時發生錯誤", workspace_id)
+        logger.exception("Error while querying workspace queue %s", workspace_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=request.state.translate("automation.queue_fetch_failed")
@@ -402,7 +402,7 @@ async def get_workspace_queue(
 @router.post(
     "/executions/{execution_id}/cancel",
     response_model=ExecutionCancelResponse,
-    summary="取消排隊任務",
+    summary="Cancel queued task",
     responses=build_responses(400, 404, 500),
 )
 async def cancel_execution(
@@ -410,22 +410,22 @@ async def cancel_execution(
     request: Request,
     service: AutomationService = Depends(get_automation_service),
 ) -> ExecutionCancelResponse:
-    """取消排隊中的任務
+    """Cancel queued task
 
-    只能取消 waiting 狀態的任務。
+    Only tasks with waiting status can be cancelled.
 
     Args:
-        execution_id: 執行記錄 ID
-        service: 自動化服務
+        execution_id: Execution record ID
+        service: Automation service
 
     Returns:
-        取消結果
+        Cancellation result
     """
     try:
         result = service.cancel_execution(execution_id)
         return ExecutionCancelResponse(**result)
     except Exception as exc:
-        logger.exception("取消執行記錄 %s 時發生錯誤", execution_id)
+        logger.exception("Error while cancelling execution record %s", execution_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=request.state.translate("automation.cancel_failed")

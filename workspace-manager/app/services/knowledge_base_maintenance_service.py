@@ -1,4 +1,4 @@
-"""Knowledge base 維護相關背景工作。"""
+"""Knowledge base maintenance related background tasks."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class KnowledgeBaseMaintenanceService:
-    """處理 KB 配額校正與 tombstone 清理。"""
+    """Handle KB quota reconciliation and tombstone cleanup."""
 
     DRIFT_THRESHOLD_RATIO = 0.05
 
@@ -28,7 +28,7 @@ class KnowledgeBaseMaintenanceService:
         self.storage_root.mkdir(parents=True, exist_ok=True)
 
     def reconcile_kb_quota(self) -> dict[str, int]:
-        """掃描所有非 tombstoned KB 目錄並校正 cached size。"""
+        """Scan all non-tombstoned KB directories and reconcile cached size."""
 
         knowledge_bases = list(
             self.db.scalars(
@@ -72,7 +72,7 @@ class KnowledgeBaseMaintenanceService:
         }
 
     def cleanup_tombstoned_knowledge_bases(self) -> dict[str, int]:
-        """清理超過 retention 的 tombstoned KB 與目錄。"""
+        """Clean up tombstoned KBs and directories exceeding retention."""
 
         cutoff = self._retention_cutoff()
         tombstoned_kbs = list(

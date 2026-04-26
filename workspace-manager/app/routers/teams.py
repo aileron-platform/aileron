@@ -1,4 +1,4 @@
-"""團隊路由"""
+"""TeamRoute"""
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
@@ -7,17 +7,17 @@ from app.models import Team, TeamCreate, TeamListResponse, TeamUpdate
 from app.services import get_team_service
 from app.services.team_service import TeamService
 
-router = APIRouter(prefix="/teams", tags=["團隊"])
+router = APIRouter(prefix="/teams", tags=["Team"])
 
 
 @router.get(
     "/",
     response_model=TeamListResponse,
-    summary="列出團隊",
+    summary="List teams",
     responses=build_responses(500),
 )
 async def list_teams(service: TeamService = Depends(get_team_service)) -> TeamListResponse:
-    """取得團隊列表"""
+    """Get team list."""
     return service.list()
 
 
@@ -25,18 +25,18 @@ async def list_teams(service: TeamService = Depends(get_team_service)) -> TeamLi
     "/",
     response_model=Team,
     status_code=status.HTTP_201_CREATED,
-    summary="建立團隊",
+    summary="Create team",
     responses=build_responses(422, 500),
 )
 async def create_team(payload: TeamCreate, service: TeamService = Depends(get_team_service)) -> Team:
-    """建立新團隊"""
+    """Create new team."""
     return service.create(payload)
 
 
 @router.get(
     "/{team_id}",
     response_model=Team,
-    summary="取得團隊",
+    summary="Get team",
     responses=build_responses(404, 500),
 )
 async def get_team(
@@ -44,7 +44,7 @@ async def get_team(
     request: Request,
     service: TeamService = Depends(get_team_service),
 ) -> Team:
-    """取得指定團隊"""
+    """Get specified team."""
     team = service.get(team_id)
     if not team:
         raise HTTPException(
@@ -57,7 +57,7 @@ async def get_team(
 @router.put(
     "/{team_id}",
     response_model=Team,
-    summary="更新團隊",
+    summary="Update team",
     responses=build_responses(404, 422, 500),
 )
 async def update_team(
@@ -66,7 +66,7 @@ async def update_team(
     request: Request,
     service: TeamService = Depends(get_team_service),
 ) -> Team:
-    """更新團隊資訊"""
+    """Update team information."""
     team = service.update(team_id, payload)
     if not team:
         raise HTTPException(
@@ -79,7 +79,7 @@ async def update_team(
 @router.delete(
     "/{team_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除團隊",
+    summary="Delete team",
     responses=build_responses(404, 500),
 )
 async def delete_team(
@@ -87,7 +87,7 @@ async def delete_team(
     request: Request,
     service: TeamService = Depends(get_team_service),
 ) -> None:
-    """刪除指定團隊"""
+    """Delete specified team."""
     team = service.get(team_id)
     if not team:
         raise HTTPException(

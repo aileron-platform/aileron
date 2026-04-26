@@ -1,4 +1,4 @@
-"""模板 Feature 偵測與索引服務"""
+"""Template feature detection and indexing service"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class FeatureIndexResult:
-    """Feature 索引結果"""
+    """Feature IndexResult"""
     def __init__(
         self,
         success: bool,
@@ -39,16 +39,16 @@ class FeatureIndexResult:
 
 
 class TemplateFeatureDetectionService:
-    """模板 Feature 偵測與索引服務
+    """Template feature detection and indexing service
 
-    負責：
-    1. 分析模板目錄結構，偵測 Feature 存在
-    2. 驗證 Feature 有效性（如 JSON 檔案格式）
-    3. 與資料庫同步 Feature 索引
-    4. 提供 Feature 查詢接口
+    Responsibilities:
+    1. Analyze template directory structure, detect feature existence
+    2. Verify feature validity (such as JSON file format)
+    3. Sync feature index with database
+    4. Provide feature query interface
     """
 
-    # Feature 偵測規則定義
+    # Feature detection rule definitions
     FEATURE_DETECTION_RULES = {
         'mcp': {
             'path': 'mcp',
@@ -92,27 +92,27 @@ class TemplateFeatureDetectionService:
         }
     }
 
-    # 需要忽略的檔案
+    # Files to ignore
     IGNORE_FILES = {'.gitkeep', '.git', '__pycache__', '.DS_Store', 'Thumbs.db'}
 
     def __init__(self, db: Session, template_base_service: TemplateBaseService):
-        """初始化服務
+        """InitializeService
 
         Args:
-            db: 資料庫 session
-            template_base_service: 模板基礎服務，用於取得模板路徑等資訊
+            db: Database session
+            template_base_service: Template base service, used for getting template path and other information
         """
         self.db = db
         self.template_base_service = template_base_service
 
     def detect_features(self, template_id: str) -> Dict[str, bool]:
-        """偵測模板的所有 Feature 存在狀態
+        """Detect existence status of all features in template
 
         Args:
-            template_id: 模板 ID
+            template_id: Template ID
 
         Returns:
-            Dict[str, bool]: Feature key -> 是否存在的映射
+            Dict[str, bool]: Feature key -> whether exists mapping
         """
         template_dir = self.template_base_service._resolve_template_dir(template_id)
 
@@ -143,16 +143,16 @@ class TemplateFeatureDetectionService:
         return detected
 
     def index_features(self, template_id: str) -> FeatureIndexResult:
-        """分析並索引 Feature 到資料庫
+        """Analyze and index features to database
 
         Args:
-            template_id: 模板 ID
+            template_id: Template ID
 
         Returns:
-            FeatureIndexResult: 索引結果
+            FeatureIndexResult: IndexResult
         """
         try:
-            # 檢查模板是否存在
+            # Check if template exists
             template = self.template_base_service._get_template(template_id)
             if not template:
                 return FeatureIndexResult(
@@ -164,24 +164,24 @@ class TemplateFeatureDetectionService:
                     message=f"Template '{template_id}' not found"
                 )
 
-            # 偵測 Feature
+            # Detect features
             detected_features = self.detect_features(template_id)
             detected_feature_keys = [key for key, exists in detected_features.items() if exists]
 
             logger.info(f"Detected features for template {template_id}: {detected_feature_keys}")
 
-            # 刪除舊的 mapping
+            # Delete old mappings
             self.db.query(TemplateFeatureMapping).filter(
                 TemplateFeatureMapping.template_id == template_id
             ).delete()
 
-            # 建立新的 mapping
+            # Create new mappings
             indexed_count = 0
             failed_count = 0
 
             for feature_key in detected_feature_keys:
                 try:
-                    # 查詢 Feature ID
+                    # Query Feature ID
                     feature = self.db.query(TemplateFeature).filter(
                         TemplateFeature.feature_key == feature_key,
                         TemplateFeature.is_active == True
@@ -192,7 +192,7 @@ class TemplateFeatureDetectionService:
                         failed_count += 1
                         continue
 
-                    # 建立新的 mapping
+                    # Create new mappings
                     mapping = TemplateFeatureMapping(
                         id=str(uuid4()),
                         template_id=template_id,
@@ -207,7 +207,7 @@ class TemplateFeatureDetectionService:
                     logger.error(f"Failed to index feature '{feature_key}': {e}", exc_info=True)
                     failed_count += 1
 
-            # 提交變更
+            # Commit changes
             self.db.commit()
 
             message = f"Successfully indexed {indexed_count} features for template {template_id}"
@@ -239,13 +239,13 @@ class TemplateFeatureDetectionService:
             )
 
     def get_template_features(self, template_id: str) -> List[str]:
-        """查詢模板已索引的 Feature
+        """Query template indexed features
 
         Args:
-            template_id: 模板 ID
+            template_id: Template ID
 
         Returns:
-            List[str]: Feature key 列表
+            List[str]: Feature key list
         """
         try:
             mappings = self.db.query(TemplateFeatureMapping).join(
@@ -270,15 +270,15 @@ class TemplateFeatureDetectionService:
             logger.error(f"Failed to get template features for {template_id}: {e}", exc_info=True)
             return []
 
-    # ==================== 驗證方法 ====================
+    # ==================== VerifyMethod ====================
 
     def _validate_mcp_json(self, path: Path) -> bool:
-        """驗證 MCP JSON 有效性
+        """Verify MCP JSON validity
 
-        檢查：
-        1. JSON 格式正確
-        2. 有 mcpServers 欄位
-        3. mcpServers 至少有一個 server
+        Check：
+        1. JSON format is correct
+        2. has mcpServers field
+        3. mcpServers has at least one server
         """
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
@@ -293,11 +293,11 @@ class TemplateFeatureDetectionService:
             return False
 
     def _validate_hooks_json(self, path: Path) -> bool:
-        """驗證 Hooks JSON 有效性
+        """Verify hooks JSON validity
 
-        檢查：
-        1. JSON 格式正確
-        2. 有 hooks 欄位
+        Check：
+        1. JSON format is correct
+        2. has hooks field
         """
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
@@ -307,7 +307,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_yaml_files(self, directory: Path) -> bool:
-        """目錄下至少存在一個合法 YAML 檔案。"""
+        """Directory contains at least one valid YAML file。"""
         try:
             return any(path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir())
         except Exception as e:
@@ -315,7 +315,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_hook_files(self, directory: Path) -> bool:
-        """hooks 目錄至少有一個合法 hook YAML，忽略 scripts 子目錄。"""
+        """Hooks directory has at least one valid hook YAML, ignore scripts subdirectory。"""
         try:
             return any(
                 path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir()
@@ -325,7 +325,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _validate_output_style_yaml(self, path: Path) -> bool:
-        """驗證 canonical output-style.yaml。"""
+        """Verify canonical output-style.yaml。"""
         try:
             data = json.loads(json.dumps(yaml.safe_load(path.read_text(encoding="utf-8")) or {}))
             return isinstance(data, dict)
@@ -334,9 +334,9 @@ class TemplateFeatureDetectionService:
             return False
 
     def _validate_agents_md(self, path: Path) -> bool:
-        """驗證 AGENTS.md 有效性
+        """Verify AGENTS.md validity
 
-        檢查檔案大小 > 10 bytes（非空檔案）
+        Check file size > 10 bytes (non-empty file)
         """
         try:
             return path.stat().st_size > 10
@@ -345,13 +345,13 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_md_files(self, directory: Path) -> bool:
-        """檢查目錄中是否有有效的 .md 檔案
+        """Check if directory has valid .md files
 
         Args:
-            directory: 目錄路徑
+            directory: Directory path
 
         Returns:
-            bool: 是否有至少一個 .md 檔案
+            bool: whether there is at least one .md file
         """
         if not directory.exists() or not directory.is_dir():
             return False
@@ -366,13 +366,13 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_files_in_directory(self, directory: Path) -> bool:
-        """檢查目錄中是否有有效檔案（排除 .gitkeep 等）
+        """Check if directory has valid files (excluding .gitkeep etc.)
 
         Args:
-            directory: 目錄路徑
+            directory: Directory path
 
         Returns:
-            bool: 目錄是否非空（排除忽略檔案）
+            bool: Whether directory is non-empty (excluding ignored files)
         """
         if not directory.exists() or not directory.is_dir():
             return False

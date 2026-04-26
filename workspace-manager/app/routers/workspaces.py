@@ -1,4 +1,4 @@
-"""工作區 API"""
+"""Workspace API"""
 
 from __future__ import annotations
 
@@ -71,23 +71,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 _WORKSPACE_KB_ERROR_DESCRIPTIONS = {
-    400: "工作區 knowledge base 請求不合法，例如 payload 格式錯誤。`detail.message` 會依請求語系本地化。",
-    403: "目前使用者沒有對工作區或知識庫掛載的操作權限。`detail.message` 會依請求語系本地化。",
-    404: "指定工作區、知識庫或掛載不存在。`detail.message` 會依請求語系本地化。",
-    409: "工作區 knowledge base 狀態衝突，例如重複掛載或掛載別名衝突。`detail.message` 會依請求語系本地化。",
+    400: "Workspace knowledge base request is invalid, e.g., malformed payload. `detail.message` will be localized based on request language.",
+    403: "Current user does not have permission to operate on workspace or knowledge base attachments. `detail.message` will be localized based on request language.",
+    404: "Specified workspace, knowledge base, or attachment does not exist. `detail.message` will be localized based on request language.",
+    409: "Workspace knowledge base state conflict, e.g., duplicate attachment or mount alias conflict. `detail.message` will be localized based on request language.",
 }
 
 _WORKSPACE_SHARE_ERROR_DESCRIPTIONS = {
-    400: "工作區分享請求不合法，例如不可分享給擁有者。`detail.message` 會依請求語系本地化。",
-    403: "目前使用者沒有管理工作區分享的權限。`detail.message` 會依請求語系本地化。",
-    404: "指定工作區、分享目標或工作區分享不存在。`detail.message` 會依請求語系本地化。",
-    409: "工作區分享狀態衝突，例如重複分享同一位使用者。`detail.message` 會依請求語系本地化。",
+    400: "Workspace share request is invalid, e.g., cannot share to owner. `detail.message` will be localized based on request language.",
+    403: "Current user does not have permission to manage workspace shares. `detail.message` will be localized based on request language.",
+    404: "Specified workspace, share target, or workspace share does not exist. `detail.message` will be localized based on request language.",
+    409: "Workspace share state conflict, e.g., duplicate share to same user. `detail.message` will be localized based on request language.",
 }
 
 _WORKSPACE_SHARE_ERROR_EXAMPLES = {
     400: {
         "shareOwnerForbidden": {
-            "summary": "不可分享給工作區擁有者",
+            "summary": "Cannot share workspace with owner",
             "value": {
                 "detail": {
                     "code": "WORKSPACE_INVALID_SHARE_TARGET",
@@ -99,7 +99,7 @@ _WORKSPACE_SHARE_ERROR_EXAMPLES = {
     },
     404: {
         "shareNotFound": {
-            "summary": "指定的工作區分享不存在",
+            "summary": "Specified workspace share does not exist",
             "value": {
                 "detail": {
                     "code": "WORKSPACE_SHARE_NOT_FOUND",
@@ -111,7 +111,7 @@ _WORKSPACE_SHARE_ERROR_EXAMPLES = {
     },
     409: {
         "shareConflict": {
-            "summary": "重複分享同一位使用者",
+            "summary": "Duplicate share to same user",
             "value": {
                 "detail": {
                     "code": "WORKSPACE_SHARE_CONFLICT",
@@ -126,7 +126,7 @@ _WORKSPACE_SHARE_ERROR_EXAMPLES = {
 _WORKSPACE_KB_ERROR_EXAMPLES = {
     404: {
         "attachmentNotFound": {
-            "summary": "指定的知識庫掛載不存在",
+            "summary": "Specified knowledge base attachment does not exist",
             "value": {
                 "detail": {
                     "code": "KB_ATTACHMENT_NOT_FOUND",
@@ -138,7 +138,7 @@ _WORKSPACE_KB_ERROR_EXAMPLES = {
     },
     409: {
         "duplicateAttachment": {
-            "summary": "重複掛載同一個知識庫",
+            "summary": "Duplicate attachment of same knowledge base",
             "value": {
                 "detail": {
                     "code": "KB_ALREADY_ATTACHED",
@@ -148,7 +148,7 @@ _WORKSPACE_KB_ERROR_EXAMPLES = {
             },
         },
         "aliasConflict": {
-            "summary": "掛載別名衝突",
+            "summary": "Mount alias conflict",
             "value": {
                 "detail": {
                     "code": "KB_MOUNT_ALIAS_CONFLICT",
@@ -290,22 +290,22 @@ _RUNTIME_LOG_STAGE_KEYS = {
 }
 
 _RUNTIME_LOG_EXACT_KEYS = {
-    "沒有關聯的 Browser 容器": "workspace.runtime_log.browser_not_found",
+    "No Browser container associated": "workspace.runtime_log.browser_not_found",
     "No Browser container found for this workspace": "workspace.runtime_log.browser_not_found",
-    "沒有關聯的 Canvas 容器": "workspace.runtime_log.canvas_not_found",
+    "No Canvas container associated": "workspace.runtime_log.canvas_not_found",
     "No Canvas container found for this workspace": "workspace.runtime_log.canvas_not_found",
 }
 
 _RUNTIME_LOG_PREFIX_KEYS = (
-    ("Browser 容器啟動失敗: ", "workspace.runtime_log.browser_error"),
+    ("Browser ContainerStartFailed: ", "workspace.runtime_log.browser_error"),
     ("Browser container startup failed: ", "workspace.runtime_log.browser_error"),
-    ("Canvas 容器啟動失敗: ", "workspace.runtime_log.canvas_error"),
+    ("Canvas ContainerStartFailed: ", "workspace.runtime_log.canvas_error"),
     ("Canvas container startup failed: ", "workspace.runtime_log.canvas_error"),
-    ("重建失敗: ", "workspace.runtime_log.rebuild_error"),
     ("Rebuild failed: ", "workspace.runtime_log.rebuild_error"),
-    ("已刪除目錄: ", "workspace.runtime_log.volume_removed"),
+    ("Rebuild failed: ", "workspace.runtime_log.rebuild_error"),
     ("Removed directory: ", "workspace.runtime_log.volume_removed"),
-    ("刪除目錄失敗: ", "workspace.runtime_log.volume_error"),
+    ("Removed directory: ", "workspace.runtime_log.volume_removed"),
+    ("Failed to remove directory: ", "workspace.runtime_log.volume_error"),
     ("Failed to remove directory: ", "workspace.runtime_log.volume_error"),
 )
 
@@ -354,7 +354,7 @@ def _should_schedule_kb_runtime_sync(workspace: object) -> bool:
 @router.get(
     "/",
     response_model=WorkspaceListResponse,
-    summary="列出工作區",
+    summary="List workspaces",
     responses=build_responses(401, 422, 500),
 )
 def list_workspaces(
@@ -379,7 +379,7 @@ def list_workspaces(
     "/",
     response_model=WorkspaceDetail,
     status_code=status.HTTP_201_CREATED,
-    summary="建立工作區",
+    summary="Create workspace",
     responses=build_responses(400, 401, 422, 500),
 )
 def create_workspace(
@@ -412,7 +412,7 @@ def create_workspace(
 @router.get(
     "/{workspace_id}",
     response_model=WorkspaceDetail,
-    summary="取得工作區詳情",
+    summary="Get workspace details",
     responses=build_responses(404, 500),
 )
 def get_workspace(
@@ -439,7 +439,7 @@ def get_workspace(
 @router.get(
     "/{workspace_id}/runtime-logs",
     response_model=list[WorkspaceRuntimeLogEntry],
-    summary="取得 Runtime 佈署日誌",
+    summary="Get runtime deployment logs",
     responses=build_responses(422, 500),
 )
 def get_workspace_runtime_logs(
@@ -468,7 +468,7 @@ def get_workspace_runtime_logs(
     if not logs:
         return []
 
-    # 手動轉換資料庫物件到 Pydantic model
+    # Manually convert database object to Pydantic model
     result = []
     for log in logs:
         log_entry = WorkspaceRuntimeLogEntry(
@@ -476,7 +476,7 @@ def get_workspace_runtime_logs(
             workspace_id=log.workspace_id,
             stage=log.stage,
             message=_translate_runtime_log_message(log.stage, log.message, request.state.translate),
-            metadata=log.log_metadata,  # 映射 log_metadata 到 metadata
+            metadata=log.log_metadata,  # Map log_metadata to metadata
             created_at=log.created_at,
         )
         result.append(log_entry)
@@ -487,7 +487,7 @@ def get_workspace_runtime_logs(
 @router.put(
     "/{workspace_id}",
     response_model=WorkspaceDetail,
-    summary="更新工作區",
+    summary="UpdateWorkspace",
     responses=build_responses(404, 422, 500),
 )
 async def update_workspace(
@@ -499,7 +499,7 @@ async def update_workspace(
 ) -> WorkspaceDetail:
     current_user_id = _require_current_user_id(request)
     try:
-        # 只有 firewall 配置變更需要額外同步到 workspace-runtime，其餘欄位由 manager 自行持久化。
+        # Only firewall configuration changes need additional sync to workspace-runtime, other columns are persisted by manager itself.
         firewall_changed = payload.firewall is not None
 
         workspace = service.update(
@@ -513,7 +513,7 @@ async def update_workspace(
                 detail=request.state.translate("workspace.not_found")
             )
 
-        # Docker workspace 的 firewall 透過 runtime internal API 套用。
+        # Docker workspace firewall is applied through runtime internal API.
         if firewall_changed and workspace.firewall and workspace.provisioner == "docker":
             background_tasks.add_task(
                 _sync_firewall_to_runtime,
@@ -542,8 +542,8 @@ async def update_workspace(
 
 
 async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
-    """背景任務：同步防火牆設定到 workspace-runtime"""
-    logger.info(f"開始背景同步防火牆設定 - workspace_id: {workspace_id}")
+    """Background task: Sync firewall settings to workspace-runtime"""
+    logger.info(f"Starting background firewall settings sync - workspace_id: {workspace_id}")
 
     db = SessionLocal()
     try:
@@ -551,12 +551,12 @@ async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
         result = await sync_service.sync_firewall_to_runtime(workspace_id, firewall_config)
 
         if result.get("success"):
-            logger.info(f"防火牆設定同步成功 - workspace_id: {workspace_id}")
+            logger.info(f"Firewall settings sync succeeded - workspace_id: {workspace_id}")
         else:
-            logger.warning(f"防火牆設定同步跳過 - workspace_id: {workspace_id}, reason: {result.get('message')}")
+            logger.warning(f"Firewall settings sync skipped - workspace_id: {workspace_id}, reason: {result.get('message')}")
 
     except Exception as e:
-        logger.error(f"防火牆設定同步失敗 - workspace_id: {workspace_id}, error: {e}", exc_info=True)
+        logger.error(f"Firewall settings sync failed - workspace_id: {workspace_id}, error: {e}", exc_info=True)
     finally:
         db.close()
 
@@ -564,7 +564,7 @@ async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
 @router.delete(
     "/{workspace_id}",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="刪除工作區",
+    summary="Delete workspace",
     responses=build_responses(404, 500),
 )
 def delete_workspace(
@@ -573,25 +573,25 @@ def delete_workspace(
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict:
-    """刪除工作區
+    """Delete workspace
 
-    此操作會在背景執行以下步驟：
-    1. 停止並刪除 Docker container
-    2. 刪除掛載的資料目錄
-    3. 刪除資料庫中的 workspace 記錄
+    This operation executes the following steps in background:
+    1. Stop and delete Docker container
+    2. Delete mounted data directory
+    3. Delete workspace record from database
 
     Args:
         workspace_id: Workspace ID
-        background_tasks: FastAPI 背景任務
-        service: Workspace 服務
+        background_tasks: FastAPI background task
+        service: Workspace service
 
     Returns:
-        dict: 包含訊息和 workspace ID
+        dict: Contains message and workspace ID
 
     Raises:
-        HTTPException: 當 workspace 不存在時
+        HTTPException: When workspace does not exist
     """
-    # 檢查 workspace 是否存在
+    # Check if workspace exists
     current_user_id = _require_current_user_id(request)
     try:
         workspace = service.get(workspace_id, current_user_id=current_user_id)
@@ -615,7 +615,7 @@ def delete_workspace(
             detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
-    # 加入背景任務
+    # Add to background task
     background_tasks.add_task(run_delete_workspace_task, workspace_id)
 
     return {
@@ -628,7 +628,7 @@ def delete_workspace(
 @router.post(
     "/{workspace_id}/rebuild",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="重建工作區 Runtime",
+    summary="Rebuild workspace runtime",
     responses=build_responses(404, 500),
 )
 def rebuild_workspace(
@@ -637,24 +637,24 @@ def rebuild_workspace(
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict:
-    """重啟工作區 Container
+    """Restart workspace container
 
-    此操作會在背景執行以下步驟：
-    1. 重啟 Docker container
-    2. 更新 workspace 狀態
+    This operation executes the following steps in background:
+    1. Restart Docker container
+    2. Update workspace status
 
     Args:
         workspace_id: Workspace ID
-        background_tasks: FastAPI 背景任務
-        service: Workspace 服務
+        background_tasks: FastAPI background task
+        service: Workspace service
 
     Returns:
-        dict: 包含訊息和 workspace ID
+        dict: Contains message and workspace ID
 
     Raises:
-        HTTPException: 當 workspace 不存在時
+        HTTPException: When workspace does not exist
     """
-    # 檢查 workspace 是否存在
+    # Check if workspace exists
     current_user_id = _require_current_user_id(request)
     try:
         workspace = service.get(workspace_id, current_user_id=current_user_id)
@@ -678,7 +678,7 @@ def rebuild_workspace(
             detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
-    # 加入背景任務
+    # Add to background task
     background_tasks.add_task(run_restart_workspace_task, workspace_id)
 
     return {
@@ -691,7 +691,7 @@ def rebuild_workspace(
 @router.post(
     "/{workspace_id}/restart-browser",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="重啟 Browser 容器",
+    summary="Restart browser container",
     responses=build_responses(400, 404, 500),
 )
 def restart_browser(
@@ -700,24 +700,24 @@ def restart_browser(
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict:
-    """重啟工作區的 Browser 容器
+    """Restart workspace browser container
 
-    此操作會在背景執行以下步驟：
-    1. 重啟 Browser Docker container
-    2. 更新 browser_status 狀態
+    This operation executes the following steps in background:
+    1. Restart browser Docker container
+    2. Update browser_status status
 
     Args:
         workspace_id: Workspace ID
-        background_tasks: FastAPI 背景任務
-        service: Workspace 服務
+        background_tasks: FastAPI background task
+        service: Workspace service
 
     Returns:
-        dict: 包含訊息和 workspace ID
+        dict: Contains message and workspace ID
 
     Raises:
-        HTTPException: 當 workspace 不存在或沒有 Browser 容器時
+        HTTPException: When workspace does not exist or has no browser container
     """
-    # 檢查 workspace 是否存在
+    # Check if workspace exists
     current_user_id = _require_current_user_id(request)
     try:
         workspace = service.get(workspace_id, current_user_id=current_user_id)
@@ -750,7 +750,7 @@ def restart_browser(
             detail=request.state.translate("workspace.access_denied"),
         ) from exc
 
-    # 加入背景任務
+    # Add to background task
     background_tasks.add_task(run_restart_browser_task, workspace_id)
 
     return {
@@ -763,7 +763,7 @@ def restart_browser(
 @router.post(
     "/{workspace_id}/restart-canvas",
     status_code=status.HTTP_202_ACCEPTED,
-    summary="重啟 Canvas 容器",
+    summary="Restart canvas container",
     responses=build_responses(400, 404, 500),
 )
 def restart_canvas(
@@ -772,15 +772,15 @@ def restart_canvas(
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> dict:
-    """重啟工作區的 Canvas 容器
+    """Restart workspace canvas container
 
     Args:
         workspace_id: Workspace ID
-        background_tasks: FastAPI 背景任務
-        service: Workspace 服務
+        background_tasks: FastAPI background task
+        service: Workspace service
 
     Returns:
-        dict: 包含訊息和 workspace ID
+        dict: Contains message and workspace ID
     """
     current_user_id = _require_current_user_id(request)
     try:
@@ -826,7 +826,7 @@ def restart_canvas(
 @router.get(
     "/{workspace_id}/shares",
     response_model=WorkspaceShareListResponse,
-    summary="列出工作區分享名單",
+    summary="List workspace shares",
     responses=_build_workspace_share_responses(401, 403, 404, 500),
 )
 def list_workspace_shares(
@@ -856,7 +856,7 @@ def list_workspace_shares(
     "/{workspace_id}/shares",
     response_model=WorkspaceShare,
     status_code=status.HTTP_201_CREATED,
-    summary="新增工作區分享",
+    summary="Add workspace share",
     responses=_build_workspace_share_responses(400, 401, 403, 404, 409, 500),
 )
 def create_workspace_share(
@@ -898,7 +898,7 @@ def create_workspace_share(
 @router.patch(
     "/{workspace_id}/shares/{share_id}",
     response_model=WorkspaceShare,
-    summary="更新工作區分享角色",
+    summary="Update workspace share role",
     responses=_build_workspace_share_responses(400, 401, 403, 404, 500),
 )
 def update_workspace_share(
@@ -940,7 +940,7 @@ def update_workspace_share(
 @router.delete(
     "/{workspace_id}/shares/{share_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="移除工作區分享",
+    summary="Remove workspace share",
     responses=_build_workspace_share_responses(401, 403, 404, 500),
 )
 def delete_workspace_share(
@@ -979,7 +979,7 @@ def delete_workspace_share(
 @router.get(
     "/{workspace_id}/knowledge-bases",
     response_model=WorkspaceKnowledgeBaseAttachmentListResponse,
-    summary="列出工作區掛載的 knowledge bases",
+    summary="List workspace knowledge bases",
     responses=_build_workspace_kb_responses(401, 403, 404, 500),
 )
 def list_workspace_knowledge_bases(
@@ -1031,7 +1031,7 @@ def list_workspace_knowledge_bases(
     "/{workspace_id}/knowledge-bases",
     response_model=WorkspaceKnowledgeBaseAttachment,
     status_code=status.HTTP_201_CREATED,
-    summary="掛載 knowledge base 到工作區",
+    summary="Attach knowledge base to workspace",
     responses=_build_workspace_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def create_workspace_knowledge_base_attachment(
@@ -1105,7 +1105,7 @@ def create_workspace_knowledge_base_attachment(
 @router.patch(
     "/{workspace_id}/knowledge-bases/{attachment_id}",
     response_model=WorkspaceKnowledgeBaseAttachment,
-    summary="更新工作區 knowledge base 掛載",
+    summary="Update workspace knowledge base attachment",
     responses=_build_workspace_kb_responses(400, 401, 403, 404, 409, 500),
 )
 def update_workspace_knowledge_base_attachment(
@@ -1165,7 +1165,7 @@ def update_workspace_knowledge_base_attachment(
 @router.delete(
     "/{workspace_id}/knowledge-bases/{attachment_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="移除工作區 knowledge base 掛載",
+    summary="Remove workspace knowledge base attachment",
     responses=_build_workspace_kb_responses(401, 403, 404, 500),
 )
 def delete_workspace_knowledge_base_attachment(

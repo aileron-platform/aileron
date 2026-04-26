@@ -1,4 +1,4 @@
-"""工作區服務"""
+"""WorkspaceService"""
 
 from __future__ import annotations
 
@@ -42,20 +42,20 @@ from app.services.knowledge_base_service import compute_attachment_signature
 from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 from app.utils.string_utils import snake_case
 
-WORKSPACE_OWNER_NOT_FOUND_MESSAGE = "工作區擁有者不存在"
-WORKSPACE_NOT_FOUND_MESSAGE = "工作區不存在"
-WORKSPACE_ACCESS_DENIED_MESSAGE = "工作區權限不足"
-WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE = "找不到要分享的使用者"
-WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE = "不可將工作區分享給擁有者"
-WORKSPACE_SHARE_CONFLICT_MESSAGE = "工作區分享已存在"
-WORKSPACE_SHARE_NOT_FOUND_MESSAGE = "工作區分享不存在"
-WORKSPACE_INVALID_NAMESPACE_MESSAGE = "無效的 Kubernetes namespace"
-WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE = "runtimeResources 僅支援 Kubernetes 工作區"
-WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE = "portMappings 僅支援 Docker 工作區"
+WORKSPACE_OWNER_NOT_FOUND_MESSAGE = "Workspace owner does not exist"
+WORKSPACE_NOT_FOUND_MESSAGE = "Workspace does not exist"
+WORKSPACE_ACCESS_DENIED_MESSAGE = "Insufficient workspace permissions"
+WORKSPACE_SHARE_TARGET_NOT_FOUND_MESSAGE = "User to share with not found"
+WORKSPACE_SHARE_OWNER_FORBIDDEN_MESSAGE = "Cannot share workspace with owner"
+WORKSPACE_SHARE_CONFLICT_MESSAGE = "Workspace share already exists"
+WORKSPACE_SHARE_NOT_FOUND_MESSAGE = "Workspace share does not exist"
+WORKSPACE_INVALID_NAMESPACE_MESSAGE = "Invalid Kubernetes namespace"
+WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE = "runtimeResources only supports Kubernetes workspaces"
+WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE = "portMappings only supports Docker workspaces"
 
 
 class WorkspaceError(ValueError):
-    """工作區相關可預期錯誤。"""
+    """Workspace related expected errors."""
 
     def __init__(self, message: str, *, code: str = "WORKSPACE_INVALID_REQUEST", params: dict | None = None) -> None:
         super().__init__(message)
@@ -64,14 +64,14 @@ class WorkspaceError(ValueError):
 
 
 class WorkspaceNotFoundError(WorkspaceError):
-    """工作區或相關資源不存在。"""
+    """Workspace or related resources do not exist."""
 
     def __init__(self, message: str, *, code: str = "WORKSPACE_NOT_FOUND", params: dict | None = None) -> None:
         super().__init__(message, code=code, params=params)
 
 
 class WorkspaceAccessDeniedError(PermissionError):
-    """使用者沒有工作區所需權限。"""
+    """User does not have required permissions for workspace."""
 
     def __init__(self, message: str, *, code: str = "WORKSPACE_ACCESS_DENIED", params: dict | None = None) -> None:
         super().__init__(message)
@@ -86,13 +86,13 @@ class WorkspaceAccessContext:
 
 
 class WorkspaceService:
-    """負責管理工作區資料"""
+    """Responsible for managing workspace data"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
         self.settings = get_settings()
 
-    # -- 資料查詢 ---------------------------------------------------------
+    # -- DataQuery ---------------------------------------------------------
 
     def list(
         self,
@@ -200,7 +200,7 @@ class WorkspaceService:
             current_user_id=current_user_id,
         )
 
-    # -- 資料寫入 ---------------------------------------------------------
+    # -- DataWrite ---------------------------------------------------------
 
     def create(self, payload: WorkspaceCreateRequest) -> WorkspaceDetail:
         owner = self.db.get(db_models.User, payload.owner_id)
@@ -525,7 +525,7 @@ class WorkspaceService:
         self.db.commit()
         return True
 
-    # -- 轉換函式 ---------------------------------------------------------
+    # -- Conversion functions ---------------------------------------------------------
 
     def _to_owner(self, user: db_models.User) -> WorkspaceOwner:
         return WorkspaceOwner(
@@ -615,20 +615,20 @@ class WorkspaceService:
             last_seen=workspace.runtime_last_seen,
             terminal_external_port=workspace.terminal_external_port,
             terminal_external_url=workspace.terminal_external_url,
-            # Browser 相關欄位
+            # Browser related columns
             browser_container_id=workspace.browser_container_id,
             browser_status=workspace.browser_status,
             browser_created_at=workspace.browser_created_at,
             browser_last_seen=workspace.browser_last_seen,
-            # Browser WebRTC (neko) 欄位
+            # Browser WebRTC (neko) Column
             browser_webrtc_internal_url=workspace.browser_webrtc_internal_url,
             browser_webrtc_external_url=workspace.browser_webrtc_external_url,
             browser_webrtc_internal_port=workspace.browser_webrtc_internal_port,
             browser_webrtc_external_port=workspace.browser_webrtc_external_port,
-            # Browser CDP 欄位
+            # Browser CDP Column
             browser_cdp_internal_port=workspace.browser_cdp_internal_port,
             browser_cdp_external_port=workspace.browser_cdp_external_port,
-            # Canvas 容器欄位
+            # Canvas ContainerColumn
             canvas_container_id=workspace.canvas_container_id,
             canvas_status=workspace.canvas_status,
             canvas_created_at=workspace.canvas_created_at,
@@ -1094,7 +1094,7 @@ class WorkspaceService:
 
         return merged
 
-    # -- 生命週期管理 ------------------------------------------------------
+    # -- Lifecycle Management -----------------------------------------------
 
     def mark_workspace_deleting(
         self,
@@ -1102,13 +1102,13 @@ class WorkspaceService:
         *,
         current_user_id: Optional[str] = None,
     ) -> bool:
-        """標記 workspace 為刪除中狀態
+        """Mark workspace as deleting status
 
         Args:
             workspace_id: Workspace ID
 
         Returns:
-            bool: 是否成功標記
+            bool: Whether successfully marked
         """
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
@@ -1130,13 +1130,13 @@ class WorkspaceService:
         *,
         current_user_id: Optional[str] = None,
     ) -> bool:
-        """標記 workspace 為重啟中狀態
+        """Mark workspace as restarting status
 
         Args:
             workspace_id: Workspace ID
 
         Returns:
-            bool: 是否成功標記
+            bool: Whether successfully marked
         """
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
@@ -1158,13 +1158,13 @@ class WorkspaceService:
         *,
         current_user_id: Optional[str] = None,
     ) -> bool:
-        """標記 Browser 容器為重啟中狀態
+        """Mark browser container as restarting status
 
         Args:
             workspace_id: Workspace ID
 
         Returns:
-            bool: 是否成功標記
+            bool: Whether successfully marked
         """
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
@@ -1186,7 +1186,7 @@ class WorkspaceService:
         *,
         current_user_id: Optional[str] = None,
     ) -> bool:
-        """標記 Canvas 容器為重啟中狀態"""
+        """Mark canvas container as restarting status"""
         workspace = self.db.get(db_models.Workspace, workspace_id)
         if not workspace:
             return False

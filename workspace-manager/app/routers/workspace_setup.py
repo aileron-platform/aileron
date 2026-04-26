@@ -1,4 +1,4 @@
-"""Workspace 初始化同步相關 API"""
+"""Workspace initialization sync related APIs"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/setup", tags=["workspace-s
 
 
 class GitBranchesResponse(BaseModel):
-    """Git 分支列表回應"""
+    """Git branch list response."""
     branches: List[str]
     total: int
 
@@ -57,7 +57,7 @@ def _translate_git_branch_error(translate, exc: Exception) -> str:
     "/sync",
     response_model=WorkspaceSetupStatus,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="啟動 Workspace 初始化同步",
+    summary="Start workspace initialization sync",
     responses=build_responses(404, 409, 422, 500),
 )
 async def trigger_workspace_initial_sync(
@@ -65,7 +65,7 @@ async def trigger_workspace_initial_sync(
     request: Request,
     service: WorkspaceSetupService = Depends(get_workspace_setup_service),
 ) -> WorkspaceSetupStatus:
-    """啟動新建 Workspace 的初始同步流程"""
+    """Start initial sync process for newly created workspace."""
     try:
         return await service.run_initial_sync(workspace_id)
     except WorkspaceSetupError as exc:
@@ -85,7 +85,7 @@ async def trigger_workspace_initial_sync(
 @router.get(
     "/status",
     response_model=WorkspaceSetupStatus,
-    summary="查詢初始化同步狀態",
+    summary="Query initialization sync status",
     responses=build_responses(404, 409, 500),
 )
 async def get_workspace_setup_status(
@@ -93,10 +93,10 @@ async def get_workspace_setup_status(
     request: Request,
     service: WorkspaceSetupService = Depends(get_workspace_setup_service),
 ) -> WorkspaceSetupStatus:
-    """查詢 Workspace 初始化同步的最新狀態
+    """Query latest status of workspace initialization sync.
 
-    這裡對 frontend 暴露的是 manager 自己的 `WorkspaceSetupStatus` 契約，
-    不直接透傳 workspace-runtime 的原始回應格式。
+    This exposes manager's own `WorkspaceSetupStatus` contract to frontend,
+    does not directly forward workspace-runtime's raw response format.
     """
     try:
         return await service.fetch_runtime_status(workspace_id)
@@ -117,7 +117,7 @@ async def get_workspace_setup_status(
 @router.get(
     "/git-branches",
     response_model=GitBranchesResponse,
-    summary="取得遠端 Git 分支列表",
+    summary="Get remote Git branch list",
     responses=build_responses(400, 500),
 )
 async def get_git_branches(
@@ -126,26 +126,26 @@ async def get_git_branches(
     git_url: str = Query(..., description="Git repository URL"),
 ) -> GitBranchesResponse:
     """
-    獲取 Git repository 的分支列表
+    Get branch list of Git repository.
 
-    此 API 會使用 workspace-manager 的 SSH key 來認證私有倉庫。
-    如果是公開倉庫，則不需要認證。
+    This API uses workspace-manager's SSH key to authenticate private repositories.
+    No authentication required for public repositories.
 
     Args:
-        workspace_id: Workspace ID（用於日誌記錄）
+        workspace_id: Workspace ID (for logging)
         git_url: Git repository URL
 
     Returns:
-        分支列表
+        List of branches
 
     Raises:
-        400: Git URL 無效
-        500: 無法獲取分支列表
+        400: Invalid Git URL
+        500: Failed to get branch list
     """
-    # 檢查 SSH key 是否存在
+    # Check if SSH key exists
     ssh_key_path = Path.home() / ".ssh" / "id_rsa"
 
-    # 創建 GitService 實例
+    # Create GitService instance
     git_service = get_git_service(
         ssh_key_path=ssh_key_path if ssh_key_path.exists() else None
     )
@@ -154,7 +154,7 @@ async def get_git_branches(
         branches = git_service.get_remote_branches(git_url)
         return GitBranchesResponse(branches=branches, total=len(branches))
     except GitBranchLookupError as exc:
-        # Git URL 無效或認證失敗
+        # Git URL invalid or authentication failed
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_translate_git_branch_error(request.state.translate, exc)

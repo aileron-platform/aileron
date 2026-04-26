@@ -3,39 +3,39 @@ from typing import Optional, List, Any
 from .models import RuntimeInfo, RuntimeStatus, RuntimeContext, ResourceRequirements
 
 class OrchestratorException(Exception):
-    """所有編排器異常的基類"""
+    """Base class for all orchestrator exceptions"""
     pass
 
 class ContainerNotFoundError(OrchestratorException):
-    """容器/Pod 不存在"""
+    """Container/Pod does not exist"""
     pass
 
 class ContainerCreationError(OrchestratorException):
-    """容器/Pod 創建失敗"""
+    """Container/Pod creation failed"""
     pass
 
 class ContainerDeletionError(OrchestratorException):
-    """容器/Pod 刪除失敗"""
+    """Container/Pod DeleteFailed"""
     pass
 
 class NetworkConfigError(OrchestratorException):
-    """網絡配置錯誤"""
+    """Network configuration error"""
     pass
 
 class VolumeError(OrchestratorException):
-    """Volume 掛載或操作錯誤"""
+    """Volume mount or operation error"""
     pass
 
 class ResourceUpdateError(OrchestratorException):
-    """資源更新失敗"""
+    """Resource update failed"""
     pass
 
 class ImagePullError(OrchestratorException):
-    """鏡像拉取失敗"""
+    """Image pull failed"""
     pass
 
 class ContainerOrchestrator(ABC):
-    """容器編排抽象基類"""
+    """Container orchestration abstract base class"""
 
     @abstractmethod
     def create_workspace_runtime(
@@ -43,7 +43,7 @@ class ContainerOrchestrator(ABC):
         workspace: Any,  # Avoid circular import, pass Workspace object
         context: RuntimeContext
     ) -> RuntimeInfo:
-        """創建 workspace runtime 環境"""
+        """Create workspace runtime environment"""
         pass
 
     def create_chrome_runtime(
@@ -51,7 +51,7 @@ class ContainerOrchestrator(ABC):
         workspace: Any,
         context: RuntimeContext
     ) -> RuntimeInfo:
-        """創建 Chrome browser 容器（可選實作）"""
+        """Create Chrome browser container (optional implementation)"""
         raise NotImplementedError(f"{self.__class__.__name__} does not support Chrome runtime")
 
     def create_canvas_runtime(
@@ -59,17 +59,17 @@ class ContainerOrchestrator(ABC):
         workspace: Any,
         context: RuntimeContext
     ) -> RuntimeInfo:
-        """創建 Canvas 容器（可選實作）"""
+        """Create canvas container (optional implementation)"""
         raise NotImplementedError(f"{self.__class__.__name__} does not support Canvas runtime")
 
     @abstractmethod
     def delete_workspace_runtime(self, workspace_id: str) -> bool:
-        """刪除 workspace runtime 環境"""
+        """Delete workspace runtime Environment"""
         pass
 
     @abstractmethod
     def get_runtime_status(self, workspace_id: str) -> RuntimeStatus:
-        """獲取 runtime 狀態"""
+        """Get runtime Status"""
         pass
 
     @abstractmethod
@@ -80,7 +80,7 @@ class ContainerOrchestrator(ABC):
         tail: int = 100,
         timestamps: bool = False
     ) -> str:
-        """獲取 runtime 日誌"""
+        """Get runtime log"""
         pass
 
     @abstractmethod
@@ -89,5 +89,5 @@ class ContainerOrchestrator(ABC):
         workspace_id: str,
         resources: ResourceRequirements
     ) -> bool:
-        """更新 runtime 資源配置"""
+        """Update runtime resource configuration"""
         pass

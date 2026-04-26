@@ -1,4 +1,4 @@
-"""模板安装、导入、导出与编译预览路由"""
+"""Template installation, import, export, and compilation preview routes"""
 
 import logging
 import tempfile
@@ -48,20 +48,20 @@ def _translate_template_install_error(translate, code: str, params: dict | None 
 
 
 def _translate_template_import_value_error(translate, error: str) -> str:
-    if "ZIP 檔案已損壞或格式不正確" in error:
+    if "ZIP file is corrupted or invalid format" in error:
         return translate("templates.import.invalid_archive")
-    if "缺少 .claude-plugin/manifest.json" in error:
+    if "Missing .claude-plugin/manifest.json" in error:
         return translate("templates.import.missing_package_manifest")
-    if "manifest.json 不是合法的 JSON" in error:
+    if "manifest.json is not valid JSON" in error:
         return translate("templates.import.invalid_package_manifest")
-    if "manifest.json 缺少 id 欄位" in error:
+    if "manifest.json missing id field" in error:
         return translate("templates.import.missing_package_manifest_id")
-    if "manifest.json 的 id 格式不合法" in error:
+    if "manifest.json id format is invalid" in error:
         return translate("templates.import.invalid_package_manifest_id_format")
-    if error.startswith("模板 '") and error.endswith("' 已存在，請使用覆蓋模式"):
-        template_id = error[len("模板 '"):].split("' 已存在，請使用覆蓋模式", 1)[0]
+    if error.startswith("Template '") and error.endswith("' already exists, use overwrite mode"):
+        template_id = error[len("Template '"):].split("' already exists, use overwrite mode", 1)[0]
         return translate("templates.import.already_exists", template_id=template_id)
-    if "模板 package manifest 無效" in error:
+    if "Template package manifest is invalid" in error:
         return translate("templates.import.invalid_package_manifest_metadata")
     return translate("templates.import_failed")
 
@@ -83,24 +83,24 @@ def _translate_template_preview_validation_error(translate, error: str) -> str:
 
 
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
-    """取得模板服務實例"""
+    """Get TemplateService instance"""
     return TemplateService(db)
 
 
 def get_template_install_service(db: Session = Depends(get_db)) -> TemplateInstallService:
-    """取得模板安裝服務實例"""
+    """Get TemplateInstallService instance"""
     return TemplateInstallService(db)
 
 
 def get_template_compiler_service(db: Session = Depends(get_db)) -> TemplateCompilerService:
-    """取得模板編譯服務實例"""
+    """Get TemplateCompilerService instance"""
     return TemplateCompilerService(db)
 
 
 @router.post(
     "/install",
     response_model=TemplateInstallResponse,
-    summary="安裝模板到 Workspace",
+    summary="Install template to workspace",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def install_template(
@@ -111,10 +111,10 @@ async def install_template(
     template_service: TemplateService = Depends(get_template_service)
 ) -> TemplateInstallResponse:
     """
-    將模板配置安裝到指定的 workspace
+    Install template configuration to specified workspace
 
-    安裝內容包括：
-    - AGENTS.md / 指令文件
+    Installation content includes:
+    - AGENTS.md / command files
     - Commands
     - Agents
     - MCP Servers
@@ -123,7 +123,7 @@ async def install_template(
     """
     try:
         translate = request.state.translate
-        # 驗證模板是否存在
+        # Validate if template exists
         template = template_service._get_template(payload.template_id)
         if not template:
             raise HTTPException(
@@ -131,13 +131,13 @@ async def install_template(
                 detail=translate("templates.install_not_found", template_id=payload.template_id)
             )
 
-        # 執行安裝
+        # Execute installation
         result = await install_service.install_template_to_workspace(
             workspace_id=payload.workspace_id,
             template_id=payload.template_id
         )
 
-        # 轉換結果格式
+        # Convert result format
         return TemplateInstallResponse(
             success=result.get("success", False),
             message=translate("templates.install_success", template_name=template.name),
@@ -172,18 +172,18 @@ async def install_template(
 @router.get(
     "/{template_id}/compile-preview",
     response_model=InstallPlan,
-    summary="取得模板目標編譯預覽",
+    summary="Get template compilation preview for target",
     responses=build_responses(401, 404, 422, 500),
 )
 async def get_template_compile_preview(
     request: Request,
     template_id: str,
-    target: CanonicalTarget = Query(..., description="編譯目標 CLI"),
+    target: CanonicalTarget = Query(..., description="Compilation target CLI"),
     current_user_id: str = Depends(get_current_user_id),
     compiler_service: TemplateCompilerService = Depends(get_template_compiler_service),
     template_service: TemplateService = Depends(get_template_service),
 ) -> InstallPlan:
-    """回傳指定模板在目標 CLI 下的編譯預覽結果。"""
+    """Return compilation preview result for specified template on target CLI."""
     translate = request.state.translate
     template = template_service._get_template(template_id)
     if not template:
@@ -210,21 +210,21 @@ async def get_template_compile_preview(
 
 @router.get(
     "/{template_id}/export",
-    summary="匯出模板",
+    summary="Export template",
     responses={
-        200: {"description": "成功匯出模板 ZIP 檔案。"},
+        200: {"description": "Successfully exported template ZIP file."},
         **build_responses(401, 404, 500),
     },
 )
 async def export_template(
     request: Request,
     template_id: str,
-    target: CanonicalTarget | None = Query(default=None, description="匯出目標 CLI"),
+    target: CanonicalTarget | None = Query(default=None, description="Export target CLI"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service),
     compiler_service: TemplateCompilerService = Depends(get_template_compiler_service),
 ):
-    """匯出模板為 target-specific ZIP 檔案。"""
+    """Export template as target-specific ZIP file."""
     translate = request.state.translate
     template = service.get(template_id)
     if not template:
@@ -266,26 +266,26 @@ async def export_template(
 
 @router.post(
     "/import",
-    summary="匯入模板",
+    summary="Import template",
     responses=build_responses(400, 401, 422, 500),
 )
 async def import_template(
     request: Request,
-    file: UploadFile = File(..., description="模板 ZIP 檔案"),
+    file: UploadFile = File(..., description="Template ZIP file"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ):
     """
-    匯入模板 ZIP 檔案
+    Import template ZIP file
 
-    ZIP 檔案結構要求:
-    - 必須包含一個 template_id 子目錄
-    - 子目錄中必須包含 .claude-plugin/manifest.json
-    - manifest.json 中的 id 必須與目錄名稱一致
-    - template_id 不能與現有模板重複
+    ZIP file structure requirements:
+    - Must contain a template_id subdirectory
+    - Subdirectory must contain .claude-plugin/manifest.json
+    - id in manifest.json must match directory name
+    - template_id must not duplicate existing templates
     """
     translate = request.state.translate
-    # 檢查檔案類型
+    # Check file type
     if not file.filename or not file.filename.endswith('.zip'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

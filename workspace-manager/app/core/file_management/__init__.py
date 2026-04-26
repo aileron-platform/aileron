@@ -1,10 +1,10 @@
-"""統一的檔案管理模組 - Workspace Manager
+"""Unified file management module - Workspace Manager
 
-此模組提供與 Workspace Runtime 一致的檔案管理介面
+This module provides file management interface consistent with Workspace Runtime
 """
 
-# 從 workspace-runtime 複製的統一模型和異常
-# 為了保持一致性，我們在這裡重新定義相同的結構
+# Copied unified models and exceptions from workspace-runtime
+# To maintain consistency, we redefine the same structure here
 
 from .models import (
     FileNode,

@@ -1,6 +1,6 @@
-"""Redis 事件訂閱服務
+"""Redis event subscription service
 
-用於訂閱 Workspace Runtime 發布的執行完成事件
+Used to subscribe to ExecutionComplete events published by Workspace Runtime
 """
 
 import asyncio
@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 try:
     import redis.asyncio as aioredis
 except ImportError:
-    # 如果沒有 redis.asyncio，使用 aioredis
+    # If no redis.asyncio, use aioredis
     import aioredis  # type: ignore
 
 from app.config.settings import get_settings
@@ -20,14 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 class RedisEventSubscriber:
-    """Redis 事件訂閱器"""
+    """Redis event subscriber"""
 
     def __init__(self):
         self._redis: Optional[aioredis.Redis] = None  # type: ignore
         self._settings = get_settings()
 
     async def get_redis(self) -> aioredis.Redis:  # type: ignore
-        """取得 Redis 連接"""
+        """Get Redis connection"""
         if self._redis is None:
             try:
                 self._redis = await aioredis.from_url(
@@ -37,7 +37,7 @@ class RedisEventSubscriber:
                     socket_connect_timeout=5,
                     socket_timeout=5,
                 )
-                # 測試連接
+                # Test connection
                 await self._redis.ping()
                 logger.info(f"Redis connection established successfully: {self._settings.REDIS_URL}")
             except Exception as e:
@@ -50,83 +50,83 @@ class RedisEventSubscriber:
         execution_id: str,
         timeout: int = 3600,
     ) -> Optional[Dict[str, Any]]:
-        """等待執行完成事件
+        """Wait for execution completion event
 
         Args:
-            execution_id: 執行記錄 ID
-            timeout: 超時時間（秒），預設 1 小時
+            execution_id: Execution record ID
+            timeout: Timeout in seconds (default 1 hour)
 
         Returns:
-            執行結果數據，如果超時則返回 None
+            Execution result data, or None if timeout
         """
         redis_client = await self.get_redis()
         channel = f"automation:execution:completed:{execution_id}"
-        
-        logger.info(f"開始訂閱執行完成事件: execution_id={execution_id}, channel={channel}, timeout={timeout}s")
-        
-        # 先檢查是否已經有結果（輪詢備份）
+
+        logger.info(f"Starting to subscribe to ExecutionComplete event: execution_id={execution_id}, channel={channel}, timeout={timeout}s")
+
+        # First check if result already exists (polling fallback)
         result_key = f"automation:execution:result:{execution_id}"
         existing_result = await redis_client.get(result_key)
         if existing_result:
-            logger.info(f"從 Redis key 獲取到已完成的執行結果: execution_id={execution_id}")
+            logger.info(f"Got completed execution result from Redis key: execution_id={execution_id}")
             try:
                 return json.loads(existing_result)
             except json.JSONDecodeError as e:
-                logger.error(f"解析執行結果失敗: {e}")
-        
-        # 創建 Pub/Sub 訂閱
+                logger.error(f"Failed to parse execution result: {e}")
+
+        # Create Pub/Sub subscription
         pubsub = redis_client.pubsub()
-        
+
         try:
             await pubsub.subscribe(channel)
-            logger.debug(f"已訂閱頻道: {channel}")
-            
-            # 等待訊息，帶超時
+            logger.debug(f"Subscribed to channel: {channel}")
+
+            # Wait for message with timeout
             start_time = asyncio.get_event_loop().time()
-            
+
             while True:
-                # 計算剩餘超時時間
+                # Calculate remaining timeout
                 elapsed = asyncio.get_event_loop().time() - start_time
                 remaining_timeout = timeout - elapsed
-                
+
                 if remaining_timeout <= 0:
-                    logger.warning(f"等待執行完成事件超時: execution_id={execution_id}, timeout={timeout}s")
+                    logger.warning(f"Waiting for ExecutionComplete event timed out: execution_id={execution_id}, timeout={timeout}s")
                     return None
-                
+
                 try:
-                    # 使用較短的超時進行輪詢，以便檢查總超時
+                    # Use shorter timeout for polling to check total timeout
                     message = await asyncio.wait_for(
                         pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0),
                         timeout=min(remaining_timeout, 5.0)
                     )
-                    
+
                     if message and message["type"] == "message":
-                        logger.info(f"收到執行完成事件: execution_id={execution_id}")
+                        logger.info(f"Received ExecutionComplete event: execution_id={execution_id}")
                         try:
                             data = json.loads(message["data"])
-                            logger.debug(f"執行結果數據: {data}")
+                            logger.debug(f"Execution result data: {data}")
                             return data
                         except json.JSONDecodeError as e:
-                            logger.error(f"解析執行完成事件失敗: {e}, data={message['data']}")
+                            logger.error(f"Failed to parse ExecutionComplete event: {e}, data={message['data']}")
                             return None
-                            
+
                 except asyncio.TimeoutError:
-                    # 繼續等待
+                    # Resume waiting
                     continue
-                    
+
         except Exception as e:
-            logger.error(f"訂閱執行完成事件失敗: {e}", exc_info=True)
+            logger.error(f"Failed to subscribe to ExecutionComplete event: {e}", exc_info=True)
             return None
         finally:
             try:
                 await pubsub.unsubscribe(channel)
                 await pubsub.close()
-                logger.debug(f"已取消訂閱並關閉 Pub/Sub: {channel}")
+                logger.debug(f"Unsubscribed and closed Pub/Sub: {channel}")
             except Exception as e:
-                logger.warning(f"關閉 Pub/Sub 失敗: {e}")
+                logger.warning(f"Failed to close Pub/Sub: {e}")
 
     async def close(self) -> None:
-        """關閉 Redis 連接"""
+        """Close Redis connection"""
         if self._redis:
             await self._redis.close()
             self._redis = None
@@ -136,18 +136,18 @@ def wait_for_execution_completed_sync(
     execution_id: str,
     timeout: int = 3600,
 ) -> Optional[Dict[str, Any]]:
-    """同步版本的等待執行完成事件（用於 Celery 任務）
+    """Synchronous version of waiting for ExecutionComplete event (for Celery tasks)
 
     Args:
-        execution_id: 執行記錄 ID
-        timeout: 超時時間（秒），預設 1 小時
+        execution_id: Execution record ID
+        timeout: Timeout in seconds (default 1 hour)
 
     Returns:
-        執行結果數據，如果超時則返回 None
+        Execution result data, or None if timeout
     """
     subscriber = RedisEventSubscriber()
-    
-    # 創建新的事件循環
+
+    # Create new event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     

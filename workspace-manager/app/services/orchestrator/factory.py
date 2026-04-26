@@ -5,7 +5,7 @@ from .k8s_orchestrator import KubernetesOrchestrator
 from ...config.settings import get_settings
 
 class OrchestratorFactory:
-    """容器編排器工廠"""
+    """Container orchestrator factory"""
 
     _orchestrators = {
         "docker": DockerOrchestrator,
@@ -14,7 +14,7 @@ class OrchestratorFactory:
 
     @classmethod
     def get_orchestrator(cls) -> ContainerOrchestrator:
-        """根據環境變數獲取編排器"""
+        """Get orchestrator based on environment variable"""
         settings = get_settings()
         # Default to docker if not set, though settings should handle default
         runtime_type = getattr(settings, "RUNTIME_PROVISIONER", "docker").lower()

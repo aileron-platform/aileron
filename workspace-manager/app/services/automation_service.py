@@ -1,4 +1,4 @@
-"""自動化服務實作：負責自動化任務 CRUD、執行紀錄與統計"""
+"""Automation service implementation: Responsible for automation task CRUD, execution records and statistics"""
 
 from __future__ import annotations
 
@@ -41,20 +41,20 @@ logger = logging.getLogger(__name__)
 
 def get_system_timezone() -> str:
     """
-    獲取系統時區設定
+    Get system timezone settings
 
-    優先順序：
-    1. 環境變數 TZ
-    2. 預設值 Asia/Taipei
+    Priority:
+    1. Environment variable TZ
+    2. Default value Asia/Taipei
 
     Returns:
-        系統時區字串，例如 'Asia/Taipei'
+        System timezone string, e.g. 'Asia/Taipei'
     """
     return os.getenv("TZ", "Asia/Taipei")
 
 
 class AutomationJobError(Exception):
-    """自動化任務執行相關錯誤"""
+    """Automation task execution related errors"""
 
     def __init__(self, message: str, *, code: str = "AUTOMATION_ERROR", params: dict | None = None) -> None:
         super().__init__(message)
@@ -63,25 +63,25 @@ class AutomationJobError(Exception):
 
 
 class JobNotFoundError(AutomationJobError):
-    """指定任務不存在"""
+    """Specified task does not exist"""
 
 
 class JobNotRunnableError(AutomationJobError):
-    """任務狀態不允許執行"""
+    """Task status does not allow execution"""
 
 
 class JobDispatchError(AutomationJobError):
-    """無法派送自動化任務"""
+    """Cannot dispatch automation task"""
 
 
 class AutomationService:
-    """管理自動化任務、執行紀錄與統計資料"""
+    """Manage automation tasks, execution records and statistics data"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
     # ------------------------------------------------------------------
-    # 任務 CRUD
+    # Task CRUD
     # ------------------------------------------------------------------
     def list_tasks(self) -> JobListResponse:
         query: Select[tuple[db_models.AutomationJob, db_models.Workspace]] = (
@@ -105,7 +105,7 @@ class AutomationService:
         return self._to_job_model(record) if record else None
 
     def get_job_record(self, job_id: str) -> Optional[db_models.AutomationJob]:
-        """取得資料庫中的自動化任務模型"""
+        """Get automation task model from database"""
 
         return self.db.get(db_models.AutomationJob, job_id)
 
@@ -153,7 +153,7 @@ class AutomationService:
 
         for field, value in data.items():
             if field == "notifications" and value is not None:
-                # value 已經是 dict（來自 model_dump()），不需要再調用 .model_dump()
+                # value is already dict (from model_dump()), no need to call .model_dump() again
                 setattr(record, field, value)
             elif field == "tags" and value is not None:
                 setattr(record, field, list(value))
@@ -206,11 +206,11 @@ class AutomationService:
     def execute_task_now(self, job_id: str) -> JobExecution:
         job = self.db.get(db_models.AutomationJob, job_id)
         if not job:
-            raise JobNotFoundError(f"自動化任務 {job_id} 不存在", code="AUTOMATION_JOB_NOT_FOUND", params={"jobId": job_id})
+            raise JobNotFoundError(f"Automation task {job_id} does not exist", code="AUTOMATION_JOB_NOT_FOUND", params={"jobId": job_id})
 
         if job.status not in {"active", "paused"}:
             raise JobNotRunnableError(
-                f"自動化任務 {job_id} 目前狀態為 {job.status}，不可執行",
+                f"Automation task {job_id} current status is {job.status}, cannot execute",
                 code="AUTOMATION_JOB_NOT_RUNNABLE",
                 params={"jobId": job_id, "status": job.status},
             )
@@ -218,30 +218,30 @@ class AutomationService:
         execution = self.enqueue_execution(
             job_id,
             trigger="manual",
-            summary="手動立即觸發自動化任務",
+            summary="Manually trigger automation task immediately",
         )
         if not execution:
-            raise JobDispatchError("無法建立任務執行紀錄", code="AUTOMATION_EXECUTION_CREATE_FAILED")
+            raise JobDispatchError("Cannot create task execution record", code="AUTOMATION_EXECUTION_CREATE_FAILED")
 
         try:
             from app.tasks import run_automation_job
             from celery.exceptions import CeleryError
 
-            # 使用 apply_async 明確指定隊列
+            # Use apply_async to explicitly specify queue
             run_automation_job.apply_async(
                 args=[job_id, execution.id],
                 queue='default'
             )
-        except (CeleryError, ConnectionError, OSError) as exc:  # pragma: no cover - Celery 連線失敗
-            logger.exception("派送自動化任務 %s 立即執行失敗", job_id)
+        except (CeleryError, ConnectionError, OSError) as exc:  # pragma: no cover - Celery ConnectionFailed
+            logger.exception("Dispatch automation task %s immediate execution failed", job_id)
             self._mark_execution_dispatch_failed(execution, str(exc))
-            raise JobDispatchError("無法派送自動化任務至 Celery", code="AUTOMATION_DISPATCH_FAILED") from exc
+            raise JobDispatchError("Cannot dispatch automation task to Celery", code="AUTOMATION_DISPATCH_FAILED") from exc
 
         self.db.refresh(execution)
         return self._to_execution_model(execution)
 
     # ------------------------------------------------------------------
-    # 執行紀錄管理
+    # Execution record management
     # ------------------------------------------------------------------
     def list_executions(
         self, job_id: Optional[str] = None, limit: Optional[int] = None
@@ -261,26 +261,26 @@ class AutomationService:
         return JobExecutionListResponse(items=items, total=len(items))
 
     def get_execution_record(self, execution_id: str) -> Optional[db_models.JobExecution]:
-        """獲取執行記錄
+        """Get execution record
 
         Args:
-            execution_id: 執行記錄 ID
+            execution_id: Execution record ID
 
         Returns:
-            執行記錄，如果不存在則返回 None
+            Execution record, returns None if not exists
         """
         return self.db.get(db_models.JobExecution, execution_id)
 
     def get_stuck_executions(
         self, timeout_minutes: int = 60
     ) -> list[db_models.JobExecution]:
-        """獲取卡住的執行記錄（超過指定時間仍在 running 狀態）
+        """Get stuck execution records (exceed specified time still in running status)
 
         Args:
-            timeout_minutes: 超時時間（分鐘），預設 60 分鐘
+            timeout_minutes: Timeout (minutes), default 60 minutes
 
         Returns:
-            卡住的執行記錄列表
+            List of stuck execution records
         """
         timeout_threshold = utcnow() - timedelta(minutes=timeout_minutes)
         query = (
@@ -326,7 +326,7 @@ class AutomationService:
             if not record:
                 return None
         else:
-            # queued 狀態已建立完畢
+            # Queued status creation completed
             record.summary = summary
             record.error_message = error_message
             record.session_id = session_id
@@ -347,7 +347,7 @@ class AutomationService:
             job_id=job_id,
             status="queued",
             trigger=trigger,
-            summary=summary or "自動化任務等待執行",
+            summary=summary or "Automation task pending execution",
         )
         self.db.add(record)
         now = utcnow()
@@ -365,7 +365,7 @@ class AutomationService:
                 job.next_run_at = next_run
             else:
                 logger.warning(
-                    "無法計算自動化任務 %s 的下一次執行時間，保留原值", job_id
+                    "Cannot calculate next execution time for automation task %s, keeping original value", job_id
                 )
         self.db.commit()
         self.db.refresh(record)
@@ -411,7 +411,7 @@ class AutomationService:
             record.execution_metadata = metadata
 
         if record.started_at and duration is None:
-            # 使用統一的時區處理工具計算時長
+            # Use unified timezone handling utility to calculate duration
             duration = calculate_duration(record.started_at, now)
 
         record.finished_at = now
@@ -426,7 +426,7 @@ class AutomationService:
         return record
 
     # ------------------------------------------------------------------
-    # 任務排程查詢
+    # TaskScheduleQuery
     # ------------------------------------------------------------------
     def list_due_tasks(self, limit: int = 20) -> list[db_models.AutomationJob]:
         now = utcnow()
@@ -441,10 +441,10 @@ class AutomationService:
         return self.db.execute(query).scalars().all()
 
     # ------------------------------------------------------------------
-    # 統計與行事曆
+    # Statistics and calendar
     # ------------------------------------------------------------------
     def get_metrics(self) -> AutomationMetrics:
-        # 從執行紀錄表中統計真實的成功和失敗次數（更可靠，避免重試導致的重複計數）
+        # Count actual success and failure from execution records table (more reliable, avoid duplicate counts from retries)
         exec_stats = (
             self.db.execute(
                 select(
@@ -462,7 +462,7 @@ class AutomationService:
         completed = total_success + total_failed
         success_rate = (total_success / completed) if completed else 0.0
 
-        # 計算各種狀態的自動化任務數量
+        # Calculate automation task count for each status
         active_count = (
             self.db.execute(
                 select(func.count()).where(db_models.AutomationJob.status == "active")
@@ -473,15 +473,15 @@ class AutomationService:
                 select(func.count()).where(db_models.AutomationJob.status == "paused")
             ).scalar_one()
         )
-        # 注意：這裡的 failed_count 應該是失敗執行次數的總和，而不是狀態為 failed 的任務數
-        # 使用 total_failed 變數（已在上面計算）
+        # Note: failed_count here should be sum of failed execution counts, not count of tasks with failed status
+        # Use total_failed variable (calculated above)
         draft_count = (
             self.db.execute(
                 select(func.count()).where(db_models.AutomationJob.status == "draft")
             ).scalar_one()
         )
 
-        # 計算執行中和佇列中的任務數
+        # Calculate tasks in execution and queue
         running_executions = (
             self.db.execute(
                 select(func.count()).where(
@@ -497,7 +497,7 @@ class AutomationService:
             ).scalar_one()
         )
 
-        # 計算平均執行時間
+        # Calculate average execution time
         total_duration = (
             self.db.execute(
                 select(func.coalesce(func.sum(db_models.AutomationJob.total_duration), 0))
@@ -508,7 +508,7 @@ class AutomationService:
         return AutomationMetrics(
             active_count=active_count,
             paused_count=paused_count,
-            failed_count=total_failed,  # 修正：使用失敗執行次數總和
+            failed_count=total_failed,  # Fixed: use sum of failed execution counts
             draft_count=draft_count,
             success_rate=success_rate,
             running_executions=running_executions,
@@ -522,10 +522,10 @@ class AutomationService:
         utc_tz = ZoneInfo("UTC")
 
         for job in records:
-            # 確保所有 datetime 對象都有相同的時區處理
+            # Ensure all datetime objects have same timezone handling
             if job.next_run_at:
                 start = job.next_run_at
-                # 如果 next_run_at 是 naive datetime，加上 UTC 時區
+                # If next_run_at is naive datetime, add UTC timezone
                 if start.tzinfo is None:
                     start = start.replace(tzinfo=utc_tz)
             else:
@@ -547,7 +547,7 @@ class AutomationService:
         return JobCalendarResponse(items=events, total=len(events))
 
     # ------------------------------------------------------------------
-    # 工具函式
+    # Utility functions
     # ------------------------------------------------------------------
     def _to_job_model(
         self,
@@ -595,7 +595,7 @@ class AutomationService:
     def _to_execution_model(
         self, record: db_models.JobExecution
     ) -> JobExecution:
-        # 截斷 summary 到 100 個字元（用於列表顯示）
+        # Truncate summary to 100 characters (for list display)
         summary = record.summary or ""
         max_length = 100
         truncated_summary = summary[:max_length] + "..." if len(summary) > max_length else summary
@@ -638,7 +638,7 @@ class AutomationService:
 
         if job.trigger == "cron":
             reference = job.next_run_at or completion_time
-            # 使用統一的時區處理工具比較時間
+            # Use unified timezone handling utility for time comparison
             completion_utc = ensure_utc(completion_time)
             next_run_utc = ensure_utc(job.next_run_at)
 
@@ -665,7 +665,7 @@ class AutomationService:
     ) -> None:
         now = utcnow()
         execution.status = "failed"
-        execution.summary = "自動化任務派送失敗"
+        execution.summary = "Automation task dispatch failed"
         execution.error_message = error_message
         execution.started_at = execution.started_at or now
         execution.finished_at = now
@@ -681,15 +681,15 @@ class AutomationService:
     def mark_execution_waiting(
         self, execution_id: str, position: int, summary: Optional[str] = None
     ) -> Optional[db_models.JobExecution]:
-        """標記執行記錄為等待狀態
+        """Mark execution record as waiting status
 
         Args:
-            execution_id: 執行記錄 ID
-            position: 排隊位置
-            summary: 執行摘要
+            execution_id: Execution record ID
+            position: Queue position
+            summary: Execution summary
 
         Returns:
-            更新後的執行記錄，如果不存在則返回 None
+            Updated execution record, returns None if not exists
         """
         record = self.db.get(db_models.JobExecution, execution_id)
         if not record:
@@ -698,27 +698,27 @@ class AutomationService:
         record.status = "waiting"
         record.queue_position = position
         record.queued_at = utcnow()
-        record.summary = summary or f"排隊中（位置：{position}）"
+        record.summary = summary or f"In queue (position: {position})"
         record.updated_at = utcnow()
 
         self.db.commit()
         self.db.refresh(record)
 
         logger.info(
-            "標記執行記錄為等待狀態 - execution_id=%s, position=%d",
+            "Mark execution record as waiting status - execution_id=%s, position=%d",
             execution_id, position
         )
 
         return record
 
     def cancel_execution(self, execution_id: str) -> dict:
-        """取消排隊中的執行記錄
+        """Cancel queued execution record
 
         Args:
-            execution_id: 執行記錄 ID
+            execution_id: Execution record ID
 
         Returns:
-            取消結果字典
+            Cancellation result dictionary
         """
         from app.utils.automation_queue import get_queue_manager
 
@@ -727,60 +727,60 @@ class AutomationService:
             return {
                 "execution_id": execution_id,
                 "status": "not_found",
-                "message": "執行記錄不存在",
+                "message": "Execution record does not exist",
                 "cancelled": False,
             }
 
-        # 只能取消 waiting 狀態的任務
+        # Only
         if record.status != "waiting":
             return {
                 "execution_id": execution_id,
                 "status": record.status,
-                "message": f"無法取消 {record.status} 狀態的任務，只能取消 waiting 狀態的任務",
+                "message": f"Cannot cancel task with status {record.status}, can only cancel waiting status tasks",
                 "cancelled": False,
             }
 
-        # 從 Redis 佇列移除
+        # Remove from Redis queue
         job = self.db.get(db_models.AutomationJob, record.job_id)
         if job:
             queue_manager = get_queue_manager()
             queue_manager.cancel(job.workspace_id, execution_id)
 
-        # 更新資料庫狀態
+        # Update database status
         record.status = "cancelled"
-        record.summary = "使用者取消排隊"
+        record.summary = "User cancelled queue"
         record.finished_at = utcnow()
         record.duration = calculate_duration(record.queued_at) if record.queued_at else 0
         record.updated_at = utcnow()
 
         self.db.commit()
 
-        logger.info("取消排隊任務 - execution_id=%s", execution_id)
+        logger.info("Cancel queued task - execution_id=%s", execution_id)
 
         return {
             "execution_id": execution_id,
             "status": "cancelled",
-            "message": "已成功取消排隊任務",
+            "message": "Successfully cancelled queued task",
             "cancelled": True,
         }
 
     def get_workspace_queue(self, workspace_id: str) -> dict:
-        """獲取工作區佇列資訊
+        """Get workspace queue information
 
         Args:
-            workspace_id: 工作區 ID
+            workspace_id: Workspace ID
 
         Returns:
-            佇列資訊字典
+            Queue information dictionary
         """
         from app.utils.automation_queue import get_queue_manager
 
         queue_manager = get_queue_manager()
 
-        # 獲取佇列中的執行記錄 ID
+        # Get execution record IDs from queue
         execution_ids = queue_manager.list_queued_executions(workspace_id, limit=50)
 
-        # 查詢執行記錄詳情
+        # Query execution record details
         executions = []
         if execution_ids:
             stmt = select(db_models.JobExecution).where(
@@ -807,7 +807,7 @@ class AutomationService:
         if trigger == "cron":
             try:
                 tz = ZoneInfo(timezone)
-            except Exception:  # pragma: no cover - 無效時區回退 UTC
+            except Exception:  # pragma: no cover - fallback to UTC for invalid timezone
                 tz = ZoneInfo("UTC")
 
             base = ensure_utc(reference) or utcnow()
@@ -817,10 +817,10 @@ class AutomationService:
                 iterator = croniter(schedule, base_local)
                 next_time_local = iterator.get_next(datetime)
                 return next_time_local.astimezone(ZoneInfo("UTC"))
-            logger.warning("無法解析排程表達式 %s (%s)", schedule, trigger)
+            logger.warning("Cannot parse schedule expression %s (%s)", schedule, trigger)
             return None
 
-        # manual 或 webhook 排程不計算下一次執行時間
+        # manual or webhook schedules don't calculate next execution time
         return None
 
 

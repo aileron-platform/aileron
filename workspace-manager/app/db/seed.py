@@ -1,6 +1,6 @@
-"""資料庫種子資料載入器
+"""Database seed data loader
 
-注意：使用者資料已由 init SQL 建立，此檔案僅負責模型配置等動態資料
+Note: User data has been created by init SQL, this file is only responsible for dynamic data such as model configuration
 """
 
 from __future__ import annotations
@@ -146,7 +146,7 @@ DEFAULT_TEMPLATE_FEATURES = [
 
 
 def should_create_default_workspace() -> bool:
-    """依部署模式決定是否需要建立預設 workspace。"""
+    """Determine if default workspace needs to be created based on deployment mode."""
     settings = get_settings()
     if settings.RUNTIME_PROVISIONER == "kubernetes":
         return settings.BOOTSTRAP_DEFAULT_WORKSPACE_ENABLED
@@ -286,14 +286,14 @@ def _create_kubernetes_default_workspace(default_user: User) -> Workspace:
 
 
 def create_default_model_configs(db: Session) -> None:
-    """建立預設模型配置"""
-    # 檢查是否已有模型配置
+    """Create default model configuration"""
+    # Check if model configuration already exists
     existing_configs = db.query(ModelConfig).count()
     if existing_configs > 0:
-        logger.info("模型配置已存在，跳過建立預設配置")
+        logger.info("Model configuration already exists, skipping creating default configuration")
         return
 
-    # Claude 模型配置
+    # Claude model configuration
     model_configs = [
         ModelConfig(
             id="model-sonnet-4",
@@ -330,18 +330,18 @@ def create_default_model_configs(db: Session) -> None:
     ]
 
     db.add_all(model_configs)
-    logger.info("建立 4 個預設模型配置")
+    logger.info("Created 4 default model configurations")
 
 
 def create_default_workspace(db: Session) -> None:
-    """建立預設 workspace (default-workspace)"""
+    """Create default workspace (default-workspace)"""
     settings = get_settings()
 
     if not should_create_default_workspace():
-        logger.info("目前設定未啟用預設 workspace bootstrap，跳過建立")
+        logger.info("Current settings do not enable default workspace bootstrap, skipping creation")
         return
 
-    # 檢查是否已存在 default-workspace
+    # Check if default-workspace already exists
     workspace_id = settings.BOOTSTRAP_DEFAULT_WORKSPACE_ID
     existing_workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
     if existing_workspace:
@@ -351,13 +351,13 @@ def create_default_workspace(db: Session) -> None:
                 existing_workspace.id,
             )
         else:
-            logger.info("預設 workspace 已存在，跳過建立")
+            logger.info("Default workspace already exists, skipping creation")
         return
 
-    # 取得預設使用者
+    # GetDefaultUser
     default_user = _get_default_workspace_owner(db)
     if not default_user:
-        logger.warning("找不到預設使用者，無法建立預設 workspace")
+        logger.warning("Default user not found, unable to create default workspace")
         return
 
     if settings.RUNTIME_PROVISIONER == "kubernetes":
@@ -366,7 +366,7 @@ def create_default_workspace(db: Session) -> None:
         default_workspace = _create_docker_default_workspace(default_user)
 
     db.add(default_workspace)
-    logger.info("建立預設 workspace: %s", default_workspace.id)
+    logger.info("CreateDefault workspace: %s", default_workspace.id)
 
 
 def ensure_bootstrap_default_workspace(
@@ -374,10 +374,10 @@ def ensure_bootstrap_default_workspace(
     max_attempts: int = 5,
     retry_interval_seconds: float = 2.0,
 ) -> bool:
-    """確保 bootstrap 預設 workspace 存在。
+    """Ensure bootstrap default workspace exists.
 
-    Kubernetes 首次安裝時，workspace-manager 可能會早於 init SQL 建立 admin user。
-    這裡用短暫重試來避免第一次啟動就永遠跳過 default workspace。
+    # On first Kubernetes installation, workspace-manager may start before init SQL creates the admin user.
+    # Use a brief retry here to avoid permanently skipping default workspace on first start.
     """
     settings = get_settings()
     workspace_id = settings.BOOTSTRAP_DEFAULT_WORKSPACE_ID
@@ -389,7 +389,7 @@ def ensure_bootstrap_default_workspace(
                 db.query(Workspace).filter(Workspace.id == workspace_id).first()
             )
             if existing_workspace:
-                logger.info("bootstrap 預設 workspace 已存在: %s", workspace_id)
+                logger.info("Bootstrap default workspace already exists: %s", workspace_id)
                 return True
 
             create_default_workspace(db)
@@ -400,7 +400,7 @@ def ensure_bootstrap_default_workspace(
             )
             if existing_workspace:
                 logger.info(
-                    "bootstrap 預設 workspace 已建立完成: %s (attempt %s/%s)",
+                    "Bootstrap default workspace creation completed: %s (attempt %s/%s)",
                     workspace_id,
                     attempt,
                     max_attempts,
@@ -408,14 +408,14 @@ def ensure_bootstrap_default_workspace(
                 return True
 
             logger.info(
-                "bootstrap 預設 workspace 尚未建立完成，稍後重試 (attempt %s/%s)",
+                "Bootstrap default workspace creation not yet complete, retrying later (attempt %s/%s)",
                 attempt,
                 max_attempts,
             )
         except Exception:
             db.rollback()
             logger.exception(
-                "bootstrap 預設 workspace 建立失敗 (attempt %s/%s)",
+                "bootstrap Default workspace CreateFailed (attempt %s/%s)",
                 attempt,
                 max_attempts,
             )
@@ -425,12 +425,12 @@ def ensure_bootstrap_default_workspace(
         if attempt < max_attempts:
             time.sleep(retry_interval_seconds)
 
-    logger.warning("bootstrap 預設 workspace 建立重試完成但仍不存在: %s", workspace_id)
+    logger.warning("Bootstrap default workspace creation retry completed but still does not exist: %s", workspace_id)
     return False
 
 
 def create_default_template_categories(db: Session) -> None:
-    """建立或更新預設模板分類"""
+    """Create or update default template categories"""
     existing_categories = {
         category.id: category
         for category in db.query(TemplateCategory).all()
@@ -493,11 +493,11 @@ def create_default_template_categories(db: Session) -> None:
             category.is_active = False
             updated_count += 1
 
-    logger.info("模板分類同步完成: 建立 %s 個，更新 %s 個", created_count, updated_count)
+    logger.info("Template category sync completed: created %s, updated %s", created_count, updated_count)
 
 
 def create_default_template_features(db: Session) -> None:
-    """建立或更新預設模板功能"""
+    """Create or update default template features"""
     existing_features = {
         feature.feature_key: feature
         for feature in db.query(TemplateFeature).all()
@@ -582,7 +582,7 @@ def create_default_template_features(db: Session) -> None:
             updated_count += 1
 
     logger.info(
-        "模板功能同步完成: 建立 %s 個，更新 %s 個，新增 CLI 關聯 %s 個",
+        "Template feature sync completed: created %s, updated %s, added CLI relationships %s",
         created_count,
         updated_count,
         cli_link_count,
@@ -590,29 +590,29 @@ def create_default_template_features(db: Session) -> None:
 
 
 def load_seed_data() -> None:
-    """載入種子資料（使用者由 init SQL 建立，default workspace 僅限 Docker 模式）"""
-    logger.info("開始載入種子資料...")
+    """Load seed data (users created by init SQL, default workspace only for Docker mode)"""
+    logger.info("Starting to load seed data...")
 
     db: Session = SessionLocal()
     try:
-        # 建立預設模型配置
+        # Create default model configurations
         create_default_model_configs(db)
 
-        # 建立預設 workspace
+        # Create default workspace
         create_default_workspace(db)
 
-        # 建立預設模板分類
+        # Create default template categories
         create_default_template_categories(db)
 
-        # 建立預設模板功能
+        # Create default template features
         create_default_template_features(db)
 
-        # 提交變更
+        # Commit changes
         db.commit()
-        logger.info("✅ 種子資料載入完成")
+        logger.info("✅ Seed data loading completed")
 
     except Exception as e:
-        logger.error(f"❌ 種子資料載入失敗: {e}")
+        logger.error(f"❌ Seed data loading failed: {e}")
         db.rollback()
         raise
     finally:
@@ -620,6 +620,6 @@ def load_seed_data() -> None:
 
 
 if __name__ == "__main__":
-    # 設定日誌
+    # Setup logging
     logging.basicConfig(level=logging.INFO)
     load_seed_data()

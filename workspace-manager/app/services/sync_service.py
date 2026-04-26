@@ -1,4 +1,4 @@
-"""同步服務 - 將設定同步到 workspace-runtime"""
+"""Synchronization service - Sync settings to workspace-runtime"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ i18n = get_i18n_service()
 
 
 class SyncService:
-    """同步服務 - 負責將資料庫設定同步到 workspace-runtime"""
+    """Synchronization service - Responsible for syncing database settings to workspace-runtime"""
 
     @staticmethod
     async def sync_settings_to_runtime(
@@ -23,17 +23,17 @@ class SyncService:
         language: str = "en",
     ) -> dict:
         """
-        將用戶設定同步到指定的 workspace-runtime
+        Sync user settings to specified workspace-runtime
 
         Args:
-            workspace: Workspace 物件
-            settings: UserSetting 物件
+            workspace: Workspace Object
+            settings: UserSetting Object
 
         Returns:
-            同步結果字典
+            Sync result dictionary
         """
         if not workspace.runtime_internal_url:
-            raise ValueError(f"Workspace {workspace.id} 沒有 runtime_internal_url")
+            raise ValueError(f"Workspace {workspace.id} does not have runtime_internal_url")
         
         results = {
             "ssh": {"success": False, "message": ""},
@@ -43,18 +43,18 @@ class SyncService:
         
         base_url = workspace.runtime_internal_url.rstrip("/")
 
-        # Internal API 認證 token
+        # Internal API Authentication token
         headers = {
             "Authorization": "Bearer dev-internal-token",
             "Content-Type": "application/json",
         }
 
         async with httpx.AsyncClient(timeout=30.0, headers=headers) as client:
-            # 1. 同步 SSH Keys
+            # 1. Sync SSH keys
             if settings.ssh_private_key and settings.ssh_public_key:
                 try:
-                    logger.info(f"同步 SSH Keys 到 workspace {workspace.id}")
-                    logger.info(f"請求 URL: {base_url}/api/v1/internal/settings/ssh-keys")
+                    logger.info(f"Sync SSH keys to workspace {workspace.id}")
+                    logger.info(f"Request URL: {base_url}/api/v1/internal/settings/ssh-keys")
                     response = await client.post(
                         f"{base_url}/api/v1/internal/settings/ssh-keys",
                         json={
@@ -62,23 +62,23 @@ class SyncService:
                             "publicKey": settings.ssh_public_key,
                         }
                     )
-                    logger.info(f"SSH Keys 響應狀態: {response.status_code}")
-                    logger.info(f"SSH Keys 響應內容: {response.text}")
+                    logger.info(f"SSH keys response status: {response.status_code}")
+                    logger.info(f"SSH keys response content: {response.text}")
                     response.raise_for_status()
                     results["ssh"]["success"] = True
                     results["ssh"]["message"] = i18n.translate("sync.ssh.success", language=language)
-                    logger.info(f"SSH Keys 同步成功: {workspace.id}")
+                    logger.info(f"SSH keys sync succeeded: {workspace.id}")
                 except Exception as e:
-                    logger.error(f"SSH Keys 同步失敗: {e}", exc_info=True)
+                    logger.error(f"SSH keys sync failed: {e}", exc_info=True)
                     results["ssh"]["message"] = i18n.translate("sync.ssh.failed", language=language)
             else:
-                results["ssh"]["message"] = "無 SSH Keys 需要同步"
+                results["ssh"]["message"] = "No SSH keys need to sync"
             
-            # 2. 同步 Claude Code 設定
+            # 2. Sync Claude Code settings
             try:
-                logger.info(f"同步 Claude Code 設定到 workspace {workspace.id}")
+                logger.info(f"Sync Claude Code settings to workspace {workspace.id}")
 
-                # 從 additional_settings 讀取 Claude Code 設定
+                # Read Claude Code settings from additional_settings
                 additional_settings = settings.additional_settings or {}
                 claude_settings = additional_settings.get("claudeCode", {})
 
@@ -87,7 +87,7 @@ class SyncService:
                 if not auth_method:
                     auth_method = "api_key" if api_key else "subscription"
 
-                # 從 claude_selected_model 或 additional_settings 中的 model 取得模型設定
+                # Get model settings from claude_selected_model or model in additional_settings
                 model = claude_settings.get("model") or settings.claude_selected_model
 
                 claude_payload = {
@@ -101,49 +101,49 @@ class SyncService:
                     "environmentVariables": claude_settings.get("environmentVariables", []),
                 }
 
-                # 除錯：記錄傳送的資料
-                logger.info(f"Claude Code 同步 payload: {claude_payload}")
+                # Debug: Record transmitted data
+                logger.info(f"Claude Code sync payload: {claude_payload}")
                 logger.info(f"Additional settings: {additional_settings}")
                 logger.info(f"Claude settings from additional_settings: {claude_settings}")
-                logger.info(f"請求 URL: {base_url}/api/v1/internal/settings/claude-code")
+                logger.info(f"Request URL: {base_url}/api/v1/internal/settings/claude-code")
 
                 response = await client.post(
                     f"{base_url}/api/v1/internal/settings/claude-code",
                     json=claude_payload,
                 )
 
-                # 記錄詳細的回應資訊
-                logger.info(f"回應狀態碼: {response.status_code}")
-                logger.info(f"回應標頭: {dict(response.headers)}")
+                # Record detailed response information
+                logger.info(f"Response status code: {response.status_code}")
+                logger.info(f"ResponseHeader: {dict(response.headers)}")
 
                 if response.status_code != 200:
                     response_text = response.text
-                    logger.error(f"Claude Code 同步失敗，狀態碼: {response.status_code}, 回應內容: {response_text}")
+                    logger.error(f"Claude Code sync failed, status code: {response.status_code}, response content: {response_text}")
                     response.raise_for_status()
                 else:
                     response_data = response.json()
-                    logger.info(f"Claude Code 同步回應: {response_data}")
+                    logger.info(f"Claude Code sync response: {response_data}")
 
                 results["claude_code"]["success"] = True
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.success", language=language)
-                logger.info(f"Claude Code 設定同步成功: {workspace.id}")
+                logger.info(f"Claude Code settings sync succeeded: {workspace.id}")
             except httpx.HTTPStatusError as e:
-                logger.error(f"Claude Code HTTP 錯誤: {e.response.status_code} - {e.response.text}")
+                logger.error(f"Claude Code HTTP Error: {e.response.status_code} - {e.response.text}")
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
             except httpx.TimeoutException as e:
-                logger.error(f"Claude Code 請求超時: {e}")
+                logger.error(f"Claude Code request timeout: {e}")
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
             except httpx.ConnectError as e:
-                logger.error(f"Claude Code 連接錯誤: {e}")
+                logger.error(f"Claude Code connection error: {e}")
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
             except Exception as e:
-                logger.error(f"Claude Code 設定同步失敗: {e}")
+                logger.error(f"Claude Code settings sync failed: {e}")
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
             
-            # 3. 同步 Git 設定
+            # 3. Sync Git settings
             if settings.git_user_name and settings.git_user_email:
                 try:
-                    logger.info(f"同步 Git 設定到 workspace {workspace.id}")
+                    logger.info(f"Sync Git settings to workspace {workspace.id}")
                     response = await client.post(
                         f"{base_url}/api/v1/internal/settings/git",
                         json={
@@ -154,32 +154,32 @@ class SyncService:
                     response.raise_for_status()
                     results["git"]["success"] = True
                     results["git"]["message"] = i18n.translate("sync.git.success", language=language)
-                    logger.info(f"Git 設定同步成功: {workspace.id}")
+                    logger.info(f"Git settings sync succeeded: {workspace.id}")
                 except Exception as e:
-                    logger.error(f"Git 設定同步失敗: {e}")
+                    logger.error(f"Git settings sync failed: {e}")
                     results["git"]["message"] = i18n.translate("sync.git.failed", language=language)
             else:
-                results["git"]["message"] = "無 Git 設定需要同步"
+                results["git"]["message"] = "No Git settings need to sync"
         
         return results
 
     @staticmethod
     async def sync_to_all_workspaces(user_id: str, settings: UserSetting, db, language: str = "en") -> dict:
         """
-        將設定同步到用戶的所有運行中的 workspace
+        Sync settings to all running workspaces of user
 
         Args:
-            user_id: 用戶 ID
-            settings: UserSetting 物件
-            db: 資料庫 session
-            language: 語言代碼
+            user_id: User ID
+            settings: UserSetting object
+            db: Database session
+            language: Language code
 
         Returns:
-            同步結果字典
+            Sync result dictionary
         """
         from sqlalchemy import select
         
-        # 查詢用戶所有運行中的 workspace
+        # Query all running workspaces for user
         query = select(Workspace).where(
             Workspace.owner_id == user_id,
             Workspace.runtime_status == "running"
@@ -189,7 +189,7 @@ class SyncService:
         if not workspaces:
             return {
                 "success": True,
-                "message": "沒有運行中的 workspace 需要同步",
+                "message": "No running workspaces need to sync",
                 "workspaces": []
             }
         
@@ -197,21 +197,22 @@ class SyncService:
         for workspace in workspaces:
             try:
                 sync_result = await SyncService.sync_settings_to_runtime(workspace, settings, language)
-                # 檢查是否有任何實際的同步操作成功
-                # 如果沒有需要同步的項目，仍視為成功
+                # Check if any actual sync operations succeeded
+                # If no items need sync, still consider as success
                 results.append({
                     "workspace_id": workspace.id,
                     "workspace_name": workspace.name,
                     "success": not any(
                         not r["success"]
-                        and "無" not in r["message"]
-                        and "沒有" not in r["message"]
+                        and "no" not in r["message"]
+                        and "not have" not in r["message"]
+                        and "missing" not in r["message"]
                         for r in sync_result.values()
                     ),
                     "details": sync_result,
                 })
             except Exception as e:
-                logger.error(f"同步到 workspace {workspace.id} 失敗: {e}")
+                logger.error(f"Sync to workspace {workspace.id} failed: {e}")
                 results.append({
                     "workspace_id": workspace.id,
                     "workspace_name": workspace.name,

@@ -1,8 +1,8 @@
 """
-JWKS 快取管理
+JWKS cache management
 
-提供 Keycloak JWKS (JSON Web Key Set) 的快取管理功能。
-自動定期更新公鑰，避免每次驗證 token 都請求 Keycloak。
+Provides cache management functionality for Keycloak JWKS (JSON Web Key Set).
+Automatically updates public keys periodically to avoid requesting Keycloak on every token verification.
 """
 
 import asyncio
@@ -18,49 +18,49 @@ logger = logging.getLogger(__name__)
 
 
 class JKWSCache:
-    """JWKS 快取管理類
+    """JWKS cache management class
 
-    提供以下功能：
-    - 自動快取 JWKS 數據
-    - 定期自動刷新（可配置 TTL）
-    - 異步刷新避免阻塞請求
-    - 失敗重試機制
-    - 快取命中率統計
+    Provides the following features:
+    - Automatic JWKS data caching
+    - Periodic auto-refresh (configurable TTL)
+    - Asynchronous refresh to avoid blocking requests
+    - Failure retry mechanism
+    - Cache hit rate statistics
     """
 
     def __init__(self):
-        """初始化 JWKS 快取"""
+        """Initialize JWKS cache"""
         self.config = get_keycloak_config()
         self._cache: Optional[Dict[str, Any]] = None
         self._cache_time: Optional[datetime] = None
         self._refresh_lock = asyncio.Lock()
         self._is_refreshing = False
 
-        # 統計信息
+        # Statistics information
         self._cache_hits = 0
         self._cache_misses = 0
         self._refresh_errors = 0
 
     @property
     def is_enabled(self) -> bool:
-        """檢查快取是否啟用"""
+        """Check if cache is active"""
         return self.config.enabled
 
     @property
     def cache_ttl(self) -> int:
-        """獲取快取 TTL（秒）"""
+        """Get cache TTL (seconds)"""
         return self.config.jwks_cache_ttl
 
     @property
     def jwks_url(self) -> Optional[str]:
-        """獲取 JWKS URL"""
+        """Get JWKS URL"""
         return self.config.jwks_url
 
     def is_cache_valid(self) -> bool:
-        """檢查快取是否有效
+        """Check if cache is valid
 
         Returns:
-            True 如果快取存在且未過期
+            True if cache exists and is not expired
         """
         if self._cache is None or self._cache_time is None:
             return False
@@ -69,26 +69,26 @@ class JKWSCache:
         return cache_age < self.cache_ttl
 
     def get_cache_age_seconds(self) -> Optional[float]:
-        """獲取快取年齡（秒）
+        """Get cache age (seconds)
 
         Returns:
-            快存的年齡，如果快取不存在則返回 None
+            Cache age, or None if cache does not exist
         """
         if self._cache_time is None:
             return None
         return (datetime.now(timezone.utc) - self._cache_time).total_seconds()
 
     async def get_jwks(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """獲取 JWKS 數據（使用快取）
+        """Get JWKS data (using cache)
 
         Args:
-            force_refresh: 是否強制刷新快取
+            force_refresh: Whether to force refresh cache
 
         Returns:
-            JWKS 數據字典
+            JWKS data dictionary
 
         Raises:
-            JWKSFetchError: 當無法獲取 JWKS 時
+            JWKSFetchError: When unable to get JWKS
         """
         if not self.is_enabled:
             raise JWKSFetchError("Authentication is not enabled")
@@ -98,21 +98,21 @@ class JKWSCache:
             logger.debug(f"Using cached JWKS (age: {self.get_cache_age_seconds():.1f}s)")
             return self._cache
 
-        # 需要刷新快取
+        # Need to refresh cache
         return await self._refresh_jwks(force_refresh=force_refresh)
 
     async def _refresh_jwks(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """內部方法：刷新 JWKS 快取
+        """Internal method: Refresh JWKS cache
 
         Returns:
-            最新的 JWKS 數據
+            Latest JWKS data
 
         Raises:
-            JWKSFetchError: 當刷新失敗時
+            JWKSFetchError: When refresh fails
         """
-        # 使用鎖避免並發刷新
+        # Use lock to avoid concurrent refresh
         async with self._refresh_lock:
-            # 再次檢查快取，可能其他任務已經刷新了
+            # Check cache again, maybe other task already refreshed
             if not force_refresh and not self._is_refreshing and self.is_cache_valid():
                 return self._cache
 
@@ -120,7 +120,7 @@ class JKWSCache:
             try:
                 jwks_data = await self._fetch_jwks_from_server()
 
-                # 更新快取
+                # Update cache
                 self._cache = jwks_data
                 self._cache_time = datetime.now(timezone.utc)
                 self._cache_misses += 1
@@ -137,13 +137,13 @@ class JKWSCache:
                 self._is_refreshing = False
 
     async def _fetch_jwks_from_server(self) -> Dict[str, Any]:
-        """從 Keycloak 服務器獲取 JWKS
+        """Get JWKS from Keycloak server
 
         Returns:
-            JWKS 數據字典
+            JWKS data dictionary
 
         Raises:
-            JWKSFetchError: 當請求失敗時
+            JWKSFetchError: When request fails
         """
         if not self.jwks_url:
             raise JWKSFetchError("JWKS URL not configured")
@@ -154,18 +154,18 @@ class JKWSCache:
                 response.raise_for_status()
                 jwks_data = response.json()
 
-            # 驗證 JWKS 格式
+            # Validate JWKS format
             if 'keys' not in jwks_data:
                 raise JWKSFetchError("Invalid JWKS format: missing 'keys' field")
 
-            self._refresh_errors = 0  # 重置錯誤計數
+            self._refresh_errors = 0  # Reset error counter
             return jwks_data
 
         except httpx.HTTPError as e:
             self._refresh_errors += 1
             logger.error(f"Failed to fetch JWKS (error #{self._refresh_errors}): {e}")
 
-            # 如果有舊的快取，在錯誤情況下返回舊快取
+            # Return stale cache if available on error
             if self._cache is not None:
                 logger.warning("Using stale JWKS cache due to fetch error")
                 return self._cache
@@ -182,10 +182,10 @@ class JKWSCache:
             raise JWKSFetchError(f"Unexpected error: {e}")
 
     async def start_background_refresh(self, interval_seconds: Optional[int] = None):
-        """啟動後台自動刷新任務
+        """Start background auto-refresh task
 
         Args:
-            interval_seconds: 刷新間隔（秒），預設為 cache_ttl 的 80%
+            interval_seconds: Refresh interval (seconds), default is 80% of cache_ttl
         """
         if interval_seconds is None:
             interval_seconds = int(self.cache_ttl * 0.8)
@@ -200,20 +200,20 @@ class JKWSCache:
                 except Exception as e:
                     logger.error(f"Background JWKS refresh failed: {e}")
 
-        # 創建後台任務
+        # Create background task
         asyncio.create_task(refresh_loop())
 
     def clear(self):
-        """清除快取"""
+        """Clear cache"""
         self._cache = None
         self._cache_time = None
         logger.info("JWKS cache cleared")
 
     def get_stats(self) -> Dict[str, Any]:
-        """獲取快取統計信息
+        """Get cache statistics
 
         Returns:
-            統計信息字典
+            Statistics information dictionary
         """
         return {
             'cache_hits': self._cache_hits,
@@ -225,13 +225,13 @@ class JKWSCache:
         }
 
     def get_key_by_kid(self, kid: str) -> Optional[Dict[str, Any]]:
-        """根據 kid (Key ID) 獲取公鑰
+        """Get public key by kid (Key ID)
 
         Args:
             kid: Key ID
 
         Returns:
-            公鑰字典，如果找不到則返回 None
+            Public key dictionary, or None if not found
         """
         if self._cache is None:
             return None
@@ -244,28 +244,28 @@ class JKWSCache:
 
 
 class JWKSFetchError(Exception):
-    """JWKS 獲取失敗異常"""
+    """JWKS fetch failed exception"""
     pass
 
 
-# 單例實例
+# Singleton instance
 _jwks_cache_instance: Optional[JKWSCache] = None
 
 
 def get_jwks_cache() -> JKWSCache:
-    """獲取 JKWSCache 單例實例
+    """Get JWKS cache singleton instance
 
     Returns:
-        JKWSCache 實例
+        JWKS cache instance
     """
     global _jwks_cache_instance
     if _jwks_cache_instance is None:
         _jwks_cache_instance = JKWSCache()
-    return _jwks_cache_instance
+    return _jw_cache_instance
 
 
 def clear_jwks_cache():
-    """清除 JWKS 快取"""
+    """Clear JWKS cache"""
     global _jwks_cache_instance
     if _jwks_cache_instance is not None:
         _jwks_cache_instance.clear()

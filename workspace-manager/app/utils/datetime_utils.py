@@ -1,6 +1,7 @@
-"""日期時間工具函數
+"""DateTime utility functions
 
-統一處理時區轉換、時間計算等操作，確保整個系統的時區一致性。
+Unified handling of timezone conversion, time calculation, and other operations
+to ensure timezone consistency across the system.
 """
 
 from __future__ import annotations
@@ -12,19 +13,19 @@ from zoneinfo import ZoneInfo
 
 def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
     """
-    確保 datetime 是 UTC timezone-aware
-    
+    Ensure datetime is UTC timezone-aware
+
     Args:
-        dt: 輸入的 datetime 對象，可能是 naive 或 aware
-        
+        dt: Input datetime object, may be naive or aware
+
     Returns:
-        UTC timezone-aware 的 datetime，如果輸入為 None 則返回 None
-        
+        UTC timezone-aware datetime, or None if input is None
+
     Examples:
         >>> naive_dt = datetime(2025, 1, 1, 12, 0, 0)
         >>> ensure_utc(naive_dt)
         datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-        
+
         >>> aware_dt = datetime(2025, 1, 1, 12, 0, 0, tzinfo=ZoneInfo("Asia/Taipei"))
         >>> ensure_utc(aware_dt)
         datetime(2025, 1, 1, 4, 0, 0, tzinfo=timezone.utc)
@@ -33,20 +34,20 @@ def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
         return None
     
     if dt.tzinfo is None:
-        # Naive datetime，假設為 UTC
+        # Naive datetime, assume as UTC
         return dt.replace(tzinfo=timezone.utc)
     
-    # Aware datetime，轉換為 UTC
+    # Aware datetime, convert to UTC
     return dt.astimezone(timezone.utc)
 
 
 def utcnow() -> datetime:
     """
-    返回當前 UTC 時間（timezone-aware）
-    
+    Return current UTC time (timezone-aware)
+
     Returns:
-        當前 UTC 時間
-        
+        Current UTC time
+
     Examples:
         >>> now = utcnow()
         >>> now.tzinfo == timezone.utc
@@ -57,15 +58,15 @@ def utcnow() -> datetime:
 
 def calculate_duration(start: datetime, end: Optional[datetime] = None) -> int:
     """
-    計算兩個時間的秒數差異
-    
+    Calculate the difference in seconds between two times
+
     Args:
-        start: 開始時間
-        end: 結束時間，如果為 None 則使用當前時間
-        
+        start: Start time
+        end: End time, use current time if None
+
     Returns:
-        時間差（秒），確保非負數
-        
+        Time difference in seconds, ensured to be non-negative
+
     Examples:
         >>> start = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         >>> end = datetime(2025, 1, 1, 12, 5, 30, tzinfo=timezone.utc)
@@ -82,22 +83,22 @@ def calculate_duration(start: datetime, end: Optional[datetime] = None) -> int:
         return 0
     
     duration = int((end_utc - start_utc).total_seconds())
-    return max(0, duration)  # 確保非負數
+    return max(0, duration)  # Ensure non-negative
 
 
 def compare_datetime(dt1: datetime, dt2: datetime) -> int:
     """
-    比較兩個 datetime 對象
-    
+    Compare two datetime objects
+
     Args:
-        dt1: 第一個 datetime
-        dt2: 第二個 datetime
-        
+        dt1: First datetime
+        dt2: Second datetime
+
     Returns:
-        -1 如果 dt1 < dt2
-         0 如果 dt1 == dt2
-         1 如果 dt1 > dt2
-         
+        -1 if dt1 < dt2
+         0 if dt1 == dt2
+         1 if dt1 > dt2
+
     Examples:
         >>> dt1 = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         >>> dt2 = datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc)
@@ -120,14 +121,14 @@ def compare_datetime(dt1: datetime, dt2: datetime) -> int:
 
 def is_past(dt: datetime) -> bool:
     """
-    檢查給定時間是否已過去
-    
+    Check if given time is in the past
+
     Args:
-        dt: 要檢查的時間
-        
+        dt: Time to check
+
     Returns:
-        True 如果時間已過去，False 否則
-        
+        True if time is in the past, False otherwise
+
     Examples:
         >>> past_dt = datetime(2020, 1, 1, tzinfo=timezone.utc)
         >>> is_past(past_dt)
@@ -142,14 +143,14 @@ def is_past(dt: datetime) -> bool:
 
 def is_future(dt: datetime) -> bool:
     """
-    檢查給定時間是否在未來
-    
+    Check if given time is in the future
+
     Args:
-        dt: 要檢查的時間
-        
+        dt: Time to check
+
     Returns:
-        True 如果時間在未來，False 否則
-        
+        True if time is in the future, False otherwise
+
     Examples:
         >>> future_dt = datetime(2030, 1, 1, tzinfo=timezone.utc)
         >>> is_future(future_dt)
@@ -164,15 +165,15 @@ def is_future(dt: datetime) -> bool:
 
 def to_local_timezone(dt: datetime, tz_name: str = "Asia/Taipei") -> datetime:
     """
-    將 UTC 時間轉換為指定時區的本地時間
-    
+    Convert UTC time to local time of specified timezone
+
     Args:
-        dt: UTC 時間
-        tz_name: 時區名稱，預設為 Asia/Taipei
-        
+        dt: UTC time
+        tz_name: Timezone name, default is Asia/Taipei
+
     Returns:
-        本地時區的 datetime
-        
+        Datetime in local timezone
+
     Examples:
         >>> utc_dt = datetime(2025, 1, 1, 4, 0, 0, tzinfo=timezone.utc)
         >>> local_dt = to_local_timezone(utc_dt, "Asia/Taipei")
@@ -187,21 +188,21 @@ def to_local_timezone(dt: datetime, tz_name: str = "Asia/Taipei") -> datetime:
         local_tz = ZoneInfo(tz_name)
         return dt_utc.astimezone(local_tz)
     except Exception:
-        # 如果時區無效，返回 UTC
+        # If timezone is invalid, return UTC
         return dt_utc
 
 
 def from_local_timezone(dt: datetime, tz_name: str = "Asia/Taipei") -> datetime:
     """
-    將本地時區的時間轉換為 UTC
-    
+    Convert local time to UTC
+
     Args:
-        dt: 本地時間（可能是 naive 或 aware）
-        tz_name: 時區名稱，預設為 Asia/Taipei
-        
+        dt: Local time (may be naive or aware)
+        tz_name: Timezone name, default is Asia/Taipei
+
     Returns:
-        UTC 時間
-        
+        UTC time
+
     Examples:
         >>> local_dt = datetime(2025, 1, 1, 12, 0, 0)
         >>> utc_dt = from_local_timezone(local_dt, "Asia/Taipei")
@@ -212,16 +213,16 @@ def from_local_timezone(dt: datetime, tz_name: str = "Asia/Taipei") -> datetime:
         local_tz = ZoneInfo(tz_name)
         
         if dt.tzinfo is None:
-            # Naive datetime，加上本地時區
+            # Naive datetime, add local timezone
             dt_with_tz = dt.replace(tzinfo=local_tz)
         else:
-            # Aware datetime，先轉換到本地時區
+            # Aware datetime, first convert to local timezone
             dt_with_tz = dt.astimezone(local_tz)
         
-        # 轉換為 UTC
+        # Convert to UTC
         return dt_with_tz.astimezone(timezone.utc)
     except Exception:
-        # 如果時區無效，假設輸入已經是 UTC
+        # If timezone is invalid, assume input is already UTC
         return ensure_utc(dt) or dt
 
 

@@ -1,4 +1,4 @@
-"""使用者模型"""
+"""User models"""
 
 from typing import Optional
 
@@ -8,42 +8,39 @@ from .common import TimestampMixin
 
 
 class UserBase(BaseModel):
-    """使用者基本欄位"""
+    """User basic fields"""
 
-    email: EmailStr = Field(description="電子郵件")
-    username: str = Field(description="使用者名稱")
-    first_name: Optional[str] = Field(default=None, description="名字")
-    last_name: Optional[str] = Field(default=None, description="姓氏")
-    display_name: Optional[str] = Field(default=None, description="顯示名稱")
-    avatar_url: Optional[str] = Field(default=None, description="頭像 URL")
-    is_active: bool = Field(default=True, description="是否啟用")
+    email: EmailStr = Field(description="Email address")
+    username: str = Field(description="Username")
+    first_name: Optional[str] = Field(default=None, description="First name")
+    last_name: Optional[str] = Field(default=None, description="Last name")
+    display_name: Optional[str] = Field(default=None, description="Display name")
+    avatar_url: Optional[str] = Field(default=None, description="Avatar URL")
+    is_active: bool = Field(default=True, description="Is active")
 
 
 class UserCreate(UserBase):
-    """建立使用者請求（僅用於系統初始化，實際用戶創建在 Keycloak 中完成）"""
-
-    # 注意：密碼欄位已移除，因為認證已遷移到 Keycloak
-    # 新用戶應通過 Keycloak 創建，而不是直接通過 API
+    """Create user request (for system initialization only, actual user creation is done in Keycloak)"""
 
 
 class UserUpdate(BaseModel):
-    """更新使用者請求"""
+    """Update user request"""
 
-    first_name: Optional[str] = Field(default=None, description="名字")
-    last_name: Optional[str] = Field(default=None, description="姓氏")
-    display_name: Optional[str] = Field(default=None, description="顯示名稱")
-    avatar_url: Optional[str] = Field(default=None, description="頭像 URL")
-    is_active: Optional[bool] = Field(default=None, description="是否啟用")
+    first_name: Optional[str] = Field(default=None, description="First name")
+    last_name: Optional[str] = Field(default=None, description="Last name")
+    display_name: Optional[str] = Field(default=None, description="Display name")
+    avatar_url: Optional[str] = Field(default=None, description="Avatar URL")
+    is_active: Optional[bool] = Field(default=None, description="Is active")
 
 
 class User(UserBase, TimestampMixin):
-    """使用者回應模型"""
+    """User response model"""
 
-    id: str = Field(description="使用者 ID")
+    id: str = Field(description="User ID")
 
 
 class UserListResponse(BaseModel):
-    """使用者列表回應"""
+    """User list response"""
 
     items: list[User]
     total: int

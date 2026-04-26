@@ -1,4 +1,4 @@
-"""OAuth 認證服務 - 處理 Claude OAuth 流程"""
+"""OAuth AuthenticationService - Handle Claude OAuth Process"""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class PKCEParams(BaseModel):
-    """PKCE 參數"""
+    """PKCE Parameter"""
     verifier: str
     challenge: str
 
 
 class OAuthTokenResponse(BaseModel):
-    """OAuth Token 回應"""
+    """OAuth Token Response"""
     access_token: str = Field(..., alias="access_token")
     refresh_token: str = Field(..., alias="refresh_token")
     expires_in: int = Field(..., alias="expires_in")
@@ -29,14 +29,14 @@ class OAuthTokenResponse(BaseModel):
 
 
 class OAuthExchangeResult(BaseModel):
-    """OAuth Exchange 結果"""
+    """OAuth Exchange Result"""
     access_token: str
     refresh_token: str
-    expires_at: int  # 毫秒時間戳
+    expires_at: int  # Millisecond timestamp
 
 
 class OAuthAccountInfo(BaseModel):
-    """OAuth 帳戶資訊"""
+    """OAuth account information"""
     account_uuid: str = Field(..., alias="accountUuid")
     email_address: str = Field(..., alias="emailAddress")
     organization_uuid: str = Field(..., alias="organizationUuid")
@@ -50,7 +50,7 @@ class OAuthAccountInfo(BaseModel):
 
 
 class OAuthService:
-    """處理 Claude OAuth 認證流程"""
+    """Handle Claude OAuth AuthenticationProcess"""
 
     CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     AUTHORIZATION_URL = "https://claude.ai/oauth/authorize"
@@ -60,11 +60,11 @@ class OAuthService:
 
     @staticmethod
     def generate_pkce() -> PKCEParams:
-        """生成 PKCE code verifier 和 challenge"""
-        # 生成 code verifier (43-128 個字元)
+        """Generate PKCE code verifier and challenge"""
+        # Generate code verifier (43-128 characters)
         verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
         
-        # 生成 code challenge (SHA256 hash of verifier)
+        # Generate code challenge (SHA256 hash of verifier)
         challenge_bytes = hashlib.sha256(verifier.encode('utf-8')).digest()
         challenge = base64.urlsafe_b64encode(challenge_bytes).decode('utf-8').rstrip('=')
         
@@ -73,8 +73,8 @@ class OAuthService:
     @staticmethod
     def build_authorization_url(pkce: PKCEParams) -> str:
         """
-        建構 OAuth 授權 URL
-        注意：根據參考程式，state 參數應該使用 verifier 的值
+        Build OAuth authorization URL
+        Note: According to reference implementation, state parameter should use verifier's value
         """
         from urllib.parse import urlencode
 
@@ -86,7 +86,7 @@ class OAuthService:
             "scope": OAuthService.SCOPE,
             "code_challenge": pkce.challenge,
             "code_challenge_method": "S256",
-            "state": pkce.verifier,  # 使用 verifier 作為 state
+            "state": pkce.verifier,  # Use verifier as state
         }
 
         return f"{OAuthService.AUTHORIZATION_URL}?{urlencode(params)}"
@@ -94,22 +94,22 @@ class OAuthService:
     @staticmethod
     async def exchange_code(code: str, verifier: str) -> OAuthExchangeResult:
         """
-        使用 authorization code 交換 access token
+        Exchange authorization code for access token
 
         Args:
-            code: 格式為 "code#state" 的認證碼
-            verifier: PKCE code verifier（應該與 state 相同）
+            code: Authentication code in format "code#state"
+            verifier: PKCE code verifier (should be same as state)
 
         Returns:
-            OAuthExchangeResult 包含 access_token, refresh_token, expires_at
+            OAuthExchangeResult containing access_token, refresh_token, expires_at
 
         Raises:
-            httpx.HTTPStatusError: 當 API 請求失敗時
-            ValueError: 當回應格式不正確時
+            httpx.HTTPStatusError: When API request fails
+            ValueError: When response format is incorrect
 
-        注意：根據參考程式，state 參數應該等於 verifier
+        Note: According to reference implementation, state parameter should equal verifier
         """
-        # 分割 code 和 state
+        # Split code and state
         splits = code.split("#")
         if len(splits) != 2:
             raise ValueError("Invalid authentication code format. Expected format: code#state")
@@ -117,14 +117,14 @@ class OAuthService:
         auth_code = splits[0]
         state = splits[1]
 
-        # 驗證 state 是否等於 verifier（根據參考程式的實現）
+        # Validate if state equals verifier (according to reference implementation)
         if state != verifier:
             raise ValueError(
                 f"State mismatch: state={state[:10]}..., verifier={verifier[:10]}... "
                 "State should equal verifier in this OAuth flow"
             )
 
-        # 準備請求資料（參考 AuthAnthropic.exchange）
+        # Prepare request data (reference AuthAnthropic.exchange)
         payload = {
             "code": auth_code,
             "state": state,
@@ -134,7 +134,7 @@ class OAuthService:
             "code_verifier": verifier,
         }
         
-        # 發送請求
+        # SendRequest
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 OAuthService.TOKEN_URL,
@@ -143,7 +143,7 @@ class OAuthService:
                 timeout=30.0,
             )
             
-            # 檢查回應狀態
+            # CheckResponseStatus
             if not response.is_success:
                 error_detail = response.text
                 raise httpx.HTTPStatusError(
@@ -152,10 +152,10 @@ class OAuthService:
                     response=response,
                 )
             
-            # 解析回應
+            # ParseResponse
             data = response.json()
 
-            # 避免在日誌中暴露敏感憑證，只記錄必要的摘要資訊
+            # Avoid exposing sensitive credentials in logs, only record required summary information
             from app.core.logging import get_logger
 
             logger = get_logger(__name__)
@@ -169,8 +169,8 @@ class OAuthService:
 
             token_response = OAuthTokenResponse(**data)
 
-            # 計算過期時間（毫秒時間戳）
-            # 使用當前時間（毫秒）+ expires_in（秒）* 1000
+            # Calculate expiration time (millisecond timestamp)
+            # Use current time (milliseconds) + expires_in (seconds) * 1000
             current_time_ms = int(time.time() * 1000)
             expires_at_ms = current_time_ms + (token_response.expires_in * 1000)
 
@@ -183,16 +183,16 @@ class OAuthService:
     @staticmethod
     async def refresh_access_token(refresh_token: str) -> OAuthExchangeResult:
         """
-        使用 refresh token 更新 access token
-        
+        Use refresh token to update access token
+
         Args:
             refresh_token: Refresh token
-            
+
         Returns:
-            OAuthExchangeResult 包含新的 access_token, refresh_token, expires_at
-            
+            OAuthExchangeResult containing new access_token, refresh_token, expires_at
+
         Raises:
-            httpx.HTTPStatusError: 當 API 請求失敗時
+            httpx.HTTPStatusError: When API request fails
         """
         payload = {
             "grant_type": "refresh_token",
@@ -219,7 +219,7 @@ class OAuthService:
             data = response.json()
             token_response = OAuthTokenResponse(**data)
 
-            # 計算過期時間（毫秒時間戳）
+            # Calculate expiration time (millisecond timestamp)
             current_time_ms = int(time.time() * 1000)
             expires_at_ms = current_time_ms + (token_response.expires_in * 1000)
 
@@ -236,27 +236,27 @@ class OAuthService:
         expires_at: Optional[int],
     ) -> Optional[str]:
         """
-        取得有效的 access token，如果過期則自動更新
+        Get valid access token, automatically update if expired
 
         Args:
-            access_token: 當前的 access token
+            access_token: Current access token
             refresh_token: Refresh token
-            expires_at: Access token 過期時間（毫秒時間戳）
+            expires_at: Access token expiration time (millisecond timestamp)
 
         Returns:
-            有效的 access token，如果無法取得則返回 None
+            Valid access token, or None if unable to obtain
         """
-        # 如果有 access token 且未過期，直接返回
+        # If access token exists and not expired, return directly
         if access_token and expires_at:
             current_time_ms = int(time.time() * 1000)
             if expires_at > current_time_ms:
                 return access_token
 
-        # 如果沒有 refresh token，無法更新
+        # If no refresh token, cannot update
         if not refresh_token:
             return None
 
-        # 使用 refresh token 更新
+        # Use refresh token Update
         try:
             result = await OAuthService.refresh_access_token(refresh_token)
             return result.access_token
@@ -266,19 +266,19 @@ class OAuthService:
     @staticmethod
     async def get_account_info(access_token: str) -> OAuthAccountInfo:
         """
-        使用 access token 取得帳戶資訊
+        Get account information using access token
 
         Args:
             access_token: OAuth access token
 
         Returns:
-            OAuthAccountInfo 包含完整的帳戶和組織資訊
+            OAuthAccountInfo containing complete account and organization information
 
         Raises:
-            httpx.HTTPStatusError: 當 API 請求失敗時
+            httpx.HTTPStatusError: When API request fails
         """
         async with httpx.AsyncClient() as client:
-            # 1. 取得 profile 資訊
+            # 1. Get profile Information
             profile_response = await client.get(
                 "https://api.anthropic.com/api/oauth/profile",
                 headers={
@@ -297,7 +297,7 @@ class OAuthService:
 
             profile_data = profile_response.json()
 
-            # 2. 取得 roles 資訊
+            # 2. Get roles Information
             roles_response = await client.get(
                 "https://api.anthropic.com/api/oauth/claude_cli/roles",
                 headers={
@@ -316,7 +316,7 @@ class OAuthService:
 
             roles_data = roles_response.json()
 
-            # 3. 組合資訊
+            # 3. Combine information
             return OAuthAccountInfo(
                 account_uuid=profile_data["account"]["uuid"],
                 email_address=profile_data["account"]["email"],

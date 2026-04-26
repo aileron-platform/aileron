@@ -1,4 +1,4 @@
-"""OAuth2 認證路由"""
+"""OAuth2 AuthenticationRoute"""
 
 from fastapi import APIRouter, HTTPException, Request, status, Depends
 from pydantic import BaseModel
@@ -34,7 +34,7 @@ def _translate_oauth_error(translate, *, category: str) -> str:
 
 
 class OAuthInfoResponse(BaseModel):
-    """OAuth 資訊回應"""
+    """OAuth information response"""
     client_id: str
     authorization_url: str
     redirect_uri: str
@@ -44,10 +44,10 @@ class OAuthInfoResponse(BaseModel):
 @router.get(
     "/info",
     response_model=OAuthInfoResponse,
-    summary="取得 OAuth 設定資訊",
+    summary="Get OAuth settings information",
 )
 async def get_oauth_info(request: Request):
-    """取得 OAuth 設定資訊"""
+    """Get OAuth settings information"""
     return OAuthInfoResponse(
         client_id="9d1c250a-e61b-44d9-88ed-5944d1962f5e",
         authorization_url="https://claude.ai/oauth/authorize",
@@ -59,8 +59,8 @@ async def get_oauth_info(request: Request):
 @router.post(
     "/exchange",
     response_model=OAuthExchangeResponse,
-    summary="交換 OAuth 認證碼取得 Access Token",
-    description="使用 OAuth 認證碼和 PKCE verifier 交換 access token 和 refresh token",
+    summary="Exchange OAuth authorization code for access token",
+    description="Exchange OAuth authorization code and PKCE verifier for access token and refresh token",
     responses=build_responses(400, 422, 500, 502),
 )
 async def exchange_oauth_code(
@@ -68,16 +68,16 @@ async def exchange_oauth_code(
     request: Request,
 ) -> OAuthExchangeResponse:
     """
-    交換 OAuth 認證碼取得 Access Token
+    Exchange OAuth authorization code for access token
 
     Args:
-        oauth_request: 包含 authCode 和 verifier 的請求
+        oauth_request: Request containing authCode and verifier
 
     Returns:
-        包含 accessToken, refreshToken, expiresAt 的回應
+        Response containing accessToken, refreshToken, expiresAt
 
     Raises:
-        HTTPException: 當交換失敗時
+        HTTPException: When exchange fails
     """
     try:
         logger.info(f"Exchanging OAuth code for access token")
@@ -114,8 +114,8 @@ async def exchange_oauth_code(
 
 @router.post(
     "/authenticate",
-    summary="OAuth 認證並儲存",
-    description="交換 OAuth 認證碼、抓取帳戶資訊，並直接儲存到目前登入使用者的設定。",
+    summary="OAuth authentication and save",
+    description="Exchange OAuth authorization code, fetch account information, and save to current logged-in user's settings",
     responses=build_responses(400, 401, 404, 422, 500, 502),
 )
 async def authenticate_and_save(
@@ -125,25 +125,25 @@ async def authenticate_and_save(
     db: Session = Depends(get_db),
 ):
     """
-    交換 OAuth 認證碼並直接儲存到資料庫
+    Exchange OAuth authorization code and save directly to database
 
-    這個端點會：
-    1. 使用 authCode 和 verifier 呼叫 Anthropic OAuth API
-    2. 取得 access_token, refresh_token
-    3. 直接儲存到用戶的設定中
+    This endpoint will:
+    1. Use authCode and verifier to call Anthropic OAuth API
+    2. Get access_token, refresh_token
+    3. Save directly to user's settings
 
     Args:
-        request: 包含 authCode 和 verifier 的請求
-        user_id: 當前用戶 ID（從認證中間件取得）
-        db: 資料庫 session
+        request: Request containing authCode and verifier
+        user_id: Current user ID (from authentication middleware)
+        db: Database session
 
     Returns:
-        成功訊息和 token 資訊
+        Success message and token information
     """
     try:
         logger.info(f"Authenticating user {user_id} with OAuth code")
 
-        # 1. 呼叫 OAuth exchange
+        # 1. Call OAuth exchange
         result = await OAuthService.exchange_code(
             code=oauth_request.auth_code,
             verifier=oauth_request.verifier,
@@ -151,7 +151,7 @@ async def authenticate_and_save(
 
         logger.info(f"Successfully exchanged OAuth code for user {user_id}")
 
-        # 2. 取得帳戶資訊
+        # 2. Get account information
         try:
             account_info = await OAuthService.get_account_info(result.access_token)
             logger.info(f"Successfully retrieved account info for user {user_id}")
@@ -159,10 +159,10 @@ async def authenticate_and_save(
             logger.info(f"Organization: {account_info.organization_name} (Role: {account_info.organization_role})")
         except Exception as e:
             logger.error(f"Failed to get account info for user {user_id}: {e}")
-            # 即使取得帳戶資訊失敗，仍然繼續儲存 token
+            # Even if getting account information fails, continue saving token
             account_info = None
 
-        # 3. 取得用戶設定（資料庫模型）
+        # 3. Get user settings (database model)
         from app.db.models import User
         user = db.get(User, user_id)
         if not user or not user.settings:
@@ -174,16 +174,16 @@ async def authenticate_and_save(
 
         db_settings = user.settings
 
-        # 4. 更新 additional_settings 中的 claudeCode
+        # 4. Update claudeCode in additional_settings
         additional_settings = db_settings.additional_settings or {}
         claude_additional = additional_settings.get("claudeCode", {})
 
         claude_additional["subscriptionAuthCode"] = oauth_request.auth_code
         claude_additional["subscriptionAccessToken"] = result.access_token
         claude_additional["subscriptionRefreshToken"] = result.refresh_token
-        claude_additional["subscriptionExpiresAt"] = result.expires_at  # 直接儲存毫秒時間戳
+        claude_additional["subscriptionExpiresAt"] = result.expires_at  # Save millisecond timestamp directly
 
-        # 儲存帳戶資訊
+        # Save account information
         if account_info:
             claude_additional["oauthAccount"] = {
                 "accountUuid": account_info.account_uuid,
@@ -199,26 +199,26 @@ async def authenticate_and_save(
         additional_settings["claudeCode"] = claude_additional
         db_settings.additional_settings = additional_settings
 
-        # 標記 JSONB 欄位已修改（SQLAlchemy 需要這個來偵測 JSONB 變更）
+        # Mark JSONB column as modified (SQLAlchemy needs this to detect JSONB changes)
         flag_modified(db_settings, "additional_settings")
 
-        # 5. 提交到資料庫
+        # 5. Commit to database
         db.commit()
         db.refresh(db_settings)
 
         logger.info(f"Successfully saved OAuth tokens and account info for user {user_id}")
 
-        # 準備回應資料
+        # Prepare response data
         response_data = {
             "success": True,
             "message": http_request.state.translate("oauth.auth_success"),
             "accessToken": result.access_token,
             "refreshToken": result.refresh_token,
-            "expiresAt": result.expires_at,  # 直接返回毫秒時間戳
-            "needsSync": True,  # 提示前端需要同步到 workspace
+            "expiresAt": result.expires_at,  # Return millisecond timestamp directly
+            "needsSync": True,  # Prompt frontend to sync to workspace
         }
 
-        # 如果有帳戶資訊，也一併返回
+        # If there is account information, return together
         if account_info:
             response_data["oauthAccount"] = {
                 "accountUuid": account_info.account_uuid,
@@ -259,8 +259,8 @@ async def authenticate_and_save(
 @router.post(
     "/refresh",
     response_model=OAuthRefreshResponse,
-    summary="更新 Access Token",
-    description="使用 refresh token 更新 access token",
+    summary="Refresh access token",
+    description="Use refresh token to renew access token",
     responses=build_responses(422, 500, 502),
 )
 async def refresh_oauth_token(
@@ -268,16 +268,16 @@ async def refresh_oauth_token(
     http_request: Request,
 ) -> OAuthRefreshResponse:
     """
-    更新 Access Token
+    Refresh access token
 
     Args:
-        oauth_request: 包含 refreshToken 的請求
+        oauth_request: Request containing refreshToken
 
     Returns:
-        包含新的 accessToken, refreshToken, expiresAt 的回應
+        Response containing new accessToken, refreshToken, expiresAt
 
     Raises:
-        HTTPException: 當更新失敗時
+        HTTPException: When refresh fails
     """
     try:
         logger.info(f"Refreshing OAuth access token")
@@ -307,10 +307,10 @@ async def refresh_oauth_token(
 
 @router.get(
     "/health",
-    summary="OAuth 服務健康檢查",
+    summary="OAuth service health check",
 )
 async def oauth_health_check(request: Request):
-    """OAuth 服務健康檢查"""
+    """OAuth service health check"""
     return {
         "status": "healthy",
         "service": request.state.translate("oauth.health.service"),

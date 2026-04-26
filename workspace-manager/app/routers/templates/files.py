@@ -1,4 +1,4 @@
-"""模板文件管理路由（Commands、Agents、Output Style、AGENTS.md、通用文件管理）"""
+"""Template file management routes (Commands, Agents, Output Style, AGENTS.md, general file management)"""
 
 import logging
 from typing import List, Optional
@@ -113,22 +113,22 @@ def _localize_file_management_exception(translate, exc: FileManagementException)
 
 
 def get_template_service(db: Session = Depends(get_db)) -> TemplateService:
-    """取得模板服務實例"""
+    """Get template service instance"""
     return TemplateService(db)
 
 
 def get_template_file_service(db: Session = Depends(get_db)) -> TemplateFileService:
-    """取得模板檔案服務實例"""
+    """Get template file service instance"""
     return TemplateFileService(db)
 
 
-# ============ Commands 檔案管理 ============
+# ============ Commands file management =============
 
 
 @router.get(
     "/{template_id}/commands",
     response_model=TemplateCommandListResponse,
-    summary="取得模板 Commands 檔案列表",
+    summary="Get template commands file list",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_commands_files(
@@ -137,7 +137,7 @@ async def get_template_commands_files(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateCommandListResponse:
-    """取得指定模板的 commands 目錄下所有檔案列表"""
+    """Get all files in commands directory of specified template"""
     result = service.get_commands_files(template_id)
     translate = request.state.translate
     if not result.success:
@@ -148,7 +148,7 @@ async def get_template_commands_files(
 @router.get(
     "/{template_id}/commands/{file_name}",
     response_model=TemplateCommandResponse,
-    summary="取得 Command 檔案內容",
+    summary="Get Command FileContent",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_template_command_file(
@@ -158,7 +158,7 @@ async def get_template_command_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateCommandResponse:
-    """取得指定模板中特定 command 檔案的內容"""
+    """Get content of specific command file in specified template"""
     result = service.get_command_file_content(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -169,7 +169,7 @@ async def get_template_command_file(
     "/{template_id}/commands",
     response_model=TemplateCommandResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 Command 檔案",
+    summary="Add Command File",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_template_command_file(
@@ -179,7 +179,7 @@ async def create_template_command_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateCommandResponse:
-    """在指定模板的 commands 目錄中新增新檔案"""
+    """Add new file in commands directory of specified template"""
     result = service.create_command_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -189,7 +189,7 @@ async def create_template_command_file(
 @router.put(
     "/{template_id}/commands/{file_name}",
     response_model=TemplateCommandResponse,
-    summary="更新 Command 檔案",
+    summary="Update Command File",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def update_template_command_file(
@@ -200,7 +200,7 @@ async def update_template_command_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateCommandResponse:
-    """更新指定模板中的 command 檔案內容"""
+    """Update command file content in specified template"""
     result = service.update_command_file(template_id, file_name, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -210,7 +210,7 @@ async def update_template_command_file(
 @router.delete(
     "/{template_id}/commands/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 Command 檔案",
+    summary="Delete Command File",
     responses=build_responses(400, 401, 404, 500),
 )
 async def delete_template_command_file(
@@ -220,18 +220,18 @@ async def delete_template_command_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板中的 command 檔案"""
+    """Delete command file from specified template"""
     result = service.delete_command_file(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
 
 
-# ============ AGENTS.md 檔案管理 ============
+# ============ AGENTS.md file management =============
 
 
 @router.get(
     "/{template_id}/agents-md",
-    summary="取得 AGENTS.md 內容",
+    summary="Get AGENTS.md Content",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_agents_md(
@@ -240,7 +240,7 @@ async def get_template_agents_md(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> dict:
-    """取得模板的 AGENTS.md 內容"""
+    """Get AGENTS.md content of template"""
     try:
         translate = request.state.translate
         agents_md = service.get_agents_md(template_id)
@@ -267,7 +267,7 @@ async def get_template_agents_md(
 
 @router.put(
     "/{template_id}/agents-md",
-    summary="更新 AGENTS.md 內容",
+    summary="Update AGENTS.md Content",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def update_template_agents_md(
@@ -277,7 +277,7 @@ async def update_template_agents_md(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> dict:
-    """更新模板的 AGENTS.md 內容"""
+    """Update AGENTS.md content of template"""
     try:
         translate = request.state.translate
         content = payload.get("content", "")
@@ -288,7 +288,7 @@ async def update_template_agents_md(
                 "message": translate("templates.agents_md_content_empty")
             }
 
-        # 呼叫 service 方法實際保存檔案
+        # Call service method to actually save file
         service.update_agents_md(template_id, content)
 
         return {
@@ -314,13 +314,13 @@ async def update_template_agents_md(
         }
 
 
-# ============ Agents 檔案管理 ============
+# ============ Agents File Management ============
 
 
 @router.get(
     "/{template_id}/agents",
     response_model=TemplateAgentListResponse,
-    summary="取得模板 Agents 檔案列表",
+    summary="Get template agents file list",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_agents_files(
@@ -329,7 +329,7 @@ async def get_template_agents_files(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateAgentListResponse:
-    """取得指定模板的 agents 目錄下所有檔案列表"""
+    """Get all files in agents directory of specified template"""
     result = service.get_agents_files(template_id)
     translate = request.state.translate
     if not result.success:
@@ -340,7 +340,7 @@ async def get_template_agents_files(
 @router.get(
     "/{template_id}/agents/{file_name}",
     response_model=TemplateAgentResponse,
-    summary="取得 Agent 檔案內容",
+    summary="Get Agent FileContent",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_template_agent_file(
@@ -350,7 +350,7 @@ async def get_template_agent_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateAgentResponse:
-    """取得指定模板中特定 agent 檔案的內容"""
+    """Get content of specific agent file in specified template"""
     result = service.get_agent_file_content(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -361,7 +361,7 @@ async def get_template_agent_file(
     "/{template_id}/agents",
     response_model=TemplateAgentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 Agent 檔案",
+    summary="Add Agent File",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_template_agent_file(
@@ -371,7 +371,7 @@ async def create_template_agent_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateAgentResponse:
-    """在指定模板的 agents 目錄中新增新檔案"""
+    """Add new file in agents directory of specified template"""
     result = service.create_agent_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -381,7 +381,7 @@ async def create_template_agent_file(
 @router.put(
     "/{template_id}/agents/{file_name}",
     response_model=TemplateAgentResponse,
-    summary="更新 Agent 檔案",
+    summary="Update Agent File",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def update_template_agent_file(
@@ -392,7 +392,7 @@ async def update_template_agent_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateAgentResponse:
-    """更新指定模板中的 agent 檔案內容"""
+    """Update agent file content in specified template"""
     result = service.update_agent_file(template_id, file_name, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -402,7 +402,7 @@ async def update_template_agent_file(
 @router.delete(
     "/{template_id}/agents/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 Agent 檔案",
+    summary="Delete Agent File",
     responses=build_responses(400, 401, 404, 500),
 )
 async def delete_template_agent_file(
@@ -412,19 +412,19 @@ async def delete_template_agent_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板中的 agent 檔案"""
+    """Delete agent file in specified template"""
     result = service.delete_agent_file(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
 
 
-# ============ Output Style 檔案管理 ============
+# ============ Output Style File Management ============
 
 
 @router.get(
     "/{template_id}/output-style",
     response_model=TemplateOutputStyleListResponse,
-    summary="取得模板 Output Style 檔案列表",
+    summary="Get template output style file list",
     responses=build_responses(401, 404, 500),
 )
 async def get_template_output_style_files(
@@ -433,7 +433,7 @@ async def get_template_output_style_files(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleListResponse:
-    """取得指定模板的 output-style 目錄下所有檔案列表"""
+    """Get all files in output-style directory of specified template"""
     result = service.get_output_style_files(template_id)
     translate = request.state.translate
     if not result.success:
@@ -444,7 +444,7 @@ async def get_template_output_style_files(
 @router.get(
     "/{template_id}/output-style/{file_name}",
     response_model=TemplateOutputStyleResponse,
-    summary="取得 Output Style 檔案內容",
+    summary="Get Output Style FileContent",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_template_output_style_file(
@@ -454,7 +454,7 @@ async def get_template_output_style_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleResponse:
-    """取得指定模板中特定 output-style 檔案的內容"""
+    """Get content of specific output-style file in specified template"""
     result = service.get_output_style_file_content(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -465,7 +465,7 @@ async def get_template_output_style_file(
     "/{template_id}/output-style",
     response_model=TemplateOutputStyleResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 Output Style 檔案",
+    summary="Add Output Style File",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_template_output_style_file(
@@ -475,7 +475,7 @@ async def create_template_output_style_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleResponse:
-    """在指定模板的 output-style 目錄中新增新檔案"""
+    """Add new file in output-style directory of specified template"""
     result = service.create_output_style_file(template_id, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -485,7 +485,7 @@ async def create_template_output_style_file(
 @router.put(
     "/{template_id}/output-style/{file_name}",
     response_model=TemplateOutputStyleResponse,
-    summary="更新 Output Style 檔案",
+    summary="Update Output Style File",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def update_template_output_style_file(
@@ -496,7 +496,7 @@ async def update_template_output_style_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> TemplateOutputStyleResponse:
-    """更新指定模板中的 output-style 檔案內容"""
+    """Update output-style file content in specified template"""
     result = service.update_output_style_file(template_id, file_name, payload)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
@@ -506,7 +506,7 @@ async def update_template_output_style_file(
 @router.delete(
     "/{template_id}/output-style/{file_name}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除 Output Style 檔案",
+    summary="Delete Output Style File",
     responses=build_responses(400, 401, 404, 500),
 )
 async def delete_template_output_style_file(
@@ -516,34 +516,34 @@ async def delete_template_output_style_file(
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateService = Depends(get_template_service)
 ) -> None:
-    """刪除指定模板中的 output-style 檔案"""
+    """Delete output-style file in specified template"""
     result = service.delete_output_style_file(template_id, file_name)
     if not result.success:
         _raise_template_service_error(result, request.state.translate)
 
 
-# ============ 通用檔案管理 API ============
+# ============ General File Management API ============
 
 
 @router.get(
     "/{template_id}/files/tree",
     response_model=FileTreeResponse,
-    summary="取得檔案樹",
+    summary="Get file tree",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_file_tree(
     request: Request,
     template_id: str,
-    path: str = Query(default="/", description="目標路徑"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    include_hidden: bool = Query(default=False, description="是否包含隱藏檔"),
-    max_depth: Optional[int] = Query(default=None, ge=0, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(default="/", description="Target path"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    include_hidden: bool = Query(default=False, description="Include hidden files"),
+    max_depth: Optional[int] = Query(default=None, ge=0, description="Maximum depth (default uses FILE_TREE_MAX_DEPTH from settings file)"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileTreeResponse:
-    """取得檔案樹"""
+    """Get file tree"""
     try:
-        # 如果未提供 max_depth，使用設定檔中的預設值
+        # If max_depth not provided, use default value from settings file
         if max_depth is None:
             settings = get_settings()
             max_depth = settings.FILE_TREE_MAX_DEPTH
@@ -558,18 +558,18 @@ async def get_file_tree(
 @router.get(
     "/{template_id}/files/content",
     response_model=FileContentResponse,
-    summary="讀取檔案內容",
+    summary="ReadFileContent",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def read_file(
     request: Request,
     template_id: str,
-    path: str = Query(..., description="檔案路徑"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    path: str = Query(..., description="File path"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileContentResponse:
-    """讀取檔案內容"""
+    """Read file content"""
     try:
         return service.read_file(template_id, path, scope)
     except FileManagementException as e:
@@ -583,20 +583,20 @@ async def read_file(
     "/{template_id}/files",
     response_model=FileOperationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立檔案或目錄",
+    summary="Create file or directory",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_entry(
     request: Request,
     template_id: str,
-    path: str = Query(..., description="路徑"),
-    entry_type: str = Query(..., pattern="^(file|directory)$", description="類型: file 或 directory"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    content: Optional[str] = Query(default="", description="檔案內容（僅檔案）"),
+    path: str = Query(..., description="Path"),
+    entry_type: str = Query(..., pattern="^(file|directory)$", description="Type: file or directory"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    content: Optional[str] = Query(default="", description="File content (files only)"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileOperationResponse:
-    """建立檔案或目錄"""
+    """Create file or directory"""
     try:
         result = service.create_entry(template_id, path, entry_type, scope, content)
         return FileOperationResponse(
@@ -615,20 +615,20 @@ async def create_entry(
 @router.put(
     "/{template_id}/files/content",
     response_model=FileOperationResponse,
-    summary="寫入檔案內容",
+    summary="Write file content",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def write_file(
     request: Request,
     template_id: str,
-    path: str = Query(..., description="檔案路徑"),
-    content: str = Query(..., description="檔案內容"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    expected_version_id: Optional[str] = Query(default=None, description="預期版本ID（衝突檢測）"),
+    path: str = Query(..., description="File path"),
+    content: str = Query(..., description="File content"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    expected_version_id: Optional[str] = Query(default=None, description="Expected version ID (conflict detection)"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileOperationResponse:
-    """寫入檔案內容"""
+    """Write file content"""
     try:
         result = service.write_file(template_id, path, content, scope, expected_version_id)
         return FileOperationResponse(
@@ -647,20 +647,20 @@ async def write_file(
 @router.post(
     "/{template_id}/files/upload",
     response_model=FileUploadResponse,
-    summary="上傳檔案",
+    summary="Upload files",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def upload_files(
     request: Request,
     template_id: str,
-    target_path: str = Form(default="", description="目標目錄路徑"),
-    files: List[UploadFile] = File(..., description="要上傳的檔案"),
-    overwrite: bool = Form(default=False, description="是否覆蓋已存在的檔案"),
-    scope: str = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    target_path: str = Form(default="", description="Target directory path"),
+    files: List[UploadFile] = File(..., description="Files to upload"),
+    overwrite: bool = Form(default=False, description="Whether to overwrite existing files"),
+    scope: str = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileUploadResponse:
-    """上傳單個或多個檔案到模板"""
+    """Upload single or multiple files to template"""
     try:
         return await service.upload_files(template_id, target_path, files, overwrite, scope)
     except FileManagementException as e:
@@ -673,19 +673,19 @@ async def upload_files(
 @router.delete(
     "/{template_id}/files",
     response_model=FileOperationResponse,
-    summary="刪除檔案或目錄",
+    summary="Delete file or directory",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def delete_entry(
     request: Request,
     template_id: str,
-    path: str = Query(..., description="路徑"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除目錄"),
+    path: str = Query(..., description="Path"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    recursive: bool = Query(default=False, description="Whether to recursively delete directory"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileOperationResponse:
-    """刪除檔案或目錄"""
+    """Delete file or directory"""
     try:
         result = service.delete_entry(template_id, path, scope, recursive)
         return FileOperationResponse(
@@ -704,20 +704,20 @@ async def delete_entry(
 @router.post(
     "/{template_id}/files/copy",
     response_model=FileOperationResponse,
-    summary="複製檔案或目錄",
+    summary="Copy file or directory",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def copy_entry(
     request: Request,
     template_id: str,
-    source_path: str = Query(..., description="來源路徑"),
-    dest_path: str = Query(..., description="目標路徑"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    source_path: str = Query(..., description="Source path"),
+    dest_path: str = Query(..., description="Destination path"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    overwrite: bool = Query(default=False, description="Whether to overwrite"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileOperationResponse:
-    """複製檔案或目錄"""
+    """Copy file or directory"""
     try:
         result = service.copy_entry(template_id, source_path, dest_path, scope, overwrite)
         return FileOperationResponse(
@@ -736,20 +736,20 @@ async def copy_entry(
 @router.post(
     "/{template_id}/files/move",
     response_model=FileOperationResponse,
-    summary="移動檔案或目錄",
+    summary="Move file or directory",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def move_entry(
     request: Request,
     template_id: str,
-    source_path: str = Query(..., description="來源路徑"),
-    dest_path: str = Query(..., description="目標路徑"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    source_path: str = Query(..., description="Source path"),
+    dest_path: str = Query(..., description="Destination path"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    overwrite: bool = Query(default=False, description="Whether to overwrite"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileOperationResponse:
-    """移動檔案或目錄"""
+    """Move file or directory"""
     try:
         result = service.move_entry(template_id, source_path, dest_path, scope, overwrite)
         return FileOperationResponse(
@@ -768,19 +768,19 @@ async def move_entry(
 @router.post(
     "/{template_id}/files/batch-delete",
     response_model=BatchOperationResponse,
-    summary="批次刪除",
+    summary="Batch delete",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def batch_delete(
     request: Request,
     template_id: str,
-    paths: list[str] = Query(..., description="路徑列表"),
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除目錄"),
+    paths: list[str] = Query(..., description="List of paths"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
+    recursive: bool = Query(default=False, description="Whether to recursively delete directory"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> BatchOperationResponse:
-    """批次刪除"""
+    """Batch delete"""
     try:
         return service.batch_delete(template_id, paths, scope, recursive)
     except FileManagementException as e:
@@ -793,18 +793,18 @@ async def batch_delete(
 @router.post(
     "/{template_id}/files/search",
     response_model=FileSearchResponse,
-    summary="搜尋檔案",
+    summary="SearchFile",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def search_files(
     request: Request,
     template_id: str,
     payload: FileSearchRequest,
-    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="範圍: scripts 或 skills"),
+    scope: Optional[str] = Query(default="scripts", pattern="^(scripts|skills)$", description="Scope: scripts or skills"),
     current_user_id: str = Depends(get_current_user_id),
     service: TemplateFileService = Depends(get_template_file_service)
 ) -> FileSearchResponse:
-    """在模板中搜尋檔案"""
+    """Search files in template"""
     try:
         return service.search_files(template_id, payload, scope)
     except FileManagementException as e:

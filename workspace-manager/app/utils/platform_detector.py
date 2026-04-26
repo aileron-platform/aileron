@@ -5,7 +5,7 @@ import os
 class PlatformDetector:
     @staticmethod
     def detect_os() -> str:
-        """檢測作業系統"""
+        """Detect operating system"""
         system = platform.system()
         return {
             "Darwin": "mac",
@@ -15,8 +15,8 @@ class PlatformDetector:
 
     @staticmethod
     def detect_container_runtime() -> str:
-        """檢測容器運行時"""
-        # 目前僅支援 docker 與 kubernetes，這裡只檢測 docker
+        """Detect container runtime"""
+        # Currently only supports docker and kubernetes, here we only detect docker
         try:
             subprocess.run(["docker", "--version"], capture_output=True, check=True)
             return "docker"
@@ -25,7 +25,7 @@ class PlatformDetector:
 
     @staticmethod
     def is_wsl() -> bool:
-        """檢測是否在 WSL 中"""
+        """Detect if running in WSL"""
         try:
             if os.path.exists("/proc/version"):
                 with open("/proc/version", "r") as f:

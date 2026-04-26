@@ -3,7 +3,7 @@ from .models import RuntimeInfo, RuntimeStatus, RuntimeContext, ResourceRequirem
 from typing import Optional, Any
 
 class KubernetesOrchestrator(ContainerOrchestrator):
-    """Kubernetes 容器編排器 (未來實現)"""
+    """Kubernetes container orchestrator (to be implemented)"""
 
     def __init__(self, settings):
         self.settings = settings

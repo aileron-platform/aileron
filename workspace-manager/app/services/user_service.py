@@ -1,4 +1,4 @@
-"""使用者服務"""
+"""UserService"""
 
 from __future__ import annotations
 
@@ -27,13 +27,13 @@ from app.models import (
 
 
 class UserService:
-    """管理使用者的基本 CRUD 操作"""
+    """Manage user basic CRUD operations"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
 
     def _db_user_to_user(self, db_user: DBUser) -> User:
-        """將資料庫使用者轉換為 API 模型"""
+        """Convert database user to API model"""
         return User(
             id=db_user.id,
             email=db_user.email or "",
@@ -48,7 +48,7 @@ class UserService:
         )
 
     def list(self, *, query: Optional[str] = None, limit: Optional[int] = None) -> UserListResponse:
-        """列出所有使用者"""
+        """List all users"""
         db_query = self.db.query(DBUser)
         if query:
             pattern = f"%{query.strip()}%"
@@ -67,21 +67,21 @@ class UserService:
         return UserListResponse(items=users, total=len(users))
 
     def get(self, user_id: str) -> Optional[User]:
-        """取得單一使用者"""
+        """Get single user"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not db_user:
             return None
         return self._db_user_to_user(db_user)
 
     def get_by_email(self, email: str) -> Optional[User]:
-        """透過電子郵件查詢使用者"""
+        """ThroughEmailQueryUser"""
         db_user = self.db.query(DBUser).filter(DBUser.email == email).first()
         if not db_user:
             return None
         return self._db_user_to_user(db_user)
 
     def create(self, payload: UserCreate) -> User:
-        """建立新的使用者"""
+        """Create new user"""
         if self.get_by_email(payload.email):
             raise ValueError("Email already registered")
 
@@ -104,7 +104,7 @@ class UserService:
         return self._db_user_to_user(db_user)
 
     def update(self, user_id: str, payload: UserUpdate) -> Optional[User]:
-        """更新使用者資料"""
+        """UpdateUserData"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not db_user:
             return None
@@ -121,21 +121,21 @@ class UserService:
         return self._db_user_to_user(db_user)
 
     def delete(self, user_id: str) -> None:
-        """刪除使用者"""
+        """DeleteUser"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if db_user:
             self.db.delete(db_user)
             self.db.commit()
 
     def mark_login(self, user_id: str) -> None:
-        """紀錄使用者登入時間"""
+        """Record user login time"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if db_user:
             db_user.updated_at = datetime.utcnow()
             self.db.commit()
 
     def get_profile(self, user_id: str) -> Optional[UserProfile]:
-        """取得使用者個人檔案"""
+        """Get user profile"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not db_user:
             return None
@@ -150,15 +150,15 @@ class UserService:
         )
 
     def get_by_keycloak_id(self, keycloak_id: str) -> Optional[DBUser]:
-        """用 keycloak_id 查詢 user"""
+        """Query user by keycloak_id"""
         return self.db.query(DBUser).filter(DBUser.keycloak_id == keycloak_id).first()
 
     def create_from_jwt_payload(self, payload: dict) -> DBUser:
-        """從 JWT payload 建立新 user 並加入 default-workspace"""
+        """Create new user from JWT payload and add to default-workspace"""
         keycloak_id = payload.get("sub", "")
         preferred_username = payload.get("preferred_username", keycloak_id)
 
-        # 處理 username 衝突：若同名 user 已存在，加上 sub 的前 8 碼作為 suffix
+        # Handle username conflicts: if user with same name exists, add first 8 chars of sub as suffix
         existing_by_username = self.db.query(DBUser).filter(
             DBUser.username == preferred_username
         ).first()
@@ -176,7 +176,7 @@ class UserService:
             updated_at=datetime.utcnow(),
         )
         self.db.add(db_user)
-        self.db.flush()  # 取得 db_user.id，尚未 commit
+        self.db.flush()  # Get db_user.id, not yet committed
 
         self.db.commit()
         self.db.refresh(db_user)
@@ -184,7 +184,7 @@ class UserService:
         return db_user
 
     def update_profile(self, user_id: str, payload: UserProfileUpdate) -> Optional[UserProfile]:
-        """更新使用者個人檔案"""
+        """Update user profile"""
         db_user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not db_user:
             return None
@@ -196,7 +196,7 @@ class UserService:
         if payload.avatar_url is not None:
             db_user.avatar_url = payload.avatar_url
 
-        # 自動計算 display_name
+        # Auto-calculate display_name
         fn = db_user.first_name or ""
         ln = db_user.last_name or ""
         db_user.display_name = f"{fn} {ln}".strip() or db_user.username

@@ -1,4 +1,4 @@
-"""Workspace Manager 路由聚合模組"""
+"""Workspace Manager router aggregator module"""
 
 from .automation import router as automation_router
 from .container_images import router as container_images_router

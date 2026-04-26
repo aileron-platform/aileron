@@ -1,6 +1,6 @@
-"""Redis 分散式鎖實作
+"""Redis distributed lock implementation
 
-用於控制自動化任務的並發執行，確保同一個工作區同時只有一個任務在執行。
+Used to control automation task concurrent execution, ensuring only one task runs at a time for the same workspace.
 """
 
 from __future__ import annotations
@@ -14,18 +14,18 @@ import redis
 
 
 class RedisLock:
-    """Redis 分散式鎖
-    
-    使用 Redis 的 SETNX 命令實現分散式鎖，確保在分散式環境下的原子性操作。
+    """Redis distributed lock
+
+    Use Redis SETNX command to implement distributed lock, ensuring atomic operations in distributed environment.
     """
 
     def __init__(self, redis_client: redis.Redis, key: str, timeout: int = 3600):
-        """初始化 Redis 鎖
-        
+        """Initialize Redis lock
+
         Args:
-            redis_client: Redis 客戶端實例
-            key: 鎖的鍵名
-            timeout: 鎖的超時時間（秒），預設 1 小時
+            redis_client: Redis client instance
+            key: Lock key name
+            timeout: Lock timeout (seconds), default 1 hour
         """
         self.redis = redis_client
         self.key = key
@@ -33,19 +33,19 @@ class RedisLock:
         self.lock_value: Optional[str] = None
 
     def acquire(self, blocking: bool = False, block_timeout: Optional[int] = None) -> bool:
-        """獲取鎖
-        
+        """Acquire lock
+
         Args:
-            blocking: 是否阻塞等待鎖釋放
-            block_timeout: 阻塞等待的超時時間（秒），None 表示使用 self.timeout
-            
+            blocking: Whether to block and wait for lock release
+            block_timeout: Block wait timeout (seconds), None means use self.timeout
+
         Returns:
-            bool: 是否成功獲取鎖
+            bool: Whether lock was successfully acquired
         """
         self.lock_value = str(uuid.uuid4())
 
         if blocking:
-            # 阻塞式獲取鎖
+            # Blocking lock acquisition
             end_time = time.time() + (block_timeout or self.timeout)
             while time.time() < end_time:
                 if self.redis.set(self.key, self.lock_value, nx=True, ex=self.timeout):
@@ -53,22 +53,22 @@ class RedisLock:
                 time.sleep(0.1)
             return False
         else:
-            # 非阻塞式獲取鎖
+            # Non-blocking lock acquisition
             result = self.redis.set(self.key, self.lock_value, nx=True, ex=self.timeout)
             return bool(result)
 
     def release(self) -> bool:
-        """釋放鎖
-        
-        使用 Lua 腳本確保原子性：只有持有鎖的進程才能釋放鎖。
-        
+        """Release lock
+
+        Use Lua script to ensure atomicity: only the process holding the lock can release it.
+
         Returns:
-            bool: 是否成功釋放鎖
+            bool: Whether lock was successfully released
         """
         if not self.lock_value:
             return False
 
-        # Lua 腳本確保原子性：檢查鎖的值是否匹配，匹配才刪除
+        # Lua script ensures atomicity: check if lock value matches, only delete if matches
         lua_script = """
         if redis.call("get", KEYS[1]) == ARGV[1] then
             return redis.call("del", KEYS[1])
@@ -80,18 +80,18 @@ class RedisLock:
         return bool(result)
 
     def extend(self, additional_time: int) -> bool:
-        """延長鎖的過期時間
-        
+        """Extend lock expiration time
+
         Args:
-            additional_time: 要延長的時間（秒）
-            
+            additional_time: Time to extend (seconds)
+
         Returns:
-            bool: 是否成功延長
+            bool: Whether extension was successful
         """
         if not self.lock_value:
             return False
 
-        # Lua 腳本確保原子性：檢查鎖的值是否匹配，匹配才延長過期時間
+        # Lua script ensures atomicity: check if lock value matches, only extend expiry if it matches
         lua_script = """
         if redis.call("get", KEYS[1]) == ARGV[1] then
             return redis.call("expire", KEYS[1], ARGV[2])
@@ -106,12 +106,12 @@ class RedisLock:
 
 
 def _get_redis_client() -> redis.Redis:
-    """獲取 Redis 客戶端實例
+    """Get Redis client instance
 
-    集中管理 Redis 客戶端創建邏輯，避免重複代碼。
+    Centralize Redis client creation logic to avoid code duplication.
 
     Returns:
-        Redis 客戶端實例
+        Redis client instance
     """
     from app.config.settings import get_settings
 
@@ -126,25 +126,25 @@ def _get_redis_client() -> redis.Redis:
 
 @contextmanager
 def workspace_lock(workspace_id: str, timeout: int = 3600, blocking: bool = False):
-    """工作區鎖上下文管理器
+    """Workspace lock context manager
 
-    用於確保同一個工作區同時只有一個自動化任務在執行。
+    Used to ensure only one automation task runs at a time for the same workspace.
 
     Args:
-        workspace_id: 工作區 ID
-        timeout: 鎖的超時時間（秒），預設 1 小時
-        blocking: 是否阻塞等待鎖釋放
+        workspace_id: Workspace ID
+        timeout: Lock timeout (seconds), default 1 hour
+        blocking: Whether to block and wait for lock release
 
     Yields:
-        bool: 是否成功獲取鎖
+        bool: Whether lock was successfully acquired
 
     Example:
         ```python
         with workspace_lock(workspace_id) as acquired:
             if not acquired:
-                logger.warning("無法獲取工作區鎖")
+                logger.warning("Cannot acquire workspace lock")
                 return
-            # 執行任務
+            # Execute task
             ...
         ```
     """
@@ -162,13 +162,13 @@ def workspace_lock(workspace_id: str, timeout: int = 3600, blocking: bool = Fals
 
 
 def get_workspace_lock_info(workspace_id: str) -> Optional[dict]:
-    """獲取工作區鎖的資訊
+    """Get workspace lock information
 
     Args:
-        workspace_id: 工作區 ID
+        workspace_id: Workspace ID
 
     Returns:
-        dict 或 None: 鎖的資訊（是否存在、剩餘時間等），如果鎖不存在則返回 None
+        dict or None: Lock information (existence, remaining time, etc.), None if lock doesn't exist
     """
     redis_client = _get_redis_client()
     lock_key = f"automation:lock:workspace:{workspace_id}"

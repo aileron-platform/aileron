@@ -31,89 +31,89 @@ from .workspace_lifecycle_service import WorkspaceLifecycleService
 
 
 def get_user_service(db: Session = Depends(get_db)) -> UserService:
-    """取得使用者服務"""
+    """GetUserService"""
     return UserService(db)
 
 
 @lru_cache()
 def get_team_service() -> TeamService:
-    """取得團隊服務單例"""
+    """Get team service singleton"""
     return TeamService()
 
 
 def get_settings_service(db: Session = Depends(get_db)) -> SettingsService:
-    """取得使用者設定服務"""
+    """GetUserSettingsService"""
     return SettingsService(db)
 
 
 def get_workspace_service(db: Session = Depends(get_db)) -> WorkspaceService:
-    """取得工作區服務"""
+    """GetWorkspaceService"""
     return WorkspaceService(db)
 
 
 def get_knowledge_base_service(db: Session = Depends(get_db)) -> KnowledgeBaseService:
-    """取得 knowledge base 服務"""
+    """Get knowledge base Service"""
     return KnowledgeBaseService(db)
 
 
 def get_knowledge_base_sharing_service(
     db: Session = Depends(get_db),
 ) -> KnowledgeBaseSharingService:
-    """取得 knowledge base 分享服務"""
+    """Get knowledge base sharing service"""
     return KnowledgeBaseSharingService(db)
 
 
 def get_knowledge_base_attachment_service(
     db: Session = Depends(get_db),
 ) -> KnowledgeBaseAttachmentService:
-    """取得 knowledge base attachment 服務"""
+    """Get knowledge base attachment Service"""
     return KnowledgeBaseAttachmentService(db)
 
 
 def get_knowledge_base_file_service(
     db: Session = Depends(get_db),
 ) -> KnowledgeBaseFileService:
-    """取得 knowledge base file 服務"""
+    """Get knowledge base file Service"""
     return KnowledgeBaseFileService(db)
 
 
 def get_knowledge_base_maintenance_service(
     db: Session = Depends(get_db),
 ) -> KnowledgeBaseMaintenanceService:
-    """取得 knowledge base 維護服務"""
+    """Get knowledge base maintenance service"""
     return KnowledgeBaseMaintenanceService(db)
 
 
 def get_workspace_setup_service(db: Session = Depends(get_db)) -> WorkspaceSetupService:
-    """取得 workspace 初始化服務"""
+    """Get workspace InitializeService"""
     return WorkspaceSetupService(db)
 
 
 def get_runtime_provision_service(
     db: Session = Depends(get_db),
 ) -> RuntimeProvisionService:
-    """取得 Runtime 佈建服務"""
+    """Get runtime provisioning service"""
 
     return RuntimeProvisionService(db)
 
 
 def get_automation_service(db: Session = Depends(get_db)) -> AutomationService:
-    """取得自動化服務"""
+    """Get automation service"""
     return AutomationService(db)
 
 
 def get_template_install_service(db: Session = Depends(get_db)) -> TemplateInstallService:
-    """取得模板安裝服務"""
+    """Get template installation service"""
     return TemplateInstallService(db)
 
 
 def get_workspace_lifecycle_service(db: Session = Depends(get_db)) -> WorkspaceLifecycleService:
-    """取得 Workspace 生命週期服務"""
+    """Get Workspace LifecycleService"""
     return WorkspaceLifecycleService(db)
 
 
-# 本機認證服務已移除，現在使用 Keycloak OAuth2/OIDC
-# 認證相關功能請使用 app.modules.auth 模組
+# Local authentication service has been removed, now using Keycloak OAuth2/OIDC
+# For authentication-related features, use app.modules.auth module
 
 __all__ = [
     "get_automation_service",

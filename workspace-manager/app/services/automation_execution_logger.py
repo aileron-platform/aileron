@@ -1,4 +1,4 @@
-"""自動化任務執行日誌記錄器"""
+"""Automation task execution logger"""
 
 from __future__ import annotations
 
@@ -11,16 +11,16 @@ logger = get_logger("automation.execution")
 
 
 class AutomationExecutionLogger:
-    """自動化任務執行日誌記錄器，提供結構化的執行日誌追蹤"""
+    """Automation task execution logger, provides structured execution log tracking"""
 
     def __init__(self, execution_id: str, job_id: str, workspace_id: Optional[str] = None):
         """
-        初始化執行日誌記錄器
+        Initialize execution logger
 
         Args:
-            execution_id: 執行 ID
-            job_id: 任務 ID
-            workspace_id: 工作區 ID（可選）
+            execution_id: Execution ID
+            job_id: Task ID
+            workspace_id: Workspace ID (optional)
         """
         self.execution_id = execution_id
         self.job_id = job_id
@@ -34,12 +34,12 @@ class AutomationExecutionLogger:
         **context: Any
     ) -> None:
         """
-        記錄執行日誌
+        Record execution log
 
         Args:
-            level: 日誌級別 (INFO, WARNING, ERROR, DEBUG)
-            message: 日誌訊息
-            **context: 額外的上下文資訊
+            level: Log level (INFO, WARNING, ERROR, DEBUG)
+            message: Log message
+            **context: Additional context information
         """
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -55,7 +55,7 @@ class AutomationExecutionLogger:
 
         self.logs.append(log_entry)
 
-        # 同時寫入標準日誌
+        # Also write to standard log
         log_method = getattr(logger, level.lower(), logger.info)
         context_str = ", ".join(f"{k}={v}" for k, v in context.items())
         log_message = (
@@ -67,31 +67,31 @@ class AutomationExecutionLogger:
         log_method(log_message)
 
     def info(self, message: str, **context: Any) -> None:
-        """記錄 INFO 級別日誌"""
+        """Record INFO level log"""
         self.log("INFO", message, **context)
 
     def warning(self, message: str, **context: Any) -> None:
-        """記錄 WARNING 級別日誌"""
+        """Record WARNING level log"""
         self.log("WARNING", message, **context)
 
     def error(self, message: str, **context: Any) -> None:
-        """記錄 ERROR 級別日誌"""
+        """Record ERROR level log"""
         self.log("ERROR", message, **context)
 
     def debug(self, message: str, **context: Any) -> None:
-        """記錄 DEBUG 級別日誌"""
+        """Record DEBUG level log"""
         self.log("DEBUG", message, **context)
 
     def get_logs(self) -> list[dict[str, Any]]:
-        """獲取所有日誌"""
+        """Get all logs"""
         return self.logs
 
     def to_metadata(self) -> dict[str, Any]:
         """
-        轉換為元數據格式，可存儲到 execution_metadata
+        Convert to metadata format, can be stored to execution_metadata
 
         Returns:
-            包含日誌資訊的字典
+            Dictionary containing log information
         """
         return {
             "execution_logs": self.logs,
@@ -103,22 +103,22 @@ class AutomationExecutionLogger:
 
     def get_summary(self) -> str:
         """
-        獲取日誌摘要
+        Get log summary
 
         Returns:
-            日誌摘要字串
+            Log summary string
         """
         total = len(self.logs)
         errors = sum(1 for log in self.logs if log["level"] == "ERROR")
         warnings = sum(1 for log in self.logs if log["level"] == "WARNING")
 
-        parts = [f"共 {total} 條日誌"]
+        parts = [f"Total {total} logs"]
         if errors > 0:
-            parts.append(f"{errors} 個錯誤")
+            parts.append(f"{errors} errors")
         if warnings > 0:
-            parts.append(f"{warnings} 個警告")
+            parts.append(f"{warnings} warnings")
 
-        return "，".join(parts)
+        return ", ".join(parts)
 
 
 __all__ = ["AutomationExecutionLogger"]

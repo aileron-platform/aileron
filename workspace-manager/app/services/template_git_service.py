@@ -1,4 +1,4 @@
-"""模板 Git 版本控制服務"""
+"""Template Git version control service"""
 
 import difflib
 import json
@@ -68,16 +68,16 @@ class GitScanResult(GitOperationResult):
 
 
 class TemplateGitService:
-    """管理模板中心的 Git 版本控制操作"""
+    """Manages Git version control operations for template center"""
 
     def __init__(self, ssh_dir: Optional[Path] = None):
-        """初始化 Git 服務
+        """Initialize Git Service
 
         Args:
-            ssh_dir: SSH 目錄路徑，如果為 None 則使用默認的 ~/.ssh
-                   主要用於單元測試中進行隔離測試
+            ssh_dir: SSH directory path, use default ~/.ssh if None
+                   Mainly used for isolated testing in unit tests
         """
-        # 動態獲取 settings，確保在測試環境中使用正確的配置
+        # Dynamically get settings to ensure correct configuration in test environment
         current_settings = get_settings()
         self.template_center_path = Path(current_settings.TEMPLATE_STORAGE_PATH)
         self._ssh_dir = ssh_dir or (Path.home() / ".ssh")
@@ -105,7 +105,7 @@ class TemplateGitService:
         return GitScanResult(success, code, message or code, params=params or {}, templates=templates or [])
 
     def _get_repo(self) -> Optional[Repo]:
-        """取得 Git 倉庫物件，如果不存在則返回 None"""
+        """Get Git repository object, return None if not exists"""
         if self._repo is not None:
             return self._repo
 
@@ -115,15 +115,15 @@ class TemplateGitService:
         except InvalidGitRepositoryError:
             return None
         except Exception as e:
-            logger.error(f"取得 Git 倉庫失敗: {e}")
+            logger.error(f"Failed to get Git repository: {e}")
             return None
 
     def is_git_repository(self) -> bool:
-        """檢查是否為 Git 倉庫"""
+        """Check if is a Git repository"""
         return self._get_repo() is not None
 
     def _has_local_content(self) -> bool:
-        """檢查模板中心目錄是否已有使用者可見內容。"""
+        """Check if template center directory already has user-visible content."""
         if not self.template_center_path.exists():
             return False
         ignored = {".git", ".gitkeep"}
@@ -146,7 +146,7 @@ class TemplateGitService:
             return None
 
     def get_repository_status(self) -> GitRepositoryStatus:
-        """取得模板中心 Git 倉庫生命週期狀態。"""
+        """Get template center Git repository lifecycle status."""
         repo = self._get_repo()
         has_local_content = self._has_local_content()
         if repo is None:
@@ -174,7 +174,7 @@ class TemplateGitService:
         )
 
     def init_repository(self, remote_url: Optional[str] = None) -> GitOperationResult:
-        """初始化目前模板中心目錄為 Git 倉庫。"""
+        """Initialize current template center directory as Git repository."""
         self.template_center_path.mkdir(parents=True, exist_ok=True)
         if self.is_git_repository():
             return self._operation_result(False, "GIT_REPOSITORY_ALREADY_INITIALIZED")
@@ -186,7 +186,7 @@ class TemplateGitService:
                 repo.create_remote("origin", remote_url.strip())
             return self._operation_result(True, "GIT_REPOSITORY_INITIALIZED")
         except Exception as e:
-            logger.error(f"初始化模板中心 Git 倉庫失敗: {e}")
+            logger.error(f"Failed to initialize template center Git repository: {e}")
             self._repo = None
             return self._operation_result(False, "GIT_REPOSITORY_INIT_FAILED")
 
@@ -287,7 +287,7 @@ class TemplateGitService:
             return 0, 0
 
     def get_git_status(self) -> GitStatus:
-        """取得 Git 倉庫狀態"""
+        """Get Git repository status"""
         repo = self._get_repo()
         if repo is None:
             return GitStatus(
@@ -300,13 +300,13 @@ class TemplateGitService:
             )
 
         try:
-            # 取得當前分支
+# Get current branch
             current_branch = repo.active_branch.name if repo.head.is_detached is False else "detached"
 
-            # 檢查是否有變更
+# Check if there are changes
             has_changes = bool(repo.index.diff(None)) or bool(repo.untracked_files)
 
-            # 取得遠端 URL
+# Get remote URL
             remote_url = None
             try:
                 if repo.remotes:
@@ -314,25 +314,25 @@ class TemplateGitService:
             except (AttributeError, IndexError):
                 pass
 
-            # 取得 ahead/behind 數量
+# Get ahead/behind count
             ahead_count = 0
             behind_count = 0
             if remote_url:
                 try:
-                    # Fetch 更新遠端狀態
+                    # Fetch and update remote status
                     repo.remotes.origin.fetch()
 
-                    # 計算 ahead/behind
+                    # Calculate ahead/behind
                     try:
                         commits_behind = list(repo.iter_commits(f"{current_branch}..origin/{current_branch}"))
                         commits_ahead = list(repo.iter_commits(f"origin/{current_branch}..{current_branch}"))
                         behind_count = len(commits_behind)
                         ahead_count = len(commits_ahead)
                     except GitCommandError:
-                        # 分支可能不存在於遠端
+                        # Branch may not exist on remote
                         pass
                 except Exception as e:
-                    logger.warning(f"無法 fetch 遠端狀態: {e}")
+                    logger.warning(f"Failed to fetch remote status: {e}")
 
             return GitStatus(
                 current_branch=current_branch,
@@ -343,7 +343,7 @@ class TemplateGitService:
                 is_git_repo=True,
             )
         except Exception as e:
-            logger.error(f"取得 Git 狀態失敗: {e}")
+            logger.error(f"Get Git StatusFailed: {e}")
             return GitStatus(
                 current_branch="unknown",
                 has_changes=False,
@@ -354,7 +354,7 @@ class TemplateGitService:
             )
 
     def get_version_control_status(self) -> TemplateVersionControlStatus:
-        """取得 file-level version-control 狀態。"""
+        """Get file-level version control status."""
         repo = self._get_repo()
         if repo is None:
             return TemplateVersionControlStatus(
@@ -384,7 +384,7 @@ class TemplateGitService:
         )
 
     def get_file_changes(self, page: int = 1, page_size: int = 100) -> TemplateChangesResponse:
-        """取得 staged / unstaged / untracked file-level changes."""
+        """Get staged / unstaged / untracked file-level changes."""
         repo = self._get_repo()
         if repo is None:
             return TemplateChangesResponse()
@@ -674,7 +674,7 @@ class TemplateGitService:
         return TemplateRemoteResponse(remote=payload.remote, branch=target_branch, message="GIT_PULL_SUCCESS")
 
     def get_user_config(self) -> GitUserConfig:
-        """取得 Git 使用者資訊"""
+        """Get Git user credentials"""
         try:
             from git import GitConfigParser
 
@@ -684,11 +684,11 @@ class TemplateGitService:
 
             return GitUserConfig(user_name=user_name, user_email=user_email)
         except Exception as e:
-            logger.warning(f"取得 Git 使用者資訊失敗: {e}")
+            logger.warning(f"Get Git UserInformationFailed: {e}")
             return GitUserConfig(user_name=None, user_email=None)
 
     def update_user_config(self, user_name: str, user_email: str) -> GitOperationResult:
-        """更新 Git 使用者資訊"""
+        """Update Git user credentials"""
         if not user_name.strip() or not user_email.strip():
             return self._operation_result(False, "GIT_USER_CONFIG_REQUIRED")
 
@@ -702,17 +702,17 @@ class TemplateGitService:
 
             return self._operation_result(True, "GIT_USER_CONFIG_UPDATED")
         except Exception as e:
-            logger.error(f"更新 Git 使用者資訊失敗: {e}")
+            logger.error(f"Update Git UserInformationFailed: {e}")
             return self._operation_result(False, "GIT_USER_CONFIG_UPDATE_FAILED")
 
     def set_remote_url(self, url: str) -> GitOperationResult:
-        """設定或更新 Git 遠端倉庫 URL
+        """Set or update Git remote repository URL
 
         Args:
-            url: 遠端倉庫 URL (例如: git@github.com:user/repo.git 或 https://github.com/user/repo.git)
+            url: Remote repository URL (e.g.: git@github.com:user/repo.git or https://github.com/user/repo.git)
 
         Returns:
-            (成功與否, 訊息)
+            (Success status, message)
         """
         repo = self._get_repo()
         if repo is None:
@@ -725,21 +725,21 @@ class TemplateGitService:
 
         try:
             if "origin" in repo.remotes:
-                # 已存在，更新 URL
+                # Already exists, update URL
                 repo.remotes.origin.set_url(url)
                 return self._operation_result(True, "GIT_REMOTE_URL_UPDATED", params={"url": url})
             else:
-                # 不存在，新增 origin
+                # Does not exist, add origin
                 repo.create_remote("origin", url)
                 return self._operation_result(True, "GIT_REMOTE_URL_CREATED", params={"url": url})
         except Exception as e:
-            logger.error(f"設定遠端倉庫 URL 失敗: {e}")
+            logger.error(f"Failed to set remote repository URL: {e}")
             return self._operation_result(False, "GIT_REMOTE_URL_SET_FAILED")
 
     def bootstrap_registry(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
-        """初始化 canonical registry。
+        """Initialize canonical registry.
 
-        僅當 templates/ 目錄為空時允許 clone，避免隱式覆蓋本地內容。
+        Only allow clone when templates/ directory is empty to avoid implicit overwriting of local content.
         """
         registry_root = self.template_center_path / "templates"
         registry_root.mkdir(parents=True, exist_ok=True)
@@ -748,7 +748,7 @@ class TemplateGitService:
         return self.clone_repository(url=url, branch=branch)
 
     def refresh_registry(self, branch: Optional[str] = None) -> GitOperationResult:
-        """更新 canonical registry，要求目前已是 Git 倉庫且無本地變更。"""
+        """Update canonical registry, requires current is already Git repository with no local changes."""
         if not self.is_git_repository():
             return self._operation_result(False, "GIT_REPO_NOT_FOUND")
 
@@ -761,7 +761,7 @@ class TemplateGitService:
         return self._pull_or_clone_existing(status.remote_url, branch)
 
     def publish_registry(self, message: str, branch: Optional[str] = None) -> GitOperationResult:
-        """發布 canonical registry 變更。"""
+        """Publish canonical registry changes."""
         repo = self._get_repo()
         if repo is None:
             return self._operation_result(False, "GIT_REPO_NOT_FOUND")
@@ -789,39 +789,39 @@ class TemplateGitService:
         except ValueError as e:
             return self._operation_result(False, str(e))
         except Exception as e:
-            logger.error(f"發布 registry 變更失敗: {e}")
+            logger.error(f"Failed to publish registry changes: {e}")
             return self._operation_result(False, "GIT_COMMIT_FAILED")
 
     def check_conflicts(self) -> Tuple[bool, List[str]]:
-        """檢查是否有衝突
+        """Check if there are conflicts
 
         Returns:
-            (有衝突與否, 衝突檔案列表)
+            (Has conflicts, list of conflicting files)
         """
         repo = self._get_repo()
         if repo is None:
             return False, []
 
         try:
-            # 檢查是否有未合併的檔案
+# Check if there are unmerged files
             conflict_files = []
             for item in repo.index.entries:
-                # 檢查 stage 欄位，如果不是 0 表示有衝突
+# Check stage column, if not 0 means there are conflicts
                 if repo.index.entries[item].stage != 0:
                     conflict_files.append(item[0])
 
             return bool(conflict_files), conflict_files
         except Exception as e:
-            logger.error(f"檢查衝突失敗: {e}")
+            logger.error(f"Failed to check conflicts: {e}")
             return False, []
 
-    # ============ SSH Keys 管理方法 ============
+    # ============ SSH Keys Management Methods ============
 
     def get_ssh_keys(self) -> Dict[str, Optional[str]]:
-        """取得當前的 SSH Keys 資訊
+        """Get current SSH keys information
 
         Returns:
-            包含 publicKey, privateKey, fingerprint, lastRotatedAt 的字典
+            Dictionary containing publicKey, privateKey, fingerprint, lastRotatedAt
         """
         ssh_dir = self._ssh_dir
         private_key_path = ssh_dir / "id_rsa"
@@ -834,42 +834,42 @@ class TemplateGitService:
             "lastRotatedAt": None,
         }
 
-        # 讀取私鑰
+        # Read private key
         if private_key_path.exists():
             try:
                 result["privateKey"] = private_key_path.read_text()
-                # 取得檔案修改時間
+# Get file modification time
                 stat = private_key_path.stat()
                 from datetime import datetime
                 result["lastRotatedAt"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
             except Exception as e:
-                logger.error(f"讀取私鑰失敗: {e}")
+                logger.error(f"Failed to read private key: {e}")
 
-        # 讀取公鑰
+        # Read public key
         if public_key_path.exists():
             try:
                 result["publicKey"] = public_key_path.read_text().strip()
-                # 計算 fingerprint
+                # Calculate fingerprint
                 result["fingerprint"] = self._calculate_ssh_fingerprint(result["publicKey"])
             except Exception as e:
-                logger.error(f"讀取公鑰失敗: {e}")
+                logger.error(f"Failed to read public key: {e}")
 
         return result
 
     def generate_ssh_keys(self) -> Dict[str, str]:
-        """產生新的 SSH Key Pair 並儲存到 ~/.ssh 目錄
+        """Generate new SSH key pair and save to ~/.ssh directory
 
         Returns:
-            包含 publicKey, privateKey, fingerprint, generatedAt 的字典
+            Dictionary containing publicKey, privateKey, fingerprint, generatedAt
         """
         import tempfile
         from datetime import datetime
 
-        # 使用臨時目錄產生金鑰
+        # Use temporary directory to generate keys
         with tempfile.TemporaryDirectory() as tmpdir:
             key_path = Path(tmpdir) / "id_rsa"
 
-            # 使用 ssh-keygen 產生金鑰
+            # Use ssh-keygen to generate keys
             result = subprocess.run(
                 [
                     "ssh-keygen",
@@ -886,29 +886,29 @@ class TemplateGitService:
             if result.returncode != 0:
                 raise Exception("SSH_KEY_GENERATION_FAILED")
 
-            # 讀取私鑰和公鑰
+            # Read private key and public key
             private_key = key_path.read_text()
             public_key = key_path.with_suffix(".pub").read_text().strip()
 
-        # 計算 fingerprint
+        # Calculate fingerprint
         fingerprint = self._calculate_ssh_fingerprint(public_key)
 
-        # 寫入到 SSH 目錄
+        # Write to SSH directory
         ssh_dir = self._ssh_dir
         ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-        # 寫入私鑰（確保結尾有換行）
+        # Write private key (ensure newline at end)
         private_key_path = ssh_dir / "id_rsa"
         private_key_content = private_key if private_key.endswith('\n') else private_key + '\n'
         private_key_path.write_text(private_key_content)
         private_key_path.chmod(0o600)
 
-        # 寫入公鑰
+        # Write public key
         public_key_path = ssh_dir / "id_rsa.pub"
         public_key_path.write_text(public_key + "\n")
         public_key_path.chmod(0o644)
 
-        logger.info(f"SSH Keys 已產生並儲存到 {ssh_dir}")
+        logger.info(f"SSH keys generated and saved to {ssh_dir}")
 
         generated_at = datetime.utcnow().isoformat()
 
@@ -920,44 +920,44 @@ class TemplateGitService:
         }
 
     def update_ssh_keys(self, private_key: str, public_key: str) -> Dict[str, str]:
-        """更新 SSH Keys 到 ~/.ssh 目錄
+        """Update SSH keys to ~/.ssh directory
 
         Args:
-            private_key: 私鑰內容
-            public_key: 公鑰內容
+            private_key: Private key content
+            public_key: Public key content
 
         Returns:
-            包含 publicKey, privateKey, fingerprint, updatedAt 的字典
+            Dictionary containing publicKey, privateKey, fingerprint, updatedAt
         """
         from datetime import datetime
 
-        # 驗證私鑰格式
+# Check private key format
         if not private_key.strip().startswith("-----BEGIN"):
             raise ValueError("SSH_PRIVATE_KEY_INVALID")
 
-        # 驗證公鑰格式
+# Check public key format
         if not public_key.strip().startswith("ssh-"):
             raise ValueError("SSH_PUBLIC_KEY_INVALID")
 
-        # 計算 fingerprint
+        # Calculate fingerprint
         fingerprint = self._calculate_ssh_fingerprint(public_key.strip())
 
-        # 寫入到 SSH 目錄
+        # Write to SSH directory
         ssh_dir = self._ssh_dir
         ssh_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
 
-        # 寫入私鑰（確保結尾有換行）
+        # Write private key (ensure newline at end)
         private_key_path = ssh_dir / "id_rsa"
         private_key_content = private_key if private_key.endswith('\n') else private_key + '\n'
         private_key_path.write_text(private_key_content)
         private_key_path.chmod(0o600)
 
-        # 寫入公鑰
+        # Write public key
         public_key_path = ssh_dir / "id_rsa.pub"
         public_key_path.write_text(public_key.strip() + "\n")
         public_key_path.chmod(0o644)
 
-        logger.info(f"SSH Keys 已更新並儲存到 {ssh_dir}")
+        logger.info(f"SSH keys updated and saved to {ssh_dir}")
 
         updated_at = datetime.utcnow().isoformat()
 
@@ -969,112 +969,112 @@ class TemplateGitService:
         }
 
     def delete_ssh_keys(self) -> None:
-        """刪除 SSH 目錄下的 SSH Keys"""
+        """Delete SSH keys from SSH directory"""
         ssh_dir = self._ssh_dir
         private_key_path = ssh_dir / "id_rsa"
         public_key_path = ssh_dir / "id_rsa.pub"
 
-        # 刪除私鑰
+# Remove private key
         if private_key_path.exists():
             private_key_path.unlink()
-            logger.info(f"已刪除私鑰: {private_key_path}")
+            logger.info(f"Deleted private key: {private_key_path}")
 
-        # 刪除公鑰
+# Remove public key
         if public_key_path.exists():
             public_key_path.unlink()
-            logger.info(f"已刪除公鑰: {public_key_path}")
+            logger.info(f"Deleted public key: {public_key_path}")
 
     @staticmethod
     def _calculate_ssh_fingerprint(public_key: str) -> str:
-        """計算 SSH 公鑰的 fingerprint (SHA256)"""
+        """Calculate SSH public key fingerprint (SHA256)"""
         import base64
         import hashlib
 
-        # 取得公鑰的 base64 部分
+# Get base64 part of public key
         parts = public_key.split()
         if len(parts) < 2:
             return ""
 
         key_data = base64.b64decode(parts[1])
 
-        # 計算 SHA256 hash
+        # Calculate SHA256 hash
         sha256_hash = hashlib.sha256(key_data).digest()
 
-        # 轉換為 base64 並移除 padding
+        # Convert to base64 and remove padding
         fingerprint = base64.b64encode(sha256_hash).decode().rstrip("=")
 
         return f"SHA256:{fingerprint}"
 
     def clone_repository(self, url: str, branch: Optional[str] = None, force: bool = False) -> GitOperationResult:
-        """Clone 遠端倉庫到模板中心目錄
+        """Clone remote repository to template center directory
 
         Args:
-            url: 遠端倉庫 URL (例如: git@github.com:user/repo.git 或 https://github.com/user/repo.git)
-            branch: 要 clone 的分支（可選）
+            url: Remote repository URL (e.g.: git@github.com:user/repo.git or https://github.com/user/repo.git)
+            branch: Branch to clone (optional)
 
         Returns:
-            (成功與否, 訊息)
+            (Success status, message)
         """
         if not url.strip():
             return self._operation_result(False, "GIT_REMOTE_URL_EMPTY")
 
         url = url.strip()
 
-        # 檢查目標目錄是否已是 Git 倉庫
+# Check if target directory is already Git repository
         if self.is_git_repository():
             repo = self._get_repo()
             if repo is None:
                 return self._operation_result(False, "GIT_REPO_ACCESS_FAILED")
 
-            # 如果已經是 Git 倉庫，檢查是否有未提交的變更
+            # If already Git repository, check for uncommitted changes
             status = self.get_git_status()
             if status.has_changes:
                 return self._operation_result(False, "GIT_CLONE_TARGET_HAS_CHANGES")
 
-            # 檢查 remote URL 是否相同
+# Check if remote URL is the same
             try:
                 existing_url = repo.remotes.origin.url if "origin" in repo.remotes else None
             except Exception:
                 existing_url = None
 
             if existing_url == url:
-                # URL 相同，執行 pull
+                # URLs are same, execute pull
                 return self._pull_or_clone_existing(url, branch)
             else:
-                # URL 不同，提示用戶
+                # URLs are different, prompt user
                 return self._operation_result(
                     False,
                     "GIT_CLONE_REMOTE_MISMATCH",
                     params={"currentUrl": existing_url or "(not configured)", "newUrl": url},
                 )
 
-        # 目標目錄不是 Git 倉庫，執行 clone
+        # Target directory is not Git repository, execute clone
         if self._has_local_content() and not force:
             return self._operation_result(False, "GIT_CLONE_TARGET_NOT_EMPTY")
         return self._clone_fresh(url, branch)
 
     def _clone_fresh(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
-        """Clone 倉庫到空目錄"""
+        """Clone repository to empty directory"""
         import shutil
         import tempfile
 
         try:
-            # 建立臨時目錄作為 clone 的父目錄
+# Add temporary directory as parent for clone
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmp_clone_path = Path(tmpdir) / "repo"
 
-                # 使用 GitPython 進行 clone
+                # Use GitPython to clone
                 try:
                     if branch:
                         Repo.clone_from(url, str(tmp_clone_path), branch=branch)
                     else:
                         Repo.clone_from(url, str(tmp_clone_path))
                 except Exception as e:
-                    logger.error(f"GitPython clone 失敗: {e}")
+                    logger.error(f"GitPython clone Failed: {e}")
                     return self._operation_result(False, "GIT_CLONE_FAILED")
 
-                # 移動檔案到目標目錄
-                # 先清空目標目錄（除了 .gitkeep）
+                # Move files to target directory
+                # First empty target directory (except .gitkeep)
                 for item in self.template_center_path.iterdir():
                     if item.name not in ['.git', '.gitkeep']:
                         if item.is_dir():
@@ -1082,7 +1082,7 @@ class TemplateGitService:
                         else:
                             item.unlink()
 
-                # 複製 clone 的內容到目標目錄
+                # Copy cloned content to target directory
                 for item in tmp_clone_path.iterdir():
                     src = item
                     dst = self.template_center_path / item.name
@@ -1091,36 +1091,36 @@ class TemplateGitService:
                     else:
                         shutil.copy2(src, dst)
 
-                # 清除舊的 repo 快取
+                # Clear old repo cache
                 self._repo = None
 
             detail = f"{url}" + (f" (branch: {branch})" if branch else "")
             return self._operation_result(True, "GIT_CLONE_SUCCESS", params={"detail": detail})
 
         except Exception as e:
-            logger.error(f"Clone 倉庫時發生錯誤: {e}")
+            logger.error(f"Error occurred while cloning repository: {e}")
             return self._operation_result(False, "GIT_CLONE_FAILED")
 
     def _pull_or_clone_existing(self, url: str, branch: Optional[str] = None) -> GitOperationResult:
-        """對已存在的倉庫執行 pull 操作"""
+        """Execute pull operation on existing repository"""
         repo = self._get_repo()
         if repo is None:
             return self._operation_result(False, "GIT_REPO_ACCESS_FAILED")
 
         try:
-            # 如果指定了分支，切換分支
+            # If branch specified, switch branch
             if branch:
                 try:
                     repo.heads[branch].checkout()
                 except IndexError:
-                    # 嘗試從遠端 checkout
+                    # Try to checkout from remote
                     try:
                         repo.create_head(branch, f"origin/{branch}")
                         repo.heads[branch].checkout()
                     except Exception as e:
                         return self._operation_result(False, "GIT_CHECKOUT_BRANCH_FAILED", params={"branch": branch})
 
-            # 執行 pull
+# Process pull
             current_branch = branch or self.get_git_status().current_branch
             try:
                 repo.remotes.origin.pull(current_branch)
@@ -1131,14 +1131,14 @@ class TemplateGitService:
             return self._operation_result(True, "GIT_CLONE_UPDATE_SUCCESS", params={"detail": detail})
 
         except Exception as e:
-            logger.error(f"Pull 倉庫時發生錯誤: {e}")
+            logger.error(f"Error occurred while pulling repository: {e}")
             return self._operation_result(False, "GIT_PULL_FAILED")
 
     def scan_and_sync_templates(self) -> GitScanResult:
-        """掃描模板中心目錄中的 canonical 模板並返回模板資訊
+        """Scan canonical templates in template center directory and return template information
 
         Returns:
-            (成功與否, 訊息, 掃描到的模板列表)
+            (Success status, message, list of scanned templates)
         """
         try:
             templates = []
@@ -1146,7 +1146,7 @@ class TemplateGitService:
             if templates_root is None:
                 return self._scan_result(False, "GIT_PLUGINS_DIR_MISSING")
 
-            # 掃描每個插件目錄
+            # Scan each plugin directory
             for plugin_dir in templates_root.iterdir():
                 if not plugin_dir.is_dir():
                     continue
@@ -1157,16 +1157,16 @@ class TemplateGitService:
                     if template_yaml_path.exists():
                         template_info = self._load_canonical_template_info(plugin_dir, template_yaml_path)
                     else:
-                        logger.warning("找不到 canonical template.yaml: %s", plugin_dir)
+                        logger.warning("Canonical template.yaml not found: %s", plugin_dir)
                         continue
 
                     templates.append(template_info)
-                    logger.info(f"成功掃描模板: {template_info['id']}")
+                    logger.info(f"SuccessScanTemplate: {template_info['id']}")
 
                 except json.JSONDecodeError as e:
-                    logger.error("解析 template.yaml 失敗 (%s): %s", template_yaml_path, e)
+                    logger.error("Parse template.yaml Failed (%s): %s", template_yaml_path, e)
                 except Exception as e:
-                    logger.error(f"掃描模板失敗 ({plugin_dir.name}): {e}")
+                    logger.error(f"ScanTemplateFailed ({plugin_dir.name}): {e}")
 
             if not templates:
                 return self._scan_result(False, "GIT_NO_TEMPLATES_FOUND")
@@ -1174,7 +1174,7 @@ class TemplateGitService:
             return self._scan_result(True, "GIT_SCAN_SUCCESS", params={"count": len(templates)}, templates=templates)
 
         except Exception as e:
-            logger.error(f"掃描模板時發生錯誤: {e}")
+            logger.error(f"Error occurred while scanning template: {e}")
             return self._scan_result(False, "GIT_SCAN_FAILED")
 
     def _get_scan_templates_root(self) -> Optional[Path]:

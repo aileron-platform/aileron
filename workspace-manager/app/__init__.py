@@ -1,12 +1,12 @@
 """
 Aileron - Workspace Manager
 
-工作區管理服務，提供：
-- 工作區生命週期管理
-- 容器管理
-- 團隊協作功能
-- 範本管理
-- 排程任務管理
+Workspace management service providing:
+- Workspace lifecycle management
+- Container management
+- Team collaboration features
+- Template management
+- Scheduled task management
 """
 
 __version__ = "1.0.0"

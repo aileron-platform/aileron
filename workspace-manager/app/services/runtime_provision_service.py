@@ -1,4 +1,4 @@
-"""Workspace Runtime 佈建服務與策略實作"""
+"""Workspace runtime provisioning service and strategy implementation"""
 
 from __future__ import annotations
 
@@ -32,19 +32,19 @@ from app.utils.path_resolver import PathResolver
 
 logger = logging.getLogger(__name__)
 
-# Port 分配範圍
+# Port allocation range
 PORT_RANGE_MIN = 30000
 PORT_RANGE_MAX = 60000
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "jinja_templates" / "runtime"
 
 class RuntimeProvisionService:
-    """負責調度 Workspace Runtime 佈建的服務。"""
+    """Service responsible for scheduling workspace runtime provisioning."""
 
     def __init__(self, db: Session) -> None:
         self.db = db
         self.template_engine = ScriptTemplateEngine(TEMPLATE_ROOT)
-        # 動態獲取 settings，確保在測試環境中使用正確的配置
+        # Dynamically get settings to ensure correct configuration in test environment
         self.settings = get_settings()
         self.script_output_root = Path(self.settings.RUNTIME_SCRIPT_ROOT)
 
@@ -101,11 +101,11 @@ class RuntimeProvisionService:
             return None
         return os.environ.get("BROWSER_WEBRTC_NAT1TO1_IP", "127.0.0.1")
 
-    # -- 背景任務主流程 --------------------------------------------------
+    # -- Background task main process --------------------------------------------------
     def execute_runtime_provision(self, workspace_id: str) -> None:
         workspace = self._get_workspace(workspace_id)
         if not workspace:
-            logger.error("Workspace %s 不存在，無法佈建", workspace_id)
+            logger.error("Workspace %s does not exist, cannot provision", workspace_id)
             return
 
         job = db_models.WorkspaceRuntimeJob(
@@ -120,19 +120,19 @@ class RuntimeProvisionService:
         self.db.add(job)
         self.db.flush()
 
-        self._log_event(workspace.id, "queued", "已排入 runtime 佈建", {"jobId": job.id})
+        self._log_event(workspace.id, "queued", "Queued runtime provision", {"jobId": job.id})
         workspace.runtime_status = "starting"
         self.db.commit()
 
         try:
             self._perform_job(workspace, job)
-        except Exception as exc:  # pragma: no cover - 實際錯誤需紀錄
-            logger.exception("佈建 Workspace %s 失敗", workspace.id)
+        except Exception as exc:  # pragma: no cover - actual errors need logging
+            logger.exception("Workspace %s provision failed", workspace.id)
             self.db.rollback()
             workspace = self._get_workspace(workspace_id)
             job = self._get_runtime_job(job.id)
             if not workspace or not job:
-                logger.error("回滾後找不到 Workspace 或 Job，無法更新失敗狀態")
+                logger.error("Cannot find workspace or job after rollback, cannot update failed status")
                 return
             self._handle_failure(workspace, job, exc)
         finally:
@@ -141,16 +141,16 @@ class RuntimeProvisionService:
     def _perform_job(self, workspace: db_models.Workspace, job: db_models.WorkspaceRuntimeJob) -> None:
         job.status = "provisioning"
         job.started_at = datetime.utcnow()
-        self._log_event(workspace.id, "provisioning", "開始建立 Workspace Runtime")
+        self._log_event(workspace.id, "provisioning", "BeginCreate Workspace Runtime")
         self.db.commit()
 
-        # 1. 準備 Runtime Context
+        # 1. Prepare runtime context
         context = self._build_runtime_context(workspace)
 
         self._log_event(
             workspace.id,
             "preparing",
-            "已產生佈建腳本與環境設定",
+            "Generated provision script and environment settings",
             {
                 "environment": {k: v for k, v in context.environment.items() if "KEY" not in k}, # Hide sensitive keys
                 "ports": [p.__dict__ for p in context.ports],
@@ -158,100 +158,100 @@ class RuntimeProvisionService:
         )
         self.db.commit()
 
-        # 2. 獲取 Orchestrator
+        # 2. Get Orchestrator
         orchestrator = OrchestratorFactory.get_orchestrator()
 
-        # 3. 執行佈建
+        # 3. Execute provisioning
         result = orchestrator.create_workspace_runtime(workspace, context)
 
         self._log_event(
             workspace.id,
             "provisioned",
-            "策略執行完成，更新 runtime 狀態",
+            "Strategy execution completed, update runtime status",
             {"identifier": result.identifier},
         )
 
-        # 4. 更新 Workspace 狀態
+        # 4. Update Workspace Status
         self._update_workspace_runtime(workspace, result)
 
-        # 5. 啟動 Browser 容器
+        # 5. Start Browser Container
         try:
-            self._log_event(workspace.id, "browser_starting", "開始建立 Browser 容器")
+            self._log_event(workspace.id, "browser_starting", "BeginCreate Browser Container")
             browser_context = self._build_browser_runtime_context(workspace)
             browser_result = orchestrator.create_chrome_runtime(workspace, browser_context)
             self._update_browser_runtime(workspace, browser_result)
             self._log_event(
                 workspace.id,
                 "browser_ready",
-                "Browser 容器已就緒",
+                "Browser container is ready",
                 {"browser_identifier": browser_result.identifier, "browser_webrtc_port": workspace.browser_webrtc_external_port},
             )
         except Exception as exc:
-            # Browser 容器啟動失敗不應影響主 runtime
-            logger.error(f"Workspace {workspace.id}: Browser 容器啟動失敗: {exc}", exc_info=True)
+            # Browser container startup failure should not affect main runtime
+            logger.error(f"Workspace {workspace.id}: Browser ContainerStartFailed: {exc}", exc_info=True)
             workspace.browser_status = "error"
             self._log_event(
                 workspace.id,
                 "browser_error",
-                f"Browser 容器啟動失敗: {exc}",
+                f"Browser ContainerStartFailed: {exc}",
             )
 
-        # 6. 啟動 Canvas 容器
+        # 6. Start Canvas Container
         try:
-            self._log_event(workspace.id, "canvas_starting", "開始建立 Canvas 容器")
+            self._log_event(workspace.id, "canvas_starting", "BeginCreate Canvas Container")
             canvas_context = self._build_canvas_runtime_context(workspace)
             canvas_result = orchestrator.create_canvas_runtime(workspace, canvas_context)
             self._update_canvas_runtime(workspace, canvas_result)
             self._log_event(
                 workspace.id,
                 "canvas_ready",
-                "Canvas 容器已就緒",
+                "Canvas container is ready",
                 {"canvas_identifier": canvas_result.identifier, "canvas_port": workspace.canvas_external_port},
             )
         except Exception as exc:
-            # Canvas 容器啟動失敗不應影響主 runtime
-            logger.error(f"Workspace {workspace.id}: Canvas 容器啟動失敗: {exc}", exc_info=True)
+            # Canvas container startup failure should not affect main runtime
+            logger.error(f"Workspace {workspace.id}: Canvas ContainerStartFailed: {exc}", exc_info=True)
             workspace.canvas_status = "error"
             self._log_event(
                 workspace.id,
                 "canvas_error",
-                f"Canvas 容器啟動失敗: {exc}",
+                f"Canvas ContainerStartFailed: {exc}",
             )
 
         job.status = "completed"
         job.finished_at = datetime.utcnow()
-        self._log_event(workspace.id, "completed", "Workspace Runtime 已就緒")
+        self._log_event(workspace.id, "completed", "Workspace runtime is ready")
 
     def _build_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
-        """構建 RuntimeContext"""
+        """Build runtime context"""
 
-        # 0. 分配固定的 port（解決 docker restart 後 port 變更的問題）
+        # 0. Allocate fixed port (resolve port change issue after docker restart)
         self._allocate_ports_if_needed(workspace)
 
-        # 1. 準備腳本 (Startup Script)
+        # 1. Prepare script (startup script)
         workspace_dir = self.script_output_root / workspace.id
         environment = self._build_environment(workspace)
 
-        # 端口配置（現在使用固定分配的 port）
+        # Port configuration (now using fixed allocated port)
         ports_config = self._build_ports_config(workspace)
         
-        # 渲染 startup.sh
+        # Render startup.sh
         self.template_engine.render_to_file(
             "docker/startup.sh.j2",
             workspace_dir / "startup.sh",
             {
                 "workspace": {"id": workspace.id, "name": workspace.name},
                 "environment": environment,
-                "ports": ports_config, # 傳遞給模板的端口配置
+                "ports": ports_config, # Port configuration passed to template
                 "git": {"url": workspace.git_url, "branch": workspace.branch},
             },
             executable=True,
         )
 
-        # 2. 構建 Volume Mounts
+        # 2. Build volume mounts
         volumes = self._build_volumes(workspace)
         
-        # 3. 構建 Port Mappings
+        # 3. Build port mappings
         port_mappings = []
         for p in ports_config["mappings"]:
             port_mappings.append(PortMapping(
@@ -260,24 +260,24 @@ class RuntimeProvisionService:
                 protocol=p["protocol"]
             ))
             
-        # 添加預設端口
+        # Add default port
         port_mappings.append(PortMapping(
             container_port=ports_config["default_internal_port"],
-            host_port=workspace.runtime_external_port # 如果已有，則使用
+            host_port=workspace.runtime_external_port # If exists, use it
         ))
-        # 注意: Canvas render server (3003) 已移至獨立的 workspace-canvas 容器
+        # Note: Canvas render server (3003) moved to separate workspace-canvas container
         port_mappings.append(PortMapping(
             container_port=ports_config["terminal_internal_port"],
             host_port=workspace.terminal_external_port
         ))
 
-        # 4. 構建 Network Config
+        # 4. Build network configuration
         network = NetworkConfig(
             network_name=self.settings.DOCKER_NETWORK,
             network_mode="bridge"
         )
         
-        # 5. 獲取 Image
+        # 5. Get Image
         from app.services.container_image_service import get_container_image_service
         image_service = get_container_image_service()
         docker_image = image_service.get_docker_image_name(workspace.runtime)
@@ -295,7 +295,7 @@ class RuntimeProvisionService:
         )
 
     def _build_environment(self, workspace: db_models.Workspace) -> dict[str, str]:
-        # Browser container 連接資訊（用於服務發現）
+        # Browser container connection information (for service discovery)
         browser_container_name = f"workspace-browser-{workspace.id}"
 
         env = {
@@ -309,15 +309,15 @@ class RuntimeProvisionService:
             "REDIS_URL": self.settings.REDIS_URL,
             "MANAGER_URL": f"http://workspace-manager:{self.settings.PORT}",
             "INTERNAL_API_TOKEN": self.settings.INTERNAL_API_TOKEN,
-            # Browser container 連接資訊
+            # Browser container connection information
             "BROWSER_CONTAINER_NAME": browser_container_name,
             "BROWSER_WEBRTC_INTERNAL_URL": workspace.browser_webrtc_internal_url or f"http://{browser_container_name}:6080",
             "BROWSER_CDP_URL": f"http://{browser_container_name}:9223",
-            # Keycloak JWT 認證（workspace-runtime 需要驗證前端傳來的 access token）
+            # Keycloak JWT authentication (workspace-runtime needs to verify access token from frontend)
             "KEYCLOAK_SERVER_URL": self.settings.KEYCLOAK_SERVER_URL,
             "KEYCLOAK_REALM": self.settings.KEYCLOAK_REALM,
             "KEYCLOAK_CLIENT_ID": self.settings.KEYCLOAK_CLIENT_ID,
-            # Canvas container 連接資訊（用於服務發現）
+            # Canvas container connection information (for service discovery)
             "CANVAS_CONTAINER_NAME": f"workspace-canvas-{workspace.id}",
             "CANVAS_INTERNAL_URL": workspace.canvas_internal_url or f"http://workspace-canvas-{workspace.id}:3003",
             "CANVAS_API_URL": f"http://workspace-canvas-{workspace.id}:3013",
@@ -328,7 +328,7 @@ class RuntimeProvisionService:
             env["GIT_BRANCH"] = workspace.branch or "main"
 
         try:
-            # 獲取工作區擁有者的用戶設置
+            # Get workspace owner's user settings
             user_settings = self.db.scalar(
                 select(db_models.UserSetting).where(
                     db_models.UserSetting.user_id == workspace.owner_id
@@ -345,7 +345,7 @@ class RuntimeProvisionService:
                 if user_settings.git_user_email:
                     env["GIT_USER_EMAIL"] = user_settings.git_user_email
         except Exception as e:
-            logger.warning(f"無法獲取用戶設置: {e}")
+            logger.warning(f"Cannot get user settings: {e}")
 
         for item in workspace.env_vars or []:
             key = item.get("key")
@@ -355,7 +355,7 @@ class RuntimeProvisionService:
         return env
 
     def _build_ports_config(self, workspace: db_models.Workspace) -> dict[str, Any]:
-        """構建端口配置字典 (用於模板渲染)"""
+        """Build port configuration dictionary (for template rendering)"""
         default_port = workspace.runtime_internal_port or 3002
         canvas_port = workspace.canvas_internal_port or 3003
         terminal_port = 3004
@@ -402,7 +402,7 @@ class RuntimeProvisionService:
         volumes = [
             VolumeMount(source=str(host_workspace), target="/workspace"),
             VolumeMount(source=str(host_scripts), target="/scripts"),
-            # 持久化 ~/.claude（Claude Code session files、設定等），避免容器重啟後 --resume 失效
+            # Persist ~/.claude (Claude Code session files, settings, etc.), avoid --resume failure after container restart
             VolumeMount(source=str(host_claude), target="/home/developer/.claude"),
             # Docker socket
             VolumeMount(source="/var/run/docker.sock", target="/var/run/docker.sock"),
@@ -447,7 +447,7 @@ class RuntimeProvisionService:
         return volumes
 
     def _allocate_ports_if_needed(self, workspace: db_models.Workspace) -> None:
-        """為 workspace 分配固定的 port（如果尚未分配）"""
+        """Allocate fixed port for workspace (if not yet allocated)"""
         allocated = []
 
         # Runtime port
@@ -485,7 +485,7 @@ class RuntimeProvisionService:
             )
             allocated.append(workspace.browser_cdp_external_port)
 
-        # 收集已分配的 port 以避免衝突
+        # Collect allocated ports to avoid conflicts
         all_allocated = {workspace.runtime_external_port, workspace.canvas_external_port,
                          workspace.terminal_external_port, workspace.browser_webrtc_external_port,
                          workspace.browser_cdp_external_port}
@@ -495,21 +495,21 @@ class RuntimeProvisionService:
             workspace.canvas_api_external_port = self._find_available_port(exclude=all_allocated)
             allocated.append(workspace.canvas_api_external_port)
 
-        # 更新 URL
+        # Update URL
         workspace.runtime_external_url = f"http://localhost:{workspace.runtime_external_port}"
         workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
         workspace.browser_webrtc_external_url = f"http://localhost:{workspace.browser_webrtc_external_port}"
         workspace.canvas_external_url = f"http://localhost:{workspace.canvas_external_port}"
 
         if allocated:
-            logger.info(f"Workspace {workspace.id}: 分配固定 ports: runtime={workspace.runtime_external_port}, "
+            logger.info(f"Workspace {workspace.id}: allocated fixed ports: runtime={workspace.runtime_external_port}, "
                        f"canvas={workspace.canvas_external_port}, terminal={workspace.terminal_external_port}, "
                        f"browser_webrtc={workspace.browser_webrtc_external_port}, browser_cdp={workspace.browser_cdp_external_port}, "
                        f"canvas_api={workspace.canvas_api_external_port}")
             self.db.flush()
 
     def _find_available_port(self, exclude: set[int] = None, protocol: str = "tcp") -> int:
-        """隨機找一個可用的 port"""
+        """Randomly find an available port"""
         exclude = exclude or set()
         socket_type = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
 
@@ -524,7 +524,7 @@ class RuntimeProvisionService:
             except OSError:
                 continue
 
-        raise RuntimeError(f"無法在 {PORT_RANGE_MIN}-{PORT_RANGE_MAX} 範圍內找到可用的 port")
+        raise RuntimeError(f"Cannot find available port in range {PORT_RANGE_MIN}-{PORT_RANGE_MAX}")
 
     def _handle_failure(
         self,
@@ -540,11 +540,11 @@ class RuntimeProvisionService:
         self._log_event(
             workspace.id,
             "failed",
-            "佈建失敗，請檢視錯誤並重新嘗試",
+            "Provision failed, please check error and retry",
             {"error": str(exc)},
         )
 
-    # -- 查詢介面 --------------------------------------------------------
+    # -- QueryInterface --------------------------------------------------------
     def get_runtime_logs(
         self,
         workspace_id: str,
@@ -568,7 +568,7 @@ class RuntimeProvisionService:
         )
         return self.db.execute(stmt).scalars().first()
 
-    # -- 私有輔助方法 ----------------------------------------------------
+    # -- Private helper methods ----------------------------------------------------
     def _get_workspace(self, workspace_id: str) -> Optional[db_models.Workspace]:
         return self.db.get(db_models.Workspace, workspace_id)
 
@@ -591,30 +591,30 @@ class RuntimeProvisionService:
         workspace.runtime_id = runtime_info.identifier
         workspace.runtime_internal_url = runtime_info.internal_url
 
-        # 保持已分配的固定 port，不要用 container 實際的 port 覆蓋
-        # 這樣可以避免 container 重啟後 port 變更的問題
+        # Keep allocated fixed port, do not override with actual container port
+        # This can avoid port change issue after container restart
         if not workspace.runtime_external_url:
             workspace.runtime_external_url = runtime_info.external_url
 
-        # 從 extra_info 中提取端口信息（僅用於驗證，不覆蓋已分配的 port）
+        # Extract port info from extra_info (only for verification, don't override allocated port)
         ports_mapping = runtime_info.extra_info.get("ports", {})
 
-        # 只在尚未分配 port 時才從 container.ports 中獲取
-        # （這樣可以保持 port 的一致性）
+        # Only update if not already set
+        # (This maintains port consistency)
         default_port = workspace.runtime_internal_port or 3002
         default_key = f"{default_port}/tcp"
 
-        # 驗證 container 是否使用了正確的 port
+        # Validate if container is using correct port
         if default_key in ports_mapping:
             actual_port = ports_mapping[default_key]
             if workspace.runtime_external_port != actual_port:
                 logger.warning(
-                    f"Workspace {workspace.id}: Container 實際 port ({actual_port}) "
-                    f"與分配的固定 port ({workspace.runtime_external_port}) 不符。"
-                    f"使用固定 port 以保持一致性。"
+                    f"Workspace {workspace.id}: Container actual port ({actual_port}) "
+                    f"does not match allocated fixed port ({workspace.runtime_external_port}). "
+                    f"Use fixed port to maintain consistency."
                 )
 
-        # Terminal - 只在尚未分配時更新
+        # Terminal - only update if not yet allocated
         terminal_port = 3004
         term_key = f"{terminal_port}/tcp"
         if term_key in ports_mapping and not workspace.terminal_external_url:
@@ -628,20 +628,20 @@ class RuntimeProvisionService:
         workspace.runtime_last_seen = datetime.utcnow()
 
     def _build_browser_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
-        """構建 Browser Runtime Context"""
+        """Build browser runtime context"""
         from app.services.container_image_service import get_container_image_service
         image_service = get_container_image_service()
 
         safe_workspace_id = workspace.id.replace('-', '_')
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
 
-        # 確保 workspace 目錄存在
+        # Ensure workspace directory exists
         host_workspace.mkdir(parents=True, exist_ok=True)
 
-        # Browser 容器名稱（用於服務發現）
+        # Browser container name (for service discovery)
         browser_container_name = f"workspace-browser-{workspace.id}"
 
-        # 為 WebRTC media 分配唯一的 UDP port
+        # Allocate unique UDP port for WebRTC media
         udp_port = workspace.browser_webrtc_external_port
 
         # Port mappings for Browser (neko WebRTC + CDP + UDP media)
@@ -651,7 +651,7 @@ class RuntimeProvisionService:
             PortMapping(container_port=udp_port, host_port=udp_port, protocol="udp"),  # WebRTC media (UDPMUX)
         ]
 
-        # Browser 容器掛載相同的 WORKSPACE 目錄
+        # Browser container mounts the same workspace directory
         volumes = [
             VolumeMount(source=str(host_workspace), target="/workspace"),
         ]
@@ -665,7 +665,7 @@ class RuntimeProvisionService:
             environment={
                 "WORKSPACE_ID": workspace.id,
                 "CONTAINER_NAME": browser_container_name,
-                # neko 設定
+                # neko Settings
                 "NEKO_SERVER_BIND": ":6080",
                 "NEKO_DESKTOP_SCREEN": "1440x900@30",
                 "NEKO_MEMBER_MULTIUSER_USER_PASSWORD": "neko",
@@ -686,7 +686,7 @@ class RuntimeProvisionService:
         )
 
     def _update_browser_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
-        """更新 Browser Runtime 狀態"""
+        """Update Browser Runtime Status"""
         workspace.browser_container_id = runtime_info.identifier
         workspace.browser_webrtc_internal_url = runtime_info.internal_url
         workspace.browser_webrtc_external_url = runtime_info.external_url
@@ -694,14 +694,14 @@ class RuntimeProvisionService:
         workspace.browser_last_seen = datetime.utcnow()
 
     def _build_canvas_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
-        """構建 Canvas Runtime Context"""
+        """Build canvas runtime context"""
         from app.services.container_image_service import get_container_image_service
         image_service = get_container_image_service()
 
         safe_workspace_id = workspace.id.replace('-', '_')
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
 
-        # 確保 workspace 目錄存在
+        # Ensure workspace directory exists
         host_workspace.mkdir(parents=True, exist_ok=True)
 
         canvas_container_name = f"workspace-canvas-{workspace.id}"
@@ -712,7 +712,7 @@ class RuntimeProvisionService:
             PortMapping(container_port=3013, host_port=workspace.canvas_api_external_port, protocol="tcp"),
         ]
 
-        # 掛載相同的 workspace 目錄
+        # Mount the same workspace directory
         volumes = [
             VolumeMount(source=str(host_workspace), target="/workspace"),
         ]
@@ -742,7 +742,7 @@ class RuntimeProvisionService:
         )
 
     def _update_canvas_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
-        """更新 Canvas Runtime 狀態"""
+        """Update Canvas Runtime Status"""
         workspace.canvas_container_id = runtime_info.identifier
         workspace.canvas_internal_url = runtime_info.internal_url
         workspace.canvas_external_url = runtime_info.external_url or f"http://localhost:{workspace.canvas_external_port}"
@@ -752,9 +752,9 @@ class RuntimeProvisionService:
 
 
 def run_runtime_provision_task(workspace_id: str) -> None:
-    """背景任務入口：開啟新的資料庫連線並執行佈建。"""
+    """Background task entry: Open new database connection and execute provisioning"""
 
-    from app.db.database import SessionLocal  # 避免循環匯入
+    from app.db.database import SessionLocal  # Avoid circular import
 
     db = SessionLocal()
     try:

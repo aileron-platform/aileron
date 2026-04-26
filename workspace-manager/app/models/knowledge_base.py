@@ -1,4 +1,4 @@
-"""Knowledge base 相關 Pydantic 模型。"""
+"""Knowledge base related Pydantic models."""
 
 from __future__ import annotations
 

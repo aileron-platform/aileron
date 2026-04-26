@@ -1,10 +1,10 @@
-"""統一的檔案管理異常定義"""
+"""Unified file management exception definitions"""
 
 from typing import Optional, Dict, Any
 
 
 class FileErrorCode:
-    """統一的錯誤代碼"""
+    """Unified error codes"""
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
     FILE_ALREADY_EXISTS = "FILE_ALREADY_EXISTS"
     PERMISSION_DENIED = "PERMISSION_DENIED"
@@ -18,9 +18,9 @@ class FileErrorCode:
 
 
 class FileManagementException(Exception):
-    """檔案管理基礎異常"""
+    """Base file management exception"""
 
-    # 預設 HTTP 狀態碼
+    # Default HTTP status code
     status_code = 500
 
     def __init__(self, code: str, message: str, details: Optional[Dict[str, Any]] = None, status_code: Optional[int] = None):
@@ -32,7 +32,7 @@ class FileManagementException(Exception):
         super().__init__(message)
 
     def to_dict(self) -> Dict[str, Any]:
-        """轉換為字典格式"""
+        """Convert to dictionary format"""
         return {
             "code": self.code,
             "message": self.message,
@@ -41,7 +41,7 @@ class FileManagementException(Exception):
 
 
 class FileNotFoundException(FileManagementException):
-    """檔案不存在"""
+    """File not found"""
 
     status_code = 404
 
@@ -58,7 +58,7 @@ class FileNotFoundException(FileManagementException):
 
 
 class FileAlreadyExistsException(FileManagementException):
-    """檔案已存在"""
+    """File already exists"""
 
     status_code = 409
 
@@ -75,7 +75,7 @@ class FileAlreadyExistsException(FileManagementException):
 
 
 class ReadonlyScopeException(FileManagementException):
-    """唯讀範圍"""
+    """Read-only scope"""
 
     status_code = 403
 
@@ -89,7 +89,7 @@ class ReadonlyScopeException(FileManagementException):
 
 
 class InvalidScopeException(FileManagementException):
-    """無效範圍"""
+    """Invalid scope"""
 
     status_code = 400
 
@@ -103,7 +103,7 @@ class InvalidScopeException(FileManagementException):
 
 
 class InvalidPathException(FileManagementException):
-    """無效路徑"""
+    """Invalid path"""
 
     status_code = 400
 
@@ -120,7 +120,7 @@ class InvalidPathException(FileManagementException):
 
 
 class PermissionDeniedException(FileManagementException):
-    """權限不足"""
+    """Permission denied"""
 
     status_code = 403
 
@@ -134,7 +134,7 @@ class PermissionDeniedException(FileManagementException):
 
 
 class FileTooLargeException(FileManagementException):
-    """檔案過大"""
+    """File too large"""
 
     status_code = 413
 
@@ -148,7 +148,7 @@ class FileTooLargeException(FileManagementException):
 
 
 class ContentConflictException(FileManagementException):
-    """內容衝突"""
+    """Content conflict"""
 
     status_code = 409
 
@@ -166,7 +166,7 @@ class ContentConflictException(FileManagementException):
 
 
 class DirectoryNotEmptyException(FileManagementException):
-    """目錄不為空"""
+    """Directory not empty"""
 
     status_code = 400
 
@@ -180,7 +180,7 @@ class DirectoryNotEmptyException(FileManagementException):
 
 
 class InvalidFileTypeException(FileManagementException):
-    """無效的檔案類型"""
+    """Invalid file type"""
 
     status_code = 400
 

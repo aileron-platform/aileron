@@ -1,7 +1,7 @@
 """
-OAuth2 認證路由
+OAuth2 Authentication Routes
 
-提供 Keycloak OAuth2/OIDC 認證流程的 API 端點。
+Provides API endpoints for Keycloak OAuth2/OIDC authentication process.
 """
 
 import os
@@ -20,54 +20,54 @@ router = APIRouter(prefix="/oauth2", tags=["Keycloak OAuth2"])
 
 
 # ============================================================================
-# 請求/響應模型
+# Request/response models
 # ============================================================================
 
 
 class LoginURLResponse(BaseModel):
-    """登入 URL 響應"""
-    authorization_url: str = Field(..., description="Keycloak 授權端點 URL")
+    """Login URL response"""
+    authorization_url: str = Field(..., description="Keycloak AuthorizationEndpoint URL")
     state: str = Field(..., description="CSRF protection token")
 
 
 class TokenResponse(BaseModel):
-    """Token 響應"""
+    """Token response"""
     access_token: str = Field(..., description="JWT access token")
     refresh_token: Optional[str] = Field(None, description="Refresh token")
-    token_type: str = Field(default="Bearer", description="Token 類型")
-    expires_in: int = Field(..., description="過期時間（秒）")
-    scope: str = Field(..., description="Token 作用域")
+    token_type: str = Field(default="Bearer", description="Token type")
+    expires_in: int = Field(..., description="Expiration time (seconds)")
+    scope: str = Field(..., description="Token scope")
 
 
 class CallbackRequest(BaseModel):
-    """OAuth callback 請求"""
-    code: str = Field(..., description="OAuth 授權碼")
+    """OAuth callback request"""
+    code: str = Field(..., description="OAuth authorization code")
     state: Optional[str] = Field(None, description="CSRF token")
 
 
 class RefreshTokenRequest(BaseModel):
-    """刷新 token 請求"""
+    """Refresh token request"""
     refresh_token: str = Field(..., description="Refresh token")
 
 
 class UserInfo(BaseModel):
-    """用戶信息"""
-    sub: str = Field(..., description="用戶唯一標識")
-    preferred_username: str = Field(..., description="用戶名")
+    """User information"""
+    sub: str = Field(..., description="User unique identifier")
+    preferred_username: str = Field(..., description="Username")
     email: Optional[str] = Field(None, description="Email")
-    given_name: Optional[str] = Field(None, description="名字")
-    family_name: Optional[str] = Field(None, description="姓氏")
-    roles: list[str] = Field(default_factory=list, description="用戶角色")
+    given_name: Optional[str] = Field(None, description="Given name")
+    family_name: Optional[str] = Field(None, description="Family name")
+    roles: list[str] = Field(default_factory=list, description="User roles")
     local_user_id: Optional[str] = Field(None, description="Local DB user ID")
 
 
 # ============================================================================
-# 依賴注入
+# Dependency injection
 # ============================================================================
 
 
 async def require_auth_enabled():
-    """要求認證功能已啟用"""
+    """Require authentication feature enabled"""
     config = get_keycloak_config()
     if not config.enabled:
         raise HTTPException(
@@ -78,14 +78,14 @@ async def require_auth_enabled():
 
 
 # ============================================================================
-# 路由端點
+# RouterEndpoint
 # ============================================================================
 
 
 @router.get(
     "/login",
     response_model=LoginURLResponse,
-    summary="取得 Keycloak 登入 URL",
+    summary="Get Keycloak login URL",
     responses=build_responses(501),
 )
 async def login(
@@ -94,35 +94,35 @@ async def login(
     config = Depends(require_auth_enabled)
 ):
     """
-    生成 Keycloak 授權 URL 並重定向用戶到登入頁面
+    Generate Keycloak authorization URL and redirect user to login page
 
     Args:
-        request: FastAPI 請求對象
-        redirect_uri: 登入後的重定向 URL（可選）
-        config: Keycloak 配置
+        request: FastAPI request object
+        redirect_uri: Redirect URL after login (optional)
+        config: Keycloak configuration
 
     Returns:
-        LoginURLResponse: 包含授權 URL 和 state token
+        LoginURLResponse: Contains authorization URL and state token
 
-    當 redirect_uri 為 None 時，使用請求的 Referer 或預設前端 URL
+    When redirect_uri is None, use request's Referer or default frontend URL
     """
     from secrets import token_urlsafe
 
-    # 生成 CSRF protection token
+    # Generate CSRF protection token
     state = token_urlsafe(32)
 
-    # 構建 redirect URI
+    # Build redirect URI
     if redirect_uri is None:
         referer = request.headers.get("referer")
         if referer:
-            # 從 referer 提取基礎 URL
+            # Extract base URL from referer
             parsed = urlparse(referer)
             redirect_uri = f"{parsed.scheme}://{parsed.netloc}/"
         else:
-            # 使用預設前端 URL
+            # Use default frontend URL
             redirect_uri = os.getenv("FRONTEND_PUBLIC_URL", "http://localhost:8082/")
 
-    # 構建 Keycloak 授權 URL
+    # Build Keycloak authorization URL
     auth_url = (
         f"{config.external_server_url}/protocol/openid-connect/auth"
         f"?client_id={config.client_id}"
@@ -140,7 +140,7 @@ async def login(
 
 @router.get(
     "/login/redirect",
-    summary="直接重導到 Keycloak 登入頁",
+    summary="Redirect directly to Keycloak login page",
     responses=build_responses(501),
 )
 async def login_redirect(
@@ -149,28 +149,28 @@ async def login_redirect(
     config = Depends(require_auth_enabled)
 ):
     """
-    重定向到 Keycloak 登入頁面
+    Redirect to Keycloak login page
 
-    這是一個便捷端點，直接重定向瀏覽器到 Keycloak
+    This is a convenient endpoint that directly redirects browser to Keycloak
 
     Args:
-        request: FastAPI 請求對象
-        redirect_uri: 登入後的重定向 URL
-        config: Keycloak 配置
+        request: FastAPI request object
+        redirect_uri: Redirect URL after login
+        config: Keycloak configuration
 
     Returns:
-        RedirectResponse: 重定向到 Keycloak
+        RedirectResponse: Redirect to Keycloak
     """
     from secrets import token_urlsafe
 
-    # 生成 CSRF protection token
+    # Generate CSRF protection token
     state = token_urlsafe(32)
 
-    # 構建 redirect URI
+    # Build redirect URI
     if redirect_uri is None:
         redirect_uri = os.getenv("FRONTEND_PUBLIC_URL", "http://localhost:8082/")
 
-    # 構建 Keycloak 授權 URL
+    # Build Keycloak authorization URL
     auth_url = (
         f"{config.external_server_url}/protocol/openid-connect/auth"
         f"?client_id={config.client_id}"
@@ -180,14 +180,14 @@ async def login_redirect(
         f"&state={state}"
     )
 
-    # 重定向到 Keycloak
+    # Redirect to Keycloak
     return RedirectResponse(url=auth_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get(
     "/callback",
     response_model=TokenResponse,
-    summary="處理 Keycloak OAuth2 Callback",
+    summary="Handle Keycloak OAuth2 callback",
     responses=build_responses(400, 502, 501),
 )
 async def callback(
@@ -199,37 +199,37 @@ async def callback(
     config = Depends(require_auth_enabled)
 ):
     """
-    處理 Keycloak OAuth2 callback
+    Handle Keycloak OAuth2 callback
 
-    Keycloak 在用戶登入成功後會重定向到此端點
+    Keycloak will redirect to this endpoint after user login succeeds
 
     Args:
-        request: FastAPI 請求對象
-        code: OAuth 授權碼
+        request: FastAPI request object
+        code: OAuth authorization code
         state: CSRF token
-        error: 錯誤代碼（如果登入失敗）
-        error_description: 錯誤描述
-        config: Keycloak 配置
+        error: Error code (if login fails)
+        error_description: Error description
+        config: Keycloak configuration
 
     Returns:
-        TokenResponse 或錯誤響應
+        TokenResponse or error response
 
-    注意：這是一個簡化實現，實際生產環境需要：
-    - 驗證 state token
-    - 處理 token 存儲（httpOnly cookie）
-    - 創建或更新本地用戶記錄
+    Note: This is a simplified implementation, actual production environment needs:
+    - Verify state token
+    - Handle token storage (httpOnly cookie)
+    - Create or update local user record
     """
-    # 處理錯誤情況
+    # Handle error scenarios
     if error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Authentication failed: {error_description or error}"
         )
 
-    # TODO: 驗證 state token（CSRF protection）
+    # TODO: Verify state token（CSRF protection）
 
     try:
-        # 交換授權碼獲取 tokens
+        # Exchange authorization code for tokens
         import httpx
 
         token_url = f"{config.server_url}/protocol/openid-connect/token"
@@ -248,9 +248,9 @@ async def callback(
             response.raise_for_status()
             token_data = response.json()
 
-        # TODO: 存儲 refresh token 到資料庫
-        # TODO: 創建或更新本地用戶記錄
-        # TODO: 設置 httpOnly cookie
+        # TODO: Store refresh token to database
+        # TODO: Create or update local user record
+        # TODO: Set httpOnly cookie
 
         return TokenResponse(
             access_token=token_data["access_token"],
@@ -270,7 +270,7 @@ async def callback(
 @router.post(
     "/refresh",
     response_model=TokenResponse,
-    summary="使用 Refresh Token 更新 Access Token",
+    summary="Use refresh token to update access token",
     responses=build_responses(400, 502, 501),
 )
 async def refresh_token(
@@ -278,16 +278,16 @@ async def refresh_token(
     config = Depends(require_auth_enabled)
 ):
     """
-    使用 refresh token 獲取新的 access token
+    Use refresh token to get new access token
 
     Args:
-        request: 包含 refresh token 的請求
-        config: Keycloak 配置
+        request: Request containing refresh token
+        config: Keycloak configuration
 
     Returns:
-        TokenResponse: 新的 token
+        TokenResponse: New token
 
-    注意：實際實作需要驗證 refresh token 是否有效且未撤銷
+    Note: Actual implementation needs to verify refresh token is valid and not revoked
     """
     try:
         import httpx
@@ -328,24 +328,24 @@ async def logout(
     config = Depends(require_auth_enabled)
 ):
     """
-    登出用戶
+    Logout user
 
-    清除本地 session 並可選調用 Keycloak logout
+    Clear local session and optionally call Keycloak logout
 
     Args:
-        request: FastAPI 請求對象
-        config: Keycloak 配置
+        request: FastAPI request object
+        config: Keycloak configuration
 
     Returns:
-        成功訊息
+        Success message
 
-    注意：實際實作需要：
-    - 從請求中獲取 refresh token
-    - 從資料庫刪除 refresh token
-    - 清除 httpOnly cookie
-    - 可選：調用 Keycloak end session endpoint
+    Note: Actual implementation needs:
+    - Get refresh token from request
+    - Delete refresh token from database
+    - Clear httpOnly cookie
+    - Optional: Call Keycloak end session endpoint
     """
-    # TODO: 實作完整的登出邏輯
+    # TODO: Implement complete logout logic
     return {"message": "Logout endpoint - implementation pending"}
 
 
@@ -355,21 +355,21 @@ async def get_current_user(
     config = Depends(require_auth_enabled)
 ):
     """
-    獲取當前認證用戶的信息
+    Get current authenticated user information
 
-    從 Authorization header 中的 JWT token 解析用戶信息
+    Parse user information from JWT token in Authorization header
 
     Args:
-        request: FastAPI 請求對象（應包含 Authorization header）
-        config: Keycloak 配置
+        request: FastAPI request object (should contain Authorization header)
+        config: Keycloak configuration
 
     Returns:
-        UserInfo: 當前用戶信息
+        UserInfo: Current user information
 
     Raises:
-        HTTPException: 當 token 無效或缺失時
+        HTTPException: When token is invalid or missing
     """
-    # 從 Authorization header 提取 token
+    # Extract token from authorization header
     authorization = request.headers.get("Authorization")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -381,15 +381,15 @@ async def get_current_user(
     token = authorization.split(" ")[1]
 
     try:
-        # 驗證並解碼 token
+        # Validate and decode token
         jwt_utils = get_jwt_utils()
         payload = jwt_utils.decode_token(token)
 
-        # 提取角色（從 realm_access.roles）
+        # Extract roles (from realm_access.roles)
         realm_access = payload.get("realm_access", {})
         roles = realm_access.get("roles", [])
 
-        # 查詢 local DB user ID
+        # Query local DB user ID
         local_user_id = None
         keycloak_id = payload.get("sub")
         if keycloak_id:
@@ -407,7 +407,7 @@ async def get_current_user(
             except Exception:
                 pass
 
-        # 構建用戶信息響應
+        # Build user info response
         return UserInfo(
             sub=payload.get("sub", ""),
             preferred_username=payload.get("preferred_username", ""),
@@ -429,15 +429,15 @@ async def get_current_user(
 @router.get("/config")
 async def get_auth_config(config = Depends(get_keycloak_config)):
     """
-    獲取認證配置信息（公開端點）
+    Get authentication configuration information (public endpoint)
 
-    返回前端需要的 OpenID Connect 配置
+    Return OpenID Connect configuration needed by frontend
 
     Args:
-        config: Keycloak 配置
+        config: Keycloak configuration
 
     Returns:
-        OpenID Connect 配置
+        OpenID Connect configuration
     """
     if not config.enabled:
         return {"enabled": False}

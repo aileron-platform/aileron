@@ -1,4 +1,4 @@
-"""使用者個人檔案服務"""
+"""User profile service"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserProfileService:
-    """管理使用者個人檔案的服務"""
+    """Service managing user profile files"""
 
     def __init__(
         self,
@@ -31,7 +31,7 @@ class UserProfileService:
         self.keycloak_sync = keycloak_sync
 
     def get_profile(self, user_id: str) -> Optional[UserProfile]:
-        """取得使用者個人檔案"""
+        """Get user profile"""
         user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not user:
             return None
@@ -51,14 +51,14 @@ class UserProfileService:
         payload: UserProfileUpdate,
         access_token: Optional[str] = None,
     ) -> Optional[UserProfile]:
-        """更新使用者個人檔案，並同步 Keycloak 可同步欄位"""
+        """Update user profile and sync to Keycloak syncable columns"""
         user = self.db.query(DBUser).filter(DBUser.id == user_id).first()
         if not user:
             return None
 
         keycloak_fields_changed = False
 
-        # 更新 first_name / last_name
+        # Update first_name / last_name
         if payload.first_name is not None:
             user.first_name = payload.first_name
             keycloak_fields_changed = True
@@ -66,7 +66,7 @@ class UserProfileService:
             user.last_name = payload.last_name
             keycloak_fields_changed = True
 
-        # 自動計算 display_name
+        # Auto-calculate display_name
         if keycloak_fields_changed:
             fn = user.first_name or ""
             ln = user.last_name or ""
@@ -78,7 +78,7 @@ class UserProfileService:
         self.db.commit()
         self.db.refresh(user)
 
-        # 非同步同步回 Keycloak（best-effort，失敗不阻塞本地更新）
+        # Async sync back to Keycloak (best-effort, failure does not block local update)
         if keycloak_fields_changed and access_token:
             try:
                 await self.keycloak_sync.sync_profile_to_keycloak(
@@ -96,7 +96,7 @@ def get_user_profile_service(
     db: Session = Depends(get_db),
     keycloak_sync: KeycloakProfileSync = Depends(get_keycloak_profile_sync),
 ) -> UserProfileService:
-    """取得使用者個人檔案服務實例"""
+    """Get user profile service instance"""
     return UserProfileService(db, keycloak_sync)
 
 

@@ -1,6 +1,6 @@
-"""自動化任務佇列管理器
+"""Automation task queue manager
 
-使用 Redis Sorted Set 管理工作區任務佇列，確保任務按照加入時間順序執行。
+Use Redis Sorted Set to manage workspace task queue, ensuring tasks execute in order of addition time.
 """
 
 from __future__ import annotations
@@ -17,27 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 class AutomationQueueManager:
-    """自動化任務佇列管理器
-    
-    使用 Redis Sorted Set 管理每個工作區的任務佇列：
+    """Automation task queue manager
+
+    Use Redis Sorted Set to manage task queue for each workspace:
     - Key: automation:queue:workspace:{workspace_id}
-    - Score: timestamp (排隊時間)
+    - Score: timestamp (queue time)
     - Member: execution_id
     """
 
     def __init__(self, redis_client: redis.Redis):
-        """初始化佇列管理器
-        
+        """Initialize queue manager
+
         Args:
-            redis_client: Redis 客戶端實例
+            redis_client: Redis client instance
         """
         self.redis = redis_client
 
     def _get_queue_key(self, workspace_id: str) -> str:
-        """獲取佇列 Redis Key
+        """Get queue Redis key
         
         Args:
-            workspace_id: 工作區 ID
+            workspace_id: Workspace ID
             
         Returns:
             Redis Key
@@ -45,171 +45,171 @@ class AutomationQueueManager:
         return f"automation:queue:workspace:{workspace_id}"
 
     def enqueue(self, workspace_id: str, execution_id: str) -> int:
-        """加入佇列
-        
+        """Enqueue to queue
+
         Args:
-            workspace_id: 工作區 ID
-            execution_id: 執行記錄 ID
-            
+            workspace_id: Workspace ID
+            execution_id: Execution record ID
+
         Returns:
-            排隊位置（1-based）
+            Queue position (1-based)
         """
         key = self._get_queue_key(workspace_id)
         score = utcnow().timestamp()
-        
-        # 加入 Sorted Set
+
+        # Add to sorted set
         self.redis.zadd(key, {execution_id: score})
-        
-        # 設定過期時間（24 小時）
+
+        # Set expiration time (24 hours)
         self.redis.expire(key, 86400)
-        
-        # 獲取排隊位置
+
+        # Get queue position
         position = self.get_queue_position(workspace_id, execution_id)
-        
+
         logger.info(
-            "任務加入佇列 - workspace_id=%s, execution_id=%s, position=%d",
+            "Task added to queue - workspace_id=%s, execution_id=%s, position=%d",
             workspace_id, execution_id, position
         )
-        
+
         return position
 
     def dequeue(self, workspace_id: str) -> Optional[str]:
-        """取出下一個任務
-        
+        """Dequeue next task
+
         Args:
-            workspace_id: 工作區 ID
-            
+            workspace_id: Workspace ID
+
         Returns:
-            執行記錄 ID，如果佇列為空則返回 None
+            Execution record ID, or None if queue is empty
         """
         key = self._get_queue_key(workspace_id)
-        
-        # 取出分數最小的元素（最早加入的）
+
+        # Remove element with smallest score (earliest added)
         result = self.redis.zpopmin(key, 1)
-        
+
         if not result:
             return None
-        
+
         execution_id = result[0][0]
-        
+
         logger.info(
-            "從佇列取出任務 - workspace_id=%s, execution_id=%s",
+            "Task removed from queue - workspace_id=%s, execution_id=%s",
             workspace_id, execution_id
         )
-        
+
         return execution_id
 
     def cancel(self, workspace_id: str, execution_id: str) -> bool:
-        """從佇列移除任務
-        
+        """Remove task from queue
+
         Args:
-            workspace_id: 工作區 ID
-            execution_id: 執行記錄 ID
-            
+            workspace_id: Workspace ID
+            execution_id: Execution record ID
+
         Returns:
-            是否成功移除
+            Whether successfully removed
         """
         key = self._get_queue_key(workspace_id)
         removed = self.redis.zrem(key, execution_id)
-        
+
         if removed:
             logger.info(
-                "從佇列移除任務 - workspace_id=%s, execution_id=%s",
+                "Task removed from queue - workspace_id=%s, execution_id=%s",
                 workspace_id, execution_id
             )
-        
+
         return bool(removed)
 
     def get_queue_position(self, workspace_id: str, execution_id: str) -> int:
-        """查詢排隊位置
-        
+        """Query queue position
+
         Args:
-            workspace_id: 工作區 ID
-            execution_id: 執行記錄 ID
-            
+            workspace_id: Workspace ID
+            execution_id: Execution record ID
+
         Returns:
-            排隊位置（1-based），如果不在佇列中則返回 0
+            Queue position (1-based), or 0 if not in queue
         """
         key = self._get_queue_key(workspace_id)
         rank = self.redis.zrank(key, execution_id)
-        
-        # zrank 返回 0-based 索引，轉換為 1-based 位置
+
+        # zrank returns 0-based index, convert to 1-based position
         return rank + 1 if rank is not None else 0
 
     def get_queue_length(self, workspace_id: str) -> int:
-        """查詢佇列長度
-        
+        """Query queue length
+
         Args:
-            workspace_id: 工作區 ID
-            
+            workspace_id: Workspace ID
+
         Returns:
-            佇列長度
+            Queue length
         """
         key = self._get_queue_key(workspace_id)
         return self.redis.zcard(key)
 
     def list_queued_executions(self, workspace_id: str, limit: int = 50) -> list[str]:
-        """列出排隊中的任務
-        
+        """List queued tasks
+
         Args:
-            workspace_id: 工作區 ID
-            limit: 最大返回數量
-            
+            workspace_id: Workspace ID
+            limit: Maximum number to return
+
         Returns:
-            執行記錄 ID 列表（按排隊順序）
+            List of execution record IDs (in queue order)
         """
         key = self._get_queue_key(workspace_id)
         return self.redis.zrange(key, 0, limit - 1)
 
     def cleanup_expired(self, workspace_id: str, timeout_seconds: int = 3600) -> int:
-        """清理超時的排隊任務
-        
+        """Clean up expired queued tasks
+
         Args:
-            workspace_id: 工作區 ID
-            timeout_seconds: 超時時間（秒）
-            
+            workspace_id: Workspace ID
+            timeout_seconds: Timeout in seconds
+
         Returns:
-            清理的任務數量
+            Number of tasks cleaned up
         """
         key = self._get_queue_key(workspace_id)
         cutoff = utcnow().timestamp() - timeout_seconds
-        
-        # 移除分數小於 cutoff 的元素（超時的任務）
+
+        # Remove elements with score less than cutoff (timed out tasks)
         removed = self.redis.zremrangebyscore(key, 0, cutoff)
-        
+
         if removed:
             logger.warning(
-                "清理超時排隊任務 - workspace_id=%s, removed=%d, timeout=%ds",
+                "Cleaned up expired queued tasks - workspace_id=%s, removed=%d, timeout=%ds",
                 workspace_id, removed, timeout_seconds
             )
         
         return removed
 
     def get_queue_info(self, workspace_id: str) -> dict:
-        """獲取佇列資訊
-        
+        """Get queue information
+
         Args:
-            workspace_id: 工作區 ID
-            
+            workspace_id: Workspace ID
+
         Returns:
-            佇列資訊字典
+            Queue information dictionary
         """
         key = self._get_queue_key(workspace_id)
         length = self.redis.zcard(key)
-        
-        # 獲取最早和最晚的任務時間
+
+        # Get oldest and newest task times
         oldest = None
         newest = None
-        
+
         if length > 0:
             oldest_result = self.redis.zrange(key, 0, 0, withscores=True)
             newest_result = self.redis.zrange(key, -1, -1, withscores=True)
-            
+
             if oldest_result:
                 oldest = datetime.fromtimestamp(oldest_result[0][1])
             if newest_result:
                 newest = datetime.fromtimestamp(newest_result[0][1])
-        
+
         return {
             "workspace_id": workspace_id,
             "queue_length": length,
@@ -219,13 +219,13 @@ class AutomationQueueManager:
 
 
 def get_queue_manager() -> AutomationQueueManager:
-    """獲取佇列管理器實例
-    
+    """Get queue manager instance
+
     Returns:
-        AutomationQueueManager 實例
+        AutomationQueueManager instance
     """
     from app.config.settings import get_settings
-    
+
     settings = get_settings()
     redis_client = redis.from_url(
         settings.REDIS_URL,

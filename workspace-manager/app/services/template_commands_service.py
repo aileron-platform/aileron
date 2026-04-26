@@ -1,4 +1,4 @@
-"""模板 Commands 檔案管理服務"""
+"""Template commands file management service"""
 
 from __future__ import annotations
 
@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateCommandsService(TemplateBaseService):
-    """處理模板的 Commands 檔案管理"""
+    """Handle template commands file management"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
     def get_commands_files(self, template_id: str) -> TemplateCommandListResponse:
-        """取得模板的 commands 檔案列表"""
+        """Get template commands file list"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateCommandListResponse,
@@ -52,7 +52,7 @@ class TemplateCommandsService(TemplateBaseService):
                 message=f"Found {len(files)} command files",
             )
         except Exception as e:
-            logger.error(f"讀取 commands 檔案列表失敗: {e}")
+            logger.error(f"Failed to read commands file list: {e}")
             return TemplateCommandListResponse(
                 success=False,
                 data=[],
@@ -60,7 +60,7 @@ class TemplateCommandsService(TemplateBaseService):
             )
 
     def get_command_file_content(self, template_id: str, file_name: str) -> TemplateCommandResponse:
-        """取得單個 command 檔案內容"""
+        """GetSingle command FileContent"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateCommandResponse,
@@ -81,15 +81,15 @@ class TemplateCommandsService(TemplateBaseService):
                 message="Command file loaded successfully",
             )
         except Exception as e:
-            logger.error(f"讀取 command 檔案內容失敗: {e}")
+            logger.error(f"Read command FileContentFailed: {e}")
             return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to read command file: {str(e)}",
             )
 
     def create_command_file(self, template_id: str, request: TemplateCommandCreateRequest) -> TemplateCommandResponse:
-        """建立新的 command 檔案（支援子目錄結構）"""
-        # 標準化檔案名稱（自動補上 .md）
+        """Create new command file (supports subdirectory structure)"""
+        # Standardize file name (auto-append .md)
         normalized_file_name = self._normalize_file_name(request.file_name)
 
         _, error_response = self._validate_template_and_filename(
@@ -106,7 +106,7 @@ class TemplateCommandsService(TemplateBaseService):
             return TemplateCommandResponse(success=False, error="Command file already exists")
 
         try:
-            # 如果檔案名稱包含路徑，確保父目錄存在
+            # If file name contains path, ensure parent directory exists
             if "/" in normalized_file_name:
                 command_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -118,7 +118,7 @@ class TemplateCommandsService(TemplateBaseService):
             if error_message:
                 return TemplateCommandResponse(success=False, error=error_message)
 
-            # 更新 plugin.json
+            # Update plugin.json
             self._update_plugin_json(template_id)
 
             return TemplateCommandResponse(
@@ -127,14 +127,14 @@ class TemplateCommandsService(TemplateBaseService):
                 message="Command file created successfully",
             )
         except Exception as e:
-            logger.error(f"建立 command 檔案失敗: {e}")
+            logger.error(f"Create command FileFailed: {e}")
             return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to create command file: {str(e)}",
             )
 
     def update_command_file(self, template_id: str, file_name: str, request: TemplateCommandUpdateRequest) -> TemplateCommandResponse:
-        """更新現有的 command 檔案"""
+        """Update existing command file"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateCommandResponse,
@@ -162,14 +162,14 @@ class TemplateCommandsService(TemplateBaseService):
                 message="Command file updated successfully",
             )
         except Exception as e:
-            logger.error(f"更新 command 檔案失敗: {e}")
+            logger.error(f"Update command FileFailed: {e}")
             return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to update command file: {str(e)}",
             )
 
     def delete_command_file(self, template_id: str, file_name: str) -> TemplateCommandResponse:
-        """刪除 command 檔案"""
+        """Delete command File"""
         _, error_response = self._validate_template_and_filename(
             template_id,
             TemplateCommandResponse,
@@ -185,7 +185,7 @@ class TemplateCommandsService(TemplateBaseService):
         try:
             command_file.unlink()
 
-            # 更新 plugin.json
+            # Update plugin.json
             self._update_plugin_json(template_id)
 
             return TemplateCommandResponse(
@@ -193,14 +193,14 @@ class TemplateCommandsService(TemplateBaseService):
                 message="Command file deleted successfully",
             )
         except Exception as e:
-            logger.error(f"刪除 command 檔案失敗: {e}")
+            logger.error(f"Delete command FileFailed: {e}")
             return TemplateCommandResponse(
                 success=False,
                 error=f"Failed to delete command file: {str(e)}",
             )
 
     def load_commands(self, template_id: str) -> List:
-        """載入 Commands 配置（支援子目錄結構）"""
+        """Load commands configuration (supports subdirectory structure)"""
         from app.models.template import TemplateCommand
 
         commands_dir = self._get_template_dir(template_id) / "commands"
@@ -209,27 +209,27 @@ class TemplateCommandsService(TemplateBaseService):
 
         commands = []
         try:
-            # 使用 rglob 遞迴搜尋所有 .md 檔案（包含子目錄）
+            # Use rglob to recursively search all .md files (include subdirectories)
             for file_path in commands_dir.rglob("*.md"):
-                # 計算相對於 commands_dir 的路徑，保留目錄結構
+                # Calculate path relative to commands_dir, preserve directory structure
                 relative_path = file_path.relative_to(commands_dir)
-                # 保留完整路徑和附檔名（包含 namespace 和 .md）
+                # Keep full path and extension (including namespace and .md)
                 command_name = str(relative_path)
                 content = file_path.read_text(encoding="utf-8")
 
-                # 提取 description
+                # Extract description
                 description = self._extract_yaml_description(content)
 
                 commands.append(TemplateCommand(
                     id=str(file_path),
-                    fileName=command_name,  # 使用完整的相對路徑作為 fileName（如 "namespace/command" 或 "command"）
+                    fileName=command_name,  # Use full relative path as fileName (e.g. "namespace/command" or "command")
                     content=content,
                     description=description,
                 ))
 
             return commands
         except Exception as e:
-            logger.error(f"載入 Commands 配置失敗: {e}")
+            logger.error(f"Load Commands ConfigurationFailed: {e}")
             return []
 
 

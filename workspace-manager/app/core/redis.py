@@ -1,4 +1,4 @@
-"""Redis 連接管理器"""
+"""Redis connection manager"""
 
 import json
 import logging
@@ -10,14 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class RedisManager:
-    """Redis 連接和操作管理器"""
+    """Redis connection and operation manager"""
 
     def __init__(self):
         self._redis: Optional[redis.Redis] = None
         self._settings = get_settings()
 
     async def get_redis(self) -> redis.Redis:
-        """取得 Redis 連接"""
+        """Get Redis connection"""
         if self._redis is None:
             try:
                 self._redis = redis.from_url(
@@ -28,7 +28,7 @@ class RedisManager:
                     socket_timeout=5,
                     retry_on_timeout=True
                 )
-                # 測試連接
+                # Test connection
                 await self._redis.ping()
                 logger.info("Redis connection established successfully")
             except Exception as e:
@@ -37,7 +37,7 @@ class RedisManager:
         return self._redis
 
     async def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
-        """設定 key-value，支援過期時間"""
+        """Set key-value, supports expiration time"""
         try:
             redis_client = await self.get_redis()
             if isinstance(value, (dict, list)):
@@ -52,14 +52,14 @@ class RedisManager:
             return False
 
     async def get(self, key: str) -> Optional[Any]:
-        """取得 value"""
+        """Get value"""
         try:
             redis_client = await self.get_redis()
             value = await redis_client.get(key)
             if value is None:
                 return None
 
-            # 嘗試解析 JSON
+            # Try to parse JSON
             try:
                 return json.loads(value)
             except (json.JSONDecodeError, TypeError):
@@ -69,7 +69,7 @@ class RedisManager:
             return None
 
     async def delete(self, key: str) -> bool:
-        """刪除 key"""
+        """Delete key"""
         try:
             redis_client = await self.get_redis()
             result = await redis_client.delete(key)
@@ -79,7 +79,7 @@ class RedisManager:
             return False
 
     async def exists(self, key: str) -> bool:
-        """檢查 key 是否存在"""
+        """Check if key exists"""
         try:
             redis_client = await self.get_redis()
             return bool(await redis_client.exists(key))
@@ -88,7 +88,7 @@ class RedisManager:
             return False
 
     async def keys(self, pattern: str) -> list[str]:
-        """取得符合模式的所有 key"""
+        """Get all keys matching pattern"""
         try:
             redis_client = await self.get_redis()
             return await redis_client.keys(pattern)
@@ -97,7 +97,7 @@ class RedisManager:
             return []
 
     async def delete_pattern(self, pattern: str) -> int:
-        """刪除符合模式的所有 key"""
+        """Delete all keys matching pattern"""
         try:
             redis_client = await self.get_redis()
             keys = await redis_client.keys(pattern)
@@ -109,18 +109,18 @@ class RedisManager:
             return 0
 
     async def close(self):
-        """關閉 Redis 連接"""
+        """Close Redis connection"""
         if self._redis:
             await self._redis.close()
             self._redis = None
 
 
-# 全域 Redis 管理器實例
+# Global Redis manager instance
 redis_manager = RedisManager()
 
 
 async def get_redis() -> redis.Redis:
-    """取得 Redis 連接（便利函數）"""
+    """Get Redis connection (convenience function)"""
     return await redis_manager.get_redis()
 
 

@@ -1,4 +1,4 @@
-"""多語系服務，負責載入翻譯檔與提供翻譯查詢。"""
+"""Multilingual service, responsible for loading translation files and providing translation lookup."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Dict, Iterable, Optional
 
 
 class I18nService:
-    """簡易的 JSON 翻譯管理服務。"""
+    """Simple JSON translation management service."""
 
     def __init__(
         self,
@@ -23,7 +23,7 @@ class I18nService:
         self._load_translations()
 
     # ------------------------------------------------------------------
-    # 公開 API
+    # Public API
     # ------------------------------------------------------------------
     @property
     def default_language(self) -> str:
@@ -41,7 +41,7 @@ class I18nService:
         default: Optional[str] = None,
         **kwargs: object,
     ) -> str:
-        """取得指定語系的翻譯字串，若不存在則回退到預設語系。"""
+        """Get translation string for specified language, fallback to default language if not exists."""
 
         target_language = self.resolve_language(language)
         fallback_language = self.resolve_language(self._default_language)
@@ -57,18 +57,18 @@ class I18nService:
             try:
                 value = value.format(**kwargs)
             except (KeyError, IndexError):
-                # 若格式化參數缺失則保留原始字串
+                # If formatting parameters missing, preserve original string
                 pass
 
         return value
 
     def resolve_language(self, language: Optional[str]) -> str:
-        """解析語系字串並回傳系統支援的語系。"""
+        """Parse language string and return system supported language."""
 
         if not language:
             return self._canonical_map.get(self._normalize(self._default_language), self._default_language)
 
-        # 解析 Accept-Language 風格的輸入，例如 "en-US,en;q=0.9"
+        # Parse Accept-Language format input, e.g. "en-US,en;q=0.9""
         for candidate in self._iter_candidates(language):
             normalized = self._normalize(candidate)
             if normalized in self._canonical_map:
@@ -77,12 +77,12 @@ class I18nService:
         return self._canonical_map.get(self._normalize(self._default_language), self._default_language)
 
     def refresh(self) -> None:
-        """重新載入翻譯檔。"""
+        """Reload translation files."""
 
         self._load_translations()
 
     # ------------------------------------------------------------------
-    # 內部工具
+    # Internal utilities
     # ------------------------------------------------------------------
     def _get_value(self, language: str, key: str) -> Optional[str]:
         return self._translations.get(language, {}).get(key)
@@ -90,7 +90,7 @@ class I18nService:
     def _iter_candidates(self, language: str) -> Iterable[str]:
         if "," not in language and ";" not in language:
             yield language
-            # 若含有區域碼，將基底語系一併檢查
+            # If contains region code, also check base language
             if "-" in language:
                 yield language.split("-", 1)[0]
             return
@@ -126,13 +126,13 @@ class I18nService:
             self._canonical_map[normalized] = canonical
 
     # ------------------------------------------------------------------
-    # 工廠方法
+    # Factory methods
     # ------------------------------------------------------------------
 
 
 @lru_cache()
 def get_i18n_service(translations_path: Optional[Path] = None) -> I18nService:
-    """提供快取化的 I18nService 實例。"""
+    """Provide cached I18nService instance."""
 
     base_path = translations_path or Path(__file__).resolve().parent.parent / "translations"
     return I18nService(base_path)

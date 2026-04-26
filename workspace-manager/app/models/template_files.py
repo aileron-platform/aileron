@@ -1,16 +1,16 @@
-"""模板檔案管理相關資料模型"""
+"""Template file management related data models"""
 
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-# ============ 請求模型 ============
+# ============ Request models ============
 
 class CreateFileRequest(BaseModel):
-    """建立檔案或目錄請求"""
-    path: str = Field(..., description="檔案或目錄路徑")
-    type: Literal["file", "directory"] = Field(..., description="類型")
-    content: Optional[str] = Field(default="", description="檔案內容(僅檔案)")
+    """Create file or directory request"""
+    path: str = Field(..., description="File or directory path")
+    type: Literal["file", "directory"] = Field(..., description="Type")
+    content: Optional[str] = Field(default="", description="File content (files only)")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -21,9 +21,9 @@ class CreateFileRequest(BaseModel):
     }}
 
 class UpdateFileContentRequest(BaseModel):
-    """更新檔案內容請求"""
-    path: str = Field(..., description="檔案路徑")
-    content: str = Field(..., description="新內容")
+    """Update file content request"""
+    path: str = Field(..., description="File path")
+    content: str = Field(..., description="New content")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -33,9 +33,9 @@ class UpdateFileContentRequest(BaseModel):
     }}
 
 class RenameFileRequest(BaseModel):
-    """重命名請求"""
-    old_path: str = Field(..., description="原路徑")
-    new_name: str = Field(..., description="新名稱")
+    """Rename request"""
+    old_path: str = Field(..., description="Original path")
+    new_name: str = Field(..., description="New name")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -45,10 +45,10 @@ class RenameFileRequest(BaseModel):
     }}
 
 class MoveFileRequest(BaseModel):
-    """移動請求"""
-    source_path: str = Field(..., description="來源路徑")
-    target_path: str = Field(..., description="目標路徑")
-    overwrite: bool = Field(default=False, description="是否覆蓋")
+    """Move request"""
+    source_path: str = Field(..., description="Source path")
+    target_path: str = Field(..., description="Target path")
+    overwrite: bool = Field(default=False, description="Whether to overwrite")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -59,10 +59,10 @@ class MoveFileRequest(BaseModel):
     }}
 
 class CopyFileRequest(BaseModel):
-    """複製請求"""
-    source_path: str = Field(..., description="來源路徑")
-    target_path: str = Field(..., description="目標路徑")
-    overwrite: bool = Field(default=False, description="是否覆蓋")
+    """Copy request"""
+    source_path: str = Field(..., description="Source path")
+    target_path: str = Field(..., description="Target path")
+    overwrite: bool = Field(default=False, description="Whether to overwrite")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -73,9 +73,9 @@ class CopyFileRequest(BaseModel):
     }}
 
 class BatchDeleteRequest(BaseModel):
-    """批次刪除請求"""
-    paths: List[str] = Field(..., description="要刪除的路徑列表")
-    recursive: bool = Field(default=False, description="是否遞迴刪除目錄")
+    """Batch delete request"""
+    paths: List[str] = Field(..., description="List of paths to delete")
+    recursive: bool = Field(default=False, description="Whether to recursively delete directory")
     
     model_config = {"json_schema_extra": {
         "example": {
@@ -84,81 +84,81 @@ class BatchDeleteRequest(BaseModel):
         }
     }}
 
-# FileSearchRequest 已移至 app.core.file_management.models
+# FileSearchRequest moved to app.core.file_management.models
 
-# ============ 回應模型 ============
+# ============ Response models =============
 
 class FileNodeInfo(BaseModel):
-    """檔案節點資訊"""
-    id: str = Field(description="節點 ID")
-    name: str = Field(description="名稱")
-    path: str = Field(description="相對路徑")
-    type: Literal["file", "directory"] = Field(description="類型")
-    size: Optional[int] = Field(default=None, description="檔案大小(bytes)")
-    content: Optional[str] = Field(default=None, description="檔案內容")
-    extension: Optional[str] = Field(default=None, description="副檔名")
-    created_at: Optional[datetime] = Field(default=None, description="建立時間")
-    modified_at: Optional[datetime] = Field(default=None, description="修改時間")
-    children: Optional[List["FileNodeInfo"]] = Field(default=None, description="子節點")
+    """File node information"""
+    id: str = Field(description="Node ID")
+    name: str = Field(description="Name")
+    path: str = Field(description="Relative path")
+    type: Literal["file", "directory"] = Field(description="Type")
+    size: Optional[int] = Field(default=None, description="File size (bytes)")
+    content: Optional[str] = Field(default=None, description="File content")
+    extension: Optional[str] = Field(default=None, description="File extension")
+    created_at: Optional[datetime] = Field(default=None, description="Creation time")
+    modified_at: Optional[datetime] = Field(default=None, description="Modification time")
+    children: Optional[List["FileNodeInfo"]] = Field(default=None, description="Child nodes")
     
     model_config = {"from_attributes": True}
 
 class TemplateFilesResponse(BaseModel):
-    """檔案樹回應"""
-    success: bool = Field(description="是否成功")
-    data: Optional[List[FileNodeInfo]] = Field(default=None, description="檔案樹")
-    total_files: int = Field(default=0, description="總檔案數")
-    total_size: int = Field(default=0, description="總大小(bytes)")
-    message: Optional[str] = Field(default=None, description="訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    """File tree response"""
+    success: bool = Field(description="Whether successful")
+    data: Optional[List[FileNodeInfo]] = Field(default=None, description="File tree")
+    total_files: int = Field(default=0, description="Total file count")
+    total_size: int = Field(default=0, description="Total size (bytes)")
+    message: Optional[str] = Field(default=None, description="Message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 class FileContentResponse(BaseModel):
-    """檔案內容回應"""
-    success: bool = Field(description="是否成功")
-    data: Optional[FileNodeInfo] = Field(default=None, description="檔案資訊")
-    message: Optional[str] = Field(default=None, description="訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    """File content response"""
+    success: bool = Field(description="Whether successful")
+    data: Optional[FileNodeInfo] = Field(default=None, description="File information")
+    message: Optional[str] = Field(default=None, description="Message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 class FileOperationResponse(BaseModel):
-    """檔案操作回應"""
-    success: bool = Field(description="是否成功")
-    data: Optional[FileNodeInfo] = Field(default=None, description="操作後的檔案資訊")
-    message: Optional[str] = Field(default=None, description="訊息")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    """File operation response"""
+    success: bool = Field(description="Whether successful")
+    data: Optional[FileNodeInfo] = Field(default=None, description="File information after operation")
+    message: Optional[str] = Field(default=None, description="Message")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 class UploadedFileInfo(BaseModel):
-    """上傳檔案資訊"""
-    filename: str = Field(description="檔案名稱")
-    path: str = Field(description="儲存路徑")
-    size: int = Field(description="檔案大小")
-    success: bool = Field(description="是否成功")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    """Uploaded file information"""
+    filename: str = Field(description="File name")
+    path: str = Field(description="Save path")
+    size: int = Field(description="File size")
+    success: bool = Field(description="Whether successful")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 class FileUploadResponse(BaseModel):
-    """檔案上傳回應"""
-    success: bool = Field(description="整體是否成功")
-    uploaded: List[UploadedFileInfo] = Field(default_factory=list, description="上傳結果")
-    total: int = Field(description="總檔案數")
-    succeeded: int = Field(description="成功數")
-    failed: int = Field(description="失敗數")
-    message: Optional[str] = Field(default=None, description="訊息")
+    """File upload response"""
+    success: bool = Field(description="Overall success")
+    uploaded: List[UploadedFileInfo] = Field(default_factory=list, description="Upload results")
+    total: int = Field(description="Total file count")
+    succeeded: int = Field(description="Success count")
+    failed: int = Field(description="Failed count")
+    message: Optional[str] = Field(default=None, description="Message")
 
 class BatchOperationResult(BaseModel):
-    """批次操作結果"""
-    path: str = Field(description="路徑")
-    success: bool = Field(description="是否成功")
-    error: Optional[str] = Field(default=None, description="錯誤訊息")
+    """Batch operation result"""
+    path: str = Field(description="Path")
+    success: bool = Field(description="Whether successful")
+    error: Optional[str] = Field(default=None, description="Error message")
 
 class BatchOperationResponse(BaseModel):
-    """批次操作回應"""
-    success: bool = Field(description="整體是否成功")
-    results: List[BatchOperationResult] = Field(default_factory=list, description="操作結果")
-    total: int = Field(description="總數")
-    succeeded: int = Field(description="成功數")
-    failed: int = Field(description="失敗數")
-    message: Optional[str] = Field(default=None, description="訊息")
+    """Batch operation response"""
+    success: bool = Field(description="Overall success")
+    results: List[BatchOperationResult] = Field(default_factory=list, description="Operation results")
+    total: int = Field(description="Total count")
+    succeeded: int = Field(description="Success count")
+    failed: int = Field(description="Failed count")
+    message: Optional[str] = Field(default=None, description="Message")
 
-# FileSearchResult, FileSearchResponse 已移至 app.core.file_management.models
+# FileSearchResult, FileSearchResponse moved to app.core.file_management.models
 
 
 __all__ = [

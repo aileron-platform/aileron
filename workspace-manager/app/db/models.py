@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM 模型定義"""
+"""SQLAlchemy ORM model definitions"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from app.db.database import Base
 
 
 class User(Base):
-    """使用者資料表"""
+    """UserTable"""
 
     __tablename__ = "users"
 
@@ -84,7 +84,7 @@ class User(Base):
 
 
 class UserSetting(Base):
-    """使用者設定"""
+    """UserSettings"""
 
     __tablename__ = "user_settings"
 
@@ -120,7 +120,7 @@ class UserSetting(Base):
 
 
 class ModelConfig(Base):
-    """可用的 Claude 模型設定"""
+    """Available Claude model settings"""
 
     __tablename__ = "model_configs"
 
@@ -141,7 +141,7 @@ class ModelConfig(Base):
 
 
 class Workspace(Base):
-    """開發工作區"""
+    """Development workspace"""
 
     __tablename__ = "workspaces"
 
@@ -153,7 +153,7 @@ class Workspace(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     git_url: Mapped[Optional[str]] = mapped_column(Text)
     branch: Mapped[str] = mapped_column(Text, default="main")
-    runtime: Mapped[str] = mapped_column(Text, default="universal")  # 對應 container_images.yaml 中的 default_image
+    runtime: Mapped[str] = mapped_column(Text, default="universal")  # Corresponds to default_image in container_images.yaml
     provisioner: Mapped[str] = mapped_column(Text, default="docker")
     target_namespace: Mapped[Optional[str]] = mapped_column(Text)
     env_vars: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
@@ -289,7 +289,7 @@ class Workspace(Base):
 
 
 class WorkspaceShare(Base):
-    """工作區分享授權"""
+    """Workspace share authorization"""
 
     __tablename__ = "workspace_shares"
 
@@ -337,7 +337,7 @@ class WorkspaceShare(Base):
 
 
 class KnowledgeBase(Base):
-    """知識庫資料表"""
+    """Knowledge base table"""
 
     __tablename__ = "knowledge_bases"
 
@@ -382,7 +382,7 @@ class KnowledgeBase(Base):
 
 
 class KnowledgeBaseShare(Base):
-    """知識庫分享授權"""
+    """Knowledge base share authorization"""
 
     __tablename__ = "knowledge_base_shares"
 
@@ -426,7 +426,7 @@ class KnowledgeBaseShare(Base):
 
 
 class WorkspaceKnowledgeBaseAttachment(Base):
-    """工作區與知識庫的掛載關係"""
+    """Workspace and knowledge base attachment relationship"""
 
     __tablename__ = "workspace_knowledge_base_attachments"
 
@@ -482,7 +482,7 @@ class WorkspaceKnowledgeBaseAttachment(Base):
 
 
 class WorkspaceRuntimeLog(Base):
-    """工作區 Runtime 佈建日誌"""
+    """Workspace runtime provisioning log"""
 
     __tablename__ = "workspace_runtime_logs"
 
@@ -501,7 +501,7 @@ class WorkspaceRuntimeLog(Base):
 
 
 class WorkspaceRuntimeJob(Base):
-    """工作區 Runtime 背景任務排程"""
+    """Workspace runtime background task schedule"""
 
     __tablename__ = "workspace_runtime_jobs"
 
@@ -522,7 +522,7 @@ class WorkspaceRuntimeJob(Base):
 
 
 class AutomationJob(Base):
-    """自動化任務資料表"""
+    """Automation taskTable"""
 
     __tablename__ = "automation_jobs"
 
@@ -552,7 +552,7 @@ class AutomationJob(Base):
     total_duration: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_duration: Mapped[Optional[int]] = mapped_column(Integer)
 
-    # 佇列配置欄位
+    # Queue configuration columns
     max_queue_size: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     queue_timeout: Mapped[int] = mapped_column(Integer, default=3600, nullable=False)
 
@@ -585,7 +585,7 @@ class AutomationJob(Base):
 
 
 class JobExecution(Base):
-    """任務執行紀錄資料表"""
+    """Task execution record table"""
 
     __tablename__ = "job_executions"
 
@@ -603,7 +603,7 @@ class JobExecution(Base):
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     execution_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
-    # 佇列相關欄位
+    # Queue-related columns
     queue_position: Mapped[Optional[int]] = mapped_column(Integer)
     queued_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -625,7 +625,7 @@ class JobExecution(Base):
 
 
 class TemplateCategory(Base):
-    """模板分類資料表"""
+    """Template category table"""
 
     __tablename__ = "template_categories"
 
@@ -645,7 +645,7 @@ class TemplateCategory(Base):
 
 
 class Template(Base):
-    """模板中心資料表"""
+    """Template center table"""
 
     __tablename__ = "templates"
 
@@ -683,7 +683,7 @@ class Template(Base):
 
 
 class TemplateFeature(Base):
-    """模板功能資料表"""
+    """TemplateFeatureTable"""
 
     __tablename__ = "template_features"
 
@@ -701,7 +701,7 @@ class TemplateFeature(Base):
 
 
 class TemplateFeatureCliType(Base):
-    """模板功能 CLI 類型關聯表"""
+    """Template feature CLI type relationship table"""
 
     __tablename__ = "template_feature_cli_types"
 
@@ -712,7 +712,7 @@ class TemplateFeatureCliType(Base):
 
 
 class TemplateFeatureMapping(Base):
-    """模板功能映射表"""
+    """Template feature mapping table"""
 
     __tablename__ = "template_feature_mappings"
 

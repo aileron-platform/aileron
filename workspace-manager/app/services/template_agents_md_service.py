@@ -1,7 +1,7 @@
 """
 Template AGENTS.md Service
 
-處理模板的 AGENTS.md 檔案管理
+Handle template's AGENTS.md file management
 """
 
 from pathlib import Path
@@ -13,23 +13,23 @@ from app.services.template_base_service import TemplateBaseService
 
 
 class TemplateAgentsMdService(TemplateBaseService):
-    """AGENTS.md 檔案管理服務"""
+    """AGENTS.md file management service"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
 
     def get_agents_md(self, template_id: str) -> str:
         """
-        取得 AGENTS.md 檔案內容
+        Get AGENTS.md file content
 
         Args:
-            template_id: 模板 ID
+            template_id: Template ID
 
         Returns:
-            AGENTS.md 檔案內容
+            AGENTS.md file content
 
         Raises:
-            ValueError: 模板不存在
+            ValueError: Template does not exist
         """
         db_template = self._get_template(template_id)
         if not db_template:
@@ -39,21 +39,21 @@ class TemplateAgentsMdService(TemplateBaseService):
         agents_md_path = template_dir / "agents.md"
 
         if not agents_md_path.exists():
-            # 如果檔案不存在，返回空字串
+            # If file does not exist, return empty string
             return ""
 
         return agents_md_path.read_text(encoding="utf-8")
 
     def update_agents_md(self, template_id: str, content: str) -> None:
         """
-        更新 AGENTS.md 檔案內容
+        Update AGENTS.md file content
 
         Args:
-            template_id: 模板 ID
-            content: 新的檔案內容
+            template_id: Template ID
+            content: New file content
 
         Raises:
-            ValueError: 模板不存在
+            ValueError: Template does not exist
         """
         db_template = self._get_template(template_id)
         if not db_template:
@@ -63,18 +63,18 @@ class TemplateAgentsMdService(TemplateBaseService):
         template_dir.mkdir(parents=True, exist_ok=True)
         agents_md_path = template_dir / "agents.md"
 
-        # 寫入檔案（直接寫入，因為不需要返回 content model）
+        # Write file (write directly, because no need to return content model)
         agents_md_path.write_text(content, encoding="utf-8")
 
     def load_agents_md(self, template_dir: Path) -> Optional[str]:
         """
-        載入 AGENTS.md 檔案內容（用於模板轉換）
+        Load AGENTS.md file content (used for template conversion)
 
         Args:
-            template_dir: 模板目錄路徑
+            template_dir: Template directory path
 
         Returns:
-            AGENTS.md 檔案內容，如果不存在則返回 None
+            AGENTS.md file content, or None if does not exist
         """
         agents_md_path = template_dir / "agents.md"
 

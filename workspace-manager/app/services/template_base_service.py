@@ -1,4 +1,4 @@
-"""模板服務基礎類別 - 提供共用的輔助方法"""
+"""TemplateService base class - provides common helper methods"""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateBaseService:
-    """模板服務基礎類別 - 提供共用的路徑管理和驗證方法"""
+    """TemplateService base class - provides common path management and verification methods"""
 
-    MAX_FILE_SIZE_BYTES = 1024 * 1024  # Command/Agent 檔案限制 1MB
-    MAX_TEMPLATE_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 模板檔案限制 10MB
-    MAX_UPLOAD_FILES = 50  # 單次最多上傳 50 個檔案
+    MAX_FILE_SIZE_BYTES = 1024 * 1024  # Command/Agent file limit 1MB
+    MAX_TEMPLATE_FILE_SIZE_BYTES = 10 * 1024 * 1024  # Template file limit 10MB
+    MAX_UPLOAD_FILES = 50  # Maximum 50 files per upload
     ALLOWED_EXTENSIONS = {
         '.md', '.txt', '.json', '.yaml', '.yml', '.py', '.js', '.ts',
         '.jsx', '.tsx', '.css', '.scss', '.html', '.xml', '.sh',
@@ -32,46 +32,46 @@ class TemplateBaseService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
-        # 動態獲取 settings，確保在測試環境中使用正確的配置
+        # Dynamically get settings to ensure correct configuration in test environment
         settings = get_settings()
         self.storage_path = Path(settings.TEMPLATE_STORAGE_PATH)
-        # 確保儲存目錄存在
+        # Ensure save directory exists
         self.storage_path.mkdir(parents=True, exist_ok=True)
-        # 保留 plugins 目錄僅供匯入/舊測試資料使用，不作為主儲存來源
+        # Keep plugins directory only for import/legacy test data use, not as main save source
         (self.storage_path / "plugins").mkdir(parents=True, exist_ok=True)
-        # canonical registry templates 目錄
+        # canonical registry templates Directory
         (self.storage_path / "templates").mkdir(parents=True, exist_ok=True)
 
     def _get_registry_templates_dir(self) -> Path:
-        """取得 canonical registry templates 根目錄。"""
+        """Get canonical registry templates root directory."""
         return self.storage_path / "templates"
 
     def _get_legacy_templates_dir(self) -> Path:
-        """取得 legacy plugins 根目錄。"""
+        """Get legacy plugins root directory."""
         return self.storage_path / "plugins"
 
     def _get_template_dir(self, template_id: str) -> Path:
-        """取得模板目錄路徑，固定使用 canonical registry。"""
+        """Get template directory path, always use canonical registry."""
         return self._get_registry_template_dir(template_id)
 
     def _get_registry_template_dir(self, template_id: str) -> Path:
-        """取得 canonical registry 模板目錄。"""
+        """Get canonical registry TemplateDirectory。"""
         return self._get_registry_templates_dir() / template_id
 
     def _resolve_template_dir(self, template_id: str) -> Path:
-        """解析模板目錄，固定使用 canonical registry。"""
+        """Parse template directory, always use canonical registry."""
         return self._get_registry_template_dir(template_id)
 
     def _get_plugin_json_path(self, template_id: str) -> Path:
-        """取得 legacy plugin.json 路徑（僅供匯入/相容邏輯使用）"""
+        """Get legacy plugin.json path (only for import/compatibility logic)"""
         return self._get_template_dir(template_id) / ".claude-plugin" / "plugin.json"
 
     def _get_template(self, template_id: str) -> Optional[TemplateDB]:
-        """取得模板資料"""
+        """GetTemplateData"""
         return self.db.query(TemplateDB).filter(TemplateDB.id == template_id).first()
 
     def _response_template_not_found(self, response_cls, *, include_list_data: bool = False):
-        """建立模板不存在的標準回應"""
+        """Create standard response for template not found"""
         payload = {"success": False, "error": "Template not found"}
         if include_list_data:
             payload["data"] = []
@@ -85,7 +85,7 @@ class TemplateBaseService:
         file_name: Optional[str] = None,
         include_list_data: bool = False
     ):
-        """模板與檔名檢查，若失敗直接回傳對應回應"""
+        """Template and filename check, return corresponding response directly if failed"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None, self._response_template_not_found(response_cls, include_list_data=include_list_data)
@@ -96,7 +96,7 @@ class TemplateBaseService:
         return db_template, None
 
     def _ensure_directory(self, template_id: str, subdir: str) -> Tuple[Path, bool]:
-        """確保模板子目錄存在，回傳目錄路徑與是否新建"""
+        """Ensure template subdirectory exists, return directory path and whether newly created"""
         directory = self._resolve_template_dir(template_id) / subdir
         created = False
         if not directory.exists():
@@ -105,7 +105,7 @@ class TemplateBaseService:
         return directory, created
 
     def _list_markdown_files(self, directory: Path, file_model_cls):
-        """列出指定目錄下的 Markdown 檔案資訊"""
+        """List markdown file information in specified directory"""
         files = []
         for file_path in directory.glob("*.md"):
             stat = file_path.stat()
@@ -119,7 +119,7 @@ class TemplateBaseService:
         return files
 
     def _read_file_content(self, file_path: Path, content_model_cls):
-        """讀取檔案並建立內容模型"""
+        """Read file and create content model"""
         content = file_path.read_text(encoding="utf-8")
         stat = file_path.stat()
         return content_model_cls(
@@ -130,7 +130,7 @@ class TemplateBaseService:
         )
 
     def _write_file_with_stats(self, file_path: Path, content: str, content_model_cls):
-        """寫入檔案並回傳內容模型或錯誤訊息"""
+        """Write file and return content model or error message"""
         if len(content.encode("utf-8")) > self.MAX_FILE_SIZE_BYTES:
             return None, "File content too large (max 1MB)"
 
@@ -147,23 +147,23 @@ class TemplateBaseService:
         )
 
     def _normalize_file_name(self, file_name: str) -> str:
-        """標準化檔案名稱，自動補上 .md 副檔名（如果沒有）"""
+        """Standardize file name, auto-append .md extension (if not present)"""
         if file_name.endswith(".md"):
             return file_name
         return f"{file_name}.md"
 
     def _validate_filename(self, filename: str) -> bool:
-        """驗證檔案名稱是否合法"""
-        # 檢查是否為空或只有點號
+        """Verify if file name is valid"""
+        # Check if empty or only dots
         if not filename or filename == '.' or filename == '..':
             return False
 
-        # 檢查是否包含非法字符
+        # Check if contains illegal characters
         illegal_chars = r'[<>:"/\\|?*\x00-\x1f]'
         if re.search(illegal_chars, filename):
             return False
 
-        # 檢查副檔名是否在允許列表中（轉換為小寫比較）
+        # Check if extension is in allowed list (convert to lowercase for comparison)
         file_ext = Path(filename).suffix.lower()
         if file_ext and file_ext not in self.ALLOWED_EXTENSIONS:
             return False
@@ -171,11 +171,11 @@ class TemplateBaseService:
         return True
 
     def _validate_file_path(self, path: str) -> bool:
-        """驗證檔案路徑"""
+        """VerifyFilePath"""
         if not path or path.startswith('/') or path.startswith('..'):
             return False
 
-        # 檢查非法字符
+        # Check illegal characters
         illegal_chars = r'[<>:"|?*\x00-\x1f]'
         if re.search(illegal_chars, path):
             return False
@@ -183,7 +183,7 @@ class TemplateBaseService:
         return True
 
     def _is_safe_path(self, path: Path, base_path: Path) -> bool:
-        """檢查路徑是否在基礎路徑內(防止路徑遍歷攻擊)"""
+        """Check if path is within base path (prevent path traversal attack)"""
         try:
             path.resolve().relative_to(base_path.resolve())
             return True
@@ -191,75 +191,75 @@ class TemplateBaseService:
             return False
 
     def _validate_template_id(self, template_id: str) -> bool:
-        """驗證模板 ID 格式（kebab-case）"""
+        """Verify template ID format (kebab-case)"""
         pattern = r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$'
         return bool(re.match(pattern, template_id))
 
     def _update_plugin_json(self, template_id: str) -> None:
-        """更新 plugin.json 中的 commands 和 agents 路徑"""
+        """Update commands and agents paths in plugin.json"""
         template_dir = self._get_template_dir(template_id)
         plugin_file = self._get_plugin_json_path(template_id)
 
         if not plugin_file.exists():
-            logger.warning(f"plugin.json 不存在: {plugin_file}")
+            logger.warning(f"plugin.json does not exist: {plugin_file}")
             return
 
         try:
-            # 讀取現有的 plugin.json
+            # Read existing plugin.json
             plugin_data = json.loads(plugin_file.read_text(encoding="utf-8"))
 
-            # 掃描 commands 目錄
+            # Scan commands Directory
             commands_dir = template_dir / "commands"
             command_paths = []
             if commands_dir.exists():
                 for item in commands_dir.rglob("*"):
                     if item.is_file() and item.suffix == ".md":
-                        # 計算相對路徑
+                        # Calculate relative path
                         rel_path = item.relative_to(template_dir)
                         command_paths.append(f"./{rel_path.as_posix()}")
 
-            # 掃描 agents 目錄
+            # Scan agents Directory
             agents_dir = template_dir / "agents"
             agent_paths = []
             if agents_dir.exists():
                 for item in agents_dir.rglob("*"):
                     if item.is_file() and item.suffix == ".md":
-                        # 計算相對路徑
+                        # Calculate relative path
                         rel_path = item.relative_to(template_dir)
                         agent_paths.append(f"./{rel_path.as_posix()}")
 
-            # 更新 plugin.json
+            # Update plugin.json
             plugin_data["commands"] = sorted(command_paths)
             plugin_data["agents"] = sorted(agent_paths)
 
-            # 寫回檔案
+            # Write back to file
             plugin_file.write_text(
                 json.dumps(plugin_data, indent=2, ensure_ascii=False),
                 encoding="utf-8"
             )
 
-            logger.info(f"已更新 plugin.json: {len(command_paths)} commands, {len(agent_paths)} agents")
+            logger.info(f"Updated plugin.json: {len(command_paths)} commands, {len(agent_paths)} agents")
 
         except Exception as e:
-            logger.error(f"更新 plugin.json 失敗: {e}")
+            logger.error(f"Failed to update plugin.json: {e}")
 
     def _extract_yaml_description(self, content: str) -> str:
-        """從 Markdown 檔案的 YAML front matter 中提取 description"""
-        description = ""  # 預設為空
+        """Extract description from YAML front matter of markdown file"""
+        description = ""  # Default is empty
 
-        # 檢查是否有 YAML front matter
+        # Check if has YAML front matter
         if content.startswith('---\n'):
-            # 找到 YAML front matter 結束位置
+            # Find YAML front matter end position
             front_matter_end = content.find('\n---', 4)
             if front_matter_end != -1:
                 yaml_content = content[4:front_matter_end]
-                # 尋找 description 欄位
+                # Find description column
                 for line in yaml_content.split('\n'):
                     line = line.strip()
                     if line.startswith('description:'):
-                        # 提取 description 值
+                        # Extract description value
                         desc_value = line[12:].strip()
-                        # 移除引號（如果有的話）
+                        # Remove quotes (if present)
                         if (desc_value.startswith('"') and desc_value.endswith('"')) or \
                            (desc_value.startswith("'") and desc_value.endswith("'")):
                             desc_value = desc_value[1:-1].strip()

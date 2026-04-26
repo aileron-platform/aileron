@@ -1,11 +1,11 @@
-"""啟動時自動套用 scripts/migrations/*.sql 的輕量 migration runner。
+"""Lightweight migration runner that automatically applies scripts/migrations/*.sql at startup.
 
-設計原則:
-- create_tables() 負責建基礎 schema(依 SQLAlchemy model),此處只補 model
-  變動後需要的 ALTER/CREATE。
-- 用 schema_migrations 表追蹤已跑過的檔名,idempotent。
-- 檔名字典序套用(慣例:YYYYMMDD_xxx.sql)。
-- *_rollback.sql 不自動執行。
+Design principles:
+- create_tables() is responsible for building the base schema (per SQLAlchemy model),
+  this only supplements ALTER/CREATE needed after model changes.
+- Use the schema_migrations table to track which files have been run, idempotent.
+- Apply files in lexicographic order (convention: YYYYMMDD_xxx.sql).
+- *_rollback.sql files are not automatically executed.
 """
 
 from __future__ import annotations
@@ -56,10 +56,10 @@ def _discover_migrations() -> list[Path]:
 
 
 def apply_pending_migrations(engine: Engine) -> list[str]:
-    """執行尚未套用的 migrations,回傳這次新套用的檔名列表。"""
+    """Execute pending migrations, return list of newly applied file names."""
     if engine.dialect.name == "sqlite":
-        # SQL 檔是為 Postgres 寫的,SQLite(測試用 in-memory)直接跳過。
-        logger.info("SQLite 引擎偵測到,略過 scripts/migrations 套用")
+        # SQL files are written for Postgres, skip for SQLite (test in-memory)
+        logger.info("SQLite engine detected, skipping scripts/migrations application")
         return []
 
     _ensure_tracking_table(engine)
@@ -67,13 +67,13 @@ def apply_pending_migrations(engine: Engine) -> list[str]:
     pending = [p for p in _discover_migrations() if p.name not in already]
 
     if not pending:
-        logger.info("schema_migrations: 無待套用項目")
+        logger.info("schema_migrations: no pending items")
         return []
 
     applied: list[str] = []
     for path in pending:
         sql = path.read_text(encoding="utf-8")
-        logger.info("套用 migration: %s", path.name)
+        logger.info("Applying migration: %s", path.name)
         with engine.begin() as conn:
             conn.exec_driver_sql(sql)
             conn.execute(
@@ -82,5 +82,5 @@ def apply_pending_migrations(engine: Engine) -> list[str]:
             )
         applied.append(path.name)
 
-    logger.info("schema_migrations: 已套用 %d 個 migrations", len(applied))
+    logger.info("schema_migrations: applied %d migrations", len(applied))
     return applied

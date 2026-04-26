@@ -1,1 +1,1 @@
-"""配置模組"""
+"""ConfigurationModule"""

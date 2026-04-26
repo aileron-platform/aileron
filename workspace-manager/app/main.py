@@ -1,7 +1,7 @@
 """
-Aileron - Workspace Manager 主應用程式
+Aileron - Workspace Manager Main Application
 
-負責工作區管理、容器控制、團隊協作等核心功能
+Manages core functionality including workspace management, container control, and team collaboration
 """
 
 import logging
@@ -34,39 +34,36 @@ from app.routers import (
     workspace_setup_router,
 )
 
-# Keycloak OAuth2 認證模組
+# Keycloak OAuth2 authentication module
 from app.modules.auth import (
     auth_router as keycloak_auth_router,
     JWTAuthenticationMiddleware,
 )
 
-# 設定日誌
+# Setup logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# 載入設定
+# Load settings
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """應用程式生命週期管理"""
-    logger.info("🚀 Aileron - Workspace Manager 啟動中...")
+    """Application lifecycle management"""
+    logger.info("🚀 Aileron - Workspace Manager starting...")
 
     try:
-        # 初始化資料庫
         create_tables()
-        logger.info("✅ 資料庫初始化完成")
+        logger.info("✅ Database initialized")
 
-        # 套用 scripts/migrations/*.sql(補 create_all 不處理的 schema 變更)
         apply_pending_migrations(engine)
 
-        # 載入種子資料
         try:
             from app.db.seed import load_seed_data
             load_seed_data()
         except Exception as seed_error:
-            logger.warning(f"種子資料載入失敗: {seed_error}")
+            logger.warning(f"Seed data loading failed: {seed_error}")
 
         if (
             settings.RUNTIME_PROVISIONER == "kubernetes"
@@ -82,59 +79,52 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         settings.BOOTSTRAP_DEFAULT_WORKSPACE_ID
                     )
                 else:
-                    logger.warning("預設 workspace bootstrap 重試完成但仍未建立")
+                    logger.warning("Default workspace bootstrap retry completed but still not created")
             except Exception as bootstrap_error:
-                logger.warning(f"預設 workspace CR bootstrap 失敗: {bootstrap_error}")
+                logger.warning(f"Default workspace CR bootstrap failed: {bootstrap_error}")
 
-        # 可以在這裡加入其他初始化邏輯
-        # - Redis 連接檢查
-        # - Celery 檢查
-        # - Docker 連接檢查
-
-        logger.info("✅ Workspace Manager 啟動完成")
+        logger.info("✅ Workspace Manager started")
         yield
 
     except Exception as e:
-        logger.error(f"❌ 應用程式啟動失敗: {e}")
+        logger.error(f"❌ Application startup failed: {e}")
         sys.exit(1)
     finally:
-        logger.info("🛑 Workspace Manager 關閉中...")
-        # 清理資源
+        logger.info("🛑 Workspace Manager shutting down...")
         try:
             engine.dispose()
         except Exception as e:
-            logger.warning(f"清理資料庫引擎時發生錯誤: {e}")
-        logger.info("✅ 資源清理完成")
+            logger.warning(f"Error disposing database engine: {e}")
+        logger.info("✅ Resource cleanup complete")
 
 
-# 創建 FastAPI 應用程式
 app = FastAPI(
     title="Aileron - Workspace Manager",
     description="""
-    ## Aileron 工作區管理服務
+    ## Aileron Workspace Management Service
 
-    提供完整的開發工作區生命週期管理功能：
+    Provides complete development workspace lifecycle management:
 
-    ### 🏢 核心功能
-    - **工作區管理**: 創建、配置、啟動、停止開發環境
-    - **容器管理**: Docker 容器生命週期控制
-    - **團隊協作**: 多用戶工作區共享與權限管理
-    - **範本中心**: 預配置的專案範本管理
-    - **任務調度**: 自動化任務執行與管理
+    ### 🏢 Core Features
+    - **Workspace Management**: Create, configure, start, stop development environments
+    - **Container Management**: Docker container lifecycle control
+    - **Team Collaboration**: Multi-user workspace sharing and permission management
+    - **Template Hub**: Pre-configured project template management
+    - **Task Scheduling**: Automated task execution and management
 
-    ### 🔧 技術特性
-    - 基於 FastAPI 的高效能 API
-    - PostgreSQL 資料庫
-    - Redis 快取與任務佇列
-    - Docker 容器化部署
-    - Keycloak OAuth2/OIDC 認證（已移除本機認證）
+    ### 🔧 Technical Features
+    - High-performance API based on FastAPI
+    - PostgreSQL database
+    - Redis cache and task queue
+    - Docker containerized deployment
+    - Keycloak OAuth2/OIDC authentication (local auth removed)
 
-    ### 🔗 相關服務
+    ### 🔗 Related Services
     - **Workspace Runtime**: `http://localhost:3002/docs`
     - **Frontend UI**: [http://localhost:8080](http://localhost:8080)
-    - **Celery Flower**: [http://localhost:5555](http://localhost:5555) (任務監控)
+    - **Celery Flower**: [http://localhost:5555](http://localhost:5555) (Task monitoring)
 
-    ### 📚 API 文件
+    ### 📚 API Documentation
     - **Swagger UI**: `/docs`
     - **ReDoc**: `/redoc`
     """,
@@ -150,84 +140,84 @@ app = FastAPI(
     },
     openapi_tags=[
         {
-            "name": "健康檢查",
-            "description": "服務健康狀態檢查和系統狀態監控",
+            "name": "Health Check",
+            "description": "Service health check and system status monitoring",
             "externalDocs": {
-                "description": "健康檢查最佳實踐",
+                "description": "Health check best practices",
                 "url": "https://microservices.io/patterns/observability/health-check-api.html",
             },
         },
         {
             "name": "oauth",
-            "description": "OAuth Token 交換、刷新與帳號授權流程",
+            "description": "OAuth token exchange, refresh, and account authorization flow",
             "externalDocs": {
-                "description": "OAuth 文檔",
+                "description": "OAuth documentation",
                 "url": "https://docs.aileron.com/oauth",
             },
         },
         {
-            "name": "使用者",
-            "description": "用戶帳戶管理和個人資料設定",
+            "name": "Users",
+            "description": "User account management and personal settings",
             "externalDocs": {
-                "description": "用戶管理文檔",
+                "description": "User management documentation",
                 "url": "https://docs.aileron.com/users",
             },
         },
         {
-            "name": "團隊",
-            "description": "團隊管理、成員邀請和協作設定",
+            "name": "Teams",
+            "description": "Team management, member invitations, and collaboration settings",
             "externalDocs": {
-                "description": "團隊協作文檔",
+                "description": "Team collaboration documentation",
                 "url": "https://docs.aileron.com/teams",
             },
         },
         {
             "name": "workspaces",
-            "description": "工作區生命週期管理和配置",
+            "description": "Workspace lifecycle management and configuration",
             "externalDocs": {
-                "description": "工作區文檔",
+                "description": "Workspace documentation",
                 "url": "https://docs.aileron.com/workspaces",
             },
         },
         {
-            "name": "模板",
-            "description": "專案範本管理和自定義範本",
+            "name": "templates",
+            "description": "Project template management and custom templates",
             "externalDocs": {
-                "description": "範本文檔",
+                "description": "Template documentation",
                 "url": "https://docs.aileron.com/templates",
             },
         },
         {
-            "name": "自動化",
-            "description": "任務調度、自動化流程和定時作業",
+            "name": "automation",
+            "description": "Task scheduling, automation workflows, and cron jobs",
             "externalDocs": {
-                "description": "調度器文檔",
+                "description": "Scheduler documentation",
                 "url": "https://docs.aileron.com/scheduler",
             },
         },
         {
             "name": "container-images",
-            "description": "Workspace 可用的容器映像與預設映像設定",
+            "description": "Available container images and preset image settings for workspaces",
             "externalDocs": {
-                "description": "容器映像文檔",
+                "description": "Container image documentation",
                 "url": "https://docs.aileron.com/container-images",
             },
         },
         {
             "name": "Keycloak OAuth2",
-            "description": "Keycloak OAuth2/OIDC 認證整合",
+            "description": "Keycloak OAuth2/OIDC authentication integration",
             "externalDocs": {
-                "description": "Keycloak 認證文檔",
+                "description": "Keycloak authentication documentation",
                 "url": "https://www.keycloak.org/documentation",
             },
         },
         {
             "name": "settings",
-            "description": "使用者設定與 SSH Key 同步管理",
+            "description": "User settings and SSH key synchronization management",
         },
         {
             "name": "workspace-setup",
-            "description": "Workspace 初始化同步與 Git 分支檢測",
+            "description": "Workspace initialization sync and Git branch detection",
         },
     ],
     swagger_ui_parameters={
@@ -244,7 +234,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 添加中間件
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
@@ -259,14 +248,12 @@ app.add_middleware(RequestIDMiddleware)
 app.add_middleware(I18nMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 
-# Keycloak JWT 認證中間件（僅在啟用時生效）
 app.add_middleware(
     JWTAuthenticationMiddleware,
     exclude_paths=["/health", "/api/v1/health", "/docs", "/redoc", "/metrics"],
     exclude_patterns=["/oauth2/*", "/api/v1/oauth2/*"],
 )
 
-# 註冊路由
 app.include_router(health_router)
 app.include_router(oauth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
@@ -279,16 +266,15 @@ app.include_router(templates_router, prefix="/api/v1")
 app.include_router(automation_router, prefix="/api/v1")
 app.include_router(container_images_router, prefix="/api/v1")
 
-# Keycloak OAuth2 認證路由
 app.include_router(keycloak_auth_router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """全域例外處理器"""
-    logger.error(f"未處理的例外: {exc}", exc_info=True)
+    """Global exception handler"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     translate = getattr(request.state, "translate", None)
-    error_message = translate("main.internal_server_error") if translate else "伺服器內部錯誤，請稍後再試"
+    error_message = translate("main.internal_server_error") if translate else "Internal server error, please try again later"
     return JSONResponse(
         status_code=500,
         content={
@@ -301,7 +287,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.get("/", include_in_schema=False)
 async def root(request: Request):
-    """根路徑重導向到 API 文件"""
+    """Root path redirects to API documentation"""
     translate = getattr(request.state, "translate", None)
     app_title = translate("main.app_title") if translate else "Aileron - Workspace Manager"
     return {
@@ -313,7 +299,7 @@ async def root(request: Request):
 
 
 def main() -> None:
-    """主程式入口點"""
+    """Main program entry point"""
     import uvicorn
 
     uvicorn.run(

@@ -1,7 +1,7 @@
 """
-角色和權限檢查裝飾器與依賴注入
+Role and permission check decorators and dependency injection
 
-提供用於檢查用戶角色和權限的裝飾器和依賴注入函數。
+Provides decorators and dependency injection functions for checking user roles and permissions.
 """
 
 from functools import wraps
@@ -14,7 +14,7 @@ from app.modules.auth.jwt_utils import JWTValidationError, get_jwt_utils
 
 
 class PermissionDeniedError(HTTPException):
-    """權限不足異常"""
+    """Insufficient permission exception"""
     def __init__(self, detail: str = "Permission denied"):
         super().__init__(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -23,10 +23,10 @@ class PermissionDeniedError(HTTPException):
 
 
 def load_role_mapping() -> dict:
-    """載入角色映射配置
+    """Load role mapping configuration
 
     Returns:
-        角色映射配置字典
+        Role mapping configuration dictionary
     """
     import yaml
     from pathlib import Path
@@ -41,140 +41,140 @@ def load_role_mapping() -> dict:
 
 
 def get_user_permissions(roles: List[str]) -> List[str]:
-    """根據用戶角色獲取權限列表
+    """Get permission list based on user role
 
     Args:
-        roles: 用戶角色列表
+        roles: User role list
 
     Returns:
-        權限列表
+        Permission list
     """
     role_mapping = load_role_mapping()
     role_mappings = role_mapping.get("role_mappings", {})
 
-    # 收集所有角色的權限
+    # Collect permissions from all roles
     permissions = set()
     processed_roles = set()
 
     def add_role_permissions(role: str):
-        """遞歸添加角色權限（處理繼承）"""
+        """Recursively add role permissions (handle inheritance)"""
         if role in processed_roles:
             return
 
         processed_roles.add(role)
 
-        # 添加該角色的直接權限
+        # Add direct permissions of this role
         if role in role_mappings:
             role_config = role_mappings[role]
             role_permissions = role_config.get("permissions", [])
             permissions.update(role_permissions)
 
-            # 處理角色繼承
+            # Handle role inheritance
             inheritance = role_mapping.get("role_inheritance", {})
             if role in inheritance:
                 for parent_role in inheritance[role].get("inherits", []):
                     add_role_permissions(parent_role)
 
-    # 添加所有角色的權限
+    # Add permissions from all roles
     for role in roles:
         add_role_permissions(role)
 
-    # 應用自定義規則（可選）
-    # TODO: 實作 custom_rules 的邏輯
+    # Application custom rules (optional)
+    # TODO: Implement custom_rules logic
 
     return list(permissions)
 
 
 def has_permission(permission: str, user_permissions: List[str]) -> bool:
-    """檢查用戶是否具有特定權限
+    """Check if user has specific permission
 
     Args:
-        permission: 要檢查的權限
-        user_permissions: 用戶權限列表
+        permission: Permission to check
+        user_permissions: User permission list
 
     Returns:
-        True 如果用戶具有該權限
+        True if user has the permission
     """
     return permission in user_permissions
 
 
 def has_role(role: str, user_roles: List[str]) -> bool:
-    """檢查用戶是否具有特定角色
+    """Check if user has specific role
 
     Args:
-        role: 要檢查的角色
-        user_roles: 用戶角色列表
+        role: Role to check
+        user_roles: User role list
 
     Returns:
-        True 如果用戶具有該角色
+        True if user has the role
     """
     return role in user_roles
 
 
 def has_any_role(roles: List[str], user_roles: List[str]) -> bool:
-    """檢查用戶是否具有任一指定角色
+    """Check if user has any of the specified roles
 
     Args:
-        roles: 要檢查的角色列表
-        user_roles: 用戶角色列表
+        roles: Role list to check
+        user_roles: User role list
 
     Returns:
-        True 如果用戶具有任一角色
+        True if user has any of the roles
     """
     return any(role in user_roles for role in roles)
 
 
 def has_all_permissions(permissions: List[str], user_permissions: List[str]) -> bool:
-    """檢查用戶是否具有所有指定權限
+    """Check if user has all specified permissions
 
     Args:
-        permissions: 要檢查的權限列表
-        user_permissions: 用戶權限列表
+        permissions: Permission list to check
+        user_permissions: User permission list
 
     Returns:
-        True 如果用戶具有所有權限
+        True if user has all permissions
     """
     return all(perm in user_permissions for perm in permissions)
 
 
 def has_any_permission(permissions: List[str], user_permissions: List[str]) -> bool:
-    """檢查用戶是否具有任一指定權限
+    """Check if user has any of the specified permissions
 
     Args:
-        permissions: 要檢查的權限列表
-        user_permissions: 用戶權限列表
+        permissions: Permission list to check
+        user_permissions: User permission list
 
     Returns:
-        True 如果用戶具有任一權限
+        True if user has any of the permissions
     """
     return any(perm in user_permissions for perm in permissions)
 
 
 # ============================================================================
-# FastAPI 依賴注入函數
+# FastAPI dependency injection functions
 # ============================================================================
 
 async def get_current_user(
     request: Request,
     config = Depends(get_keycloak_config)
 ) -> dict:
-    """從請求中獲取當前用戶信息
+    """Get current user information from request
 
     Args:
-        request: FastAPI 請求對象
-        config: Keycloak 配置
+        request: FastAPI request object
+        config: Keycloak configuration
 
     Returns:
-        用戶信息字典（包含 sub, username, email, roles 等）
+        User information dictionary (contains sub, username, email, roles, etc.)
 
     Raises:
-        HTTPException: 當認證失敗時
+        HTTPException: When authentication fails
     """
     if not config.enabled:
-        # 認證未啟用，返回空用戶
+        # Authentication not enabled, return empty user
         return {}
 
-    # 從 Authorization header 提取 token
+    # Extract token from Authorization header
     authorization = request.headers.get("Authorization")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -186,7 +186,7 @@ async def get_current_user(
     token = authorization.split(" ")[1]
 
     try:
-        # 驗證並解碼 token
+        # Validate and decode token
         jwt_utils = get_jwt_utils()
         payload = jwt_utils.decode_token(token)
 
@@ -204,14 +204,14 @@ async def get_optional_current_user(
     request: Request,
     config = Depends(get_keycloak_config)
 ) -> Optional[dict]:
-    """可選的當前用戶信息（不強制要求認證）
+    """Optional current user information (authentication not required)
 
     Args:
-        request: FastAPI 請求對象
-        config: Keycloak 配置
+        request: FastAPI request object
+        config: Keycloak configuration
 
     Returns:
-        用戶信息字典，如果未認證則返回 None
+        User information dictionary, returns None if not authenticated
     """
     if not config.enabled:
         return None
@@ -226,17 +226,17 @@ async def require_authenticated_user(
     current_user: dict = Depends(get_current_user),
     config = Depends(get_keycloak_config)
 ) -> dict:
-    """要求用戶已認證的依賴注入
+    """Dependency injection requiring user to be authenticated
 
     Args:
-        current_user: 當前用戶信息
-        config: Keycloak 配置
+        current_user: Current user information
+        config: Keycloak configuration
 
     Returns:
-        用戶信息字典
+        User information dictionary
 
     Raises:
-        HTTPException: 當用戶未認證時
+        HTTPException: When user is not authenticated
     """
     if not config.enabled:
         raise HTTPException(
@@ -254,19 +254,19 @@ async def require_authenticated_user(
 
 
 # ============================================================================
-# 角色檢查裝飾器工廠函數
+# Role check decorator factory functions
 # ============================================================================
 
 def require_role(required_role: str):
-    """要求特定角色的裝飾器工廠
+    """Decorator factory requiring specific role
 
     Args:
-        required_role: 必需的角色名稱
+        required_role: Required role name
 
     Returns:
-        裝飾器函數
+        Decorator function
 
-    使用示例：
+    Usage example:
         @router.get("/admin")
         @require_role("admin")
         async def admin_endpoint():
@@ -275,12 +275,12 @@ def require_role(required_role: str):
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # 從 kwargs 中獲取 current_user
+            # Get current_user from kwargs
             current_user = kwargs.get("current_user")
             if not current_user:
                 raise PermissionDeniedError("Authentication required")
 
-            # 獲取用戶角色
+            # GetUserRole
             user_roles = current_user.get("roles", [])
 
             if not has_role(required_role, user_roles):
@@ -293,15 +293,15 @@ def require_role(required_role: str):
 
 
 def require_any_role(*required_roles: str):
-    """要求任一特定角色的裝飾器工廠
+    """Decorator factory requiring any of specific roles
 
     Args:
-        *required_roles: 必需的角色名稱列表
+        *required_roles: List of required role names
 
     Returns:
-        裝飾器函數
+        Decorator function
 
-    使用示例：
+    Usage example:
         @router.get("/moderator")
         @require_any_role("admin", "moderator")
         async def moderator_endpoint():
@@ -326,15 +326,15 @@ def require_any_role(*required_roles: str):
 
 
 def require_permission(required_permission: str):
-    """要求特定權限的裝飾器工廠
+    """Decorator factory requiring specific permission
 
     Args:
-        required_permission: 必需的權限名稱
+        required_permission: Required permission name
 
     Returns:
-        裝飾器函數
+        Decorator function
 
-    使用示例：
+    Usage example:
         @router.post("/workspaces")
         @require_permission("workspace:create")
         async def create_workspace():
@@ -347,7 +347,7 @@ def require_permission(required_permission: str):
             if not current_user:
                 raise PermissionDeniedError("Authentication required")
 
-            # 獲取用戶權限
+            # GetUserPermission
             user_roles = current_user.get("roles", [])
             user_permissions = get_user_permissions(user_roles)
 
@@ -361,13 +361,13 @@ def require_permission(required_permission: str):
 
 
 def require_any_permission(*required_permissions: str):
-    """要求任一特定權限的裝飾器工廠
+    """Decorator factory requiring any of specific permissions
 
     Args:
-        *required_permissions: 必需的權限名稱列表
+        *required_permissions: List of required permission names
 
     Returns:
-        裝飾器函數
+        Decorator function
     """
     def decorator(func: Callable):
         @wraps(func)
@@ -389,13 +389,13 @@ def require_any_permission(*required_permissions: str):
 
 
 def require_all_permissions(*required_permissions: str):
-    """要求所有特定權限的裝飾器工廠
+    """Decorator factory requiring all of specific permissions
 
     Args:
-        *required_permissions: 必需的權限名稱列表
+        *required_permissions: List of required permission names
 
     Returns:
-        裝飾器函數
+        Decorator function
     """
     def decorator(func: Callable):
         @wraps(func)
@@ -417,16 +417,16 @@ def require_all_permissions(*required_permissions: str):
 
 
 def get_current_user_id(request: Request) -> str:
-    """從 request.state 獲取當前用戶 ID
-    
+    """Get current user ID from request.state
+
     Args:
-        request: FastAPI Request 物件
-        
+        request: FastAPI request object
+
     Returns:
-        str: 用戶 ID
-        
+        str: User ID
+
     Raises:
-        HTTPException: 當用戶未認證時
+        HTTPException: When user is not authenticated
     """
     from fastapi import status, HTTPException
     

@@ -1,7 +1,7 @@
 """
-Keycloak 配置管理
+Keycloak configuration management
 
-從環境變數讀取 Keycloak 連接配置，提供認證相關的設定。
+Read Keycloak connection configuration from environment variables and provide authentication-related settings.
 """
 
 import os
@@ -16,10 +16,10 @@ from app.config.settings import get_settings
 
 
 class KeycloakConfig(BaseSettings):
-    """Keycloak 配置類
+    """Keycloak configuration class
 
-    從環境變數讀取 Keycloak 連接和認證配置。
-    認證為強制啟用，不支援關閉。
+    Read Keycloak connection and authentication configuration from environment variables.
+    Authentication is mandatory and does not support disabling.
     """
 
     model_config = SettingsConfigDict(
@@ -29,27 +29,27 @@ class KeycloakConfig(BaseSettings):
         extra="ignore",
     )
 
-    # === Keycloak 服務配置 ===
+    # === Keycloak Service Configuration ===
     server_url: str
     external_server_url: str
     realm: str
     client_id: str
     client_secret: Optional[str] = None
 
-    # === 認證永遠啟用 ===
+    # === Authentication always enabled ===
     enabled: bool = True
 
-    # === JWT 配置 ===
+    # === JWT Configuration ===
     jwt_algorithm: str = "RS256"
     jwt_access_token_expire_minutes: int = 30
 
-    # === JWKS 配置 ===
+    # === JWKS Configuration ===
     jwks_url: Optional[str] = None
-    jwks_cache_ttl: int = 3600  # 秒
+    jwks_cache_ttl: int = 3600  # seconds
 
     @classmethod
     def from_env(cls) -> "KeycloakConfig":
-        """從環境變數創建配置實例"""
+        """Create configuration instance from environment variables"""
         env_path = Path(__file__).parent.parent.parent.parent.parent / ".env"
 
         possible_paths = [
@@ -103,7 +103,7 @@ class KeycloakConfig(BaseSettings):
         return f"{normalized}/realms/{realm}"
 
     def get_openid_configuration(self) -> dict:
-        """獲取 OpenID Connect 配置端點 URL"""
+        """Get OpenID Connect configuration endpoint URL"""
         return {
             "issuer": f"{self.external_server_url}",
             "authorization_endpoint": f"{self.external_server_url}/protocol/openid-connect/auth",
@@ -116,11 +116,11 @@ class KeycloakConfig(BaseSettings):
 
 @lru_cache()
 def get_keycloak_config() -> KeycloakConfig:
-    """獲取 Keycloak 配置單例（緩存）"""
+    """Get Keycloak configuration singleton (cached)"""
     return KeycloakConfig.from_env()
 
 
 def reload_keycloak_config() -> KeycloakConfig:
-    """重新載入 Keycloak 配置（清除緩存）"""
+    """Reload Keycloak configuration (clear cache)"""
     get_keycloak_config.cache_clear()
     return get_keycloak_config()

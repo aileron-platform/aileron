@@ -1,13 +1,13 @@
 """
-Keycloak 認證模組
+Keycloak Authentication Module
 
-提供 OAuth2/OIDC 認證整合，包括：
-- Keycloak 配置管理
-- JWT token 驗證
-- OAuth2 流程處理
-- 用戶同步
-- 角色和權限管理
-- JWT 認證中間件
+Provides OAuth2/OIDC authentication integration, including:
+- Keycloak configuration management
+- JWT token verification
+- OAuth2 flow handling
+- User synchronization
+- Role and permission management
+- JWT authentication middleware
 """
 
 from app.modules.auth.config import KeycloakConfig, get_keycloak_config

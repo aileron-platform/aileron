@@ -1,4 +1,4 @@
-"""模板 MCP 配置服務"""
+"""Template MCP ConfigurationService"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class TemplateMcpService(TemplateBaseService):
-    """處理模板的 MCP 配置管理"""
+    """Handle template MCP configuration management"""
 
     def __init__(self, db: Session) -> None:
         super().__init__(db)
@@ -25,7 +25,7 @@ class TemplateMcpService(TemplateBaseService):
         return self._resolve_template_dir(template_id) / "mcp"
 
     def get_mcp_config(self, template_id: str) -> Optional[McpConfigResponse]:
-        """取得模板的 MCP 配置"""
+        """Get template MCP configuration"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None
@@ -50,13 +50,13 @@ class TemplateMcpService(TemplateBaseService):
                 }
             return McpConfigResponse(template_id=template_id, mcp_servers=mcp_servers)
         except Exception as e:
-            logger.error(f"讀取 MCP 配置失敗: {e}")
+            logger.error(f"Failed to read MCP configuration: {e}")
             return McpConfigResponse(template_id=template_id, mcp_servers={})
 
     def update_mcp_config(
         self, template_id: str, payload: McpConfigUpdateRequest
     ) -> Optional[McpConfigResponse]:
-        """更新模板的 MCP 配置"""
+        """Update template MCP configuration"""
         db_template = self._get_template(template_id)
         if not db_template:
             return None
@@ -89,14 +89,14 @@ class TemplateMcpService(TemplateBaseService):
                     yaml.safe_dump(mcp_data, allow_unicode=True, sort_keys=False),
                     encoding="utf-8",
                 )
-            logger.info(f"已更新模板 {template_id} 的 MCP 配置")
+            logger.info(f"Updated template {template_id} MCP configuration")
             return McpConfigResponse(template_id=template_id, mcp_servers=payload.mcp_servers)
         except Exception as e:
-            logger.error(f"更新 MCP 配置失敗: {e}")
+            logger.error(f"Failed to update MCP configuration: {e}")
             raise
 
     def load_mcp_servers(self, template_id: str) -> List:
-        """載入 MCP 伺服器配置"""
+        """Load MCP ServerConfiguration"""
         from app.models.template import TemplateMcpServer
 
         mcp_dir = self._get_mcp_dir(template_id)
@@ -122,7 +122,7 @@ class TemplateMcpService(TemplateBaseService):
 
             return mcp_servers
         except Exception as e:
-            logger.error(f"載入 MCP 伺服器配置失敗: {e}")
+            logger.error(f"Load MCP ServerConfigurationFailed: {e}")
             return []
 
 

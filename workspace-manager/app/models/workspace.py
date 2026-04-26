@@ -1,4 +1,4 @@
-"""工作區相關的 Pydantic 模型"""
+"""Workspace-related Pydantic models"""
 
 from __future__ import annotations
 
@@ -10,9 +10,7 @@ from pydantic import Field
 from app.utils.pydantic import CamelModel
 from app.models.knowledge_base import KnowledgeBaseAttachmentMode, KnowledgeBaseRole
 
-# Browser 容器狀態類型
 BrowserStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
-# Canvas 容器狀態類型
 CanvasStatusType = Literal['stopped', 'starting', 'running', 'error', 'restarting']
 CanvasType = Literal['html', 'nextjs', 'default']
 CanvasManifestStatus = Literal['missing', 'valid', 'invalid']

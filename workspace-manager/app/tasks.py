@@ -1,4 +1,4 @@
-"""Celery 任務定義：自動化任務派送與執行"""
+"""Celery task definitions: Automated task dispatch and execution"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ DEFAULT_MODEL = "claude-3-7-sonnet-20250219"
 
 @contextmanager
 def automation_service() -> Iterator[AutomationService]:
-    """建立 AutomationService 的資料庫工作階段"""
+    """Create database session for AutomationService"""
 
     db = SessionLocal()
     try:
@@ -41,7 +41,7 @@ def automation_service() -> Iterator[AutomationService]:
 
 @contextmanager
 def knowledge_base_maintenance_service() -> Iterator[KnowledgeBaseMaintenanceService]:
-    """建立 KnowledgeBaseMaintenanceService 的資料庫工作階段"""
+    """Create database session for KnowledgeBaseMaintenanceService"""
 
     db = SessionLocal()
     try:
@@ -55,7 +55,7 @@ def knowledge_base_maintenance_service() -> Iterator[KnowledgeBaseMaintenanceSer
 
 @current_app.task(name="automation.dispatch_due_jobs")
 def dispatch_due_jobs(limit: int = 50) -> dict[str, int]:
-    """查找到期的自動化任務並分派 Celery 任務執行"""
+    """Find due automation tasks and dispatch Celery tasks for execution"""
 
     dispatched = 0
     with automation_service() as service:
@@ -67,7 +67,7 @@ def dispatch_due_jobs(limit: int = 50) -> dict[str, int]:
             execution = service.enqueue_execution(
                 job.id,
                 trigger=job.trigger,
-                summary="自動化任務已加入佇列",
+                summary="Automation task added to queue",
             )
             if not execution:
                 continue
@@ -75,21 +75,21 @@ def dispatch_due_jobs(limit: int = 50) -> dict[str, int]:
             dispatched += 1
             current_app.send_task("automation.run_job", args=[job.id, execution.id])
 
-    logger.info("派送 %s 個自動化任務等待執行", dispatched)
+    logger.info("Dispatched %s automation tasks for execution", dispatched)
     return {"dispatched": dispatched}
 
 
 @current_app.task(name="automation.cleanup_stuck_executions")
 def cleanup_stuck_executions(timeout_minutes: int = 60) -> dict[str, int]:
-    """清理卡住的任務執行記錄
+    """Clean up stuck task execution records.
 
-    將超過指定時間仍在 running 狀態的任務標記為失敗。
+    Mark tasks that are still in running status beyond specified time as failed.
 
     Args:
-        timeout_minutes: 超時時間（分鐘），預設 60 分鐘
+        timeout_minutes: Timeout period in minutes, default 60 minutes
 
     Returns:
-        清理統計資訊
+        Cleanup statistics
     """
     cleaned = 0
     with automation_service() as service:
@@ -99,7 +99,7 @@ def cleanup_stuck_executions(timeout_minutes: int = 60) -> dict[str, int]:
             return {"cleaned": 0}
 
         logger.warning(
-            "發現 %d 個卡住的任務執行記錄，開始清理（超時閾值：%d 分鐘）",
+            "Found %d stuck task execution records, starting cleanup (timeout threshold: %d minutes)",
             len(stuck_executions), timeout_minutes
         )
 
@@ -110,7 +110,7 @@ def cleanup_stuck_executions(timeout_minutes: int = 60) -> dict[str, int]:
                 service.complete_execution(
                     execution.id,
                     status="failed",
-                    summary=f"任務執行超時（超過 {timeout_minutes} 分鐘），已自動清理",
+                    summary=f"Task execution timeout (exceeded {timeout_minutes} minutes), automatically cleaned up",
                     error_message="Execution timeout - cleaned up by system",
                     duration=duration,
                     metadata={
@@ -123,18 +123,18 @@ def cleanup_stuck_executions(timeout_minutes: int = 60) -> dict[str, int]:
 
             except Exception as exc:
                 logger.error(
-                    "清理卡住的任務失敗 - execution_id=%s, error=%s",
+                    "Failed to clean up stuck task - execution_id=%s, error=%s",
                     execution.id, str(exc),
                     exc_info=True
                 )
 
-        logger.info("清理完成，共清理 %d 個卡住的任務", cleaned)
+        logger.info("Cleanup completed, cleaned %d stuck tasks total", cleaned)
         return {"cleaned": cleaned, "total_stuck": len(stuck_executions)}
 
 
 @current_app.task(name="knowledge_bases.reconcile_kb_quota")
 def reconcile_kb_quota() -> dict[str, int]:
-    """每日校正 knowledge base cached size。"""
+    """Daily reconciliation of knowledge base cached size."""
 
     with knowledge_base_maintenance_service() as service:
         return service.reconcile_kb_quota()
@@ -142,7 +142,7 @@ def reconcile_kb_quota() -> dict[str, int]:
 
 @current_app.task(name="knowledge_bases.cleanup_tombstoned_kb")
 def cleanup_tombstoned_kb() -> dict[str, int]:
-    """清理超過 retention 的 tombstoned knowledge bases。"""
+    """Clean up tombstoned knowledge bases exceeding retention period."""
 
     with knowledge_base_maintenance_service() as service:
         return service.cleanup_tombstoned_knowledge_bases()
@@ -150,23 +150,22 @@ def cleanup_tombstoned_kb() -> dict[str, int]:
 
 @current_app.task(name="automation.run_job", bind=True, max_retries=0)
 def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Optional[str]]:
-    """實際執行自動化任務：呼叫 Workspace Runtime 啟動 Session
+    """Execute automation task: Call Workspace Runtime to start Session
 
     Args:
-        job_id: 自動化任務 ID
-        execution_id: 執行記錄 ID
+        job_id: Automation task ID
+        execution_id: Execution record ID
 
     Returns:
-        執行結果字典，包含 status 和 session_id
+        Execution result dictionary containing status and session_id
     """
     from app.utils.redis_lock import workspace_lock
 
     logger.debug(
-        "Celery 任務開始 - task_id=%s, job_id=%s, execution_id=%s",
+        "Celery task started - task_id=%s, job_id=%s, execution_id=%s",
         self.request.id, job_id, execution_id
     )
 
-    # 建立執行日誌記錄器
     exec_logger: Optional[AutomationExecutionLogger] = None
 
     try:
@@ -174,70 +173,64 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
             job = service.get_job_record(job_id)
             if not job:
                 logger.error(
-                    "自動化任務不存在 - job_id=%s, execution_id=%s",
+                    "Automation task not found - job_id=%s, execution_id=%s",
                     job_id, execution_id
                 )
                 service.complete_execution(
                     execution_id,
                     status="failed",
-                    summary="排程任務不存在，已取消執行",
+                    summary="Scheduled task not found, execution cancelled",
                     error_message="Scheduled task not found",
                     duration=0,
                     metadata={"error_type": "job_not_found"}
                 )
                 return {"status": "not_found", "session_id": None}
 
-            # 初始化執行日誌記錄器
             exec_logger = AutomationExecutionLogger(
                 execution_id=execution_id,
                 job_id=job_id,
                 workspace_id=job.workspace_id
             )
-            exec_logger.info("自動化任務開始執行", task_name=job.name, prompt_length=len(job.prompt))
+            exec_logger.info("Automation task started executing", task_name=job.name, prompt_length=len(job.prompt))
 
-            # 記錄執行上下文
             logger.info(
-                "開始執行自動化任務 - job_id=%s, execution_id=%s, workspace_id=%s, prompt=%s",
+                "Starting automation task execution - job_id=%s, execution_id=%s, workspace_id=%s, prompt=%s",
                 job_id, execution_id, job.workspace_id, job.prompt[:100]
             )
 
-            # 使用 Redis 分散式鎖控制並發（確保同一個工作區同時只有一個任務執行）
             with workspace_lock(job.workspace_id, timeout=3600, blocking=False) as acquired:
                 if not acquired:
-                    # 無法獲取鎖，加入佇列等待
                     from app.utils.automation_queue import get_queue_manager
 
                     queue_manager = get_queue_manager()
                     position = queue_manager.enqueue(job.workspace_id, execution_id)
 
                     exec_logger.info(
-                        "無法獲取工作區鎖，加入佇列等待",
+                        "Unable to acquire workspace lock, queuing for execution",
                         workspace_id=job.workspace_id,
                         queue_position=position
                     )
                     logger.debug(
-                        "Redis 佇列操作 - workspace_id=%s, execution_id=%s, position=%d",
+                        "Redis queue operation - workspace_id=%s, execution_id=%s, position=%d",
                         job.workspace_id, execution_id, position
                     )
 
-                    # 標記為 waiting 狀態
                     service.mark_execution_waiting(
                         execution_id,
                         position=position,
-                        summary=f"排隊中（位置：{position}）"
+                        summary=f"Queued (position: {position})"
                     )
 
                     return {"status": "queued", "session_id": None, "queue_position": position}
 
-                # 成功獲取鎖，開始執行任務
-                exec_logger.info("成功獲取工作區鎖，開始執行任務")
+                exec_logger.info("Successfully acquired workspace lock, starting task execution")
                 execution = service.mark_execution_running(
-                    execution_id, summary="排程任務執行中"
+                    execution_id, summary="Scheduled task executing"
                 )
                 if not execution:
-                    exec_logger.error("執行紀錄不存在")
+                    exec_logger.error("Execution record not found")
                     logger.error(
-                        "執行紀錄不存在 - job_id=%s, execution_id=%s",
+                        "Execution record not found - job_id=%s, execution_id=%s",
                         job_id, execution_id
                     )
                     return {"status": "missing_execution", "session_id": None}
@@ -246,14 +239,12 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                 session_id = None
 
                 try:
-                    exec_logger.info("開始執行任務")
+                    exec_logger.info("Starting task execution")
                     session_id, summary, metadata = _execute_automation_job(service, job, exec_logger, execution_id)
 
-                    # 成功執行
                     duration = calculate_duration(start_time)
-                    exec_logger.info("任務執行成功", session_id=session_id, duration=duration)
+                    exec_logger.info("Task execution successful", session_id=session_id, duration=duration)
 
-                    # 合併執行日誌到 metadata
                     final_metadata = {**metadata, **exec_logger.to_metadata()}
 
                     service.complete_execution(
@@ -266,7 +257,7 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     )
 
                     logger.info(
-                        "自動化任務執行成功 - job_id=%s, execution_id=%s, session_id=%s, duration=%ds",
+                        "Automation task execution successful - job_id=%s, execution_id=%s, session_id=%s, duration=%ds",
                         job_id, execution_id, session_id, duration
                     )
                     return {"status": "success", "session_id": session_id}
@@ -276,13 +267,13 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     error_type = type(exc).__name__
                     error_message = str(exc)
 
-                    # 檢查異常是否攜帶 session_id
+                    if hasattr(exc, 'session_id'):
                     if hasattr(exc, 'session_id'):
                         session_id = exc.session_id  # type: ignore
 
-                    exec_logger.error("任務執行失敗", error_type=error_type, error_message=error_message)
+                    exec_logger.error("TaskExecutionFailed", error_type=error_type, error_message=error_message)
                     logger.error(
-                        "自動化任務執行失敗 - job_id=%s, execution_id=%s, session_id=%s, "
+                        "Automation taskExecutionFailed - job_id=%s, execution_id=%s, session_id=%s, "
                         "error_type=%s, error=%s, duration=%ds",
                         job_id, execution_id, session_id or "N/A",
                         error_type, error_message, duration,
@@ -290,7 +281,6 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     )
 
                     try:
-                        # 合併執行日誌到 metadata
                         final_metadata = {
                             **exec_logger.to_metadata(),
                             "error_type": error_type,
@@ -303,19 +293,19 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                         service.complete_execution(
                             execution_id,
                             status="failed",
-                            summary=f"排程任務執行失敗 ({error_type}): {error_message}",
+                            summary=f"Scheduled task execution failed ({error_type}): {error_message}",
                             duration=duration,
                             session_id=session_id,
                             error_message=error_message,
                             metadata=final_metadata
                         )
                         logger.info(
-                            "執行狀態已更新為失敗 - execution_id=%s",
+                            "Execution status updated to failed - execution_id=%s",
                             execution_id
                         )
                     except Exception as update_exc:
                         logger.critical(
-                            "無法更新執行狀態！- execution_id=%s, error=%s",
+                            "Failed to update execution status! - execution_id=%s, error=%s",
                             execution_id, str(update_exc),
                             exc_info=True
                         )
@@ -328,14 +318,12 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
 
     except Exception as outer_exc:
         logger.critical(
-            "自動化任務執行發生嚴重錯誤 - job_id=%s, execution_id=%s, error=%s",
+            "Critical error in automation task execution - job_id=%s, execution_id=%s, error=%s",
             job_id, execution_id, str(outer_exc),
             exc_info=True
         )
         return {"status": "error", "session_id": None, "error": str(outer_exc)}
     finally:
-        # 無論成功或失敗，都觸發下一個排隊任務
-        # 注意：這裡需要重新獲取 job 資訊，因為可能在 except 區塊中
         try:
             with automation_service() as service:
                 job = service.get_job_record(job_id)
@@ -343,17 +331,17 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     _trigger_next_queued_task(job.workspace_id)
         except Exception as trigger_exc:
             logger.error(
-                "觸發下一個排隊任務失敗 - job_id=%s, error=%s",
+                "Failed to trigger next queued task - job_id=%s, error=%s",
                 job_id, str(trigger_exc),
                 exc_info=True
             )
 
 
 def _trigger_next_queued_task(workspace_id: str) -> None:
-    """觸發下一個排隊任務
+    """Trigger the next queued task.
 
     Args:
-        workspace_id: 工作區 ID
+        workspace_id: Workspace ID
     """
     from app.utils.automation_queue import get_queue_manager
 
@@ -363,38 +351,35 @@ def _trigger_next_queued_task(workspace_id: str) -> None:
 
         if next_execution_id:
             logger.info(
-                "觸發下一個排隊任務 - workspace_id=%s, execution_id=%s",
+                "Triggering next queued task - workspace_id=%s, execution_id=%s",
                 workspace_id, next_execution_id
             )
 
-            # 使用 Celery 異步執行下一個任務
-            # 需要先查詢 execution 的 job_id
             db = SessionLocal()
             try:
                 execution = db.get(db_models.JobExecution, next_execution_id)
                 if execution:
-                    # 直接呼叫 run_automation_job 任務
                     run_automation_job.apply_async(
                         args=[execution.job_id, next_execution_id],
-                        countdown=1  # 延遲 1 秒執行，確保鎖完全釋放
+                        countdown=1
                     )
                     logger.info(
-                        "已排程下一個任務 - job_id=%s, execution_id=%s",
+                        "Next task scheduled - job_id=%s, execution_id=%s",
                         execution.job_id, next_execution_id
                     )
                 else:
                     logger.warning(
-                        "找不到執行記錄 - execution_id=%s",
+                        "Execution record not found - execution_id=%s",
                         next_execution_id
                     )
             finally:
                 db.close()
         else:
-            logger.debug("佇列為空，無需觸發下一個任務 - workspace_id=%s", workspace_id)
+            logger.debug("Queue is empty, no need to trigger next task - workspace_id=%s", workspace_id)
 
     except Exception as exc:
         logger.error(
-            "觸發下一個排隊任務失敗 - workspace_id=%s, error=%s",
+            "Failed to trigger next queued task - workspace_id=%s, error=%s",
             workspace_id, str(exc),
             exc_info=True
         )
@@ -406,47 +391,47 @@ def _execute_automation_job(
     exec_logger: AutomationExecutionLogger,
     execution_id: str
 ) -> tuple[str, str, dict[str, Optional[str]]]:
-    """呼叫 Workspace Runtime 建立並執行會話
+    """Call workspace runtime to create and execute session
 
     Args:
-        service: AutomationService 實例
-        job: 自動化任務記錄
-        exec_logger: 執行日誌記錄器
-        execution_id: 執行記錄 ID
+        service: AutomationService instance
+        job: Automation task record
+        exec_logger: Execution logger
+        execution_id: Execution record ID
 
     Returns:
-        (session_id, summary, metadata) 元組
+        (session_id, summary, metadata) tuple
 
     Raises:
-        RuntimeError: 當執行失敗時
+        RuntimeError: When execution fails
     """
 
-    db = service.db  # 使用 AutomationService 管理的 Session
+    db = service.db  # Session managed by AutomationService
     workspace = db.get(db_models.Workspace, job.workspace_id)
     if not workspace:
-        exec_logger.error("找不到 Workspace", workspace_id=job.workspace_id)
-        logger.error("找不到 Workspace - workspace_id=%s", job.workspace_id)
-        raise RuntimeError("找不到對應的 Workspace")
+        exec_logger.error("Workspace not found", workspace_id=job.workspace_id)
+        logger.error("Workspace not found - workspace_id=%s", job.workspace_id)
+        raise RuntimeError("Corresponding workspace not found")
 
     user = db.get(db_models.User, job.creator_user_id)
     if not user:
-        exec_logger.error("找不到使用者", user_id=job.creator_user_id)
-        logger.error("找不到使用者 - user_id=%s", job.creator_user_id)
-        raise RuntimeError("找不到對應的使用者")
+        exec_logger.error("User not found", user_id=job.creator_user_id)
+        logger.error("User not found - user_id=%s", job.creator_user_id)
+        raise RuntimeError("Corresponding user not found")
 
     runtime_url = workspace.runtime_internal_url or workspace.runtime_external_url
     if not runtime_url:
-        exec_logger.error("Workspace Runtime 未啟動", workspace_name=workspace.name)
+        exec_logger.error("Workspace Runtime not started", workspace_name=workspace.name)
         logger.error(
-            "Workspace Runtime 未啟動 - workspace_id=%s, workspace_name=%s",
+            "Workspace Runtime not started - workspace_id=%s, workspace_name=%s",
             job.workspace_id, workspace.name
         )
-        raise RuntimeError("Workspace Runtime 尚未啟動")
+        raise RuntimeError("Workspace Runtime not yet started")
 
     base_url = runtime_url.rstrip("/")
     sessions_url = f"{base_url}/api/v1/agent-sessions"
 
-    # 獲取 Internal API Token 用於內部服務認證
+    # Get internal API token for internal service authentication
     settings = get_settings()
     internal_headers = {
         "X-Internal-Token": settings.INTERNAL_API_TOKEN,
@@ -456,13 +441,13 @@ def _execute_automation_job(
     # NOTE: model_key is now determined by the agentic tool on the runtime side.
     # We just select the tool here. Assuming 'claude-code' for automation jobs.
     agentic_tool = "claude-code"
-    exec_logger.info("準備建立 Session", runtime_url=base_url, agentic_tool=agentic_tool)
+    exec_logger.info("Preparing to create session", runtime_url=base_url, agentic_tool=agentic_tool)
     logger.info(
-        "準備建立 Session - workspace_id=%s, runtime_url=%s, agentic_tool=%s",
+        "Preparing to create session - workspace_id=%s, runtime_url=%s, agentic_tool=%s",
         job.workspace_id, base_url, agentic_tool
     )
 
-    # 準備執行參數
+    # Prepare execution parameters
     metadata = job.task_metadata or {}
     images = []
     if isinstance(metadata, dict):
@@ -480,116 +465,116 @@ def _execute_automation_job(
         "prompt": job.prompt,
         "images": images,
         "stream": True,  # Streaming is handled by the pub/sub wait
-        "automation_execution_id": execution_id,  # 用於完成通知
+        "automation_execution_id": execution_id,  # For completion notification
     }
 
     session_id = None
 
     try:
         with httpx.Client(timeout=60.0) as client:
-            # 步驟 1: 建立 Session
+            # Step 1: Create Session
             try:
-                exec_logger.info("發送建立 Session 請求", url=sessions_url)
+                exec_logger.info("SendCreate Session Request", url=sessions_url)
                 logger.info(
-                    "發送建立 Session 請求 - url=%s, workspace_id=%s",
+                    "SendCreate Session Request - url=%s, workspace_id=%s",
                     sessions_url, job.workspace_id
                 )
                 response = client.post(sessions_url, json=create_payload, headers=internal_headers)
                 response.raise_for_status()
                 session_data = response.json()
                 session_id = session_data["session_id"]
-                exec_logger.info("Session 建立成功", session_id=session_id)
+                exec_logger.info("Session created successfully", session_id=session_id)
                 logger.info(
-                    "Session 建立成功 - session_id=%s, workspace_id=%s",
+                    "Session created successfully - session_id=%s, workspace_id=%s",
                     session_id, job.workspace_id
                 )
             except httpx.HTTPStatusError as e:
                 error_detail = _extract_http_error_detail(e)
-                exec_logger.error("建立 Session 失敗", status_code=e.response.status_code, error=error_detail)
+                exec_logger.error("Failed to create session", status_code=e.response.status_code, error=error_detail)
                 logger.error(
-                    "建立 Session 失敗 - status_code=%s, error=%s, url=%s",
+                    "Failed to create session - status_code=%s, error=%s, url=%s",
                     e.response.status_code, error_detail, sessions_url
                 )
                 raise RuntimeError(
-                    f"建立 Session 失敗 (HTTP {e.response.status_code}): {error_detail}"
+                    f"Failed to create session (HTTP {e.response.status_code}): {error_detail}"
                 ) from e
             except httpx.RequestError as e:
-                exec_logger.error("無法連接到 Workspace Runtime", error=str(e))
+                exec_logger.error("Unable to connect to Workspace Runtime", error=str(e))
                 logger.error(
-                    "無法連接到 Workspace Runtime - error=%s, url=%s",
+                    "Unable to connect to Workspace Runtime - error=%s, url=%s",
                     str(e), sessions_url
                 )
-                raise RuntimeError(f"無法連接到 Workspace Runtime: {e}") from e
+                raise RuntimeError(f"Unable to connect to Workspace Runtime: {e}") from e
 
-            # 步驟 2: 執行指令（異步，立即返回）
+            # Step 2: Execute command (async, return immediately)
             try:
                 execute_url = f"{sessions_url}/{session_id}/prompt" # Changed from /execute to /prompt
-                exec_logger.info("發送執行 Prompt 請求", session_id=session_id, execution_id=execution_id)
+                exec_logger.info("SendExecution Prompt Request", session_id=session_id, execution_id=execution_id)
                 logger.info(
-                    "發送執行 Prompt 請求 - url=%s, session_id=%s, execution_id=%s",
+                    "SendExecution Prompt Request - url=%s, session_id=%s, execution_id=%s",
                     execute_url, session_id, execution_id
                 )
                 response = client.post(execute_url, json=prompt_payload, headers=internal_headers)
                 response.raise_for_status()
-                exec_logger.info("執行 Prompt 請求已發送（異步執行）", session_id=session_id)
+                exec_logger.info("Execution prompt request sent (async execution)", session_id=session_id)
                 logger.info(
-                    "執行 Prompt 請求已發送（異步執行） - session_id=%s",
+                    "Execution prompt request sent (async execution) - session_id=%s",
                     session_id
                 )
             except httpx.HTTPStatusError as e:
                 error_detail = _extract_http_error_detail(e)
                 logger.error(
-                    "執行 Prompt 失敗 - status_code=%s, error=%s, session_id=%s",
+                    "Execution prompt failed - status_code=%s, error=%s, session_id=%s",
                     e.response.status_code, error_detail, session_id
                 )
                 raise RuntimeError(
-                    f"執行 Prompt 失敗 (HTTP {e.response.status_code}): {error_detail}"
+                    f"Execution prompt failed (HTTP {e.response.status_code}): {error_detail}"
                 ) from e
             except httpx.RequestError as e:
                 logger.error(
-                    "執行請求失敗 - error=%s, session_id=%s",
+                    "Execution request failed - error=%s, session_id=%s",
                     str(e), session_id
                 )
-                raise RuntimeError(f"執行請求失敗: {e}") from e
+                raise RuntimeError(f"Execution request failed: {e}") from e
 
-        # 步驟 3: 等待執行完成（通過 Redis Pub/Sub）
+        # Step 3: Wait for execution completion (via Redis Pub/Sub)
         from app.utils.redis_subscriber import wait_for_execution_completed_sync
 
-        exec_logger.info("等待執行完成", execution_id=execution_id, timeout=3600)
+        exec_logger.info("Waiting for execution completion", execution_id=execution_id, timeout=3600)
         logger.info(
-            "等待執行完成 - execution_id=%s, timeout=3600s",
+            "Waiting for execution completion - execution_id=%s, timeout=3600s",
             execution_id
         )
 
         # NOTE: This relies on the new execution_service publishing a compatible message.
         execution_result = wait_for_execution_completed_sync(
             execution_id=execution_id,
-            timeout=3600  # 1 小時超時
+            timeout=3600  # 1 hour timeout
         )
 
         if not execution_result:
-            raise RuntimeError("等待執行完成超時（1小時）")
+            raise RuntimeError("Waiting for execution completion timed out (1 hour)")
 
-        exec_logger.info("收到執行完成事件", execution_id=execution_id, result=execution_result)
+        exec_logger.info("Received execution completion event", execution_id=execution_id, result=execution_result)
         logger.info(
-            "收到執行完成事件 - execution_id=%s, status=%s, total_messages=%d",
+            "Received execution completion event - execution_id=%s, status=%s, total_messages=%d",
             execution_id, execution_result.get("status"), execution_result.get("total_messages", 0)
         )
 
-        # 檢查執行狀態
+        # CheckExecutionStatus
         exec_status = execution_result.get("status")
         has_error = execution_result.get("has_error", False)
         error_message = execution_result.get("error_message")
         total_messages = execution_result.get("total_messages", 0)
 
         if exec_status == "failed" or has_error:
-            error_msg = error_message or "執行失敗"
-            raise RuntimeError(f"排程任務執行失敗: {error_msg}")
+            error_msg = error_message or "Execution failed"
+            raise RuntimeError(f"Scheduled task execution failed: {error_msg}")
 
         if exec_status == "aborted":
-            raise RuntimeError("排程任務執行被中止")
+            raise RuntimeError("Scheduled task execution was aborted")
 
-        # 步驟 4: 獲取執行結果訊息
+        # Step 4: Get execution result message
         # This part of the logic might need adjustment if the message structure from the new agent_session is different.
         # For now, we assume it's compatible enough to find a summary.
         messages_url = f"{base_url}/api/v1/sessions/{session_id}/messages"
@@ -600,18 +585,18 @@ def _execute_automation_job(
                 messages_data = response.json()
                 messages = messages_data.get("items", [])
                 logger.info(
-                    "獲取執行結果訊息 - session_id=%s, message_count=%d",
+                    "Retrieved execution result messages - session_id=%s, message_count=%d",
                     session_id, len(messages)
                 )
         except Exception as e:
-            logger.warning(f"獲取執行結果訊息失敗: {e}")
+            logger.warning(f"Failed to retrieve execution result messages: {e}")
             messages = []
 
-        # 查找結果訊息
+        # Find result message
         # This logic is highly dependent on the old message format.
         # The new format uses Content Blocks. This will likely fail or return a poor summary.
         # TODO: Re-implement summary extraction based on AgentMessage format.
-        summary = "排程任務執行完成"
+        summary = "Scheduled task execution completed"
         if messages:
             last_message = messages[-1]
             if isinstance(last_message, dict) and last_message.get("content"):
@@ -635,9 +620,9 @@ def _execute_automation_job(
         return session_id, summary, metadata_out
 
     except Exception as e:
-        # 如果已經建立了 Session，將 session_id 附加到異常中
+        # If session already created, attach session_id to exception
         if session_id:
-            # 創建新的異常並附加 session_id
+            # Create new exception and attach session_id
             error_with_session = RuntimeError(str(e))
             error_with_session.session_id = session_id  # type: ignore
             raise error_with_session from e
@@ -646,7 +631,7 @@ def _execute_automation_job(
 
 
 def _extract_http_error_detail(error: httpx.HTTPStatusError) -> str:
-    """從 HTTP 錯誤響應中提取詳細資訊"""
+    """Extract detailed information from HTTP error response"""
     try:
         error_data = error.response.json()
         if isinstance(error_data, dict):
@@ -658,14 +643,14 @@ def _extract_http_error_detail(error: httpx.HTTPStatusError) -> str:
 
 @current_app.task(name="automation.cleanup_expired_queue")
 def cleanup_expired_queue() -> dict:
-    """清理超時的排隊任務
+    """Clean up timed out queued tasks
 
-    定期執行（每 5 分鐘），清理所有工作區中超時的排隊任務。
+    Executed periodically (every 5 minutes) to clean up timed-out queued tasks across all workspaces.
 
     Returns:
-        清理結果字典
+        Cleanup result dictionary
     """
-    logger.info("開始清理超時排隊任務")
+    logger.info("Starting cleanup of timed-out queued tasks")
 
     from app.utils.automation_queue import get_queue_manager
 
@@ -674,7 +659,7 @@ def cleanup_expired_queue() -> dict:
         service = AutomationService(db)
         queue_manager = get_queue_manager()
 
-        # 查詢所有有排隊任務的工作區
+        # Query all workspaces with queued tasks
         stmt = select(db_models.AutomationJob.workspace_id).distinct().where(
             db_models.AutomationJob.status == "active"
         )
@@ -684,7 +669,7 @@ def cleanup_expired_queue() -> dict:
         total_timeout = 0
 
         for workspace_id in workspace_ids:
-            # 獲取工作區的佇列配置（使用第一個 active job 的配置）
+            # Get workspace queue configuration (use first active job's configuration)
             job = db.execute(
                 select(db_models.AutomationJob).where(
                     db_models.AutomationJob.workspace_id == workspace_id,
@@ -697,17 +682,17 @@ def cleanup_expired_queue() -> dict:
 
             timeout_seconds = job.queue_timeout
 
-            # 清理 Redis 中超時的任務
+            # Clean up timed out tasks in Redis
             cleaned = queue_manager.cleanup_expired(workspace_id, timeout_seconds)
             total_cleaned += cleaned
 
             if cleaned > 0:
                 logger.warning(
-                    "清理超時排隊任務 - workspace_id=%s, cleaned=%d, timeout=%ds",
+                    "Cleaned up timed-out queued tasks - workspace_id=%s, cleaned=%d, timeout=%ds",
                     workspace_id, cleaned, timeout_seconds
                 )
 
-            # 查詢資料庫中 waiting 狀態超時的任務
+            # Query tasks with waiting status timeout in database
             from app.utils.datetime_utils import utcnow
             cutoff_time = utcnow() - timedelta(seconds=timeout_seconds)
 
@@ -725,21 +710,21 @@ def cleanup_expired_queue() -> dict:
 
             for execution in timeout_executions:
                 execution.status = "timeout"
-                execution.summary = f"排隊超時（超過 {timeout_seconds} 秒）"
+                execution.summary = f"Queue timeout (exceeded {timeout_seconds} seconds)"
                 execution.finished_at = utcnow()
                 execution.duration = calculate_duration(execution.queued_at) if execution.queued_at else 0
                 execution.updated_at = utcnow()
                 total_timeout += 1
 
                 logger.warning(
-                    "標記排隊任務為超時 - execution_id=%s, queued_at=%s",
+                    "Marking queued task as timed out - execution_id=%s, queued_at=%s",
                     execution.id, execution.queued_at
                 )
 
             db.commit()
 
         logger.info(
-            "清理超時排隊任務完成 - total_cleaned=%d, total_timeout=%d",
+            "Cleanup of timed-out queued tasks completed - total_cleaned=%d, total_timeout=%d",
             total_cleaned, total_timeout
         )
 
@@ -752,7 +737,7 @@ def cleanup_expired_queue() -> dict:
 
     except Exception as exc:
         logger.error(
-            "清理超時排隊任務失敗 - error=%s",
+            "Failed to clean up timed-out queued tasks - error=%s",
             str(exc),
             exc_info=True
         )
