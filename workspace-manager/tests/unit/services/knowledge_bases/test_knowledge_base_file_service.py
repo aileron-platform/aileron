@@ -51,7 +51,7 @@ def file_service(mock_db_session, kb, tmp_path, monkeypatch):
 
 @pytest.mark.unit
 def test_write_file_rejects_disallowed_extension(file_service):
-    with pytest.raises(FileManagementException, match="不支援的檔案副檔名"):
+    with pytest.raises(FileManagementException, match="Unsupported file extension"):
         file_service.write_file(
             user_id="owner-1",
             kb_id="kb-1",
@@ -74,7 +74,7 @@ def test_write_file_rejects_file_too_large(file_service):
 @pytest.mark.unit
 def test_write_file_rejects_kb_quota(file_service, kb):
     kb.current_size_bytes = 18
-    with pytest.raises(FileManagementException, match="知識庫容量配額不足"):
+    with pytest.raises(FileManagementException, match="Knowledge base storage quota exceeded"):
         file_service.write_file(
             user_id="owner-1",
             kb_id="kb-1",
@@ -87,7 +87,7 @@ def test_write_file_rejects_kb_quota(file_service, kb):
 def test_write_file_rejects_user_quota(file_service, mock_db_session):
     mock_db_session.scalar.return_value = 98
 
-    with pytest.raises(FileManagementException, match="使用者知識庫總容量配額不足"):
+    with pytest.raises(FileManagementException, match="User knowledge base total storage quota exceeded"):
         file_service.write_file(
             user_id="owner-1",
             kb_id="kb-1",
@@ -102,7 +102,7 @@ def test_write_file_rejects_viewer_write_access(file_service, kb):
         return_value=(kb, type("Access", (), {"access_role": "viewer"})())
     )
 
-    with pytest.raises(KnowledgeBaseAccessDeniedError, match="知識庫無寫入權限"):
+    with pytest.raises(KnowledgeBaseAccessDeniedError, match="Knowledge base does not have write permission"):
         file_service.write_file(
             user_id="viewer-1",
             kb_id="kb-1",
@@ -252,7 +252,7 @@ def test_copy_entry_rejects_disallowed_extension(file_service, kb):
     (kb_root / "source.md").write_text("hello", encoding="utf-8")
     kb.current_size_bytes = 5
 
-    with pytest.raises(FileManagementException, match="不支援的檔案副檔名"):
+    with pytest.raises(FileManagementException, match="Unsupported file extension"):
         file_service.copy_entry(
             user_id="owner-1",
             kb_id="kb-1",
@@ -268,7 +268,7 @@ def test_copy_entry_rejects_kb_quota(file_service, kb):
     (kb_root / "source.md").write_text("abcd", encoding="utf-8")
     kb.current_size_bytes = 18
 
-    with pytest.raises(FileManagementException, match="知識庫容量配額不足"):
+    with pytest.raises(FileManagementException, match="Knowledge base storage quota exceeded"):
         file_service.copy_entry(
             user_id="owner-1",
             kb_id="kb-1",
@@ -287,7 +287,7 @@ def test_copy_entry_rejects_viewer_write_access(file_service, kb):
         return_value=(kb, type("Access", (), {"access_role": "viewer"})())
     )
 
-    with pytest.raises(KnowledgeBaseAccessDeniedError, match="知識庫無寫入權限"):
+    with pytest.raises(KnowledgeBaseAccessDeniedError, match="Knowledge base does not have write permission"):
         file_service.copy_entry(
             user_id="viewer-1",
             kb_id="kb-1",

@@ -113,7 +113,7 @@ class TestInstallation:
 
     @pytest.mark.asyncio
     async def test_install_template_workspace_not_found(self, install_service, mock_db_session):
-        """測試：Workspace 不存在時安裝失敗"""
+        """測試：Workspace does not exist時安裝失敗"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -156,7 +156,7 @@ class TestInstallation:
         mock_db_session,
         mock_workspace
     ):
-        """測試：Template 不存在時安裝失敗"""
+        """測試：Template does not exist時安裝失敗"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -371,7 +371,7 @@ class TestRuntimeAPICall:
             mock_client.return_value = mock_client_instance
 
             # Act & Assert
-            with pytest.raises(Exception, match="安裝模板失敗"):
+            with pytest.raises(Exception, match="Template installation failed"):
                 await install_service._call_runtime_install_api(
                     runtime_url,
                     workspace_id,
@@ -396,7 +396,7 @@ class TestRuntimeAPICall:
             mock_client.return_value = mock_client_instance
 
             # Act & Assert
-            with pytest.raises(Exception, match="無法連線到 Workspace Runtime"):
+            with pytest.raises(Exception, match="Cannot connect to workspace runtime"):
                 await install_service._call_runtime_install_api(
                     runtime_url,
                     workspace_id,
@@ -426,7 +426,7 @@ class TestWorkspaceRetrieval:
         assert result == mock_workspace
 
     def test_get_workspace_not_found(self, install_service, mock_db_session):
-        """測試：Workspace 不存在返回 None"""
+        """測試：Workspace does not exist返回 None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -468,7 +468,7 @@ class TestRuntimeURL:
         mock_workspace.runtime_external_url = None
 
         # Act & Assert
-        with pytest.raises(TemplateInstallError, match="沒有可用的 runtime URL") as exc_info:
+        with pytest.raises(TemplateInstallError, match="does not have an available runtime URL") as exc_info:
             install_service._get_runtime_url(mock_workspace)
         assert exc_info.value.code == "TEMPLATE_INSTALL_RUNTIME_URL_MISSING"
 

@@ -189,7 +189,7 @@ class TestTemplateCRUD:
             mock_db_session.query.assert_called_once()
 
     def test_get_template_not_found(self, template_service, mock_db_session):
-        """測試：取得不存在的模板返回 None"""
+        """測試：取得does not exist的模板返回 None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -238,7 +238,7 @@ class TestTemplateCRUD:
         mock_db_session.query.return_value = mock_query
 
         # Act & Assert
-        with pytest.raises(ValueError, match="已存在"):
+        with pytest.raises(ValueError, match="already exists"):
             template_service.create(mock_template_create)
 
     def test_create_template_invalid_id_format(self, template_service, mock_db_session):
@@ -296,7 +296,7 @@ class TestTemplateCRUD:
             assert mock_db_session.commit.call_count >= 1
 
     def test_update_template_not_found(self, template_service, mock_db_session):
-        """測試：更新不存在的模板返回 None"""
+        """測試：更新does not exist的模板返回 None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -331,7 +331,7 @@ class TestTemplateCRUD:
             mock_db_session.commit.assert_called_once()
 
     def test_delete_template_not_found(self, template_service, mock_db_session):
-        """測試：刪除不存在的模板返回 False"""
+        """測試：刪除does not exist的模板返回 False"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -376,7 +376,7 @@ class TestTemplateImportExport:
             assert result.suffix == ".zip"
 
     def test_export_template_not_found(self, template_service, mock_db_session):
-        """測試：匯出不存在的模板返回 None"""
+        """測試：匯出does not exist的模板返回 None"""
         # Arrange
         with patch.object(template_service, '_get_template') as mock_get:
             mock_get.return_value = None
@@ -446,7 +446,7 @@ class TestTemplateImportExport:
         mock_file.read = AsyncMock(return_value=zip_path.read_bytes())
 
         # Act & Assert
-        with pytest.raises(ValueError, match="缺少 .claude-plugin/manifest.json"):
+        with pytest.raises(ValueError, match="missing .claude-plugin/manifest.json"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -463,7 +463,7 @@ class TestTemplateImportExport:
 
         mock_file = upload_file_factory("legacy-marketplace-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="缺少 .claude-plugin/manifest.json"):
+        with pytest.raises(ValueError, match="missing .claude-plugin/manifest.json"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -517,7 +517,7 @@ class TestTemplateImportExport:
 
         mock_file = upload_file_factory("missing-id-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="manifest.json 缺少 id 欄位"):
+        with pytest.raises(ValueError, match="manifest.json missing id field"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -730,7 +730,7 @@ class TestTemplateImportExport:
 
         mock_file = upload_file_factory("invalid-cli-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="cli_type 不合法"):
+        with pytest.raises(ValueError, match="cli_type is invalid"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -744,7 +744,7 @@ class TestTemplateImportExport:
 
         mock_file = upload_file_factory("invalid-json-template.zip", zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="manifest.json 不是合法的 JSON"):
+        with pytest.raises(ValueError, match="manifest.json is not valid JSON"):
             await template_service.import_template(mock_file)
 
     @pytest.mark.asyncio
@@ -757,7 +757,7 @@ class TestTemplateImportExport:
 
         mock_file = upload_file_factory("broken-template.zip", bad_zip_path.read_bytes())
 
-        with pytest.raises(ValueError, match="ZIP 檔案已損壞或格式不正確"):
+        with pytest.raises(ValueError, match="ZIP file is corrupted or invalid format"):
             await template_service.import_template(mock_file)
 
 

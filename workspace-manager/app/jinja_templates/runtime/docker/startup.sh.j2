@@ -9,19 +9,19 @@ log() {
   echo "[${WORKSPACE_ID}] $1"
 }
 
-log "初始化 Workspace Runtime (${WORKSPACE_NAME})"
+log "Initializing Workspace Runtime (${WORKSPACE_NAME})"
 
-log "建立基本目錄結構"
+log "Creating base directory structure"
 mkdir -p /workspace/src /workspace/docs /workspace/tests /workspace/config
 
-log "產生環境變數設定"
+log "Generating environment variable configuration"
 cat <<'ENVVARS' > /workspace/config/.env
 {% for key, value in environment.items() %}{{ key }}="{{ value }}"
 {% endfor %}
 ENVVARS
 
 {% if git.url %}
-log "設定 Git 倉庫 {{ git.url }}"
+log "Setting up Git repository {{ git.url }}"
 if [ ! -d "/workspace/src/.git" ]; then
   git clone --branch "{{ git.branch }}" "{{ git.url }}" /workspace/src
 else
@@ -32,5 +32,5 @@ else
 fi
 {% endif %}
 
-log "完成 Workspace Runtime 初始化，準備啟動服務 (port: ${RUNTIME_PORT})"
-log "自訂設定腳本將在 start_services.sh 中執行 (/scripts/custom-setup.sh)"
+log "Workspace Runtime initialization complete, ready to start services (port: ${RUNTIME_PORT})"
+log "Custom setup script will run from start_services.sh (/scripts/custom-setup.sh)"

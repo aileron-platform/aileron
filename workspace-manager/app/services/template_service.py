@@ -196,7 +196,7 @@ class TemplateService(TemplateBaseService):
 
 # Check template ID format (kebab-case, must start with letter, English only)
         if not re.match(r'^[a-z][a-z0-9]*(-[a-z0-9]+)*$', template_id):
-            raise ValueError("Template IDmust use kebab-case format (start with lowercase letter, only contain lowercase letters, numbers and hyphens)")
+            raise ValueError("Template ID must use kebab-case format (start with lowercase letter, only contain lowercase letters, numbers and hyphens)")
 
 # AddDatabaseRecord
         db_template = TemplateDB(
@@ -766,7 +766,7 @@ class TemplateService(TemplateBaseService):
             except zipfile.BadZipFile as e:
                 raise ValueError("Invalid template file: ZIP file is corrupted or invalid format") from e
 
-            # ReadTemplate package manifest。
+            # Read template package manifest.
             package_manifest_path = self._find_import_package_manifest(extract_dir)
             if not package_manifest_path.exists():
                 raise ValueError("Invalid template file: missing .claude-plugin/manifest.json")

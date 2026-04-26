@@ -1,11 +1,11 @@
-# Keycloak 角色到本地權限映射配置
+# Keycloak role to local permission mapping configuration.
 #
-# 此配置定義了 Keycloak 中的角色如何映射到 Aileron 的本地權限
+# This configuration defines how Keycloak roles map to Aileron local permissions.
 
-# 角色映射規則
+# Role mapping rules.
 role_mappings:
-  # Keycloak realm roles -> 本地權限
-  # 管理員角色
+  # Keycloak realm roles -> local permissions.
+  # Administrator role.
   admin:
     permissions:
       - "workspace:all"
@@ -17,9 +17,9 @@ role_mappings:
       - "user:manage"
       - "settings:manage"
       - "template:manage"
-    description: "系統管理員，擁有所有權限"
+    description: "System administrator with all permissions"
 
-  # 開發者角色
+  # Developer role.
   developer:
     permissions:
       - "workspace:create"
@@ -27,47 +27,47 @@ role_mappings:
       - "workspace:update"
       - "workspace:share"
       - "template:read"
-    description: "開發者，可以管理工作區和模板"
+    description: "Developer who can manage workspaces and templates"
 
-  # 一般用戶角色
+  # General user role.
   user:
     permissions:
       - "workspace:read"
-      - "workspace:create"  # 基於用戶的個人工作區
-    description: "一般用戶，基本工作區權限"
+      - "workspace:create"  # User-owned personal workspaces.
+    description: "General user with basic workspace permissions"
 
-  # 只讀用戶
+  # Read-only user.
   viewer:
     permissions:
       - "workspace:read"
-    description: "只讀用戶，只能查看"
+    description: "Read-only user who can only view"
 
-# 默認角色（如果用戶沒有任何 Keycloak 角色）
+# Default role if the user has no Keycloak roles.
 default_role: "user"
 
-# 權限組（方便批量分配）
+# Permission groups for batch assignment.
 permission_groups:
-  # 完整管理權限組
+  # Full administrative permission group.
   full_access:
     roles: ["admin"]
-    description: "完整系統訪問權限"
+    description: "Full system access permissions"
 
-  # 工作區管理權限組
+  # Workspace management permission group.
   workspace_management:
     roles: ["admin", "developer"]
-    description: "工作區管理權限"
+    description: "Workspace management permissions"
 
-  # 基本用戶權限組
+  # Basic user permission group.
   basic_access:
     roles: ["user", "developer", "admin"]
-    description: "基本用戶訪問權限"
+    description: "Basic user access permissions"
 
-  # 只讀訪問權限組
+  # Read-only access permission group.
   read_only:
     roles: ["viewer", "user", "developer", "admin"]
-    description: "只讀訪問權限"
+    description: "Read-only access permissions"
 
-# 角色繼承（角色可以繼承其他角色的權限）
+# Role inheritance. Roles can inherit permissions from other roles.
 role_inheritance:
   admin:
     inherits: ["developer", "user", "viewer"]
@@ -76,25 +76,25 @@ role_inheritance:
   user:
     inherits: ["viewer"]
 
-# Keycloak group 到本地角色的映射
-# 可以根據 Keycloak groups 自動分配本地角色
+# Keycloak group to local role mapping.
+# Local roles can be assigned automatically from Keycloak groups.
 group_mappings:
-  # Keycloak group path -> 本地角色
+  # Keycloak group path -> local role.
   /admins:
     role: "admin"
-    description: "Keycloak admins 組成員映射為本地管理員"
+    description: "Keycloak admins group members map to local administrators"
 
   /developers:
     role: "developer"
-    description: "Keycloak developers 組成員映射為本地開發者"
+    description: "Keycloak developers group members map to local developers"
 
   /viewers:
     role: "viewer"
-    description: "Keycloak viewers 組成員映射為只讀用戶"
+    description: "Keycloak viewers group members map to read-only users"
 
-# 資源訪問控制（可選的細粒度控制）
+# Resource access control for optional fine-grained controls.
 resource_access:
-  # 工作區資源
+  # Workspace resources.
   workspaces:
     admin:
       - "create"
@@ -110,12 +110,12 @@ resource_access:
       - "update"
       - "share"
     user:
-      - "create"  # 只能創建自己的工作區
-      - "read"    # 只能讀取有權限訪問的工作區
+      - "create"  # Can only create own workspaces.
+      - "read"    # Can only read workspaces they can access.
     viewer:
-      - "read"    # 只能讀取有權限訪問的工作區
+      - "read"    # Can only read workspaces they can access.
 
-  # 模板資源
+  # Template resources.
   templates:
     admin:
       - "create"
@@ -130,7 +130,7 @@ resource_access:
     viewer:
       - "read"
 
-  # 用戶管理資源
+  # User management resources.
   users:
     admin:
       - "create"
@@ -144,9 +144,9 @@ resource_access:
     viewer:
       - "read"
 
-# 自定義權限規則（高級配置）
+# Custom permission rules for advanced configuration.
 custom_rules:
-  # 規則：允許用戶管理自己創建的工作區
+  # Rule: allow users to manage workspaces they created.
   - name: "workspace:owner"
     condition: "user.owns_resource"
     effect: "allow"
@@ -154,23 +154,23 @@ custom_rules:
       - "workspace:update"
       - "workspace:delete"
       - "workspace:share"
-    description: "用戶總是可以管理自己創建的工作區"
+    description: "Users can always manage workspaces they created"
 
-  # 規則：允許用戶讀取共享給他們的工作區
+  # Rule: allow users to read workspaces shared with them.
   - name: "workspace:shared"
     condition: "workspace.shared_with_user"
     effect: "allow"
     permissions:
       - "workspace:read"
-    description: "用戶可以讀取共享給他們的工作區"
+    description: "Users can read workspaces shared with them"
 
-# 配置說明
-# 1. Keycloak 中的角色名稱需要與此配置中的 role_mappings 鍵匹配
-# 2. 如果用戶有多個 Keycloak 角色，權限會合併
-# 3. 角色繼承會自動應用（admin 包含 developer 的權限，以此類推）
-# 4. group_mappings 允許根據 Keycloak groups 自動分配本地角色
-# 5. 資源訪問控制可以定義更細粒度的權限
+# Configuration notes:
+# 1. Keycloak role names must match the role_mappings keys in this configuration.
+# 2. Permissions are merged when a user has multiple Keycloak roles.
+# 3. Role inheritance is applied automatically. For example, admin includes developer permissions.
+# 4. group_mappings can assign local roles automatically from Keycloak groups.
+# 5. Resource access controls can define more granular permissions.
 
-# 示例：用戶同時擁有 Keycloak 的 "developer" 和 "viewer" 角色
-# 結果：用戶會獲得 developer 和 viewer 的合併權限
-# 由於 developer 繼承自 user 和 viewer，實際權限包括所有角色的權限
+# Example: a user has both the "developer" and "viewer" Keycloak roles.
+# Result: the user receives merged developer and viewer permissions.
+# Because developer inherits from user and viewer, the effective permissions include all inherited role permissions.

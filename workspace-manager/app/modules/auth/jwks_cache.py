@@ -261,7 +261,7 @@ def get_jwks_cache() -> JKWSCache:
     global _jwks_cache_instance
     if _jwks_cache_instance is None:
         _jwks_cache_instance = JKWSCache()
-    return _jw_cache_instance
+    return _jwks_cache_instance
 
 
 def clear_jwks_cache():

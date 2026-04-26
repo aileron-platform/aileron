@@ -141,7 +141,7 @@ class WorkspaceSetupService:
 
     @staticmethod
     def _is_skipped_message(message: str) -> bool:
-        lowered = message or ""
+        lowered = (message or "").lower()
         return any(keyword in lowered for keyword in ["no", "none", "not configured"])
 
 

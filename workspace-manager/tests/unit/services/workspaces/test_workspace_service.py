@@ -242,7 +242,7 @@ class TestWorkspaceGet:
         mock_db_session.get.assert_called_once()
 
     def test_get_workspace_not_found(self, workspace_service, mock_db_session):
-        """測試：工作區不存在返回 None"""
+        """測試：工作區does not exist返回 None"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -360,7 +360,7 @@ class TestWorkspaceCreate:
     def test_create_workspace_with_nonexistent_owner(
         self, workspace_service, mock_db_session
     ):
-        """測試：owner 不存在時創建失敗"""
+        """測試：owner does not exist時創建失敗"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -374,7 +374,7 @@ class TestWorkspaceCreate:
         )
 
         # Act & Assert
-        with pytest.raises(ValueError, match="工作區擁有者不存在"):
+        with pytest.raises(ValueError, match="Workspace owner does not exist"):
             workspace_service.create(create_request)
 
     def test_create_workspace_with_env_vars(
@@ -539,7 +539,7 @@ class TestWorkspaceCreate:
 
         with pytest.raises(
             ValueError,
-            match="runtimeResources 僅支援 Kubernetes 工作區",
+            match="runtimeResources only supports Kubernetes workspaces",
         ):
             workspace_service.create(create_request)
 
@@ -564,7 +564,7 @@ class TestWorkspaceCreate:
 
         with pytest.raises(
             ValueError,
-            match="portMappings 僅支援 Docker 工作區",
+            match="portMappings only supports Docker workspaces",
         ):
             workspace_service.create(create_request)
 
@@ -627,7 +627,7 @@ class TestWorkspaceCreate:
             port_mappings=[],
         )
 
-        with pytest.raises(ValueError, match="無效的 Kubernetes namespace"):
+        with pytest.raises(ValueError, match="Invalid Kubernetes namespace"):
             workspace_service.create(create_request)
 
     def test_create_workspace_ignores_payload_provisioner_and_uses_deployment_runtime(
@@ -692,7 +692,7 @@ class TestWorkspaceUpdate:
     def test_update_workspace_not_found(
         self, workspace_service, mock_db_session
     ):
-        """測試：更新不存在的工作區返回 None"""
+        """測試：更新does not exist的工作區返回 None"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -757,7 +757,7 @@ class TestWorkspaceUpdate:
 
         with pytest.raises(
             ValueError,
-            match="runtimeResources 僅支援 Kubernetes 工作區",
+            match="runtimeResources only supports Kubernetes workspaces",
         ):
             workspace_service.update("workspace-123", update_request)
 
@@ -776,7 +776,7 @@ class TestWorkspaceUpdate:
 
         with pytest.raises(
             ValueError,
-            match="portMappings 僅支援 Docker 工作區",
+            match="portMappings only supports Docker workspaces",
         ):
             workspace_service.update("workspace-123", update_request)
 
@@ -855,7 +855,7 @@ class TestWorkspaceUpdate:
             target_namespace="forbidden",
         )
 
-        with pytest.raises(ValueError, match="無效的 Kubernetes namespace"):
+        with pytest.raises(ValueError, match="Invalid Kubernetes namespace"):
             workspace_service.update("workspace-123", update_request)
 
 
@@ -1036,7 +1036,7 @@ class TestWorkspaceLifecycle:
     def test_mark_workspace_deleting_not_found(
         self, workspace_service, mock_db_session
     ):
-        """測試：工作區不存在時標記失敗"""
+        """測試：工作區does not exist時標記失敗"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -1064,7 +1064,7 @@ class TestWorkspaceLifecycle:
     def test_mark_workspace_rebuilding_not_found(
         self, workspace_service, mock_db_session
     ):
-        """測試：工作區不存在時標記失敗"""
+        """測試：工作區does not exist時標記失敗"""
         # Arrange
         mock_db_session.get.return_value = None
 

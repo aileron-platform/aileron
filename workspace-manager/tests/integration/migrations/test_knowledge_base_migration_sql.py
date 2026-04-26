@@ -10,7 +10,11 @@ POSTGRES_TEST_URL = "postgresql://test_user:test_password@postgres-test:5432/tes
 
 WORKSPACE_MANAGER_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = Path("/repo-root")
-INIT_SCHEMA_SQL = (REPO_ROOT / "init-sql" / "001_init_schema.sql").read_text(encoding="utf-8")
+INIT_SCHEMA_SQL = "\n".join(
+    line
+    for line in (REPO_ROOT / "init-sql" / "001_init_schema.sql").read_text(encoding="utf-8").splitlines()
+    if not line.startswith("CREATE EXTENSION")
+)
 UPGRADE_SQL = (
     WORKSPACE_MANAGER_ROOT / "scripts" / "migrations" / "20260421_add_knowledge_bases.sql"
 ).read_text(encoding="utf-8")

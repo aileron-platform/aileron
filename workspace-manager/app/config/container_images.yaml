@@ -1,20 +1,20 @@
-# 容器映像配置檔
-# 定義所有可用的容器映像選項，用於 Workspace 創建和容器管理
+# Container image configuration.
+# Defines all available container image options for workspace creation and container management.
 
 version: "1.0"
 
-# 預設映像（與資料庫預設值保持一致）
+# Default image. Keep this aligned with the database default value.
 default_image: "universal"
 
-# 支援容器映像（Browser、Canvas 等輔助容器）
+# Supporting container images for browser, canvas, and other auxiliary containers.
 browser_image: "ailerondocker/workspace-chrome:dev-arm64"
 canvas_image: "ailerondocker/workspace-canvas:dev-arm64"
 
-# 可用的容器映像列表
+# Available container image list.
 images:
   - id: "universal"
-    name: "標準容器映像"
-    description: "Aileron 標準執行環境，包含 Python、Node.js、Git、SSH、Claude Code 等完整工具鏈"
+    name: "Standard Container Image"
+    description: "Aileron standard runtime environment with a complete toolchain including Python, Node.js, Git, SSH, and Claude Code"
     icon: "🌐"
     image: "ailerondocker/workspace-runtime:dev-lite-arm64"
     tags:
@@ -27,19 +27,19 @@ images:
     features:
       - "Python 3.11+"
       - "Node.js 20+"
-      - "Git 版本控制"
-      - "SSH 遠端存取"
+      - "Git version control"
+      - "SSH remote access"
       - "Claude Code CLI"
       - "Docker-in-Docker"
-      - "完整開發工具鏈"
+      - "Complete development toolchain"
     recommended: true
     active: true
     sort_order: 1
 
-  # 未來可擴展的映像選項（目前註解掉）
+  # Future extensible image options, currently commented out.
   # - id: "python-data-science"
-  #   name: "Python 資料科學"
-  #   description: "專為資料科學和機器學習優化的 Python 環境"
+  #   name: "Python Data Science"
+  #   description: "Python environment optimized for data science and machine learning"
   #   icon: "🐍"
   #   image: "aileron-python-ds:latest"
   #   tags:
@@ -56,8 +56,8 @@ images:
   #   sort_order: 2
 
   # - id: "nodejs-fullstack"
-  #   name: "Node.js 全端開發"
-  #   description: "Node.js + TypeScript 全端開發環境"
+  #   name: "Node.js Full-stack Development"
+  #   description: "Node.js + TypeScript full-stack development environment"
   #   icon: "🟢"
   #   image: "aileron-nodejs:latest"
   #   tags:
@@ -74,8 +74,8 @@ images:
   #   sort_order: 3
 
   # - id: "go-microservices"
-  #   name: "Go 微服務"
-  #   description: "Go 語言微服務開發環境"
+  #   name: "Go Microservices"
+  #   description: "Go microservice development environment"
   #   icon: "🔷"
   #   image: "aileron-golang:latest"
   #   tags:
@@ -90,8 +90,8 @@ images:
   #   sort_order: 4
 
   # - id: "rust-systems"
-  #   name: "Rust 系統程式"
-  #   description: "Rust 系統程式設計環境"
+  #   name: "Rust Systems Programming"
+  #   description: "Rust systems programming environment"
   #   icon: "🦀"
   #   image: "aileron-rust:latest"
   #   tags:
@@ -100,7 +100,7 @@ images:
   #   features:
   #     - "Rust 1.75+"
   #     - "Cargo, Clippy"
-  #     - "WebAssembly 支援"
+  #     - "WebAssembly support"
   #   recommended: false
   #   active: false
   #   sort_order: 5

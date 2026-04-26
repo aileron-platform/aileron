@@ -134,7 +134,7 @@ def test_attach_rejects_duplicate_attachment(
         return_value=(kb, type("Access", (), {"access_role": "editor"})())
     )
 
-    with pytest.raises(KnowledgeBaseConflictError, match="已掛載到此工作區"):
+    with pytest.raises(KnowledgeBaseConflictError, match="already attached to this workspace"):
         attachment_service.attach(
             user_id="owner-1",
             workspace_id="ws-1",
@@ -169,7 +169,7 @@ def test_attach_rejects_explicit_alias_conflict(
         return_value=(kb, type("Access", (), {"access_role": "editor"})())
     )
 
-    with pytest.raises(KnowledgeBaseConflictError, match="掛載別名已存在"):
+    with pytest.raises(KnowledgeBaseConflictError, match="mount alias already exists"):
         attachment_service.attach(
             user_id="owner-1",
             workspace_id="ws-1",
@@ -238,10 +238,10 @@ def test_attach_propagates_tombstoned_kb_error(
     )
     mock_db_session.get.side_effect = [workspace]
     attachment_service.kb_service.get_kb = MagicMock(
-        side_effect=KnowledgeBaseNotFoundError("知識庫不存在")
+        side_effect=KnowledgeBaseNotFoundError("知識庫does not exist")
     )
 
-    with pytest.raises(KnowledgeBaseNotFoundError, match="知識庫不存在"):
+    with pytest.raises(KnowledgeBaseNotFoundError, match="知識庫does not exist"):
         attachment_service.attach(
             user_id="owner-1",
             workspace_id="ws-1",

@@ -187,7 +187,7 @@ class TestAutomationJobCRUD:
         db_session.get.assert_called_once_with(db_models.AutomationJob, "job-123")
 
     def test_get_job_not_found(self, automation_service, db_session):
-        """測試：查詢不存在的任務返回 None"""
+        """測試：查詢does not exist的任務返回 None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -240,7 +240,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_update_job_not_found(self, automation_service, db_session):
-        """測試：更新不存在的任務返回 None"""
+        """測試：更新does not exist的任務返回 None"""
         # Arrange
         db_session.get.return_value = None
         update_request = JobUpdateRequest(name="Updated Job Name")
@@ -282,7 +282,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_delete_job_not_found(self, automation_service, db_session):
-        """測試：刪除不存在的任務不報錯"""
+        """測試：刪除does not exist的任務不報錯"""
         # Arrange
         db_session.get.return_value = None
 
@@ -350,12 +350,12 @@ class TestAutomationJobExecution:
             assert result.trigger == "manual"
 
     def test_execute_task_now_not_found(self, automation_service, db_session):
-        """測試：執行不存在的任務拋出異常"""
+        """測試：執行does not exist的任務拋出異常"""
         # Arrange
         db_session.get.return_value = None
 
         # Act & Assert
-        with pytest.raises(JobNotFoundError, match="不存在"):
+        with pytest.raises(JobNotFoundError, match="does not exist"):
             automation_service.execute_task_now("nonexistent-job")
 
     def test_execute_task_now_invalid_status(self, automation_service, db_session, sample_job_record):
@@ -365,7 +365,7 @@ class TestAutomationJobExecution:
         db_session.get.return_value = sample_job_record
 
         # Act & Assert
-        with pytest.raises(JobNotRunnableError, match="不可執行"):
+        with pytest.raises(JobNotRunnableError, match="cannot execute"):
             automation_service.execute_task_now("job-123")
 
     @patch('app.tasks.run_automation_job')
@@ -377,7 +377,7 @@ class TestAutomationJobExecution:
         mock_task.apply_async.side_effect = CeleryError("Connection failed")
 
         # Act & Assert
-        with pytest.raises(JobDispatchError, match="無法派送"):
+        with pytest.raises(JobDispatchError, match="Cannot dispatch"):
             automation_service.execute_task_now("job-123")
 
 
@@ -444,7 +444,7 @@ class TestJobExecutionManagement:
         assert result.id == "exec-123"
 
     def test_get_execution_record_not_found(self, automation_service, db_session):
-        """測試：獲取不存在的執行記錄返回 None"""
+        """測試：獲取does not exist的執行記錄返回 None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -505,7 +505,7 @@ class TestJobExecutionManagement:
         db_session.commit.assert_called_once()
 
     def test_enqueue_execution_job_not_found(self, automation_service, db_session):
-        """測試：為不存在的任務創建執行記錄返回 None"""
+        """測試：為does not exist的任務創建執行記錄返回 None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -536,7 +536,7 @@ class TestJobExecutionManagement:
         assert result.summary == "Running now"
 
     def test_mark_execution_running_not_found(self, automation_service, db_session):
-        """測試：標記不存在的執行記錄為運行中返回 None"""
+        """測試：標記does not exist的執行記錄為運行中返回 None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -655,7 +655,7 @@ class TestJobExecutionManagement:
 
         # Assert
         assert result["cancelled"] is False
-        assert "只能取消 waiting 狀態" in result["message"]
+        assert "can only cancel waiting status" in result["message"]
 
 
 # ============================================================================
@@ -910,7 +910,7 @@ class TestErrorHandling:
         db_session.get.assert_called_once_with(db_models.AutomationJob, "job-123")
 
     def test_get_job_record_not_found(self, automation_service, db_session):
-        """測試：get_job_record 任務不存在"""
+        """測試：get_job_record 任務does not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -945,7 +945,7 @@ class TestErrorHandling:
         assert sample_job_record.webhook_api_key == "new-api-key"
 
     def test_update_task_status_not_found(self, automation_service, db_session):
-        """測試：update_task_status 任務不存在"""
+        """測試：update_task_status 任務does not exist"""
         # Arrange
         db_session.get.return_value = None
         payload = JobStatusUpdate(status="paused")
@@ -964,7 +964,7 @@ class TestErrorHandling:
         # Mock enqueue_execution to return None
         with patch.object(automation_service, 'enqueue_execution', return_value=None):
             # Act & Assert
-            with pytest.raises(JobDispatchError, match="無法建立任務執行紀錄"):
+            with pytest.raises(JobDispatchError, match="Cannot create task execution record"):
                 automation_service.execute_task_now("job-123")
 
     def test_create_execution_running_status(self, automation_service, db_session, sample_job_record):
@@ -1081,7 +1081,7 @@ class TestErrorHandling:
             # next_run_at should remain unchanged
 
     def test_complete_execution_not_found(self, automation_service, db_session):
-        """測試：complete_execution 執行記錄不存在"""
+        """測試：complete_execution 執行記錄does not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -1237,7 +1237,7 @@ class TestErrorHandling:
         assert sample_job_record.next_run_at is None
 
     def test_mark_execution_waiting_not_found(self, automation_service, db_session):
-        """測試：mark_execution_waiting 執行記錄不存在"""
+        """測試：mark_execution_waiting 執行記錄does not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -1252,7 +1252,7 @@ class TestErrorHandling:
         assert result is None
 
     def test_cancel_execution_not_found(self, automation_service, db_session):
-        """測試：cancel_execution 執行記錄不存在"""
+        """測試：cancel_execution 執行記錄does not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -1262,4 +1262,4 @@ class TestErrorHandling:
         # Assert
         assert result["status"] == "not_found"
         assert result["cancelled"] is False
-        assert "不存在" in result["message"]
+        assert "does not exist" in result["message"]

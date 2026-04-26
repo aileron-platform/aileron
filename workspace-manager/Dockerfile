@@ -23,7 +23,7 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Install uv
 RUN pip install uv
 
-# Development stage (Mount 方式 - 不複製程式碼)
+# Development stage: mount code instead of copying it.
 FROM base AS development
 
 # Copy project files for dependency installation
@@ -32,7 +32,7 @@ COPY pyproject.toml uv.lock* README.md ./
 # Install dependencies with uv (including dev dependencies)
 RUN uv sync --dev
 
-# Create app directory structure (程式碼會透過 mount 掛載)
+# Create the app directory structure. Code is mounted at runtime.
 RUN mkdir -p /workspace-manager/app
 
 # Create data directories with proper permissions
@@ -64,7 +64,7 @@ RUN apt-get update && apt-get install -y \
 
 CMD ["sh", "-lc", "uv sync --dev && uv run pytest tests/ -v"]
 
-# Production stage (程式打包到容器內)
+# Production stage: package the application into the container.
 FROM base AS production
 
 # Copy project files
@@ -73,7 +73,7 @@ COPY pyproject.toml uv.lock* README.md ./
 # Install dependencies with uv (production only, no dev dependencies)
 RUN uv sync --no-dev
 
-# Copy application code (完整複製到容器內)
+# Copy the full application code into the container.
 COPY app/ ./app/
 COPY scripts/ ./scripts/
 COPY supervisord.conf supervisord.dev.conf ./

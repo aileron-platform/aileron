@@ -361,7 +361,7 @@ class TestLogSummary:
         summary = execution_logger.get_summary()
 
         # Assert
-        assert summary == "共 0 條日誌"
+        assert summary == "Total 0 logs"
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_info_only(self, mock_logger, execution_logger):
@@ -375,7 +375,7 @@ class TestLogSummary:
         summary = execution_logger.get_summary()
 
         # Assert
-        assert summary == "共 3 條日誌"
+        assert summary == "Total 3 logs"
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_errors(self, mock_logger, execution_logger):
@@ -389,8 +389,8 @@ class TestLogSummary:
         summary = execution_logger.get_summary()
 
         # Assert
-        assert "共 3 條日誌" in summary
-        assert "2 個錯誤" in summary
+        assert "Total 3 logs" in summary
+        assert "2 errors" in summary
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_warnings(self, mock_logger, execution_logger):
@@ -403,8 +403,8 @@ class TestLogSummary:
         summary = execution_logger.get_summary()
 
         # Assert
-        assert "共 2 條日誌" in summary
-        assert "1 個警告" in summary
+        assert "Total 2 logs" in summary
+        assert "1 warning" in summary
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_errors_and_warnings(self, mock_logger, execution_logger):
@@ -419,9 +419,9 @@ class TestLogSummary:
         summary = execution_logger.get_summary()
 
         # Assert
-        assert "共 4 條日誌" in summary
-        assert "1 個錯誤" in summary
-        assert "2 個警告" in summary
+        assert "Total 4 logs" in summary
+        assert "1 error" in summary
+        assert "2 warnings" in summary
 
 
 # ============================================================================

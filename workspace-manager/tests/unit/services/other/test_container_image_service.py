@@ -130,13 +130,13 @@ class TestConfigLoading:
         assert len(config.images) == 3
 
     def test_load_config_file_not_found(self, tmp_path):
-        """測試：配置檔不存在時拋出錯誤"""
+        """測試：配置檔does not exist時拋出錯誤"""
         # Arrange
         non_existent_path = tmp_path / "non_existent.yaml"
         service = ContainerImageService(config_path=str(non_existent_path))
 
         # Act & Assert
-        with pytest.raises(FileNotFoundError, match="容器映像配置檔不存在"):
+        with pytest.raises(FileNotFoundError, match="Container image configuration file does not exist"):
             service._load_config()
 
     def test_config_property_caching(self, container_image_service):
@@ -215,7 +215,7 @@ class TestImageRetrieval:
         assert image.name == "Python"
 
     def test_get_image_by_id_not_exists(self, container_image_service):
-        """測試：根據 ID 取得不存在的映像"""
+        """測試：根據 ID 取得does not exist的映像"""
         # Act
         image = container_image_service.get_image_by_id("nonexistent")
 
@@ -233,8 +233,8 @@ class TestImageRetrieval:
         assert image.recommended is True
 
     def test_get_default_image_not_found(self, tmp_path):
-        """測試：預設映像不存在時拋出錯誤"""
-        # Arrange - 建立一個預設映像不存在的配置
+        """測試：Default image does not exist時拋出錯誤"""
+        # Arrange - 建立一個Default image does not exist的配置
         bad_config = {
             "version": "1.0",
             "default_image": "nonexistent",
@@ -255,7 +255,7 @@ class TestImageRetrieval:
         service = ContainerImageService(config_path=str(config_file))
 
         # Act & Assert
-        with pytest.raises(ValueError, match="預設映像不存在"):
+        with pytest.raises(ValueError, match="Default image does not exist"):
             service.get_default_image()
 
     def test_get_docker_image_name_exists(self, container_image_service):
@@ -267,7 +267,7 @@ class TestImageRetrieval:
         assert docker_name == "python:3.11"
 
     def test_get_docker_image_name_not_exists_fallback(self, container_image_service):
-        """測試：映像不存在時回退到預設映像"""
+        """測試：映像does not exist時回退到預設映像"""
         # Act
         docker_name = container_image_service.get_docker_image_name("nonexistent")
 

@@ -268,7 +268,6 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     error_message = str(exc)
 
                     if hasattr(exc, 'session_id'):
-                    if hasattr(exc, 'session_id'):
                         session_id = exc.session_id  # type: ignore
 
                     exec_logger.error("TaskExecutionFailed", error_type=error_type, error_message=error_message)

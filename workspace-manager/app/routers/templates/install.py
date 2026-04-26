@@ -48,15 +48,16 @@ def _translate_template_install_error(translate, code: str, params: dict | None 
 
 
 def _translate_template_import_value_error(translate, error: str) -> str:
-    if "ZIP file is corrupted or invalid format" in error:
+    normalized_error = error.lower()
+    if "zip file is corrupted or invalid format" in normalized_error:
         return translate("templates.import.invalid_archive")
-    if "Missing .claude-plugin/manifest.json" in error:
+    if "missing .claude-plugin/manifest.json" in normalized_error:
         return translate("templates.import.missing_package_manifest")
-    if "manifest.json is not valid JSON" in error:
+    if "manifest.json is not valid json" in normalized_error:
         return translate("templates.import.invalid_package_manifest")
-    if "manifest.json missing id field" in error:
+    if "manifest.json missing id field" in normalized_error:
         return translate("templates.import.missing_package_manifest_id")
-    if "manifest.json id format is invalid" in error:
+    if "manifest.json id format is invalid" in normalized_error:
         return translate("templates.import.invalid_package_manifest_id_format")
     if error.startswith("Template '") and error.endswith("' already exists, use overwrite mode"):
         template_id = error[len("Template '"):].split("' already exists, use overwrite mode", 1)[0]

@@ -28,7 +28,7 @@ class WorkspaceLifecycleService:
     def delete_workspace_task(self, workspace_id: str) -> None:
         """Background task: Delete workspace
         
-        Step：
+        Steps:
         1. Read workspace Data
         2. Stop and delete container
         3. Delete mounted data directory
@@ -90,7 +90,7 @@ class WorkspaceLifecycleService:
     def restart_workspace_task(self, workspace_id: str) -> None:
         """Background task: Rebuild workspace container (using latest image)
 
-        Step：
+        Steps:
         1. Read workspace Data
         2. rebuild container (stop old container → create new container with same configuration)
         3. update status and container ID
@@ -139,7 +139,7 @@ class WorkspaceLifecycleService:
     def restart_browser_task(self, workspace_id: str) -> None:
         """Background task: Rebuild browser container (using latest image)
 
-        Step：
+        Steps:
         1. Read workspace Data
         2. Get browser_container_id
         3. Rebuild container
@@ -246,10 +246,10 @@ class WorkspaceLifecycleService:
                 logger.error(f"Update Canvas ErrorStatusFailed: {update_error}")
 
     def _build_fresh_environment(self, workspace: db_models.Workspace) -> list[str]:
-        """Build latest environment variables from database (for container rebuild)"""
+        """Build latest environment variables from database for container rebuild.
 
-        Use RuntimeProvisionService logic to build complete environment variables，
-        ensure using latest settings from database during rebuild。
+        Use RuntimeProvisionService logic to build complete environment variables,
+        ensuring the rebuild uses the latest settings from the database.
 
         Returns:
             Docker format environment variable list ["KEY=VALUE", ...]
@@ -260,9 +260,10 @@ class WorkspaceLifecycleService:
         return [f"{k}={v}" for k, v in env_dict.items()]
 
     def _delete_kubernetes_workspace(self, workspace: db_models.Workspace) -> None:
-        """Delete Kubernetes workspace。
+        """Delete Kubernetes workspace.
 
-        Through workspace custom resource service delete manifest and corresponding data。
+        Delete the manifest and corresponding data through the workspace custom
+        resource service.
         """
         from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 
@@ -295,7 +296,8 @@ class WorkspaceLifecycleService:
     def _recreate_container(self, container_id: str, workspace_id: str, *, env_override: list[str] | None = None) -> Optional[str]:
         """Recreate docker container (use latest image)
 
-        Stop and remove old container, create new container with same configuration, ensure using latest image layers。
+        Stop and remove old container, then create a new container with the same
+        configuration while ensuring the latest image layers are used.
 
         Args:
             container_id: Container ID
@@ -431,7 +433,7 @@ class WorkspaceLifecycleService:
                 self._log_event(workspace_id, "container_removed", f"Deleted container: {container_id}")
 
             except docker.errors.NotFound:
-                logger.warning(f"Container {container_id} does not exist，may have been deleted")
+                logger.warning(f"Container {container_id} does not exist, it may have been deleted")
                 self._log_event(workspace_id, "container_not_found", f"Container {container_id} does not exist")
 
             except docker.errors.APIError as e:

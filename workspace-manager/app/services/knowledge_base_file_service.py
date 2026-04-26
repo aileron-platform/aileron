@@ -369,7 +369,7 @@ class KnowledgeBaseFileService:
             total=len(files),
             succeeded=succeeded,
             failed=failed,
-            message=f"{KB_UPLOAD_SUCCESS_MESSAGE}（{succeeded}/{len(files)}）",
+            message=f"{KB_UPLOAD_SUCCESS_MESSAGE} ({succeeded}/{len(files)})",
         )
 
     def _scope(self, kb_id: str) -> str:

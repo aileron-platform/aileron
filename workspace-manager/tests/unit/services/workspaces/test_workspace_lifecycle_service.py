@@ -110,7 +110,7 @@ class TestDeleteWorkspace:
     def test_delete_workspace_not_found(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：workspace 不存在時優雅處理"""
+        """測試：workspace does not exist時優雅處理"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -158,7 +158,7 @@ class TestDeleteWorkspace:
     def test_delete_workspace_with_container_not_found(
         self, lifecycle_service, mock_db_session, sample_workspace, mock_docker_client
     ):
-        """測試：容器不存在時優雅處理"""
+        """測試：容器does not exist時優雅處理"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         docker_client, _ = mock_docker_client
@@ -294,7 +294,7 @@ class TestRestartWorkspace:
     def test_restart_workspace_not_found(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：workspace 不存在時優雅處理"""
+        """測試：workspace does not exist時優雅處理"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -373,12 +373,12 @@ class TestRestartWorkspace:
     def test_restart_workspace_with_container_not_found(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：容器不存在時的錯誤處理"""
+        """測試：容器does not exist時的錯誤處理"""
         # Arrange
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
         with patch(
             "app.services.runtime_provision_service.RuntimeProvisionService.execute_runtime_provision",
-            side_effect=ValueError("Container container-abc 不存在"),
+            side_effect=ValueError("Container container-abc does not exist"),
         ):
             # Act
             lifecycle_service.restart_workspace_task("workspace-123")
@@ -459,7 +459,7 @@ class TestContainerOperations:
     def test_stop_and_remove_container_not_found(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：容器不存在時優雅處理"""
+        """測試：容器does not exist時優雅處理"""
         # Arrange
         docker_client, _ = mock_docker_client
         docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
@@ -522,12 +522,12 @@ class TestContainerOperations:
     def test_recreate_container_not_found(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：容器不存在時拋出錯誤"""
+        """測試：容器does not exist時拋出錯誤"""
         docker_client, _ = mock_docker_client
         docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
 
         with patch("docker.from_env", return_value=docker_client):
-            with pytest.raises(ValueError, match="Container .* 不存在"):
+            with pytest.raises(ValueError, match="Container .* does not exist"):
                 lifecycle_service._recreate_container("container-123", "workspace-123")
 
     def test_recreate_container_api_error(
@@ -580,7 +580,7 @@ class TestVolumeCleanup:
     def test_cleanup_workspace_volumes_directory_not_exists(
         self, lifecycle_service
     ):
-        """測試：目錄不存在時優雅處理"""
+        """測試：目錄does not exist時優雅處理"""
         # Arrange
         workspace_id = "workspace-123"
 
@@ -590,7 +590,7 @@ class TestVolumeCleanup:
                 lifecycle_service._cleanup_workspace_volumes(workspace_id)
 
                 # Assert
-                # 不應該嘗試刪除不存在的目錄
+                # 不應該嘗試刪除does not exist的目錄
                 mock_rmtree.assert_not_called()
 
     def test_cleanup_workspace_volumes_with_error(

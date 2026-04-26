@@ -1,7 +1,7 @@
 [project]
 name = "aileron-workspace-manager"
 version = "1.0.0"
-description = "Aileron - Workspace Manager API 服務，負責工作區生命週期管理"
+description = "Aileron Workspace Manager API service for workspace lifecycle management"
 authors = [
     {name = "Aileron Team", email = "dev@aileron.com"}
 ]
@@ -22,43 +22,43 @@ classifiers = [
 ]
 
 dependencies = [
-    # 核心框架
+    # Core framework
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0",
     "pydantic[email]>=2.5.0",
     "pydantic-settings>=2.1.0",
-    # 資料庫
+    # Database
     "sqlalchemy>=2.0.0",
     "psycopg2-binary>=2.9.0",
     "alembic>=1.13.0",
-    # HTTP 客戶端和檔案處理
+    # HTTP clients and file handling
     "aiohttp>=3.9.1",
     "aiofiles>=23.2.0",
     "httpx>=0.25.0",
     "python-multipart>=0.0.6",
-    # 環境配置
+    # Environment configuration
     "python-dotenv>=1.0.0",
-    # 快取和佇列
+    # Cache and queue
     "redis[hiredis]>=5.0.0",
-    # 容器管理
+    # Container management
     "docker>=7.0.0",
     "kubernetes>=30.1.0",
-    # 模板引擎和配置
+    # Template engine and configuration
     "jinja2>=3.1.0",
     "pyyaml>=6.0.0",
-    # Git 版本控制
+    # Git version control
     "GitPython>=3.1.0",
-    # 任務調度
+    # Task scheduling
     "celery[redis]>=5.3.0",
     "flower>=2.0.1",
     "kombu>=5.3.0",
     "croniter>=1.3.0",
-    # 工具庫
+    # Utility libraries
     "pyjwt>=2.8.0",
     "python-jose[cryptography]>=3.3.0",
-    # Keycloak OAuth2/OIDC 整合
+    # Keycloak OAuth2/OIDC integration
     "python-keycloak>=4.0.0",
-    # Email 驗證依賴 (明確包含以避免 idna.uts46data 錯誤)
+    # Email validation dependency. Include explicitly to avoid idna.uts46data errors.
     "email-validator>=2.0.0",
     "idna>=3.0",
 ]

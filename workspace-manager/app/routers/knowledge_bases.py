@@ -1,4 +1,4 @@
-"""Knowledge base API。"""
+"""Knowledge base API."""
 
 from __future__ import annotations
 

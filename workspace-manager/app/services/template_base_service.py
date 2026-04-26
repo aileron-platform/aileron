@@ -55,7 +55,7 @@ class TemplateBaseService:
         return self._get_registry_template_dir(template_id)
 
     def _get_registry_template_dir(self, template_id: str) -> Path:
-        """Get canonical registry TemplateDirectory。"""
+        """Get canonical registry template directory."""
         return self._get_registry_templates_dir() / template_id
 
     def _resolve_template_dir(self, template_id: str) -> Path:

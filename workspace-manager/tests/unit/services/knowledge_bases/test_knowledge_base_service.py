@@ -83,7 +83,7 @@ def test_create_kb_rejects_duplicate_slug(
     mock_db_session.get.return_value = user_factory(id="owner-1")
     mock_db_session.scalar.return_value = object()
 
-    with pytest.raises(KnowledgeBaseConflictError, match="slug 已存在"):
+    with pytest.raises(KnowledgeBaseConflictError, match="slug already exists"):
         knowledge_base_service.create_kb(
             owner_id="owner-1",
             name="Docs",
@@ -135,7 +135,7 @@ def test_delete_kb_rejects_when_attached_without_force(
     mock_db_session.get.return_value = kb
     mock_db_session.scalar.return_value = 1
 
-    with pytest.raises(KnowledgeBaseConflictError, match="仍被工作區掛載"):
+    with pytest.raises(KnowledgeBaseConflictError, match="still mounted by workspace"):
         knowledge_base_service.delete_kb(
             user_id="owner-1",
             kb_id="kb-1",
@@ -160,7 +160,7 @@ def test_grant_share_rejects_owner_target(
     mock_db_session.get.return_value = kb
     mock_db_session.scalar.return_value = None
 
-    with pytest.raises(KnowledgeBaseConflictError, match="分享給擁有者"):
+    with pytest.raises(KnowledgeBaseConflictError, match="share knowledge base with owner"):
         sharing_service.grant_share(
             user_id="owner-1",
             kb_id="kb-1",
@@ -186,7 +186,7 @@ def test_grant_share_rejects_duplicate_share(
     sharing_service.kb_service.get_kb = MagicMock(return_value=(kb, object()))
     mock_db_session.scalar.return_value = object()
 
-    with pytest.raises(KnowledgeBaseConflictError, match="知識庫分享已存在"):
+    with pytest.raises(KnowledgeBaseConflictError, match="Knowledge base share already exists"):
         sharing_service.grant_share(
             user_id="owner-1",
             kb_id="kb-1",
@@ -212,7 +212,7 @@ def test_grant_share_rejects_invalid_role(
     sharing_service.kb_service.get_kb = MagicMock(return_value=(kb, object()))
     mock_db_session.scalar.return_value = None
 
-    with pytest.raises(KnowledgeBaseError, match="無效的知識庫分享角色"):
+    with pytest.raises(KnowledgeBaseError, match="Invalid knowledge base sharing role"):
         sharing_service.grant_share(
             user_id="owner-1",
             kb_id="kb-1",
@@ -243,7 +243,7 @@ def test_update_share_role_rejects_missing_share(
 ):
     mock_db_session.get.return_value = None
 
-    with pytest.raises(KnowledgeBaseNotFoundError, match="知識庫分享不存在"):
+    with pytest.raises(KnowledgeBaseNotFoundError, match="Knowledge base share does not exist"):
         sharing_service.update_share_role(
             user_id="owner-1",
             share_id="share-1",
@@ -266,7 +266,7 @@ def test_update_share_role_rejects_invalid_role(
     mock_db_session.get.return_value = share
     sharing_service.kb_service.get_kb = MagicMock(return_value=(object(), object()))
 
-    with pytest.raises(KnowledgeBaseError, match="無效的知識庫分享角色"):
+    with pytest.raises(KnowledgeBaseError, match="Invalid knowledge base sharing role"):
         sharing_service.update_share_role(
             user_id="owner-1",
             share_id="share-1",

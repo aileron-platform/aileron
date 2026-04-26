@@ -50,7 +50,7 @@ class TestSyncService:
         with pytest.raises(ValueError) as exc_info:
             await SyncService.sync_settings_to_runtime(mock_workspace, mock_settings)
 
-        assert "沒有 runtime_internal_url" in str(exc_info.value)
+        assert "does not have runtime_internal_url" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_all_success(
@@ -95,7 +95,7 @@ class TestSyncService:
             )
 
             assert result["ssh"]["success"] is False
-            assert "無 SSH Keys 需要同步" in result["ssh"]["message"]
+            assert "No SSH keys need to sync" in result["ssh"]["message"]
             assert result["claude_code"]["success"] is True
             assert result["git"]["success"] is True
 
@@ -122,7 +122,7 @@ class TestSyncService:
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is True
             assert result["git"]["success"] is False
-            assert "無 Git 設定需要同步" in result["git"]["message"]
+            assert "No Git settings need to sync" in result["git"]["message"]
 
     @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_ssh_error(
@@ -240,7 +240,7 @@ class TestSyncService:
         )
 
         assert result["success"] is True
-        assert "沒有運行中的 workspace 需要同步" in result["message"]
+        assert "No running workspaces need to sync" in result["message"]
         assert result["workspaces"] == []
 
     @pytest.mark.asyncio

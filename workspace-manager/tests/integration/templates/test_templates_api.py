@@ -2167,7 +2167,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
         with patch(
             "app.routers.templates.git.TemplateGitService.update_ssh_keys",
-            side_effect=ValueError("私鑰格式不正確"),
+            side_effect=ValueError("Private key format is incorrect"),
         ):
             en_response = client.put(
                 "/api/v1/templates/marketplace/ssh-keys",
@@ -2182,7 +2182,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         with patch(
             "app.routers.templates.git.TemplateGitService.update_ssh_keys",
-            side_effect=ValueError("私鑰格式不正確"),
+            side_effect=ValueError("Private key format is incorrect"),
         ):
             zh_response = client.put(
                 "/api/v1/templates/marketplace/ssh-keys",

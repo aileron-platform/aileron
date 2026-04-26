@@ -270,12 +270,12 @@ class TemplateFeatureDetectionService:
             logger.error(f"Failed to get template features for {template_id}: {e}", exc_info=True)
             return []
 
-    # ==================== VerifyMethod ====================
+    # ==================== Validation methods ====================
 
     def _validate_mcp_json(self, path: Path) -> bool:
         """Verify MCP JSON validity
 
-        Check：
+        Checks:
         1. JSON format is correct
         2. has mcpServers field
         3. mcpServers has at least one server
@@ -295,7 +295,7 @@ class TemplateFeatureDetectionService:
     def _validate_hooks_json(self, path: Path) -> bool:
         """Verify hooks JSON validity
 
-        Check：
+        Checks:
         1. JSON format is correct
         2. has hooks field
         """
@@ -307,7 +307,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_yaml_files(self, directory: Path) -> bool:
-        """Directory contains at least one valid YAML file。"""
+        """Directory contains at least one valid YAML file."""
         try:
             return any(path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir())
         except Exception as e:
@@ -315,7 +315,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _has_valid_hook_files(self, directory: Path) -> bool:
-        """Hooks directory has at least one valid hook YAML, ignore scripts subdirectory。"""
+        """Hooks directory has at least one valid hook YAML, ignoring the scripts subdirectory."""
         try:
             return any(
                 path.is_file() and path.suffix in {".yaml", ".yml"} for path in directory.iterdir()
@@ -325,7 +325,7 @@ class TemplateFeatureDetectionService:
             return False
 
     def _validate_output_style_yaml(self, path: Path) -> bool:
-        """Verify canonical output-style.yaml。"""
+        """Verify canonical output-style.yaml."""
         try:
             data = json.loads(json.dumps(yaml.safe_load(path.read_text(encoding="utf-8")) or {}))
             return isinstance(data, dict)

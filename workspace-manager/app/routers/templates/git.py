@@ -123,7 +123,12 @@ def _translate_git_result(translate, result) -> str:
 
 def _translate_git_exception(translate, exc: Exception) -> str:
     message = str(exc)
-    if message in {"SSH_PRIVATE_KEY_INVALID", "SSH_PUBLIC_KEY_INVALID", "Private key format is incorrect", "Public key format is incorrect"}:
+    if message in {
+        "SSH_PRIVATE_KEY_INVALID",
+        "SSH_PUBLIC_KEY_INVALID",
+        "Private key format is incorrect",
+        "Public key format is incorrect",
+    }:
         return translate("templates.ssh_keys_invalid_format")
     if message == "SSH_KEY_GENERATION_FAILED":
         return translate("git.ssh_key_gen_failed_simple")

@@ -226,7 +226,7 @@ async def callback(
             detail=f"Authentication failed: {error_description or error}"
         )
 
-    # TODO: Verify state token（CSRF protection）
+    # TODO: Verify state token (CSRF protection).
 
     try:
         # Exchange authorization code for tokens
