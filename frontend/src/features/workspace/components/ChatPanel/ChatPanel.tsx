@@ -687,7 +687,7 @@ export const ChatPanel: React.FC = () => {
             isThinking={agentState.isThinking}
             runningTools={agentState.runningTools}
             onPreviewMessage={handleOpenMessagePreview}
-            previewLabel={t('workspace.chat.messages.openInCanvas')}
+            previewLabel={t('workspace.chat.messages.viewResult')}
             onAskUserQuestionSubmit={handleAskUserQuestionSubmit}
             activeTaskId={agentState.activeTask?.task_id}
           />
