@@ -95,6 +95,26 @@ def test_drawio_viewer_generates_url(client):
     assert payload["mode"] == "edit"
     assert payload["file_path"] == "diagram.drawio"
     assert "draw" in payload["url"]  # URL contains draw (diagrams.net)
+    assert "saveAndExit=1" in payload["url"]
+
+
+def test_drawio_viewer_view_mode_does_not_open_external_editor(client):
+    service = DrawioFileServiceStub(content="<mxfile>demo</mxfile>")
+
+    with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
+        response = client.get(
+            "/api/v1/drawio/viewer",
+            params={"file_path": "diagram.drawio", "mode": "view"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "view"
+    assert "edit=_blank" not in payload["url"]
+    assert "saveAndExit=1" not in payload["url"]
+    assert "lightbox=1" not in payload["url"]
+    assert "layers=1" not in payload["url"]
+    assert "toolbar=0" in payload["url"]
 
 
 def test_drawio_viewer_empty_file_returns_error(client):

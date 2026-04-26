@@ -1,8 +1,28 @@
 # Multi-stage build for workspace-runtime
-# Stage 1: base → Stage 2: development / Stage 3: production
+# Stage 1: go-terminal-builder / Stage 2: base / Stage 3: development / Stage 4: production
 # runtime-base 可由 build context 指向不同 base image，例如：
 #   1. codex-universal
 #   2. workspace-runtime/base-lite
+FROM golang:1.23 AS go-terminal-builder
+
+WORKDIR /workspace-terminal
+
+COPY workspace-terminal/go.mod workspace-terminal/go.sum ./
+RUN go mod download
+COPY workspace-terminal/ ./
+
+ARG TARGETARCH
+RUN mkdir -p /opt/terminal-service/bin && \
+    GOARCH_VALUE="${TARGETARCH:-$(go env GOARCH)}" && \
+    case "${GOARCH_VALUE}" in \
+        amd64|arm64) ;; \
+        x86_64) GOARCH_VALUE="amd64" ;; \
+        aarch64) GOARCH_VALUE="arm64" ;; \
+        *) echo "Unsupported TARGETARCH: ${GOARCH_VALUE}" >&2; exit 1 ;; \
+    esac && \
+    CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH_VALUE}" go build -o /opt/terminal-service/bin/terminal-service ./cmd/server && \
+    chmod +x /opt/terminal-service/bin/terminal-service
+
 FROM runtime-base AS base
 
 USER root
@@ -27,19 +47,6 @@ RUN apt-get update && apt-get install -y --fix-missing \
     locales \
     wget \
     && rm -rf /var/lib/apt/lists/*
-
-# 安裝 Go（部分 base image 已內建；缺少時才補裝，用於編譯 workspace-terminal）
-ENV GO_VERSION=1.23.4
-RUN if ! command -v go >/dev/null 2>&1; then \
-        ARCH=$(dpkg --print-architecture) && \
-        if [ "$ARCH" = "amd64" ]; then GO_ARCH="amd64"; \
-        elif [ "$ARCH" = "arm64" ]; then GO_ARCH="arm64"; \
-        else GO_ARCH="amd64"; fi && \
-        wget -q https://go.dev/dl/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
-        tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz && \
-        rm go${GO_VERSION}.linux-${GO_ARCH}.tar.gz; \
-    fi
-ENV PATH="/usr/local/go/bin:${PATH}"
 
 RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
 ENV LANG=en_US.UTF-8
@@ -163,26 +170,6 @@ ENV DISABLE_AUTOUPDATER=1
 ENV OPENSPEC_AUTO_INIT=1
 ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"
 
-FROM base AS terminal-builder
-
-WORKDIR /workspace-terminal
-
-COPY workspace-terminal/go.mod workspace-terminal/go.sum ./
-RUN go mod download
-COPY workspace-terminal/ ./
-
-ARG TARGETARCH
-RUN mkdir -p /opt/terminal-service/bin && \
-    GOARCH_VALUE="${TARGETARCH:-$(dpkg --print-architecture)}" && \
-    case "${GOARCH_VALUE}" in \
-        amd64|arm64) ;; \
-        x86_64) GOARCH_VALUE="amd64" ;; \
-        aarch64) GOARCH_VALUE="arm64" ;; \
-        *) echo "Unsupported TARGETARCH: ${GOARCH_VALUE}" >&2; exit 1 ;; \
-    esac && \
-    CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH_VALUE}" go build -o /opt/terminal-service/bin/terminal-service ./cmd/server && \
-    chmod +x /opt/terminal-service/bin/terminal-service
-
 # Stage 2: Development - 程式碼透過 volume mount 掛入
 FROM base AS development
 
@@ -194,7 +181,7 @@ RUN uv sync --dev
 USER root
 
 RUN mkdir -p /workspace-runtime/app /workspace-runtime/scripts
-COPY --from=terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
+COPY --from=go-terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
 COPY workspace-runtime/scripts/ /workspace-runtime/scripts/
 COPY workspace-terminal/ /workspace-terminal/
 RUN chmod +x /workspace-runtime/scripts/*.sh /opt/terminal-service/bin/terminal-service
@@ -243,7 +230,7 @@ COPY workspace-runtime/.env* ./
 RUN mkdir -p /workspace-runtime/scripts
 COPY workspace-runtime/scripts/ /workspace-runtime/scripts/
 RUN chmod +x /workspace-runtime/scripts/*.sh
-COPY --from=terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
+COPY --from=go-terminal-builder /opt/terminal-service/bin/terminal-service /opt/terminal-service/bin/terminal-service
 RUN chmod +x /opt/terminal-service/bin/terminal-service
 
 RUN mkdir -p /workspace-terminal

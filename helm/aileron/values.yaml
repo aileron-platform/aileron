@@ -176,6 +176,7 @@ workspaceManager:
 workspaceOperator:
   enabled: true
   replicaCount: 1
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
   image:
     repository: ailerondocker/workspace-operator
     tag: latest
@@ -190,6 +191,15 @@ workspaceOperator:
     WORKSPACE_CRD_VERSION: v1alpha1
   rbac:
     create: true
+
+workspaceRuntimePrepuller:
+  enabled: true
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    requests:
+      cpu: 1m
+      memory: 1Mi
 
 postgres:
   enabled: true

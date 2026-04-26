@@ -99,10 +99,8 @@ async def get_drawio_viewer_url(
             # 檢視模式
             params.update({
                 "chrome": "0",      # 隱藏工具列
+                "toolbar": "0",     # 關閉 Draw.io 內建 hover toolbar
                 "nav": "1",         # 顯示導航控制
-                "edit": "_blank",   # 編輯時在新視窗開啟
-                "layers": "1",      # 顯示圖層
-                "lightbox": "1",    # 啟用燈箱模式
             })
 
         # 構建完整 URL

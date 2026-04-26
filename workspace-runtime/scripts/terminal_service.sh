@@ -185,6 +185,7 @@ ensure_terminal_binary() {
 ensure_terminal_binary
 
 if [ "${1:-}" = "--exec" ]; then
+    echo "Using terminal-service binary: ${RESOLVED_TERMINAL_BINARY}"
     exec "${RESOLVED_TERMINAL_BINARY}"
 fi
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DrawioViewer } from './DrawioViewer';
 
 const apiGetMock = vi.hoisted(() => vi.fn());
@@ -92,5 +92,56 @@ describe('DrawioViewer', () => {
 
     await waitFor(() => expect(apiGetMock).toHaveBeenCalledTimes(1));
     expect(document.querySelector('iframe')).toBeInTheDocument();
+  });
+
+  it('switches to bridged edit mode instead of relying on Draw.io external edit links', async () => {
+    apiGetMock
+      .mockResolvedValueOnce({ url: 'about:blank?mode=view' })
+      .mockResolvedValueOnce({ url: 'about:blank?mode=edit' });
+
+    render(
+      <DrawioViewer
+        content="<mxfile><diagram /></mxfile>"
+        filePath="/docs/diagram.drawio"
+        runtimeBaseUrl="http://runtime.local"
+      />,
+    );
+
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalledTimes(1));
+    expect(apiGetMock).toHaveBeenLastCalledWith('/api/v1/drawio/viewer?file_path=%2Fdocs%2Fdiagram.drawio&mode=view');
+
+    fireEvent.click(screen.getByTitle('workspace.fileManagement.drawio.edit'));
+
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalledTimes(2));
+    expect(apiGetMock).toHaveBeenLastCalledWith('/api/v1/drawio/viewer?file_path=%2Fdocs%2Fdiagram.drawio&mode=edit');
+  });
+
+  it('does not reload the iframe when autosave updates content while editing', async () => {
+    apiGetMock
+      .mockResolvedValueOnce({ url: 'about:blank?mode=view' })
+      .mockResolvedValueOnce({ url: 'about:blank?mode=edit' });
+
+    const { rerender } = render(
+      <DrawioViewer
+        content={'<mxfile><diagram id="before" /></mxfile>'}
+        filePath="/docs/diagram.drawio"
+        runtimeBaseUrl="http://runtime.local"
+      />,
+    );
+
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTitle('workspace.fileManagement.drawio.edit'));
+    await waitFor(() => expect(apiGetMock).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <DrawioViewer
+        content={'<mxfile><diagram id="after" /></mxfile>'}
+        filePath="/docs/diagram.drawio"
+        runtimeBaseUrl="http://runtime.local"
+      />,
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(apiGetMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -162,6 +162,37 @@ kubectl delete crd workspaces.platform.aileron.io
 ```
 :::
 
+## Image Pre-pulling
+
+Workspace Runtime image 較大時，每個 node 上第一個 workspace pod 會先等待 image pull。Helm chart 預設建立 `workspace-runtime-prepuller` DaemonSet，讓每個 node 先快取 `workspaceOperator.runtimeImage` 指定的 runtime image，後續 workspace pod 使用 `IfNotPresent` 時可直接啟動。
+
+DaemonSet 透過 initContainer 拉取 runtime image，完成後由 `registry.k8s.io/pause:3.10` container 保持 pod 存活。runtime image 升版時，Helm upgrade 會讓 DaemonSet rollout，觸發各 node 拉取新 image。
+
+驗證 pre-puller 狀態：
+
+```bash
+kubectl get pods -n <namespace> -l app.kubernetes.io/component=workspace-runtime-prepuller -o wide
+kubectl describe daemonset -n <namespace> <release-name>-aileron-workspace-runtime-prepuller
+```
+
+若 workspace node 有 taint，pre-puller 需要相同的 toleration，否則不會排程到那些 node：
+
+```yaml
+workspaceRuntimePrepuller:
+  tolerations:
+    - key: workspace
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+```
+
+如需關閉 pre-puller：
+
+```yaml
+workspaceRuntimePrepuller:
+  enabled: false
+```
+
 ## Public Routing 設定
 
 Kubernetes 模式使用 host-based routing（子網域模式），不使用 path-based ingress。
@@ -437,7 +468,7 @@ spec:
 | `kubernetes.nodePort` | `RUNTIME_K8S_NODE_PORT` | _(空)_ | NodePort 設定 |
 | `kubernetes.nodeAddress` | `RUNTIME_K8S_NODE_ADDRESS` | `127.0.0.1` | Node 位址 |
 | `kubernetes.pvcName` | `RUNTIME_K8S_PVC_NAME` | `workspace-runtime-pvc` | PVC 名稱 |
-| `kubernetes.runtimeImage` | `RUNTIME_K8S_IMAGE` | `ailerondocker/workspace-runtime:k8s-local` | Runtime 映像 |
+| `workspaceOperator.runtimeImage` | `RUNTIME_K8S_IMAGE` | `ailerondocker/workspace-runtime:latest-lite-amd64` | Runtime 映像，也供 pre-puller 使用 |
 | `kubernetes.browserImage` | `RUNTIME_K8S_BROWSER_IMAGE` | `ailerondocker/workspace-browser:k8s-local` | Browser 映像 |
 | `kubernetes.nextjsImage` | `RUNTIME_K8S_NEXTJS_IMAGE` | `ailerondocker/workspace-nextjs:k8s-local` | Next.js 映像 |
 | `kubernetes.watchNamespace` | `WATCH_NAMESPACE` | _(空，所有 namespace)_ | Operator watch namespace |

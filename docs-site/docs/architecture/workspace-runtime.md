@@ -46,6 +46,40 @@ Workspace Runtime 是運行在每個開發工作區容器內的服務，提供 A
 | AI 客戶端 | Anthropic SDK / 多 Agent CLI 整合 |
 | 版本控制 | GitPython |
 
+## Image Variants
+
+Workspace Runtime 支援兩種 base image flavor：
+
+| Flavor | 適用場景 | 說明 |
+|--------|----------|------|
+| `lite` | 預設的 agent workspace | 保留 agent CLI、Python、Node.js、Git、Docker CLI、常用 shell 工具與 OpenSpec CLI，適合平台預設工作區 |
+| `codex` | 需要完整多語言工具鏈的 workspace | 使用 codex-universal base，包含更完整的語言 runtime 與開發工具，映像較大 |
+
+`base-lite` 會包含平台執行所需的基本工具：
+
+- Shell 與建置工具：`bash`、`build-essential`、`make`、`pkg-config`
+- 版本控制與檔案工具：`git`、`git-lfs`、`ripgrep`、`fd`、`rsync`
+- 語言與套件基礎：Python 3、Node.js、`pnpm`、`uv`
+- 系統工具：`curl`、`wget`、`jq`、`sudo`、`openssh-client`
+
+`base-lite` 不包含 Java runtime / JDK，也不包含 Go compiler 或 `/usr/local/go`。Java 或完整多語言開發需求應使用 `codex` flavor。
+
+`terminal-service` 是 Go binary，但 Go toolchain 不會進入 runtime image。`workspace-runtime/Dockerfile` 會在獨立的 `golang:1.23` builder stage 編譯 binary，再把 `/opt/terminal-service/bin/terminal-service` 複製到 `development` 與 `production` image。
+
+本機建置預設使用 `lite`：
+
+```bash
+make build-runtime-base
+make build-workspace-runtime
+```
+
+需要切換到 codex-universal base 時，明確指定 `RUNTIME_BASE=universal`：
+
+```bash
+RUNTIME_BASE=universal make build-runtime-base
+RUNTIME_BASE=universal make build-workspace-runtime
+```
+
 ## 目錄結構
 
 ```

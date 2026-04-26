@@ -29,7 +29,7 @@ data:
   RUNTIME_K8S_NODE_ADDRESS: {{ .Values.kubernetes.nodeAddress | quote }}
   RUNTIME_K8S_PVC_NAME: {{ .Values.kubernetes.pvcName | quote }}
   KNOWLEDGE_BASES_PVC_NAME: {{ .Values.kubernetes.knowledgeBases.pvcName | quote }}
-  RUNTIME_K8S_IMAGE: {{ .Values.kubernetes.runtimeImage | quote }}
+  RUNTIME_K8S_IMAGE: {{ .Values.workspaceOperator.runtimeImage | quote }}
   RUNTIME_K8S_BROWSER_IMAGE: {{ .Values.kubernetes.browserImage | quote }}
   RUNTIME_K8S_CANVAS_IMAGE: {{ .Values.kubernetes.canvasImage | quote }}
   RUNTIME_K8S_RUNTIME_RESOURCES: {{ .Values.kubernetes.workspaceDefaults.runtime.resources | toJson | quote }}

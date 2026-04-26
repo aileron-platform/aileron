@@ -1,0 +1,44 @@
+{{- if .Values.workspaceRuntimePrepuller.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "aileron.fullname" . }}-workspace-runtime-prepuller
+  labels:
+    {{- include "aileron.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workspace-runtime-prepuller
+spec:
+  selector:
+    matchLabels:
+      {{- include "aileron.componentLabels" (dict "component" "workspace-runtime-prepuller" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aileron.componentLabels" (dict "component" "workspace-runtime-prepuller" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 8 }}
+      annotations:
+        checksum/runtime-image: {{ .Values.workspaceOperator.runtimeImage | sha256sum }}
+    spec:
+      {{- include "aileron.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.workspaceRuntimePrepuller.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.workspaceRuntimePrepuller.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 0
+      initContainers:
+        - name: pull-workspace-runtime
+          image: {{ .Values.workspaceOperator.runtimeImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - echo image ready
+      containers:
+        - name: pause
+          image: registry.k8s.io/pause:3.10
+          imagePullPolicy: IfNotPresent
+          resources:
+            {{- toYaml .Values.workspaceRuntimePrepuller.resources | nindent 12 }}
+{{- end }}

@@ -7,7 +7,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('DrawioViewer');
-import { AlertCircle, Loader2, Download, Image as ImageIcon } from 'lucide-react';
+import { AlertCircle, Loader2, Download, Edit3, Image as ImageIcon, X } from 'lucide-react';
 import { ApiClient, ApiError } from '@/shared/api/apiClient';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -28,12 +28,14 @@ interface DrawioMessage {
   event: 'init' | 'save' | 'export' | 'exit' | 'autosave';
   xml?: string;
   data?: string;
+  exit?: boolean;
 }
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
 
 type DrawioFallbackReason = 'DISABLED' | 'UNREACHABLE' | null;
+type DrawioViewerMode = 'view' | 'edit';
 
 const isDrawioUnavailable = (error: unknown): error is ApiError => {
   return error instanceof ApiError
@@ -52,6 +54,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
 }) => {
   const { t } = useI18n();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const latestContentRef = useRef(content);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [drawioUrl, setDrawioUrl] = useState<string>('');
@@ -59,11 +62,17 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   const [retryCount, setRetryCount] = useState(0);
   const [fallbackReason, setFallbackReason] = useState<DrawioFallbackReason | undefined>(undefined);
   const [reloadToken, setReloadToken] = useState(0);
+  const [viewerMode, setViewerMode] = useState<DrawioViewerMode>('view');
+  const hasContent = content.trim().length > 0;
+
+  useEffect(() => {
+    latestContentRef.current = content;
+  }, [content]);
 
   // 獲取 Draw.io URL（帶重試機制）
   useEffect(() => {
     const fetchDrawioUrl = async () => {
-      if (!runtimeBaseUrl || !content.trim()) {
+      if (!runtimeBaseUrl || !hasContent) {
         return;
       }
 
@@ -74,7 +83,7 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
       try {
         const client = new ApiClient({ baseUrl: runtimeBaseUrl });
         const data = await client.get<{ url: string }>(
-          `/api/v1/drawio/viewer?file_path=${encodeURIComponent(filePath)}&mode=view`
+          `/api/v1/drawio/viewer?file_path=${encodeURIComponent(filePath)}&mode=${viewerMode}`
         );
         setDrawioUrl(data.url);
         setRetryCount(0); // 成功後重置重試計數
@@ -107,7 +116,68 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
     };
 
     fetchDrawioUrl();
-  }, [runtimeBaseUrl, filePath, content, retryCount, reloadToken]);
+  }, [runtimeBaseUrl, filePath, hasContent, retryCount, reloadToken, viewerMode]);
+
+  const switchViewerMode = useCallback((mode: DrawioViewerMode) => {
+    setViewerMode(mode);
+    setError('');
+    setDrawioUrl('');
+    setRetryCount(0);
+    setReloadToken(prev => prev + 1);
+  }, []);
+
+  // 保存圖表
+  const handleSave = useCallback(async (xml: string): Promise<boolean> => {
+    if (!runtimeBaseUrl || isSaving) {
+      return false;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // 使用 ApiClient 來確保請求攜帶 Authorization header
+      const client = new ApiClient({ baseUrl: runtimeBaseUrl });
+      const path = `/api/v1/drawio/save?file_path=${encodeURIComponent(filePath)}`;
+
+      await client.post(path, { content: xml });
+      logger.debug('Draw.io file saved', { path });
+
+      // 通知父組件
+      if (onSave) {
+        onSave(xml);
+      }
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          action: 'status',
+          messageKey: 'allChangesSaved',
+          modified: false,
+        }),
+        '*'
+      );
+      return true;
+    } catch (err) {
+      logger.error('Failed to save Draw.io file', { error: err });
+      if (isDrawioUnavailable(err)) {
+        const reason = err.reason === 'DISABLED' || err.reason === 'UNREACHABLE'
+          ? err.reason
+          : null;
+        setFallbackReason(reason);
+        return false;
+      }
+      setError(err instanceof Error ? err.message : 'Save failed');
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({
+          action: 'status',
+          messageKey: 'errorSavingFile',
+          modified: true,
+        }),
+        '*'
+      );
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [filePath, isSaving, onSave, runtimeBaseUrl]);
 
   // 處理來自 Draw.io 的訊息
   const handleMessage = useCallback((evt: MessageEvent) => {
@@ -129,8 +199,11 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
         // 發送 load 消息來載入圖表
         const loadMessage = {
           action: 'load',
-          xml: content,
-          autosave: 0  // 檢視模式不自動保存
+          xml: latestContentRef.current,
+          autosave: viewerMode === 'edit' ? 1 : 0,
+          saveAndExit: viewerMode === 'edit' ? '1' : undefined,
+          modified: viewerMode === 'edit' ? 'unsavedChanges' : undefined,
+          title: filePath.split('/').pop() || filePath,
         };
 
         iframeRef.current.contentWindow?.postMessage(
@@ -141,58 +214,33 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
 
       // 處理保存事件（檢視模式不應該觸發，但保留處理）
       if (message.event === 'save' && message.xml) {
-        handleSave(message.xml);
+        void handleSave(message.xml).then((saved) => {
+          if (saved && message.exit) {
+            switchViewerMode('view');
+          }
+        });
       }
 
       // 處理自動保存（檢視模式不應該觸發，但保留處理）
       if (message.event === 'autosave' && message.xml) {
-        handleSave(message.xml);
+        void handleSave(message.xml);
+      }
+
+      if (message.event === 'exit') {
+        setViewerMode('view');
+        setDrawioUrl('');
+        setReloadToken(prev => prev + 1);
       }
     } catch (err) {
       logger.error('Failed to parse Draw.io message', { error: err });
     }
-  }, [content]);
+  }, [filePath, handleSave, switchViewerMode, viewerMode]);
 
   // 註冊訊息監聽器
   useEffect(() => {
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [handleMessage]);
-
-  // 保存圖表
-  const handleSave = async (xml: string) => {
-    if (!runtimeBaseUrl || isSaving) {
-      return;
-    }
-
-    setIsSaving(true);
-
-    try {
-      // 使用 ApiClient 來確保請求攜帶 Authorization header
-      const client = new ApiClient({ baseUrl: runtimeBaseUrl });
-      const path = `/api/v1/drawio/save?file_path=${encodeURIComponent(filePath)}`;
-
-      await client.post(path, { content: xml });
-      logger.debug('Draw.io file saved', { path });
-
-      // 通知父組件
-      if (onSave) {
-        onSave(xml);
-      }
-    } catch (err) {
-      logger.error('Failed to save Draw.io file', { error: err });
-      if (isDrawioUnavailable(err)) {
-        const reason = err.reason === 'DISABLED' || err.reason === 'UNREACHABLE'
-          ? err.reason
-          : null;
-        setFallbackReason(reason);
-        return;
-      }
-      setError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // 下載圖表
   const handleDownload = () => {
@@ -209,15 +257,30 @@ export const DrawioViewer: React.FC<DrawioViewerProps> = ({
   };
 
   const toolbarActions = (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={handleDownload}
-      disabled={!content}
-      title={t('workspace.fileManagement.drawio.download')}
-    >
-      <Download className="h-4 w-4" />
-    </Button>
+    <>
+      {fallbackReason === undefined && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => switchViewerMode(viewerMode === 'edit' ? 'view' : 'edit')}
+          disabled={!content || isLoading || isSaving}
+          title={viewerMode === 'edit'
+            ? t('workspace.fileManagement.drawio.cancel')
+            : t('workspace.fileManagement.drawio.edit')}
+        >
+          {viewerMode === 'edit' ? <X className="h-4 w-4" /> : <Edit3 className="h-4 w-4" />}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleDownload}
+        disabled={!content}
+        title={t('workspace.fileManagement.drawio.download')}
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+    </>
   );
 
   const fallbackDescriptionKey = fallbackReason === 'DISABLED'
