@@ -144,7 +144,7 @@ export default defineBackground(() => {
             glowEnabled: message.enabled,
           });
 
-          // 如果停用光暈，立即移除所有光暈
+          // If glow is disabled, immediately remove all glow effects
           if (!message.enabled) {
             await glowEffectManager.removeAll();
           }

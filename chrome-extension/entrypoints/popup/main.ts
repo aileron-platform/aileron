@@ -23,7 +23,7 @@ const resetConfigBtn = document.getElementById("reset-config") as HTMLButtonElem
 
 function updateUI(state: StateResponse): void {
   toggle.checked = state.isActive;
-  statusText.textContent = state.isActive ? "已啟用" : "已停用";
+  statusText.textContent = state.isActive ? "Enabled" : "Disabled";
 
   // 更新光暈開關
   glowToggle.checked = state.glowEnabled ?? true;

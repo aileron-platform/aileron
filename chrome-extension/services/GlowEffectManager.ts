@@ -1,5 +1,5 @@
 /**
- * GlowEffectManager - 管理被控制標籤頁的光暈效果
+ * GlowEffectManager - Manages glow effect for controlled tabs
  */
 
 import type { Logger } from "../utils/logger";
@@ -10,7 +10,7 @@ export interface GlowEffectManagerDeps {
   stateManager: StateManager;
 }
 
-// 光暈效果的 CSS 樣式 - 增強版
+// Glow effect CSS - enhanced version
 const GLOW_CSS = `
 html::before {
   content: '';
@@ -71,60 +71,46 @@ export class GlowEffectManager {
     this.stateManager = deps.stateManager;
   }
 
-  /**
-   * 設置指定標籤頁的光暈效果
-   */
   async setGlow(tabId: number, enabled: boolean): Promise<void> {
-    // 讀取使用者全域設定
     const state = await this.stateManager.getState();
 
-    // 只有在使用者啟用光暈功能時才執行
     const shouldGlow = enabled && state.glowEnabled;
 
     if (shouldGlow) {
-      // 先記錄啟用狀態，這樣即使注入失敗，頁面導航後也能恢復
+      // Record enabled state first, so glow can be restored after page navigation even if injection fails
       this.enabledTabs.add(tabId);
 
       try {
-        // 注入 CSS
         await chrome.scripting.insertCSS({
           target: { tabId },
           css: GLOW_CSS,
         });
         this.logger.debug(`Glow enabled for tab ${tabId}`);
       } catch (error) {
-        // 某些特殊頁面可能無法注入 CSS（例如空白頁、chrome:// 頁面）
-        // 保留 enabledTabs 狀態，這樣頁面導航後可以自動恢復光暈
+        // Some special pages cannot accept CSS injection (e.g., blank pages, chrome:// pages)
+        // Keep enabledTabs state so glow can be automatically restored after page navigation
         this.logger.debug(`Failed to inject glow CSS for tab ${tabId} (will retry on page load):`, error);
       }
     } else {
-      // 移除光暈狀態
       this.enabledTabs.delete(tabId);
 
       try {
-        // 移除 CSS
         await chrome.scripting.removeCSS({
           target: { tabId },
           css: GLOW_CSS,
         });
         this.logger.debug(`Glow disabled for tab ${tabId}`);
       } catch (error) {
-        // 移除失敗也沒關係，狀態已清除
+        // Failed removal is acceptable; state has been cleared
         this.logger.debug(`Failed to remove glow CSS from tab ${tabId}:`, error);
       }
     }
   }
 
-  /**
-   * 檢查指定標籤頁是否已啟用光暈
-   */
   isEnabled(tabId: number): boolean {
     return this.enabledTabs.has(tabId);
   }
 
-  /**
-   * 獲取指定標籤頁的光暈狀態
-   */
   async getGlowState(tabId: number): Promise<{
     enabled: boolean;
     userEnabled: boolean;
@@ -136,9 +122,6 @@ export class GlowEffectManager {
     };
   }
 
-  /**
-   * 處理頁面載入事件，重新注入光暈
-   */
   async handlePageLoad(tabId: number): Promise<void> {
     if (this.enabledTabs.has(tabId)) {
       this.logger.debug(`Page loaded for tab ${tabId}, re-injecting glow`);
@@ -153,18 +136,12 @@ export class GlowEffectManager {
     }
   }
 
-  /**
-   * 處理標籤頁關閉事件，清理狀態
-   */
   handleTabClosed(tabId: number): void {
     if (this.enabledTabs.delete(tabId)) {
       this.logger.debug(`Tab ${tabId} closed, glow state cleaned up`);
     }
   }
 
-  /**
-   * 移除所有光暈效果並清空狀態
-   */
   async removeAll(): Promise<void> {
     const tabIds = Array.from(this.enabledTabs);
     this.logger.debug(`Removing glow from ${tabIds.length} tabs`);

@@ -3,7 +3,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   manifest: {
     name: "Aileron",
-    description: "連接您的瀏覽器到 Aileron 以進行自動化控制",
+    description: "Connect your browser to Aileron for automation control",
     permissions: ["debugger", "tabGroups", "storage", "alarms", "scripting"],
     host_permissions: ["<all_urls>"],
     icons: {

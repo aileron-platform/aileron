@@ -38,7 +38,7 @@ func main() {
 		fmt.Printf("   ❌ Error: %v\n", err)
 		return
 	}
-		fmt.Printf("   ✅ Token data: %s\n", tokenData)
+	fmt.Printf("   ✅ Token data: %s\n", tokenData)
 	fmt.Println()
 
 	// 2. Parse JSON
@@ -48,19 +48,19 @@ func main() {
 		fmt.Printf("   ❌ JSON parse failed: %v\n", err)
 		return
 	}
-		fmt.Printf("   ✅ Parse successful\n")
-	fmt.Printf("   		fmt.Printf("   - user_id: %s\n", wmToken.UserID)
-	fmt.Printf("   		fmt.Printf("   - created_at: %d (type: int64)\n", wmToken.CreatedAt)
-	fmt.Printf("   		fmt.Printf("   - expires_at: %d (type: int64)\n", wmToken.ExpiresAt)
+	fmt.Printf("   ✅ Parse successful\n")
+	fmt.Printf("   - user_id: %s\n", wmToken.UserID)
+	fmt.Printf("   - created_at: %d (type: int64)\n", wmToken.CreatedAt)
+	fmt.Printf("   - expires_at: %d (type: int64)\n", wmToken.ExpiresAt)
 	fmt.Println()
 
 	// 3. Verify timestamps
 	fmt.Println("3. Verify timestamps")
 	currentTime := time.Now().Unix()
-		fmt.Printf("   - Current timestamp: %d\n", currentTime)
-		fmt.Printf("   - Token created at: %d\n", wmToken.CreatedAt)
-		fmt.Printf("   - Token expires at: %d\n", wmToken.ExpiresAt)
-		fmt.Printf("   - Validity period: %d seconds (%.1f hours)\n",
+	fmt.Printf("   - Current timestamp: %d\n", currentTime)
+	fmt.Printf("   - Token created at: %d\n", wmToken.CreatedAt)
+	fmt.Printf("   - Token expires at: %d\n", wmToken.ExpiresAt)
+	fmt.Printf("   - Validity period: %d seconds (%.1f hours)\n",
 		wmToken.ExpiresAt-wmToken.CreatedAt,
 		float64(wmToken.ExpiresAt-wmToken.CreatedAt)/3600)
 	fmt.Printf("   - Remaining time: %d seconds (%.1f minutes)\n",
@@ -71,9 +71,9 @@ func main() {
 	// 4. Check if token is expired
 	fmt.Println("4. Check if token is expired")
 	if currentTime >= wmToken.ExpiresAt {
-			fmt.Printf("   ❌ Token expired\n")
+		fmt.Printf("   ❌ Token expired\n")
 	} else {
-			fmt.Printf("   ✅ Token valid\n")
+		fmt.Printf("   ✅ Token valid\n")
 	}
 	fmt.Println()
 
@@ -81,8 +81,8 @@ func main() {
 	fmt.Println("5. Test time conversion")
 	createdTime := time.Unix(wmToken.CreatedAt, 0)
 	expiresTime := time.Unix(wmToken.ExpiresAt, 0)
-		fmt.Printf("   - Created at: %s\n", createdTime.Format("2006-01-02 15:04:05"))
-		fmt.Printf("   - Expires at: %s\n", expiresTime.Format("2006-01-02 15:04:05"))
+	fmt.Printf("   - Created at: %s\n", createdTime.Format("2006-01-02 15:04:05"))
+	fmt.Printf("   - Expires at: %s\n", expiresTime.Format("2006-01-02 15:04:05"))
 	fmt.Println()
 
 	fmt.Println("=== Test Complete ===")
