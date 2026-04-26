@@ -44,7 +44,7 @@ type jwkSet struct {
 	Keys []jwkKey `json:"keys"`
 }
 
-// JWKS 快取（全域，帶讀寫鎖）
+	// JWKS cache (global, with read-write lock)
 var (
 	jwksCache     *jwkSet
 	jwksCacheTime time.Time

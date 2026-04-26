@@ -22,15 +22,15 @@ func TestCreateTab(t *testing.T) {
 func TestCloseTab(t *testing.T) {
 	tm := NewTerminalManager()
 
-	// 建立 tab
+	// Create tab
 	tab, _ := tm.CreateTab("ws_123", 80, 24, "/tmp")
 
-	// 關閉 tab
+	// Close tab
 	err := tm.CloseTab("ws_123", tab.TabID)
 
 	assert.NoError(t, err)
 
-	// 驗證 tab 已被刪除
+	// Verify tab is deleted
 	_, err = tm.GetTab("ws_123", tab.TabID)
 	assert.Error(t, err)
 }
@@ -38,7 +38,7 @@ func TestCloseTab(t *testing.T) {
 func TestListTabs(t *testing.T) {
 	tm := NewTerminalManager()
 
-	// 建立多個 tabs
+	// Create multiple tabs
 	tm.CreateTab("ws_123", 80, 24, "/tmp")
 	tm.CreateTab("ws_123", 80, 24, "/tmp")
 	tm.CreateTab("ws_123", 80, 24, "/tmp")
@@ -52,20 +52,20 @@ func TestListTabs(t *testing.T) {
 func TestSwitchTab(t *testing.T) {
 	tm := NewTerminalManager()
 
-	// 建立兩個 tabs
+	// Create two tabs
 	tab1, _ := tm.CreateTab("ws_123", 80, 24, "/tmp")
 	tab2, _ := tm.CreateTab("ws_123", 80, 24, "/tmp")
 
-	// 切換到 tab2
+	// Switch to tab2
 	err := tm.SwitchTab("ws_123", tab2.TabID)
 
 	assert.NoError(t, err)
 
-	// 驗證 activeTabID
+	// Verify activeTabID
 	workspace := tm.workspaces["ws_123"]
 	assert.Equal(t, tab2.TabID, workspace.ActiveTabID)
 
-	// 切換回 tab1
+	// Switch back to tab1
 	err = tm.SwitchTab("ws_123", tab1.TabID)
 	assert.NoError(t, err)
 	assert.Equal(t, tab1.TabID, workspace.ActiveTabID)

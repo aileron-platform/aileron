@@ -14,5 +14,5 @@ type Client struct {
 	WorkspaceID string
 	Token       string
 	ConnectedAt time.Time
-	WriteMutex  sync.Mutex // 保護 WebSocket 寫入操作
+	WriteMutex  sync.Mutex // Protects WebSocket write operations
 }

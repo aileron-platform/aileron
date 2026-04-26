@@ -12,12 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// 建立 PTY
+// Create PTY
 func createPTY(workspacePath string, cols int, rows int) (*TerminalTab, error) {
-	// 建立 shell 命令（同時使用 login + interactive）
+	// Create shell command (using both login and interactive)
 	cmd := exec.Command("/bin/bash", "-l", "-i")
 	cmd.Dir = workspacePath
-	// 設置環境變量，包括 PS1 提示符以顯示用戶名和容器ID
+	// Set environment variables, including PS1 prompt to show username and container ID
 	env := os.Environ()
 	env = append(env,
 		"TERM=xterm-256color",
@@ -41,7 +41,7 @@ func createPTY(workspacePath string, cols int, rows int) (*TerminalTab, error) {
 	env = append(env, fmt.Sprintf("BASH_ENV=%s", bashrcPath))
 	cmd.Env = env
 
-	// 啟動 PTY
+	// Start PTY
 	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{
 		Rows: uint16(rows),
 		Cols: uint16(cols),
@@ -63,13 +63,13 @@ func createPTY(workspacePath string, cols int, rows int) (*TerminalTab, error) {
 		OutputChan:    make(chan []byte, 256),
 	}
 
-	// 啟動輸出監控 goroutine
+	// Start output monitoring goroutine
 	go monitorPTYOutput(tab)
 
 	return tab, nil
 }
 
-// 監控 PTY 輸出
+// Monitor PTY output
 func monitorPTYOutput(tab *TerminalTab) {
 	buf := make([]byte, 4096)
 	for {
@@ -79,13 +79,13 @@ func monitorPTYOutput(tab *TerminalTab) {
 			return
 		}
 		if n > 0 {
-			// 複製數據以避免競態條件
+			// Copy data to avoid race condition
 			data := make([]byte, n)
 			copy(data, buf[:n])
 			select {
 			case tab.OutputChan <- data:
 			default:
-				// channel 滿時丟棄舊資料
+				// Drop old data when channel is full
 			}
 		}
 	}
@@ -106,7 +106,7 @@ func getContainerID() string {
 	return id
 }
 
-// 發送輸入到 PTY
+// Send input to PTY
 func (tab *TerminalTab) SendInput(data []byte) error {
 	tab.mu.Lock()
 	defer tab.mu.Unlock()
@@ -119,7 +119,7 @@ func (tab *TerminalTab) SendInput(data []byte) error {
 	return err
 }
 
-// 調整 PTY 大小
+// Resize PTY
 func (tab *TerminalTab) Resize(cols int, rows int) error {
 	tab.mu.Lock()
 	defer tab.mu.Unlock()
@@ -137,7 +137,7 @@ func (tab *TerminalTab) Resize(cols int, rows int) error {
 	})
 }
 
-// 關閉 PTY
+// Close PTY
 func (tab *TerminalTab) Close() error {
 	tab.mu.Lock()
 	defer tab.mu.Unlock()

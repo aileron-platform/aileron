@@ -1,72 +1,72 @@
 .PHONY: build run test test-container test-container-clean clean docker-build docker-up docker-down
 
-# 建構應用
+# Build application
 build:
 	go build -o bin/terminal-service ./cmd/server
 
-# 執行應用
+# Run application
 run:
 	go run ./cmd/server/main.go
 
-# 執行測試
+# Run tests
 test:
 	go test -v ./...
 
-# 使用容器執行測試
+# Run tests in container
 test-container:
 	docker compose -f docker-compose.test.yml run --build --rm workspace-terminal-test
 
 test-container-clean:
 	docker compose -f docker-compose.test.yml down -v --remove-orphans
 
-# 執行測試（帶覆蓋率）
+# Run tests with coverage
 test-coverage:
 	go test -v -coverprofile=coverage.out ./...
 	go tool cover -html=coverage.out
 
-# 清理建構產物
+# Clean build artifacts
 clean:
 	rm -rf bin/
 	rm -f coverage.out
 
-# 格式化代碼
+# Format code
 fmt:
 	go fmt ./...
 
-# 代碼檢查
+# Lint code
 lint:
 	golangci-lint run
 
-# 下載依賴
+# Download dependencies
 deps:
 	go mod download
 	go mod tidy
 
-# Docker 建構
+# Build Docker image
 docker-build:
 	docker-compose build
 
-# Docker 啟動
+# Start Docker containers
 docker-up:
 	docker-compose up -d
 
-# Docker 停止
+# Stop Docker containers
 docker-down:
 	docker-compose down
 
-# Docker 查看日誌
+# View Docker logs
 docker-logs:
 	docker-compose logs -f terminal-service
 
-# Docker 重啟
+# Restart Docker container
 docker-restart:
 	docker-compose restart terminal-service
 
-# 開發模式（使用 air 熱重載）
+# Development mode (hot reload with air)
 dev:
 	air
 
-# 安裝開發工具
+# Install development tools
 install-tools:
 	go install github.com/cosmtrek/air@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

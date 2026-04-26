@@ -4,20 +4,20 @@ const { chromium } = require("playwright");
 // Read configuration from environment variables
 const cdpPort = process.env.CDP_PORT || 9222;
 
-// Chromium 路徑（使用 Playwright 動態取得，避免版本號硬編碼）
+// Chromium path (dynamically obtained from Playwright to avoid version hardcoding)
 const chromiumPath = chromium.executablePath();
 
 console.log("Starting Chrome in normal mode with address bar...");
 console.log(`Chromium path: ${chromiumPath}`);
 
-// GPU 加速設定（預設啟用）
+// GPU acceleration setting (enabled by default)
 const enableGpu = process.env.ENABLE_GPU !== "false";
 
 const chromeArgs = [
-  "--disable-dev-shm-usage",           // 避免 /dev/shm 空間不足
+
   `--remote-debugging-port=${cdpPort}`,
-  "--remote-allow-origins=*",          // 允許任何來源的 CDP 連接
-  "--start-maximized",                 // 最大化視窗但保留網址列和 tab 列
+
+
   "--window-size=1440,900",
   "--window-position=0,0",
   "--disable-session-crashed-bubble",
@@ -29,10 +29,10 @@ const chromeArgs = [
   "--user-data-dir=/tmp/chrome-user-data",
   "--disable-background-networking",
   "--disable-sync",
-  "about:blank"  // 初始頁面
+  "about:blank"  // Initial page
 ];
 
-// GPU 相關參數
+// GPU-related parameters
 if (enableGpu) {
   console.log("GPU acceleration: ENABLED");
   chromeArgs.push(
@@ -53,15 +53,15 @@ const chrome = spawn(chromiumPath, chromeArgs, {
   env: {
     ...process.env,
     DISPLAY: process.env.DISPLAY || ":99",
-    // 輸入法環境變數
+    // Input method environment variables
     GTK_IM_MODULE: "fcitx",
     QT_IM_MODULE: "fcitx",
     XMODIFIERS: "@im=fcitx",
     DBUS_SESSION_BUS_ADDRESS: "unix:path=/tmp/dbus-session-bus",
-    // 中文 locale
+    // Chinese locale
     LANG: "zh_TW.UTF-8",
     LC_ALL: "zh_TW.UTF-8",
-    // 禁用 Google API 金鑰警告
+    // Disable Google API key warnings
     GOOGLE_API_KEY: "no",
     GOOGLE_DEFAULT_CLIENT_ID: "no",
     GOOGLE_DEFAULT_CLIENT_SECRET: "no"
@@ -91,14 +91,12 @@ chrome.on("close", (code) => {
   process.exit(code);
 });
 
-// 等待 Chrome 啟動
 console.log("Waiting for Chrome to start...");
 setTimeout(() => {
   console.log(`Chrome started in normal mode`);
   console.log(`CDP endpoint available on port ${cdpPort}`);
 }, 3000);
 
-// 處理終止信號
 process.on("SIGINT", () => {
   console.log("Shutting down Chrome...");
   chrome.kill("SIGTERM");

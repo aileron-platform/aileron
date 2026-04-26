@@ -12,9 +12,9 @@ type Config struct {
 	RedisPort string
 	RedisDB   int
 
-	// Terminal 配置
+	// Terminal configuration
 	MaxTabsPerWorkspace int
-	SessionTimeout      int // 秒
+	SessionTimeout      int // seconds
 	PTYBufferSize       int
 }
 

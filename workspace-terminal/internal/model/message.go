@@ -5,31 +5,31 @@ import "time"
 type MessageType string
 
 const (
-	// 連線管理
+	// Connection management
 	TypeConnect    MessageType = "connect"
 	TypeConnected  MessageType = "connected"
 	TypeDisconnect MessageType = "disconnect"
 
-	// Tab 管理
+	// Tab management
 	TypeCreateTab MessageType = "create_tab"
 	TypeCloseTab  MessageType = "close_tab"
 	TypeSwitchTab MessageType = "switch_tab"
 	TypeListTabs  MessageType = "list_tabs"
 
-	// 事件
+	// Events
 	TypeTabCreated  MessageType = "tab_created"
 	TypeTabClosed   MessageType = "tab_closed"
 	TypeTabSwitched MessageType = "tab_switched"
 	TypeTabList     MessageType = "tab_list"
 
-	// 終端操作
+	// Terminal operations
 	TypeInput   MessageType = "input"
 	TypeOutput  MessageType = "output"
 	TypeResize  MessageType = "resize"
 	TypeResized MessageType = "resized"
 	TypeClear   MessageType = "clear"
 
-	// 錯誤
+	// Errors
 	TypeError MessageType = "error"
 )
 
@@ -40,7 +40,7 @@ type Message struct {
 	Timestamp int64                  `json:"timestamp,omitempty"`
 }
 
-// 特定訊息類型的輔助函數
+// Helper functions for specific message types
 func NewConnectedMessage(clientID string, userID string) *Message {
 	return &Message{
 		Type: TypeConnected,

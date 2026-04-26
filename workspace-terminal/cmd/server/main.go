@@ -19,10 +19,8 @@ import (
 )
 
 func main() {
-	// 1. 加載配置
 	cfg := config.Load()
 
-	// 2. 初始化日誌
 	logger := initLogger(cfg.LogLevel)
 	defer logger.Sync()
 
@@ -30,17 +28,14 @@ func main() {
 		zap.String("port", cfg.Port),
 		zap.String("log_level", cfg.LogLevel))
 
-	// 3. 初始化服務
 	tokenManager := service.NewTokenManager()
 	terminalManager := service.NewTerminalManager()
 
-	// 5. 初始化 Gin
 	if cfg.LogLevel == "info" || cfg.LogLevel == "warn" || cfg.LogLevel == "error" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := gin.Default()
 
-	// 6. 註冊路由
 	wsHandler := handler.NewWebSocketHandler(
 		tokenManager,
 		terminalManager,
@@ -50,9 +45,7 @@ func main() {
 	router.GET("/health", handler.HealthCheckHandler)
 	router.GET("/ws/terminal", wsHandler.HandleTerminalWS)
 
-	// 7. 啟動服務器
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%s", cfg.Port),
 		Handler: router,
 	}
 
@@ -63,9 +56,7 @@ func main() {
 		}
 	}()
 
-	// 8. 優雅關閉
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	logger.Info("Shutting down server...")

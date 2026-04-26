@@ -234,7 +234,6 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 			FSGroup: int64Ptr(1000),
 		}
 		deployment.Spec.Template.Spec.Volumes = runtimeVolumes(workspace, r.knowledgeBasesPVCName())
-		// 建立容器規格
 		container := corev1.Container{
 			Name:  "runtime",
 			Image: resolveRuntimeImage(workspace),
@@ -245,7 +244,6 @@ func (r *WorkspaceReconciler) reconcileRuntimeDeployment(
 			Env:          append(runtimeEnvVars(workspace, r), toEnvVars(workspace.Spec.EnvVars)...),
 			VolumeMounts: runtimeVolumeMounts(workspace),
 		}
-		// 套用資源配置
 		if workspace.Spec.Runtime.Resources != nil {
 			container.Resources = *workspace.Spec.Runtime.Resources
 		}
@@ -320,7 +318,6 @@ func (r *WorkspaceReconciler) reconcileBrowserDeployment(
 				},
 			},
 		}
-		// 建立容器規格
 		container := corev1.Container{
 			Name:  "browser",
 			Image: resolveOptionalImage(workspace.Spec.Browser.Image, "ailerondocker/workspace-chrome:latest"),
@@ -336,7 +333,6 @@ func (r *WorkspaceReconciler) reconcileBrowserDeployment(
 				},
 			},
 		}
-		// 套用資源配置
 		if workspace.Spec.Browser.Resources != nil {
 			container.Resources = *workspace.Spec.Browser.Resources
 		}
@@ -411,7 +407,6 @@ func (r *WorkspaceReconciler) reconcileCanvasDeployment(
 				},
 			},
 		}
-		// 建立容器規格
 		container := corev1.Container{
 			Name:  "canvas",
 			Image: resolveOptionalImage(workspace.Spec.Canvas.Image, "ailerondocker/workspace-canvas:latest"),
@@ -426,7 +421,6 @@ func (r *WorkspaceReconciler) reconcileCanvasDeployment(
 				},
 			},
 		}
-		// 套用資源配置
 		if workspace.Spec.Canvas.Resources != nil {
 			container.Resources = *workspace.Spec.Canvas.Resources
 		}
@@ -1379,7 +1373,7 @@ func runtimeEnvVars(
 		"",
 	); err == nil && frontendPublicURL != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "FRONTEND_PUBLIC_URL", Value: frontendPublicURL})
-		// ALLOWED_ORIGINS 必須是 JSON array，才能被 pydantic-settings 正確解析。
+		// ALLOWED_ORIGINS must be a JSON array for pydantic-settings to parse correctly.
 		allowedOriginsJSON := fmt.Sprintf(`[%q]`, frontendPublicURL)
 		envVars = append(envVars, corev1.EnvVar{Name: "ALLOWED_ORIGINS", Value: allowedOriginsJSON})
 	}

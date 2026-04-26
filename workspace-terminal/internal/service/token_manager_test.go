@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// buildTestJWT 組裝一個未簽名（或任意簽名）的測試 JWT。
-// 僅適用於 KEYCLOAK_JWKS_URL 未設定時（略過簽名驗證）。
+// buildTestJWT assembles an unsigned (or arbitrarily signed) test JWT.
+// Only works when KEYCLOAK_JWKS_URL is not set (skips signature verification).
 func buildTestJWT(sub string, exp int64) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT","kid":"test-kid"}`))
 	payload, _ := json.Marshal(map[string]interface{}{
@@ -24,9 +24,9 @@ func buildTestJWT(sub string, exp int64) string {
 }
 
 func TestVerifyToken_ValidJWT(t *testing.T) {
-	// KEYCLOAK_JWKS_URL 未設定時略過簽名驗證，僅驗證 claims
+	// When KEYCLOAK_JWKS_URL is not set, skip signature verification and only verify claims
 	tm := NewTokenManager()
-	tm.jwksURL = "" // 確保測試環境不做簽名驗證
+	tm.jwksURL = "" // Ensure test environment does not verify signature
 
 	token := buildTestJWT("user-abc", time.Now().Add(time.Hour).Unix())
 	result, err := tm.VerifyToken(token)

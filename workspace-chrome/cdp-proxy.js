@@ -98,7 +98,7 @@ server.on('upgrade', (clientReq, clientSocket, head) => {
   proxySocket.on('connect', () => {
     console.log(`[WS] Connected to Chrome CDP`);
 
-    // 保持原始的 Host header
+    // Preserve original Host header
     const rawRequest =
       `GET ${parsedUrl.path} HTTP/1.1\r\n` +
       `Host: localhost\r\n` +

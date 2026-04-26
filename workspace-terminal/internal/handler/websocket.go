@@ -34,13 +34,12 @@ func NewWebSocketHandler(
 		logger:       logger,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return true // 實際部署時應該限制 origin
+				return true // TODO: restrict origin in production
 			},
 		},
 	}
 }
 
-// WebSocket 端點
 func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 	token := c.Query("token")
 
@@ -49,7 +48,6 @@ func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 		return
 	}
 
-	// 認證
 	tokenInfo, err := h.authenticateConnection(token)
 	if err != nil {
 		h.logger.Warn("Authentication failed", zap.Error(err))
@@ -57,7 +55,6 @@ func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 		return
 	}
 
-	// 升級連線
 	ws, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		h.logger.Error("WebSocket upgrade failed", zap.Error(err))
@@ -69,31 +66,26 @@ func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 		ID:          clientID,
 		WS:          ws,
 		UserID:      tokenInfo.UserID,
-		WorkspaceID: "", // Terminal Service 不綁定 workspace
+		WorkspaceID: "", // Terminal Service does not bind to workspace
 		Token:       token,
 		ConnectedAt: time.Now(),
 	}
 
-	// 註冊客戶端
 	h.terminalMgr.RegisterClient(client)
 
 	h.logger.Info("Client connected",
 		zap.String("client_id", clientID),
 		zap.String("user_id", tokenInfo.UserID))
 
-	// 發送 connected 訊息
 	h.sendMessage(client, model.NewConnectedMessage(clientID, tokenInfo.UserID))
 
-	// 處理客戶端
 	h.handleClient(client)
 
-	// 斷開時清理
 	h.terminalMgr.UnregisterClient(clientID)
 
 	h.logger.Info("Client disconnected", zap.String("client_id", clientID))
 }
 
-// 認證連線
 func (h *WebSocketHandler) authenticateConnection(token string) (*service.TokenInfo, error) {
 	tokenInfo, err := h.tokenManager.VerifyToken(token)
 	if err != nil {
@@ -103,7 +95,6 @@ func (h *WebSocketHandler) authenticateConnection(token string) (*service.TokenI
 	return tokenInfo, nil
 }
 
-// 處理客戶端消息
 func (h *WebSocketHandler) handleClient(client *model.Client) {
 	defer client.WS.Close()
 
@@ -121,7 +112,6 @@ func (h *WebSocketHandler) handleClient(client *model.Client) {
 	}
 }
 
-// 路由消息
 func (h *WebSocketHandler) routeMessage(client *model.Client, msg *model.Message) {
 	switch msg.Type {
 	case model.TypeCreateTab:
@@ -143,19 +133,16 @@ func (h *WebSocketHandler) routeMessage(client *model.Client, msg *model.Message
 	}
 }
 
-// 發送訊息
 func (h *WebSocketHandler) sendMessage(client *model.Client, msg *model.Message) error {
 	client.WriteMutex.Lock()
 	defer client.WriteMutex.Unlock()
 	return client.WS.WriteJSON(msg)
 }
 
-// 發送錯誤
 func (h *WebSocketHandler) sendError(client *model.Client, code string, message string) {
 	h.sendMessage(client, model.NewErrorMessage("", code, message))
 }
 
-// 廣播到 workspace 的所有客戶端
 func (h *WebSocketHandler) broadcastToWorkspace(workspaceID string, msg *model.Message) {
 	clients := h.terminalMgr.GetWorkspaceClients(workspaceID)
 	for _, client := range clients {

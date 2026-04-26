@@ -1,4 +1,4 @@
-# Air 配置文件 - 用於熱重載開發
+# Air configuration file for hot reload development
 
 root = "."
 testdata_dir = "testdata"

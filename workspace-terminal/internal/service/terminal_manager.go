@@ -19,7 +19,7 @@ type TerminalTab struct {
 	CreatedAt     time.Time
 	LastActiveAt  time.Time
 
-	// PTY 相關
+	// PTY-related fields
 	pty        *os.File
 	cmd        *exec.Cmd
 	OutputChan chan []byte
@@ -47,7 +47,7 @@ func NewTerminalManager() *TerminalManager {
 	}
 }
 
-// 建立新 tab
+// Create new tab
 func (tm *TerminalManager) CreateTab(
 	workspaceID string,
 	cols int,
@@ -65,7 +65,7 @@ func (tm *TerminalManager) CreateTab(
 	}
 	tm.mu.Unlock()
 
-	// 建立 PTY
+	// Create PTY
 	tab, err := createPTY(cwd, cols, rows)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (tm *TerminalManager) CreateTab(
 	return tab, nil
 }
 
-// 關閉 tab
+// Close tab
 func (tm *TerminalManager) CloseTab(workspaceID string, tabID string) error {
 	tm.mu.RLock()
 	workspace, exists := tm.workspaces[workspaceID]
@@ -102,7 +102,7 @@ func (tm *TerminalManager) CloseTab(workspaceID string, tabID string) error {
 
 	if workspace.ActiveTabID == tabID {
 		workspace.ActiveTabID = ""
-		// 如果還有其他 tabs，設置第一個為活躍
+		// If other tabs exist, set first one as active
 		for id := range workspace.Tabs {
 			workspace.ActiveTabID = id
 			break
@@ -111,11 +111,11 @@ func (tm *TerminalManager) CloseTab(workspaceID string, tabID string) error {
 
 	workspace.mu.Unlock()
 
-	// 清理資源
+	// Clean up resources
 	return tab.Close()
 }
 
-// 切換 tab
+// Switch tab
 func (tm *TerminalManager) SwitchTab(workspaceID string, tabID string) error {
 	tm.mu.RLock()
 	workspace, exists := tm.workspaces[workspaceID]
@@ -136,7 +136,7 @@ func (tm *TerminalManager) SwitchTab(workspaceID string, tabID string) error {
 	return nil
 }
 
-// 列出所有 tabs
+// List all tabs
 func (tm *TerminalManager) ListTabs(workspaceID string) ([]*TerminalTab, error) {
 	tm.mu.RLock()
 	workspace, exists := tm.workspaces[workspaceID]
@@ -156,7 +156,7 @@ func (tm *TerminalManager) ListTabs(workspaceID string) ([]*TerminalTab, error) 
 	return tabs, nil
 }
 
-// 獲取 tab
+// Get tab
 func (tm *TerminalManager) GetTab(workspaceID string, tabID string) (*TerminalTab, error) {
 	tm.mu.RLock()
 	workspace, exists := tm.workspaces[workspaceID]
@@ -177,21 +177,21 @@ func (tm *TerminalManager) GetTab(workspaceID string, tabID string) (*TerminalTa
 	return tab, nil
 }
 
-// 註冊客戶端
+// Register client
 func (tm *TerminalManager) RegisterClient(client *model.Client) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	tm.clients[client.ID] = client
 }
 
-// 註銷客戶端
+// Unregister client
 func (tm *TerminalManager) UnregisterClient(clientID string) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	delete(tm.clients, clientID)
 }
 
-// 獲取 workspace 的所有客戶端
+// Get all clients for workspace
 func (tm *TerminalManager) GetWorkspaceClients(workspaceID string) []*model.Client {
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
@@ -205,7 +205,7 @@ func (tm *TerminalManager) GetWorkspaceClients(workspaceID string) []*model.Clie
 	return clients
 }
 
-// 關閉所有資源
+// Close all resources
 func (tm *TerminalManager) Close() {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()

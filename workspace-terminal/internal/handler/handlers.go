@@ -7,9 +7,7 @@ import (
 	"workspace-terminal/internal/service"
 )
 
-// 處理建立 tab
 func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Message) {
-	// 提取參數
 	cols, ok := msg.Data["cols"].(float64)
 	if !ok {
 		h.sendError(client, "INVALID_PARAMS", "cols is required and must be a number")
@@ -24,15 +22,14 @@ func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Mess
 
 	name, ok := msg.Data["name"].(string)
 	if !ok || name == "" {
-		name = "Terminal" // 默認名稱
+		name = "Terminal" // Default name
 	}
 
 	workspacePath, ok := msg.Data["workspace_path"].(string)
 	if !ok || workspacePath == "" {
-		workspacePath = "/workspace" // 默認工作目錄
+		workspacePath = "/workspace" // Default working directory
 	}
 
-	// 建立 tab
 	tab, err := h.terminalMgr.CreateTab(client.WorkspaceID, int(cols), int(rows), workspacePath)
 	if err != nil {
 		h.logger.Error("Failed to create tab", zap.Error(err))
@@ -40,11 +37,9 @@ func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Mess
 		return
 	}
 
-	// 發送 tab_created 訊息
 	response := model.NewTabCreatedMessage(tab.TabID, tab.SessionID, name, tab.WorkspacePath, tab.Cols, tab.Rows)
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
-	// 啟動輸出監聽
 	go h.monitorTabOutput(client.WorkspaceID, tab)
 
 	h.logger.Info("Tab created",
@@ -53,7 +48,6 @@ func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Mess
 		zap.String("workspace_id", client.WorkspaceID))
 }
 
-// 處理關閉 tab
 func (h *WebSocketHandler) handleCloseTab(client *model.Client, msg *model.Message) {
 	if msg.TabID == "" {
 		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
@@ -67,7 +61,6 @@ func (h *WebSocketHandler) handleCloseTab(client *model.Client, msg *model.Messa
 		return
 	}
 
-	// 發送 tab_closed 訊息
 	response := model.NewTabClosedMessage(msg.TabID, 0)
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
@@ -76,7 +69,6 @@ func (h *WebSocketHandler) handleCloseTab(client *model.Client, msg *model.Messa
 		zap.String("workspace_id", client.WorkspaceID))
 }
 
-// 處理切換 tab
 func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Message) {
 	if msg.TabID == "" {
 		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
@@ -90,7 +82,6 @@ func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Mess
 		return
 	}
 
-	// 發送 tab_switched 訊息
 	response := model.NewTabSwitchedMessage(msg.TabID)
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
@@ -99,7 +90,6 @@ func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Mess
 		zap.String("workspace_id", client.WorkspaceID))
 }
 
-// 處理輸入
 func (h *WebSocketHandler) handleInput(client *model.Client, msg *model.Message) {
 	if msg.TabID == "" {
 		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
@@ -126,7 +116,6 @@ func (h *WebSocketHandler) handleInput(client *model.Client, msg *model.Message)
 	}
 }
 
-// 處理調整大小
 func (h *WebSocketHandler) handleResize(client *model.Client, msg *model.Message) {
 	if msg.TabID == "" {
 		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
@@ -158,7 +147,6 @@ func (h *WebSocketHandler) handleResize(client *model.Client, msg *model.Message
 		return
 	}
 
-	// 發送 resized 訊息
 	response := model.NewResizedMessage(msg.TabID, int(cols), int(rows))
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
@@ -168,7 +156,6 @@ func (h *WebSocketHandler) handleResize(client *model.Client, msg *model.Message
 		zap.Int("rows", int(rows)))
 }
 
-// 處理列出 tabs
 func (h *WebSocketHandler) handleListTabs(client *model.Client, msg *model.Message) {
 	tabs, err := h.terminalMgr.ListTabs(client.WorkspaceID)
 	if err != nil {
@@ -177,7 +164,6 @@ func (h *WebSocketHandler) handleListTabs(client *model.Client, msg *model.Messa
 		return
 	}
 
-	// 構建 tabs 列表
 	tabsList := make([]map[string]interface{}, 0, len(tabs))
 	for _, tab := range tabs {
 		tabsList = append(tabsList, map[string]interface{}{
@@ -191,12 +177,10 @@ func (h *WebSocketHandler) handleListTabs(client *model.Client, msg *model.Messa
 		})
 	}
 
-	// 發送 tab_list 訊息
 	response := model.NewTabListMessage(tabsList)
 	h.sendMessage(client, response)
 }
 
-// 處理清除終端
 func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message) {
 	if msg.TabID == "" {
 		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
@@ -209,7 +193,6 @@ func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message)
 		return
 	}
 
-	// 發送 clear 命令到終端
 	err = tab.SendInput([]byte("clear\n"))
 	if err != nil {
 		h.logger.Error("Failed to clear terminal", zap.Error(err))
@@ -218,7 +201,6 @@ func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message)
 	}
 }
 
-// 監聽 tab 輸出
 func (h *WebSocketHandler) monitorTabOutput(workspaceID string, tab *service.TerminalTab) {
 	for data := range tab.OutputChan {
 		if data == nil {
