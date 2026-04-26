@@ -38,7 +38,7 @@ class WorkspaceLifecycleService:
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"BeginDelete workspace: {workspace_id}")
+        logger.info(f"Starting to delete workspace: {workspace_id}")
         
         try:
             # 1. Read workspace Data
@@ -52,13 +52,13 @@ class WorkspaceLifecycleService:
                 return
             
             # Record deletion log
-            self._log_event(workspace_id, "deleting", "BeginDelete workspace")
+            self._log_event(workspace_id, "deleting", "Starting to delete workspace")
             
             # 2. Stop and delete containers
             if workspace.runtime_container_id:
                 self._stop_and_remove_container(workspace.runtime_container_id, workspace_id)
             else:
-                logger.warning(f"Workspace {workspace_id} no associated runtime container")
+                logger.warning(f"Workspace {workspace_id} has no associated runtime container")
 
             # Delete Canvas Container
             if workspace.canvas_container_id:
@@ -71,10 +71,10 @@ class WorkspaceLifecycleService:
             self.db.delete(workspace)
             self.db.commit()
             
-            logger.info(f"SuccessDelete workspace: {workspace_id}")
+            logger.info(f"Successfully deleted workspace: {workspace_id}")
             
         except Exception as e:
-            logger.exception(f"Delete workspace {workspace_id} Failed: {e}")
+            logger.exception(f"Failed to delete workspace {workspace_id}: {e}")
             self.db.rollback()
             
             # Try to update status to error (if workspace still exists)
@@ -82,10 +82,10 @@ class WorkspaceLifecycleService:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.runtime_status = "error"
-                    self._log_event(workspace_id, "error", f"DeleteFailed: {str(e)}")
+                    self._log_event(workspace_id, "error", f"Failed to delete: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"UpdateErrorStatusFailed: {update_error}")
+                logger.error(f"Failed to update error status: {update_error}")
 
     def restart_workspace_task(self, workspace_id: str) -> None:
         """Background task: Rebuild workspace container (using latest image)
@@ -98,7 +98,7 @@ class WorkspaceLifecycleService:
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"Begin rebuilding workspace container: {workspace_id}")
+        logger.info(f"Starting to rebuild workspace container: {workspace_id}")
 
         try:
             # 1. Read workspace Data
@@ -112,18 +112,18 @@ class WorkspaceLifecycleService:
                 return
 
             # Record restart log
-            self._log_event(workspace_id, "restarting", "Begin rebuilding workspace container")
+            self._log_event(workspace_id, "restarting", "Starting to rebuild workspace container")
             if workspace.runtime_container_id:
                 from app.services.runtime_provision_service import RuntimeProvisionService
 
                 RuntimeProvisionService(self.db).execute_runtime_provision(workspace_id)
                 logger.info(f"Successfully rebuilt workspace container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} no associated container")
-                self._log_event(workspace_id, "error", "no associated container")
+                logger.warning(f"Workspace {workspace_id} has no associated container")
+                self._log_event(workspace_id, "error", "No associated container")
 
         except Exception as e:
-            logger.exception(f"Rebuild workspace container {workspace_id} failed: {e}")
+            logger.exception(f"Failed to rebuild workspace container {workspace_id}: {e}")
             self.db.rollback()
 
             # Update status to error
@@ -131,10 +131,10 @@ class WorkspaceLifecycleService:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.runtime_status = "error"
-                    self._log_event(workspace_id, "error", f"rebuild failed: {str(e)}")
+                    self._log_event(workspace_id, "error", f"Failed to rebuild: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"UpdateErrorStatusFailed: {update_error}")
+                logger.error(f"Failed to update error status: {update_error}")
 
     def restart_browser_task(self, workspace_id: str) -> None:
         """Background task: Rebuild browser container (using latest image)
@@ -148,7 +148,7 @@ class WorkspaceLifecycleService:
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"Begin rebuilding browser container: {workspace_id}")
+        logger.info(f"Starting to rebuild browser container: {workspace_id}")
 
         try:
             # 1. Read workspace Data
@@ -162,7 +162,7 @@ class WorkspaceLifecycleService:
                 return
 
             # Record restart log
-            self._log_event(workspace_id, "browser_restarting", "Begin rebuilding browser container")
+            self._log_event(workspace_id, "browser_restarting", "Starting to rebuild browser container")
 
             # 2. Rebuild container
             if workspace.browser_container_id:
@@ -174,16 +174,16 @@ class WorkspaceLifecycleService:
                 if new_id:
                     workspace.browser_container_id = new_id
                 workspace.browser_status = "running"
-                self._log_event(workspace_id, "browser_running", "Browser container rebuild succeeded")
+                self._log_event(workspace_id, "browser_running", "Browser container successfully rebuilt")
                 self.db.commit()
 
                 logger.info(f"Successfully rebuilt browser container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} No associated browser container")
+                logger.warning(f"Workspace {workspace_id} has no associated browser container")
                 self._log_event(workspace_id, "browser_error", "No associated browser container")
 
         except Exception as e:
-            logger.exception(f"Rebuild browser container {workspace_id} failed: {e}")
+            logger.exception(f"Failed to rebuild browser container {workspace_id}: {e}")
             self.db.rollback()
 
             # Update browser status to error
@@ -191,10 +191,10 @@ class WorkspaceLifecycleService:
                 workspace = self.db.get(db_models.Workspace, workspace_id)
                 if workspace:
                     workspace.browser_status = "error"
-                    self._log_event(workspace_id, "browser_error", f"rebuild failed: {str(e)}")
+                    self._log_event(workspace_id, "browser_error", f"Failed to rebuild: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"Update Browser ErrorStatusFailed: {update_error}")
+                logger.error(f"Failed to update browser error status: {update_error}")
 
     def restart_canvas_task(self, workspace_id: str) -> None:
         """Background task: Rebuild canvas container (using latest image)
@@ -202,7 +202,7 @@ class WorkspaceLifecycleService:
         Args:
             workspace_id: Workspace ID
         """
-        logger.info(f"Begin rebuilding canvas container: {workspace_id}")
+        logger.info(f"Starting to rebuild canvas container: {workspace_id}")
 
         try:
             workspace = self.db.get(db_models.Workspace, workspace_id)
@@ -214,7 +214,7 @@ class WorkspaceLifecycleService:
                 self._restart_kubernetes_canvas(workspace)
                 return
 
-            self._log_event(workspace_id, "canvas_restarting", "Begin rebuilding canvas container")
+            self._log_event(workspace_id, "canvas_restarting", "Starting to rebuild canvas container")
 
             if workspace.canvas_container_id:
                 new_id = self._recreate_container(
@@ -224,16 +224,16 @@ class WorkspaceLifecycleService:
                 if new_id:
                     workspace.canvas_container_id = new_id
                 workspace.canvas_status = "running"
-                self._log_event(workspace_id, "canvas_running", "Canvas container rebuild succeeded")
+                self._log_event(workspace_id, "canvas_running", "Canvas container successfully rebuilt")
                 self.db.commit()
 
                 logger.info(f"Successfully rebuilt canvas container: {workspace_id}")
             else:
-                logger.warning(f"Workspace {workspace_id} No associated canvas container")
+                logger.warning(f"Workspace {workspace_id} has no associated canvas container")
                 self._log_event(workspace_id, "canvas_error", "No associated canvas container")
 
         except Exception as e:
-            logger.exception(f"Rebuild canvas container {workspace_id} failed: {e}")
+            logger.exception(f"Failed to rebuild canvas container {workspace_id}: {e}")
             self.db.rollback()
 
             try:
@@ -243,7 +243,7 @@ class WorkspaceLifecycleService:
                     self._log_event(workspace_id, "canvas_error", f"rebuild failed: {str(e)}")
                     self.db.commit()
             except Exception as update_error:
-                logger.error(f"Update Canvas ErrorStatusFailed: {update_error}")
+                logger.error(f"Failed to update canvas error status: {update_error}")
 
     def _build_fresh_environment(self, workspace: db_models.Workspace) -> list[str]:
         """Build latest environment variables from database for container rebuild.
@@ -270,7 +270,7 @@ class WorkspaceLifecycleService:
         service = WorkspaceCustomResourceService(self.db)
         deleted = service.delete_workspace_custom_resource(workspace.id)
         if not deleted:
-            raise ValueError(f"Workspace {workspace.id} DeleteFailed")
+            raise ValueError(f"Failed to delete workspace {workspace.id}")
 
     def _restart_kubernetes_workspace(self, workspace: db_models.Workspace) -> None:
         """Restart Kubernetes runtime workload."""
@@ -325,7 +325,7 @@ class WorkspaceLifecycleService:
 
             logger.info(f"Recreating container {name} ({container_id[:12]}) with image {image}")
             self._log_event(workspace_id, "container_recreating",
-                            f"Rebuilding container {name}, use latest image: {image}")
+                            f"Rebuilding container {name}, using latest image: {image}")
 
             # GetNetworkConfiguration
             networks = attrs.get("NetworkSettings", {}).get("Networks", {})
@@ -334,7 +334,7 @@ class WorkspaceLifecycleService:
             # Stop and remove old container
             container.stop(timeout=10)
             container.remove(force=True)
-            logger.info(f"Old container {container_id[:12]} removed")
+            logger.info(f"Old container {container_id[:12]} has been removed")
 
             # Create host_config (preserve original configuration)
             log_cfg = host_config.get("LogConfig", {})
@@ -404,8 +404,8 @@ class WorkspaceLifecycleService:
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Recreate container Failed: {e}")
-            self._log_event(workspace_id, "container_error", f"Recreate container Failed: {str(e)}")
+            logger.error(f"Failed to recreate container: {e}")
+            self._log_event(workspace_id, "container_error", f"Failed to recreate container: {str(e)}")
             raise
 
     def _stop_and_remove_container(self, container_id: str, workspace_id: str) -> None:
@@ -433,7 +433,7 @@ class WorkspaceLifecycleService:
                 self._log_event(workspace_id, "container_removed", f"Deleted container: {container_id}")
 
             except docker.errors.NotFound:
-                logger.warning(f"Container {container_id} does not exist, it may have been deleted")
+                logger.warning(f"Container {container_id} does not exist, it may have already been deleted")
                 self._log_event(workspace_id, "container_not_found", f"Container {container_id} does not exist")
 
             except docker.errors.APIError as e:
@@ -442,8 +442,8 @@ class WorkspaceLifecycleService:
                 # Do not raise exception, continue executing subsequent steps
 
         except Exception as e:
-            logger.error(f"Stop/Delete container Failed: {e}")
-            self._log_event(workspace_id, "container_error", f"Stop/Delete container Failed: {str(e)}")
+            logger.error(f"Failed to stop/delete container: {e}")
+            self._log_event(workspace_id, "container_error", f"Failed to stop/delete container: {str(e)}")
             # Do not raise exception, continue executing subsequent steps
 
     def _cleanup_workspace_volumes(self, workspace_id: str) -> None:
@@ -465,16 +465,16 @@ class WorkspaceLifecycleService:
         for directory in directories_to_remove:
             try:
                 if directory.exists():
-                    logger.debug(f"DeleteDirectory: {directory}")
+                    logger.debug(f"Deleting directory: {directory}")
                     shutil.rmtree(directory)
-                    logger.debug(f"SuccessDeleteDirectory: {directory}")
+                    logger.debug(f"Successfully deleted directory: {directory}")
                     self._log_event(workspace_id, "volume_removed", f"Deleted directory: {directory}")
                 else:
-                    logger.debug(f"Directorydoes not exist: {directory}")
+                    logger.debug(f"Directory does not exist: {directory}")
                     
             except Exception as e:
-                logger.error(f"DeleteDirectory {directory} Failed: {e}")
-                self._log_event(workspace_id, "volume_error", f"DeleteDirectoryFailed: {directory} - {str(e)}")
+                logger.error(f"Failed to delete directory {directory}: {e}")
+                self._log_event(workspace_id, "volume_error", f"Failed to delete directory: {directory} - {str(e)}")
                 # Do not raise exception, continue deleting other directories
 
     def _log_event(self, workspace_id: str, stage: str, message: str, metadata: Optional[dict] = None) -> None:
@@ -497,7 +497,7 @@ class WorkspaceLifecycleService:
             self.db.add(log_entry)
             self.db.commit()
         except Exception as e:
-            logger.error(f"Record logFailed: {e}")
+            logger.error(f"Failed to record log: {e}")
             self.db.rollback()
             # Don't raise exception to avoid affecting main process
 

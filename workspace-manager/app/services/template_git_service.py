@@ -343,7 +343,7 @@ class TemplateGitService:
                 is_git_repo=True,
             )
         except Exception as e:
-            logger.error(f"Get Git StatusFailed: {e}")
+            logger.error(f"Failed to get Git status: {e}")
             return GitStatus(
                 current_branch="unknown",
                 has_changes=False,
@@ -684,7 +684,7 @@ class TemplateGitService:
 
             return GitUserConfig(user_name=user_name, user_email=user_email)
         except Exception as e:
-            logger.warning(f"Get Git UserInformationFailed: {e}")
+            logger.warning(f"Failed to get Git user information: {e}")
             return GitUserConfig(user_name=None, user_email=None)
 
     def update_user_config(self, user_name: str, user_email: str) -> GitOperationResult:
@@ -702,7 +702,7 @@ class TemplateGitService:
 
             return self._operation_result(True, "GIT_USER_CONFIG_UPDATED")
         except Exception as e:
-            logger.error(f"Update Git UserInformationFailed: {e}")
+            logger.error(f"Failed to update Git user information: {e}")
             return self._operation_result(False, "GIT_USER_CONFIG_UPDATE_FAILED")
 
     def set_remote_url(self, url: str) -> GitOperationResult:
@@ -1070,7 +1070,7 @@ class TemplateGitService:
                     else:
                         Repo.clone_from(url, str(tmp_clone_path))
                 except Exception as e:
-                    logger.error(f"GitPython clone Failed: {e}")
+                    logger.error(f"GitPython clone failed: {e}")
                     return self._operation_result(False, "GIT_CLONE_FAILED")
 
                 # Move files to target directory
