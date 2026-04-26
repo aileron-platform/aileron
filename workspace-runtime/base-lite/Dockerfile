@@ -1,6 +1,5 @@
 FROM ubuntu:24.04
 
-ARG TARGETARCH
 ARG NODE_MAJOR=22
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -51,6 +50,6 @@ USER developer
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
     && /home/developer/.local/bin/uv tool update-shell
 
-COPY verify.sh /opt/verify.sh
-RUN sudo chmod +x /opt/verify.sh \
-    && bash /opt/verify.sh
+COPY --chown=developer:developer verify.sh /tmp/verify.sh
+RUN bash /tmp/verify.sh \
+    && rm /tmp/verify.sh

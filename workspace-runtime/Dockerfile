@@ -74,20 +74,20 @@ RUN mkdir -p /home/developer/.ssh \
 # 加入 docker 群組（部分 base image 未預設）
 RUN usermod -aG docker developer 2>/dev/null || true
 
-# 讓 developer 可存取 root 的工具鏈（若 base image 提供）
+# 讓 developer 可存取 root 的 Cargo 工具鏈（若 base image 提供）
 RUN mkdir -p /home/developer/.cargo && \
-    chmod 755 /root/.cargo 2>/dev/null || true && \
-    ln -sf /root/.cargo/bin /home/developer/.cargo/bin || true && \
-    chown developer:developer /home/developer/.cargo 2>/dev/null || true && \
+    (chmod o+x /root 2>/dev/null || true) && \
+    (chmod 755 /root/.cargo /root/.cargo/bin 2>/dev/null || true) && \
+    (ln -sf /root/.cargo/bin /home/developer/.cargo/bin || true) && \
+    (chown developer:developer /home/developer/.cargo 2>/dev/null || true) && \
     if [ -f /root/.cargo/env ]; then ln -sf /root/.cargo/env /home/developer/.cargo/env 2>/dev/null || true; fi
 
 # developer .bashrc：環境變數與 PATH
-# Java 直接路徑放在 mise shims 之前，避免 PTY 環境下 mise shim 卡住
 RUN echo 'export PYTHONPATH="/workspace-runtime:/workspace"' >> /home/developer/.bashrc && \
     echo 'export CARGO_HOME="/home/developer/.cargo"' >> /home/developer/.bashrc && \
     echo 'export RUSTUP_HOME="/root/.rustup"' >> /home/developer/.bashrc && \
     echo 'if [ -f "$HOME/.cargo/env" ]; then source "$HOME/.cargo/env" 2>/dev/null || true; fi' >> /home/developer/.bashrc && \
-    echo 'export PATH="/root/.local/share/mise/installs/java/21/bin:/root/.local/share/mise/installs/java/17/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.cargo/bin:$PATH"' >> /home/developer/.bashrc && \
+    echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.cargo/bin:$PATH"' >> /home/developer/.bashrc && \
     echo "export PS1='\$(whoami)@\$(hostname -s):\${PWD}\$ '" >> /home/developer/.bashrc && \
     chown developer:developer /home/developer/.bashrc
 
@@ -157,13 +157,7 @@ RUN chown -R developer:developer /workspace-runtime /workspace /workspace-termin
 
 # Anthropic 設定由執行時環境變數注入，不在映像中提供預設值
 
-# Java 直接路徑放在 mise shims 之前，避免 PTY 環境下 mise shim 卡住
-ENV PATH="/home/developer/.local/share/mise/installs/java/21/bin:/home/developer/.local/share/mise/installs/java/17/bin:/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
-
-# /etc/profile.d/ 腳本確保 mise activate 覆蓋 PATH 後 Java 路徑仍正確
-RUN echo '#!/bin/bash' > /etc/profile.d/fix-mise-path.sh && \
-    echo 'export PATH="/home/developer/.local/share/mise/installs/java/21/bin:/home/developer/.local/share/mise/installs/java/17/bin:$PATH"' >> /etc/profile.d/fix-mise-path.sh && \
-    chmod +x /etc/profile.d/fix-mise-path.sh
+ENV PATH="/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
 
 ENV PYTHONPATH="/workspace-runtime:/workspace"
 ENV DISABLE_AUTOUPDATER=1
@@ -187,20 +181,6 @@ COPY workspace-terminal/ /workspace-terminal/
 RUN chmod +x /workspace-runtime/scripts/*.sh /opt/terminal-service/bin/terminal-service
 
 EXPOSE 3002 3004 22
-
-# 修復 /root 目錄訪問權限（developer 需存取 pyenv/nvm/cargo 等工具）
-RUN chmod o+rx /root 2>/dev/null || true && \
-    chmod o+rx /root/.pyenv 2>/dev/null || true && \
-    chmod o+rwx /root/.pyenv/shims 2>/dev/null || true && \
-    chmod o+rx /root/.nvm 2>/dev/null || true && \
-    chmod o+rx /root/.nvm/versions 2>/dev/null || true && \
-    chmod o+rx /root/.cargo 2>/dev/null || true && \
-    chmod o+rx /root/.cargo/bin 2>/dev/null || true && \
-    chmod o+rx /root/.local 2>/dev/null || true && \
-    chmod o+rx /root/.local/bin 2>/dev/null || true && \
-    chmod o+rx /root/.local/share 2>/dev/null || true && \
-    chmod o+rx /root/.local/share/mise 2>/dev/null || true && \
-    chmod o+rwx /root/.local/share/mise/shims 2>/dev/null || true
 
 HEALTHCHECK --interval=30s --timeout=30s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:3002/health || exit 1
@@ -240,20 +220,6 @@ WORKDIR /workspace-runtime
 
 RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal && \
     chmod 755 /workspace /workspace-runtime /workspace-terminal
-
-# 修復 /root 目錄訪問權限（developer 需存取 pyenv/nvm/cargo 等工具）
-RUN chmod o+rx /root 2>/dev/null || true && \
-    chmod o+rx /root/.pyenv 2>/dev/null || true && \
-    chmod o+rwx /root/.pyenv/shims 2>/dev/null || true && \
-    chmod o+rx /root/.nvm 2>/dev/null || true && \
-    chmod o+rx /root/.nvm/versions 2>/dev/null || true && \
-    chmod o+rx /root/.cargo 2>/dev/null || true && \
-    chmod o+rx /root/.cargo/bin 2>/dev/null || true && \
-    chmod o+rx /root/.local 2>/dev/null || true && \
-    chmod o+rx /root/.local/bin 2>/dev/null || true && \
-    chmod o+rx /root/.local/share 2>/dev/null || true && \
-    chmod o+rx /root/.local/share/mise 2>/dev/null || true && \
-    chmod o+rwx /root/.local/share/mise/shims 2>/dev/null || true
 
 COPY workspace-runtime/start_services.sh /start_services.sh
 COPY workspace-runtime/supervisord.conf workspace-runtime/supervisord.dev.conf ./

@@ -86,9 +86,8 @@ chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2
 # bind-mount 可能讓 host 上的 script 失去 +x（Dockerfile 的 chmod 被覆蓋），在這裡補回
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 
-echo "🔧 修復 /root 目錄訪問權限（developer 用戶需要執行語言工具）..."
-for dir in /root /root/.pyenv/versions /root/.nvm/versions /root/.cargo/bin \
-           /root/.local/bin /root/.local/share/mise/shims; do
+echo "🔧 修復 /root Cargo 工具鏈訪問權限..."
+for dir in /root /root/.cargo /root/.cargo/bin; do
     [ -d "$dir" ] && chmod o+x "$dir" 2>/dev/null && echo "  ✓ $dir" || true
 done
 
