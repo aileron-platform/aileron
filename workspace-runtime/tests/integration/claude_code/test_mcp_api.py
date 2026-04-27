@@ -1,4 +1,4 @@
-"""Claude Code API 測試案例 - MCP 伺服器"""
+"""Claude Code API test cases - MCP servers"""
 
 from __future__ import annotations
 
@@ -205,7 +205,7 @@ def test_mcp_003_get_scope_success(client):
 
 
 def test_mcp_004_scope_not_supported(client):
-    # 測試在 PLUGIN scope 嘗試建立伺服器會失敗
+    # Test creating server in PLUGIN scope will fail
     service = StubMcpService(create_error=McpScopeNotSupportedError("plugin"))
 
     payload = {

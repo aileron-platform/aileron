@@ -1,1 +1,1 @@
-"""openspec 模組測試套件。"""
+"""openspec module test suite."""

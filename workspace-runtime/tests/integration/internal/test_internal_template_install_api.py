@@ -1,4 +1,4 @@
-"""Internal API Template Install 相關測試"""
+"""Internal API Template Install related tests"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .helpers import override_dependency
 
 
 class TemplateInstallServiceStub:
-    """可設定回傳結果的 TemplateInstallService stub"""
+    """Configurable return result TemplateInstallService stub"""
 
     def __init__(self) -> None:
         self.slash_commands_result: tuple[bool, InstallResults] = (
@@ -122,12 +122,12 @@ class TemplateInstallServiceStub:
         return True, "success", ""
 
 
-async def _allow_internal_token():  # pragma: no cover - 覆寫用
+async def _allow_internal_token():  # pragma: no cover - for override
     return None
 
 
 def test_ti_001_install_slash_commands_success(client):
-    """測試安裝 Slash Commands 成功"""
+    """Test Slash Commands installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -152,7 +152,7 @@ def test_ti_001_install_slash_commands_success(client):
 
 
 def test_ti_002_install_subagents_success(client):
-    """測試安裝 Subagents 成功"""
+    """Test Subagents installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -177,7 +177,7 @@ def test_ti_002_install_subagents_success(client):
 
 
 def test_ti_003_install_output_styles_success(client):
-    """測試安裝 Output Styles 成功"""
+    """Test Output Styles installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -202,7 +202,7 @@ def test_ti_003_install_output_styles_success(client):
 
 
 def test_ti_004_install_claude_md_success(client):
-    """測試安裝 Claude.md 成功"""
+    """Test Claude.md installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -222,7 +222,7 @@ def test_ti_004_install_claude_md_success(client):
 
 
 def test_ti_005_install_mcp_servers_success(client):
-    """測試安裝 MCP Servers 成功"""
+    """Test MCP Servers installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -251,7 +251,7 @@ def test_ti_005_install_mcp_servers_success(client):
 
 
 def test_ti_006_install_hooks_success(client):
-    """測試安裝 Hooks 成功"""
+    """Test Hooks installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -280,7 +280,7 @@ def test_ti_006_install_hooks_success(client):
 
 
 def test_ti_007_install_scripts_success(client):
-    """測試安裝 Scripts 成功"""
+    """Test Scripts installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -312,7 +312,7 @@ def test_ti_007_install_scripts_success(client):
 
 
 def test_ti_008_install_template_batch_success(client):
-    """測試批次安裝模板成功"""
+    """Test batch template installation success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -356,7 +356,7 @@ def test_ti_008_install_template_batch_success(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "模板安裝完成" in payload["message"]
+    assert "Template installation completed" in payload["message"]
     assert payload["templateId"] == "test-template-id"
     assert payload["templateName"] == "test-template"
     assert payload["results"]["claudeMd"] is not None
@@ -369,7 +369,7 @@ def test_ti_008_install_template_batch_success(client):
 
 
 def test_ti_009_install_template_batch_with_init_commands(client):
-    """測試批次安裝模板（含初始化指令）成功"""
+    """Test batch template installation (with init commands) success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -389,11 +389,11 @@ def test_ti_009_install_template_batch_with_init_commands(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "模板安裝完成" in payload["message"]
+    assert "Template installation completed" in payload["message"]
 
 
 def test_ti_010_install_template_batch_partial_install(client):
-    """測試批次安裝模板（部分項目）成功"""
+    """Test batch template installation (partial items) success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(
@@ -428,7 +428,7 @@ def test_ti_010_install_template_batch_partial_install(client):
 
 
 def test_ti_011_install_template_compiled_plan_success(client):
-    """測試批次安裝模板（compiled install plan）成功"""
+    """Test batch template installation (compiled install plan) success"""
     service = TemplateInstallServiceStub()
 
     with override_dependency(

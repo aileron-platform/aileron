@@ -1,4 +1,4 @@
-"""重構後的檔案 API 路由"""
+"""Refactored file API routes"""
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -45,7 +45,7 @@ from .models import (
 )
 from .service import FileService
 
-router = APIRouter(prefix="/files", tags=["檔案管理"])
+router = APIRouter(prefix="/files", tags=["File Management"])
 
 ARCHIVE_ACTIONS = {"store", "extract"}
 CONFLICT_STRATEGIES = {"rename", "overwrite", "reject"}
@@ -328,14 +328,14 @@ def _extract_archive(
     )
 
     if progress_callback:
-        progress_callback(0.1, "正在掃描壓縮檔內容...")
+        progress_callback(0.1, "Scanning archive content...")
 
     extracted_results: List[UploadResult] = []
     total_entries = len(extraction_plan)
 
     if total_entries == 0:
         if progress_callback:
-            progress_callback(1.0, "壓縮檔沒有可解壓的檔案")
+            progress_callback(1.0, "Archive has no files to extract")
         return extracted_results
 
     with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
@@ -349,13 +349,13 @@ def _extract_archive(
             if progress_callback:
                 progress_callback(
                     index / total_entries,
-                    f"正在解壓 {index}/{total_entries}: {info.filename}",
+                    f"Extracting {index}/{total_entries}: {info.filename}",
                 )
 
     return extracted_results
 
 
-def _create_extract_operation(message: str = "準備解壓縮 ZIP 檔案...") -> ExtractArchiveOperation:
+def _create_extract_operation(message: str = "Preparing to extract ZIP file...") -> ExtractArchiveOperation:
     operation_id = f"extract-{uuid4().hex[:12]}"
     operation = ExtractArchiveOperation(
         operation_id=operation_id,
@@ -407,7 +407,7 @@ def _run_extract_archive_operation(
             operation_id,
             status_value="running",
             progress=0.02,
-            message="正在讀取 ZIP 檔案...",
+            message="Reading ZIP file...",
         )
 
         archive_fs_path = service.resolve_scope_path(None, archive_path)
@@ -443,7 +443,7 @@ def _run_extract_archive_operation(
             operation_id,
             status_value="completed",
             progress=1.0,
-            message=f"解壓完成，共 {len(extracted)} 個項目",
+            message=f"Extraction completed, {len(extracted)} items total",
             result=result,
         )
     except FileManagementException as exc:
@@ -457,7 +457,7 @@ def _run_extract_archive_operation(
         _update_extract_operation(
             operation_id,
             status_value="failed",
-            message=f"解壓失敗: {exc}",
+            message=f"Extraction failed: {exc}",
             error=str(exc),
         )
 
@@ -470,19 +470,19 @@ def _resolve_extract_target_path(archive_path: str, target_path: Optional[str]) 
 @router.get(
     "/tree",
     response_model=FileTreeResponse,
-    summary="取得檔案樹",
+    summary="Get file tree",
     responses=build_responses(400, 404, 422, 500),
 )
 async def get_file_tree(
-    path: str = Query("/", description="目標路徑"),
-    scope: Optional[str] = Query(None, description="範圍識別（Files 不使用）"),
-    include_hidden: bool = Query(False, alias="includeHidden", description="是否包含隱藏檔"),
-    max_depth: Optional[int] = Query(None, alias="maxDepth", ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query("/", description="Target path"),
+    scope: Optional[str] = Query(None, description="Scope identifier (not used for Files)"),
+    include_hidden: bool = Query(False, alias="includeHidden", description="Whether to include hidden files"),
+    max_depth: Optional[int] = Query(None, alias="maxDepth", ge=1, description="Maximum depth (defaults to FILE_TREE_MAX_DEPTH in config)"),
     service: FileService = Depends(get_new_file_service)
 ) -> FileTreeResponse:
-    """取得檔案樹結構
+    """Get file tree structure
 
-    如果未提供 max_depth，將使用環境設定檔中的 FILE_TREE_MAX_DEPTH
+    If max_depth is not provided, uses FILE_TREE_MAX_DEPTH from environment configuration
     """
     try:
         result = service.get_tree(
@@ -507,19 +507,19 @@ async def get_file_tree(
 @router.get(
     "/tree/children",
     response_model=FileTreeResponse,
-    summary="懶載入子節點",
+    summary="Lazy load child nodes",
     responses=build_responses(400, 404, 422, 500),
 )
 async def get_directory_children(
-    path: str = Query(..., description="目標目錄路徑"),
-    scope: Optional[str] = Query(None, description="範圍識別（Files 不使用）"),
-    include_hidden: bool = Query(False, alias="includeHidden", description="是否包含隱藏檔"),
-    max_depth: Optional[int] = Query(None, alias="maxDepth", ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(..., description="Target directory path"),
+    scope: Optional[str] = Query(None, description="Scope identifier (not used for Files)"),
+    include_hidden: bool = Query(False, alias="includeHidden", description="Whether to include hidden files"),
+    max_depth: Optional[int] = Query(None, alias="maxDepth", ge=1, description="Maximum depth (defaults to FILE_TREE_MAX_DEPTH in config)"),
     service: FileService = Depends(get_new_file_service)
 ) -> FileTreeResponse:
-    """懶載入：動態取得指定目錄的子節點
+    """Lazy load: dynamically get child nodes of specified directory
 
-    如果未提供 max_depth，將使用環境設定檔中的 FILE_TREE_MAX_DEPTH
+    If max_depth is not provided, uses FILE_TREE_MAX_DEPTH from environment configuration
     """
     try:
         result = service.get_tree(
@@ -544,31 +544,31 @@ async def get_directory_children(
 @router.get(
     "/content",
     response_model=FileContentResponse,
-    summary="讀取檔案內容",
+    summary="Read file content",
     responses={
         200: {
-            "description": "成功讀取檔案。當 `raw=true` 時回傳原始檔案串流；否則回傳 JSON 內容。",
+            "description": "Successfully read file. When `raw=true`, returns original file stream; otherwise returns JSON content.",
         },
         **build_responses(400, 404, 422, 500),
     },
 )
 async def read_file(
-    path: str = Query(..., description="檔案路徑"),
-    scope: Optional[str] = Query(None, description="範圍識別（Files 不使用）"),
-    raw: bool = Query(False, description="是否返回原始二進制內容"),
+    path: str = Query(..., description="File path"),
+    scope: Optional[str] = Query(None, description="Scope identifier (not used for Files)"),
+    raw: bool = Query(False, description="Whether to return raw binary content"),
     service: FileService = Depends(get_new_file_service)
 ):
-    """讀取檔案內容
+    """Read file content
 
-    - 當 raw=false 時，返回 JSON 格式的文本內容（僅適用於文本檔案）
-    - 當 raw=true 時，返回原始二進制內容（適用於圖片等二進制檔案）
+    - When raw=false, returns JSON format text content (only applicable to text files)
+    - When raw=true, returns raw binary content (applicable to binary files like images)
     """
     try:
-        # 如果請求原始二進制內容
+        # If requesting raw binary content
         if raw:
             binary_content = service.read_file_binary(path=path, scope=scope)
 
-            # 根據檔案副檔名猜測 MIME 類型
+            # Guess MIME type based on file extension
             mime_type, _ = mimetypes.guess_type(path)
             if mime_type is None:
                 mime_type = "application/octet-stream"
@@ -581,7 +581,7 @@ async def read_file(
                 }
             )
 
-        # 否則返回 JSON 格式的文本內容
+        # Otherwise return JSON format text content
         result = service.read_file(path=path, scope=scope)
         return FileContentResponse(**result)
     except FileNotFoundException as e:
@@ -599,14 +599,14 @@ async def read_file(
 @router.put(
     "/content",
     response_model=FileOperationResponse,
-    summary="寫入檔案內容",
+    summary="Write file content",
     responses=build_responses(400, 403, 422, 500),
 )
 async def write_file(
     request: FileWriteRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> FileOperationResponse:
-    """寫入檔案內容"""
+    """Write file content"""
     try:
         result = service.write_file(
             path=request.path,
@@ -630,14 +630,14 @@ async def write_file(
 @router.post(
     "/content/batch",
     response_model=BatchOperationResponse,
-    summary="批次寫入檔案",
+    summary="Batch write files",
     responses=build_responses(400, 403, 422, 500),
 )
 async def batch_write_files(
     request: BatchWriteRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> BatchOperationResponse:
-    """批次寫入多個檔案"""
+    """Batch write multiple files"""
     result = service.batch_write(files=request.files, scope=request.scope)
     return BatchOperationResponse(**result)
 
@@ -646,14 +646,14 @@ async def batch_write_files(
     "",
     response_model=FileOperationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立檔案或目錄",
+    summary="Create file or directory",
     responses=build_responses(400, 409, 422, 500),
 )
 async def create_entry(
     request: FileCreateRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> FileOperationResponse:
-    """建立檔案或目錄"""
+    """Create file or directory"""
     try:
         result = service.create_entry(
             path=request.path,
@@ -678,16 +678,16 @@ async def create_entry(
 @router.delete(
     "",
     response_model=FileOperationResponse,
-    summary="刪除檔案或目錄",
+    summary="Delete file or directory",
     responses=build_responses(400, 404, 422, 500),
 )
 async def delete_entry(
-    path: str = Query(..., description="路徑"),
-    scope: Optional[str] = Query(None, description="範圍識別（Files 不使用）"),
-    recursive: bool = Query(False, description="是否遞迴刪除目錄"),
+    path: str = Query(..., description="Path"),
+    scope: Optional[str] = Query(None, description="Scope identifier (not used for Files)"),
+    recursive: bool = Query(False, description="Whether to recursively delete directory"),
     service: FileService = Depends(get_new_file_service)
 ) -> FileOperationResponse:
-    """刪除檔案或目錄"""
+    """Delete file or directory"""
     try:
         result = service.delete_entry(path=path, scope=scope, recursive=recursive)
         return FileOperationResponse(success=True, data=result)
@@ -711,14 +711,14 @@ async def delete_entry(
 @router.post(
     "/batch-delete",
     response_model=BatchOperationResponse,
-    summary="批次刪除",
+    summary="Batch delete",
     responses=build_responses(400, 422, 500),
 )
 async def batch_delete_entries(
     request: BatchDeleteRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> BatchOperationResponse:
-    """批次刪除檔案或目錄"""
+    """Batch delete files or directories"""
     result = service.batch_delete(
         paths=request.paths,
         scope=request.scope,
@@ -730,14 +730,14 @@ async def batch_delete_entries(
 @router.post(
     "/copy",
     response_model=FileOperationResponse,
-    summary="複製檔案或目錄",
+    summary="Copy file or directory",
     responses=build_responses(400, 404, 409, 422, 500),
 )
 async def copy_entry(
     request: FileCopyRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> FileOperationResponse:
-    """複製檔案或目錄（支援資料夾複製）"""
+    """Copy file or directory (supports folder copy)"""
     try:
         result = service.copy_entry(
             source_path=request.sourcePath,
@@ -767,14 +767,14 @@ async def copy_entry(
 @router.post(
     "/move",
     response_model=FileOperationResponse,
-    summary="移動或重命名",
+    summary="Move or rename",
     responses=build_responses(400, 404, 409, 422, 500),
 )
 async def move_entry(
     request: FileMoveRequest,
     service: FileService = Depends(get_new_file_service)
 ) -> FileOperationResponse:
-    """移動或重命名檔案或目錄"""
+    """Move or rename file or directory"""
     try:
         result = service.move_entry(
             source_path=request.sourcePath,
@@ -805,7 +805,7 @@ async def move_entry(
     "/extract",
     response_model=ExtractArchiveAcceptedResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="背景解壓既有 ZIP 檔案",
+    summary="Background extract existing ZIP file",
     responses=build_responses(400, 404, 409, 422, 500),
 )
 async def extract_archive(
@@ -813,7 +813,7 @@ async def extract_archive(
     background_tasks: BackgroundTasks,
     service: FileService = Depends(get_new_file_service),
 ) -> ExtractArchiveAcceptedResponse:
-    """將既有 ZIP 檔案加入背景解壓任務。"""
+    """Add existing ZIP file to background extraction task."""
     try:
         _validate_upload_options("extract", payload.conflictStrategy)
         archive_path = payload.archivePath if payload.archivePath.startswith("/") else f"/{payload.archivePath}"
@@ -842,13 +842,13 @@ async def extract_archive(
 @router.get(
     "/extract/{operation_id}",
     response_model=ExtractArchiveStatusResponse,
-    summary="查詢背景 ZIP 解壓狀態",
+    summary="Query background ZIP extraction status",
     responses=build_responses(404, 500),
 )
 async def get_extract_archive_status(
-    operation_id: str = ApiPath(..., description="背景解壓 operation ID"),
+    operation_id: str = ApiPath(..., description="Background extraction operation ID"),
 ) -> ExtractArchiveStatusResponse:
-    """查詢背景 ZIP 解壓任務進度。"""
+    """Query background ZIP extraction task progress."""
     operation = _extract_operations.get(operation_id)
     if operation is None:
         raise HTTPException(
@@ -866,20 +866,20 @@ async def get_extract_archive_status(
     "/upload",
     response_model=UploadResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="上傳檔案",
+    summary="Upload files",
     responses=build_responses(400, 409, 422, 500),
 )
 async def upload_files(
-    targetPath: str = Form(..., description="目標目錄路徑"),
-    conflictStrategy: str = Form(default="rename", description="衝突處理策略: overwrite、rename 或 reject"),
-    archiveAction: str = Form(default="store", description="壓縮檔處理策略: store 或 extract"),
-    keepArchive: bool = Form(default=False, description="解壓時是否保留原始 ZIP"),
-    files: List[UploadFile] = File(..., description="要上傳的檔案"),
+    targetPath: str = Form(..., description="Target directory path"),
+    conflictStrategy: str = Form(default="rename", description="Conflict handling strategy: overwrite, rename, or reject"),
+    archiveAction: str = Form(default="store", description="Archive processing strategy: store or extract"),
+    keepArchive: bool = Form(default=False, description="Whether to keep original ZIP when extracting"),
+    files: List[UploadFile] = File(..., description="Files to upload"),
     service: FileService = Depends(get_new_file_service)
 ) -> UploadResponse:
-    """使用 multipart/form-data 上傳一個或多個檔案
+    """Upload one or more files using multipart/form-data
 
-    自動處理所有類型的檔案（文本、二進制），無需手動判斷或編碼
+    Automatically handles all file types (text, binary), no manual judgment or encoding needed
     """
     uploaded: List[UploadResult] = []
     extracted: List[UploadResult] = []

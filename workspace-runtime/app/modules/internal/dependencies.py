@@ -1,4 +1,4 @@
-"""Internal API 依賴注入"""
+"""Internal API dependency injection"""
 
 from __future__ import annotations
 
@@ -20,19 +20,19 @@ settings = get_settings()
 
 
 async def verify_internal_token(
-    authorization: Annotated[str, Header(description="內部 API 認證 Token")]
+    authorization: Annotated[str, Header(description="Internal API authentication Token")]
 ) -> None:
-    """驗證內部 API 呼叫權限"""
+    """Verify internal API call permission"""
     if not authorization.startswith("Bearer "):
-        logger.warning("Internal API 呼叫缺少 Bearer token")
+        logger.warning("Internal API call missing Bearer token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Bearer token for internal API",
         )
 
-    token = authorization[7:]  # 移除 "Bearer " 前綴
+    token = authorization[7:]  # Remove "Bearer " prefix
 
-    # 檢查 token 是否有效
+    # Check if token is valid
     expected_token = getattr(settings, 'INTERNAL_API_TOKEN', 'dev-internal-token')
     if token != expected_token:
         logger.warning(f"Invalid internal API token: {token}")
@@ -46,24 +46,24 @@ async def verify_internal_token(
 
 @lru_cache()
 def get_mcp_service() -> McpService:
-    """取得單例 MCP 服務"""
+    """Get singleton MCP service"""
     return McpService()
 
 
 @lru_cache()
 def get_hook_service() -> HookService:
-    """取得單例 Hook 服務"""
+    """Get singleton Hook service"""
     return HookService()
 
 
 @lru_cache()
 def get_claude_md_service() -> ClaudeMdService:
-    """取得單例 Claude.md 服務"""
+    """Get singleton Claude.md service"""
     return ClaudeMdService()
 
 
 def get_internal_service() -> InternalService:
-    """取得 Internal Service 實例"""
+    """Get Internal Service instance"""
     return InternalService()
 
 
@@ -72,7 +72,7 @@ def get_template_install_service(
     hook_service: HookService = Depends(get_hook_service),
     claude_md_service: ClaudeMdService = Depends(get_claude_md_service),
 ) -> TemplateInstallService:
-    """取得 Template Install Service 實例（注入依賴）"""
+    """Get Template Install Service instance (inject dependencies)"""
     return TemplateInstallService(
         mcp_service=mcp_service,
         hook_service=hook_service,

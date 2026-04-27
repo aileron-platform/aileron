@@ -1,4 +1,4 @@
-"""Internal API 模組 - 供 workspace-manager 內部呼叫"""
+"""Internal API module - for internal calls by workspace-manager"""
 
 from __future__ import annotations
 

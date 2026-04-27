@@ -1,6 +1,6 @@
-"""Git 遠端操作
+"""Git remote operations
 
-提供 Git 遠端倉庫的 push、pull、fetch 等操作。
+Provides Git remote repository push, pull, fetch and other operations.
 """
 
 from __future__ import annotations
@@ -30,33 +30,33 @@ logger = logging.getLogger(__name__)
 
 
 class RemoteOperations:
-    """Git 遠端操作
+    """Git remote operations
 
-    提供 push、pull、fetch 等遠端倉庫操作。
+    Provides remote repository operations such as push, pull, fetch.
     """
 
     def __init__(self, utils: GitUtils, cache: Optional["GitCache"] = None) -> None:
-        """初始化
+        """Initialize
 
         Args:
-            utils: Git 工具類實例
-            cache: 快取層（可選）
+            utils: Git utility class instance
+            cache: Cache layer (optional)
         """
         self._utils = utils
         self.cache = cache
 
     def push(self, workspace_id: str, payload: PushRequest, context_id: Optional[str] = None) -> PushResponse:
-        """推送到遠端
+        """Push to remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 推送請求
+            workspace_id: Workspace ID
+            payload: Push request
 
         Returns:
-            推送回應
+            Push response
 
         Raises:
-            VersionControlError: 推送失敗
+            VersionControlError: Push failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         branch, _ = self._utils.current_branch(repo)
@@ -89,17 +89,17 @@ class RemoteOperations:
         return PushResponse(remote=payload.remote, branch=target_branch, updates=updates)
 
     def pull(self, workspace_id: str, payload: PullRequest, context_id: Optional[str] = None) -> PullResponse:
-        """從遠端拉取
+        """Pull from remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 拉取請求
+            workspace_id: Workspace ID
+            payload: Pull request
 
         Returns:
-            拉取回應
+            Pull response
 
         Raises:
-            VersionControlError: 拉取失敗
+            VersionControlError: Pull failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         branch, _ = self._utils.current_branch(repo)
@@ -152,17 +152,17 @@ class RemoteOperations:
         )
 
     def fetch(self, workspace_id: str, payload: FetchRequest, context_id: Optional[str] = None) -> FetchResponse:
-        """從遠端取得更新
+        """Fetch updates from remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: Fetch 請求
+            workspace_id: Workspace ID
+            payload: Fetch request
 
         Returns:
-            Fetch 回應
+            Fetch response
 
         Raises:
-            VersionControlError: Fetch 失敗
+            VersionControlError: Fetch failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         self._utils.ensure_remote(repo, payload.remote)

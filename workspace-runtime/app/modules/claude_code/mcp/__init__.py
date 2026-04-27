@@ -1,4 +1,4 @@
-"""MCP 子模組"""
+"""MCP Submodule"""
 
 from __future__ import annotations
 

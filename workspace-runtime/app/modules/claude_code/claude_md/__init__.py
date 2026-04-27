@@ -1,4 +1,4 @@
-"""Claude.md 子模組"""
+"""Claude.md Submodule"""
 
 from __future__ import annotations
 

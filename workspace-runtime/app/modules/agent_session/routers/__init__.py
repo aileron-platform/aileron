@@ -1,4 +1,4 @@
-"""API Router 層 - FastAPI 路由定義."""
+"""API Router layer - FastAPI route definitions."""
 
 from .agent_session_router import router as agent_session_router
 from .task_router import router as task_router

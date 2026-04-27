@@ -1,6 +1,6 @@
-"""Task Schema 定義.
+"""Task Schema definitions.
 
-定義任務相關的 API 請求/回應模型。
+Defines API request/response models for tasks.
 """
 
 from __future__ import annotations
@@ -13,11 +13,11 @@ from pydantic import BaseModel, Field
 from ..domain.enums import TaskStatus
 
 
-# === 請求模型 ===
+# === Request Models ===
 
 
 class TaskCreate(BaseModel):
-    """建立任務請求."""
+    """Create task request."""
 
     session_id: str
     full_prompt: Optional[str] = None
@@ -25,7 +25,7 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    """更新任務請求."""
+    """Update task request."""
 
     status: Optional[TaskStatus] = None
     description: Optional[str] = None
@@ -33,7 +33,7 @@ class TaskUpdate(BaseModel):
 
 
 class TaskQuery(BaseModel):
-    """任務查詢參數."""
+    """Task query parameters."""
 
     session_id: Optional[str] = None
     status: Optional[TaskStatus] = None
@@ -41,11 +41,11 @@ class TaskQuery(BaseModel):
     offset: int = Field(0, ge=0)
 
 
-# === 回應模型 ===
+# === Response Models ===
 
 
 class MessageRangeResponse(BaseModel):
-    """訊息範圍回應."""
+    """Message range response."""
 
     start_index: int
     end_index: int
@@ -54,7 +54,7 @@ class MessageRangeResponse(BaseModel):
 
 
 class PermissionRequestResponse(BaseModel):
-    """權限請求回應."""
+    """Permission request response."""
 
     request_id: str
     tool_name: str
@@ -66,7 +66,7 @@ class PermissionRequestResponse(BaseModel):
 
 
 class TokenUsageSummary(BaseModel):
-    """Token 使用摘要."""
+    """Token usage summary."""
 
     input_tokens: int = 0
     output_tokens: int = 0
@@ -78,7 +78,7 @@ class TokenUsageSummary(BaseModel):
 
 
 class TaskResponse(BaseModel):
-    """任務回應."""
+    """Task response."""
 
     task_id: str = Field(alias="id")
     session_id: str
@@ -88,7 +88,7 @@ class TaskResponse(BaseModel):
     completed_at: Optional[datetime] = None
     status: TaskStatus
 
-    # Data blob 欄位
+    # Data blob fields
     description: Optional[str] = None
     full_prompt: Optional[str] = None
     message_range: Optional[MessageRangeResponse] = None
@@ -104,8 +104,8 @@ class TaskResponse(BaseModel):
 
     @classmethod
     def from_entity(cls, entity) -> "TaskResponse":
-        """從領域實體建立回應."""
-        # 建立 message_range
+        """Create response from domain entity."""
+        # Create message_range
         message_range = None
         if entity.message_range:
             message_range = MessageRangeResponse(
@@ -115,7 +115,7 @@ class TaskResponse(BaseModel):
                 end_timestamp=entity.message_range.end_timestamp,
             )
 
-        # 建立 permission_request
+        # Create permission_request
         permission_request = None
         if entity.permission_request:
             pr = entity.permission_request
@@ -129,7 +129,7 @@ class TaskResponse(BaseModel):
                 approved_at=pr.get("approved_at"),
             )
 
-        # 從 raw_sdk_response 提取 token 使用量
+        # Extract token usage from raw_sdk_response
         token_usage = None
         if entity.raw_sdk_response:
             token_usage = cls._extract_token_usage(entity.raw_sdk_response)
@@ -156,7 +156,7 @@ class TaskResponse(BaseModel):
 
     @staticmethod
     def _extract_token_usage(raw_response: Dict[str, Any]) -> Optional[TokenUsageSummary]:
-        """從 raw_sdk_response 提取 token 使用量."""
+        """Extract token usage from raw_sdk_response."""
         sdk_type = raw_response.get("type")
         response = raw_response.get("response", {})
 
@@ -210,7 +210,7 @@ class TaskResponse(BaseModel):
 
 
 class TaskListResponse(BaseModel):
-    """任務列表回應."""
+    """Task list response."""
 
     items: List[TaskResponse]
     total: int
@@ -219,7 +219,7 @@ class TaskListResponse(BaseModel):
 
 
 class StopTaskResponse(BaseModel):
-    """停止任務回應."""
+    """Stop task response."""
 
     success: bool = True
     task_id: str

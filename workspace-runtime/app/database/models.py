@@ -1,4 +1,4 @@
-"""資料庫模型定義（映射到 Workspace Manager 的表）"""
+"""Database model definitions (mapped to Workspace Manager tables)"""
 
 from __future__ import annotations
 
@@ -18,13 +18,13 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    """SQLAlchemy Base 類別"""
+    """SQLAlchemy Base class"""
 
     pass
 
 
 class User(Base):
-    """使用者資料表（唯讀）"""
+    """User table (read-only)"""
 
     __tablename__ = "users"
 
@@ -37,7 +37,7 @@ class User(Base):
 
 
 class Workspace(Base):
-    """工作區資料表"""
+    """Workspace table"""
 
     __tablename__ = "workspaces"
 
@@ -67,7 +67,7 @@ class Workspace(Base):
 
 
 class AutomationJob(Base):
-    """自動化任務資料表（唯讀）"""
+    """Automation job table (read-only)"""
 
     __tablename__ = "automation_jobs"
 
@@ -125,7 +125,7 @@ class AutomationJob(Base):
 
 
 class JobExecution(Base):
-    """任務執行紀錄資料表（唯讀）"""
+    """Job execution record table (read-only)"""
 
     __tablename__ = "job_executions"
 

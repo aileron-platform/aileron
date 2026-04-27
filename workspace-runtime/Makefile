@@ -1,12 +1,12 @@
 .PHONY: help test-setup test-run test-teardown test-all test-unit test-integration test-coverage test-local clean-test
 
-# 默認目標
+# Default target
 .DEFAULT_GOAL := help
 
 COMPOSE_FILE := docker-compose.test.yml
 COMPOSE := docker compose -f $(COMPOSE_FILE)
 
-# 顏色定義
+# Color definitions
 CYAN := \033[0;36m
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
@@ -15,124 +15,124 @@ NC := \033[0m # No Color
 
 ##@ General
 
-help: ## 顯示幫助信息
+help: ## Show help
 	@echo "$(CYAN)Workspace Runtime Test Makefile$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(CYAN)<target>$(NC)\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  $(CYAN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(YELLOW)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 ##@ Test Infrastructure
 
-test-setup: ## 設置測試環境（啟動PostgreSQL和Redis）
-	@echo "$(GREEN)🚀 設置測試環境...$(NC)"
+test-setup: ## Set up test environment (start PostgreSQL and Redis)
+	@echo "$(GREEN)🚀 Setting up test environment...$(NC)"
 	@$(COMPOSE) up -d postgres-test redis-test
-	@echo "$(YELLOW)⏳ 等待服務健康檢查...$(NC)"
+	@echo "$(YELLOW)⏳ Waiting for service health checks...$(NC)"
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 		if $(COMPOSE) ps | grep -q "healthy"; then \
-			echo "$(GREEN)✅ 測試環境就緒$(NC)"; \
+			echo "$(GREEN)✅ Test environment is ready$(NC)"; \
 			echo "  - PostgreSQL: localhost:5435"; \
 			echo "  - Redis: localhost:6382"; \
 			exit 0; \
 		fi; \
 		sleep 3; \
 	done; \
-	echo "$(RED)❌ 服務啟動超時$(NC)"; \
+	echo "$(RED)❌ Timed out while starting services$(NC)"; \
 	exit 1
 
-test-teardown: ## 清理測試環境
-	@echo "$(YELLOW)🧹 清理測試環境...$(NC)"
+test-teardown: ## Clean up test environment
+	@echo "$(YELLOW)🧹 Cleaning up test environment...$(NC)"
 	@$(COMPOSE) down -v --remove-orphans
-	@echo "$(GREEN)✅ 清理完成$(NC)"
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
 
-test-status: ## 檢查測試環境狀態
-	@echo "$(CYAN)📊 測試環境狀態:$(NC)"
+test-status: ## Check test environment status
+	@echo "$(CYAN)📊 Test environment status:$(NC)"
 	@$(COMPOSE) ps
 
 ##@ Test Execution
 
-test-all: test-setup ## 執行所有測試（單元+整合）
-	@echo "$(GREEN)🧪 執行所有測試...$(NC)"
+test-all: test-setup ## Run all tests (unit + integration)
+	@echo "$(GREEN)🧪 Running all tests...$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test || ($(MAKE) test-teardown && exit 1)
 	@$(MAKE) test-teardown
 
-test-run: ## 執行測試（假設環境已啟動）
-	@echo "$(GREEN)🧪 執行所有測試（使用現有環境）...$(NC)"
+test-run: ## Run tests with an existing environment
+	@echo "$(GREEN)🧪 Running all tests with the existing environment...$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test
 
-test-unit: test-setup ## 僅執行單元測試
-	@echo "$(GREEN)🧪 執行單元測試...$(NC)"
+test-unit: test-setup ## Run unit tests only
+	@echo "$(GREEN)🧪 Running unit tests...$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test \
 		sh -c "uv sync --all-extras && uv run pytest tests/unit/ -v --cov=app --cov-report=term-missing" || ($(MAKE) test-teardown && exit 1)
 	@$(MAKE) test-teardown
 
-test-integration: test-setup ## 僅執行整合測試
-	@echo "$(GREEN)🧪 執行整合測試...$(NC)"
+test-integration: test-setup ## Run integration tests only
+	@echo "$(GREEN)🧪 Running integration tests...$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test \
 		sh -c "uv sync --all-extras && uv run pytest tests/integration/ -v --cov=app --cov-report=term-missing" || ($(MAKE) test-teardown && exit 1)
 	@$(MAKE) test-teardown
 
-test-coverage: test-setup ## 生成覆蓋率報告
-	@echo "$(GREEN)📊 生成覆蓋率報告...$(NC)"
+test-coverage: test-setup ## Generate coverage report
+	@echo "$(GREEN)📊 Generating coverage report...$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test \
 		sh -c "uv sync --all-extras && uv run pytest tests/ --cov=app --cov-report=html --cov-report=term-missing --cov-report=json:test-results/coverage.json" || ($(MAKE) test-teardown && exit 1)
-	@echo "$(GREEN)📁 覆蓋率報告生成於: htmlcov/index.html$(NC)"
-	@echo "$(CYAN)💡 使用 'make open-coverage' 打開報告$(NC)"
+	@echo "$(GREEN)📁 Coverage report generated at: htmlcov/index.html$(NC)"
+	@echo "$(CYAN)💡 Use 'make open-coverage' to open the report$(NC)"
 	@$(MAKE) test-teardown
 
-test-watch: test-setup ## 監視模式運行測試（文件變更時自動重新運行）
-	@echo "$(GREEN)👀 進入測試監視模式...$(NC)"
-	@echo "$(YELLOW)⚠️  按 Ctrl+C 退出$(NC)"
+test-watch: test-setup ## Run tests in watch mode
+	@echo "$(GREEN)👀 Entering test watch mode...$(NC)"
+	@echo "$(YELLOW)⚠️  Press Ctrl+C to exit$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test \
 		sh -c "uv sync --all-extras && uv run pytest-watch tests/ -- -v" || ($(MAKE) test-teardown && exit 1)
 
-test-specific: test-setup ## 執行特定測試文件（使用 TEST_FILE=path/to/test.py）
+test-specific: test-setup ## Run a specific test file with TEST_FILE=path/to/test.py
 ifndef TEST_FILE
-	@echo "$(RED)❌ 請指定測試文件: make test-specific TEST_FILE=tests/unit/test_example.py$(NC)"
+	@echo "$(RED)❌ Specify a test file: make test-specific TEST_FILE=tests/unit/test_example.py$(NC)"
 	@$(MAKE) test-teardown
 	@exit 1
 endif
-	@echo "$(GREEN)🧪 執行測試: $(TEST_FILE)$(NC)"
+	@echo "$(GREEN)🧪 Running test: $(TEST_FILE)$(NC)"
 	@$(COMPOSE) run --rm workspace-runtime-test \
 		sh -c "uv sync --all-extras && uv run pytest $(TEST_FILE) -v --cov=app --cov-report=term-missing" || ($(MAKE) test-teardown && exit 1)
 	@$(MAKE) test-teardown
 
 ##@ Local Testing
 
-test-local: ## 在本地執行測試（假設環境已設置）
-	@echo "$(GREEN)🏃 執行本地測試...$(NC)"
-	@echo "$(YELLOW)⚠️  確保PostgreSQL (5435) 和 Redis (6382) 正在運行$(NC)"
+test-local: ## Run tests locally with an existing environment
+	@echo "$(GREEN)🏃 Running local tests...$(NC)"
+	@echo "$(YELLOW)⚠️  Ensure PostgreSQL (5435) and Redis (6382) are running$(NC)"
 	@uv run pytest tests/ -v --cov=app --cov-report=term-missing
 
-test-local-unit: ## 在本地執行單元測試
-	@echo "$(GREEN)🏃 執行本地單元測試...$(NC)"
+test-local-unit: ## Run unit tests locally
+	@echo "$(GREEN)🏃 Running local unit tests...$(NC)"
 	@uv run pytest tests/unit/ -v --cov=app --cov-report=term-missing
 
-test-local-integration: ## 在本地執行整合測試
-	@echo "$(GREEN)🏃 執行本地整合測試...$(NC)"
-	@echo "$(YELLOW)⚠️  確保PostgreSQL (5435) 和 Redis (6382) 正在運行$(NC)"
+test-local-integration: ## Run integration tests locally
+	@echo "$(GREEN)🏃 Running local integration tests...$(NC)"
+	@echo "$(YELLOW)⚠️  Ensure PostgreSQL (5435) and Redis (6382) are running$(NC)"
 	@uv run pytest tests/integration/ -v --cov=app --cov-report=term-missing
 
 ##@ Reports & Analysis
 
-open-coverage: ## 打開覆蓋率報告（macOS）
+open-coverage: ## Open coverage report on macOS
 	@if [ -f "htmlcov/index.html" ]; then \
-		echo "$(GREEN)📖 打開覆蓋率報告...$(NC)"; \
+		echo "$(GREEN)📖 Opening coverage report...$(NC)"; \
 		open htmlcov/index.html; \
 	else \
-		echo "$(RED)❌ 覆蓋率報告不存在。請先運行 'make test-coverage'$(NC)"; \
+		echo "$(RED)❌ Coverage report does not exist. Run 'make test-coverage' first$(NC)"; \
 	fi
 
-coverage-summary: ## 顯示覆蓋率摘要
+coverage-summary: ## Show coverage summary
 	@if [ -f "test-results/coverage.json" ]; then \
-		echo "$(CYAN)📊 覆蓋率摘要:$(NC)"; \
-		python3 -c "import json; data=json.load(open('test-results/coverage.json')); print(f\"總覆蓋率: {data['totals']['percent_covered']:.2f}%\")"; \
+		echo "$(CYAN)📊 Coverage summary:$(NC)"; \
+		python3 -c "import json; data=json.load(open('test-results/coverage.json')); print(f\"Total coverage: {data['totals']['percent_covered']:.2f}%\")"; \
 	else \
-		echo "$(RED)❌ 覆蓋率數據不存在。請先運行 'make test-coverage'$(NC)"; \
+		echo "$(RED)❌ Coverage data does not exist. Run 'make test-coverage' first$(NC)"; \
 	fi
 
 ##@ Cleanup
 
-clean-test: ## 清理測試生成的文件
-	@echo "$(YELLOW)🧹 清理測試文件...$(NC)"
+clean-test: ## Clean test-generated files
+	@echo "$(YELLOW)🧹 Cleaning test files...$(NC)"
 	@rm -rf htmlcov/
 	@rm -rf test-results/
 	@rm -rf .pytest_cache/
@@ -140,34 +140,34 @@ clean-test: ## 清理測試生成的文件
 	@rm -rf coverage.xml
 	@find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	@find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	@echo "$(GREEN)✅ 清理完成$(NC)"
+	@echo "$(GREEN)✅ Cleanup complete$(NC)"
 
-clean-all: clean-test test-teardown ## 清理所有（測試文件+Docker容器）
-	@echo "$(GREEN)✅ 所有清理完成$(NC)"
+clean-all: clean-test test-teardown ## Clean everything (test files + Docker containers)
+	@echo "$(GREEN)✅ Full cleanup complete$(NC)"
 
 ##@ Development
 
-install-test-deps: ## 安裝測試依賴
-	@echo "$(GREEN)📦 安裝測試依賴...$(NC)"
+install-test-deps: ## Install test dependencies
+	@echo "$(GREEN)📦 Installing test dependencies...$(NC)"
 	@uv sync --all-extras
-	@echo "$(GREEN)✅ 依賴安裝完成$(NC)"
+	@echo "$(GREEN)✅ Dependencies installed$(NC)"
 
-lint: ## 執行代碼檢查
-	@echo "$(CYAN)🔍 執行代碼檢查...$(NC)"
+lint: ## Run code checks
+	@echo "$(CYAN)🔍 Running code checks...$(NC)"
 	@uv run ruff check app/ tests/
 	@uv run black --check app/ tests/
 	@uv run mypy app/
 
-format: ## 格式化代碼
-	@echo "$(CYAN)✨ 格式化代碼...$(NC)"
+format: ## Format code
+	@echo "$(CYAN)✨ Formatting code...$(NC)"
 	@uv run black app/ tests/
 	@uv run isort app/ tests/
-	@echo "$(GREEN)✅ 格式化完成$(NC)"
+	@echo "$(GREEN)✅ Formatting complete$(NC)"
 
 ##@ CI/CD
 
-ci-test: ## CI環境測試（假設服務已啟動）
-	@echo "$(GREEN)🤖 執行CI測試...$(NC)"
+ci-test: ## Run CI tests with services already started
+	@echo "$(GREEN)🤖 Running CI tests...$(NC)"
 	@uv run pytest tests/ \
 		--cov=app \
 		--cov-report=xml \
@@ -176,16 +176,16 @@ ci-test: ## CI環境測試（假設服務已啟動）
 		-v \
 		--maxfail=5
 
-ci-setup: ## CI環境設置
-	@echo "$(GREEN)🤖 設置CI環境...$(NC)"
+ci-setup: ## Set up CI environment
+	@echo "$(GREEN)🤖 Setting up CI environment...$(NC)"
 	@uv sync --all-extras
 
 ##@ Quick Commands
 
-quick-test: ## 快速測試（僅運行失敗的測試）
-	@echo "$(GREEN)⚡ 快速測試...$(NC)"
+quick-test: ## Quick test run for last failures only
+	@echo "$(GREEN)⚡ Running quick tests...$(NC)"
 	@uv run pytest tests/ --lf -v
 
-quick-changed: ## 測試變更的文件
-	@echo "$(GREEN)⚡ 測試變更的文件...$(NC)"
+quick-changed: ## Test changed files
+	@echo "$(GREEN)⚡ Testing changed files...$(NC)"
 	@uv run pytest tests/ --picked -v

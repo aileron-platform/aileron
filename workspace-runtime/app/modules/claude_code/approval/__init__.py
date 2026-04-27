@@ -1,4 +1,4 @@
-"""工具審批模組"""
+"""Tool Approval Module"""
 
 from __future__ import annotations
 

@@ -1,1 +1,1 @@
-"""Repository 層測試."""
+"""Repository layer tests."""

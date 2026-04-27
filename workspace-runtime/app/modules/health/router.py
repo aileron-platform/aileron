@@ -1,4 +1,4 @@
-"""健康檢查路由"""
+"""Health Check Router"""
 
 from __future__ import annotations
 
@@ -15,18 +15,18 @@ from .service import HealthCheckService, get_terminal_service_status
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/health", tags=["健康檢查"])
+router = APIRouter(prefix="/health", tags=["Health Check"])
 
 
-@router.get("", summary="服務健康檢查")
+@router.get("", summary="Service health check")
 async def health_check(db: Session = Depends(get_db)) -> dict[str, object]:
     """
-    提供運行時服務的健康狀態
+    Provide health status of runtime service
 
-    同時檢查並更新資料庫中的以下欄位：
-    - runtime_status: 確保為 'running'
-    - runtime_container_id: 更新為當前容器 ID
-    - runtime_last_seen: 更新為當前時間
+    Check and update the following fields in the database:
+    - runtime_status: ensure it is 'running'
+    - runtime_container_id: update to current container ID
+    - runtime_last_seen: update to current time
     """
     logger.debug("Health check called")
     try:
@@ -35,7 +35,7 @@ async def health_check(db: Session = Depends(get_db)) -> dict[str, object]:
         logger.debug("Health check result: %s", result.get('status'))
         return result
     except Exception as e:
-        # 如果資料庫連線失敗，仍然返回基本的健康狀態
+        # If database connection fails, still return basic health status
         settings = get_settings()
         terminal_status = get_terminal_service_status()
         return {

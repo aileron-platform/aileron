@@ -111,7 +111,7 @@ def test_subagents_router_rejects_local_scope() -> None:
 
     response = client.delete(f"/workspaces/ws-1/claude-code/subagents/{DocumentScope.LOCAL.value}/reviewer.md")
     assert response.status_code == 400
-    assert response.json()["detail"]["message"] == "Subagents 不支援 LOCAL scope"
+    assert response.json()["detail"]["message"] == "Subagents does not support LOCAL scope"
 
 
 def test_subagents_router_rejects_read_only_scope(monkeypatch) -> None:

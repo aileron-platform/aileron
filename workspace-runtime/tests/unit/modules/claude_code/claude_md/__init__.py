@@ -1,1 +1,1 @@
-"""Claude.md 單元測試模組"""
+"""Claude.md unit test module"""

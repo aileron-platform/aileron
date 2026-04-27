@@ -1,4 +1,4 @@
-"""Claude Code Memory 模組"""
+"""Claude Code Memory Module"""
 
 from __future__ import annotations
 

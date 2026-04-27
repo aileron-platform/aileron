@@ -56,4 +56,4 @@ class TestErrorHandlerMiddleware:
             result = await middleware.dispatch(mock_request, call_next)
 
             mock_logger.error.assert_called_once()
-            assert "未處理的錯誤" in str(mock_logger.error.call_args)
+            assert "Unhandled error" in str(mock_logger.error.call_args)

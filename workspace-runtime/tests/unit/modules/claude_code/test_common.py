@@ -1,4 +1,4 @@
-"""Claude Code Common 模組單元測試"""
+"""Claude Code Common module unit tests."""
 
 from __future__ import annotations
 
@@ -27,50 +27,50 @@ from app.modules.claude_code.common import (
 
 
 class TestDocumentScope:
-    """測試 DocumentScope 枚舉."""
+    """Test DocumentScope enum."""
 
     def test_document_scope_values(self):
-        """測試 scope 值."""
+        """Test scope values."""
         assert DocumentScope.PROJECT == "project"
         assert DocumentScope.USER == "user"
         assert DocumentScope.LOCAL == "local"
         assert DocumentScope.PLUGIN == "plugin"
 
     def test_document_scope_iteration(self):
-        """測試迭代所有 scope."""
+        """Test iterating all scopes."""
         scopes = list(DocumentScope)
         assert len(scopes) == 4
 
 
 class TestExceptions:
-    """測試自訂異常."""
+    """Test custom exceptions."""
 
     def test_document_not_found_error(self):
-        """測試 DocumentNotFoundError."""
+        """Test DocumentNotFoundError."""
         with pytest.raises(DocumentNotFoundError):
             raise DocumentNotFoundError("File not found")
 
     def test_duplicate_document_error(self):
-        """測試 DuplicateDocumentError."""
+        """Test DuplicateDocumentError."""
         with pytest.raises(DuplicateDocumentError):
             raise DuplicateDocumentError("File exists")
 
     def test_ambiguous_document_error(self):
-        """測試 AmbiguousDocumentError."""
+        """Test AmbiguousDocumentError."""
         with pytest.raises(AmbiguousDocumentError):
             raise AmbiguousDocumentError("Multiple files found")
 
 
 class TestUTCNow:
-    """測試 utcnow 函數."""
+    """Test utcnow function."""
 
     def test_utcnow_returns_aware_datetime(self):
-        """測試返回 timezone-aware datetime."""
+        """Test returning timezone-aware datetime."""
         now = utcnow()
         assert now.tzinfo == timezone.utc
 
     def test_utcnow_is_current_time(self):
-        """測試返回當前時間."""
+        """Test returning current time."""
         before = datetime.now(timezone.utc)
         now = utcnow()
         after = datetime.now(timezone.utc)
@@ -79,67 +79,67 @@ class TestUTCNow:
 
 
 class TestHumanizeSize:
-    """測試 humanize_size 函數."""
+    """Test humanize_size function."""
 
     def test_humanize_size_bytes(self):
-        """測試位元組."""
+        """Test bytes."""
         assert humanize_size(500) == "500B"
         assert humanize_size(1023) == "1023B"
 
     def test_humanize_size_kilobytes(self):
-        """測試 KB."""
+        """Test KB."""
         assert humanize_size(1024) == "1KB"
         assert humanize_size(2048) == "2KB"
-        assert humanize_size(1536) == "2KB"  # 1.5KB 四捨五入
+        assert humanize_size(1536) == "2KB"  # 1.5KB rounded
 
     def test_humanize_size_megabytes(self):
-        """測試 MB."""
+        """Test MB."""
         assert humanize_size(1024 * 1024) == "1.0MB"
         assert humanize_size(1024 * 1024 * 2) == "2.0MB"
         assert humanize_size(1024 * 1024 * 2.5) == "2.5MB"
 
     def test_humanize_size_zero(self):
-        """測試零."""
+        """Test zero."""
         assert humanize_size(0) == "0B"
 
 
 class TestFormatFileSize:
-    """測試 format_file_size 函數."""
+    """Test format_file_size function."""
 
     def test_format_file_size_bytes(self):
-        """測試位元組."""
+        """Test bytes."""
         assert format_file_size(500) == "500.0B"
         assert format_file_size(1023) == "1023.0B"
 
     def test_format_file_size_kilobytes(self):
-        """測試 KB."""
+        """Test KB."""
         assert format_file_size(1024) == "1.0KB"
         assert format_file_size(2048) == "2.0KB"
 
     def test_format_file_size_megabytes(self):
-        """測試 MB."""
+        """Test MB."""
         assert format_file_size(1024 * 1024) == "1.0MB"
         assert format_file_size(1024 * 1024 * 2.5) == "2.5MB"
 
     def test_format_file_size_gigabytes(self):
-        """測試 GB."""
+        """Test GB."""
         assert format_file_size(1024 * 1024 * 1024) == "1.0GB"
         assert format_file_size(1024 * 1024 * 1024 * 2) == "2.0GB"
 
     def test_format_file_size_terabytes(self):
-        """測試 TB."""
+        """Test TB."""
         assert format_file_size(1024 * 1024 * 1024 * 1024) == "1.0TB"
 
     def test_format_file_size_zero(self):
-        """測試零."""
+        """Test zero."""
         assert format_file_size(0) == "0.0B"
 
 
 class TestParseFrontMatter:
-    """測試 parse_front_matter 函數."""
+    """Test parse_front_matter function."""
 
     def test_parse_front_matter_with_metadata(self):
-        """測試解析包含 metadata."""
+        """Test parsing with metadata."""
         content = """---
 title: Test Document
 author: John Doe
@@ -154,7 +154,7 @@ author: John Doe
         assert body == "# Content here"
 
     def test_parse_front_matter_without_metadata(self):
-        """測試不含 metadata."""
+        """Test without metadata."""
         content = "# Just content"
 
         metadata, body = parse_front_matter(content)
@@ -163,7 +163,7 @@ author: John Doe
         assert body == content
 
     def test_parse_front_matter_empty(self):
-        """測試空內容."""
+        """Test empty content."""
         content = ""
 
         metadata, body = parse_front_matter(content)
@@ -172,7 +172,7 @@ author: John Doe
         assert body == ""
 
     def test_parse_front_matter_invalid_yaml(self):
-        """測試無效 YAML."""
+        """Test invalid YAML."""
         content = """---
 invalid: yaml: syntax:
 ---
@@ -184,7 +184,7 @@ invalid: yaml: syntax:
         assert metadata == {}
 
     def test_parse_front_matter_no_closing(self):
-        """測試沒有結束標記."""
+        """Test without closing marker."""
         content = """---
 title: Test
 This is not closed"""
@@ -194,7 +194,7 @@ This is not closed"""
         assert metadata == {}
 
     def test_parse_front_matter_complex_metadata(self):
-        """測試複雜 metadata."""
+        """Test complex metadata."""
         content = """---
 title: Complex
 tags:
@@ -216,11 +216,11 @@ config:
 
 
 class TestWorkspaceRoot:
-    """測試 workspace_root 函數."""
+    """Test workspace_root function."""
 
     @patch('app.modules.claude_code.common.get_workspace_path')
     def test_workspace_root(self, mock_get_path):
-        """測試獲取工作區根目錄."""
+        """Test getting workspace root directory."""
         mock_get_path.return_value = "/test/workspace"
 
         result = workspace_root()
@@ -229,10 +229,10 @@ class TestWorkspaceRoot:
 
 
 class TestEnsureDirectory:
-    """測試 ensure_directory 函數."""
+    """Test ensure_directory function."""
 
     def test_ensure_directory_creates_dir(self, tmp_path):
-        """測試創建目錄."""
+        """Test creating directory."""
         test_dir = tmp_path / "new_dir"
 
         ensure_directory(test_dir)
@@ -241,7 +241,7 @@ class TestEnsureDirectory:
         assert test_dir.is_dir()
 
     def test_ensure_directory_parents(self, tmp_path):
-        """測試創建嵌套目錄."""
+        """Test creating nested directories."""
         test_dir = tmp_path / "parent" / "child" / "grandchild"
 
         ensure_directory(test_dir)
@@ -250,29 +250,29 @@ class TestEnsureDirectory:
         assert test_dir.is_dir()
 
     def test_ensure_directory_exists(self, tmp_path):
-        """測試目錄已存在."""
+        """Test directory already exists."""
         test_dir = tmp_path / "existing"
         test_dir.mkdir()
 
-        # 不應該引發錯誤
+        # Should not raise error
         ensure_directory(test_dir)
 
         assert test_dir.exists()
 
 
 class TestResolveScopeRoot:
-    """測試 resolve_scope_root 函數."""
+    """Test resolve_scope_root function."""
 
     @patch('app.modules.claude_code.common.workspace_root')
     def test_resolve_scope_root_user(self, mock_root):
-        """測試 USER scope."""
+        """Test USER scope."""
         result = resolve_scope_root("workspace-1", DocumentScope.USER)
 
         assert result == Path("/home/developer/.claude")
 
     @patch('app.modules.claude_code.common.workspace_root')
     def test_resolve_scope_root_project(self, mock_root):
-        """測試 PROJECT scope."""
+        """Test PROJECT scope."""
         mock_root.return_value = Path("/workspace")
 
         result = resolve_scope_root("workspace-1", DocumentScope.PROJECT)
@@ -281,7 +281,7 @@ class TestResolveScopeRoot:
 
     @patch('app.modules.claude_code.common.workspace_root')
     def test_resolve_scope_root_local(self, mock_root):
-        """測試 LOCAL scope."""
+        """Test LOCAL scope."""
         mock_root.return_value = Path("/workspace")
 
         result = resolve_scope_root("workspace-1", DocumentScope.LOCAL)
@@ -290,10 +290,10 @@ class TestResolveScopeRoot:
 
 
 class TestReadJsonFile:
-    """測試 read_json_file 函數."""
+    """Test read_json_file function."""
 
     def test_read_json_file_success(self, tmp_path):
-        """測試成功讀取 JSON."""
+        """Test successfully reading JSON."""
         json_file = tmp_path / "test.json"
         json_file.write_text('{"key": "value"}')
 
@@ -302,7 +302,7 @@ class TestReadJsonFile:
         assert result == {"key": "value"}
 
     def test_read_json_file_not_exists(self, tmp_path):
-        """測試文件不存在."""
+        """Test file not exists."""
         json_file = tmp_path / "nonexistent.json"
 
         result = read_json_file(json_file)
@@ -310,7 +310,7 @@ class TestReadJsonFile:
         assert result == {}
 
     def test_read_json_file_invalid_json(self, tmp_path):
-        """測試無效 JSON."""
+        """Test invalid JSON."""
         json_file = tmp_path / "invalid.json"
         json_file.write_text("{ invalid json }")
 
@@ -319,7 +319,7 @@ class TestReadJsonFile:
         assert result == {}
 
     def test_read_json_file_empty(self, tmp_path):
-        """測試空文件."""
+        """Test empty file."""
         json_file = tmp_path / "empty.json"
         json_file.write_text("")
 
@@ -329,10 +329,10 @@ class TestReadJsonFile:
 
 
 class TestWriteJsonFile:
-    """測試 write_json_file 函數."""
+    """Test write_json_file function."""
 
     def test_write_json_file_success(self, tmp_path):
-        """測試成功寫入 JSON."""
+        """Test successfully writing JSON."""
         json_file = tmp_path / "test.json"
         data = {"key": "value", "number": 42}
 
@@ -344,7 +344,7 @@ class TestWriteJsonFile:
         assert "value" in content
 
     def test_write_json_file_creates_directory(self, tmp_path):
-        """測試創建目錄."""
+        """Test creating directory."""
         json_file = tmp_path / "subdir" / "test.json"
         data = {"key": "value"}
 
@@ -354,7 +354,7 @@ class TestWriteJsonFile:
         assert json_file.parent.exists()
 
     def test_write_json_file_overwrites(self, tmp_path):
-        """測試覆寫文件."""
+        """Test overwriting file."""
         json_file = tmp_path / "test.json"
 
         write_json_file(json_file, {"old": "data"})
@@ -365,7 +365,7 @@ class TestWriteJsonFile:
         assert "old" not in content
 
     def test_write_json_file_unicode(self, tmp_path):
-        """測試 Unicode 字符."""
+        """Test Unicode characters."""
         json_file = tmp_path / "test.json"
         data = {"中文": "測試", "emoji": "😀"}
 
@@ -377,10 +377,10 @@ class TestWriteJsonFile:
 
 
 class TestMarkdownDocumentRecord:
-    """測試 MarkdownDocumentRecord dataclass."""
+    """Test MarkdownDocumentRecord dataclass."""
 
     def test_markdown_document_record_creation(self):
-        """測試創建記錄."""
+        """Test creating record."""
         record = MarkdownDocumentRecord(
             file_path=Path("/test/doc.md"),
             root_path=Path("/test"),
@@ -397,7 +397,7 @@ class TestMarkdownDocumentRecord:
         assert record.size_bytes == 100
 
     def test_markdown_document_record_none_updated_at(self):
-        """測試 None 更新時間."""
+        """Test None updated_at."""
         record = MarkdownDocumentRecord(
             file_path=Path("/test/doc.md"),
             root_path=Path("/test"),
@@ -412,16 +412,16 @@ class TestMarkdownDocumentRecord:
 
 
 class TestEdgeCases:
-    """測試邊界條件."""
+    """Test edge cases."""
 
     def test_humanize_size_large_numbers(self):
-        """測試大數字."""
-        # 超過 MB 的數字
+        """Test large numbers."""
+        # Numbers over MB
         result = humanize_size(10 * 1024 * 1024)
         assert "MB" in result
 
     def test_parse_front_matter_special_characters(self):
-        """測試特殊字符."""
+        """Test special characters."""
         content = """---
 title: Test @ #$%
 special: "quotes: and: colons"
@@ -434,11 +434,11 @@ Content"""
 
 
 class TestScopedMarkdownRepository:
-    """測試 ScopedMarkdownRepository 類別."""
+    """Test ScopedMarkdownRepository class."""
 
     @pytest.fixture
     def temp_workspace(self, tmp_path):
-        """創建臨時工作區."""
+        """Create temporary workspace."""
         workspace_id = "test-workspace"
         workspace_path = tmp_path / "workspace"
         workspace_path.mkdir()
@@ -446,11 +446,11 @@ class TestScopedMarkdownRepository:
 
     @pytest.fixture
     def repository(self):
-        """創建測試倉庫實例."""
+        """Create test repository instance."""
         return ScopedMarkdownRepository("test-docs", supports_namespace=True)
 
     def test_init(self):
-        """測試初始化."""
+        """Test initialization."""
         repo = ScopedMarkdownRepository("my-folder")
         assert repo.folder_name == "my-folder"
         assert repo.supports_namespace is False
@@ -459,14 +459,14 @@ class TestScopedMarkdownRepository:
         assert repo_with_ns.supports_namespace is True
 
     def test_normalize_file_name(self, repository):
-        """測試文件名標準化."""
+        """Test file name normalization."""
         assert repository._normalize_file_name("test") == "test.md"
         assert repository._normalize_file_name("test.md") == "test.md"
         assert repository._normalize_file_name("my-file") == "my-file.md"
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_directory(self, mock_resolve, repository, temp_workspace):
-        """測試目錄解析."""
+        """Test directory resolution."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -475,20 +475,20 @@ class TestScopedMarkdownRepository:
         mock_resolve.assert_called_once_with(workspace_id, DocumentScope.PROJECT)
 
     def test_namespace_directory(self, repository, tmp_path):
-        """測試命名空間目錄."""
+        """Test namespace directory."""
         base_dir = tmp_path / "base"
 
-        # 無命名空間
+        # No namespace
         result = repository._namespace_directory(base_dir, None)
         assert result == base_dir
 
-        # 有命名空間
+        # With namespace
         result = repository._namespace_directory(base_dir, "subdir")
         assert result == base_dir / "subdir"
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_list_records_empty(self, mock_resolve, repository, temp_workspace):
-        """測試列出記錄 - 空目錄."""
+        """Test listing records - empty directory."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -497,14 +497,14 @@ class TestScopedMarkdownRepository:
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_list_records_with_files(self, mock_resolve, repository, temp_workspace):
-        """測試列出記錄 - 有檔案."""
+        """Test listing records - with files."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
         docs_dir = workspace_path / ".claude" / "test-docs"
         docs_dir.mkdir(parents=True)
 
-        # 創建測試文件
+        # Create test files
         (docs_dir / "doc1.md").write_text("# Doc 1", encoding="utf-8")
         (docs_dir / "doc2.md").write_text("# Doc 2", encoding="utf-8")
 
@@ -515,7 +515,7 @@ class TestScopedMarkdownRepository:
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_get_record_success(self, mock_resolve, repository, temp_workspace):
-        """測試獲取記錄 - 成功."""
+        """Test getting record - success."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -537,7 +537,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_get_record_not_found(self, mock_resolve, repository, temp_workspace):
-        """測試獲取記錄 - 找不到."""
+        """Test getting record - not found."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -546,7 +546,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_create_record_success(self, mock_resolve, repository, temp_workspace):
-        """測試創建記錄 - 成功."""
+        """Test creating record - success."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -559,14 +559,14 @@ title: Test Doc
         assert record.content == content
         assert record.scope == DocumentScope.PROJECT
 
-        # 驗證文件已創建
+        # Verify file created
         expected_path = workspace_path / ".claude" / "test-docs" / "new-doc.md"
         assert expected_path.exists()
         assert expected_path.read_text(encoding="utf-8") == content
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_create_record_with_namespace(self, mock_resolve, repository, temp_workspace):
-        """測試創建記錄 - 帶命名空間."""
+        """Test creating record - with namespace."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -578,13 +578,13 @@ title: Test Doc
         assert record.file_name == "doc.md"
         assert record.namespace == "subdir"
 
-        # 驗證文件在正確的命名空間目錄
+        # Verify file in correct namespace directory
         expected_path = workspace_path / ".claude" / "test-docs" / "subdir" / "doc.md"
         assert expected_path.exists()
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_create_record_duplicate(self, mock_resolve, repository, temp_workspace):
-        """測試創建記錄 - 重複."""
+        """Test creating record - duplicate."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -597,7 +597,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_update_record_success(self, mock_resolve, repository, temp_workspace):
-        """測試更新記錄 - 成功."""
+        """Test updating record - success."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -615,7 +615,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_update_record_not_found(self, mock_resolve, repository, temp_workspace):
-        """測試更新記錄 - 找不到."""
+        """Test updating record - not found."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -626,7 +626,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_delete_record_success(self, mock_resolve, repository, temp_workspace):
-        """測試刪除記錄 - 成功."""
+        """Test deleting record - success."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -641,7 +641,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_delete_record_not_found(self, mock_resolve, repository, temp_workspace):
-        """測試刪除記錄 - 找不到."""
+        """Test deleting record - not found."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -650,7 +650,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_resolve_file_path_with_namespace(self, mock_resolve, repository, temp_workspace):
-        """測試解析文件路徑 - 帶命名空間."""
+        """Test resolving file path - with namespace."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -664,7 +664,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_resolve_file_path_without_namespace(self, mock_resolve, repository, temp_workspace):
-        """測試解析文件路徑 - 無命名空間."""
+        """Test resolving file path - without namespace."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -677,7 +677,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_resolve_file_path_ambiguous(self, mock_resolve, repository, temp_workspace):
-        """測試解析文件路徑 - 模糊不清."""
+        """Test resolving file path - ambiguous."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 
@@ -694,7 +694,7 @@ title: Test Doc
 
     @patch("app.modules.claude_code.common.resolve_scope_root")
     def test_resolve_file_path_not_found(self, mock_resolve, repository, temp_workspace):
-        """測試解析文件路徑 - 找不到."""
+        """Test resolving file path - not found."""
         workspace_id, workspace_path = temp_workspace
         mock_resolve.return_value = workspace_path / ".claude"
 

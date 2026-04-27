@@ -1,6 +1,6 @@
-"""Agent Session Schema 定義.
+"""Agent Session Schema definitions.
 
-定義會話相關的 API 請求/回應模型。
+Defines API request/response models for sessions.
 """
 
 from __future__ import annotations
@@ -20,18 +20,18 @@ from ..domain.enums import (
 )
 
 
-# === 請求模型 ===
+# === Request Models ===
 
 
 class PermissionConfigCreate(BaseModel):
-    """權限配置建立請求."""
+    """Permission config creation request."""
 
     mode: PermissionMode = PermissionMode.DEFAULT
     codex: Optional[Dict[str, Any]] = None
 
 
 class ModelConfigCreate(BaseModel):
-    """模型配置建立請求."""
+    """Model config creation request."""
 
     mode: str = "alias"
     model: str = ""
@@ -43,7 +43,7 @@ class ModelConfigCreate(BaseModel):
 
 
 class AgentSessionCreate(BaseModel):
-    """建立會話請求."""
+    """Create session request."""
 
     workspace_id: str
     agentic_tool: AgenticTool = AgenticTool.CLAUDE_CODE
@@ -60,7 +60,7 @@ class AgentSessionCreate(BaseModel):
 
 
 class AgentSessionUpdate(BaseModel):
-    """更新會話請求."""
+    """Update session request."""
 
     status: Optional[AgentSessionStatus] = None
     title: Optional[str] = None
@@ -71,7 +71,7 @@ class AgentSessionUpdate(BaseModel):
 
 
 class AgentSessionQuery(BaseModel):
-    """會話查詢參數."""
+    """Session query parameters."""
 
     workspace_id: Optional[str] = None
     status: Optional[AgentSessionStatus] = None
@@ -83,7 +83,7 @@ class AgentSessionQuery(BaseModel):
 
 
 class PromptRequest(BaseModel):
-    """執行 Prompt 請求."""
+    """Execute Prompt request."""
 
     prompt: str
     permission_mode: Optional[PermissionMode] = None
@@ -91,13 +91,13 @@ class PromptRequest(BaseModel):
     stream: bool = True
     thinking_mode: Optional[str] = None  # "enabled", "disabled", "auto"
     thinking_budget: Optional[int] = None  # Token budget for thinking
-    automation_execution_id: Optional[str] = None  # 自動化執行 ID（用於完成通知）
+    automation_execution_id: Optional[str] = None  # Automation execution ID (for completion notification)
 
 
 class PermissionDecisionRequest(BaseModel):
-    """權限決策請求（相容舊版 API）.
+    """Permission decision request (compatible with legacy API).
 
-    Deprecated: 新流程使用 ToolDecisionRequest。
+    Deprecated: New flow uses ToolDecisionRequest.
     """
 
     request_id: str
@@ -110,7 +110,7 @@ class PermissionDecisionRequest(BaseModel):
 
 
 class ToolDecisionRequest(BaseModel):
-    """Tool Decision 請求."""
+    """Tool Decision request."""
 
     request_id: str
     task_id: str
@@ -124,7 +124,7 @@ class ToolDecisionRequest(BaseModel):
 
 
 class ToolDecisionResponse(BaseModel):
-    """Tool Decision 回應."""
+    """Tool Decision response."""
 
     success: bool
     request_id: str
@@ -135,7 +135,7 @@ class ToolDecisionResponse(BaseModel):
 
 
 class ToolResultRequest(BaseModel):
-    """工具結果請求 - 用於使用者互動工具如 AskUserQuestion."""
+    """Tool result request - for user interaction tools like AskUserQuestion."""
 
     tool_use_id: str
     task_id: str
@@ -143,18 +143,18 @@ class ToolResultRequest(BaseModel):
     is_error: bool = False
 
 
-# === 回應模型 ===
+# === Response Models ===
 
 
 class PermissionConfigResponse(BaseModel):
-    """權限配置回應."""
+    """Permission config response."""
 
     mode: str
     codex: Optional[Dict[str, Any]] = None
 
 
 class ModelConfigResponse(BaseModel):
-    """模型配置回應."""
+    """Model config response."""
 
     mode: str
     model: str
@@ -167,7 +167,7 @@ class ModelConfigResponse(BaseModel):
 
 
 class ContextWindowResponse(BaseModel):
-    """Context Window 狀態回應."""
+    """Context Window status response."""
 
     current_usage: int = 0
     limit: int = 200000
@@ -177,7 +177,7 @@ class ContextWindowResponse(BaseModel):
 
 
 class AgentSessionResponse(BaseModel):
-    """會話回應."""
+    """Session response."""
 
     session_id: str
     created_at: datetime
@@ -194,7 +194,7 @@ class AgentSessionResponse(BaseModel):
     git_context_id: Optional[str] = None
     workspace_path: Optional[str] = None
 
-    # Data blob 欄位
+    # Data blob fields
     agentic_tool_version: Optional[str] = None
     sdk_session_id: Optional[str] = None
     title: Optional[str] = None
@@ -210,8 +210,8 @@ class AgentSessionResponse(BaseModel):
 
     @classmethod
     def from_entity(cls, entity) -> "AgentSessionResponse":
-        """從領域實體建立回應."""
-        # 建立 context_window
+        """Create response from domain entity."""
+        # Create context_window
         context_window = None
         if entity.current_context_usage is not None:
             limit = entity.context_window_limit or 200000
@@ -225,7 +225,7 @@ class AgentSessionResponse(BaseModel):
                 last_update_at=entity.last_context_update_at,
             )
 
-        # 建立 permission_config
+        # Create permission_config
         permission_config = None
         if entity.permission_config:
             permission_config = PermissionConfigResponse(
@@ -233,7 +233,7 @@ class AgentSessionResponse(BaseModel):
                 codex=entity.permission_config.codex.__dict__ if entity.permission_config.codex else None,
             )
 
-        # 建立 model_settings
+        # Create model_settings
         model_settings = None
         if entity.model_settings:
             model_settings = ModelConfigResponse(
@@ -272,7 +272,7 @@ class AgentSessionResponse(BaseModel):
 
 
 class AgentSessionListResponse(BaseModel):
-    """會話列表回應."""
+    """Session list response."""
 
     items: List[AgentSessionResponse]
     total: int
@@ -281,7 +281,7 @@ class AgentSessionListResponse(BaseModel):
 
 
 class TokenUsageResponse(BaseModel):
-    """Token 使用量回應."""
+    """Token usage response."""
 
     total_input_tokens: int = 0
     total_output_tokens: int = 0
@@ -293,19 +293,19 @@ class TokenUsageResponse(BaseModel):
 
 
 class PromptResponse(BaseModel):
-    """執行 Prompt 回應."""
+    """Execute Prompt response."""
 
     success: bool = True
-    task_id: Optional[str] = None  # Queued message 沒有 task_id
-    status: str = "running"  # 可能是 "running" 或 "queued"
+    task_id: Optional[str] = None  # Queued message has no task_id
+    status: str = "running"  # Can be "running" or "queued"
     streaming: bool = True
-    queued: Optional[bool] = None  # 是否進入 queue
+    queued: Optional[bool] = None  # Whether entered queue
     message_id: Optional[str] = None  # Queued message ID
-    queue_position: Optional[int] = None  # Queue 位置
+    queue_position: Optional[int] = None  # Queue position
 
 
 class CurrentExecutionResponse(BaseModel):
-    """當前執行狀態回應."""
+    """Current execution status response."""
 
     has_active_execution: bool
     session_id: Optional[str] = None
@@ -315,7 +315,7 @@ class CurrentExecutionResponse(BaseModel):
 
 
 class ActiveRequestsResponse(BaseModel):
-    """活躍請求回應."""
+    """Active requests response."""
 
     has_active_requests: bool
     active_count: int = 0

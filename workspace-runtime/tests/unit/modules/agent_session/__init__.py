@@ -1,1 +1,1 @@
-"""Agent Session 模組測試."""
+"""Agent Session module tests."""

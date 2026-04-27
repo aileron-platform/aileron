@@ -1,4 +1,4 @@
-"""CLI Agents MD 路由"""
+"""CLI Agents MD router"""
 
 from __future__ import annotations
 
@@ -23,12 +23,12 @@ def create_agents_md_router(tool: AgentsMdTool) -> APIRouter:
     @router.get(
         f"/{config.endpoint_name}",
         response_model=AgentsMdDocument,
-        summary="取得 Agents MD 內容",
+        summary="Get Agents MD content",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def get_agents_md(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: AgentsMdScope = Query(..., description="檔案範圍"),
+        scope: AgentsMdScope = Query(..., description="File scope"),
         service: AgentsMdService = Depends(get_service),
     ) -> AgentsMdDocument:
         return service.get_document(workspace_id, scope)
@@ -36,7 +36,7 @@ def create_agents_md_router(tool: AgentsMdTool) -> APIRouter:
     @router.put(
         f"/{config.endpoint_name}",
         response_model=AgentsMdUpdateResponse,
-        summary="更新 Agents MD 內容",
+        summary="Update Agents MD content",
         responses=build_responses(400, 401, 403, 404, 422, 500),
     )
     async def update_agents_md(

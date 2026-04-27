@@ -1,4 +1,4 @@
-"""Workspace Runtime 版本控制模組"""
+"""Workspace Runtime Version Control Module"""
 
 from .dependencies import get_git_service
 from .router import router

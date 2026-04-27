@@ -1,4 +1,4 @@
-"""Claude Code Memory 服務"""
+"""Claude Code Memory Service"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from .models import (
 
 
 class MemoryService:
-    """管理固定 Claude Memory 目錄下的單層 Markdown 檔案"""
+    """Manage single-level Markdown files in a fixed Claude Memory directory"""
 
     DEFAULT_MEMORY_DIR = Path("/home/developer/.claude/projects/-workspace/memory")
 
@@ -53,7 +53,7 @@ class MemoryService:
         if file_path.exists():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail={"error": "DUPLICATE_FILE_NAME", "message": f"Memory 檔案已存在：{file_name}"},
+                detail={"error": "DUPLICATE_FILE_NAME", "message": f"Memory file already exists: {file_name}"},
             )
         file_path.write_text(payload.content, encoding="utf-8")
         return MemoryDocumentResponse(
@@ -85,12 +85,12 @@ class MemoryService:
         if not normalized:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_FILE_NAME", "message": "Memory 檔案名稱不可為空"},
+                detail={"error": "INVALID_FILE_NAME", "message": "Memory file name cannot be empty"},
             )
         if normalized.startswith("/") or "/" in normalized or "\\" in normalized or Path(normalized).name != normalized:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_FILE_NAME", "message": "Memory 檔案名稱不可包含路徑"},
+                detail={"error": "INVALID_FILE_NAME", "message": "Memory file name cannot contain path"},
             )
         if not normalized.lower().endswith(".md"):
             normalized = f"{normalized}.md"
@@ -102,7 +102,7 @@ class MemoryService:
         if not file_path.exists() or not file_path.is_file() or file_path.suffix.lower() != ".md":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail={"error": "404_NOT_FOUND", "message": f"Memory 檔案不存在：{normalized}"},
+                detail={"error": "404_NOT_FOUND", "message": f"Memory file not found: {normalized}"},
             )
         return file_path
 

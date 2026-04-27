@@ -1,4 +1,4 @@
-"""Workspace Runtime 資料庫模組。"""
+"""Workspace Runtime database module."""
 
 from .session import (
     async_session_scope,

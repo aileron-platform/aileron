@@ -1,4 +1,4 @@
-"""Plugin Components Loader 模組"""
+"""Plugin Components Loader Module"""
 
 from .loader import ComponentFileInfo, PluginComponentsLoader, get_plugin_loader
 

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class AcpToolManager:
     """Global ACP tool manager.
 
-    AcpTool 為無狀態設計（不持有 DB session），因此可安全共享。
+    AcpTool is stateless (does not hold DB session), so it can be safely shared.
     """
 
     _instance: Optional["AcpToolManager"] = None

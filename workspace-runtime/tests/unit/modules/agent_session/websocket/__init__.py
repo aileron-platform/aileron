@@ -1,1 +1,1 @@
-"""Agent Session websocket 測試."""
+"""Agent Session websocket tests."""

@@ -69,16 +69,16 @@ class PermissionHooks:
     # Tools that require user input instead of permission approval
     USER_INPUT_TOOLS = {"AskUserQuestion"}
 
-    # 預設 permission 選項（供 Tool Decision 使用）
+    # Default permission options (for Tool Decision)
     DEFAULT_PERMISSION_OPTIONS = [
-        {"option_id": "allow_once", "name": "允許一次", "kind": "allow_once", "scope": "once"},
-        {"option_id": "allow_session", "name": "允許此會話", "kind": "allow_always", "scope": "session"},
-        {"option_id": "reject_once", "name": "拒絕", "kind": "reject_once", "scope": "once"},
+        {"option_id": "allow_once", "name": "Allow once", "kind": "allow_once", "scope": "once"},
+        {"option_id": "allow_session", "name": "Allow for session", "kind": "allow_always", "scope": "session"},
+        {"option_id": "reject_once", "name": "Reject", "kind": "reject_once", "scope": "once"},
     ]
 
     USER_INPUT_OPTIONS = [
-        {"option_id": "submit", "name": "提交", "kind": "allow_once", "scope": "once"},
-        {"option_id": "cancel", "name": "取消", "kind": "reject_once", "scope": "once"},
+        {"option_id": "submit", "name": "Submit", "kind": "allow_once", "scope": "once"},
+        {"option_id": "cancel", "name": "Cancel", "kind": "reject_once", "scope": "once"},
     ]
 
     async def can_use_tool(
@@ -161,7 +161,7 @@ class PermissionHooks:
                 "tool_name": tool_name,
                 "tool_input": tool_input,
                 "type": "user_input",
-                "tool_use_id": tool_use_id,  # 用於重連時重播事件
+                "tool_use_id": tool_use_id,  # For replaying events on reconnection
             })
 
             # Step 2: Emit WebSocket event for tool decision (user_input)
@@ -352,8 +352,8 @@ class PermissionHooks:
                     "request_id": request_id,
                     "tool_name": tool_name,
                     "tool_input": tool_input,
-                    "type": "permission",  # 用於重連時重播事件
-                    "tool_use_id": tool_use_id,  # 用於重連時重播事件
+                    "type": "permission",  # For replaying events on reconnection
+                    "tool_use_id": tool_use_id,  # For replaying events on reconnection
                 },
             )
 
@@ -374,8 +374,8 @@ class PermissionHooks:
             self.emit_event("tool-decision:request", event_data)
 
             # Step 4: Wait for decision (with abort signal support)
-            # Note: DB 狀態更新由 API 層的 tool_decision_service.resolve_decision() 處理
-            # PermissionHooks 只負責等待決策並返回結果給 SDK
+            # Note: DB state updates are handled by API layer's tool_decision_service.resolve_decision()
+            # PermissionHooks is only responsible for waiting for decision and returning result to SDK
             decision = await self._wait_for_decision(request_id, timeout=60, signal=signal)
 
             # Step 5: Return decision to SDK
@@ -411,14 +411,14 @@ class PermissionHooks:
 
                 return response
             else:
-                # Note: DB 狀態更新由 API 層的 tool_decision_service.resolve_decision() 處理
+                # Note: DB state updates are handled by API layer's tool_decision_service.resolve_decision()
                 return PermissionResultDeny(
                     behavior="deny",
                     message=decision.get("reason", f"Permission denied for: {tool_name}"),
                 )
 
         except asyncio.TimeoutError:
-            # Timeout 情況下需要更新 DB，因為 API 不會被調用
+            # In timeout case, need to update DB because API won't be called
             await self._handle_timeout(request_id)
             return PermissionResultDeny(
                 behavior="deny",
@@ -639,7 +639,7 @@ class PermissionHooks:
         decision: Dict[str, Any],
         request_id: str,
     ) -> tuple[bool, Optional[str]]:
-        """解析 Tool Decision 為 allow/scope."""
+        """Resolve Tool Decision to allow/scope."""
         if "allow" in decision:
             return bool(decision.get("allow")), decision.get("scope")
 
@@ -680,6 +680,6 @@ class PermissionHooks:
         await self._fail_task("Permission request timed out")
 
 
-# 注意：全域 registry 已移至 PermissionManager
-# PermissionHooks 實例由 ClaudeTool 在 execute_task 期間管理
-# 並透過 global_tool_decision_manager.register_hooks/unregister_hooks 註冊
+# Note: Global registry has been moved to PermissionManager
+# PermissionHooks instances are managed by ClaudeTool during execute_task
+# And registered via global_tool_decision_manager.register_hooks/unregister_hooks

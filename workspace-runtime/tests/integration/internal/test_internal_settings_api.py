@@ -1,4 +1,4 @@
-"""Internal API 設定相關測試"""
+"""Internal API settings related tests"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .helpers import override_dependency
 
 
 class InternalServiceStub:
-    """可設定回傳結果的 InternalService stub"""
+    """Configurable return result InternalService stub"""
 
     def __init__(self) -> None:
         self.ssh_response: Dict[str, Any] = {}
@@ -23,7 +23,7 @@ class InternalServiceStub:
         self.setup_status: Dict[str, Any] = {}
         self.setup_status_error: Exception | None = None
 
-    async def setup_ssh_keys(self, request):  # pragma: no cover - 參數僅用於型別
+    async def setup_ssh_keys(self, request):  # pragma: no cover - parameter for type only
         if self.ssh_error:
             raise self.ssh_error
         return self.ssh_response
@@ -33,12 +33,12 @@ class InternalServiceStub:
             return self.firewall_response
         return {"status": "ok", **self.firewall_response}
 
-    async def setup_claude_code(self, request):  # pragma: no cover - 參數僅用於型別
+    async def setup_claude_code(self, request):  # pragma: no cover - parameter for type only
         if self.claude_code_error:
             raise self.claude_code_error
         return self.claude_code_response
 
-    async def setup_git_settings(self, request):  # pragma: no cover - 參數僅用於型別
+    async def setup_git_settings(self, request):  # pragma: no cover - parameter for type only
         if self.git_error:
             raise self.git_error
         return self.git_response
@@ -49,7 +49,7 @@ class InternalServiceStub:
         return self.setup_status
 
 
-async def _allow_internal_token():  # pragma: no cover - 覆寫用
+async def _allow_internal_token():  # pragma: no cover - for override
     return None
 
 
@@ -119,7 +119,7 @@ def test_in_007_apply_firewall_failure(client):
             json={
                 "networkAccessEnabled": True,
                 "domainAccessMode": "specific",
-                "allowedDomains": []  # 空列表會導致錯誤
+                "allowedDomains": []  # Empty list will cause error
             },
             headers={"Authorization": "Bearer test-token"},
         )
@@ -152,7 +152,7 @@ def test_in_009_internal_health_invalid_token(client):
 
 
 def test_in_010_sync_claude_code_success(client):
-    """測試 Claude Code 設定同步成功"""
+    """Test Claude Code settings sync success"""
     service = InternalServiceStub()
     service.claude_code_response = {
         "configPath": "/home/dev/.claude/config.json",
@@ -172,11 +172,11 @@ def test_in_010_sync_claude_code_success(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "Claude Code 設定已成功完成" in payload["message"]
+    assert "Claude Code configuration completed successfully" in payload["message"]
 
 
 def test_in_011_sync_claude_code_failure(client):
-    """測試 Claude Code 設定同步失敗"""
+    """Test Claude Code settings sync failure"""
     service = InternalServiceStub()
     service.claude_code_error = RuntimeError("Config write failed")
 
@@ -192,7 +192,7 @@ def test_in_011_sync_claude_code_failure(client):
 
 
 def test_in_012_sync_git_settings_success(client):
-    """測試 Git 設定同步成功"""
+    """Test Git settings sync success"""
     service = InternalServiceStub()
     service.git_response = {
         "userName": "Test User",
@@ -212,11 +212,11 @@ def test_in_012_sync_git_settings_success(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "Git 全域設定已成功完成" in payload["message"]
+    assert "Git global configuration completed successfully" in payload["message"]
 
 
 def test_in_013_sync_git_settings_failure(client):
-    """測試 Git 設定同步失敗"""
+    """Test Git settings sync failure"""
     service = InternalServiceStub()
     service.git_error = RuntimeError("Git config failed")
 
@@ -235,7 +235,7 @@ def test_in_013_sync_git_settings_failure(client):
 
 
 def test_in_014_get_workspace_setup_status_success(client):
-    """測試查詢 Workspace 設定狀態成功"""
+    """Test workspace setup status query success"""
     service = InternalServiceStub()
     service.setup_status = {
         "ssh": {"status": "success", "message": "SSH Keys 已就緒"},
@@ -252,11 +252,11 @@ def test_in_014_get_workspace_setup_status_success(client):
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert "取得初始化狀態成功" in payload["message"]
+    assert "Fetch initialization status successful" in payload["message"]
 
 
 def test_in_015_get_workspace_setup_status_failure(client):
-    """測試查詢 Workspace 設定狀態失敗"""
+    """Test workspace setup status query failure"""
     service = InternalServiceStub()
     service.setup_status_error = RuntimeError("Status check failed")
 

@@ -1,4 +1,4 @@
-"""MCP 伺服器後端服務"""
+"""MCP server backend service"""
 
 from __future__ import annotations
 
@@ -35,28 +35,28 @@ from .models import (
 
 
 class McpScopeNotSupportedError(ValueError):
-    """指定的 scope 不支援"""
+    """Specified scope is not supported"""
 
 
 class McpServerAlreadyExistsError(RuntimeError):
-    """伺服器名稱重複"""
+    """Server name already exists"""
 
 
 class McpServerNotFoundError(KeyError):
-    """伺服器不存在"""
+    """Server not found"""
 
 
 
 
 @dataclass
 class McpServerEntry:
-    """記錄單一 MCP 伺服器設定"""
+    """Records single MCP server configuration"""
 
     name: str
     config: McpServerConfig
 
     def to_runtime(self, enabled: bool = True) -> McpServerRuntime:
-        """轉換為 Runtime 模型，包含 enabled 狀態"""
+        """Convert to Runtime model, including enabled state"""
         data = self.config.model_dump(by_alias=True, exclude_none=True)
         data["enabled"] = enabled
         return McpServerRuntime.model_validate(data)
@@ -68,14 +68,14 @@ class McpServerEntry:
 
 
 class McpService:
-    """管理 MCP 伺服器設定的檔案服務"""
+    """Manages MCP server configuration file service"""
 
     SUPPORTED_SCOPES: tuple[DocumentScope, ...] = (
         DocumentScope.PROJECT,
         DocumentScope.USER,
         DocumentScope.LOCAL,
     )
-    # PLUGIN scope 支援讀取但不支援寫入
+    # PLUGIN scope supports read but not write
     READABLE_SCOPES: tuple[DocumentScope, ...] = (
         DocumentScope.PROJECT,
         DocumentScope.USER,
@@ -86,21 +86,21 @@ class McpService:
     _USER_FILE = ".claude.json"
     _LOCAL_FILE = ".claude.json"
 
-    # === 公開方法 ==================================================
+    # === Public Methods ==============================================
 
     def list_servers(
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> McpServerCollectionResponse:
         """
-        列出所有 MCP servers
+        List all MCP servers
 
-        修改：自動整合 plugin MCP servers
+        Modified: Auto-integrate plugin MCP servers
         """
-        # 驗證 scope（如果指定）
+        # Validate scope (if specified)
         if scope is not None:
             scope = self._normalize_scope_for_read(scope)
 
-            # 如果是 PLUGIN scope，直接返回 plugin servers
+            # If PLUGIN scope, directly return plugin servers
             if scope == DocumentScope.PLUGIN:
                 plugin_servers = self._load_plugin_mcp_servers(workspace_id)
                 return McpServerCollectionResponse(
@@ -114,7 +114,7 @@ class McpService:
 
         groups: List[McpScopeServers] = []
 
-        # 1. 載入原有的 MCP servers（project/user/local）
+        # 1. Load existing MCP servers (project/user/local)
         for scope_item in scopes:
             entries = self._load_scope_entries(workspace_id, scope_item)
             groups.append(
@@ -124,7 +124,7 @@ class McpService:
                 )
             )
 
-        # 2. 載入 plugin MCP servers（新增）
+        # 2. Load plugin MCP servers (added)
         if scope is None or scope == DocumentScope.PLUGIN:
             try:
                 plugin_servers = self._load_plugin_mcp_servers(workspace_id)
@@ -143,7 +143,7 @@ class McpService:
     def get_scope(self, workspace_id: str, scope: DocumentScope) -> McpScopeResponse:
         normalized = self._normalize_scope_for_read(scope)
 
-        # 如果是 PLUGIN scope，載入 plugin MCP servers
+        # If PLUGIN scope, load plugin MCP servers
         if normalized == DocumentScope.PLUGIN:
             plugin_servers = self._load_plugin_mcp_servers(workspace_id)
             return McpScopeResponse(
@@ -164,7 +164,7 @@ class McpService:
     ) -> McpScopeResponse:
         normalized = self._normalize_scope_for_read(scope)
 
-        # 如果是 PLUGIN scope，從 plugin servers 中查找
+        # If PLUGIN scope, search in plugin servers
         if normalized == DocumentScope.PLUGIN:
             plugin_servers = self._load_plugin_mcp_servers(workspace_id)
             if server_name not in plugin_servers:
@@ -304,13 +304,13 @@ class McpService:
     def import_servers_from_file(
         self, workspace_id: str, payload: McpImportUploadRequest
     ) -> McpImportResponse:
-        """從上傳的 JSON 檔案匯入 MCP 伺服器配置"""
+        """Import MCP server configuration from uploaded JSON file"""
         try:
-            # 解析 JSON 檔案內容
+            # Parse JSON file content
             file_content = payload.file.decode('utf-8')
             json_data = json.loads(file_content)
 
-            # 檢查是否包含 mcpServers 欄位
+            # Check if mcpServers field exists
             if 'mcpServers' not in json_data:
                 raise ValueError("Invalid format: missing 'mcpServers' field")
 
@@ -318,7 +318,7 @@ class McpService:
             if not isinstance(mcp_servers_data, dict):
                 raise ValueError("Invalid format: 'mcpServers' must be an object")
 
-            # 轉換為 McpServerConfig 物件
+            # Convert to McpServerConfig objects
             mcp_servers = {}
             for name, config in mcp_servers_data.items():
                 if not isinstance(config, dict):
@@ -327,14 +327,14 @@ class McpService:
 
                 mcp_servers[name] = McpServerConfig(**config)
 
-            # 建立匯入請求
+            # Create import request
             import_request = McpImportRequest(
                 scope=payload.scope,
                 mcpServers=mcp_servers,
                 overwrite=payload.overwrite
             )
 
-            # 執行匯入
+            # Execute import
             return self.import_servers(workspace_id, import_request)
 
         except json.JSONDecodeError as e:
@@ -363,48 +363,48 @@ class McpService:
     def toggle_server_status(
         self, workspace_id: str, scope: DocumentScope, server_name: str, enabled: bool
     ) -> McpScopeResponse:
-        """切換 MCP 伺服器的啟用/停用狀態
+        """Toggle MCP server enabled/disabled status
 
         Args:
             workspace_id: Workspace ID
-            scope: 設定範圍
-            server_name: 伺服器名稱
-            enabled: True 為啟用，False 為停用
+            scope: Configuration scope
+            server_name: Server name
+            enabled: True for enabled, False for disabled
 
         Returns:
-            更新後的 MCP 伺服器資訊
+            Updated MCP server information
 
         Note:
-            - 對於 plugin scope，會使用 plugin:{plugin_name}:{server_name} 格式
-            - 對於其他 scope，使用 {server_name} 格式
+            - For plugin scope, uses plugin:{plugin_name}:{server_name} format
+            - For other scopes, uses {server_name} format
         """
-        # 處理 plugin scope
+        # Handle plugin scope
         if scope == DocumentScope.PLUGIN:
             return self._toggle_plugin_server_status(workspace_id, server_name, enabled)
 
-        # 處理一般 scope (project/user/local)
+        # Handle general scope (project/user/local)
         normalized = self._normalize_scope(scope)
         entries = self._load_scope_entries(workspace_id, normalized)
         if server_name not in entries:
             raise McpServerNotFoundError(server_name)
 
-        # 載入當前的停用清單
+        # Load current disabled list
         disabled_servers = self._load_disabled_servers(workspace_id)
 
-        # 更新停用清單
+        # Update disabled list
         if enabled:
-            # 啟用：從停用清單中移除
+            # Enable: Remove from disabled list
             if server_name in disabled_servers:
                 disabled_servers.remove(server_name)
         else:
-            # 停用：加入停用清單
+            # Disable: Add to disabled list
             if server_name not in disabled_servers:
                 disabled_servers.append(server_name)
 
-        # 儲存更新後的停用清單
+        # Save updated disabled list
         self._save_disabled_servers(workspace_id, disabled_servers)
 
-        # 回傳更新後的伺服器資訊
+        # Return updated server information
         entry = entries[server_name]
         return McpScopeResponse(
             workspaceId=workspace_id,
@@ -412,7 +412,7 @@ class McpService:
             mcpServers={server_name: entry.to_runtime(enabled=enabled)},
         )
 
-    # === 內部工具 ==================================================
+    # === Internal Utilities ==========================================
 
     def _normalize_optional_scope(
         self, scope: DocumentScope | None
@@ -422,42 +422,42 @@ class McpService:
         return self._normalize_scope(scope)
 
     def _normalize_scope(self, scope: DocumentScope) -> DocumentScope:
-        """驗證 scope 是否支援寫入操作"""
+        """Validate if scope supports write operations"""
         if scope not in self.SUPPORTED_SCOPES:
             raise McpScopeNotSupportedError(f"Unsupported scope: {scope}")
         return scope
 
     def _normalize_scope_for_read(self, scope: DocumentScope) -> DocumentScope:
-        """驗證 scope 是否支援讀取操作（包含 PLUGIN）"""
+        """Validate if scope supports read operations (including PLUGIN)"""
         if scope not in self.READABLE_SCOPES:
             raise McpScopeNotSupportedError(f"Unsupported scope: {scope}")
         return scope
 
     def _project_file(self, workspace_id: str) -> Path:
-        """Project scope: /workspace/.mcp.json (專案根目錄，與團隊共享)"""
+        """Project scope: /workspace/.mcp.json (project root directory, shared with team)"""
         return workspace_root() / self._PROJECT_FILE
 
     def _local_file(self) -> Path:
-        """Local scope: ~/.claude.json (巢狀結構: projects -> /workspace -> mcpServers)"""
+        """Local scope: ~/.claude.json (nested structure: projects -> /workspace -> mcpServers)"""
         return Path.home() / self._LOCAL_FILE
 
     def _user_file(self) -> Path:
-        """User scope: ~/.claude.json (直接結構: root -> mcpServers)"""
+        """User scope: ~/.claude.json (direct structure: root -> mcpServers)"""
         return Path.home() / self._USER_FILE
 
     def _possible_user_project_keys(self, workspace_id: str) -> List[str]:
-        """根據文檔範例，user scope的專案路徑識別"""
+        """Identify workspace path for user scope based on documentation conventions"""
         workspace_base = workspace_root() / workspace_id
         normalized = workspace_base.resolve()
 
-        # 按照文檔中claude.json的範例格式
+        # Per claude.json format in documentation
         raw_candidates: List[str | None] = [
-            "/workspace",  # 最常見的 key，優先嘗試
-            normalized.as_posix(),  # 完整解析路徑
-            workspace_base.as_posix(),  # 基本路徑
-            str(normalized),  # 字串格式
-            f"/{workspace_id}" if not workspace_id.startswith("/") else workspace_id,  # 相對workspace_id
-            str(workspace_root()),  # workspace root 路徑
+            "/workspace",  # Most common key, try first
+            normalized.as_posix(),  # Fully resolved path
+            workspace_base.as_posix(),  # Base path
+            str(normalized),  # String format
+            f"/{workspace_id}" if not workspace_id.startswith("/") else workspace_id,  # Relative to workspace_id
+            str(workspace_root()),  # Workspace root path
         ]
         seen: List[str] = []
         for candidate in raw_candidates:
@@ -518,7 +518,7 @@ class McpService:
     def _load_local_entries(
         self, workspace_id: str
     ) -> Dict[str, McpServerEntry]:
-        """Local scope 使用 ~/.claude.json 巢狀結構: projects -> /workspace -> mcpServers"""
+        """Local scope uses ~/.claude.json nested structure: projects -> /workspace -> mcpServers"""
         path = self._local_file()
         data = read_json_file(path)
         if not isinstance(data, dict):
@@ -538,19 +538,19 @@ class McpService:
     def _update_project_block_field(
         self, workspace_id: str, field_name: str, value: Any
     ) -> None:
-        """更新 ~/.claude.json 中 project_block 的特定欄位，保留其他欄位
+        """Update specific field in project_block in ~/.claude.json, preserving other fields
 
         Args:
             workspace_id: Workspace ID
-            field_name: 要更新的欄位名稱（如 'mcpServers', 'disabledMcpServers'）
-            value: 欄位值
+            field_name: Field name to update (e.g., 'mcpServers', 'disabledMcpServers')
+            value: Field value
         """
         path = self._local_file()
         data = read_json_file(path)
         if not isinstance(data, dict):
             data = {}
 
-        # 確保 projects 存在
+        # Ensure projects exists
         if "projects" not in data:
             data["projects"] = {}
         projects = data["projects"]
@@ -558,10 +558,10 @@ class McpService:
             projects = {}
             data["projects"] = projects
 
-        # 取得 project key
+        # Get project key
         key = self._primary_user_project_key(workspace_id)
 
-        # 取得現有的 project_block，如果不存在則創建新的
+        # Get existing project_block, create new if not exists
         if key not in projects:
             projects[key] = {}
         project_block = projects[key]
@@ -569,7 +569,7 @@ class McpService:
             project_block = {}
             projects[key] = project_block
 
-        # 更新指定欄位，保留其他欄位
+        # Update specified field, preserve other fields
         project_block[field_name] = value
 
         write_json_file(path, data)
@@ -577,9 +577,9 @@ class McpService:
     def _write_local_entries(
         self, workspace_id: str, entries: Dict[str, McpServerEntry]
     ) -> None:
-        """Local scope 使用 ~/.claude.json 巢狀結構: projects -> /workspace -> mcpServers
+        """Local scope uses ~/.claude.json nested structure: projects -> /workspace -> mcpServers
 
-        注意：此方法會保留現有的 project_block 內容（如 disabledMcpServers），只更新 mcpServers
+        Note: This method preserves existing project_block content (like disabledMcpServers), only updates mcpServers
         """
         self._update_project_block_field(
             workspace_id, "mcpServers", self._encode_servers(entries)
@@ -590,7 +590,7 @@ class McpService:
     def _load_user_entries(
         self, workspace_id: str  # pylint: disable=unused-argument
     ) -> Dict[str, McpServerEntry]:
-        """User scope 使用 ~/.claude.json 直接結構: root -> mcpServers"""
+        """User scope uses ~/.claude.json direct structure: root -> mcpServers"""
         path = self._user_file()
         data = read_json_file(path)
         if not isinstance(data, dict):
@@ -601,7 +601,7 @@ class McpService:
     def _write_user_entries(
         self, workspace_id: str, entries: Dict[str, McpServerEntry]  # pylint: disable=unused-argument
     ) -> None:
-        """User scope 使用 ~/.claude.json 直接結構: root -> mcpServers"""
+        """User scope uses ~/.claude.json direct structure: root -> mcpServers"""
         path = self._user_file()
         data = read_json_file(path)
         if not isinstance(data, dict):
@@ -609,7 +609,7 @@ class McpService:
         data["mcpServers"] = self._encode_servers(entries)
         write_json_file(path, data)
 
-    # --- 共用編碼工具 -----------------------------------------------
+    # --- Shared Encoding Utilities ----------------------------------
 
     def _decode_servers(self, payload: Any) -> Dict[str, McpServerEntry]:
         result: Dict[str, McpServerEntry] = {}
@@ -645,7 +645,7 @@ class McpService:
     def _runtime_map(
         self, entries: Dict[str, McpServerEntry], workspace_id: str
     ) -> Dict[str, McpServerRuntime]:
-        """將 McpServerEntry 轉換為 McpServerRuntime，包含 enabled 狀態"""
+        """Convert McpServerEntry to McpServerRuntime, including enabled state"""
         disabled_servers = self._load_disabled_servers(workspace_id)
         return {
             name: entries[name].to_runtime(enabled=(name not in disabled_servers))
@@ -663,10 +663,10 @@ class McpService:
             prepared[key] = config
         return prepared
 
-    # --- MCP 開關管理 -----------------------------------------------
+    # --- MCP Toggle Management --------------------------------------
 
     def _load_disabled_servers(self, workspace_id: str) -> List[str]:
-        """從 ~/.claude.json 的 projects./workspace.disabledMcpServers 讀取停用清單"""
+        """Read disabled list from ~/.claude.json projects./workspace.disabledMcpServers"""
         path = self._local_file()
         data = read_json_file(path)
         if not isinstance(data, dict):
@@ -678,7 +678,7 @@ class McpService:
             logger.debug(f"[MCP Toggle] projects is not a dict")
             return []
 
-        # 嘗試所有可能的 workspace key
+        # Try all possible workspace keys
         candidates = self._possible_user_project_keys(workspace_id)
         logger.debug(f"[MCP Toggle] Trying candidates: {candidates}")
         logger.debug(f"[MCP Toggle] Available project keys: {list(projects.keys())}")
@@ -695,9 +695,9 @@ class McpService:
         return []
 
     def _save_disabled_servers(self, workspace_id: str, disabled_servers: List[str]) -> None:
-        """將停用清單寫回 ~/.claude.json 的 projects./workspace.disabledMcpServers
+        """Write disabled list back to ~/.claude.json projects./workspace.disabledMcpServers
 
-        注意：此方法會保留現有的 project_block 內容（如 mcpServers），只更新 disabledMcpServers
+        Note: This method preserves existing project_block content (like mcpServers), only updates disabledMcpServers
         """
         self._update_project_block_field(workspace_id, "disabledMcpServers", disabled_servers)
 
@@ -706,14 +706,14 @@ class McpService:
         workspace_id: str
     ) -> Dict[str, McpServerRuntime]:
         """
-        載入 plugin MCP servers（新方法）
+        Load plugin MCP servers (new method)
 
-        支援透過 disabledMcpServers 停用 plugin MCP servers
-        格式：plugin:{plugin_name}:{server_name}
-        範例：plugin:chrome-devtools-mcp:chrome-devtools
+        Support disabling plugin MCP servers via disabledMcpServers
+        Format: plugin:{plugin_name}:{server_name}
+        Example: plugin:chrome-devtools-mcp:chrome-devtools
 
         Returns:
-            Dict[server_name, McpServerRuntime]: MCP servers 字典
+            Dict[server_name, McpServerRuntime]: MCP servers dictionary
         """
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service
@@ -721,44 +721,44 @@ class McpService:
         settings_service = get_settings_service()
         loader = get_plugin_loader(settings_service)
 
-        # 載入所有 plugin MCP servers（按 plugin 分組）
+        # Load all plugin MCP servers (grouped by plugin)
         plugin_mcp_dict = loader.load_plugin_mcp_servers(workspace_id)
 
-        # 載入 disabled servers 清單
+        # Load disabled servers list
         disabled_servers = self._load_disabled_servers(workspace_id)
 
-        # 合併為單一字典（server_name → McpServerRuntime）
+        # Merge into single dict (server_name → McpServerRuntime)
         all_servers = {}
 
         for plugin_id, servers in plugin_mcp_dict.items():
             plugin_name, marketplace_name = plugin_id.split("@")
 
-            # 防禦性檢查：確保 servers 是 dict
+            # Defensive check: ensure servers is dict
             if not isinstance(servers, dict):
                 logger.warning(f"Plugin '{plugin_id}' MCP servers is not a dict: {type(servers)}")
                 continue
 
             for server_name, server_config in servers.items():
-                # 防禦性檢查：確保 server_config 是 dict
+                # Defensive check: ensure server_config is dict
                 if not isinstance(server_config, dict):
                     logger.warning(f"Plugin '{plugin_id}' server '{server_name}' config is not a dict: {type(server_config)}")
                     continue
 
-                # 檢查是否被停用
-                # 支援兩種格式：
+                # Check if disabled
+                # Supports two formats:
                 # 1. plugin:{plugin_name}:{server_name}
-                # 2. {server_name} (向後相容)
+                # 2. {server_name} (backward compatible)
                 plugin_server_key = f"plugin:{plugin_name}:{server_name}"
                 is_disabled = (
                     plugin_server_key in disabled_servers or
                     server_name in disabled_servers
                 )
 
-                # 轉換為 McpServerRuntime 格式
+                # Convert to McpServerRuntime format
                 try:
                     runtime_data = {
                         **server_config,
-                        "enabled": not is_disabled,  # 根據 disabled 清單設定
+                        "enabled": not is_disabled,  # Set based on disabled list
                         "pluginName": plugin_name,
                         "marketplaceName": marketplace_name
                     }
@@ -777,11 +777,11 @@ class McpService:
         enabled: bool
     ) -> McpScopeResponse:
         """
-        切換 plugin MCP 伺服器的啟用/停用狀態
+        Toggle plugin MCP server enabled/disabled status
 
-        使用 plugin:{plugin_name}:{server_name} 格式儲存到 disabledMcpServers
+        Store using plugin:{plugin_name}:{server_name} format in disabledMcpServers
         """
-        # 載入所有 plugin MCP servers 以找到對應的 plugin_name
+        # Load all plugin MCP servers to find corresponding plugin_name
         plugin_servers = self._load_plugin_mcp_servers(workspace_id)
 
         if server_name not in plugin_servers:
@@ -793,34 +793,34 @@ class McpService:
         if not plugin_name:
             raise ValueError(f"Server '{server_name}' is not a plugin server")
 
-        # 載入當前的停用清單
+        # Load current disabled list
         disabled_servers = self._load_disabled_servers(workspace_id)
 
-        # 建構 plugin server key
+        # Build plugin server key
         plugin_server_key = f"plugin:{plugin_name}:{server_name}"
 
-        # 更新停用清單
+        # Update disabled list
         if enabled:
-            # 啟用：從停用清單中移除（兩種格式都移除）
+            # Enable: Remove from disabled list (both formats)
             if plugin_server_key in disabled_servers:
                 disabled_servers.remove(plugin_server_key)
             if server_name in disabled_servers:
                 disabled_servers.remove(server_name)
         else:
-            # 停用：加入停用清單（使用 plugin 專用格式）
+            # Disable: Add to disabled list (using plugin-specific format)
             if plugin_server_key not in disabled_servers:
                 disabled_servers.append(plugin_server_key)
-            # 移除舊的通用格式（如果存在）
+            # Remove old generic format (if exists)
             if server_name in disabled_servers:
                 disabled_servers.remove(server_name)
 
-        # 儲存更新後的停用清單
+        # Save updated disabled list
         self._save_disabled_servers(workspace_id, disabled_servers)
 
-        # 更新 server runtime 的 enabled 狀態
+        # Update server runtime enabled state
         server_runtime.enabled = enabled
 
-        # 回傳更新後的伺服器資訊
+        # Return updated server information
         return McpScopeResponse(
             workspaceId=workspace_id,
             scope=DocumentScope.PLUGIN,

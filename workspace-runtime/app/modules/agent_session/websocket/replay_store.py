@@ -1,6 +1,6 @@
-"""WebSocket 事件 Replay Store.
+"""WebSocket event Replay Store.
 
-使用 Redis 保存每個 session 的近期事件，支援斷線重連回放。
+Uses Redis to store recent events for each session, supports replay after reconnection.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ _SESSION_ID_PATTERN = re.compile(
 
 
 def _validate_session_id(session_id: str) -> bool:
-    """驗證 session_id 為合法的 UUID 格式，防止 Redis key 注入."""
+    """Validate session_id as valid UUID format to prevent Redis key injection."""
     return bool(session_id) and _SESSION_ID_PATTERN.match(session_id) is not None
 
 
@@ -48,10 +48,10 @@ class RedisWebSocketReplayStore:
         session_id: str,
         payload: Dict[str, Any],
     ) -> Optional[int]:
-        """追加事件並分配 seq.
+        """Append event and assign seq.
 
         Returns:
-            事件 seq；若 Redis 不可用則回傳 None。
+            Event seq; returns None if Redis is unavailable.
         """
         if not _validate_session_id(session_id):
             return None
@@ -91,7 +91,7 @@ class RedisWebSocketReplayStore:
         last_seq: int,
         limit: int = 200,
     ) -> List[Dict[str, Any]]:
-        """查詢指定 seq 之後的事件（依序）."""
+        """Query events after specified seq (in order)."""
         if not _validate_session_id(session_id):
             return []
 
@@ -130,7 +130,7 @@ _global_replay_store: Optional[RedisWebSocketReplayStore] = None
 
 
 def get_websocket_replay_store() -> RedisWebSocketReplayStore:
-    """取得全域 replay store."""
+    """Get global replay store."""
     global _global_replay_store
     if _global_replay_store is None:
         _global_replay_store = RedisWebSocketReplayStore()
@@ -138,7 +138,7 @@ def get_websocket_replay_store() -> RedisWebSocketReplayStore:
 
 
 def reset_websocket_replay_store() -> None:
-    """重置全域 replay store（主要用於測試）."""
+    """Reset global replay store (mainly for testing)."""
     global _global_replay_store
     _global_replay_store = None
 

@@ -1,4 +1,4 @@
-"""Agents md 依賴注入"""
+"""Agents md dependency injection"""
 
 from __future__ import annotations
 

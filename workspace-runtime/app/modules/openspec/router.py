@@ -32,7 +32,7 @@ router = APIRouter(
 @router.get(
     "/summary",
     response_model=OpenSpecWorkspaceSummaryResponse,
-    summary="取得 OpenSpec workspace 輕量 summary",
+    summary="Get OpenSpec workspace lightweight summary",
     responses=build_responses(401, 404, 500),
 )
 async def get_openspec_workspace_summary(
@@ -45,7 +45,7 @@ async def get_openspec_workspace_summary(
 @router.get(
     "",
     response_model=OpenSpecWorkspaceResponse,
-    summary="取得 OpenSpec workspace 狀態與 actions",
+    summary="Get OpenSpec workspace state and actions",
     responses=build_responses(401, 404, 500),
 )
 async def get_openspec_workspace_state(
@@ -74,7 +74,7 @@ async def get_openspec_workspace_state(
 @router.get(
     "/customization",
     response_model=OpenSpecCustomizationStateResponse,
-    summary="取得 OpenSpec customization explorer 狀態",
+    summary="Get OpenSpec customization explorer state",
     responses=build_responses(401, 404, 500),
 )
 async def get_openspec_customization_state(
@@ -87,7 +87,7 @@ async def get_openspec_customization_state(
 @router.get(
     "/customization/file",
     response_model=OpenSpecCustomizationFileResponse,
-    summary="讀取 customization 檔案內容",
+    summary="Read customization file content",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_openspec_customization_file(
@@ -104,7 +104,7 @@ async def get_openspec_customization_file(
 @router.put(
     "/customization/file",
     response_model=OpenSpecCustomizationActionResponse,
-    summary="儲存 customization 檔案內容",
+    summary="Save customization file content",
     responses=build_responses(400, 401, 404, 500),
 )
 async def update_openspec_customization_file(
@@ -122,7 +122,7 @@ async def update_openspec_customization_file(
 @router.post(
     "/customization/schemas/fork",
     response_model=OpenSpecCustomizationActionResponse,
-    summary="Fork built-in 或現有 schema 到 project-local",
+    summary="Fork built-in or existing schema to project-local",
     responses=build_responses(400, 401, 404, 500),
 )
 async def fork_openspec_customization_schema(
@@ -143,7 +143,7 @@ async def fork_openspec_customization_schema(
 @router.post(
     "/customization/schemas",
     response_model=OpenSpecCustomizationActionResponse,
-    summary="建立新的 project-local schema",
+    summary="Create new project-local schema",
     responses=build_responses(400, 401, 404, 500),
 )
 async def init_openspec_customization_schema(
@@ -165,7 +165,7 @@ async def init_openspec_customization_schema(
 @router.post(
     "/customization/validate",
     response_model=OpenSpecCustomizationValidationResponse,
-    summary="驗證目前 customization context",
+    summary="Validate current customization context",
     responses=build_responses(400, 401, 404, 500),
 )
 async def validate_openspec_customization(
@@ -182,7 +182,7 @@ async def validate_openspec_customization(
 @router.get(
     "/customization/debug",
     response_model=OpenSpecCustomizationDebugResponse,
-    summary="顯示目前 customization context 的 schema resolution",
+    summary="Show current customization context schema resolution",
     responses=build_responses(400, 401, 404, 500),
 )
 async def debug_openspec_customization(

@@ -1,7 +1,7 @@
 """
-Aileron - Workspace Runtime 主應用程式
+Aileron - Workspace Runtime Main Application
 
-提供開發環境運行時支援，包含 Claude Code 整合、檔案監控、WebSocket 通訊等
+Provides runtime support for development environments, including Claude Code integration, file monitoring, WebSocket communication, etc.
 """
 
 import logging
@@ -34,73 +34,73 @@ from app.modules.canvas import router as canvas_router
 from app.modules.version_control import router as version_control_router
 from app.modules.cli_settings import router as cli_settings_router
 from app.modules.client_browser_relay import router as client_browser_relay_router
-# Services 將在後續實作
+# Services to be implemented later
 # from app.services.system_monitor import SystemMonitor
 # from app.services.workspace_manager import WorkspaceManager
 
-# 載入設定
+# Load settings
 settings = get_settings()
 
-# 設定日誌
+# Setup logging
 setup_logging({"log_level": "INFO"})
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """應用程式生命週期管理"""
-    logger.info("🚀 Aileron - Workspace Runtime 啟動中...")
+    """Application lifecycle management"""
+    logger.info("🚀 Aileron - Workspace Runtime starting...")
 
     try:
-        # 基本初始化
-        logger.info("✅ 基本服務初始化完成")
+        # Basic initialization
+        logger.info("✅ Basic service initialization complete")
         OpenSpecService().log_cli_probe()
 
-        # TODO: 後續將加入工作區管理器和系統監控
+        # TODO: Will add workspace manager and system monitor later
 
-        logger.info("✅ Workspace Runtime 啟動完成")
+        logger.info("✅ Workspace Runtime startup complete")
         yield
 
     except Exception as e:
-        logger.error(f"❌ 應用程式啟動失敗: {e}")
-        # 不要使用 sys.exit，讓 FastAPI 處理錯誤
+        logger.error(f"❌ Application startup failed: {e}")
+        # Do not use sys.exit, let FastAPI handle the error
         raise
     finally:
-        logger.info("🛑 Workspace Runtime 關閉中...")
-        logger.info("✅ 資源清理完成")
+        logger.info("🛑 Workspace Runtime shutting down...")
+        logger.info("✅ Resource cleanup complete")
 
 
-# 創建 FastAPI 應用程式
+# Create FastAPI application
 app = FastAPI(
     title="Aileron - Workspace Runtime",
     description="""
-    ## Aileron 工作區運行時服務
+    ## Aileron Workspace Runtime Service
 
-    為開發工作區提供完整的運行時支援：
+    Provides complete runtime support for development workspaces:
 
-    ### 🏃‍♂️ 核心功能
-    - **Claude Code 整合**: 與 Claude Code 的無縫整合
-    - **檔案系統監控**: 即時監控檔案變更
-    - **WebSocket 通訊**: 即時雙向通訊
-    - **系統監控**: CPU、記憶體、磁碟使用率監控
-    - **程序管理**: 開發程序的生命週期管理
+    ### 🏃‍♂️ Core Features
+    - **Claude Code Integration**: Seamless integration with Claude Code
+    - **File System Monitoring**: Real-time file change monitoring
+    - **WebSocket Communication**: Real-time bidirectional communication
+    - **System Monitoring**: CPU, memory, disk usage monitoring
+    - **Process Management**: Development process lifecycle management
 
-    ### 🔧 技術特性
-    - 基於 FastAPI 的高效能服務
-    - WebSocket 即時通訊
-    - 檔案系統監控與同步
-    - 系統資源監控
-    - 容器化執行環境
+    ### 🔧 Technical Features
+    - High-performance service based on FastAPI
+    - WebSocket real-time communication
+    - File system monitoring and synchronization
+    - System resource monitoring
+    - Containerized execution environment
 
-    ### 📡 通訊協定
-    - **HTTP API**: RESTful API 服務
-    - **WebSocket**: 即時通訊頻道
-    - **Claude Code**: 原生整合支援
+    ### 📡 Communication Protocols
+    - **HTTP API**: RESTful API services
+    - **WebSocket**: Real-time communication channels
+    - **Claude Code**: Native integration support
 
-    ### 🔗 相關服務
+    ### 🔗 Related Services
     - **Workspace Manager**: [http://localhost:3001/docs](http://localhost:3001/docs)
     - **Frontend UI**: [http://localhost:8080](http://localhost:8080)
-    - **Celery Flower**: [http://localhost:5555](http://localhost:5555) (任務監控)
+    - **Celery Flower**: [http://localhost:5555](http://localhost:5555) (Task monitoring)
     """,
     version="1.0.0",
     contact={
@@ -113,98 +113,98 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT",
     },
     openapi_tags=[
-        # 核心服務
+        # Core services
         {
-            "name": "健康檢查",
-            "description": "服務健康狀態檢查和監控",
+            "name": "Health Check",
+            "description": "Service health status check and monitoring",
         },
         {
             "name": "agent-sessions",
-            "description": "Agent Session 主資源管理",
+            "description": "Agent Session main resource management",
         },
         {
             "name": "agent-session-messages",
-            "description": "Agent Session 訊息查詢與佇列管理",
+            "description": "Agent Session message query and queue management",
         },
         {
             "name": "agent-session-tasks",
-            "description": "Agent Session 任務建立與查詢",
+            "description": "Agent Session task creation and query",
         },
         {
             "name": "agent-session-websocket",
-            "description": "Agent Session 的 WebSocket 即時通訊端點",
+            "description": "WebSocket real-time communication endpoint for Agent Session",
         },
         {
-            "name": "內部 API",
-            "description": "內部管理和設定 API（僅供系統內部使用）",
+            "name": "Internal API",
+            "description": "Internal management and configuration API (for system internal use only)",
         },
-        # 檔案與版本控制
+        # File and version control
         {
-            "name": "檔案管理",
-            "description": "檔案系統操作和管理",
+            "name": "File Management",
+            "description": "File system operations and management",
         },
         {
-            "name": "版本控制",
-            "description": "Git 版本控制操作",
+            "name": "Version Control",
+            "description": "Git version control operations",
         },
         {
             "name": "OpenSpec",
-            "description": "Workspace 內建 OpenSpec 狀態與 workflow actions",
+            "description": "Workspace built-in OpenSpec state and workflow actions",
         },
         {
-            "name": "Draw.io 整合",
-            "description": "Draw.io 圖表檢視和編輯整合",
+            "name": "Draw.io Integration",
+            "description": "Draw.io diagram viewing and editing integration",
         },
-        # 工作區管理
+        # Workspace management
         {
-            "name": "預覽服務",
-            "description": "應用程式預覽和同步服務",
+            "name": "Preview Service",
+            "description": "Application preview and synchronization service",
         },
         # Claude Code
         {
-            "name": "Claude Code - 設定",
-            "description": "Claude Code 全域設定管理",
+            "name": "Claude Code - Settings",
+            "description": "Claude Code global settings management",
         },
         {
             "name": "Claude Code - CLAUDE.md",
-            "description": "CLAUDE.md 配置檔案管理",
+            "description": "CLAUDE.md configuration file management",
         },
         {
             "name": "Claude Code - Hooks",
-            "description": "生命週期 Hooks 管理",
+            "description": "Lifecycle Hooks management",
         },
         {
-            "name": "Claude Code - MCP 伺服器",
-            "description": "Model Context Protocol 伺服器管理",
+            "name": "Claude Code - MCP Servers",
+            "description": "Model Context Protocol server management",
         },
         {
-            "name": "Claude Code - 腳本",
-            "description": "自訂腳本檔案管理",
+            "name": "Claude Code - Scripts",
+            "description": "Custom script file management",
         },
         {
-            "name": "Claude Code - 技能",
-            "description": "技能（Skills）檔案管理",
+            "name": "Claude Code - Skills",
+            "description": "Skills file management",
         },
         {
-            "name": "Claude Code - 斜線命令",
-            "description": "斜線命令（Slash Commands）管理",
+            "name": "Claude Code - Slash Commands",
+            "description": "Slash commands management",
         },
         {
-            "name": "Claude Code - 子代理",
-            "description": "子代理（Subagents）配置管理",
+            "name": "Claude Code - Subagents",
+            "description": "Subagents configuration management",
         },
         {
-            "name": "Claude Code - 輸出樣式",
-            "description": "輸出樣式（Output Styles）管理",
+            "name": "Claude Code - Output Styles",
+            "description": "Output styles management",
         },
         {
-            "name": "Claude Code - 使用統計",
-            "description": "API 使用統計和配額管理",
+            "name": "Claude Code - Usage Statistics",
+            "description": "API usage statistics and quota management",
         },
         # Client Browser Relay
         {
             "name": "Client Browser Relay",
-            "description": "用戶端瀏覽器 CDP Relay Server，控制用戶本機的 Chrome 瀏覽器",
+            "description": "Client browser CDP Relay Server, controls user's local Chrome browser",
         },
     ],
     swagger_ui_parameters={
@@ -220,8 +220,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 添加中間件（注意：最後添加的中間件最先執行，即最外層）
-# CORSMiddleware 必須在最外層，確保所有回應（包含認證失敗的 401）都帶有 CORS 標頭
+# Add middleware (note: last added middleware executes first, i.e., outermost layer)
+# CORSMiddleware must be at the outermost layer, ensuring all responses (including auth failed 401) have CORS headers
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(I18nMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
@@ -235,20 +235,20 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
-# 註冊路由
+# Register routes
 app.include_router(health_router)
 
-# Agent Session 路由 (優先於 core_router，避免路由衝突)
-logger.info("🟢 [MAIN] 註冊 agent_session_router...")
+# Agent Session routes (prioritize over core_router to avoid route conflicts)
+logger.info("🟢 [MAIN] Registering agent_session_router...")
 app.include_router(agent_session_router, prefix="/api/v1")
-logger.info("🟢 [MAIN] 註冊 agent_task_router...")
+logger.info("🟢 [MAIN] Registering agent_task_router...")
 app.include_router(agent_task_router, prefix="/api/v1")
-logger.info("🟢 [MAIN] 註冊 agent_message_router...")
+logger.info("🟢 [MAIN] Registering agent_message_router...")
 app.include_router(agent_message_router, prefix="/api/v1")
-# Agent Session WebSocket 路由
-logger.info("🔴 [MAIN] 正在註冊 agent_websocket_router (WebSocket routes)...")
+# Agent Session WebSocket routes
+logger.info("🔴 [MAIN] Registering agent_websocket_router (WebSocket routes)...")
 app.include_router(agent_websocket_router, prefix="/api/v1")
-logger.info("🔴 [MAIN] agent_websocket_router 已註冊!")
+logger.info("🔴 [MAIN] agent_websocket_router registered!")
 
 app.include_router(claude_code_router, prefix="/api/v1")
 app.include_router(cli_settings_router, prefix="/api/v1")
@@ -258,19 +258,19 @@ app.include_router(canvas_router, prefix="/api/v1")
 app.include_router(version_control_router, prefix="/api/v1")
 app.include_router(openspec_router, prefix="/api/v1")
 
-# Client Browser Relay 路由
-logger.info("🟢 [MAIN] 註冊 client_browser_relay_router...")
+# Client Browser Relay routes
+logger.info("🟢 [MAIN] Registering client_browser_relay_router...")
 app.include_router(client_browser_relay_router, prefix="/api/v1")
 
-# Draw.io 整合路由
+# Draw.io integration routes
 from app.modules.drawio.router import router as drawio_router
 app.include_router(drawio_router, prefix="/api/v1")
 
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """HTTP 例外處理器"""
-    logger.warning(f"HTTP 例外: {exc.status_code} - {exc.detail}")
+    """HTTP exception handler"""
+    logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
 
     response = JSONResponse(
         status_code=exc.status_code,
@@ -282,7 +282,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
         },
     )
 
-    # 添加 CORS 標頭
+    # Add CORS headers
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
@@ -291,19 +291,19 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """全域例外處理器"""
-    logger.error(f"未處理的例外: {exc}", exc_info=True)
+    """Global exception handler"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
 
     response = JSONResponse(
         status_code=500,
         content={
-            "error": "內部伺服器錯誤",
+            "error": "Internal server error",
             "detail": str(exc),
             "request_id": getattr(request.state, "request_id", None),
         },
     )
 
-    # 添加 CORS 標頭以確保錯誤響應也支援跨域請求
+    # Add CORS headers to ensure error responses also support cross-origin requests
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
 
@@ -312,13 +312,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.options("/{path:path}", include_in_schema=False)
 async def options_handler(path: str):
-    """處理 CORS 預檢請求"""
+    """Handle CORS preflight requests"""
     return {"status": "ok"}
 
 
 @app.get("/", include_in_schema=False)
 async def root():
-    """根路徑重導向到 API 文件"""
+    """Root path redirect to API docs"""
     return {
         "message": "Aileron - Workspace Runtime",
         "version": "1.0.0",
@@ -330,7 +330,7 @@ async def root():
 
 
 def main() -> None:
-    """主程式入口點"""
+    """Main program entry point"""
     import uvicorn
 
     uvicorn.run(

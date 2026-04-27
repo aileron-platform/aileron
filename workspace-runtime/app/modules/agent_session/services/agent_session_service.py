@@ -1,6 +1,6 @@
 """Agent Session Service.
 
-提供會話的業務邏輯，包含建立、查詢、執行 prompt 等功能。
+Provides business logic for sessions, including creation, query, and prompt execution.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ from ..websocket.events import EventEmitter, get_event_emitter
 class AgentSessionService:
     """Agent Session Service.
 
-    處理會話相關的業務邏輯。
+    Handles session-related business logic.
     """
 
     def __init__(
@@ -53,13 +53,13 @@ class AgentSessionService:
         emitter: Optional[EventEmitter] = None,
         git_utils: Optional[GitUtils] = None,
     ):
-        """初始化 Service.
+        """Initialize Service.
 
         Args:
-            db: 資料庫 session
-            session_repo: Session Repository (可注入)
-            task_repo: Task Repository (可注入)
-            emitter: Event Emitter (可注入)
+            db: Database session
+            session_repo: Session Repository (injectable)
+            task_repo: Task Repository (injectable)
+            emitter: Event Emitter (injectable)
         """
         self.db = db
         self.session_repo = session_repo or AgentSessionRepository(db)
@@ -72,13 +72,13 @@ class AgentSessionService:
         self,
         data: AgentSessionCreate,
     ) -> AgentSession:
-        """建立會話.
+        """Create session.
 
         Args:
-            data: 建立請求資料
+            data: Creation request data
 
         Returns:
-            建立的會話實體
+            Created session entity
         """
         session_id = str(uuid.uuid4())
         now = utcnow()
@@ -94,7 +94,7 @@ class AgentSessionService:
             custom_context["git_context_id"] = data.git_context_id
             custom_context["workspace_path"] = workspace_path
 
-        # 建立 data blob
+        # Create data blob
         data_blob: Dict[str, Any] = {
             "tasks": [],
             "message_count": 0,
@@ -126,12 +126,12 @@ class AgentSessionService:
             if data.model_settings.provider:
                 data_blob["model_config"]["provider"] = data.model_settings.provider
 
-        # 設定 context window limit
+        # Set context window limit
         tool_caps = get_tool_capabilities(data.agentic_tool.value)
         if tool_caps:
             data_blob["context_window_limit"] = tool_caps.max_context_window
 
-        # 建立記錄 (data 序列化為 JSON 字串存入 TEXT 欄位)
+        # Create record (data serialized to JSON string stored in TEXT field)
         model = await self.session_repo.create({
             "session_id": session_id,
             "created_at": now,
@@ -147,7 +147,7 @@ class AgentSessionService:
 
         session_entity = self.session_repo.to_entity(model)
 
-        # 發送 sessions:created 事件
+        # Send sessions:created event
         logger.debug("Sending sessions:created event - session_id=%s", session_id)
         try:
             sent_count = await self.emitter.emit_session_created(
@@ -164,13 +164,13 @@ class AgentSessionService:
         self,
         session_id: str,
     ) -> Optional[AgentSession]:
-        """取得會話.
+        """Get session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            會話實體或 None
+            Session entity or None
         """
         model = await self.session_repo.find_by_id(session_id)
         if not model:
@@ -182,15 +182,15 @@ class AgentSessionService:
         self,
         query: AgentSessionQuery,
     ) -> Tuple[List[AgentSession], int]:
-        """查詢會話列表.
+        """Query session list.
 
         Args:
-            query: 查詢參數
+            query: Query parameters
 
         Returns:
-            (會話列表, 總數)
+            (Session list, total)
         """
-        # 建立過濾條件
+        # Build filter conditions
         filters: Dict[str, Any] = {"archived": query.archived}
 
         if query.workspace_id:
@@ -202,7 +202,7 @@ class AgentSessionService:
         if query.source:
             filters["source"] = query.source
 
-        # 查詢
+        # Query
         models = await self.session_repo.find_all(
             filters=filters,
             limit=query.limit,
@@ -211,10 +211,10 @@ class AgentSessionService:
             order_desc=True,
         )
 
-        # 計算總數
+        # Count total
         total = await self.session_repo.count(filters)
 
-        # 轉換為實體
+        # Convert to entities
         sessions = [self.session_repo.to_entity(m) for m in models]
 
         return sessions, total
@@ -224,14 +224,14 @@ class AgentSessionService:
         session_id: str,
         data: AgentSessionUpdate,
     ) -> Optional[AgentSession]:
-        """更新會話.
+        """Update session.
 
         Args:
-            session_id: 會話 ID
-            data: 更新資料
+            session_id: Session ID
+            data: Update data
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         existing = await self.session_repo.find_by_id(session_id)
         if not existing:
@@ -248,9 +248,9 @@ class AgentSessionService:
         if data.archived_reason is not None:
             update_data["archived_reason"] = data.archived_reason
 
-        # 更新 data blob
+        # Update data blob
         if data.title is not None or data.permission_config is not None or data.model_settings is not None:
-            # 反序列化 existing data (JSON 字符串 -> dict)
+            # Deserialize existing data (JSON string -> dict)
             existing_data = json.loads(existing.data) if existing.data else {}
 
             if data.title is not None:
@@ -276,7 +276,7 @@ class AgentSessionService:
                 if data.model_settings.provider:
                     existing_data["model_config"]["provider"] = data.model_settings.provider
 
-            # 序列化後更新 (dict -> JSON 字符串)
+            # Serialize and update (dict -> JSON string)
             update_data["data"] = json.dumps(existing_data, ensure_ascii=False)
 
         if not update_data:
@@ -288,7 +288,7 @@ class AgentSessionService:
 
         session_entity = self.session_repo.to_entity(model)
 
-        # 發送 sessions:patched 事件
+        # Send sessions:patched event
         await self.emitter.emit_session_patched(
             session_id=session_id,
             data=self._session_to_event_data(session_entity),
@@ -300,15 +300,15 @@ class AgentSessionService:
         self,
         session_id: str,
     ) -> bool:
-        """刪除會話.
+        """Delete session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            是否成功刪除
+            Whether deletion succeeded
         """
-        # 清理相關資源
+        # Clean up related resources
         from .execution_service import ExecutionService
         ExecutionService.cleanup_session_lock(session_id)
 
@@ -319,14 +319,14 @@ class AgentSessionService:
         session_id: str,
         reason: str = "manual",
     ) -> Optional[AgentSession]:
-        """封存會話.
+        """Archive session.
 
         Args:
-            session_id: 會話 ID
-            reason: 封存原因
+            session_id: Session ID
+            reason: Archive reason
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         model = await self.session_repo.archive(session_id, reason)
         if not model:
@@ -338,13 +338,13 @@ class AgentSessionService:
         self,
         workspace_id: str,
     ) -> Optional[Dict[str, Any]]:
-        """取得工作區當前執行中的會話.
+        """Get currently executing session in workspace.
 
         Args:
-            workspace_id: 工作區 ID
+            workspace_id: Workspace ID
 
         Returns:
-            執行狀態資訊或 None
+            Execution state info or None
         """
         model = await self.session_repo.find_running_by_workspace(workspace_id)
         if not model:
@@ -352,7 +352,7 @@ class AgentSessionService:
                 "has_active_execution": False,
             }
 
-        # 查詢活躍的 task
+        # Query active task
         active_task = await self.task_repo.find_active_by_session(model.session_id)
 
         return {
@@ -368,14 +368,14 @@ class AgentSessionService:
         session_id: str,
         status: AgentSessionStatus,
     ) -> Optional[AgentSession]:
-        """更新會話狀態.
+        """Update session status.
 
         Args:
-            session_id: 會話 ID
-            status: 新狀態
+            session_id: Session ID
+            status: New status
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         model = await self.session_repo.update_status(session_id, status)
         if not model:
@@ -388,14 +388,14 @@ class AgentSessionService:
         session_id: str,
         task_id: str,
     ) -> Optional[AgentSession]:
-        """新增 Task 到會話.
+        """Add task to session.
 
         Args:
-            session_id: 會話 ID
-            task_id: 任務 ID
+            session_id: Session ID
+            task_id: Task ID
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         model = await self.session_repo.add_task(session_id, task_id)
         if not model:
@@ -408,14 +408,14 @@ class AgentSessionService:
         session_id: str,
         count: int = 1,
     ) -> Optional[AgentSession]:
-        """增加訊息計數.
+        """Increment message count.
 
         Args:
-            session_id: 會話 ID
-            count: 增加數量
+            session_id: Session ID
+            count: Increment amount
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         model = await self.session_repo.increment_message_count(session_id, count)
         if not model:
@@ -429,15 +429,15 @@ class AgentSessionService:
         usage: int,
         limit: Optional[int] = None,
     ) -> Optional[AgentSession]:
-        """更新 Context Window 使用量.
+        """Update Context Window usage.
 
         Args:
-            session_id: 會話 ID
-            usage: 當前使用量
-            limit: Context 上限
+            session_id: Session ID
+            usage: Current usage
+            limit: Context limit
 
         Returns:
-            更新後的會話或 None
+            Updated session or None
         """
         model = await self.session_repo.update_context_usage(session_id, usage, limit)
         if not model:
@@ -447,36 +447,36 @@ class AgentSessionService:
 
     @staticmethod
     def get_tool_capabilities(tool: str) -> Optional[ToolCapabilities]:
-        """取得工具能力.
+        """Get tool capabilities.
 
         Args:
-            tool: 工具名稱
+            tool: Tool name
 
         Returns:
-            工具能力描述
+            Tool capabilities description
         """
         return get_tool_capabilities(tool)
 
     @staticmethod
     def get_all_tool_capabilities() -> Dict[str, ToolCapabilities]:
-        """取得所有工具能力.
+        """Get all tool capabilities.
 
         Returns:
-            所有工具的能力描述
+            All tool capabilities descriptions
         """
         return TOOL_CAPABILITIES
 
     @staticmethod
     def _session_to_event_data(session: AgentSession) -> Dict[str, Any]:
-        """將 AgentSession 實體轉換為事件數據.
+        """Convert AgentSession entity to event data.
 
-        包含完整的會話資訊，用於 WebSocket 事件廣播。
+        Contains complete session information for WebSocket event broadcast.
 
         Args:
-            session: AgentSession 實體
+            session: AgentSession entity
 
         Returns:
-            事件數據字典
+            Event data dictionary
         """
         data = {
             "session_id": session.id,
@@ -490,7 +490,7 @@ class AgentSessionService:
             "archived": session.archived,
         }
 
-        # 添加 Session 實體中的信息
+        # Add info from Session entity
         if session.title:
             data["title"] = session.title
         if session.message_count > 0:

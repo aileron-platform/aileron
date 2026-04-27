@@ -1,6 +1,6 @@
 """Permission Service.
 
-提供權限審批相關的業務邏輯。
+Provides business logic for permission approval.
 """
 
 from __future__ import annotations
@@ -24,19 +24,19 @@ from ..schemas.agent_session import PermissionDecisionRequest
 
 
 class PermissionServiceError(Exception):
-    """Permission Service 錯誤."""
+    """Permission Service error."""
 
     pass
 
 
 class PermissionTimeoutError(PermissionServiceError):
-    """權限請求超時."""
+    """Permission request timeout."""
 
     pass
 
 
 class PermissionDeniedError(PermissionServiceError):
-    """權限被拒絕."""
+    """Permission denied."""
 
     pass
 
@@ -44,7 +44,7 @@ class PermissionDeniedError(PermissionServiceError):
 class PermissionService:
     """Permission Service.
 
-    處理工具執行的權限審批流程。
+    Handles permission approval flow for tool execution.
     """
 
     def __init__(
@@ -55,14 +55,14 @@ class PermissionService:
         message_repo: Optional[MessageRepository] = None,
         event_emitter: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ):
-        """初始化 Service.
+        """Initialize Service.
 
         Args:
-            db: 資料庫 session
-            session_repo: Session Repository (可注入)
-            task_repo: Task Repository (可注入)
-            message_repo: Message Repository (可注入)
-            event_emitter: 事件發送器 (用於 WebSocket)
+            db: Database session
+            session_repo: Session Repository ((injectable))
+            task_repo: Task Repository ((injectable))
+            message_repo: Message Repository ((injectable))
+            event_emitter: Event emitter (for WebSocket)
         """
         self.db = db
         self.session_repo = session_repo or AgentSessionRepository(db)
@@ -70,12 +70,12 @@ class PermissionService:
         self.message_repo = message_repo or MessageRepository(db)
         self.event_emitter = event_emitter
 
-        # 等待中的決策 (request_id -> asyncio.Event)
+        # Pending decisions (request_id -> asyncio.Event)
         self._pending_decisions: Dict[str, asyncio.Event] = {}
         self._decision_results: Dict[str, PermissionDecisionRequest] = {}
 
-        # 追蹤每個 session 的權限請求 (session_id -> set of request_ids)
-        # 用於在權限被拒絕時批量取消同一 session 的其他待處理請求
+        # Track permission requests per session (session_id -> set of request_ids)
+        # Used to batch-cancel other pending requests in the same session when permission is denied
         self._session_requests: Dict[str, set] = {}
 
     async def create_permission_request(
@@ -87,15 +87,15 @@ class PermissionService:
         tool_use_id: Optional[str] = None,
         timeout_seconds: int = 60,
     ) -> str:
-        """建立權限請求.
+        """Create permission request.
 
         Args:
-            session_id: 會話 ID
-            task_id: 任務 ID
-            tool_name: 工具名稱
-            tool_input: 工具輸入參數
+            session_id: Session ID
+            task_id: Task ID
+            tool_name: Tool name
+            tool_input: Tool input parameters
             tool_use_id: Tool Use ID
-            timeout_seconds: 超時秒數
+            timeout_seconds: Timeout in seconds
 
         Returns:
             request_id
@@ -103,7 +103,7 @@ class PermissionService:
         request_id = str(uuid.uuid4())
         now = utcnow()
 
-        # 建立權限請求資料
+        # Create permission request data
         permission_request = {
             "request_id": request_id,
             "tool_name": tool_name,
@@ -113,13 +113,13 @@ class PermissionService:
         if tool_use_id:
             permission_request["tool_use_id"] = tool_use_id
 
-        # 更新 task 狀態
+        # Update task status
         await self.task_repo.set_awaiting_permission(task_id, permission_request)
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(session_id, AgentSessionStatus.AWAITING_PERMISSION)
 
-        # 建立權限請求訊息
+        # Create permission request message
         await self._create_permission_message(
             session_id=session_id,
             task_id=task_id,
@@ -129,7 +129,7 @@ class PermissionService:
             tool_use_id=tool_use_id,
         )
 
-        # 發送 WebSocket 事件
+        # Send WebSocket event
         if self.event_emitter:
             self.event_emitter("permission:request", {
                 "request_id": request_id,
@@ -140,7 +140,7 @@ class PermissionService:
                 "timeout": timeout_seconds,
             })
 
-        # 追蹤此 session 的權限請求
+        # Track this session's permission request
         if session_id not in self._session_requests:
             self._session_requests[session_id] = set()
         self._session_requests[session_id].add(request_id)
@@ -152,27 +152,27 @@ class PermissionService:
         request_id: str,
         timeout_seconds: int = 60,
     ) -> PermissionDecisionRequest:
-        """等待權限決策.
+        """Wait for permission decision.
 
         Args:
-            request_id: 請求 ID
-            timeout_seconds: 超時秒數
+            request_id: Request ID
+            timeout_seconds: Timeout in seconds
 
         Returns:
-            權限決策
+            Permission decision
 
         Raises:
-            PermissionTimeoutError: 超時
+            PermissionTimeoutError: Timeout
         """
-        # 建立等待事件
+        # Create wait event
         event = asyncio.Event()
         self._pending_decisions[request_id] = event
 
         try:
-            # 等待決策或超時
+            # Wait for decision or timeout
             await asyncio.wait_for(event.wait(), timeout=timeout_seconds)
 
-            # 取得決策結果
+            # Get decision result
             decision = self._decision_results.get(request_id)
             if not decision:
                 raise PermissionServiceError(f"Decision not found for request: {request_id}")
@@ -183,7 +183,7 @@ class PermissionService:
             raise PermissionTimeoutError(f"Permission request timed out: {request_id}")
 
         finally:
-            # 清理
+            # Clean up
             self._pending_decisions.pop(request_id, None)
             self._decision_results.pop(request_id, None)
 
@@ -191,24 +191,24 @@ class PermissionService:
         self,
         decision: PermissionDecisionRequest,
     ) -> bool:
-        """處理權限決策.
+        """Handle permission decision.
 
         Args:
-            decision: 決策請求
+            decision: Decision request
 
         Returns:
-            是否成功處理
+            Whether processing was successful
         """
         request_id = decision.request_id
 
-        # 取得 task
+        # Get task
         task_model = await self.task_repo.find_by_id(decision.task_id)
         if not task_model:
             raise PermissionServiceError(f"Task not found: {decision.task_id}")
 
         session_id = task_model.session_id
 
-        # 更新權限請求訊息
+        # Update permission request message
         status = PermissionStatus.APPROVED.value if decision.allow else PermissionStatus.DENIED.value
         await self._update_permission_message(
             session_id=session_id,
@@ -218,28 +218,28 @@ class PermissionService:
             approved_by=decision.decided_by,
         )
 
-        # 更新 task 狀態
+        # Update task status
         if decision.allow:
-            # 批准 - 恢復執行
+            # Approved - resume execution
             await self.task_repo.update(decision.task_id, {"status": TaskStatus.RUNNING.value})
             await self.session_repo.update_status(session_id, AgentSessionStatus.RUNNING)
         else:
-            # 拒絕 - 標記失敗
+            # Denied - mark as failed
             await self.task_repo.fail_task(
                 decision.task_id,
                 error_message=decision.reason or "Permission denied",
             )
             await self.session_repo.update_status(session_id, AgentSessionStatus.IDLE)
-            # 取消同一 session 中其他待處理的權限請求
+            # Cancel other pending permission requests in the same session
             await self.cancel_pending_requests(session_id)
 
-        # 儲存決策結果並通知等待者
+        # Store decision result and notify waiters
         self._decision_results[request_id] = decision
         event = self._pending_decisions.get(request_id)
         if event:
             event.set()
 
-        # 發送 WebSocket 事件
+        # Send WebSocket event
         if self.event_emitter:
             event_name = "permission:approved" if decision.allow else "permission:denied"
             self.event_emitter(event_name, {
@@ -259,11 +259,11 @@ class PermissionService:
         request_id: str,
         task_id: str,
     ) -> None:
-        """處理權限請求超時.
+        """Handle permission request timeout.
 
         Args:
-            request_id: 請求 ID
-            task_id: 任務 ID
+            request_id: Request ID
+            task_id: Task ID
         """
         task_model = await self.task_repo.find_by_id(task_id)
         if not task_model:
@@ -271,7 +271,7 @@ class PermissionService:
 
         session_id = task_model.session_id
 
-        # 更新權限請求訊息
+        # Update permission request message
         await self._update_permission_message(
             session_id=session_id,
             request_id=request_id,
@@ -279,13 +279,13 @@ class PermissionService:
             approved_by="system",
         )
 
-        # 標記 task 失敗
+        # Mark task as failed
         await self.task_repo.fail_task(task_id, error_message="Permission request timed out")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(session_id, AgentSessionStatus.IDLE)
 
-        # 發送 WebSocket 事件
+        # Send WebSocket event
         if self.event_emitter:
             self.event_emitter("permission:timeout", {
                 "request_id": request_id,
@@ -297,15 +297,15 @@ class PermissionService:
         self,
         request_id: str,
     ) -> None:
-        """取消權限請求.
+        """Cancel permission request.
 
         Args:
-            request_id: 請求 ID
+            request_id: Request ID
         """
-        # 通知等待者
+        # Notify waiters
         event = self._pending_decisions.get(request_id)
         if event:
-            # 建立一個拒絕的決策
+            # Create a denied decision
             self._decision_results[request_id] = PermissionDecisionRequest(
                 request_id=request_id,
                 task_id="",
@@ -319,16 +319,16 @@ class PermissionService:
         self,
         session_id: str,
     ) -> int:
-        """取消指定 session 的所有待處理權限請求.
+        """Cancel all pending permission requests for a given session.
 
-        當權限被拒絕時調用，自動取消該 session 中所有其他待處理的請求。
-        參考 agor 的 cancelPendingRequests 實現。
+        Called when permission is denied, automatically cancels all other pending requests in the session.
+        References agor's cancelPendingRequests implementation.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            取消的請求數量
+            Number of cancelled requests
         """
         request_ids = self._session_requests.get(session_id, set()).copy()
         cancelled_count = 0
@@ -346,7 +346,7 @@ class PermissionService:
                 event.set()
                 cancelled_count += 1
 
-        # 清理 session 的請求追蹤
+        # Clean up session request tracking
         self._session_requests.pop(session_id, None)
 
         if cancelled_count > 0:
@@ -363,7 +363,7 @@ class PermissionService:
         tool_input: Dict[str, Any],
         tool_use_id: Optional[str] = None,
     ) -> None:
-        """建立權限請求訊息.
+        """Create permission request message.
 
         Internal method to create the permission request message.
         """
@@ -392,7 +392,7 @@ class PermissionService:
         scope: Optional[str] = None,
         approved_by: Optional[str] = None,
     ) -> None:
-        """更新權限請求訊息.
+        """Update permission request message.
 
         Internal method to update the permission request message status.
         """

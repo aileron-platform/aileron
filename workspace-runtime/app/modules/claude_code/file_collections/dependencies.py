@@ -1,4 +1,4 @@
-"""File Collections 依賴注入"""
+"""File Collections Dependency Injection"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ _workspace_service: WorkspaceDataService | None = None
 
 
 def get_workspace_service() -> WorkspaceDataService:
-    """取得工作區資料服務"""
+    """Get workspace data service"""
     global _workspace_service
     if _workspace_service is None:
         _workspace_service = WorkspaceDataService()
@@ -17,7 +17,7 @@ def get_workspace_service() -> WorkspaceDataService:
 
 
 def get_workspace_id() -> str:
-    """取得當前工作區 ID"""
+    """Get current workspace ID"""
     workspace_service = get_workspace_service()
     return workspace_service.get_current_workspace_id()
 

@@ -131,7 +131,7 @@ def test_slash_commands_router_rejects_local_scope() -> None:
         json={"fileName": "bad.md", "content": "# bad"},
     )
     assert response.status_code == 400
-    assert response.json()["detail"]["message"] == "Slash Commands 不支援 LOCAL scope"
+    assert response.json()["detail"]["message"] == "Slash Commands does not support LOCAL scope"
 
 
 def test_slash_commands_router_rejects_read_only_scope(monkeypatch) -> None:

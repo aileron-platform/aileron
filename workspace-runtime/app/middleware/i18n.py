@@ -1,4 +1,4 @@
-"""Workspace Runtime 國際化中間件。"""
+"""Workspace Runtime internationalization middleware."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class I18nMiddleware(BaseHTTPMiddleware):
-    """將請求語系注入 request state 供後續依賴使用。"""
+    """Inject request language into request state for subsequent dependencies."""
 
     def __init__(self, app, *, default_language: str = "zh-TW") -> None:  # type: ignore[override]
         super().__init__(app)
@@ -30,14 +30,14 @@ class I18nMiddleware(BaseHTTPMiddleware):
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
-        # 語言優先順序：
-        # 1. X-Language header (用戶臨時切換)
-        # 2. Accept-Language header (瀏覽器語言)
-        # 3. 預設語言 (en)
+        # Language priority:
+        # 1. X-Language header (user temporary override)
+        # 2. Accept-Language header (browser language)
+        # 3. Default language (en)
 
         header_language = request.headers.get("X-Language")
 
-        # 決定最終語言
+        # Determine final language
         preferred = (
             header_language
             or request.headers.get("Accept-Language")

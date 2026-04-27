@@ -1,4 +1,4 @@
-"""Subagents 模組依賴"""
+"""Subagents Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import SubagentService
 
 @lru_cache()
 def get_subagent_service() -> SubagentService:
-    """提供 SubagentService"""
+    """Provide SubagentService"""
 
     return SubagentService()

@@ -1,4 +1,4 @@
-"""CLI MCP 模組"""
+"""CLI MCP module"""
 
 from .router import create_mcp_router
 from .service import McpTool

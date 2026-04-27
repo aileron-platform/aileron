@@ -1,1 +1,1 @@
-"""Claude Code 模組測試."""
+"""Claude Code module tests."""

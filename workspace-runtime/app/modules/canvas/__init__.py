@@ -1,4 +1,4 @@
-"""Canvas 管理模組"""
+"""Canvas management module"""
 
 from .dependencies import get_canvas_service
 from .router import router

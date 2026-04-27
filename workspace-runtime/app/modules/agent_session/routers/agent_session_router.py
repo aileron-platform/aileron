@@ -1,6 +1,6 @@
 """Agent Session API Router.
 
-提供會話相關的 REST API 端點。
+Provides REST API endpoints for sessions.
 """
 
 from __future__ import annotations
@@ -34,22 +34,22 @@ router = APIRouter(prefix="/agent-sessions", tags=["agent-sessions"])
 
 
 async def get_agent_session_service(db: AsyncSession = Depends(get_async_db)) -> AgentSessionService:
-    """取得 Session Service."""
+    """Get Session Service."""
     return AgentSessionService(db)
 
 
 async def get_task_service(db: AsyncSession = Depends(get_async_db)) -> TaskService:
-    """取得 Task Service."""
+    """Get Task Service."""
     return TaskService(db)
 
 
 async def get_tool_decision_service(db: AsyncSession = Depends(get_async_db)) -> ToolDecisionService:
-    """取得 Tool Decision Service."""
+    """Get Tool Decision Service."""
     return ToolDecisionService(db)
 
 
 async def get_execution_service(db: AsyncSession = Depends(get_async_db)) -> ExecutionService:
-    """取得 Execution Service."""
+    """Get Execution Service."""
     return ExecutionService(db)
 
 
@@ -57,23 +57,23 @@ async def get_execution_service(db: AsyncSession = Depends(get_async_db)) -> Exe
     "",
     response_model=AgentSessionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立會話",
-    description="建立新的 AI 對話會話，可指定使用的 Agentic Tool。",
+    summary="Create session",
+    description="Create a new AI conversation session, optionally specifying the Agentic Tool to use.",
 )
 async def create_session(
     data: AgentSessionCreate,
 ) -> AgentSessionResponse:
-    """建立會話.
+    """Create session.
 
     Args:
-        data: 建立請求
+        data: Creation request
 
     Returns:
-        建立的會話
+        Created session
     """
-    # 重要：create session 回應成功前必須已 commit。
-    # 否則前端在收到 201 後立刻送 prompt，新的 transaction 可能還看不到
-    # 剛建立的 agent_session，進而觸發 session_id FK violation。
+    # Important: create session must have committed before responding successfully.
+    # Otherwise frontend sends prompt immediately after receiving 201, new transaction may not see
+    # the just-created agent_session, triggering session_id FK violation.
     async with async_session_scope() as db:
         service = AgentSessionService(db)
         try:
@@ -89,24 +89,24 @@ async def create_session(
 @router.get(
     "/{session_id}",
     response_model=AgentSessionResponse,
-    summary="取得會話",
-    description="依 ID 取得會話詳細資料，支援短 ID。",
+    summary="Get session",
+    description="Get session details by ID, supports short ID.",
 )
 async def get_session(
     session_id: str,
     service: AgentSessionService = Depends(get_agent_session_service),
 ) -> AgentSessionResponse:
-    """取得會話.
+    """Get session.
 
     Args:
-        session_id: 會話 ID (支援短 ID)
+        session_id: Session ID (supports short ID)
         service: Session Service
 
     Returns:
-        會話資料
+        Session data
 
     Raises:
-        HTTPException: 會話不存在
+        HTTPException: Session not found
     """
     session = await service.get_session(session_id)
     if not session:
@@ -120,32 +120,32 @@ async def get_session(
 @router.get(
     "",
     response_model=AgentSessionListResponse,
-    summary="查詢會話列表",
-    description="查詢會話列表，支援多種過濾條件。",
+    summary="List sessions",
+    description="List sessions with various filter conditions.",
 )
 async def list_sessions(
-    workspace_id: Optional[str] = Query(None, description="工作區 ID"),
-    status: Optional[AgentSessionStatus] = Query(None, description="會話狀態"),
+    workspace_id: Optional[str] = Query(None, description="Workspace ID"),
+    status: Optional[AgentSessionStatus] = Query(None, description="Session status"),
     agentic_tool: Optional[AgenticTool] = Query(None, description="Agentic Tool"),
-    source: Optional[str] = Query(None, description="來源過濾 (user / automation)"),
-    archived: bool = Query(False, description="是否包含已封存"),
-    limit: int = Query(50, ge=1, le=200, description="最大筆數"),
-    offset: int = Query(0, ge=0, description="偏移量"),
+    source: Optional[str] = Query(None, description="Source filter (user / automation)"),
+    archived: bool = Query(False, description="Include archived"),
+    limit: int = Query(50, ge=1, le=200, description="Max results"),
+    offset: int = Query(0, ge=0, description="Offset"),
     service: AgentSessionService = Depends(get_agent_session_service),
 ) -> AgentSessionListResponse:
-    """查詢會話列表.
+    """List sessions.
 
     Args:
-        workspace_id: 工作區 ID
-        status: 會話狀態
+        workspace_id: Workspace ID
+        status: Session status
         agentic_tool: Agentic Tool
-        archived: 是否包含已封存
-        limit: 最大筆數
-        offset: 偏移量
+        archived: Include archived
+        limit: Max results
+        offset: Offset
         service: Session Service
 
     Returns:
-        會話列表
+        Session list
     """
     query = AgentSessionQuery(
         workspace_id=workspace_id,
@@ -170,26 +170,26 @@ async def list_sessions(
 @router.patch(
     "/{session_id}",
     response_model=AgentSessionResponse,
-    summary="更新會話",
-    description="更新會話屬性。",
+    summary="Update session",
+    description="Update session attributes.",
 )
 async def update_session(
     session_id: str,
     data: AgentSessionUpdate,
     service: AgentSessionService = Depends(get_agent_session_service),
 ) -> AgentSessionResponse:
-    """更新會話.
+    """Update session.
 
     Args:
-        session_id: 會話 ID
-        data: 更新資料
+        session_id: Session ID
+        data: Update data
         service: Session Service
 
     Returns:
-        更新後的會話
+        Updated session
 
     Raises:
-        HTTPException: 會話不存在
+        HTTPException: Session not found
     """
     session = await service.update_session(session_id, data)
     if not session:
@@ -203,21 +203,21 @@ async def update_session(
 @router.delete(
     "/{session_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除會話",
-    description="刪除會話及其所有相關資料。",
+    summary="Delete session",
+    description="Delete session and all related data.",
 )
 async def delete_session(
     session_id: str,
     service: AgentSessionService = Depends(get_agent_session_service),
 ) -> None:
-    """刪除會話.
+    """Delete session.
 
     Args:
-        session_id: 會話 ID
+        session_id: Session ID
         service: Session Service
 
     Raises:
-        HTTPException: 會話不存在
+        HTTPException: Session not found
     """
     success = await service.delete_session(session_id)
     if not success:
@@ -230,26 +230,26 @@ async def delete_session(
 @router.post(
     "/{session_id}/archive",
     response_model=AgentSessionResponse,
-    summary="封存會話",
-    description="封存會話，使其不再出現在預設列表中。",
+    summary="Archive session",
+    description="Archive session so it no longer appears in default lists.",
 )
 async def archive_session(
     session_id: str,
-    reason: str = Query("manual", description="封存原因"),
+    reason: str = Query("manual", description="Archive reason"),
     service: AgentSessionService = Depends(get_agent_session_service),
 ) -> AgentSessionResponse:
-    """封存會話.
+    """Archive session.
 
     Args:
-        session_id: 會話 ID
-        reason: 封存原因
+        session_id: Session ID
+        reason: Archive reason
         service: Session Service
 
     Returns:
-        更新後的會話
+        Updated session
 
     Raises:
-        HTTPException: 會話不存在
+        HTTPException: Session not found
     """
     session = await service.archive_session(session_id, reason)
     if not session:
@@ -263,28 +263,28 @@ async def archive_session(
 @router.post(
     "/{session_id}/prompt",
     response_model=PromptResponse,
-    summary="執行 Prompt",
-    description="在會話中執行 prompt，啟動 Agentic Tool。",
+    summary="Execute prompt",
+    description="Execute prompt in session, starting the Agentic Tool.",
 )
 async def execute_prompt(
     session_id: str,
     data: PromptRequest,
     execution_service: ExecutionService = Depends(get_execution_service),
 ) -> PromptResponse:
-    """執行 Prompt.
+    """Execute prompt.
 
-    使用 ExecutionService 協調 SDK 執行、訊息持久化和 WebSocket 串流。
+    Uses ExecutionService to coordinate SDK execution, message persistence, and WebSocket streaming.
 
     Args:
-        session_id: 會話 ID
-        data: Prompt 請求
+        session_id: Session ID
+        data: Prompt request
         execution_service: Execution Service
 
     Returns:
-        執行狀態
+        Execution status
 
     Raises:
-        HTTPException: 會話不存在或正在執行中
+        HTTPException: Session not found or already running
     """
     from ..services.execution_service import ExecutionServiceError
 
@@ -331,37 +331,37 @@ async def execute_prompt(
     "/{session_id}/tool-decision",
     response_model=ToolDecisionResponse,
     status_code=status.HTTP_200_OK,
-    summary="處理 Tool Decision",
-    description="處理工具執行的決策（permission/user_input）。",
+    summary="Handle tool decision",
+    description="Handle tool execution decisions (permission/user_input).",
 )
 async def handle_tool_decision(
     session_id: str,
     data: ToolDecisionRequest,
     tool_decision_service: ToolDecisionService = Depends(get_tool_decision_service),
 ) -> ToolDecisionResponse:
-    """處理 Tool Decision.
+    """Handle tool decision.
 
-    這個 endpoint 處理兩個任務：
-    1. 喚醒等待中的決策 hooks（若存在）
-    2. 更新資料庫中的決策狀態
+    This endpoint handles two tasks:
+    1. Wake up waiting decision hooks (if any)
+    2. Update decision status in database
 
     Args:
-        session_id: 會話 ID
-        data: Tool Decision 請求
+        session_id: Session ID
+        data: Tool Decision request
         tool_decision_service: Tool Decision Service
 
     Returns:
-        處理結果
+        Handling result
     """
     from ..services.tool_decision_manager import global_tool_decision_manager
 
     try:
         decision_dict = data.model_dump(mode="json")
 
-        # Step 1: 嘗試喚醒等待中的決策 hooks
+        # Step 1: Try to wake up waiting decision hooks
         hooks_resolved = global_tool_decision_manager.resolve_decision(session_id, decision_dict)
 
-        # Step 2: 更新資料庫狀態（即使 hooks 沒有找到也要更新）
+        # Step 2: Update database status (even if hooks not found)
         db_success = await tool_decision_service.resolve_decision(data)
 
         return ToolDecisionResponse(
@@ -382,33 +382,33 @@ async def handle_tool_decision(
 @router.post(
     "/{session_id}/tool-result",
     status_code=status.HTTP_200_OK,
-    summary="提交工具結果",
-    description="提交使用者互動工具（如 AskUserQuestion）的結果。",
+    summary="Submit tool result",
+    description="Submit results for user interaction tools (e.g., AskUserQuestion).",
 )
 async def submit_tool_result(
     session_id: str,
     data: ToolResultRequest,
     execution_service: ExecutionService = Depends(get_execution_service),
 ) -> dict:
-    """提交工具結果.
+    """Submit tool result.
 
-    用於處理需要使用者互動的工具，如 AskUserQuestion。
-    將使用者的回應作為 tool_result 發送回 Claude SDK。
+    For handling tools that require user interaction, such as AskUserQuestion.
+    Send user response as tool_result back to Claude SDK.
 
     Args:
-        session_id: 會話 ID
-        data: 工具結果請求
+        session_id: Session ID
+        data: Tool result request
         execution_service: Execution Service
 
     Returns:
-        處理結果
+        Handling result
     """
     from ..services.tools.claude.claude_tool import ClaudeTool
     from ..services.tool_decision_manager import global_tool_decision_manager
 
     try:
-        # 嘗試解決等待中的工具輸入請求（如果有 hooks 機制）
-        # 目前 AskUserQuestion 可以透過類似 permission 的機制處理
+        # Try to resolve waiting tool input request (if hooks mechanism exists)
+        # Currently AskUserQuestion can be handled via a permission-like mechanism
         decision_dict = {
             "request_id": data.tool_use_id,
             "tool_use_id": data.tool_use_id,
@@ -416,7 +416,7 @@ async def submit_tool_result(
             "is_error": data.is_error,
         }
 
-        # 嘗試透過全域 tool decision manager 解決（可能是 AskUserQuestion hook）
+        # Try to resolve via global tool decision manager (may be AskUserQuestion hook)
         hooks_resolved = global_tool_decision_manager.resolve_tool_input(session_id, decision_dict)
 
         return {
@@ -434,23 +434,23 @@ async def submit_tool_result(
 @router.delete(
     "/{session_id}/messages/{message_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除佇列訊息",
-    description="刪除佇列中的訊息。只能刪除狀態為 queued 的訊息。",
+    summary="Delete queued message",
+    description="Delete message from queue. Can only delete messages with queued status.",
 )
 async def delete_queued_message(
     session_id: str,
     message_id: str,
     db: AsyncSession = Depends(get_async_db),
 ) -> None:
-    """刪除佇列訊息.
+    """Delete queued message.
 
     Args:
-        session_id: 會話 ID
-        message_id: 訊息 ID
-        db: 資料庫 session
+        session_id: Session ID
+        message_id: Message ID
+        db: Database session
 
     Raises:
-        HTTPException: 訊息不存在或非 queued 狀態
+        HTTPException: Message not found or not in queued status
     """
     from ..services.message_service import MessageService
     from ..domain.enums import MessageStatus
@@ -478,7 +478,7 @@ async def delete_queued_message(
             detail=f"Queued message not found: {message_id}",
         )
 
-    # 刪除訊息
+    # Delete message
     success = await message_service.delete_queued_message(message_id)
     if not success:
         raise HTTPException(
@@ -486,8 +486,8 @@ async def delete_queued_message(
             detail=f"Failed to delete message: {message_id}",
         )
 
-    # 發送 MESSAGE_DEQUEUED 事件
-    # 注意：不需手動 commit，get_async_db 已用 session.begin() 自動管理交易
+    # Send MESSAGE_DEQUEUED event
+    # Note: no need to manually commit, get_async_db already uses session.begin() to manage transaction
     await emitter.emit(
         WebSocketEvent(
             type=EventType.MESSAGE_DEQUEUED,
@@ -504,21 +504,21 @@ async def delete_queued_message(
 
 @router.get(
     "/{session_id}/queued-messages",
-    summary="取得佇列訊息",
-    description="取得會話中所有等待處理的佇列訊息。",
+    summary="Get queued messages",
+    description="Get all queued messages waiting to be processed in the session.",
 )
 async def get_queued_messages(
     session_id: str,
     db: AsyncSession = Depends(get_async_db),
 ) -> dict:
-    """取得佇列訊息.
+    """Get queued messages.
 
     Args:
-        session_id: 會話 ID
-        db: 資料庫 session
+        session_id: Session ID
+        db: Database session
 
     Returns:
-        佇列訊息列表
+        Queued message list
     """
     from ..services.message_service import MessageService
     from ..services.execution_service import ExecutionService
@@ -545,21 +545,21 @@ async def get_queued_messages(
 
 @router.get(
     "/{session_id}/current-execution",
-    summary="取得當前執行狀態",
-    description="取得會話當前的執行狀態。",
+    summary="Get current execution state",
+    description="Get current execution state of the session.",
 )
 async def get_current_execution(
     session_id: str,
     session_service: AgentSessionService = Depends(get_agent_session_service),
 ) -> dict:
-    """取得當前執行狀態.
+    """Get current execution state.
 
     Args:
-        session_id: 會話 ID
+        session_id: Session ID
         session_service: Session Service
 
     Returns:
-        執行狀態
+        Execution status
     """
     session = await session_service.get_session(session_id)
     if not session:

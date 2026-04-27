@@ -1,4 +1,4 @@
-"""Agent Session 模組 - 支援多種 Agentic CLI 工具的對話系統."""
+"""Agent Session module - Conversation system supporting various Agentic CLI tools."""
 
 from .domain.enums import (
     AgenticTool,

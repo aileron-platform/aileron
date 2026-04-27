@@ -1,4 +1,4 @@
-"""Claude Code Settings 服務"""
+"""Claude Code Settings Service"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from .models import (
 
 
 class SettingsService:
-    """提供 Claude Code settings 讀寫操作"""
+    """Provides Claude Code settings read/write operations"""
 
     _SETTINGS_FILES = {
         DocumentScope.USER: "settings.json",
@@ -35,7 +35,7 @@ class SettingsService:
     def get_settings(
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> ClaudeCodeSettings:
-        """讀取目前生效的設定，必要時限定權限來源"""
+        """Read currently effective settings, restrict permission source when necessary"""
 
         if scope is not None:
             state = self._read_scope_state(workspace_id, scope)
@@ -105,12 +105,12 @@ class SettingsService:
         payload: ClaudeCodeSettingsUpdateRequest,
         scope: DocumentScope,
     ) -> ClaudeCodeSettings:
-        """更新指定範圍的設定檔，回傳合併後結果"""
+        """Update settings file for specified scope, return merged result"""
 
         file_path = self._settings_file(workspace_id, scope)
         state = read_json_file(file_path)
 
-        # 定義欄位映射：payload 屬性 -> state 鍵名 -> 值轉換器
+        # Define field mappings: payload attribute -> state key -> value transformer
         field_mappings: List[Tuple[str, str, Optional[Callable[[Any], Any]]]] = [
             ("output_style", "outputStyle", None),
             ("model", "model", None),
@@ -121,7 +121,7 @@ class SettingsService:
             ("enable_all_project_mcp_servers", "enableAllProjectMcpServers", None),
         ]
 
-        # 處理簡單欄位
+        # Process simple fields
         for payload_attr, state_key, transformer in field_mappings:
             if payload.field_provided(payload_attr):
                 value = getattr(payload, payload_attr)
@@ -130,7 +130,7 @@ class SettingsService:
                 else:
                     state[state_key] = transformer(value) if transformer else value
 
-        # 處理 mode 欄位（特殊邏輯）
+        # Process mode field (special logic)
         resolved_mode = payload.resolved_mode()
         if resolved_mode is not None or payload.field_provided("mode") or payload.field_provided("default_mode"):
             if resolved_mode is not None:
@@ -138,7 +138,7 @@ class SettingsService:
             else:
                 state.pop("defaultMode", None)
 
-        # 處理複雜欄位
+        # Process complex fields
         if payload.field_provided("permissions"):
             state["permissions"] = payload.permissions.model_dump() if payload.permissions else None
 
@@ -148,7 +148,7 @@ class SettingsService:
         if payload.field_provided("enabled_plugins"):
             state["enabledPlugins"] = payload.enabled_plugins if payload.enabled_plugins is not None else None
 
-        # 處理列表欄位
+        # Process list fields
         for payload_attr, state_key in [
             ("enabled_mcpjson_servers", "enabledMcpjsonServers"),
             ("disabled_mcpjson_servers", "disabledMcpjsonServers"),
@@ -157,7 +157,7 @@ class SettingsService:
                 value = getattr(payload, payload_attr)
                 state[state_key] = value if value else None
 
-        # 處理 MCP 伺服器策略列表
+        # Process MCP server policy list
         for payload_attr, state_key in [
             ("allowed_mcp_servers", "allowedMcpServers"),
             ("denied_mcp_servers", "deniedMcpServers"),
@@ -169,11 +169,11 @@ class SettingsService:
                 else:
                     state.pop(state_key, None)
 
-        # 寫入檔案，加入錯誤處理
+        # Write file with error handling
         if state:
             try:
                 write_json_file(file_path, state)
-                # 驗證寫入成功
+                # Verify write success
                 if not file_path.exists() or file_path.stat().st_size == 0:
                     raise IOError(f"Failed to write settings file: {file_path}")
             except (IOError, OSError, PermissionError) as e:
@@ -206,11 +206,11 @@ class SettingsService:
 
         return self.get_settings(workspace_id, scope)
 
-    # 內部工具 -------------------------------------------------------
+    # Internal Utilities ---------------------------------------
     def _aggregate_settings(self, workspace_id: str) -> ClaudeCodeSettings:
-        """聚合所有範圍的設定，使用統一的欄位提取邏輯"""
+        """Aggregate settings from all scopes using unified field extraction logic"""
 
-        # 定義所有可聚合的欄位及其提取器
+        # Define all aggregatable fields and their extractors
         aggregatable_fields: Dict[str, Tuple[Any, Callable[[Dict[str, Any]], Any]]] = {
             "mode": (None, self._extract_mode),
             "output_style": (None, lambda s: s.get("outputStyle")),
@@ -223,7 +223,7 @@ class SettingsService:
             "cleanup_period": (None, self._extract_cleanup_period),
         }
 
-        # 需要合併的欄位（dict 或 list）
+        # Fields to merge (dict or list)
         mergeable_fields: Dict[str, Any] = {
             "env": {},
             "enabled_plugins": {},
@@ -238,13 +238,13 @@ class SettingsService:
             if not state:
                 continue
 
-            # 處理單值欄位（後面的覆蓋前面的）
+            # Process single-value fields (later ones override earlier ones)
             for field_name, (default, extractor) in aggregatable_fields.items():
                 value = extractor(state)
                 if value is not None:
                     aggregatable_fields[field_name] = (value, extractor)
 
-            # 處理合併欄位
+            # Process merge fields
             if isinstance(state.get("env"), dict):
                 mergeable_fields["env"].update(
                     {str(k): str(v) for k, v in state["env"].items() if k is not None and v is not None}
@@ -264,7 +264,7 @@ class SettingsService:
                 if provided:
                     mergeable_fields[target_key] = value
 
-        # 解包聚合結果
+        # Unpack aggregation results
         mode = aggregatable_fields["mode"][0] or PermissionMode.DEFAULT
         output_style = aggregatable_fields["output_style"][0]
         permissions = aggregatable_fields["permissions"][0]
@@ -348,7 +348,7 @@ class SettingsService:
         return None
 
     def _extract_enabled_plugins(self, state: Dict[str, Any]) -> Dict[str, bool]:
-        """從狀態中提取 enabledPlugins 設定"""
+        """Extract enabledPlugins setting from state"""
         plugins = state.get("enabledPlugins")
         if not isinstance(plugins, dict):
             return {}
@@ -407,7 +407,7 @@ class SettingsService:
                     entry = McpServerPolicy(**item)
                 else:
                     entry = McpServerPolicy(serverName=str(item))
-            except Exception:  # pragma: no cover - 忽略無效項目
+            except Exception:  # pragma: no cover - ignore invalid items
                 continue
             if entry.server_name in seen:
                 continue
@@ -431,8 +431,8 @@ class SettingsService:
         return normalized
 
     def get_marketplaces(self, workspace_id: str) -> MarketplaceListResponse:
-        """讀取所有可用的 marketplaces"""
-        # 取得 workspace 的 home 目錄 (已經包含 .claude)
+        """Read all available marketplaces"""
+        # Get workspace home directory (already includes .claude)
         user_root = resolve_scope_root(workspace_id, DocumentScope.USER)
         marketplaces_dir = user_root / "plugins" / "marketplaces"
 
@@ -441,12 +441,12 @@ class SettingsService:
         if not marketplaces_dir.exists():
             return MarketplaceListResponse(marketplaces=[])
 
-        # 遍歷所有 marketplace 目錄
+        # Iterate through all marketplace directories
         for marketplace_path in marketplaces_dir.iterdir():
             if not marketplace_path.is_dir():
                 continue
 
-            # 讀取 marketplace.json
+            # Read marketplace.json
             marketplace_json = (
                 marketplace_path / ".claude-plugin" / "marketplace.json"
             )
@@ -460,17 +460,17 @@ class SettingsService:
 
                     marketplace_data = json.loads(data)
 
-                # 解析 marketplace
-                # description 和 version 可能在頂層或 metadata 對象中
+                # Parse marketplace
+                # description and version may be at top level or in metadata object
                 metadata_obj = marketplace_data.get("metadata", {})
 
-                # 解析 plugins，單獨處理每個 plugin 的驗證錯誤
+                # Parse plugins, handle validation errors for each plugin separately
                 plugins_data: List[PluginMetadata] = []
                 for plugin in marketplace_data.get("plugins", []):
                     try:
                         plugins_data.append(PluginMetadata(**plugin))
                     except Exception as e:
-                        # 只跳過無效的 plugin，不影響整個 marketplace
+                        # Only skip invalid plugin, don't affect entire marketplace
                         plugin_name = plugin.get("name", "unknown")
                         logger.warning(
                             "Failed to parse plugin '%s' in marketplace %s: %s",

@@ -1,6 +1,6 @@
-"""CLI Skills 設定
+"""CLI Skills configuration
 
-定義各 CLI 工具的 skills 目錄結構。
+Defines skills directory structure for each CLI tool.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Dict
 
 
 class SkillTool(str, Enum):
-    """支援 skills 的 CLI 工具"""
+    """CLI tools that support skills"""
 
     CLAUDE = "claude"
     GEMINI = "gemini"
@@ -21,23 +21,23 @@ class SkillTool(str, Enum):
 
 
 class SkillScope(str, Enum):
-    """Skill 檔案範圍"""
+    """Skill file scope"""
 
     PROJECT = "project"
     USER = "user"
-    PLUGIN = "plugin"  # Claude 專用
+    PLUGIN = "plugin"  # Claude only
 
 
 @dataclass(frozen=True)
 class SkillToolConfig:
-    """每個 CLI 工具的 skills 設定"""
+    """Skills configuration for each CLI tool"""
 
     tool: SkillTool
-    project_dot_dir: str  # 專案內的 dot 目錄 (.claude / .gemini / .agents / .opencode)
-    skill_dir_name: str  # skills 子目錄名稱
-    user_root: Path  # 使用者級別 skills 根目錄
-    supports_plugin: bool  # 是否支援 plugin scope
-    api_prefix: str  # API 路徑前綴 (claude-code / gemini / codex / opencode)
+    project_dot_dir: str  # Dot directory within project (.claude / .gemini / .agents / .opencode)
+    skill_dir_name: str  # Skills subdirectory name
+    user_root: Path  # User-level skills root directory
+    supports_plugin: bool  # Whether plugin scope is supported
+    api_prefix: str  # API path prefix (claude-code / gemini / codex / opencode)
 
 
 def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:

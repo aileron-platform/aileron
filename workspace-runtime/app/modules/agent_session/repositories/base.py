@@ -1,6 +1,6 @@
-"""Repository 基礎類別.
+"""Base Repository class.
 
-提供通用的 CRUD 方法和短 ID 解析邏輯。
+Provides common CRUD methods and short ID resolution logic.
 """
 
 from __future__ import annotations
@@ -16,18 +16,18 @@ T = TypeVar("T", bound=DeclarativeBase)
 
 
 class BaseRepository(ABC, Generic[T]):
-    """Repository 基礎類別.
+    """Base Repository class.
 
-    提供通用的 CRUD 操作和短 ID 解析。
+    Provides common CRUD operations and short ID resolution.
     """
 
     def __init__(self, db: AsyncSession, model_class: Type[T], id_column: str = "id"):
-        """初始化 Repository.
+        """Initialize Repository.
 
         Args:
-            db: 資料庫 session
-            model_class: ORM 模型類別
-            id_column: 主鍵欄位名稱
+            db: Database session
+            model_class: ORM model class
+            id_column: Primary key column name
         """
         self.db = db
         self.model_class = model_class
@@ -35,27 +35,27 @@ class BaseRepository(ABC, Generic[T]):
 
     @abstractmethod
     def _get_id_column(self) -> Any:
-        """取得主鍵欄位.
+        """Get primary key column.
 
         Returns:
-            主鍵欄位的 Column 對象
+            Column object of the primary key field
         """
         pass
 
     async def find_by_id(self, id: str) -> Optional[T]:
-        """依 ID 查詢.
+        """Query by ID.
 
-        支援短 ID 解析 (前綴匹配)。
+        Supports short ID resolution (prefix matching).
 
         Args:
-            id: 完整 ID 或短 ID
+            id: Full ID or short ID
 
         Returns:
-            找到的記錄或 None
+            Found record or None
         """
         id_col = self._get_id_column()
 
-        # 先嘗試完全匹配
+        # Try exact match first
         stmt = select(self.model_class).where(id_col == id)
         result = await self.db.execute(stmt)
         row = result.scalar_one_or_none()
@@ -63,7 +63,7 @@ class BaseRepository(ABC, Generic[T]):
         if row:
             return row
 
-        # 短 ID 解析 (前綴匹配)
+        # Short ID resolution (prefix matching)
         if len(id) < 36:
             stmt = select(self.model_class).where(id_col.startswith(id))
             result = await self.db.execute(stmt)
@@ -84,21 +84,21 @@ class BaseRepository(ABC, Generic[T]):
         order_by: Optional[str] = None,
         order_desc: bool = True,
     ) -> List[T]:
-        """查詢所有記錄.
+        """Query all records.
 
         Args:
-            filters: 過濾條件
-            limit: 最大筆數
-            offset: 偏移量
-            order_by: 排序欄位
-            order_desc: 是否降序
+            filters: Filter conditions
+            limit: Maximum number of records
+            offset: Offset
+            order_by: Sort column
+            order_desc: Whether to sort in descending order
 
         Returns:
-            記錄列表
+            List of records
         """
         stmt = select(self.model_class)
 
-        # 套用過濾條件
+        # Apply filter conditions
         if filters:
             for key, value in filters.items():
                 if hasattr(self.model_class, key):
@@ -108,7 +108,7 @@ class BaseRepository(ABC, Generic[T]):
                     else:
                         stmt = stmt.where(column == value)
 
-        # 排序
+        # Sorting
         if order_by and hasattr(self.model_class, order_by):
             column = getattr(self.model_class, order_by)
             if order_desc:
@@ -116,20 +116,20 @@ class BaseRepository(ABC, Generic[T]):
             else:
                 stmt = stmt.order_by(column.asc())
 
-        # 分頁
+        # Pagination
         stmt = stmt.offset(offset).limit(limit)
 
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
     async def create(self, data: Dict[str, Any]) -> T:
-        """建立記錄.
+        """Create record.
 
         Args:
-            data: 記錄資料
+            data: Record data
 
         Returns:
-            建立的記錄
+            Created record
         """
         instance = self.model_class(**data)
         self.db.add(instance)
@@ -138,50 +138,50 @@ class BaseRepository(ABC, Generic[T]):
         return instance
 
     async def update(self, id: str, data: Dict[str, Any]) -> Optional[T]:
-        """更新記錄.
+        """Update record.
 
         Args:
-            id: 記錄 ID
-            data: 更新資料
+            id: Record ID
+            data: Update data
 
         Returns:
-            更新後的記錄或 None
+            Updated record or None
         """
-        # 先查詢確保存在
+        # Query first to ensure it exists
         existing = await self.find_by_id(id)
         if not existing:
             return None
 
-        # 取得實際 ID (可能是短 ID 解析後的完整 ID)
+        # Get actual ID (might be full ID after short ID resolution)
         actual_id = getattr(existing, self.id_column)
 
-        # 更新
+        # Update
         id_col = self._get_id_column()
         stmt = update(self.model_class).where(id_col == actual_id).values(**data)
         await self.db.execute(stmt)
         await self.db.flush()
 
-        # 重新查詢
+        # Re-query
         return await self.find_by_id(actual_id)
 
     async def delete(self, id: str) -> bool:
-        """刪除記錄.
+        """Delete record.
 
         Args:
-            id: 記錄 ID
+            id: Record ID
 
         Returns:
-            是否成功刪除
+            Whether deletion was successful
         """
-        # 先查詢確保存在
+        # Query first to ensure it exists
         existing = await self.find_by_id(id)
         if not existing:
             return False
 
-        # 取得實際 ID
+        # Get actual ID
         actual_id = getattr(existing, self.id_column)
 
-        # 刪除
+        # Delete
         id_col = self._get_id_column()
         stmt = delete(self.model_class).where(id_col == actual_id)
         result = await self.db.execute(stmt)
@@ -190,13 +190,13 @@ class BaseRepository(ABC, Generic[T]):
         return result.rowcount > 0
 
     async def count(self, filters: Optional[Dict[str, Any]] = None) -> int:
-        """計算記錄數量.
+        """Count records.
 
         Args:
-            filters: 過濾條件
+            filters: Filter conditions
 
         Returns:
-            記錄數量
+            Number of records
         """
         from sqlalchemy import func as sql_func
 
@@ -215,13 +215,13 @@ class BaseRepository(ABC, Generic[T]):
         return result.scalar() or 0
 
     async def exists(self, id: str) -> bool:
-        """檢查記錄是否存在.
+        """Check if record exists.
 
         Args:
-            id: 記錄 ID
+            id: Record ID
 
         Returns:
-            是否存在
+            Whether the record exists
         """
         record = await self.find_by_id(id)
         return record is not None

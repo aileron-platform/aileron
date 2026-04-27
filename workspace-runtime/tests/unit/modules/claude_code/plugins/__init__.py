@@ -1,1 +1,1 @@
-"""Plugins 模块单元测试"""
+"""Plugins module unit tests"""

@@ -1,4 +1,4 @@
-"""核心模組 Health Check API 測試"""
+"""Core module Health Check API tests"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from app.modules.health.service import HealthCheckService
 
 
 class StubWorkspace:
-    """可控制的 Workspace 模型 stub"""
+    """Controllable Workspace model stub"""
 
     def __init__(self, **kwargs) -> None:
         self._data = kwargs
@@ -30,16 +30,16 @@ class StubWorkspace:
             super().__setattr__(name, value)
         else:
             self._data[name] = value
-            # 同步更新對應的實例屬性
+            # Synchronously update corresponding instance attributes
             if name in ['runtime_status', 'runtime_container_id', 'runtime_last_seen', 'updated_at']:
                 super().__setattr__(name, value)
-                # 如果有 workspaces_dict 的引用，同步更新
+                # If workspaces_dict reference exists, synchronously update
                 if hasattr(self, '_workspaces_dict') and self.id in self._workspaces_dict:
                     self._workspaces_dict[self.id][name] = value
 
 
 class StubQuery:
-    """可控制的 SQLAlchemy Query stub"""
+    """Controllable SQLAlchemy Query stub"""
 
     def __init__(self, results: list, workspaces_dict: dict = None) -> None:
         self.results = results
@@ -53,7 +53,7 @@ class StubQuery:
 
 
 class StubDatabaseService:
-    """可控制的資料庫服務 stub"""
+    """Controllable database service stub"""
 
     def __init__(self) -> None:
         self.should_fail = False
@@ -61,30 +61,30 @@ class StubDatabaseService:
         self._committed = False
 
     def query(self, model):
-        """模擬 SQLAlchemy query 方法"""
-        # 將轉為 Workspace 對象
+        """Simulate SQLAlchemy query method"""
+        # Convert to Workspace objects
         workspace_objects = []
         for workspace_id, workspace_data in self.workspaces.items():
             if model.__name__ == "Workspace":
-                # 傳遞 workspaces_dict 引用給 StubWorkspace
+                # Pass workspaces_dict reference to StubWorkspace
                 workspace_data_with_ref = {**workspace_data, '_workspaces_dict': self.workspaces}
                 workspace_objects.append(StubWorkspace(**workspace_data_with_ref))
 
         return StubQuery(workspace_objects, self.workspaces)
 
     def commit(self) -> None:
-        """模擬資料庫提交"""
+        """Simulate database commit"""
         if self.should_fail:
             raise Exception("Database commit failed")
         self._committed = True
 
     def rollback(self) -> None:
-        """模擬資料庫回滾"""
+        """Simulate database rollback"""
         self._committed = False
 
 
 class StubRuntimeService:
-    """可控制的 RuntimeService stub"""
+    """Controllable RuntimeService stub"""
 
     def __init__(self) -> None:
         self.status = "running"
@@ -104,27 +104,27 @@ class StubRuntimeService:
 
 
 def mock_get_db():
-    """模擬 get_db 依賴"""
+    """Mock get_db dependency"""
     return StubDatabaseService()
 
 
 def test_hl_001_normal_status_update(client):
-    """HL-001 正常狀態更新"""
+    """HL-001 Normal status update"""
     db_service = StubDatabaseService()
     runtime_service = StubRuntimeService()
     runtime_service.status = "starting"
 
-    # 模擬資料庫中的工作區記錄 (使用實際的 WORKSPACE_ID)
+    # Simulate workspace record in database (using actual WORKSPACE_ID)
     workspace_id = "default-workspace"
     db_service.workspaces[workspace_id] = {
         "id": workspace_id,
-        "runtime_status": "stopped",  # 設為非 running/starting 狀態以觸發更新
-        "runtime_container_id": "old_container_id",  # 設為不同容器 ID 以觸發更新
+        "runtime_status": "stopped",  # Set to non-running/starting status to trigger update
+        "runtime_container_id": "old_container_id",  # Set to different container ID to trigger update
         "runtime_last_seen": None,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # 模擬 get_db 依賴
+    # Mock get_db dependency
     import app.database.session as db_session
     original_get_db = db_session.get_db
 
@@ -139,7 +139,7 @@ def test_hl_001_normal_status_update(client):
     assert payload["status"] == "healthy"
     assert payload["updated"] is True
 
-    # 驗證 Health Check API 回應
+    # Verify Health Check API response
     assert "container_id" in payload
     assert payload["runtime_status"] == "running"
     assert payload["updated"] is True
@@ -148,7 +148,7 @@ def test_hl_001_normal_status_update(client):
 
 
 def test_hl_002_database_connection_failure(client):
-    """HL-002 資料庫連線失敗"""
+    """HL-002 Database connection failure"""
 
     class FailingDatabaseService:
         def query(self, model):
@@ -162,7 +162,7 @@ def test_hl_002_database_connection_failure(client):
 
     db_service = FailingDatabaseService()
 
-    # 模擬 get_db 依賴
+    # Mock get_db dependency
     import app.database.session as db_session
     original_get_db = db_session.get_db
 
@@ -181,11 +181,11 @@ def test_hl_002_database_connection_failure(client):
 
 
 def test_hl_003_workspace_not_found(client):
-    """HL-003 工作區不存在"""
+    """HL-003 Workspace not found"""
     db_service = StubDatabaseService()
-    # 不建立任何工作區記錄
+    # Do not create any workspace records
 
-    # 模擬 get_db 依賴
+    # Mock get_db dependency
     import app.database.session as db_session
     original_get_db = db_session.get_db
 
@@ -197,26 +197,26 @@ def test_hl_003_workspace_not_found(client):
 
     assert response.status_code == 200
     payload = response.json()
-    # 即使沒有工作區記錄，健康檢查仍應回報正常
+    # Even without workspace records, health check should report normally
     assert payload["status"] == "unhealthy"
     assert payload["terminal_service"]["status"] == "starting"
 
 
 def test_hl_004_container_id_unavailable(client):
-    """HL-004 Socket 無法獲取主機名"""
+    """HL-004 Socket cannot get hostname"""
 
     class FailingSocketService:
         def gethostname(self):
             raise Exception("Container ID unavailable")
 
-    # 模擬 socket.gethostname 失敗
+    # Mock socket.gethostname failure
     import socket
     original_gethostname = socket.gethostname
     socket.gethostname = FailingSocketService().gethostname
 
     try:
         db_service = StubDatabaseService()
-        # 設置 workspace 記錄
+        # Set up workspace record
         workspace_id = "default-workspace"
         db_service.workspaces[workspace_id] = {
             "id": workspace_id,
@@ -226,7 +226,7 @@ def test_hl_004_container_id_unavailable(client):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # 模擬 get_db 依賴
+        # Mock get_db dependency
         import app.database.session as db_session
         original_get_db = db_session.get_db
 
@@ -238,20 +238,20 @@ def test_hl_004_container_id_unavailable(client):
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["status"] == "healthy"  # socket.gethostname 失敗不會影響健康檢查
-        assert payload["container_id"] is None  # container_id 會是 None
+        assert payload["status"] == "healthy"  # socket.gethostname failure does not affect health check
+        assert payload["container_id"] is None  # container_id will be None
         assert payload["terminal_service"]["status"] == "starting"
 
     finally:
-        # 恢復原始的 socket.gethostname
+        # Restore original socket.gethostname
         socket.gethostname = original_gethostname
 
 
 def test_hl_005_database_operational_error(client):
-    """HL-005 資料庫操作錯誤"""
+    """HL-005 Database operational error"""
     db_service = StubDatabaseService()
 
-    # 設置一個工作區，但讓 commit 方法失敗
+    # Set up a workspace, but make commit method fail
     workspace_id = "default-workspace"
     db_service.workspaces[workspace_id] = {
         "id": workspace_id,
@@ -260,9 +260,9 @@ def test_hl_005_database_operational_error(client):
         "runtime_last_seen": None,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    db_service.should_fail = True  # 讓 commit 失敗
+    db_service.should_fail = True  # Make commit fail
 
-    # 模擬 get_db 依賴
+    # Mock get_db dependency
     import app.database.session as db_session
     original_get_db = db_session.get_db
 

@@ -1,6 +1,6 @@
-"""CLI Slash Commands 設定
+"""CLI Slash Commands configuration
 
-定義各 CLI 工具的 slash commands 目錄結構與格式。
+Defines slash commands directory structure and format for each CLI tool.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Dict
 
 
 class SlashCommandTool(str, Enum):
-    """支援 slash commands 的 CLI 工具"""
+    """CLI tools that support slash commands"""
 
     GEMINI = "gemini"
     CODEX = "codex"
@@ -20,14 +20,14 @@ class SlashCommandTool(str, Enum):
 
 
 class SlashCommandScope(str, Enum):
-    """Slash command 檔案範圍"""
+    """Slash command file scope"""
 
     PROJECT = "project"
     USER = "user"
 
 
 class DocumentFormat(str, Enum):
-    """文件格式"""
+    """Document format"""
 
     MARKDOWN = "markdown"
     TOML = "toml"
@@ -35,15 +35,15 @@ class DocumentFormat(str, Enum):
 
 @dataclass(frozen=True)
 class SlashCommandToolConfig:
-    """每個 CLI 工具的 slash commands 設定"""
+    """Slash commands configuration for each CLI tool"""
 
     tool: SlashCommandTool
-    dir_name: str  # 目錄名稱 (commands / prompts)
+    dir_name: str  # Directory name (commands / prompts)
     file_extension: str  # .toml / .md
     format: DocumentFormat
-    project_dot_dir: str  # 專案內的 dot 目錄 (.gemini / .codex / .opencode)
-    user_root: Path  # 使用者根目錄
-    supports_namespace: bool  # 是否支援子目錄命名空間
+    project_dot_dir: str  # Dot directory within project (.gemini / .codex / .opencode)
+    user_root: Path  # User root directory
+    supports_namespace: bool  # Whether subdirectory namespaces are supported
 
 
 def _tool_configs() -> Dict[SlashCommandTool, SlashCommandToolConfig]:

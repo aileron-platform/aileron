@@ -1,4 +1,4 @@
-"""Output Styles 模組資料模型"""
+"""Output Styles Module Data Models"""
 
 from __future__ import annotations
 
@@ -10,90 +10,90 @@ from ..common import DocumentScope
 
 
 class OutputStyleSummary(BaseModel):
-    """輸出樣式檔案摘要"""
+    """Output style file summary"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    name: str | None = Field(None, description="樣式名稱")
-    description: str | None = Field(None, description="樣式描述")
-    scope: DocumentScope = Field(..., description="檔案範圍")
-    size: str = Field(..., description="檔案大小")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    name: str | None = Field(None, description="Style name")
+    description: str | None = Field(None, description="Style description")
+    scope: DocumentScope = Field(..., description="File scope")
+    size: str = Field(..., description="File size")
 
     model_config = {"populate_by_name": True}
 
 
 class OutputStyleDocument(OutputStyleSummary):
-    """輸出樣式詳細內容"""
+    """Output style detail content"""
 
-    content: str = Field(..., description="Markdown 內容")
+    content: str = Field(..., description="Markdown content")
 
 
 class OutputStyleScopeGroup(BaseModel):
-    """同一範圍的輸出樣式"""
+    """Output styles in same scope"""
 
-    scope: DocumentScope = Field(..., description="檔案範圍")
+    scope: DocumentScope = Field(..., description="File scope")
     documents: List[OutputStyleSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
 
 class OutputStyleCollectionResponse(BaseModel):
-    """所有範圍的輸出樣式列表"""
+    """Output style list in all scopes"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
     scopes: List[OutputStyleScopeGroup] = Field(
-        default_factory=list, description="依範圍分類的樣式"
+        default_factory=list, description="Styles grouped by scope"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class OutputStyleScopeResponse(BaseModel):
-    """單一範圍輸出樣式列表"""
+    """Output style list in single scope"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="檔案範圍")
+    scope: DocumentScope = Field(..., description="File scope")
     documents: List[OutputStyleSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class OutputStyleDocumentResponse(BaseModel):
-    """單一輸出樣式內容"""
+    """Single output style content"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="檔案範圍")
-    document: OutputStyleDocument = Field(..., description="檔案內容")
+    scope: DocumentScope = Field(..., description="File scope")
+    document: OutputStyleDocument = Field(..., description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class OutputStyleCreateRequest(BaseModel):
-    """建立輸出樣式請求"""
+    """Create output style request"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    content: str = Field(..., description="Markdown 內容")
-    name: str | None = Field(None, description="樣式名稱預設值")
-    description: str | None = Field(None, description="樣式描述預設值")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    content: str = Field(..., description="Markdown content")
+    name: str | None = Field(None, description="Style name default value")
+    description: str | None = Field(None, description="Style description default value")
 
     model_config = {"populate_by_name": True}
 
 
 class OutputStyleUpdateRequest(BaseModel):
-    """更新輸出樣式請求"""
+    """Update output style request"""
 
-    content: str = Field(..., description="Markdown 內容")
-    name: str | None = Field(None, description="樣式名稱預設值")
-    description: str | None = Field(None, description="樣式描述預設值")
+    content: str = Field(..., description="Markdown content")
+    name: str | None = Field(None, description="Style name default value")
+    description: str | None = Field(None, description="Style description default value")
 
 
 class OutputStyleDeleteResponse(BaseModel):
-    """刪除輸出樣式回應"""
+    """Delete output style response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="檔案範圍")
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    deleted: bool = Field(True, description="刪除狀態")
+    scope: DocumentScope = Field(..., description="File scope")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    deleted: bool = Field(True, description="Deletion status")
 
     model_config = {"populate_by_name": True}

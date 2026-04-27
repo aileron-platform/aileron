@@ -9,5 +9,5 @@ from .service import OpenSpecService
 
 @lru_cache(maxsize=1)
 def get_openspec_service() -> OpenSpecService:
-    """取得 OpenSpec service 單例。"""
+    """Get OpenSpec service singleton."""
     return OpenSpecService()

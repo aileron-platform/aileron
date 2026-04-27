@@ -1,1 +1,1 @@
-"""claude_code hooks 模組測試套件。"""
+"""claude_code hooks module test suite."""

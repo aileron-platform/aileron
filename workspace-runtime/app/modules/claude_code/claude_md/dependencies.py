@@ -1,4 +1,4 @@
-"""Claude.md 模組依賴"""
+"""Claude.md Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import ClaudeMdService
 
 @lru_cache()
 def get_claude_md_service() -> ClaudeMdService:
-    """提供單例 ClaudeMdService"""
+    """Provide singleton ClaudeMdService"""
 
     return ClaudeMdService()

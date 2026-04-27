@@ -1,4 +1,4 @@
-"""Claude.md 服務"""
+"""Claude.md Service"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .models import ClaudeMdDocument, ClaudeMdScope, ClaudeMdUpdateRequest, Clau
 
 
 class ClaudeMdService:
-    """管理 Claude.md 檔案的服務"""
+    """Service for managing Claude.md files"""
 
     _FILE_NAME = "CLAUDE.md"
 

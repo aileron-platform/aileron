@@ -1,6 +1,6 @@
-"""Content Block Schema 定義.
+"""Content Block Schema definitions.
 
-定義 Message 內容中的各種 ContentBlock 類型。
+Defines various ContentBlock types in Message content.
 """
 
 from __future__ import annotations
@@ -11,14 +11,14 @@ from pydantic import BaseModel, Field
 
 
 class TextBlock(BaseModel):
-    """文字內容區塊."""
+    """Text content block."""
 
     type: Literal["text"] = "text"
     text: str = ""
 
 
 class ImageBlock(BaseModel):
-    """影像內容區塊 (Claude 支援)."""
+    """Image content block (Claude supported)."""
 
     type: Literal["image"] = "image"
     source: Dict[str, Any] = Field(default_factory=dict)
@@ -26,7 +26,7 @@ class ImageBlock(BaseModel):
 
 
 class ToolUseBlock(BaseModel):
-    """工具調用區塊."""
+    """Tool use block."""
 
     type: Literal["tool_use"] = "tool_use"
     id: str = ""
@@ -35,7 +35,7 @@ class ToolUseBlock(BaseModel):
 
 
 class ToolResultBlock(BaseModel):
-    """工具結果區塊."""
+    """Tool result block."""
 
     type: Literal["tool_result"] = "tool_result"
     tool_use_id: str = ""
@@ -44,15 +44,15 @@ class ToolResultBlock(BaseModel):
 
 
 class ThinkingBlock(BaseModel):
-    """思考過程區塊 (Claude 專屬)."""
+    """Thinking process block (Claude exclusive)."""
 
     type: Literal["thinking"] = "thinking"
     thinking: str = ""
-    signature: Optional[str] = None  # Claude 的思考簽名
+    signature: Optional[str] = None  # Claude's thinking signature
 
 
 class SystemStatusBlock(BaseModel):
-    """系統狀態區塊."""
+    """System status block."""
 
     type: Literal["system_status"] = "system_status"
     status: str = ""  # e.g., "compacting", "saving", "processing"
@@ -61,14 +61,14 @@ class SystemStatusBlock(BaseModel):
 
 
 class SystemCompleteBlock(BaseModel):
-    """系統完成通知區塊."""
+    """System complete notification block."""
 
     type: Literal["system_complete"] = "system_complete"
     message: str = ""
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-# ContentBlock 聯合類型
+# ContentBlock union type
 ContentBlock = Union[
     TextBlock,
     ImageBlock,
@@ -81,13 +81,13 @@ ContentBlock = Union[
 
 
 def parse_content_block(data: Dict[str, Any]) -> ContentBlock:
-    """解析 ContentBlock.
+    """Parse ContentBlock.
 
     Args:
-        data: 原始資料
+        data: Raw data
 
     Returns:
-        對應類型的 ContentBlock
+        Corresponding type ContentBlock
     """
     block_type = data.get("type", "text")
 
@@ -106,13 +106,13 @@ def parse_content_block(data: Dict[str, Any]) -> ContentBlock:
 
 
 def parse_content_blocks(data: List[Dict[str, Any]]) -> List[ContentBlock]:
-    """解析多個 ContentBlock.
+    """Parse multiple ContentBlocks.
 
     Args:
-        data: 原始資料列表
+        data: Raw data list
 
     Returns:
-        ContentBlock 列表
+        ContentBlock list
     """
     return [parse_content_block(item) for item in data]
 

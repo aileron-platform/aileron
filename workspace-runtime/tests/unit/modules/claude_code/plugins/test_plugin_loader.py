@@ -1,4 +1,4 @@
-"""Plugin Loader 单元测试"""
+"""Plugin Loader unit tests."""
 
 from __future__ import annotations
 
@@ -73,10 +73,10 @@ def sample_plugin_config():
 
 
 class TestComponentFileInfo:
-    """测试 ComponentFileInfo 数据类."""
+    """Test ComponentFileInfo dataclass."""
 
     def test_component_file_info_creation(self):
-        """测试 ComponentFileInfo 创建."""
+        """Test ComponentFileInfo creation."""
         # Act
         info = ComponentFileInfo(
             file_path="/path/to/file.md",
@@ -94,7 +94,7 @@ class TestComponentFileInfo:
         assert info.description == "Test description"
 
     def test_component_file_info_without_description(self):
-        """测试不含描述的 ComponentFileInfo 创建."""
+        """Test ComponentFileInfo creation without description."""
         # Act
         info = ComponentFileInfo(
             file_path="/path/to/file.md",
@@ -108,10 +108,10 @@ class TestComponentFileInfo:
 
 
 class TestSkillDirectoryInfo:
-    """测试 SkillDirectoryInfo 数据类."""
+    """Test SkillDirectoryInfo dataclass."""
 
     def test_skill_directory_info_creation(self):
-        """测试 SkillDirectoryInfo 创建."""
+        """Test SkillDirectoryInfo creation."""
         # Act
         info = SkillDirectoryInfo(
             directory_path="/path/to/skill",
@@ -128,10 +128,10 @@ class TestSkillDirectoryInfo:
 
 
 class TestPluginLoaderInitialization:
-    """测试 Plugin Loader 初始化."""
+    """Test Plugin Loader initialization."""
 
     def test_loader_init(self, mock_settings_service):
-        """测试 Loader 初始化."""
+        """Test Loader initialization."""
         # Act
         loader = PluginComponentsLoader(mock_settings_service)
 
@@ -140,10 +140,10 @@ class TestPluginLoaderInitialization:
 
 
 class TestParsePluginId:
-    """测试 Plugin ID 解析."""
+    """Test Plugin ID parsing."""
 
     def test_parse_valid_plugin_id(self, plugin_loader):
-        """测试解析有效的 plugin ID."""
+        """Test parsing valid plugin ID."""
         # Act
         plugin_name, marketplace_name = plugin_loader._parse_plugin_id(
             "test-plugin@test-marketplace"
@@ -154,7 +154,7 @@ class TestParsePluginId:
         assert marketplace_name == "test-marketplace"
 
     def test_parse_plugin_id_with_special_chars(self, plugin_loader):
-        """测试解析包含特殊字符的 plugin ID."""
+        """Test parsing plugin ID with special characters."""
         # Act
         plugin_name, marketplace_name = plugin_loader._parse_plugin_id(
             "my-plugin-v2@my.marketplace"
@@ -165,19 +165,19 @@ class TestParsePluginId:
         assert marketplace_name == "my.marketplace"
 
     def test_parse_invalid_plugin_id_no_at(self, plugin_loader):
-        """测试解析缺少 @ 的 plugin ID."""
+        """Test parsing plugin ID missing @."""
         # Act & Assert
         with pytest.raises(ValueError, match="Invalid plugin_id format"):
             plugin_loader._parse_plugin_id("invalid-plugin-id")
 
     def test_parse_invalid_plugin_id_multiple_at(self, plugin_loader):
-        """测试解析包含多个 @ 的 plugin ID."""
+        """Test parsing plugin ID with multiple @."""
         # Act & Assert
         with pytest.raises(ValueError, match="Invalid plugin_id format"):
             plugin_loader._parse_plugin_id("plugin@market@extra")
 
     def test_parse_invalid_plugin_id_empty_parts(self, plugin_loader):
-        """测试解析空白部分的 plugin ID."""
+        """Test parsing plugin ID with empty parts."""
         # Act & Assert
         with pytest.raises(ValueError, match="Invalid plugin_id"):
             plugin_loader._parse_plugin_id("@marketplace")
@@ -187,10 +187,10 @@ class TestParsePluginId:
 
 
 class TestResolvePath:
-    """测试路径解析."""
+    """Test path resolution."""
 
     def test_resolve_relative_path(self, plugin_loader):
-        """测试解析相对路径."""
+        """Test resolving relative path."""
         # Arrange
         base_path = Path("/base/path")
         relative_path = "./subdir/file.md"
@@ -202,7 +202,7 @@ class TestResolvePath:
         assert result == (base_path / "subdir/file.md").resolve()
 
     def test_resolve_absolute_path(self, plugin_loader):
-        """测试解析绝对路径."""
+        """Test resolving absolute path."""
         # Arrange
         base_path = Path("/base/path")
         absolute_path = "/absolute/path/file.md"
@@ -214,7 +214,7 @@ class TestResolvePath:
         assert result == Path("/absolute/path/file.md")
 
     def test_resolve_path_with_env_var(self, plugin_loader):
-        """测试解析包含环境变量的路径."""
+        """Test resolving path with environment variable."""
         # Arrange
         base_path = Path("/base/path")
         path_with_env = "${CLAUDE_PLUGIN_ROOT}/subdir/file.md"
@@ -227,10 +227,10 @@ class TestResolvePath:
 
 
 class TestReplaceEnvVars:
-    """测试环境变量替换."""
+    """Test environment variable replacement."""
 
     def test_replace_env_vars_in_string(self, plugin_loader):
-        """测试替换字符串中的环境变量."""
+        """Test replacing environment variables in string."""
         # Arrange
         base_path = Path("/base/path")
         config = "${CLAUDE_PLUGIN_ROOT}/test"
@@ -242,7 +242,7 @@ class TestReplaceEnvVars:
         assert result == "/base/path/test"
 
     def test_replace_env_vars_in_dict(self, plugin_loader):
-        """测试替换字典中的环境变量."""
+        """Test replacing environment variables in dict."""
         # Arrange
         base_path = Path("/base/path")
         config = {
@@ -258,7 +258,7 @@ class TestReplaceEnvVars:
         assert result["args"][1] == "/base/path/data"
 
     def test_replace_env_vars_in_list(self, plugin_loader):
-        """测试替换列表中的环境变量."""
+        """Test replacing environment variables in list."""
         # Arrange
         base_path = Path("/base/path")
         config = ["${CLAUDE_PLUGIN_ROOT}/a", "${CLAUDE_PLUGIN_ROOT}/b"]
@@ -270,7 +270,7 @@ class TestReplaceEnvVars:
         assert result == ["/base/path/a", "/base/path/b"]
 
     def test_replace_env_vars_nested_structure(self, plugin_loader):
-        """测试替换嵌套结构中的环境变量."""
+        """Test replacing environment variables in nested structure."""
         # Arrange
         base_path = Path("/base/path")
         config = {
@@ -293,10 +293,10 @@ class TestReplaceEnvVars:
 
 
 class TestReadJsonFile:
-    """测试 JSON 文件读取."""
+    """Test JSON file reading."""
 
     def test_read_valid_json_file(self, plugin_loader, tmp_path):
-        """测试读取有效的 JSON 文件."""
+        """Test reading valid JSON file."""
         # Arrange
         json_file = tmp_path / "test.json"
         json_data = {"key": "value", "number": 42}
@@ -309,7 +309,7 @@ class TestReadJsonFile:
         assert result == json_data
 
     def test_read_invalid_json_file(self, plugin_loader, tmp_path):
-        """测试读取无效的 JSON 文件."""
+        """Test reading invalid JSON file."""
         # Arrange
         json_file = tmp_path / "invalid.json"
         json_file.write_text("{ invalid json }")
@@ -319,7 +319,7 @@ class TestReadJsonFile:
             plugin_loader._read_json_file(json_file)
 
     def test_read_nonexistent_json_file(self, plugin_loader, tmp_path):
-        """测试读取不存在的 JSON 文件."""
+        """Test reading nonexistent JSON file."""
         # Arrange
         json_file = tmp_path / "nonexistent.json"
 
@@ -329,10 +329,10 @@ class TestReadJsonFile:
 
 
 class TestExtractDescription:
-    """测试描述提取."""
+    """Test description extraction."""
 
     def test_extract_description_from_frontmatter(self, plugin_loader, tmp_path):
-        """测试从 frontmatter 提取描述."""
+        """Test extracting description from frontmatter."""
         # Arrange
         md_file = tmp_path / "test.md"
         content = """---
@@ -351,7 +351,7 @@ title: Test
         assert result == "Test description"
 
     def test_extract_description_with_quotes(self, plugin_loader, tmp_path):
-        """测试提取带引号的描述."""
+        """Test extracting description with quotes."""
         # Arrange
         md_file = tmp_path / "test.md"
         content = """---
@@ -369,7 +369,7 @@ description: "Test description with quotes"
         assert result == "Test description with quotes"
 
     def test_extract_description_no_frontmatter(self, plugin_loader, tmp_path):
-        """测试提取无 frontmatter 的文件."""
+        """Test extracting file without frontmatter."""
         # Arrange
         md_file = tmp_path / "test.md"
         content = "# Simple content without frontmatter"
@@ -382,7 +382,7 @@ description: "Test description with quotes"
         assert result is None
 
     def test_extract_description_nonexistent_file(self, plugin_loader, tmp_path):
-        """测试提取不存在文件的描述."""
+        """Test extracting nonexistent file description."""
         # Arrange
         md_file = tmp_path / "nonexistent.md"
 
@@ -394,10 +394,10 @@ description: "Test description with quotes"
 
 
 class TestFindPluginInMarketplace:
-    """测试在 marketplace 中查找 plugin."""
+    """Test finding plugin in marketplace."""
 
     def test_find_existing_plugin(self, plugin_loader, sample_marketplace_data):
-        """测试查找存在的 plugin."""
+        """Test finding existing plugin."""
         # Act
         result = plugin_loader._find_plugin_in_marketplace(
             sample_marketplace_data, "test-plugin"
@@ -408,7 +408,7 @@ class TestFindPluginInMarketplace:
         assert result["version"] == "1.0.0"
 
     def test_find_nonexistent_plugin(self, plugin_loader, sample_marketplace_data):
-        """测试查找不存在的 plugin."""
+        """Test finding nonexistent plugin."""
         # Act & Assert
         with pytest.raises(ValueError, match="Plugin 'nonexistent' not found"):
             plugin_loader._find_plugin_in_marketplace(
@@ -417,10 +417,10 @@ class TestFindPluginInMarketplace:
 
 
 class TestGetEnabledPlugins:
-    """测试获取已启用的 plugins."""
+    """Test getting enabled plugins."""
 
     def test_get_enabled_plugins_empty(self, plugin_loader):
-        """测试获取空的已启用 plugins."""
+        """Test getting empty enabled plugins."""
         # Arrange
         plugin_loader.settings_service._read_scope_state.return_value = {}
         plugin_loader.settings_service._extract_enabled_plugins.return_value = {}
@@ -432,7 +432,7 @@ class TestGetEnabledPlugins:
         assert result == {}
 
     def test_get_enabled_plugins_multiple_scopes(self, plugin_loader):
-        """测试从多个 scope 获取已启用 plugins."""
+        """Test getting enabled plugins from multiple scopes."""
         # Arrange
         def mock_extract(state):
             return state.get("plugins", {})
@@ -454,18 +454,18 @@ class TestGetEnabledPlugins:
         result = plugin_loader._get_enabled_plugins("test-workspace")
 
         # Assert
-        # Local 覆盖 Project 覆盖 User
-        # plugin1: True (user) -> False (local) = False (不应该在结果中)
+        # Local overrides Project overrides User
+        # plugin1: True (user) -> False (local) = False (should not be in result)
         # plugin2: False (user) -> True (project) = True
         # plugin3: True (project) = True
         assert result == {"plugin2@market1": True, "plugin3@market1": True}
 
 
 class TestGetMarketplaceBasePath:
-    """测试获取 marketplace 根目录."""
+    """Test getting marketplace root directory."""
 
     def test_get_marketplace_base_path(self, plugin_loader):
-        """测试获取 marketplace 根目录."""
+        """Test getting marketplace root directory."""
         # Arrange
         marketplace_path = Path("/home/user/.claude/plugins/marketplaces/test/.claude-plugin/marketplace.json")
 
@@ -473,15 +473,15 @@ class TestGetMarketplaceBasePath:
         result = plugin_loader._get_marketplace_base_path(marketplace_path)
 
         # Assert
-        # marketplace.json 的父目录是 .claude-plugin，父目录的父目录是 test
+        # Parent of marketplace.json is .claude-plugin, parent of that is test
         assert result == Path("/home/user/.claude/plugins/marketplaces/test")
 
 
 class TestScanCommandsStrictMode:
-    """测试 strict 模式下的 commands 扫描."""
+    """Test commands scanning in strict mode."""
 
     def test_scan_commands_strict_mode(self, plugin_loader, tmp_path):
-        """测试 strict 模式下扫描 commands."""
+        """Test scanning commands in strict mode."""
         # Arrange
         base_path = tmp_path
         plugin_dir = base_path / "plugin"
@@ -506,7 +506,7 @@ class TestScanCommandsStrictMode:
         assert "cmd3.md" in file_names
 
     def test_scan_commands_strict_mode_no_commands_dir(self, plugin_loader, tmp_path):
-        """测试 strict 模式下无 commands 目录."""
+        """Test strict mode without commands directory."""
         # Arrange
         base_path = tmp_path
         plugin_dir = base_path / "plugin"
@@ -522,10 +522,10 @@ class TestScanCommandsStrictMode:
 
 
 class TestScanCommandsListMode:
-    """测试 list 模式下的 commands 扫描."""
+    """Test commands scanning in list mode."""
 
     def test_scan_commands_list_mode_files(self, plugin_loader, tmp_path):
-        """测试 list 模式下扫描文件."""
+        """Test scanning files in list mode."""
         # Arrange
         base_path = tmp_path
         (base_path / "cmd1.md").touch()
@@ -543,7 +543,7 @@ class TestScanCommandsListMode:
         assert len(result) == 2
 
     def test_scan_commands_list_mode_directory(self, plugin_loader, tmp_path):
-        """测试 list 模式下扫描目录."""
+        """Test scanning directory in list mode."""
         # Arrange
         base_path = tmp_path
         cmd_dir = base_path / "commands"
@@ -564,14 +564,14 @@ class TestScanCommandsListMode:
 
 
 class TestLoadPluginCommands:
-    """测试加载 plugin commands."""
+    """Test loading plugin commands."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_commands_for_plugin')
     def test_load_plugin_commands_success(
         self, mock_load_for_plugin, mock_get_enabled, plugin_loader
     ):
-        """测试成功加载 plugin commands."""
+        """Test successfully loading plugin commands."""
         # Arrange
         mock_get_enabled.return_value = {
             "plugin1@market1": True,
@@ -606,7 +606,7 @@ class TestLoadPluginCommands:
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     def test_load_plugin_commands_empty(self, mock_get_enabled, plugin_loader):
-        """测试加载空的 plugin commands."""
+        """Test loading empty plugin commands."""
         # Arrange
         mock_get_enabled.return_value = {}
 
@@ -618,14 +618,14 @@ class TestLoadPluginCommands:
 
 
 class TestLoadPluginAgents:
-    """测试加载 plugin agents."""
+    """Test loading plugin agents."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_agents_for_plugin')
     def test_load_plugin_agents_success(
         self, mock_load_for_plugin, mock_get_enabled, plugin_loader
     ):
-        """测试成功加载 plugin agents."""
+        """Test successfully loading plugin agents."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.return_value = [
@@ -648,14 +648,14 @@ class TestLoadPluginAgents:
 
 
 class TestLoadPluginMcpServers:
-    """测试加载 plugin MCP servers."""
+    """Test loading plugin MCP servers."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_mcp_for_plugin')
     def test_load_plugin_mcp_servers_success(
         self, mock_load_for_plugin, mock_get_enabled, plugin_loader
     ):
-        """测试成功加载 plugin MCP servers."""
+        """Test successfully loading plugin MCP servers."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.return_value = {
@@ -671,14 +671,14 @@ class TestLoadPluginMcpServers:
 
 
 class TestLoadPluginHooks:
-    """测试加载 plugin hooks."""
+    """Test loading plugin hooks."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_hooks_for_plugin')
     def test_load_plugin_hooks_success(
         self, mock_load_for_plugin, mock_get_enabled, plugin_loader
     ):
-        """测试成功加载 plugin hooks."""
+        """Test successfully loading plugin hooks."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.return_value = {
@@ -694,14 +694,14 @@ class TestLoadPluginHooks:
 
 
 class TestLoadPluginSkills:
-    """测试加载 plugin skills."""
+    """Test loading plugin skills."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_skills_for_plugin')
     def test_load_plugin_skills_success(
         self, mock_load_for_plugin, mock_get_enabled, plugin_loader
     ):
-        """测试成功加载 plugin skills."""
+        """Test successfully loading plugin skills."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.return_value = [
@@ -722,11 +722,11 @@ class TestLoadPluginSkills:
 
 
 class TestGetPluginLoaderSingleton:
-    """测试 get_plugin_loader 单例模式."""
+    """Test get_plugin_loader singleton pattern."""
 
     @patch('app.modules.claude_code.plugins.loader._loader_instance', None)
     def test_get_plugin_loader_creates_instance(self, mock_settings_service):
-        """测试首次调用创建实例."""
+        """Test creating instance on first call."""
         # Act
         loader = get_plugin_loader(mock_settings_service)
 
@@ -736,7 +736,7 @@ class TestGetPluginLoaderSingleton:
 
     @patch('app.modules.claude_code.plugins.loader._loader_instance', None)
     def test_get_plugin_loader_returns_same_instance(self, mock_settings_service):
-        """测试多次调用返回相同实例."""
+        """Test returning same instance on multiple calls."""
         # Act
         loader1 = get_plugin_loader(mock_settings_service)
         loader2 = get_plugin_loader(mock_settings_service)
@@ -746,7 +746,7 @@ class TestGetPluginLoaderSingleton:
 
 
 class TestLoadPluginCommandsForPlugin:
-    """测试加载单个 plugin 的 commands."""
+    """Test loading commands for single plugin."""
 
     @patch.object(PluginComponentsLoader, '_parse_plugin_id')
     @patch.object(PluginComponentsLoader, '_get_marketplace_path')
@@ -765,7 +765,7 @@ class TestLoadPluginCommandsForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试 strict 模式加载单个 plugin 的 commands."""
+        """Test loading single plugin commands in strict mode."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -804,7 +804,7 @@ class TestLoadPluginCommandsForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试 list 模式加载单个 plugin 的 commands."""
+        """Test loading single plugin commands in list mode."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -827,7 +827,7 @@ class TestLoadPluginCommandsForPlugin:
 
 
 class TestLoadPluginMcpForPlugin:
-    """测试加载单个 plugin 的 MCP 配置."""
+    """Test loading MCP configuration for single plugin."""
 
     @patch.object(PluginComponentsLoader, '_parse_plugin_id')
     @patch.object(PluginComponentsLoader, '_get_marketplace_path')
@@ -846,7 +846,7 @@ class TestLoadPluginMcpForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试加载包含 MCP 配置的 plugin."""
+        """Test loading plugin with MCP configuration."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -888,7 +888,7 @@ class TestLoadPluginMcpForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试从 .mcp.json 文件加载 MCP 配置."""
+        """Test loading MCP configuration from .mcp.json file."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -943,7 +943,7 @@ class TestLoadPluginMcpForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试 MCP 配置为字符串引用的情况."""
+        """Test MCP configuration as string reference."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -981,7 +981,7 @@ class TestLoadPluginMcpForPlugin:
 
 
 class TestLoadPluginHooksForPlugin:
-    """测试加载单个 plugin 的 hooks 配置."""
+    """Test loading hooks configuration for single plugin."""
 
     @patch.object(PluginComponentsLoader, '_parse_plugin_id')
     @patch.object(PluginComponentsLoader, '_get_marketplace_path')
@@ -1000,7 +1000,7 @@ class TestLoadPluginHooksForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试加载包含 hooks 配置的 plugin."""
+        """Test loading plugin with hooks configuration."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -1042,7 +1042,7 @@ class TestLoadPluginHooksForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试从 hooks.json 文件加载 hooks 配置."""
+        """Test loading hooks configuration from hooks.json file."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -1085,7 +1085,7 @@ class TestLoadPluginHooksForPlugin:
 
 
 class TestLoadPluginSkillsForPlugin:
-    """测试加载单个 plugin 的 skills."""
+    """Test loading skills for single plugin."""
 
     @patch.object(PluginComponentsLoader, '_parse_plugin_id')
     @patch.object(PluginComponentsLoader, '_get_marketplace_path')
@@ -1104,7 +1104,7 @@ class TestLoadPluginSkillsForPlugin:
         plugin_loader,
         tmp_path
     ):
-        """测试成功加载 plugin skills."""
+        """Test successfully loading plugin skills."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -1150,7 +1150,7 @@ class TestLoadPluginSkillsForPlugin:
         mock_parse,
         plugin_loader
     ):
-        """测试加载没有 skills 的 plugin."""
+        """Test loading plugin without skills."""
         # Arrange
         mock_parse.return_value = ("test-plugin", "test-marketplace")
         mock_get_path.return_value = Path("/path/to/marketplace.json")
@@ -1171,7 +1171,7 @@ class TestLoadPluginSkillsForPlugin:
 
 
 class TestErrorHandling:
-    """测试错误处理."""
+    """Test error handling."""
 
     @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
     @patch.object(PluginComponentsLoader, '_load_plugin_commands_for_plugin')
@@ -1181,7 +1181,7 @@ class TestErrorHandling:
         mock_get_enabled,
         plugin_loader
     ):
-        """测试处理文件未找到错误."""
+        """Test handling file not found error."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.side_effect = FileNotFoundError("File not found")
@@ -1200,7 +1200,7 @@ class TestErrorHandling:
         mock_get_enabled,
         plugin_loader
     ):
-        """测试处理值错误."""
+        """Test handling value error."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.side_effect = ValueError("Invalid value")
@@ -1219,7 +1219,7 @@ class TestErrorHandling:
         mock_get_enabled,
         plugin_loader
     ):
-        """测试处理 JSON 解析错误."""
+        """Test handling JSON decode error."""
         # Arrange
         mock_get_enabled.return_value = {"plugin1@market1": True}
         mock_load_for_plugin.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
@@ -1236,7 +1236,7 @@ class TestErrorHandling:
         mock_get_enabled,
         plugin_loader
     ):
-        """测试处理一般错误."""
+        """Test handling general error."""
         # Arrange
         mock_get_enabled.side_effect = Exception("General error")
 

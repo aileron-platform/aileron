@@ -1,6 +1,6 @@
-"""Scripts API Router - 重構版本
+"""Scripts API Router - Refactored Version
 
-使用統一的檔案管理 API 結構
+Using unified file management API structure
 """
 
 from __future__ import annotations
@@ -30,28 +30,28 @@ from .service import FileCollectionService
 from .dependencies import get_workspace_id
 
 
-router = APIRouter(prefix="/scripts", tags=["Claude Code - 腳本"])
+router = APIRouter(prefix="/scripts", tags=["Claude Code - Scripts"])
 
 
 def get_scripts_service(workspace_id: str = Depends(get_workspace_id)) -> FileCollectionService:
-    """取得 Scripts 服務實例"""
+    """Get Scripts service instance"""
     return FileCollectionService(FileCollectionType.SCRIPTS, workspace_id)
 
 
 @router.get(
     "/tree",
     response_model=FileTreeResponse,
-    summary="取得 Scripts 檔案樹",
+    summary="Get Scripts file tree",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_scripts_tree(
-    path: str = Query(default="/", description="目標路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-    maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(default="/", description="Target path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    includeHidden: bool = Query(default=False, description="Include hidden files"),
+    maxDepth: Optional[int] = Query(default=None, ge=1, description="Max depth (defaults to FILE_TREE_MAX_DEPTH in settings)"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """取得 Scripts 檔案樹"""
+    """Get Scripts file tree"""
     try:
         result = service.get_tree(path, scope, includeHidden, maxDepth)
         return result
@@ -64,17 +64,17 @@ async def get_scripts_tree(
 @router.get(
     "/tree/children",
     response_model=FileTreeResponse,
-    summary="懶載入子節點",
+    summary="Lazy load child nodes",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_scripts_children(
-    path: str = Query(description="父節點路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-    maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(description="Parent node path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    includeHidden: bool = Query(default=False, description="Include hidden files"),
+    maxDepth: Optional[int] = Query(default=None, ge=1, description="Max depth (defaults to FILE_TREE_MAX_DEPTH in settings)"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """懶載入子節點"""
+    """Lazy load child nodes"""
     try:
         result = service.get_tree(path, scope, includeHidden, maxDepth)
         return result
@@ -87,15 +87,15 @@ async def get_scripts_children(
 @router.get(
     "/content",
     response_model=FileContentResponse,
-    summary="讀取 Script 檔案",
+    summary="Read Script file",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def read_script(
-    path: str = Query(description="檔案路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
+    path: str = Query(description="File path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """讀取 Script 檔案內容"""
+    """Read Script file content"""
     try:
         result = service.read_file(path, scope)
         return result
@@ -108,17 +108,17 @@ async def read_script(
 @router.put(
     "/content",
     response_model=FileOperationResponse,
-    summary="寫入 Script 檔案",
+    summary="Write Script file",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def write_script(
-    path: str = Query(description="檔案路徑"),
-    content: str = Query(description="檔案內容"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    expectedVersionId: Optional[str] = Query(default=None, description="預期版本ID"),
+    path: str = Query(description="File path"),
+    content: str = Query(description="File content"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    expectedVersionId: Optional[str] = Query(default=None, description="Expected version ID"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """寫入 Script 檔案內容"""
+    """Write Script file content"""
     try:
         result = service.write_file(path, content, scope, expectedVersionId)
         return FileOperationResponse(
@@ -141,17 +141,17 @@ async def write_script(
     "",
     response_model=FileOperationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立 Script",
+    summary="Create Script",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_script(
-    path: str = Query(description="路徑"),
-    type: str = Query(description="類型 (file/directory)"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    content: Optional[str] = Query(default="", description="檔案內容"),
+    path: str = Query(description="Path"),
+    type: str = Query(description="Type (file/directory)"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    content: Optional[str] = Query(default="", description="File content"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """建立 Script 檔案或目錄"""
+    """Create Script file or directory"""
     try:
         result = service.create_entry(path, type, scope, content)
         return FileOperationResponse(
@@ -172,16 +172,16 @@ async def create_script(
 @router.delete(
     "",
     response_model=FileOperationResponse,
-    summary="刪除 Script",
+    summary="Delete Script",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def delete_script(
-    path: str = Query(description="路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除"),
+    path: str = Query(description="Path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    recursive: bool = Query(default=False, description="Recursive delete"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """刪除 Script 檔案或目錄"""
+    """Delete Script file or directory"""
     try:
         result = service.delete_entry(path, scope, recursive)
         return FileOperationResponse(
@@ -201,18 +201,18 @@ async def delete_script(
 @router.post(
     "/copy",
     response_model=FileOperationResponse,
-    summary="複製 Script",
+    summary="Copy Script",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def copy_script(
-    sourcePath: str = Query(description="源路徑"),
-    destPath: str = Query(description="目標路徑"),
-    sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-    destScope: Optional[str] = Query(default=None, description="目標範圍"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    sourcePath: str = Query(description="Source path"),
+    destPath: str = Query(description="Target path"),
+    sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+    destScope: Optional[str] = Query(default=None, description="Destination scope"),
+    overwrite: bool = Query(default=False, description="Overwrite"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """複製 Script 檔案或目錄"""
+    """Copy Script file or directory"""
     try:
         result = service.copy_entry(sourcePath, destPath, sourceScope, destScope, overwrite)
         return FileOperationResponse(
@@ -234,18 +234,18 @@ async def copy_script(
 @router.post(
     "/move",
     response_model=FileOperationResponse,
-    summary="移動 Script",
+    summary="Move Script",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def move_script(
-    sourcePath: str = Query(description="源路徑"),
-    destPath: str = Query(description="目標路徑"),
-    sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-    destScope: Optional[str] = Query(default=None, description="目標範圍"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    sourcePath: str = Query(description="Source path"),
+    destPath: str = Query(description="Target path"),
+    sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+    destScope: Optional[str] = Query(default=None, description="Destination scope"),
+    overwrite: bool = Query(default=False, description="Overwrite"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """移動或重命名 Script"""
+    """Move or rename Script"""
     try:
         result = service.move_entry(sourcePath, destPath, sourceScope, destScope, overwrite)
         return FileOperationResponse(
@@ -267,16 +267,16 @@ async def move_script(
 @router.post(
     "/batch-delete",
     response_model=BatchOperationResponse,
-    summary="批次刪除 Scripts",
+    summary="Batch delete Scripts",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def batch_delete_scripts(
-    paths: List[str] = Query(description="路徑列表"),
-    scope: Optional[str] = Query(default=None, description="範圍"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除"),
+    paths: List[str] = Query(description="Path list"),
+    scope: Optional[str] = Query(default=None, description="Scope"),
+    recursive: bool = Query(default=False, description="Recursive delete"),
     service: FileCollectionService = Depends(get_scripts_service),
 ):
-    """批次刪除 Scripts"""
+    """Batch delete Scripts"""
     try:
         result = service.batch_delete(paths, scope, recursive)
         return result

@@ -1,5 +1,5 @@
-"""Plugin Components Loader - 核心共用服務
-供 Slash Commands、MCP、Hooks、Subagents 模組使用
+"""Plugin Components Loader - Core Shared Service
+Used by Slash Commands, MCP, Hooks, Subagents modules
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ComponentFileInfo:
-    """組件檔案資訊（輕量級）"""
+    """Component file information (lightweight)"""
     def __init__(
         self,
         file_path: str,
@@ -31,7 +31,7 @@ class ComponentFileInfo:
 
 
 class SkillDirectoryInfo:
-    """Skill 目錄資訊"""
+    """Skill directory information"""
     def __init__(
         self,
         directory_path: str,
@@ -39,45 +39,45 @@ class SkillDirectoryInfo:
         plugin_name: str,
         marketplace_name: str,
     ):
-        self.directory_path = directory_path  # 完整的目錄絕對路徑
-        self.skill_name = skill_name          # skill 名稱 (例如: xlsx, pdf)
+        self.directory_path = directory_path  # Complete absolute directory path
+        self.skill_name = skill_name          # skill name (e.g., xlsx, pdf)
         self.plugin_name = plugin_name
         self.marketplace_name = marketplace_name
 
 
 class PluginComponentsLoader:
     """
-    Plugin 組件載入器
+    Plugin component loader
 
-    職責：
-    1. 從 enabledPlugins 設定中找出已啟用的 plugins
-    2. 載入各 plugin 的組件（commands/agents/hooks/mcpServers）
-    3. 提供結構化資料給各功能模組使用
+    Responsibilities:
+    1. Find enabled plugins from enabledPlugins settings
+    2. Load each plugin's components (commands/agents/hooks/mcpServers)
+    3. Provide structured data to functional modules
     """
 
     def __init__(self, settings_service):
         """
-        初始化 Loader
+        Initialize loader
 
         Args:
-            settings_service: SettingsService 實例
+            settings_service: SettingsService instance
         """
         self.settings_service = settings_service
 
     # =========================================================================
-    # 公開方法 - 供各功能模組呼叫
+    # Public Methods - Called by functional modules
     # =========================================================================
 
     def load_plugin_commands(
         self,
         workspace_id: str
     ) -> list[ComponentFileInfo]:
-        """載入所有已啟用 plugins 的 commands
+        """Load commands from all enabled plugins
 
-        供 Slash Commands 模組使用
+        Used by Slash Commands module
 
         Returns:
-            List[ComponentFileInfo]: Commands 清單
+            List[ComponentFileInfo]: Commands list
         """
         result = []
 
@@ -102,12 +102,12 @@ class PluginComponentsLoader:
         self,
         workspace_id: str
     ) -> list[ComponentFileInfo]:
-        """載入所有已啟用 plugins 的 agents/subagents
+        """Load agents/subagents from all enabled plugins
 
-        供 Subagents 模組使用
+        Used by Subagents module
 
         Returns:
-            List[ComponentFileInfo]: Agents 清單
+            List[ComponentFileInfo]: Agents list
         """
         result = []
 
@@ -132,13 +132,13 @@ class PluginComponentsLoader:
         self,
         workspace_id: str
     ) -> dict[str, dict[str, Any]]:
-        """載入所有已啟用 plugins 的 MCP servers
+        """Load MCP servers from all enabled plugins
 
-        供 MCP 模組使用
+        Used by MCP module
 
         Returns:
             Dict[plugin_id, Dict[server_name, server_config]]:
-            MCP servers 字典，按 plugin 分組
+            MCP servers dictionary grouped by plugin
         """
         result = {}
 
@@ -164,12 +164,12 @@ class PluginComponentsLoader:
         self,
         workspace_id: str
     ) -> dict[str, dict[str, Any]]:
-        """載入所有已啟用 plugins 的 hooks
+        """Load hooks from all enabled plugins
 
-        供 Hooks 模組使用
+        Used by Hooks module
 
         Returns:
-            Dict[plugin_id, hooks_config]: Hooks 配置，按 plugin 分組
+            Dict[plugin_id, hooks_config]: Hooks configuration grouped by plugin
         """
         result = {}
 
@@ -195,12 +195,12 @@ class PluginComponentsLoader:
         self,
         workspace_id: str
     ) -> list[SkillDirectoryInfo]:
-        """載入所有已啟用 plugins 的 skills
+        """Load skills from all enabled plugins
 
-        供 Skills 模組使用
+        Used by Skills module
 
         Returns:
-            List[SkillDirectoryInfo]: Skills 目錄清單
+            List[SkillDirectoryInfo]: Skills directory list
         """
         result = []
 
@@ -222,20 +222,20 @@ class PluginComponentsLoader:
         return result
 
     # =========================================================================
-    # 私有方法 - 內部實作
+    # Private Methods - Internal implementation
     # =========================================================================
 
     def _get_enabled_plugins(self, workspace_id: str) -> dict[str, bool]:
-        """取得已啟用的 plugins
+        """Get enabled plugins
 
-        合併三個 scope（local > project > user）的 enabledPlugins
-        過濾出 enabled=true 的項目
+        Merge enabledPlugins from three scopes (local > project > user)
+        Filter out enabled=true items
         """
         merged: dict[str, bool] = {}
 
         from ..common import DocumentScope
 
-        # 依序讀取 user → project → local（後面的覆蓋前面的）
+        # Read user → project → local sequentially (later overrides earlier)
         for scope in [DocumentScope.USER, DocumentScope.PROJECT, DocumentScope.LOCAL]:
             try:
                 state = self.settings_service._read_scope_state(workspace_id, scope)
@@ -245,7 +245,7 @@ class PluginComponentsLoader:
             except Exception as e:
                 logger.warning(f"Failed to read {scope} settings: {e}")
 
-        # 過濾出 enabled=true
+        # Filter out enabled=true
         return {k: v for k, v in merged.items() if v}
 
     def _load_plugin_commands_for_plugin(
@@ -253,7 +253,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         plugin_id: str
     ) -> list[ComponentFileInfo]:
-        """載入單一 plugin 的 commands"""
+        """Load commands from single plugin"""
         plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
 
         marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
@@ -271,7 +271,7 @@ class PluginComponentsLoader:
         return [
             ComponentFileInfo(
                 file_path=str(file_path),
-                file_name=Path(file_path).name,  # 保留完整附檔名（包含 .md）
+                file_name=Path(file_path).name,  # Keep complete extension (including .md)
                 plugin_name=plugin_name,
                 marketplace_name=marketplace_name,
                 description=self._extract_description(file_path)
@@ -284,7 +284,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         plugin_id: str
     ) -> list[ComponentFileInfo]:
-        """載入單一 plugin 的 agents"""
+        """Load agents from single plugin"""
         plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
 
         marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
@@ -302,7 +302,7 @@ class PluginComponentsLoader:
         return [
             ComponentFileInfo(
                 file_path=str(file_path),
-                file_name=Path(file_path).name,  # 保留完整附檔名（包含 .md）
+                file_name=Path(file_path).name,  # Keep complete extension (including .md)
                 plugin_name=plugin_name,
                 marketplace_name=marketplace_name,
                 description=self._extract_description(file_path)
@@ -315,7 +315,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         plugin_id: str
     ) -> dict[str, Any] | None:
-        """載入單一 plugin 的 MCP servers 配置"""
+        """Load MCP servers configuration from single plugin"""
         plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
 
         marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
@@ -350,7 +350,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         plugin_id: str
     ) -> dict[str, Any] | None:
-        """載入單一 plugin 的 hooks 配置"""
+        """Load hooks configuration from single plugin"""
         plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
 
         marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
@@ -385,7 +385,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         plugin_id: str
     ) -> list[SkillDirectoryInfo]:
-        """載入單一 plugin 的 skills"""
+        """Load skills from single plugin"""
         plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
 
         marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
@@ -418,17 +418,17 @@ class PluginComponentsLoader:
         return result
 
     # =========================================================================
-    # 工具方法
+    # Utility Methods
     # =========================================================================
 
     def _get_marketplace_base_path(self, marketplace_path: Path) -> Path:
-        """取得 marketplace 根目錄
+        """Get marketplace root directory
 
         Args:
-            marketplace_path: marketplace.json 的完整路徑
+            marketplace_path: Complete path to marketplace.json
 
         Returns:
-            marketplace 根目錄（marketplace.json 的父目錄的父目錄）
+            Marketplace root directory (parent of parent of marketplace.json)
         """
         return marketplace_path.parent.parent
 
@@ -437,7 +437,7 @@ class PluginComponentsLoader:
         base_path: Path,
         plugin_config: dict[str, Any]
     ) -> list[Path]:
-        """strict=true: 掃描 commands/ 目錄下的所有 .md 檔案"""
+        """strict=true: Scan all .md files under commands/ directory"""
         source = plugin_config.get("source", "./")
         source_path = self._resolve_path(base_path, source)
         commands_dir = source_path / "commands"
@@ -452,7 +452,7 @@ class PluginComponentsLoader:
         base_path: Path,
         plugin_config: dict[str, Any]
     ) -> list[Path]:
-        """strict=false: 從配置讀取 commands 清單"""
+        """strict=false: Read commands list from configuration"""
         commands_raw = plugin_config.get("commands", [])
 
         if isinstance(commands_raw, str):
@@ -478,7 +478,7 @@ class PluginComponentsLoader:
         base_path: Path,
         plugin_config: dict[str, Any]
     ) -> list[Path]:
-        """strict=true: 掃描 agents/ 目錄下的所有 .md 檔案"""
+        """strict=true: Scan all .md files under agents/ directory"""
         source = plugin_config.get("source", "./")
         source_path = self._resolve_path(base_path, source)
         agents_dir = source_path / "agents"
@@ -493,7 +493,7 @@ class PluginComponentsLoader:
         base_path: Path,
         plugin_config: dict[str, Any]
     ) -> list[Path]:
-        """strict=false: 從配置讀取 agents 清單"""
+        """strict=false: Read agents list from configuration"""
         agents_raw = plugin_config.get("agents", [])
 
         if isinstance(agents_raw, str):
@@ -515,10 +515,10 @@ class PluginComponentsLoader:
         return result
 
     def _parse_plugin_id(self, plugin_id: str) -> tuple[str, str]:
-        """解析 plugin_id
+        """Parse plugin_id
 
         Args:
-            plugin_id: 格式 "plugin_name@marketplace_name"
+            plugin_id: Format "plugin_name@marketplace_name"
 
         Returns:
             (plugin_name, marketplace_name)
@@ -540,7 +540,7 @@ class PluginComponentsLoader:
         workspace_id: str,
         marketplace_name: str
     ) -> Path:
-        """取得 marketplace.json 的路徑"""
+        """Get path to marketplace.json"""
         from ..common import DocumentScope, resolve_scope_root
 
         user_root = resolve_scope_root(workspace_id, DocumentScope.USER)
@@ -559,7 +559,7 @@ class PluginComponentsLoader:
         marketplace_data: dict[str, Any],
         plugin_name: str
     ) -> dict[str, Any]:
-        """在 marketplace.json 的 plugins 陣列中找出對應的 plugin"""
+        """Find corresponding plugin in plugins array of marketplace.json"""
         plugins = marketplace_data.get("plugins", [])
 
         for plugin in plugins:
@@ -569,7 +569,7 @@ class PluginComponentsLoader:
         raise ValueError(f"Plugin '{plugin_name}' not found in marketplace")
 
     def _resolve_path(self, base_path: Path, relative_path: str) -> Path:
-        """解析相對路徑為絕對路徑"""
+        """Resolve relative path to absolute path"""
         path_str = relative_path.replace("${CLAUDE_PLUGIN_ROOT}", "")
 
         if path_str.startswith("/"):
@@ -578,7 +578,7 @@ class PluginComponentsLoader:
             return (base_path / path_str).resolve()
 
     def _replace_env_vars(self, base_path: Path, config: Any) -> Any:
-        """遞迴替換配置中的環境變數"""
+        """Recursively replace environment variables in configuration"""
         if isinstance(config, str):
             return config.replace("${CLAUDE_PLUGIN_ROOT}", str(base_path))
         elif isinstance(config, dict):
@@ -589,7 +589,7 @@ class PluginComponentsLoader:
             return config
 
     def _read_json_file(self, file_path: Path) -> dict[str, Any]:
-        """讀取並解析 JSON 檔案"""
+        """Read and parse JSON file"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
@@ -597,7 +597,7 @@ class PluginComponentsLoader:
             raise ValueError(f"Invalid JSON in file: {file_path}. Error: {e}") from e
 
     def _extract_description(self, file_path: Path) -> str | None:
-        """從 Markdown frontmatter 提取 description"""
+        """Extract description from Markdown frontmatter"""
         try:
             if not file_path.exists():
                 return None
@@ -620,7 +620,7 @@ class PluginComponentsLoader:
 
 
 # =========================================================================
-# 全域實例（線程安全的單例模式）
+# Global Instance (Thread-safe singleton)
 # =========================================================================
 
 _loader_instance: PluginComponentsLoader | None = None
@@ -628,7 +628,7 @@ _loader_lock = threading.Lock()
 
 
 def get_plugin_loader(settings_service) -> PluginComponentsLoader:
-    """取得 PluginComponentsLoader 單例（線程安全）"""
+    """Get PluginComponentsLoader singleton (thread-safe)"""
     global _loader_instance
 
     if _loader_instance is None:

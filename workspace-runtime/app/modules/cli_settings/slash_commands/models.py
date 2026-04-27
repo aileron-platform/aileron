@@ -1,4 +1,4 @@
-"""CLI Slash Commands 資料模型"""
+"""CLI Slash Commands data models"""
 
 from __future__ import annotations
 
@@ -10,89 +10,89 @@ from .config import SlashCommandScope, DocumentFormat
 
 
 class CliSlashCommandDocumentSummary(BaseModel):
-    """Slash Command 檔案摘要"""
+    """Slash Command file summary"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    namespace: str | None = Field(None, description="命名空間")
-    description: str | None = Field(None, description="指令描述")
-    scope: SlashCommandScope = Field(..., description="檔案範圍")
-    size: str = Field(..., description="檔案大小")
-    format: DocumentFormat = Field(..., description="文件格式 (markdown / toml)")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    namespace: str | None = Field(None, description="Namespace")
+    description: str | None = Field(None, description="Command description")
+    scope: SlashCommandScope = Field(..., description="File scope")
+    size: str = Field(..., description="File size")
+    format: DocumentFormat = Field(..., description="Document format (markdown / toml)")
 
     model_config = {"populate_by_name": True}
 
 
 class CliSlashCommandDocumentDetail(CliSlashCommandDocumentSummary):
-    """Slash Command 完整內容"""
+    """Slash Command full content"""
 
-    content: str = Field(..., description="檔案原始內容")
+    content: str = Field(..., description="File raw content")
 
 
 class CliSlashCommandScopeGroup(BaseModel):
-    """同一範圍的命令清單"""
+    """Command list for same scope"""
 
-    scope: SlashCommandScope = Field(..., description="檔案範圍")
+    scope: SlashCommandScope = Field(..., description="File scope")
     documents: List[CliSlashCommandDocumentSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
 
 class CliSlashCommandScopesResponse(BaseModel):
-    """列出所有範圍的命令"""
+    """List all commands by scope"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
     scopes: List[CliSlashCommandScopeGroup] = Field(
-        default_factory=list, description="依範圍分類的命令"
+        default_factory=list, description="Commands grouped by scope"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class CliSlashCommandScopeResponse(BaseModel):
-    """單一範圍命令列表"""
+    """Single scope command list"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: SlashCommandScope = Field(..., description="命令範圍")
+    scope: SlashCommandScope = Field(..., description="Command scope")
     documents: List[CliSlashCommandDocumentSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class CliSlashCommandDocumentResponse(BaseModel):
-    """單一檔案內容"""
+    """Single file content"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: SlashCommandScope = Field(..., description="檔案範圍")
-    document: CliSlashCommandDocumentDetail = Field(..., description="檔案內容")
+    scope: SlashCommandScope = Field(..., description="File scope")
+    document: CliSlashCommandDocumentDetail = Field(..., description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class CliSlashCommandCreateRequest(BaseModel):
-    """建立 Slash Command 請求"""
+    """Create Slash Command request"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    content: str = Field(..., description="檔案內容")
-    namespace: str | None = Field(None, description="命名空間")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    content: str = Field(..., description="File content")
+    namespace: str | None = Field(None, description="Namespace")
 
     model_config = {"populate_by_name": True}
 
 
 class CliSlashCommandUpdateRequest(BaseModel):
-    """更新 Slash Command 請求"""
+    """Update Slash Command request"""
 
-    content: str = Field(..., description="檔案內容")
-    namespace: str | None = Field(None, description="命名空間")
+    content: str = Field(..., description="File content")
+    namespace: str | None = Field(None, description="Namespace")
 
 
 class CliSlashCommandDeleteResponse(BaseModel):
-    """刪除命令的回應"""
+    """Delete command response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: SlashCommandScope = Field(..., description="命令範圍")
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    deleted: bool = Field(True, description="刪除狀態")
+    scope: SlashCommandScope = Field(..., description="Command scope")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    deleted: bool = Field(True, description="Deletion status")
 
     model_config = {"populate_by_name": True}

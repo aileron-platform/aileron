@@ -1,8 +1,8 @@
 """
-Browser Container 服務發現工具模組
+Browser Container service discovery utility module
 
-提供從環境變數中取得 Browser container 連接資訊的功能，
-支援 Docker 和 Kubernetes 服務發現。
+Provides functionality to retrieve Browser container connection information from environment variables,
+supporting Docker and Kubernetes service discovery.
 """
 
 import os
@@ -12,14 +12,14 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class BrowserContainerInfo:
-    """Browser Container 連接資訊"""
+    """Browser Container connection information"""
 
     container_name: str | None
     webrtc_internal_url: str | None
     cdp_url: str | None
 
     def to_dict(self) -> dict[str, Any]:
-        """轉換為字典格式"""
+        """Convert to dictionary format"""
         return {
             "container_name": self.container_name,
             "webrtc_internal_url": self.webrtc_internal_url,
@@ -28,42 +28,42 @@ class BrowserContainerInfo:
 
 
 class BrowserContainerDiscovery:
-    """Browser Container 服務發現類別
+    """Browser Container service discovery class
 
-    從環境變數中讀取 Browser container 的連接資訊。
-    環境變數由 workspace-manager 在啟動 workspace-runtime 時注入。
+    Read Browser container connection information from environment variables.
+    Environment variables are injected by workspace-manager when starting workspace-runtime.
 
-    環境變數:
-        BROWSER_CONTAINER_NAME: Browser 容器名稱（Docker）或 Service 名稱（K8s）
-        BROWSER_WEBRTC_INTERNAL_URL: Browser WebRTC (neko) 內部 URL
+    Environment Variables:
+        BROWSER_CONTAINER_NAME: Browser container name (Docker) or Service name (K8s)
+        BROWSER_WEBRTC_INTERNAL_URL: Browser WebRTC (neko) internal URL
         BROWSER_CDP_URL: Browser CDP URL
     """
 
-    # 環境變數名稱常數
+    # Environment variable name constants
     ENV_CONTAINER_NAME = "BROWSER_CONTAINER_NAME"
     ENV_WEBRTC_INTERNAL_URL = "BROWSER_WEBRTC_INTERNAL_URL"
     ENV_CDP_URL = "BROWSER_CDP_URL"
 
     @classmethod
     def get_browser_info(cls) -> BrowserContainerInfo:
-        """取得 Browser container 連接資訊
+        """Get Browser container connection information
 
-        從環境變數讀取，如果環境變數未設定則嘗試從 CONTAINER_NAME 推斷。
+        Read from environment variables, if not set, try to infer from CONTAINER_NAME.
 
         Returns:
-            BrowserContainerInfo: Browser container 連接資訊
+            BrowserContainerInfo: Browser container connection information
         """
         workspace_id = os.getenv("WORKSPACE_ID", "default")
         container_name = os.getenv(cls.ENV_CONTAINER_NAME)
 
-        # 如果沒有設定 container_name，嘗試從 WORKSPACE_ID 推斷
+        # If container_name is not set, try to infer from WORKSPACE_ID
         if not container_name and workspace_id:
             container_name = f"workspace-browser-{workspace_id}"
 
         webrtc_internal_url = os.getenv(cls.ENV_WEBRTC_INTERNAL_URL)
         cdp_url = os.getenv(cls.ENV_CDP_URL)
 
-        # 如果沒有設定 URL，使用 container_name 構建預設值
+        # If URL is not set, build default value using container_name
         if not webrtc_internal_url and container_name:
             webrtc_internal_url = f"http://{container_name}:6080"
 
@@ -78,30 +78,30 @@ class BrowserContainerDiscovery:
 
     @classmethod
     def get_cdp_endpoint(cls) -> str | None:
-        """取得 CDP endpoint
+        """Get CDP endpoint
 
         Returns:
-            str: CDP URL，如果無法取得則返回 None
+            str: CDP URL, or None if unavailable
         """
         info = cls.get_browser_info()
         return info.cdp_url
 
     @classmethod
     def get_browser_container_name(cls) -> str | None:
-        """取得 Browser container 名稱
+        """Get Browser container name
 
         Returns:
-            str: Container 名稱，如果無法取得則返回 None
+            str: Container name, or None if unavailable
         """
         info = cls.get_browser_info()
         return info.container_name
 
     @classmethod
     def is_browser_available(cls) -> bool:
-        """檢查 Browser container 是否可用
+        """Check if Browser container is available
 
         Returns:
-            bool: 如果 Browser container 資訊完整則返回 True
+            bool: True if Browser container information is complete
         """
         info = cls.get_browser_info()
         return all([
@@ -111,10 +111,10 @@ class BrowserContainerDiscovery:
 
     @classmethod
     def get_mcp_config(cls) -> dict[str, Any]:
-        """取得 MCP 伺服器配置範例
+        """Get MCP server configuration example
 
         Returns:
-            dict: MCP 配置字典，可用於構建 .claude/mcp.json
+            dict: MCP configuration dictionary, can be used to build .claude/mcp.json
         """
         info = cls.get_browser_info()
 
@@ -132,7 +132,7 @@ class BrowserContainerDiscovery:
         return config
 
 
-# 保持向後兼容的別名
+# Backward compatible aliases
 ChromeContainerInfo = BrowserContainerInfo
 ChromeContainerDiscovery = BrowserContainerDiscovery
 
@@ -140,7 +140,7 @@ ChromeContainerDiscovery = BrowserContainerDiscovery
 __all__ = [
     "BrowserContainerDiscovery",
     "BrowserContainerInfo",
-    # 向後兼容別名
+    # Backward compatible aliases
     "ChromeContainerDiscovery",
     "ChromeContainerInfo",
 ]

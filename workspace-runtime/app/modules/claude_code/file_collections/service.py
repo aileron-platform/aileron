@@ -1,6 +1,6 @@
-"""File Collections 服務層 - 重構版本
+"""File Collections Service Layer - Refactored Version
 
-繼承自 BaseFileService，支援 Skills 和 Scripts 的檔案管理
+Inherits from BaseFileService, supports Skills and Scripts file management
 """
 
 from __future__ import annotations
@@ -31,15 +31,15 @@ from .models import (
 
 
 class FileCollectionService(BaseFileService):
-    """檔案集合服務 - 統一處理 Skills 和 Scripts
+    """File Collection Service - Unified handling of Skills and Scripts
     
-    支援的 scope:
-    - project: 專案級別
-    - user: 使用者級別
-    - plugin: 插件級別（唯讀）
+    Supported scopes:
+    - project: Project level
+    - user: User level
+    - plugin: Plugin level (read-only)
     """
 
-    # 檔案類型映射
+    # File type mapping
     FILE_TYPE_MAP = {
         ".md": FileType.MARKDOWN,
         ".ts": FileType.TYPESCRIPT,
@@ -51,18 +51,18 @@ class FileCollectionService(BaseFileService):
         ".sh": FileType.SHELL,
     }
 
-    # 有效的 scope 值
+    # Valid scope values
     VALID_SCOPES = {DocumentScope.PROJECT, DocumentScope.USER, DocumentScope.PLUGIN}
 
     def __init__(self, collection_type: FileCollectionType, workspace_id: str):
-        """初始化服務
+        """Initialize service
 
         Args:
-            collection_type: 集合類型（SKILLS 或 SCRIPTS）
+            collection_type: Collection type (SKILLS or SCRIPTS)
             workspace_id: Workspace ID
         """
-        # 不需要 root_path，因為我們使用 scope 來解析路徑
-        super().__init__(root_path=Path("/tmp"))  # 臨時路徑，不會被使用
+        # No need for root_path, as we use scope to resolve paths
+        super().__init__(root_path=Path("/tmp"))  # Temporary path, will not be used
         
         self.collection_type = collection_type
         self.workspace_id = workspace_id
@@ -70,62 +70,62 @@ class FileCollectionService(BaseFileService):
         self.plugin_loader = get_plugin_loader(self.settings_service)
 
     def resolve_scope_path(self, scope: Optional[str], relative_path: str) -> Path:
-        """解析 scope 和相對路徑到實際檔案系統路徑
+        """Resolve scope and relative path to actual file system path
         
         Args:
-            scope: 範圍識別 (project/user/plugin)
-            relative_path: 相對路徑
+            scope: Scope identifier (project/user/plugin)
+            relative_path: Relative path
             
         Returns:
-            實際檔案系統路徑
+            Actual file system path
             
         Raises:
-            InvalidScopeException: 無效的 scope
+            InvalidScopeException: Invalid scope
         """
-        # 預設使用 project scope
+        # Use project scope by default
         if not scope:
             scope = DocumentScope.PROJECT
         
-        # 驗證 scope
+        # Validate scope
         if not self.validate_scope(scope):
             raise InvalidScopeException(f"Invalid scope: {scope}")
         
-        # 解析 scope 根目錄
+        # Resolve scope root directory
         scope_root = resolve_scope_root(self.workspace_id, scope)
         
-        # 根據集合類型添加子目錄
+        # Add subdirectory based on collection type
         if self.collection_type == FileCollectionType.SKILLS:
             collection_dir = scope_root / "skills"
         else:  # SCRIPTS
             collection_dir = scope_root / "scripts"
         
-        # 驗證並解析相對路徑
+        # Validate and resolve relative path
         validated_path = self._validate_path(relative_path)
         
         return collection_dir / validated_path
 
     def validate_scope(self, scope: Optional[str]) -> bool:
-        """驗證 scope 是否有效
+        """Validate if scope is valid
         
         Args:
-            scope: 範圍識別
+            scope: Scope identifier
             
         Returns:
-            是否有效
+            Whether valid
         """
         if not scope:
-            return True  # None 會被轉換為預設的 project
+            return True  # None will be converted to default project
         
         return scope in self.VALID_SCOPES
 
     def is_readonly_scope(self, scope: Optional[str]) -> bool:
-        """檢查 scope 是否為唯讀
+        """Check if scope is read-only
         
         Args:
-            scope: 範圍識別
+            scope: Scope identifier
             
         Returns:
-            是否唯讀
+            Whether read-only
         """
         return scope == DocumentScope.PLUGIN
 
@@ -136,14 +136,14 @@ class FileCollectionService(BaseFileService):
         include_hidden: bool = False,
         max_depth: Optional[int] = None,
     ) -> Dict:
-        """取得檔案樹，並對 SKILL.md 節點嵌入 front matter metadata"""
+        """Get file tree and embed front matter metadata for SKILL.md nodes"""
         result = super().get_tree(path, scope, include_hidden, max_depth)
         if self.collection_type == FileCollectionType.SKILLS:
             self._enrich_skill_nodes(result["nodes"], scope)
         return result
 
     def _enrich_skill_nodes(self, nodes: List[Dict], scope: Optional[str]) -> None:
-        """遞迴走訪節點，對 SKILL.md file 節點嵌入 skillName/skillDescription"""
+        """Recursively traverse nodes and embed skillName/skillDescription for SKILL.md file nodes"""
         for node in nodes:
             if node.get("type") == "file" and node.get("name") == "SKILL.md":
                 try:
@@ -163,29 +163,29 @@ class FileCollectionService(BaseFileService):
                 self._enrich_skill_nodes(node["children"], scope)
 
     def _get_file_type(self, file_path: Path) -> FileType:
-        """取得檔案類型"""
+        """Get file type"""
         suffix = file_path.suffix.lower()
         return self.FILE_TYPE_MAP.get(suffix, FileType.OTHER)
 
     def _parse_front_matter(self, content: str) -> tuple[Optional[Dict], str]:
-        """解析 Front Matter
+        """Parse Front Matter
         
         Args:
-            content: 檔案內容
+            content: File content
             
         Returns:
             (front_matter_dict, content_without_front_matter)
         """
-        # 檢查是否有 YAML Front Matter
+        # Check if YAML Front Matter exists
         if not content.startswith("---\n"):
             return None, content
         
-        # 找到第二個 ---
+        # Find second ---
         end_marker = content.find("\n---\n", 4)
         if end_marker == -1:
             return None, content
         
-        # 提取 Front Matter
+        # Extract Front Matter
         front_matter_str = content[4:end_marker]
         remaining_content = content[end_marker + 5:]
         
@@ -202,69 +202,69 @@ class FileCollectionService(BaseFileService):
         include_hidden: bool = False,
         max_depth: int = 1
     ) -> List[FileNode]:
-        """取得檔案樹（帶 Front Matter 元數據）
+        """Get file tree with Front Matter metadata
         
         Args:
-            path: 目標路徑
-            scope: 範圍識別
-            include_hidden: 是否包含隱藏檔
-            max_depth: 最大深度
+            path: Target path
+            scope: Scope identifier
+            include_hidden: Whether to include hidden files
+            max_depth: Maximum depth
             
         Returns:
-            檔案節點列表（包含 metadata）
+            File node list (with metadata)
         """
-        # 使用父類的 get_tree 方法
+        # Use parent class get_tree method
         tree_response = self.get_tree(path, scope, include_hidden, max_depth)
         nodes = tree_response["nodes"]
         
-        # 為每個檔案節點添加 Front Matter 元數據
+        # Add Front Matter metadata to each file node
         for node in nodes:
             if node["type"] == "file":
                 try:
-                    # 讀取檔案內容
+                    # Read file content
                     content_response = self.read_file(node["path"], scope)
                     content = content_response["content"]
                     
-                    # 解析 Front Matter
+                    # Parse Front Matter
                     front_matter, _ = self._parse_front_matter(content)
                     
                     if front_matter:
-                        # 將 Front Matter 添加到 metadata
+                        # Add Front Matter to metadata
                         if node.get("metadata") is None:
                             node["metadata"] = {}
                         node["metadata"]["frontMatter"] = front_matter
                         
-                        # 添加檔案類型
+                        # Add file type
                         file_type = self._get_file_type(Path(node["path"]))
                         node["fileType"] = file_type.value
                         
                 except Exception:
-                    # 如果讀取失敗，跳過元數據
+                    # If read fails, skip metadata
                     pass
         
         return nodes
 
     def get_plugin_skills(self) -> List[PluginSkillInfo]:
-        """取得所有插件的 Skills
+        """Get all plugin Skills
         
         Returns:
-            插件 Skills 列表
+            Plugin Skills list
         """
         plugin_skills = []
         
         try:
-            # 取得所有已安裝的插件
+            # Get all installed plugins
             plugins = self.plugin_loader.get_installed_plugins()
             
             for plugin in plugins:
-                # 取得插件的 skills 目錄
+                # Get plugin skills directory
                 plugin_root = resolve_scope_root(self.workspace_id, DocumentScope.PLUGIN)
                 skills_dir = plugin_root / plugin.name / "skills"
                 
                 if not skills_dir.exists():
                     continue
                 
-                # 掃描 skills 目錄
+                # Scan skills directory
                 for skill_file in skills_dir.glob("*.md"):
                     try:
                         content = skill_file.read_text(encoding="utf-8")
@@ -279,11 +279,11 @@ class FileCollectionService(BaseFileService):
                             metadata=front_matter
                         ))
                     except Exception:
-                        # 跳過無法讀取的檔案
+                        # Skip unreadable files
                         continue
         
         except Exception:
-            # 如果取得插件失敗，返回空列表
+            # If getting plugins fails, return empty list
             pass
         
         return plugin_skills

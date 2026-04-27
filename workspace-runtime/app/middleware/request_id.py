@@ -1,5 +1,5 @@
 """
-請求 ID 中介軟體
+Request ID middleware
 """
 
 import uuid
@@ -8,10 +8,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """請求 ID 中介軟體"""
+    """Request ID middleware"""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        """為每個請求添加唯一 ID"""
+        """Add unique ID to each request"""
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
 

@@ -1,4 +1,4 @@
-"""MCP 模組依賴"""
+"""MCP Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import McpService
 
 @lru_cache()
 def get_mcp_service() -> McpService:
-    """提供單例 MCP 服務"""
+    """Provide singleton MCP service"""
 
     return McpService()

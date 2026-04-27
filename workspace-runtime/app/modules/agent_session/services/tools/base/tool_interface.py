@@ -1,7 +1,7 @@
 """
-ITool 介面定義.
+ITool interface definition.
 
-比照 agor-main 的 ITool interface
+References agor-main's ITool interface
 """
 
 from abc import ABC, abstractmethod
@@ -15,40 +15,40 @@ from .types import TaskResult, ToolCapabilities, ToolType
 
 class ITool(ABC):
     """
-    Tool 基礎介面.
+    Tool base interface.
     
-    所有 SDK Tool 的統一介面。
+    Unified interface for all SDK Tools.
     """
     
     @property
     @abstractmethod
     def tool_type(self) -> ToolType:
-        """Tool 類型識別碼."""
+        """Tool type identifier."""
         ...
     
     @property
     @abstractmethod
     def name(self) -> str:
-        """人類可讀的 Tool 名稱."""
+        """Human-readable Tool name."""
         ...
     
     @abstractmethod
     def get_capabilities(self) -> ToolCapabilities:
         """
-        取得 Tool 能力標記.
+        Get Tool capability flags.
         
         Returns:
-            ToolCapabilities: 能力標記
+            ToolCapabilities: Capability flags
         """
         ...
     
     @abstractmethod
     async def check_installed(self) -> bool:
         """
-        檢查 Tool 是否已安裝且可存取.
+        Check if Tool is installed and accessible.
         
         Returns:
-            bool: 是否已安裝
+            bool: Whether installed
         """
         ...
     
@@ -61,39 +61,39 @@ class ITool(ABC):
         streaming_callbacks: Optional[StreamingCallbacks] = None,
     ) -> TaskResult:
         """
-        執行任務（發送 prompt）.
+        Execute task (send prompt).
 
         CONTRACT:
-        - 必須呼叫 messagesService.create() 建立完整訊息
-        - 完整訊息會自動透過 WebSocket 廣播
-        - 如果提供 streamingCallbacks 且 supportsStreaming=True，可在執行期間呼叫回調
+        - Must call messagesService.create() to create complete message
+        - Complete message is automatically broadcast via WebSocket
+        - If streamingCallbacks provided and supportsStreaming=True, can call callbacks during execution
 
         STREAMING:
-        - 如果提供 streamingCallbacks 且 supportsStreaming=True:
-          - 呼叫 on_stream_start() 開始生成
-          - 呼叫 on_stream_chunk() 傳送 3-10 字片段
-          - 呼叫 on_stream_end() 結束生成
-          - 然後在 DB 建立完整訊息
-        - 如果未提供 streamingCallbacks 或 supportsStreaming=False:
-          - 同步執行
-          - 在 DB 建立完整訊息
-          - 使用者看到載入動畫，然後看到完整訊息
+        - If streamingCallbacks provided and supportsStreaming=True:
+          - Call on_stream_start() to start generation
+          - Call on_stream_chunk() to send 3-10 char chunks
+          - Call on_stream_end() to end generation
+          - Then create complete message in DB
+        - If streamingCallbacks not provided or supportsStreaming=False:
+          - Execute synchronously
+          - Create complete message in DB
+          - User sees loading animation, then sees complete message
 
         PERMISSION MODE (Claude Code):
-        - DEFAULT: 每個工具都提示（最嚴格）
-        - ACCEPT_EDITS: 自動接受檔案編輯，其他工具提示
-        - BYPASS_PERMISSIONS: 允許所有操作（不提示）
-        - PLAN: 計劃模式（生成計劃但不執行）
+        - DEFAULT: Prompt for every tool (strictest)
+        - ACCEPT_EDITS: Auto-accept file edits, prompt for other tools
+        - BYPASS_PERMISSIONS: Allow all operations (no prompt)
+        - PLAN: Plan mode (generate plan but do not execute)
 
         Args:
-            session_id: 會話 ID
-            prompt: 使用者 prompt
-            task_id: 任務 ID（用於連結訊息）
-            permission_mode: 權限模式（Claude Code 原生模式）
-            streaming_callbacks: 串流回調（可選）
+            session_id: Session ID
+            prompt: User prompt
+            task_id: Task ID (for linking messages)
+            permission_mode: Permission mode (Claude Code native mode)
+            streaming_callbacks: Streaming callbacks (optional)
 
         Returns:
-            TaskResult: 任務結果（包含訊息 ID）
+            TaskResult: Task result (includes message ID)
         """
         raise NotImplementedError("execute_task not implemented")
     
@@ -103,20 +103,20 @@ class ITool(ABC):
         task_id: Optional[str] = None,
     ) -> dict:
         """
-        停止目前執行的任務.
+        Stop currently executing task.
         
-        優雅地終止 agent 的目前執行。
-        實作方式因 SDK 而異：
-        - Claude Agent SDK: 呼叫 Query 物件的 interrupt()
-        - Gemini SDK: 呼叫 AbortController 的 abort()
-        - Codex SDK: 設定停止標記並中斷事件循環
+        Gracefully terminate agent's current execution.
+        Implementation varies by SDK:
+        - Claude Agent SDK: Call Query object's interrupt()
+        - Gemini SDK: Call AbortController's abort()
+        - Codex SDK: Set stop flag and interrupt event loop
         
         Args:
-            session_id: 會話 ID
-            task_id: 任務 ID（可選，如果有多個任務執行）
+            session_id: Session ID
+            task_id: Task ID (optional, if multiple tasks executing)
         
         Returns:
-            dict: 成功狀態和部分結果（如果有）
+            dict: Success status and partial results (if any)
         """
         raise NotImplementedError("stop_task not implemented")
 

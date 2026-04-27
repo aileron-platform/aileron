@@ -1,1 +1,1 @@
-"""核心功能整合測試套件。"""
+"""Core functionality integration test suite."""

@@ -1,4 +1,4 @@
-"""CLI Agents MD 模型"""
+"""CLI Agents MD models"""
 
 from __future__ import annotations
 
@@ -8,18 +8,18 @@ from pydantic import BaseModel, Field
 
 
 class AgentsMdScope(str, Enum):
-    """Agents md 支援的範圍"""
+    """Scopes supported by agents md"""
 
     PROJECT = "project"
     USER = "user"
 
 
 class AgentsMdDocument(BaseModel):
-    """Agents md 文件內容"""
+    """Agents md document content"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: AgentsMdScope = Field(..., description="檔案範圍")
-    content: str = Field(..., description="Agents md 原始內容")
+    scope: AgentsMdScope = Field(..., description="File scope")
+    content: str = Field(..., description="Agents md raw content")
 
     model_config = {
         "populate_by_name": True,
@@ -27,11 +27,11 @@ class AgentsMdDocument(BaseModel):
 
 
 class AgentsMdUpdateRequest(BaseModel):
-    """更新 agents md 的請求"""
+    """Request to update agents md"""
 
-    scope: AgentsMdScope = Field(..., description="更新範圍")
-    content: str = Field(..., description="新的 agents md 內容")
-    message: str | None = Field(None, description="變更說明")
+    scope: AgentsMdScope = Field(..., description="Update scope")
+    content: str = Field(..., description="New agents md content")
+    message: str | None = Field(None, description="Change description")
 
     model_config = {
         "populate_by_name": True,
@@ -39,10 +39,10 @@ class AgentsMdUpdateRequest(BaseModel):
 
 
 class AgentsMdUpdateResponse(BaseModel):
-    """更新 agents md 的結果"""
+    """Result of updating agents md"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: AgentsMdScope = Field(..., description="更新範圍")
+    scope: AgentsMdScope = Field(..., description="Update scope")
 
     model_config = {
         "populate_by_name": True,

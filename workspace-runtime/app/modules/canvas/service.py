@@ -1,4 +1,4 @@
-"""Canvas 模組服務"""
+"""Canvas module service"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ CANVAS_INTERNAL_URL = os.getenv("CANVAS_INTERNAL_URL", "http://localhost:3003")
 
 
 class CanvasService:
-    """管理 Canvas 偵測、路由、健康狀態、同步、重置與日誌。"""
+    """Manage Canvas detection, routing, health status, sync, reset, and logs."""
 
     def __init__(self) -> None:
         self._workspace_base = Path("/workspace")

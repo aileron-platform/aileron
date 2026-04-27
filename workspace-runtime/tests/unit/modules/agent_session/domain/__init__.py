@@ -1,1 +1,1 @@
-"""Domain 層測試."""
+"""Domain layer tests."""

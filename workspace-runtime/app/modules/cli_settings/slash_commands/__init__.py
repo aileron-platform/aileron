@@ -1,4 +1,4 @@
-"""CLI Slash Commands 模組"""
+"""CLI Slash Commands module"""
 
 from .router import create_slash_commands_router
 from .config import SlashCommandTool

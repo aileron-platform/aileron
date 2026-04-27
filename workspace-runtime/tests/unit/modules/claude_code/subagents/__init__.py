@@ -1,1 +1,1 @@
-"""Subagents 模块单元测试"""
+"""Subagents module unit tests"""

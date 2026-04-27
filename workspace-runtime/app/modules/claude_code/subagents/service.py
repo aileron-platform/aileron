@@ -1,4 +1,4 @@
-"""Subagents 服務"""
+"""Subagents Service"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class SubagentService:
-    """管理 Subagent 設定檔的服務"""
+    """Service for managing Subagent configuration files"""
 
     def __init__(self) -> None:
         self._repository = ScopedMarkdownRepository("agents")
@@ -41,20 +41,20 @@ class SubagentService:
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> SubagentCollectionResponse:
         """
-        列出所有 subagents
+        List all subagents
 
-        修改：自動整合 plugin agents
+        Modified: Auto-integrate plugin agents
         """
         groups = []
 
-        # 1. 載入原有的 agents（project/user）
+        # 1. Load existing agents (project/user)
         for scope_item in iter_requested_scopes(scope, allow_local=False):
             records = self._repository.list_records(workspace_id, scope_item)
             documents = [self._to_summary(record) for record in records]
             documents.sort(key=lambda item: item.file_name)
             groups.append(SubagentScopeGroup(scope=scope_item, documents=documents))
 
-        # 2. 載入 plugin agents（新增）
+        # 2. Load plugin agents (added)
         if scope is None or scope == DocumentScope.PLUGIN:
             try:
                 plugin_agents = self._load_plugin_agents(workspace_id)
@@ -83,11 +83,11 @@ class SubagentService:
     def get_document(
         self, workspace_id: str, scope: DocumentScope, file_name: str
     ) -> SubagentDocumentResponse:
-        # 如果是 PLUGIN scope，從 plugin 載入
+        # If PLUGIN scope, load from plugin
         if scope == DocumentScope.PLUGIN:
             return self._get_plugin_document(workspace_id, file_name)
 
-        # 否則從檔案系統載入
+        # Otherwise load from file system
         try:
             record = self._repository.get_record(workspace_id, scope, file_name)
         except AmbiguousDocumentError as error:
@@ -191,7 +191,7 @@ class SubagentService:
     def _get_plugin_document(
         self, workspace_id: str, file_name: str
     ) -> SubagentDocumentResponse:
-        """從 plugin 載入單個文檔"""
+        """Load single document from plugin"""
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service
 
@@ -262,10 +262,10 @@ class SubagentService:
         self,
         workspace_id: str
     ) -> list[SubagentSummary]:
-        """載入 plugin agents
+        """Load plugin agents
 
         Returns:
-            List[SubagentSummary]: 包含 pluginName 和 marketplaceName 的文檔
+            List[SubagentSummary]: Documents with pluginName and marketplaceName
         """
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service

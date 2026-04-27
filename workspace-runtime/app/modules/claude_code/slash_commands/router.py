@@ -1,4 +1,4 @@
-"""Slash Commands 路由"""
+"""Slash Commands Routes"""
 
 from __future__ import annotations
 
@@ -17,20 +17,20 @@ from .models import (
 )
 from .service import SlashCommandService
 
-router = APIRouter(prefix="/slash-commands", tags=["Claude Code - 斜線命令"])
+router = APIRouter(prefix="/slash-commands", tags=["Claude Code - Slash Commands"])
 
 
 def _validate_slash_command_scope(scope: DocumentScope, *, check_writable: bool = False) -> None:
-    """驗證 Slash Commands scope
+    """Validate Slash Commands scope
 
     Args:
-        scope: 要驗證的範圍
-        check_writable: 是否檢查可寫入性（用於 POST/PUT/DELETE 操作）
+        scope: Scope to validate
+        check_writable: Whether to check writability (for POST/PUT/DELETE operations)
     """
     if scope == DocumentScope.LOCAL:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_SCOPE", "message": "Slash Commands 不支援 LOCAL scope"},
+            detail={"error": "INVALID_SCOPE", "message": "Slash Commands does not support LOCAL scope"},
         )
 
     if check_writable:
@@ -46,13 +46,13 @@ def _validate_slash_command_scope(scope: DocumentScope, *, check_writable: bool 
 @router.get(
     "",
     response_model=SlashCommandScopesResponse,
-    summary="列出所有命令",
+    summary="List all commands",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def list_slash_commands(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="可選擇僅回傳指定範圍"
+        None, description="Optionally return only specified scope"
     ),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandScopesResponse:
@@ -62,12 +62,12 @@ async def list_slash_commands(
 @router.get(
     "/{scope}",
     response_model=SlashCommandScopeResponse,
-    summary="取得指定範圍命令",
+    summary="Get commands for specified scope",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_scope_commands(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="命令範圍"),
+    scope: DocumentScope = Path(..., description="Command scope"),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandScopeResponse:
     _validate_slash_command_scope(scope, check_writable=False)
@@ -77,13 +77,13 @@ async def get_scope_commands(
 @router.get(
     "/{scope}/{file_name}",
     response_model=SlashCommandDocumentResponse,
-    summary="取得命令內容",
+    summary="Get command content",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_slash_command(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="命令範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Command scope"),
+    file_name: str = Path(..., description="File name"),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandDocumentResponse:
     _validate_slash_command_scope(scope, check_writable=False)
@@ -94,13 +94,13 @@ async def get_slash_command(
     "/{scope}",
     response_model=SlashCommandDocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增命令",
+    summary="Create command",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def create_slash_command(
     payload: SlashCommandCreateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="命令範圍"),
+    scope: DocumentScope = Path(..., description="Command scope"),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandDocumentResponse:
     _validate_slash_command_scope(scope, check_writable=True)
@@ -110,14 +110,14 @@ async def create_slash_command(
 @router.put(
     "/{scope}/{file_name}",
     response_model=SlashCommandDocumentResponse,
-    summary="更新命令",
+    summary="Update command",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def update_slash_command(
     payload: SlashCommandUpdateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="命令範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Command scope"),
+    file_name: str = Path(..., description="File name"),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandDocumentResponse:
     _validate_slash_command_scope(scope, check_writable=True)
@@ -127,13 +127,13 @@ async def update_slash_command(
 @router.delete(
     "/{scope}/{file_name}",
     response_model=SlashCommandDeleteResponse,
-    summary="刪除命令",
+    summary="Delete command",
     responses=build_responses(400, 401, 403, 404, 500),
 )
 async def delete_slash_command(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="命令範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Command scope"),
+    file_name: str = Path(..., description="File name"),
     service: SlashCommandService = Depends(get_slash_command_service),
 ) -> SlashCommandDeleteResponse:
     _validate_slash_command_scope(scope, check_writable=True)

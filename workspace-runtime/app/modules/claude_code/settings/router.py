@@ -1,4 +1,4 @@
-"""Settings API 路由"""
+"""Settings API Routes"""
 
 from __future__ import annotations
 
@@ -14,20 +14,20 @@ from .models import (
 )
 from .service import SettingsService
 
-router = APIRouter(prefix="/settings", tags=["Claude Code - 設定"])
+router = APIRouter(prefix="/settings", tags=["Claude Code - Settings"])
 
 
 @router.get(
     "",
     response_model=ClaudeCodeSettings,
-    summary="取得 Claude Code 設定",
+    summary="Get Claude Code settings",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_settings(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
         default=None,
-        description="指定後僅回傳該範圍的權限集合",
+        description="If specified, return only that scope's permission set",
     ),
     service: SettingsService = Depends(get_settings_service),
 ) -> ClaudeCodeSettings:
@@ -37,7 +37,7 @@ async def get_settings(
 @router.get(
     "/marketplaces",
     response_model=MarketplaceListResponse,
-    summary="取得所有 Marketplaces",
+    summary="Get all marketplaces",
     responses=build_responses(401, 404, 500),
 )
 async def get_marketplaces(
@@ -50,7 +50,7 @@ async def get_marketplaces(
 @router.put(
     "",
     response_model=ClaudeCodeSettings,
-    summary="更新 Claude Code 設定",
+    summary="Update Claude Code settings",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def update_settings(
@@ -58,7 +58,7 @@ async def update_settings(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope = Query(
         default=DocumentScope.PROJECT,
-        description="要寫入的設定範圍，預設為 project",
+        description="Settings scope to write to, defaults to project",
     ),
     service: SettingsService = Depends(get_settings_service),
 ) -> ClaudeCodeSettings:

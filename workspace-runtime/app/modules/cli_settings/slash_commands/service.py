@@ -1,6 +1,6 @@
-"""CLI Slash Command 服務
+"""CLI Slash Command service
 
-為 Gemini、Codex、OpenCode 提供 slash commands 的 CRUD 操作。
+Provides CRUD operations for slash commands for Gemini, Codex, OpenCode.
 """
 
 from __future__ import annotations
@@ -32,22 +32,22 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 
-# === 例外 ==============================================================
+# === Exceptions ==========================================================
 
 
 class CliSlashCommandNotFoundError(FileNotFoundError):
-    """指定的 slash command 不存在"""
+    """The specified slash command does not exist"""
 
 
 class CliSlashCommandDuplicateError(FileExistsError):
-    """Slash command 已存在"""
+    """Slash command already exists"""
 
 
 class CliSlashCommandAmbiguousError(RuntimeError):
-    """找到多個同名 slash command"""
+    """Found multiple slash commands with the same name"""
 
 
-# === 工具函數 ==========================================================
+# === Utility functions ===================================================
 
 
 BYTES_PER_KB = 1024
@@ -69,26 +69,26 @@ def _get_format_strategy(fmt: DocumentFormat) -> DocumentFormatStrategy:
     return MarkdownFormatStrategy()
 
 
-# === 服務 ================================================================
+# === Service ==============================================================
 
 
 class CliSlashCommandService:
-    """管理 CLI 工具 Slash Commands 的檔案服務"""
+    """File service for managing CLI tool Slash Commands"""
 
     def __init__(self, config: SlashCommandToolConfig) -> None:
         self._config = config
         self._strategy = _get_format_strategy(config.format)
 
-    # --- 目錄解析 ---------------------------------------------------------
+    # --- Directory resolution ----------------------------------------------
 
     def _scope_dir(self, workspace_id: str, scope: SlashCommandScope) -> Path:
         if scope == SlashCommandScope.USER:
             return self._config.user_root
-        # PROJECT: workspace_root / .gemini/commands 等
+        # PROJECT: workspace_root / .gemini/commands etc.
         return Path(get_workspace_path()) / self._config.project_dot_dir / self._config.dir_name
 
     def _normalize_file_name(self, file_name: str) -> str:
-        # 防止路徑遍歷攻擊：拒絕包含 .. 或路徑分隔符的字元
+        # Prevent path traversal attacks: reject characters containing .. or path separators
         if ".." in file_name or "/" in file_name or "\\" in file_name:
             raise ValueError(f"Invalid file_name: path traversal not allowed: {file_name}")
 
@@ -107,7 +107,7 @@ class CliSlashCommandService:
             candidate = directory / namespace / normalized
             return candidate if candidate.exists() else None
 
-        # 搜尋所有匹配檔案
+        # Search all matching files
         pattern = f"*{ext}"
         candidates = [
             p for p in directory.rglob(pattern)
@@ -119,7 +119,7 @@ class CliSlashCommandService:
             raise CliSlashCommandAmbiguousError(file_name)
         return candidates[0]
 
-    # --- 公開 CRUD -------------------------------------------------------
+    # --- Public CRUD ------------------------------------------------------
 
     def list_scopes(
         self, workspace_id: str, scope: SlashCommandScope | None = None
@@ -175,9 +175,9 @@ class CliSlashCommandService:
         directory = self._scope_dir(workspace_id, scope)
         normalized = self._normalize_file_name(payload.file_name)
 
-        # 確定目標目錄
+        # Determine target directory
         if payload.namespace and self._config.supports_namespace:
-            # 防止路徑遍歷攻擊：驗證 namespace 不包含危险字元
+            # Prevent path traversal attacks: verify namespace does not contain dangerous characters
             if ".." in payload.namespace or "/" in payload.namespace or "\\" in payload.namespace:
                 raise ValueError(f"Invalid namespace: path traversal not allowed: {payload.namespace}")
             target_dir = directory / payload.namespace
@@ -255,7 +255,7 @@ class CliSlashCommandService:
             workspaceId=workspace_id, scope=scope, fileName=file_name, deleted=True
         )
 
-    # --- 內部工具 ---------------------------------------------------------
+    # --- Internal utilities -----------------------------------------------
 
     def _list_documents(
         self, workspace_id: str, scope: SlashCommandScope

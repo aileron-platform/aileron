@@ -1,4 +1,4 @@
-"""Output Styles 子模組"""
+"""Output Styles Submodule"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""認證中間件"""
+"""Authentication middleware"""
 
 import logging
 import os
@@ -9,7 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.services.auth_service import get_auth_service
 from app.utils.datetime_utils import utcnow
 
-# 從環境變數讀取內部 API token（僅用於開發/測試環境）
+# Read internal API token from environment variable (for dev/test environments only)
 INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 
 logger = logging.getLogger(__name__)
@@ -17,18 +17,18 @@ logger = logging.getLogger(__name__)
 
 def get_current_user_id(request: Request) -> str:
     """
-    從請求中取得當前用戶 ID
+    Get current user ID from request
 
-    這個函數用於 FastAPI 的 Depends 依賴注入
+    This function is used for FastAPI Depends dependency injection
 
     Args:
-        request: FastAPI Request 物件
+        request: FastAPI Request object
 
     Returns:
-        str: 用戶 ID
+        str: User ID
 
     Raises:
-        HTTPException: 當用戶未認證時
+        HTTPException: When user is not authenticated
     """
     if not hasattr(request.state, "user_id"):
         raise HTTPException(
@@ -39,7 +39,7 @@ def get_current_user_id(request: Request) -> str:
 
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
-    """Token 驗證中間件"""
+    """Token validation middleware"""
 
     PUBLIC_PATHS = {
         "/",
@@ -51,40 +51,40 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         "/redoc",
         "/health",
         "/static",
-        "/api/v1/client-browser-relay",  # dev-browser client relay API (無需 token 驗證)
+        "/api/v1/client-browser-relay",  # dev-browser client relay API (no token required)
         "/api/v1/oauth2",  # Keycloak OAuth2 endpoints (handled by JWT middleware in workspace-manager)
     )
     INTERNAL_API_PREFIXES = (
-        "/api/v1/internal/",  # 內部 API 使用不同的認證機制
+        "/api/v1/internal/",  # Internal API uses different authentication mechanism
     )
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
         normalized_path = path.rstrip("/") or "/"
 
-        # 跳過公開路徑和 OPTIONS 請求
+        # Skip public paths and OPTIONS requests
         if request.method == "OPTIONS" or self._is_public(path, normalized_path):
             return await call_next(request)
 
-        # 跳過 WebSocket 升級請求
-        # 設計決策：WebSocket 連線無法透過 HTTP middleware 進行認證，因為
-        # middleware 無法在 handshake 前拒絕連線並傳送 WebSocket close frame。
-        # 需要認證的 WS endpoint（如 agent-session）在 accept 後自行呼叫
-        # authenticate_websocket()；不需認證的 WS endpoint（如 terminal、
-        # browser-relay）依賴 container 網路隔離作為安全邊界。
+        # Skip WebSocket upgrade requests
+        # Design decision: WebSocket connections cannot be authenticated via HTTP middleware because
+        # middleware cannot reject connections and send WebSocket close frames before handshake.
+        # WS endpoints requiring authentication (e.g., agent-session) call
+        # authenticate_websocket() after accept; unauthenticated WS endpoints (e.g., terminal,
+        # browser-relay) rely on container network isolation as security boundary.
         if request.headers.get("upgrade", "").lower() == "websocket":
             return await call_next(request)
 
-        # 內部 API 路徑跳過認證中間件（由 router 的 dependency 處理）
+        # Internal API paths skip authentication middleware (handled by router dependency)
         if self._is_internal_api(path):
             return await call_next(request)
 
-        # 檢查內部 API token（用於測試和內部服務調用）
-        # 只有在設定環境變數 INTERNAL_API_TOKEN 時才啟用此功能
+        # Check internal API token (for testing and internal service calls)
+        # This feature is only enabled when INTERNAL_API_TOKEN environment variable is set
         if INTERNAL_API_TOKEN:
             internal_token = request.headers.get("X-Internal-Token")
             if internal_token and internal_token == INTERNAL_API_TOKEN:
-                # 為內部 API token 創建一個測試用戶
+                # Create a test user for internal API token
                 class TestUser:
                     def __init__(self):
                         self.id = 'internal-test-user'
@@ -95,7 +95,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 logger.debug(f"Internal token auth successful for {path}")
                 return await call_next(request)
 
-        # 檢查 Authorization header
+        # Check Authorization header
         auth_header = request.headers.get("Authorization")
 
         if not auth_header or not auth_header.lower().startswith("bearer "):
@@ -109,7 +109,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Empty token for {path}")
                 return self._unauthorized("Empty authentication token", "EMPTY_TOKEN")
 
-            # 驗證 token
+            # Validate token
             service = get_auth_service()
             user = await service.validate_access_token(token)
 
@@ -120,7 +120,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                     "TOKEN_EXPIRED"
                 )
 
-            # 設置用戶信息到請求狀態
+            # Set user info to request state
             request.state.user = user
             request.state.user_id = user.id
             logger.debug(f"Auth successful for {path}: user_id={user.id}")
@@ -130,19 +130,19 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
             return self._unauthorized("Authentication failed", "AUTH_ERROR")
 
     def _is_public(self, path: str, normalized_path: str) -> bool:
-        """判斷是否為公開路徑"""
+        """Check if path is public"""
         if normalized_path in self.PUBLIC_PATHS:
             return True
 
         return any(path.startswith(prefix) for prefix in self.PUBLIC_PREFIXES)
 
     def _is_internal_api(self, path: str) -> bool:
-        """判斷是否為內部 API 路徑"""
+        """Check if path is internal API"""
         return any(path.startswith(prefix) for prefix in self.INTERNAL_API_PREFIXES)
 
     @staticmethod
     def _unauthorized(message: str = "Unauthorized", error_code: str = "UNAUTHORIZED") -> JSONResponse:
-        """回傳未授權回應，包含錯誤代碼以便前端處理"""
+        """Return unauthorized response with error code for frontend handling"""
         return JSONResponse(
             status_code=status.HTTP_401_UNAUTHORIZED,
             content={

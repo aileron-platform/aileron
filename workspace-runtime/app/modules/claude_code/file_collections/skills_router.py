@@ -1,6 +1,6 @@
-"""Skills API Router - 重構版本
+"""Skills API Router - Refactored Version
 
-使用統一的檔案管理 API 結構
+Using unified file management API structure
 """
 
 from __future__ import annotations
@@ -30,28 +30,28 @@ from .service import FileCollectionService
 from .dependencies import get_workspace_id
 
 
-router = APIRouter(prefix="/skills", tags=["Claude Code - 技能"])
+router = APIRouter(prefix="/skills", tags=["Claude Code - Skills"])
 
 
 def get_skills_service(workspace_id: str = Depends(get_workspace_id)) -> FileCollectionService:
-    """取得 Skills 服務實例"""
+    """Get Skills service instance"""
     return FileCollectionService(FileCollectionType.SKILLS, workspace_id)
 
 
 @router.get(
     "/tree",
     response_model=FileTreeResponse,
-    summary="取得 Skills 檔案樹",
+    summary="Get Skills file tree",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_skills_tree(
-    path: str = Query(default="/", description="目標路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-    maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(default="/", description="Target path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    includeHidden: bool = Query(default=False, description="Include hidden files"),
+    maxDepth: Optional[int] = Query(default=None, ge=1, description="Max depth (defaults to FILE_TREE_MAX_DEPTH in settings)"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """取得 Skills 檔案樹"""
+    """Get Skills file tree"""
     try:
         result = service.get_tree(path, scope, includeHidden, maxDepth)
         return result
@@ -64,17 +64,17 @@ async def get_skills_tree(
 @router.get(
     "/tree/children",
     response_model=FileTreeResponse,
-    summary="懶載入子節點",
+    summary="Lazy load child nodes",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_skills_children(
-    path: str = Query(description="父節點路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-    maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度（預設使用設定檔中的 FILE_TREE_MAX_DEPTH）"),
+    path: str = Query(description="Parent node path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    includeHidden: bool = Query(default=False, description="Include hidden files"),
+    maxDepth: Optional[int] = Query(default=None, ge=1, description="Max depth (defaults to FILE_TREE_MAX_DEPTH in settings)"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """懶載入子節點"""
+    """Lazy load child nodes"""
     try:
         result = service.get_tree(path, scope, includeHidden, maxDepth)
         return result
@@ -87,15 +87,15 @@ async def get_skills_children(
 @router.get(
     "/content",
     response_model=FileContentResponse,
-    summary="讀取 Skill 檔案",
+    summary="Read Skill file",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def read_skill(
-    path: str = Query(description="檔案路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
+    path: str = Query(description="File path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """讀取 Skill 檔案內容"""
+    """Read Skill file content"""
     try:
         result = service.read_file(path, scope)
         return result
@@ -108,17 +108,17 @@ async def read_skill(
 @router.put(
     "/content",
     response_model=FileOperationResponse,
-    summary="寫入 Skill 檔案",
+    summary="Write Skill file",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def write_skill(
-    path: str = Query(description="檔案路徑"),
-    content: str = Query(description="檔案內容"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    expectedVersionId: Optional[str] = Query(default=None, description="預期版本ID"),
+    path: str = Query(description="File path"),
+    content: str = Query(description="File content"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    expectedVersionId: Optional[str] = Query(default=None, description="Expected version ID"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """寫入 Skill 檔案內容"""
+    """Write Skill file content"""
     try:
         result = service.write_file(path, content, scope, expectedVersionId)
         return FileOperationResponse(
@@ -141,17 +141,17 @@ async def write_skill(
     "",
     response_model=FileOperationResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立 Skill",
+    summary="Create Skill",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def create_skill(
-    path: str = Query(description="路徑"),
-    type: str = Query(description="類型 (file/directory)"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    content: Optional[str] = Query(default="", description="檔案內容"),
+    path: str = Query(description="Path"),
+    type: str = Query(description="Type (file/directory)"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    content: Optional[str] = Query(default="", description="File content"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """建立 Skill 檔案或目錄"""
+    """Create Skill file or directory"""
     try:
         result = service.create_entry(path, type, scope, content)
         return FileOperationResponse(
@@ -172,16 +172,16 @@ async def create_skill(
 @router.delete(
     "",
     response_model=FileOperationResponse,
-    summary="刪除 Skill",
+    summary="Delete Skill",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def delete_skill(
-    path: str = Query(description="路徑"),
-    scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除"),
+    path: str = Query(description="Path"),
+    scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+    recursive: bool = Query(default=False, description="Recursive delete"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """刪除 Skill 檔案或目錄"""
+    """Delete Skill file or directory"""
     try:
         result = service.delete_entry(path, scope, recursive)
         return FileOperationResponse(
@@ -201,18 +201,18 @@ async def delete_skill(
 @router.post(
     "/copy",
     response_model=FileOperationResponse,
-    summary="複製 Skill",
+    summary="Copy Skill",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def copy_skill(
-    sourcePath: str = Query(description="源路徑"),
-    destPath: str = Query(description="目標路徑"),
-    sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-    destScope: Optional[str] = Query(default=None, description="目標範圍"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    sourcePath: str = Query(description="Source path"),
+    destPath: str = Query(description="Target path"),
+    sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+    destScope: Optional[str] = Query(default=None, description="Destination scope"),
+    overwrite: bool = Query(default=False, description="Overwrite"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """複製 Skill 檔案或目錄"""
+    """Copy Skill file or directory"""
     try:
         result = service.copy_entry(sourcePath, destPath, sourceScope, destScope, overwrite)
         return FileOperationResponse(
@@ -234,18 +234,18 @@ async def copy_skill(
 @router.post(
     "/move",
     response_model=FileOperationResponse,
-    summary="移動 Skill",
+    summary="Move Skill",
     responses=build_responses(400, 401, 404, 409, 422, 500),
 )
 async def move_skill(
-    sourcePath: str = Query(description="源路徑"),
-    destPath: str = Query(description="目標路徑"),
-    sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-    destScope: Optional[str] = Query(default=None, description="目標範圍"),
-    overwrite: bool = Query(default=False, description="是否覆蓋"),
+    sourcePath: str = Query(description="Source path"),
+    destPath: str = Query(description="Target path"),
+    sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+    destScope: Optional[str] = Query(default=None, description="Destination scope"),
+    overwrite: bool = Query(default=False, description="Overwrite"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """移動或重命名 Skill"""
+    """Move or rename Skill"""
     try:
         result = service.move_entry(sourcePath, destPath, sourceScope, destScope, overwrite)
         return FileOperationResponse(
@@ -267,16 +267,16 @@ async def move_skill(
 @router.post(
     "/batch-delete",
     response_model=BatchOperationResponse,
-    summary="批次刪除 Skills",
+    summary="Batch delete Skills",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def batch_delete_skills(
-    paths: List[str] = Query(description="路徑列表"),
-    scope: Optional[str] = Query(default=None, description="範圍"),
-    recursive: bool = Query(default=False, description="是否遞迴刪除"),
+    paths: List[str] = Query(description="Path list"),
+    scope: Optional[str] = Query(default=None, description="Scope"),
+    recursive: bool = Query(default=False, description="Recursive delete"),
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """批次刪除 Skills"""
+    """Batch delete Skills"""
     try:
         result = service.batch_delete(paths, scope, recursive)
         return result
@@ -289,17 +289,17 @@ async def batch_delete_skills(
 @router.get(
     "/plugins",
     response_model=List[PluginSkillInfo],
-    summary="取得插件 Skills",
+    summary="Get plugin Skills",
     responses=build_responses(401, 500),
 )
 async def get_plugin_skills(
     service: FileCollectionService = Depends(get_skills_service),
 ):
-    """取得所有插件的 Skills"""
+    """Get all plugin Skills"""
     try:
         return service.get_plugin_skills()
     except Exception:
-        # 優雅地處理插件加載錯誤，返回空列表
+        # Gracefully handle plugin loading errors, return empty list
         return []
 
 

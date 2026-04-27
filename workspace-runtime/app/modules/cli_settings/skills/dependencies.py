@@ -1,4 +1,4 @@
-"""CLI Skills 模組依賴注入"""
+"""CLI Skills module dependency injection"""
 
 from __future__ import annotations
 

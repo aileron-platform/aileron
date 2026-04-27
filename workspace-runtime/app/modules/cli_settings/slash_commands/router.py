@@ -1,6 +1,6 @@
-"""CLI Slash Commands API 路由
+"""CLI Slash Commands API router
 
-工廠函數，為每個 CLI 工具產生 slash commands 端點集合。
+Factory function to generate slash commands endpoint sets for each CLI tool.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from .service import (
 )
 
 
-# === 錯誤轉換 helpers ===================================================
+# === Error conversion helpers ==============================================
 
 
 def _not_found(file_name: str) -> HTTPException:
@@ -54,11 +54,11 @@ def _ambiguous(error: CliSlashCommandAmbiguousError) -> HTTPException:
     )
 
 
-# === 路由工廠 ============================================================
+# === Router factory ========================================================
 
 
 def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
-    """為指定的 CLI 工具建立 slash commands 路由"""
+    """Create slash commands router for specified CLI tool"""
 
     router = APIRouter(
         prefix=f"/{tool.value}/slash-commands",
@@ -72,13 +72,13 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     @router.get(
         "",
         response_model=CliSlashCommandScopesResponse,
-        summary="列出所有命令",
+        summary="List all commands",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def list_commands(
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: SlashCommandScope | None = Query(
-            None, description="若指定則僅回傳該範圍"
+            None, description="If specified, only return this scope"
         ),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandScopesResponse:
@@ -89,12 +89,12 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     @router.get(
         "/{scope}",
         response_model=CliSlashCommandScopeResponse,
-        summary="取得指定範圍命令",
+        summary="Get commands for specified scope",
         responses=build_responses(400, 401, 404, 500),
     )
     async def get_scope_commands(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: SlashCommandScope = Path(..., description="命令範圍"),
+        scope: SlashCommandScope = Path(..., description="Command scope"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandScopeResponse:
         return service.get_scope(workspace_id, scope)
@@ -104,13 +104,13 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     @router.get(
         "/{scope}/{file_name}",
         response_model=CliSlashCommandDocumentResponse,
-        summary="取得命令內容",
+        summary="Get command content",
         responses=build_responses(400, 401, 404, 500),
     )
     async def get_command(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: SlashCommandScope = Path(..., description="命令範圍"),
-        file_name: str = Path(..., description="檔案名稱"),
+        scope: SlashCommandScope = Path(..., description="Command scope"),
+        file_name: str = Path(..., description="File name"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDocumentResponse:
         try:
@@ -126,13 +126,13 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
         "/{scope}",
         response_model=CliSlashCommandDocumentResponse,
         status_code=status.HTTP_201_CREATED,
-        summary="新增命令",
+        summary="Create command",
         responses=build_responses(400, 401, 403, 404, 409, 422, 500),
     )
     async def create_command(
         payload: CliSlashCommandCreateRequest,
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: SlashCommandScope = Path(..., description="命令範圍"),
+        scope: SlashCommandScope = Path(..., description="Command scope"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDocumentResponse:
         try:
@@ -145,14 +145,14 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     @router.put(
         "/{scope}/{file_name}",
         response_model=CliSlashCommandDocumentResponse,
-        summary="更新命令",
+        summary="Update command",
         responses=build_responses(400, 401, 403, 404, 409, 422, 500),
     )
     async def update_command(
         payload: CliSlashCommandUpdateRequest,
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: SlashCommandScope = Path(..., description="命令範圍"),
-        file_name: str = Path(..., description="檔案名稱"),
+        scope: SlashCommandScope = Path(..., description="Command scope"),
+        file_name: str = Path(..., description="File name"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDocumentResponse:
         try:
@@ -167,13 +167,13 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     @router.delete(
         "/{scope}/{file_name}",
         response_model=CliSlashCommandDeleteResponse,
-        summary="刪除命令",
+        summary="Delete command",
         responses=build_responses(400, 401, 403, 404, 500),
     )
     async def delete_command(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: SlashCommandScope = Path(..., description="命令範圍"),
-        file_name: str = Path(..., description="檔案名稱"),
+        scope: SlashCommandScope = Path(..., description="Command scope"),
+        file_name: str = Path(..., description="File name"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDeleteResponse:
         try:

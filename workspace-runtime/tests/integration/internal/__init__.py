@@ -1,1 +1,1 @@
-"""內部 API 整合測試"""
+"""Internal API integration tests"""

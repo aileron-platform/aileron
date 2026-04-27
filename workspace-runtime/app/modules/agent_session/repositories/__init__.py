@@ -1,4 +1,4 @@
-"""Repository 層 - 資料存取抽象."""
+"""Repository layer - Data access abstraction."""
 
 from .sqlalchemy_models import (
     AgentMessageModel,

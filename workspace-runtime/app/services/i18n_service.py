@@ -1,4 +1,4 @@
-"""Workspace Runtime 多語系服務。"""
+"""Workspace Runtime internationalization service."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Dict, Iterable, Optional
 
 
 class I18nService:
-    """管理運行時翻譯字串的服務。"""
+    """Service for managing runtime translation strings."""
 
     def __init__(
         self,
@@ -116,7 +116,7 @@ class I18nService:
 
 @lru_cache()
 def get_i18n_service() -> I18nService:
-    """取得 I18n 服務實例（用於 FastAPI 依賴注入）"""
+    """Get I18n service instance (for FastAPI dependency injection)"""
     base_path = PathType(__file__).resolve().parent.parent / "translations"
     return I18nService(base_path)
 

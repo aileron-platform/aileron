@@ -1,4 +1,4 @@
-"""Claude Code 模組共用工具"""
+"""Claude Code module shared utilities"""
 
 from __future__ import annotations
 
@@ -15,28 +15,28 @@ from app.config.settings import get_workspace_path
 
 
 class DocumentScope(str, Enum):
-    """支援的設定檔案範圍"""
+    """Supported configuration file scopes"""
 
     PROJECT = "project"
     USER = "user"
     LOCAL = "local"
-    PLUGIN = "plugin"  # 新增：Plugin 範圍
+    PLUGIN = "plugin"  # Added: Plugin scope
 
 
 class DocumentNotFoundError(FileNotFoundError):
-    """指定的檔案不存在"""
+    """Specified file does not exist"""
 
 
 class DuplicateDocumentError(FileExistsError):
-    """檔案已存在"""
+    """File already exists"""
 
 
 class AmbiguousDocumentError(RuntimeError):
-    """找到多個同名檔案"""
+    """Found multiple files with same name"""
 
 
 def utcnow() -> datetime:
-    """取得 UTC 現在時間"""
+    """Get current UTC time"""
 
     return datetime.now(timezone.utc)
 
@@ -45,7 +45,7 @@ BYTES_PER_KB = 1024
 
 
 def humanize_size(byte_count: int) -> str:
-    """以人類易讀格式表示大小（簡化版本）"""
+    """Represent size in human-readable format (simplified version)"""
 
     if byte_count < BYTES_PER_KB:
         return f"{byte_count}B"
@@ -57,13 +57,13 @@ def humanize_size(byte_count: int) -> str:
 
 
 def format_file_size(size_bytes: int) -> str:
-    """格式化檔案大小（詳細版本，支援更多單位）
+    """Format file size (detailed version, supports more units)
 
     Args:
-        size_bytes: 檔案大小（位元組）
+        size_bytes: File size in bytes
 
     Returns:
-        格式化後的檔案大小字串（例如: "1.5KB", "2.3MB"）
+        Formatted file size string (e.g., "1.5KB", "2.3MB")
     """
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size_bytes < BYTES_PER_KB:
@@ -73,7 +73,7 @@ def format_file_size(size_bytes: int) -> str:
 
 
 def parse_front_matter(content: str) -> Tuple[Dict[str, Any], str]:
-    """解析 Markdown Front Matter"""
+    """Parse Markdown Front Matter"""
 
     if not content.startswith("---"):
         return {}, content
@@ -92,32 +92,32 @@ def parse_front_matter(content: str) -> Tuple[Dict[str, Any], str]:
 
 
 def workspace_root() -> Path:
-    """取得工作區根目錄"""
+    """Get workspace root directory"""
 
     return Path(get_workspace_path())
 
 
 def ensure_directory(path: Path) -> None:
-    """確保目錄存在"""
+    """Ensure directory exists"""
 
     path.mkdir(parents=True, exist_ok=True)
 
 
 def resolve_scope_root(workspace_id: str, scope: DocumentScope) -> Path:
-    """根據 scope 取得對應的 .claude 根目錄路徑
+    """Get corresponding .claude root directory path based on scope
 
     Args:
-        workspace_id: 工作區 ID（保留參數以維持 API 相容性，實際未使用）
-        scope: 文檔範圍類型
+        workspace_id: Workspace ID (reserved parameter for API compatibility, not actually used)
+        scope: Document scope type
 
     Returns:
-        Path: USER scope 回傳 developer 用戶家目錄的 .claude，其他 scope 回傳工作區根目錄的 .claude
+        Path: USER scope returns .claude in developer user home, other scopes return .claude in workspace root
     """
     return Path("/home/developer/.claude") if scope == DocumentScope.USER else workspace_root() / ".claude"
 
 
 def read_json_file(file_path: Path) -> Dict[str, Any]:
-    """讀取 JSON 設定檔，若檔案不存在或格式錯誤則回傳空 dict"""
+    """Read JSON configuration file, return empty dict if file doesn't exist or format is incorrect"""
 
     if not file_path.exists():
         return {}
@@ -128,7 +128,7 @@ def read_json_file(file_path: Path) -> Dict[str, Any]:
 
 
 def write_json_file(file_path: Path, payload: Dict[str, Any]) -> None:
-    """寫入 JSON 設定檔並確保目錄存在"""
+    """Write JSON configuration file and ensure directory exists"""
 
     ensure_directory(file_path.parent)
     file_path.write_text(
@@ -138,7 +138,7 @@ def write_json_file(file_path: Path, payload: Dict[str, Any]) -> None:
 
 @dataclass(init=False)
 class MarkdownDocumentRecord:
-    """Markdown 設定檔內容"""
+    """Markdown configuration file content"""
 
     file_path: Path
     root_path: Path
@@ -188,7 +188,7 @@ class MarkdownDocumentRecord:
 
     @property
     def file_name(self) -> str:
-        return self.file_path.name  # 保留完整附檔名（包含 .md）
+        return self.file_path.name  # Keep complete extension (including .md)
 
     @property
     def namespace(self) -> str:
@@ -229,13 +229,13 @@ class MarkdownDocumentRecord:
 
 
 class ScopedMarkdownRepository:
-    """處理依範圍儲存的 Markdown 檔案"""
+    """Handle scope-stored Markdown files"""
 
     def __init__(self, folder_name: str, *, supports_namespace: bool = False) -> None:
         self.folder_name = folder_name
         self.supports_namespace = supports_namespace
 
-    # 目錄與路徑 -----------------------------------------------------
+    # Directory & Path ---------------------------------------------
     def _directory(self, workspace_id: str, scope: DocumentScope) -> Path:
         root = resolve_scope_root(workspace_id, scope)
         return root / self.folder_name
@@ -266,7 +266,7 @@ class ScopedMarkdownRepository:
             updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
         )
 
-    # 公開操作 -------------------------------------------------------
+    # Public Operations -------------------------------------------
     def list_records(
         self, workspace_id: str, scope: DocumentScope
     ) -> List[MarkdownDocumentRecord]:
@@ -341,7 +341,7 @@ class ScopedMarkdownRepository:
             raise DocumentNotFoundError(file_name)
         file_path.unlink()
 
-    # 內部工具 -------------------------------------------------------
+    # Internal Utilities -------------------------------------------
     def _resolve_file_path(
         self, directory: Path, file_name: str, *, namespace: str | None
     ) -> Path | None:
@@ -366,12 +366,12 @@ class ScopedMarkdownRepository:
 def iter_requested_scopes(
     scope: DocumentScope | None, *, allow_local: bool = True, allow_plugin: bool = False
 ) -> Iterable[DocumentScope]:
-    """根據查詢參數取得要處理的範圍
+    """Get scopes to process based on query parameters
 
     Args:
-        scope: 指定的範圍，如果為 None 則返回所有支援的範圍
-        allow_local: 是否包含 LOCAL scope（預設 True）
-        allow_plugin: 是否包含 PLUGIN scope（預設 False，因為 plugin 通常需要特殊處理）
+        scope: Specified scope, if None returns all supported scopes
+        allow_local: Whether to include LOCAL scope (default True)
+        allow_plugin: Whether to include PLUGIN scope (default False, as plugins usually need special handling)
     """
 
     if scope:
@@ -385,13 +385,13 @@ def iter_requested_scopes(
 
 
 def check_scope_writable(scope: DocumentScope) -> None:
-    """檢查 scope 是否可寫入，如果是 PLUGIN scope 則拋出異常
+    """Check if scope is writable, raise exception if PLUGIN scope
 
     Args:
-        scope: 要檢查的範圍
+        scope: Scope to check
 
     Raises:
-        ValueError: 如果 scope 是 PLUGIN（只讀）
+        ValueError: If scope is PLUGIN (read-only)
     """
     if scope == DocumentScope.PLUGIN:
         raise ValueError("Plugin scope is read-only. Plugins can only be managed through the marketplace.")

@@ -1,4 +1,4 @@
-"""MCP API 路由"""
+"""MCP API Routes"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from .service import (
     McpService,
 )
 
-router = APIRouter(tags=["Claude Code - MCP 伺服器"])
+router = APIRouter(tags=["Claude Code - MCP Servers"])
 
 
 def _scope_error(error: McpScopeNotSupportedError) -> HTTPException:
@@ -78,13 +78,13 @@ def _invalid_payload(error: ValueError) -> HTTPException:
 @router.get(
     "/mcp-servers",
     response_model=McpServerCollectionResponse,
-    summary="列出 MCP 伺服器",
+    summary="List MCP servers",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def list_servers(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="若指定則僅回傳該範圍設定"
+        None, description="If specified, only return settings for that scope"
     ),
     service: McpService = Depends(get_mcp_service),
 ) -> McpServerCollectionResponse:
@@ -97,11 +97,11 @@ async def list_servers(
 @router.get(
     "/mcp-servers/{scope}",
     response_model=McpScopeResponse,
-    summary="取得指定範圍的 MCP 伺服器",
+    summary="Get MCP servers for specified scope",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_scope(
-    scope: DocumentScope = Path(..., description="設定範圍"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpScopeResponse:
@@ -114,12 +114,12 @@ async def get_scope(
 @router.get(
     "/mcp-servers/{scope}/{server_name}",
     response_model=McpScopeResponse,
-    summary="取得單一 MCP 伺服器",
+    summary="Get single MCP server",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_server(
-    scope: DocumentScope = Path(..., description="設定範圍"),
-    server_name: str = Path(..., description="伺服器名稱"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
+    server_name: str = Path(..., description="Server name"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpScopeResponse:
@@ -134,12 +134,12 @@ async def get_server(
 @router.post(
     "/mcp-servers/{scope}",
     response_model=McpScopeResponse,
-    summary="建立 MCP 伺服器",
+    summary="Create MCP server",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def create_server(
     payload: McpServerCreateRequest,
-    scope: DocumentScope = Path(..., description="設定範圍"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpScopeResponse:
@@ -156,13 +156,13 @@ async def create_server(
 @router.put(
     "/mcp-servers/{scope}/{server_name}",
     response_model=McpScopeResponse,
-    summary="更新 MCP 伺服器",
+    summary="Update MCP server",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def update_server(
     payload: McpServerUpdateRequest,
-    scope: DocumentScope = Path(..., description="設定範圍"),
-    server_name: str = Path(..., description="伺服器名稱"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
+    server_name: str = Path(..., description="Server name"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpScopeResponse:
@@ -183,12 +183,12 @@ async def update_server(
 @router.delete(
     "/mcp-servers/{scope}/{server_name}",
     response_model=McpServerDeleteResponse,
-    summary="刪除 MCP 伺服器",
+    summary="Delete MCP server",
     responses=build_responses(400, 401, 403, 404, 500),
 )
 async def delete_server(
-    scope: DocumentScope = Path(..., description="設定範圍"),
-    server_name: str = Path(..., description="伺服器名稱"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
+    server_name: str = Path(..., description="Server name"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpServerDeleteResponse:
@@ -203,19 +203,19 @@ async def delete_server(
 @router.patch(
     "/mcp-servers/{scope}/{server_name}/toggle",
     response_model=McpScopeResponse,
-    summary="切換 MCP 伺服器啟用狀態",
+    summary="Toggle MCP server enabled status",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def toggle_server_status(
-    scope: DocumentScope = Path(..., description="設定範圍"),
-    server_name: str = Path(..., description="伺服器名稱"),
-    enabled: bool = Query(..., description="是否啟用"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
+    server_name: str = Path(..., description="Server name"),
+    enabled: bool = Query(..., description="Whether enabled"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpScopeResponse:
-    """切換 MCP 伺服器的啟用/停用狀態
+    """Toggle MCP server enabled/disabled status
 
-    此操作會更新 ~/.claude.json 中的 projects./workspace.disabledMcpServers 陣列
+    This operation updates the projects./workspace.disabledMcpServers array in ~/.claude.json
     """
     try:
         return service.toggle_server_status(workspace_id, scope, server_name, enabled)
@@ -228,12 +228,12 @@ async def toggle_server_status(
 @router.get(
     "/mcp-servers/{scope}/{server_name}/export",
     response_model=McpServerExportResponse,
-    summary="匯出 MCP 伺服器設定",
+    summary="Export MCP server configuration",
     responses=build_responses(400, 401, 404, 500),
 )
 async def export_server(
-    scope: DocumentScope = Path(..., description="設定範圍"),
-    server_name: str = Path(..., description="伺服器名稱"),
+    scope: DocumentScope = Path(..., description="Configuration scope"),
+    server_name: str = Path(..., description="Server name"),
     workspace_id: str = Path(..., description="Workspace ID"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpServerExportResponse:
@@ -250,21 +250,21 @@ async def export_server(
 @router.post(
     "/mcp-import",
     response_model=McpImportResponse,
-    summary="匯入 MCP 設定",
+    summary="Import MCP configuration",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def import_servers(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Form(..., description="匯入目標範圍"),
-    file: UploadFile = File(..., description="Claude Desktop 配置檔案 (JSON)"),
-    overwrite: bool = Form(False, description="是否覆寫既有設定"),
+    scope: DocumentScope = Form(..., description="Import target scope"),
+    file: UploadFile = File(..., description="Claude Desktop configuration file (JSON)"),
+    overwrite: bool = Form(False, description="Whether to overwrite existing configuration"),
     service: McpService = Depends(get_mcp_service),
 ) -> McpImportResponse:
     try:
-        # 讀取上傳檔案內容
+        # Read uploaded file content
         file_content = await file.read()
 
-        # 建立匯入請求物件
+        # Create import request object
         payload = McpImportUploadRequest(
             scope=scope,
             file=file_content,

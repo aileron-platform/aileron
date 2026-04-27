@@ -1,4 +1,4 @@
-"""Hook 設定服務"""
+"""Hook Configuration Service"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from .models import (
 
 
 class HookService:
-    """管理 Claude Code Hooks 的檔案服務"""
+    """File service for managing Claude Code Hooks"""
 
     _SETTINGS_FILE = {
         DocumentScope.USER: "settings.json",
@@ -45,11 +45,11 @@ class HookService:
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> HookScopesResponse:
         """
-        列出所有 hooks
+        List all hooks
 
-        修改：自動整合 plugin hooks
+        Modified: Auto-integrate plugin hooks
         """
-        # 如果指定了 PLUGIN scope，只返回 plugin hooks
+        # If PLUGIN scope specified, only return plugin hooks
         if scope == DocumentScope.PLUGIN:
             try:
                 plugin_hooks = self._load_plugin_hooks(workspace_id)
@@ -71,13 +71,13 @@ class HookService:
                 ]
             return HookScopesResponse(workspaceId=workspace_id, scopes=documents)
 
-        # 載入一般 scopes（project/user/local）
+        # Load general scopes (project/user/local)
         documents = [
             self._load_scope_document(workspace_id, scope_item)
             for scope_item in iter_requested_scopes(scope)
         ]
 
-        # 如果沒有指定 scope，也載入 plugin hooks
+        # If no scope specified, also load plugin hooks
         if scope is None:
             try:
                 plugin_hooks = self._load_plugin_hooks(workspace_id)
@@ -95,7 +95,7 @@ class HookService:
         return HookScopesResponse(workspaceId=workspace_id, scopes=documents)
 
     def get_scope(self, workspace_id: str, scope: DocumentScope) -> HookScopeResponse:
-        # 如果是 PLUGIN scope，載入 plugin hooks
+        # If PLUGIN scope, load plugin hooks
         if scope == DocumentScope.PLUGIN:
             plugin_hooks = self._load_plugin_hooks(workspace_id)
             return HookScopeResponse(
@@ -117,7 +117,7 @@ class HookService:
         scope: DocumentScope,
         payload: HookScopeUpsertRequest,
     ) -> HookScopeResponse:
-        # 檢查 PLUGIN scope 不可寫入
+        # Check PLUGIN scope not writable
         if scope == DocumentScope.PLUGIN:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -146,7 +146,7 @@ class HookService:
         )
 
     def delete_scope(self, workspace_id: str, scope: DocumentScope) -> HookDeleteResponse:
-        # 檢查 PLUGIN scope 不可刪除
+        # Check PLUGIN scope not deletable
         if scope == DocumentScope.PLUGIN:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
@@ -220,9 +220,9 @@ class HookService:
             skipped=skipped,
         )
 
-    # 內部工具 -------------------------------------------------------
+    # Internal Utilities ---------------------------------------
     def _scope_file(self, workspace_id: str, scope: DocumentScope) -> Path:
-        # PLUGIN scope 不使用檔案系統，應該透過 _load_plugin_hooks 載入
+        # PLUGIN scope does not use file system, should load via _load_plugin_hooks
         if scope == DocumentScope.PLUGIN:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -261,11 +261,11 @@ class HookService:
         hooks: Dict[str, List[HookRule]],
     ) -> None:
         file_path = self._scope_file(workspace_id, scope)
-        # 讀取現有檔案內容，如果不存在則建立空字典
+        # Read existing file content, create empty dict if not exists
         data = read_json_file(file_path)
         if not data:
             data = {}
-        # 將 hooks 寫入到 "hooks" 欄位
+        # Write hooks to "hooks" field
         data["hooks"] = self._encode_hooks(hooks)
         write_json_file(file_path, data)
 
@@ -290,10 +290,10 @@ class HookService:
         workspace_id: str
     ) -> Dict[str, List[HookRule]]:
         """
-        載入 plugin hooks（新方法）
+        Load plugin hooks (new method)
 
         Returns:
-            Dict[event_name, List[HookRule]]: Hooks 配置
+            Dict[event_name, List[HookRule]]: Hooks configuration
         """
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service
@@ -301,10 +301,10 @@ class HookService:
         settings_service = get_settings_service()
         loader = get_plugin_loader(settings_service)
 
-        # 載入所有 plugin hooks（按 plugin 分組）
+        # Load all plugin hooks (grouped by plugin)
         plugin_hooks_dict = loader.load_plugin_hooks(workspace_id)
 
-        # 合併為單一字典（event_name → List[HookRule]）
+        # Merge to single dict (event_name → List[HookRule])
         all_hooks = {}
 
         for plugin_id, hooks_config in plugin_hooks_dict.items():
@@ -314,7 +314,7 @@ class HookService:
                 if event_name not in all_hooks:
                     all_hooks[event_name] = []
 
-                # 為每個 rule 附加 plugin 來源資訊
+                # Attach plugin source info for each rule
                 for rule in rules:
                     rule_with_source = {
                         **rule,
@@ -330,9 +330,9 @@ class HookService:
         hooks: Dict[str, List[HookRule]]
     ) -> Dict[str, str]:
         """
-        建構 plugin 來源映射表
+        Build plugin source mapping
 
-        用於前端顯示每個 hook rule 的來源
+        For frontend display of each hook rule's source
         """
         sources = {}
         for event_name, rules in hooks.items():

@@ -1,4 +1,4 @@
-"""Subagents 子模組"""
+"""Subagents Submodule"""
 
 from __future__ import annotations
 

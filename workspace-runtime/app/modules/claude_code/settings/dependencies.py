@@ -1,4 +1,4 @@
-"""Settings 相依性定義"""
+"""Settings Dependency Definitions"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import SettingsService
 
 @lru_cache()
 def get_settings_service() -> SettingsService:
-    """提供單一 SettingsService 實例"""
+    """Provide a single SettingsService instance"""
 
     return SettingsService()

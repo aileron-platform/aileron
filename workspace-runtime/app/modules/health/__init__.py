@@ -1,4 +1,4 @@
-"""Workspace Runtime 健康檢查模組"""
+"""Workspace Runtime Health Check Module"""
 
 from .router import router
 from .service import HealthCheckService

@@ -1,6 +1,6 @@
 """
-Draw.io 整合路由
-提供 Draw.io 圖表檢視和編輯的 API 端點
+Draw.io Integration Router
+Provides API endpoints for viewing and editing Draw.io diagrams
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
@@ -18,7 +18,7 @@ from app.modules.drawio.availability import get_drawio_availability
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-router = APIRouter(prefix="/drawio", tags=["Draw.io 整合"])
+router = APIRouter(prefix="/drawio", tags=["Draw.io Integration"])
 
 
 def _translate(i18n: I18nService, key: str, **kwargs) -> str:
@@ -44,69 +44,69 @@ async def _ensure_drawio_available(translate: I18nService) -> None:
 
 @router.get("/viewer")
 async def get_drawio_viewer_url(
-    file_path: str = Query(..., description="檔案路徑"),
-    mode: str = Query("view", description="模式: view 或 edit"),
+    file_path: str = Query(..., description="File path"),
+    mode: str = Query("view", description="Mode: view or edit"),
     file_service: FileService = Depends(get_file_service_sync),
     translate: I18nService = Depends(get_i18n_service)
 ):
     """
-    生成 Draw.io 檢視器 URL
+    Generate Draw.io viewer URL
 
     Args:
-        file_path: 要檢視的 .drawio 檔案路徑
-        mode: 檢視模式 (view/edit)
+        file_path: Path to the .drawio file to view
+        mode: View mode (view/edit)
 
     Returns:
-        包含 Draw.io URL 的 JSON 響應
+        JSON response containing Draw.io URL
 
     Raises:
-        HTTPException: 當檔案不存在或讀取失敗時
+        HTTPException: When file does not exist or read fails
     """
     try:
         logger.info(f"Generating Draw.io URL for file: {file_path}, mode: {mode}")
         await _ensure_drawio_available(translate)
 
-        # 讀取檔案內容
+        # Read file content
         file_result = file_service.read_file(file_path)
         content = file_result["content"]
-        
+
         if not content or not content.strip():
             raise HTTPException(
                 status_code=400,
                 detail=_translate(translate, "drawio.errors.empty_file")
             )
-        
-        # Draw.io 服務的外部 URL (瀏覽器可訪問)
+
+        # External URL of Draw.io service (browser-accessible)
         drawio_base_url = settings.DRAWIO_EXTERNAL_URL
 
-        # 構建 URL 參數
+        # Build URL parameters
         params = {
-            "embed": "1",           # 啟用嵌入模式
-            "proto": "json",        # 使用 JSON 協議進行 PostMessage 通訊
-            "spin": "1",            # 顯示載入動畫
-            "ui": "atlas",          # 使用 Atlas UI 主題
-            "lang": "zh",           # 語言設定
+            "embed": "1",           # Enable embed mode
+            "proto": "json",        # Use JSON protocol for PostMessage communication
+            "spin": "1",            # Show loading animation
+            "ui": "atlas",          # Use Atlas UI theme
+            "lang": "zh",           # Language setting
         }
 
-        # 根據模式設定不同的參數
+        # Set different parameters based on mode
         if mode == "edit":
             params.update({
-                "modified": "unsavedChanges",  # 標記為未保存
-                "saveAndExit": "1",            # 啟用保存並退出
-                "noSaveBtn": "0",              # 顯示保存按鈕
+                "modified": "unsavedChanges",  # Mark as unsaved
+                "saveAndExit": "1",            # Enable save and exit
+                "noSaveBtn": "0",              # Show save button
             })
         else:
-            # 檢視模式
+            # View mode
             params.update({
-                "chrome": "0",      # 隱藏工具列
-                "toolbar": "0",     # 關閉 Draw.io 內建 hover toolbar
-                "nav": "1",         # 顯示導航控制
+                "chrome": "0",      # Hide toolbar
+                "toolbar": "0",     # Turn off Draw.io built-in hover toolbar
+                "nav": "1",         # Show navigation controls
             })
 
-        # 構建完整 URL
+        # Build complete URL
         query_string = urllib.parse.urlencode(params)
-        # 不在 URL 中嵌入 XML，而是通過 PostMessage 發送
-        # 前端會在收到 init 事件後發送 load 消息
+        # Do not embed XML in URL, send via PostMessage instead
+        # Frontend will send load message after receiving init event
         full_url = f"{drawio_base_url}/?{query_string}"
         
         logger.info(f"Generated Draw.io URL successfully for {file_path}")
@@ -141,37 +141,37 @@ async def get_drawio_viewer_url(
 
 @router.post("/save")
 async def save_drawio_file(
-    file_path: str = Query(..., description="檔案路徑"),
-    content: str = Body(..., description="XML 內容", embed=True),
+    file_path: str = Query(..., description="File path"),
+    content: str = Body(..., description="XML content", embed=True),
     file_service: FileService = Depends(get_file_service_sync),
     translate: I18nService = Depends(get_i18n_service)
 ):
     """
-    保存 Draw.io 檔案
+    Save Draw.io file
 
     Args:
-        file_path: 檔案路徑
-        content: XML 內容
+        file_path: File path
+        content: XML content
 
     Returns:
-        保存結果的 JSON 響應
+        JSON response of save result
 
     Raises:
-        HTTPException: 當保存失敗時
+        HTTPException: When save fails
     """
     try:
         logger.info(f"Saving Draw.io file: {file_path}")
         await _ensure_drawio_available(translate)
 
-        # 驗證內容不為空
+        # Validate content is not empty
         if not content or not content.strip():
             raise HTTPException(
                 status_code=400,
                 detail=_translate(translate, "drawio.errors.empty_content")
             )
 
-        # 驗證是否為有效的 XML
-        # 簡單檢查：確保包含 mxfile 或 mxGraphModel 標籤
+        # Validate if valid XML
+        # Simple check: ensure contains mxfile or mxGraphModel tag
         if not ("<mxfile" in content or "<mxGraphModel" in content):
             logger.warning(f"Invalid Draw.io XML format for {file_path}")
             raise HTTPException(
@@ -179,7 +179,7 @@ async def save_drawio_file(
                 detail=_translate(translate, "drawio.errors.invalid_xml")
             )
 
-        # 保存檔案
+        # Save file
         file_service.write_file(file_path, content)
         
         logger.info(f"Draw.io file saved successfully: {file_path}")
@@ -208,7 +208,7 @@ async def save_drawio_file(
 
 @router.get("/availability")
 async def get_drawio_availability_endpoint():
-    """取得 Draw.io 整合可用性。"""
+    """Get Draw.io integration availability."""
     availability = await get_drawio_availability(settings)
     return JSONResponse(content={
         "available": availability.available,

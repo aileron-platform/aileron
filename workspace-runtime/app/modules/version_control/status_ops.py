@@ -1,6 +1,6 @@
-"""Git 狀態與分支操作
+"""Git status and branch operations
 
-提供 Git 狀態查詢和分支管理功能。
+Provides Git status query and branch management functionality.
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 class StatusOperations:
-    """Git 狀態與分支操作
+    """Git status and branch operations
 
-    提供狀態查詢、分支列表、分支切換等功能。
+    Provides functionality such as status query, branch list, branch checkout.
     """
 
     def __init__(
@@ -41,24 +41,24 @@ class StatusOperations:
         cache: Optional["GitCache"] = None,
         snapshot_provider: Optional[WorkingTreeSnapshotProvider] = None,
     ) -> None:
-        """初始化
+        """Initialize
 
         Args:
-            utils: Git 工具類實例
-            cache: 快取層（可選）
+            utils: Git utility class instance
+            cache: Cache layer (optional)
         """
         self._utils = utils
         self.cache = cache
         self._snapshot_provider = snapshot_provider or WorkingTreeSnapshotProvider(utils, cache)
 
     def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
-        """取得 Git 狀態
+        """Get Git status
 
         Args:
-            workspace_id: 工作區 ID
+            workspace_id: Workspace ID
 
         Returns:
-            版本控制狀態
+            Version control status
         """
         snapshot = self._snapshot_provider.get_snapshot(workspace_id, context_id=context_id)
         return VersionControlStatus(
@@ -81,15 +81,15 @@ class StatusOperations:
         context_id: Optional[str] = None,
         include_metadata: bool = True,
     ) -> BranchListResponse:
-        """列出分支
+        """List branches
 
         Args:
-            workspace_id: 工作區 ID
-            include_remote: 是否包含遠端分支
-            search: 搜尋關鍵字
+            workspace_id: Workspace ID
+            include_remote: Whether to include remote branches
+            search: Search keyword
 
         Returns:
-            分支列表回應
+            Branch list response
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         current_branch, detached = self._utils.current_branch(repo)
@@ -136,25 +136,25 @@ class StatusOperations:
             )
 
         if include_remote:
-            # 收集本地分支名稱，避免重複顯示
+            # Collect local branch names to avoid duplicate display
             local_branch_names = {b.name for b in branches}
 
             for remote in repo.remotes:
                 for ref in remote.refs:
                     fullname = ref.name
 
-                    # 跳過 HEAD 引用（如 origin/HEAD）
+                    # Skip HEAD reference (e.g., origin/HEAD)
                     if ref.remote_head == "HEAD":
                         continue
 
-                    # 如果遠端分支對應的本地分支已存在，跳過
+                    # Skip if local branch corresponding to remote branch already exists
                     if ref.remote_head in local_branch_names:
                         continue
 
                     if query and query not in fullname.lower():
                         continue
 
-                    # 使用完整名稱作為 displayName，避免與本地分支混淆
+                    # Use full name as displayName to avoid confusion with local branches
                     branches.append(
                         BranchInfo(
                             name=fullname,
@@ -172,18 +172,18 @@ class StatusOperations:
     def checkout_branch(
         self, workspace_id: str, branch_name: str, payload: CheckoutRequest, context_id: Optional[str] = None
     ) -> CheckoutResponse:
-        """切換分支
+        """Checkout branch
 
         Args:
-            workspace_id: 工作區 ID
-            branch_name: 目標分支名稱
-            payload: 切換請求
+            workspace_id: Workspace ID
+            branch_name: Target branch name
+            payload: Checkout request
 
         Returns:
-            切換回應
+            Checkout response
 
         Raises:
-            VersionControlError: 切換失敗
+            VersionControlError: Checkout failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         stashed = None

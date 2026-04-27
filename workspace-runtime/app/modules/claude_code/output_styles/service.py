@@ -1,4 +1,4 @@
-"""Output Styles 服務"""
+"""Output Styles Service"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .models import (
 
 
 class OutputStyleService:
-    """管理輸出樣式設定的服務"""
+    """Service for managing output style settings"""
 
     def __init__(self) -> None:
         self._repository = ScopedMarkdownRepository("output-styles")

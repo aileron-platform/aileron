@@ -1,6 +1,6 @@
-"""Git 變更與暫存操作
+"""Git changes and staging operations
 
-提供檔案變更查詢和暫存區管理功能。
+Provides file change query and staging area management functionality.
 """
 
 from __future__ import annotations
@@ -29,9 +29,9 @@ if TYPE_CHECKING:
     from .cache import GitCache
 
 class StagingOperations:
-    """Git 變更與暫存操作
+    """Git changes and staging operations
 
-    提供變更查詢、暫存、取消暫存、放棄變更等功能。
+    Provides functionality such as change query, stage, unstage, discard changes.
     """
 
     def __init__(
@@ -40,11 +40,11 @@ class StagingOperations:
         cache: Optional["GitCache"] = None,
         snapshot_provider: Optional[WorkingTreeSnapshotProvider] = None,
     ) -> None:
-        """初始化
+        """Initialize
 
         Args:
-            utils: Git 工具類實例
-            cache: 快取層（可選）
+            utils: Git utility class instance
+            cache: Cache layer (optional)
         """
         self._utils = utils
         self.cache = cache
@@ -57,15 +57,15 @@ class StagingOperations:
         page_size: int = 100,
         context_id: Optional[str] = None,
     ) -> ChangesResponse:
-        """取得檔案變更（優化版 - 支援快取 + 使用 Git 命令避免記憶體爆炸）
+        """Get file changes (optimized version - with cache + use Git commands to avoid memory explosion)
 
         Args:
-            workspace_id: 工作區 ID
-            page: 頁碼
-            page_size: 每頁大小
+            workspace_id: Workspace ID
+            page: Page number
+            page_size: Items per page
 
         Returns:
-            變更回應
+            Changes response
         """
         snapshot = self._snapshot_provider.get_snapshot(workspace_id, page=page, page_size=page_size, context_id=context_id)
 
@@ -81,17 +81,17 @@ class StagingOperations:
         return result
 
     def stage(self, workspace_id: str, payload: StageRequest, context_id: Optional[str] = None) -> StageResponse:
-        """暫存檔案（優化版 - 使快取失效）
+        """Stage files (optimized version - invalidate cache)
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 暫存請求
+            workspace_id: Workspace ID
+            payload: Stage request
 
         Returns:
-            暫存回應
+            Stage response
 
         Raises:
-            VersionControlError: 暫存失敗
+            VersionControlError: Stage failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         normalized = self._utils.normalize_paths(repo, payload.paths)
@@ -100,7 +100,7 @@ class StagingOperations:
         except GitCommandError as exc:
             raise VersionControlError(str(exc), error_code="VC_STAGE_FAILED") from exc
 
-        # 使快取失效
+        # Invalidate cache
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
@@ -111,33 +111,33 @@ class StagingOperations:
         return StageResponse(staged=staged, unstaged=unstaged)
 
     def unstage(self, workspace_id: str, payload: UnstageRequest, context_id: Optional[str] = None) -> UnstageResponse:
-        """取消暫存檔案（優化版 - 批次處理 + 使快取失效）
+        """Unstage files (optimized version - batch processing + invalidate cache)
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 取消暫存請求
+            workspace_id: Workspace ID
+            payload: Unstage request
 
         Returns:
-            取消暫存回應
+            Unstage response
 
         Raises:
-            VersionControlError: 取消暫存失敗
+            VersionControlError: Unstage failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         normalized = self._utils.normalize_paths(repo, payload.paths)
 
-        # 優化：批次處理，一次 Git 命令
+        # Optimization: batch processing, single Git command
         try:
             if self._utils.has_head(repo):
-                # 一次處理所有檔案
+                # Process all files at once
                 repo.git.reset("HEAD", "--", *normalized)
             else:
-                # 批次移除
+                # Batch remove
                 repo.index.remove(normalized, working_tree=False)
         except GitCommandError as exc:
             raise VersionControlError(str(exc), error_code="VC_UNSTAGE_FAILED") from exc
 
-        # 使快取失效
+        # Invalidate cache
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
@@ -147,14 +147,14 @@ class StagingOperations:
         return UnstageResponse(unstaged=normalized, remainingStaged=remaining)
 
     def discard(self, workspace_id: str, payload: DiscardRequest, context_id: Optional[str] = None) -> DiscardResponse:
-        """放棄變更
+        """Discard changes
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 放棄請求
+            workspace_id: Workspace ID
+            payload: Discard request
 
         Returns:
-            放棄回應
+            Discard response
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         worktree = Path(repo.working_tree_dir or ".")
@@ -184,13 +184,13 @@ class StagingOperations:
         return DiscardResponse(discarded=discarded, warnings=[])
 
     def _to_file_change(self, entry: DiffEntry) -> FileChange:
-        """將 DiffEntry 轉換為 FileChange
+        """Convert DiffEntry to FileChange
 
         Args:
-            entry: DiffEntry 物件
+            entry: DiffEntry object
 
         Returns:
-            FileChange 物件
+            FileChange object
         """
         return FileChange(
             name=Path(entry.path).name,

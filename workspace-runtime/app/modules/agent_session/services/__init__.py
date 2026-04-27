@@ -1,4 +1,4 @@
-"""Service 層 - 業務邏輯."""
+"""Service layer - Business logic."""
 
 from .agent_session_service import AgentSessionService
 from .task_service import TaskService

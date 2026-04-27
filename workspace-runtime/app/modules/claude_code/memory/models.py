@@ -1,4 +1,4 @@
-"""Claude Code Memory 資料模型"""
+"""Claude Code Memory Data Models"""
 
 from __future__ import annotations
 
@@ -8,62 +8,62 @@ from pydantic import BaseModel, Field
 
 
 class MemoryDocumentSummary(BaseModel):
-    """Memory 檔案摘要"""
+    """Memory file summary"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    name: str | None = Field(None, description="顯示名稱")
-    description: str | None = Field(None, description="描述")
-    size: str = Field(..., description="檔案大小")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    name: str | None = Field(None, description="Display name")
+    description: str | None = Field(None, description="Description")
+    size: str = Field(..., description="File size")
 
     model_config = {"populate_by_name": True}
 
 
 class MemoryDocumentDetail(MemoryDocumentSummary):
-    """Memory 檔案完整內容"""
+    """Memory file complete content"""
 
-    content: str = Field(..., description="Markdown 內容")
+    content: str = Field(..., description="Markdown content")
 
 
 class MemoryCollectionResponse(BaseModel):
-    """Memory 檔案列表回應"""
+    """Memory file list response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
     documents: List[MemoryDocumentSummary] = Field(
-        default_factory=list, description="Memory 檔案列表"
+        default_factory=list, description="List of memory files"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class MemoryDocumentResponse(BaseModel):
-    """單一 Memory 檔案回應"""
+    """Single memory file response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    document: MemoryDocumentDetail = Field(..., description="Memory 檔案內容")
+    document: MemoryDocumentDetail = Field(..., description="Memory file content")
 
     model_config = {"populate_by_name": True}
 
 
 class MemoryCreateRequest(BaseModel):
-    """建立 Memory 檔案請求"""
+    """Create memory file request"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    content: str = Field(..., description="Markdown 內容")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    content: str = Field(..., description="Markdown content")
 
     model_config = {"populate_by_name": True}
 
 
 class MemoryUpdateRequest(BaseModel):
-    """更新 Memory 檔案請求"""
+    """Update memory file request"""
 
-    content: str = Field(..., description="Markdown 內容")
+    content: str = Field(..., description="Markdown content")
 
 
 class MemoryDeleteResponse(BaseModel):
-    """刪除 Memory 檔案回應"""
+    """Delete memory file response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    deleted: bool = Field(True, description="刪除狀態")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    deleted: bool = Field(True, description="Deletion status")
 
     model_config = {"populate_by_name": True}

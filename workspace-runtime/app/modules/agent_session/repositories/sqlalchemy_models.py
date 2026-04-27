@@ -1,11 +1,11 @@
-"""SQLAlchemy ORM 模型定義.
+"""SQLAlchemy ORM model definitions.
 
-定義 Agent Session 系統的資料庫表結構，採用 Materialized Columns + JSON Blob 混合模式。
+Defines database table structure for Agent Session system, using Materialized Columns + JSON Blob hybrid pattern.
 
-表結構：
-- agent_sessions: 會話表
-- agent_tasks: 任務表
-- agent_messages: 訊息表
+Table structure:
+- agent_sessions: Session table
+- agent_tasks: Task table
+- agent_messages: Message table
 """
 
 from __future__ import annotations
@@ -18,15 +18,15 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
-    """Declarative 基底類別."""
+    """Declarative base class."""
 
     pass
 
 
 class AgentSessionModel(Base):
-    """會話 ORM 模型.
+    """Session ORM model.
 
-    Materialized Columns (用於查詢):
+    Materialized Columns (for queries):
     - session_id, created_at, updated_at, created_by
     - status, agentic_tool, workspace_id
     - ready_for_prompt, archived, archived_reason
@@ -38,10 +38,10 @@ class AgentSessionModel(Base):
 
     __tablename__ = "agent_sessions"
 
-    # 主鍵
+    # Primary key
     session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
 
-    # 時間戳
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -53,14 +53,14 @@ class AgentSessionModel(Base):
         nullable=True,
     )
 
-    # 建立者
+    # Creator
     created_by: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
         default="anonymous",
     )
 
-    # 狀態欄位
+    # Status fields
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -79,7 +79,7 @@ class AgentSessionModel(Base):
         index=True,
     )
 
-    # 來源（user / automation）
+    # Source (user / automation)
     source: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
@@ -87,7 +87,7 @@ class AgentSessionModel(Base):
         index=True,
     )
 
-    # 布林欄位
+    # Boolean fields
     ready_for_prompt: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -124,7 +124,7 @@ class AgentSessionModel(Base):
         order_by="AgentMessageModel.index",
     )
 
-    # 索引
+    # Indexes
     __table_args__ = (
         Index("agent_sessions_workspace_status_idx", "workspace_id", "status"),
         Index("agent_sessions_created_idx", "created_at"),
@@ -132,7 +132,7 @@ class AgentSessionModel(Base):
 
 
 class AgentTaskModel(Base):
-    """任務 ORM 模型.
+    """Task ORM model.
 
     Materialized Columns:
     - task_id, session_id, created_at, started_at, completed_at
@@ -146,10 +146,10 @@ class AgentTaskModel(Base):
 
     __tablename__ = "agent_tasks"
 
-    # 主鍵
+    # Primary key
     task_id: Mapped[str] = mapped_column(String(36), primary_key=True)
 
-    # 外鍵
+    # Foreign key
     session_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("agent_sessions.session_id", ondelete="CASCADE"),
@@ -157,7 +157,7 @@ class AgentTaskModel(Base):
         index=True,
     )
 
-    # 時間戳
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -172,7 +172,7 @@ class AgentTaskModel(Base):
         nullable=True,
     )
 
-    # 狀態
+    # Status
     status: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -180,7 +180,7 @@ class AgentTaskModel(Base):
         index=True,
     )
 
-    # 建立者
+    # Creator
     created_by: Mapped[str] = mapped_column(
         String(36),
         nullable=False,
@@ -205,7 +205,7 @@ class AgentTaskModel(Base):
         order_by="AgentMessageModel.index",
     )
 
-    # 索引
+    # Indexes
     __table_args__ = (
         Index("agent_tasks_session_status_idx", "session_id", "status"),
         Index("agent_tasks_created_idx", "created_at"),
@@ -213,7 +213,7 @@ class AgentTaskModel(Base):
 
 
 class AgentMessageModel(Base):
-    """訊息 ORM 模型.
+    """Message ORM model.
 
     Materialized Columns:
     - message_id, created_at, session_id, task_id
@@ -228,17 +228,17 @@ class AgentMessageModel(Base):
 
     __tablename__ = "agent_messages"
 
-    # 主鍵
+    # Primary key
     message_id: Mapped[str] = mapped_column(String(36), primary_key=True)
 
-    # 時間戳
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
 
-    # 外鍵
+    # Foreign keys
     session_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("agent_sessions.session_id", ondelete="CASCADE"),
@@ -252,7 +252,7 @@ class AgentMessageModel(Base):
         index=True,
     )
 
-    # 訊息屬性
+    # Message properties
     type: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
@@ -273,19 +273,19 @@ class AgentMessageModel(Base):
         nullable=True,
     )
 
-    # 內容預覽 (前 200 字)
+    # Content preview (first 200 chars)
     content_preview: Mapped[Optional[str]] = mapped_column(
         Text,
         nullable=True,
     )
 
-    # 巢狀工具支援
+    # Nested tool support
     parent_tool_use_id: Mapped[Optional[str]] = mapped_column(
         String(64),
         nullable=True,
     )
 
-    # 佇列支援
+    # Queue support
     status: Mapped[Optional[str]] = mapped_column(
         String(32),
         nullable=True,
@@ -312,12 +312,12 @@ class AgentMessageModel(Base):
         back_populates="messages",
     )
 
-    # 索引
+    # Indexes
     __table_args__ = (
         Index("agent_messages_session_index_idx", "session_id", "index"),
         Index("agent_messages_task_idx", "task_id"),
         Index("agent_messages_queue_idx", "session_id", "status", "queue_position"),
-        # 用於權限請求查詢優化
+        # For permission request query optimization
         Index("agent_messages_session_type_idx", "session_id", "type"),
     )
 

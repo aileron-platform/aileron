@@ -1,4 +1,4 @@
-"""Workspace Runtime 檔案模組（重構後）"""
+"""Workspace Runtime file module (refactored)"""
 
 from .base_service import BaseFileService
 from .dependencies import get_file_service, get_file_service_sync

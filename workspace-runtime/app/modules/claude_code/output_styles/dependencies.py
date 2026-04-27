@@ -1,4 +1,4 @@
-"""Output Styles 模組依賴"""
+"""Output Styles Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import OutputStyleService
 
 @lru_cache()
 def get_output_style_service() -> OutputStyleService:
-    """提供 OutputStyleService"""
+    """Provide OutputStyleService"""
 
     return OutputStyleService()

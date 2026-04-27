@@ -1,4 +1,4 @@
-"""Workspace Runtime 資料庫 session 工具。"""
+"""Workspace Runtime database session utilities."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ _AsyncSessionLocal = None
 
 
 def _get_database_url() -> str:
-    """取得資料庫連線字串。"""
+    """Get database connection string."""
     database_url = get_settings().DATABASE_URL
     if not database_url:
-        raise RuntimeError("DATABASE_URL 未設定")
+        raise RuntimeError("DATABASE_URL not set")
     return database_url
 
 
 def _get_async_database_url(database_url: str) -> str:
-    """將同步資料庫 URL 轉為 SQLAlchemy async URL。"""
+    """Convert synchronous database URL to SQLAlchemy async URL."""
     if database_url.startswith("postgresql+asyncpg://") or database_url.startswith(
         "sqlite+aiosqlite://"
     ):
@@ -41,7 +41,7 @@ def _get_async_database_url(database_url: str) -> str:
 
 
 def get_engine():
-    """建立或回傳快取的同步 SQLAlchemy engine。"""
+    """Create or return cached synchronous SQLAlchemy engine."""
     global _engine
     if _engine is not None:
         return _engine
@@ -54,7 +54,7 @@ def get_engine():
 
 
 def get_session_local():
-    """建立或回傳快取的 SessionLocal。"""
+    """Create or return cached SessionLocal."""
     global _SessionLocal
     if _SessionLocal is not None:
         return _SessionLocal
@@ -64,7 +64,7 @@ def get_session_local():
 
 
 def get_async_engine():
-    """建立或回傳快取的非同步 SQLAlchemy engine。"""
+    """Create or return cached asynchronous SQLAlchemy engine."""
     global _async_engine
     if _async_engine is not None:
         return _async_engine
@@ -76,7 +76,7 @@ def get_async_engine():
 
 
 def get_async_session_local():
-    """建立或回傳快取的 AsyncSession 工廠。"""
+    """Create or return cached AsyncSession factory."""
     global _AsyncSessionLocal
     if _AsyncSessionLocal is not None:
         return _AsyncSessionLocal
@@ -91,7 +91,7 @@ def get_async_session_local():
 
 
 def get_db() -> Generator[Session, None, None]:
-    """提供同步資料庫 session。"""
+    """Provide synchronous database session."""
     db = get_session_local()()
     try:
         yield db
@@ -101,7 +101,7 @@ def get_db() -> Generator[Session, None, None]:
 
 @contextmanager
 def session_scope() -> Generator[Session, None, None]:
-    """提供自動 commit/rollback 的 session context manager。"""
+    """Provide session context manager with automatic commit/rollback."""
     session = get_session_local()()
     try:
         yield session
@@ -114,7 +114,7 @@ def session_scope() -> Generator[Session, None, None]:
 
 
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """提供非同步資料庫 session，並自動管理交易。"""
+    """Provide asynchronous database session with automatic transaction management."""
     async_session = get_async_session_local()
     async with async_session() as session:
         async with session.begin():
@@ -123,7 +123,7 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 
 @asynccontextmanager
 async def async_session_scope() -> AsyncGenerator[AsyncSession, None]:
-    """提供自動 commit/rollback 的非同步 session context manager。"""
+    """Provide asynchronous session context manager with automatic commit/rollback."""
     async_session = get_async_session_local()
     async with async_session() as session:
         try:

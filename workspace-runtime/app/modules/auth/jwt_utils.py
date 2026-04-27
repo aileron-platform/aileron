@@ -1,8 +1,8 @@
 """
-JWT 驗證工具類
+JWT validation utility class
 
-提供 Keycloak JWT token 的驗證和解析功能。
-支援使用 JWKS (JSON Web Key Set) 動態獲取公鑰進行 token 驗證。
+Provides Keycloak JWT token validation and parsing functionality.
+Supports using JWKS (JSON Web Key Set) to dynamically fetch public keys for token validation.
 """
 
 import logging
@@ -19,17 +19,17 @@ logger = logging.getLogger(__name__)
 
 
 class JWTValidationError(Exception):
-    """JWT 驗證失敗異常"""
+    """JWT validation failure exception"""
     pass
 
 
 class JWKSFetchError(Exception):
-    """JWKS 獲取失敗異常"""
+    """JWKS fetch failure exception"""
     pass
 
 
 class JWTUtils:
-    """JWT 驗證工具類"""
+    """JWT validation utility class"""
 
     def __init__(self):
         self.config = get_keycloak_config()
@@ -37,7 +37,7 @@ class JWTUtils:
         self.jwks_cache_time: Optional[datetime] = None
 
     async def fetch_jwks(self) -> Dict[str, Any]:
-        """從 Keycloak 獲取 JWKS"""
+        """Fetch JWKS from Keycloak"""
         if not self.config.enabled:
             raise JWKSFetchError("Authentication is not enabled")
 
@@ -69,10 +69,10 @@ class JWTUtils:
             raise JWKSFetchError(f"Unexpected error fetching JWKS from {jwks_url}: {e}")
 
     def get_public_key(self, token: str) -> Dict[str, Any]:
-        """從 token header 的 kid 找到對應公鑰
+        """Find corresponding public key from token header's kid
 
-        注意：此方法為同步方法，呼叫前必須確保 JWKS 快取已載入（呼叫 decode_token_async）。
-        若快取為空會拋出錯誤，避免在執行中的事件迴圈內使用 run_until_complete 造成死鎖。
+        Note: This is a synchronous method. Before calling, ensure JWKS cache is loaded (call decode_token_async).
+        If cache is empty, an error will be thrown to avoid deadlock when using run_until_complete in running event loop.
         """
         try:
             headers = jwt.get_unverified_headers(token)
@@ -98,7 +98,7 @@ class JWTUtils:
             raise JWTValidationError(f"Invalid token header: {e}")
 
     def decode_token(self, token: str, verify_audience: bool = True) -> Dict[str, Any]:
-        """解碼並驗證 JWT token"""
+        """Decode and validate JWT token"""
         if not self.config.enabled:
             logger.warning("Authentication is disabled, skipping token validation")
             return {}
@@ -139,7 +139,7 @@ class JWTUtils:
             raise JWTValidationError(f"Invalid token: {e}")
 
     async def decode_token_async(self, token: str, verify_audience: bool = True) -> Dict[str, Any]:
-        """異步解碼並驗證 JWT token"""
+        """Asynchronously decode and validate JWT token"""
         if not self.config.enabled:
             logger.warning("Authentication is disabled, skipping token validation")
             return {}
@@ -155,7 +155,7 @@ class JWTUtils:
             raise JWTValidationError(f"Token validation failed: {e}")
 
     def clear_jwks_cache(self):
-        """清除 JWKS 快取"""
+        """Clear JWKS cache"""
         self.jwks_cache = None
         self.jwks_cache_time = None
         logger.info("JWKS cache cleared")
@@ -165,7 +165,7 @@ _jwt_utils_instance: Optional[JWTUtils] = None
 
 
 def get_jwt_utils() -> JWTUtils:
-    """獲取 JWTUtils 單例實例"""
+    """Get JWTUtils singleton instance"""
     global _jwt_utils_instance
     if _jwt_utils_instance is None:
         _jwt_utils_instance = JWTUtils()
@@ -173,7 +173,7 @@ def get_jwt_utils() -> JWTUtils:
 
 
 def clear_jwt_utils_cache():
-    """清除 JWTUtils 快取"""
+    """Clear JWTUtils cache"""
     global _jwt_utils_instance
     if _jwt_utils_instance is not None:
         _jwt_utils_instance.clear_jwks_cache()

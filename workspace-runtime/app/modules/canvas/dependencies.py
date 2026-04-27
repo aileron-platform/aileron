@@ -1,4 +1,4 @@
-"""Canvas 模組依賴"""
+"""Canvas module dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import CanvasService
 
 @lru_cache(maxsize=1)
 def get_canvas_service() -> CanvasService:
-    """取得 Canvas 服務單例"""
+    """Get Canvas service singleton"""
 
     return CanvasService()

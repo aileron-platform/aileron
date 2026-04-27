@@ -1,7 +1,7 @@
 """
-JWKS 快取管理
+JWKS cache management
 
-提供 Keycloak JWKS (JSON Web Key Set) 的快取管理功能。
+Provides cache management functionality for Keycloak JWKS (JSON Web Key Set).
 """
 
 import asyncio
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class JKWSCache:
-    """JWKS 快取管理類"""
+    """JWKS cache management class"""
 
     def __init__(self):
         self.config = get_keycloak_config()
@@ -117,7 +117,7 @@ class JKWSCache:
 
 
 class JWKSFetchError(Exception):
-    """JWKS 獲取失敗異常"""
+    """JWKS fetch failure exception"""
     pass
 
 

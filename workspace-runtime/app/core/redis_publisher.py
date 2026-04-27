@@ -1,6 +1,6 @@
-"""Redis 事件發布服務
+"""Redis event publishing service
 
-用於發布執行完成事件給 Workspace Manager
+Used to publish execution completion events to Workspace Manager
 """
 
 import json
@@ -13,9 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class RedisEventPublisher:
-    """Redis 事件發布器
+    """Redis event publisher
 
-    使用 RedisManager 來管理 Redis 連接，避免重複的連接邏輯。
+    Use RedisManager to manage Redis connections, avoiding duplicate connection logic.
     """
 
     async def publish_execution_completed(
@@ -28,21 +28,21 @@ class RedisEventPublisher:
         has_error: bool,
         error_message: Optional[str] = None,
     ) -> None:
-        """發布執行完成事件
+        """Publish execution completion event
 
         Args:
-            execution_id: 執行記錄 ID
+            execution_id: Execution record ID
             session_id: Session ID
             workspace_id: Workspace ID
-            status: 執行狀態 (completed, failed, aborted)
-            total_messages: 訊息總數
-            has_error: 是否有錯誤
-            error_message: 錯誤訊息
+            status: Execution status (completed, failed, aborted)
+            total_messages: Total message count
+            has_error: Whether there is an error
+            error_message: Error message
         """
         try:
             redis_client = await redis_manager.get_redis()
 
-            # 構建事件數據
+            # Build event data
             event_data = {
                 "execution_id": execution_id,
                 "session_id": session_id,
@@ -53,7 +53,7 @@ class RedisEventPublisher:
                 "error_message": error_message,
             }
 
-            # 發布到特定執行 ID 的頻道
+            # Publish to channel for specific execution ID
             channel = f"automation:execution:completed:{execution_id}"
             message = json.dumps(event_data)
 
@@ -63,30 +63,30 @@ class RedisEventPublisher:
                 f"status={status}, channel={channel}"
             )
 
-            # 同時設置一個 key 用於輪詢備份（TTL 1小時）
+            # Also set a key for polling backup (TTL 1 hour)
             result_key = f"automation:execution:result:{execution_id}"
             await redis_client.setex(result_key, 3600, message)
             logger.debug(f"Set execution result key: {result_key}")
 
         except Exception as e:
             logger.error(f"Failed to publish execution completed event: {e}", exc_info=True)
-            # 不拋出異常，避免影響主流程
+            # Do not raise exception to avoid affecting main flow
 
     async def close(self) -> None:
-        """關閉 Redis 連接
+        """Close Redis connection
 
-        注意：這會關閉共享的 redis_manager 連接，
-        只有在確定不再需要 Redis 連接時才應該呼叫。
+        Note: This will close the shared redis_manager connection,
+        should only be called when Redis connection is no longer needed.
         """
         await redis_manager.close()
 
 
-# 全局單例
+# Global singleton
 _publisher: Optional[RedisEventPublisher] = None
 
 
 def get_redis_publisher() -> RedisEventPublisher:
-    """取得 Redis 事件發布器單例"""
+    """Get Redis event publisher singleton"""
     global _publisher
     if _publisher is None:
         _publisher = RedisEventPublisher()

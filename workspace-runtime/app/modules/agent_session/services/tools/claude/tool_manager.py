@@ -1,8 +1,8 @@
 """
-Claude Tool 管理器 - 全域單例管理
+Claude Tool Manager - Global singleton management
 
-確保所有 ExecutionService 實例共享同一個 ClaudeTool 實例，
-這樣 stop_task 可以正確存取 abort_events。
+Ensures all ExecutionService instances share the same ClaudeTool instance,
+so stop_task can correctly access abort_events.
 """
 
 import logging
@@ -16,10 +16,10 @@ from .claude_tool import ClaudeTool
 
 class ClaudeToolManager:
     """
-    Claude Tool 全域管理器.
+    Claude Tool global manager.
 
-    使用單例模式確保所有 ExecutionService 實例共享同一個 ClaudeTool。
-    ClaudeTool 為無狀態設計（不持有 DB session），因此可安全共享。
+    Uses singleton pattern to ensure all ExecutionService instances share the same ClaudeTool.
+    ClaudeTool is stateless (does not hold DB session), so it can be safely shared.
     """
 
     _instance: Optional["ClaudeToolManager"] = None
@@ -32,10 +32,10 @@ class ClaudeToolManager:
 
     def get_tool(self) -> ClaudeTool:
         """
-        取得或創建 ClaudeTool 實例.
+        Get or create ClaudeTool instance.
 
-        如果已存在實例，返回現有的。
-        如果不存在，創建新的並緩存。
+        Returns existing instance if available.
+        Creates and caches new instance if not exists.
         """
         if self._tool is None:
             api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -44,25 +44,25 @@ class ClaudeToolManager:
 
     def get_existing_tool(self) -> Optional[ClaudeTool]:
         """
-        取得現有的 ClaudeTool 實例（如果存在）.
+        Get existing ClaudeTool instance (if available).
 
-        用於 stop_task 等操作，不需要創建新實例。
+        Used for operations like stop_task, does not create new instance.
         """
         return self._tool
 
     def reset(self) -> None:
         """
-        重置管理器（主要用於測試）.
+        Reset manager (mainly for testing).
         """
         self._tool = None
 
 
-# 全域實例
+# Global instance
 _claude_tool_manager: Optional[ClaudeToolManager] = None
 
 
 def get_claude_tool_manager() -> ClaudeToolManager:
-    """取得全域 ClaudeToolManager 實例."""
+    """Get global ClaudeToolManager instance."""
     global _claude_tool_manager
     if _claude_tool_manager is None:
         _claude_tool_manager = ClaudeToolManager()

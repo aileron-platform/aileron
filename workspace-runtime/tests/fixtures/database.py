@@ -140,13 +140,13 @@ def session_repository(db_session):
             session = Session(...)
             await session_repository.save(session)
     """
-    pytest.skip("舊版同步 SessionRepository 測試夾具已不再適用目前 async repository 架構")
+    pytest.skip("Legacy synchronous SessionRepository test fixture no longer applies to current async repository architecture")
 
 
 @pytest.fixture
 def message_repository(db_session):
     """Create MessageRepository with test database"""
-    pytest.skip("舊版同步 MessageRepository 測試夾具已不再適用目前 async repository 架構")
+    pytest.skip("Legacy synchronous MessageRepository test fixture no longer applies to current async repository architecture")
 
 
 # Integration test repositories (async)

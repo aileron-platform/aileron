@@ -1,6 +1,6 @@
-"""Message Schema 定義.
+"""Message Schema definitions.
 
-定義訊息相關的 API 請求/回應模型。
+Defines API request/response models for messages.
 """
 
 from __future__ import annotations
@@ -17,11 +17,11 @@ from ..domain.enums import MessageRole, MessageStatus, MessageType
 from .content_blocks import ContentBlock
 
 
-# === 請求模型 ===
+# === Request Models ===
 
 
 class ToolUseCreate(BaseModel):
-    """工具使用建立請求."""
+    """Tool use creation request."""
 
     id: str
     name: str
@@ -29,7 +29,7 @@ class ToolUseCreate(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    """建立訊息請求."""
+    """Create message request."""
 
     session_id: str
     task_id: Optional[str] = None
@@ -42,7 +42,7 @@ class MessageCreate(BaseModel):
 
 
 class MessageUpdate(BaseModel):
-    """更新訊息請求."""
+    """Update message request."""
 
     content: Optional[Union[str, List[Dict[str, Any]], Dict[str, Any]]] = None
     tool_uses: Optional[List[ToolUseCreate]] = None
@@ -50,7 +50,7 @@ class MessageUpdate(BaseModel):
 
 
 class MessageQuery(BaseModel):
-    """訊息查詢參數."""
+    """Message query parameters."""
 
     session_id: Optional[str] = None
     task_id: Optional[str] = None
@@ -61,22 +61,22 @@ class MessageQuery(BaseModel):
 
 
 class MessageBulkCreate(BaseModel):
-    """批次建立訊息請求."""
+    """Bulk create message request."""
 
     messages: List[MessageCreate]
 
 
 class QueueMessageRequest(BaseModel):
-    """佇列訊息請求."""
+    """Queue message request."""
 
     prompt: str
 
 
-# === 回應模型 ===
+# === Response Models ===
 
 
 class ToolUseResponse(BaseModel):
-    """工具使用回應."""
+    """Tool use response."""
 
     id: str
     name: str
@@ -84,7 +84,7 @@ class ToolUseResponse(BaseModel):
 
 
 class PermissionRequestContentResponse(BaseModel):
-    """權限請求內容回應."""
+    """Permission request content response."""
 
     request_id: str
     tool_name: str
@@ -105,7 +105,7 @@ class PermissionRequestContentResponse(BaseModel):
 
 
 class TokenUsage(BaseModel):
-    """Token 使用量."""
+    """Token usage."""
 
     input: int = 0
     output: int = 0
@@ -114,7 +114,7 @@ class TokenUsage(BaseModel):
 
 
 class MessageMetadataResponse(BaseModel):
-    """訊息元數據回應."""
+    """Message metadata response."""
 
     model: Optional[str] = None
     tokens: Optional[TokenUsage] = None
@@ -125,9 +125,9 @@ class MessageMetadataResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    """訊息回應."""
+    """Message response."""
 
-    message_id: str  # 前端期望的欄位名稱
+    message_id: str  # Field name expected by frontend
     created_at: datetime
     session_id: str
     task_id: Optional[str] = None
@@ -140,9 +140,9 @@ class MessageResponse(BaseModel):
     status: Optional[MessageStatus] = None
     queue_position: Optional[int] = None
 
-    # Data blob 欄位
+    # Data blob fields
     content: Union[str, List[Dict[str, Any]], PermissionRequestContentResponse, None] = None
-    content_blocks: Optional[List[Dict[str, Any]]] = None  # 前端期望的格式
+    content_blocks: Optional[List[Dict[str, Any]]] = None  # Format expected by frontend
     tool_uses: List[ToolUseResponse] = Field(default_factory=list)
     metadata: Optional[MessageMetadataResponse] = None
 
@@ -150,8 +150,8 @@ class MessageResponse(BaseModel):
 
     @classmethod
     def from_entity(cls, entity) -> "MessageResponse":
-        """從領域實體建立回應."""
-        # 處理 content
+        """Create response from domain entity."""
+        # Process content
         content = entity.content
         if hasattr(content, "to_dict"):
             # PermissionRequestContent (object)
@@ -174,8 +174,8 @@ class MessageResponse(BaseModel):
                 content=content.content,
             )
         elif isinstance(content, dict) and "tool_name" in content:
-            # PermissionRequestContent (dict) - 防禦性處理
-            # 驗證必要欄位
+            # PermissionRequestContent (dict) - Defensive handling
+            # Validate required fields
             missing_fields = []
             if not content.get("request_id"):
                 missing_fields.append("request_id")
@@ -223,7 +223,7 @@ class MessageResponse(BaseModel):
                 content=content.get("content"),
             )
 
-        # 處理 tool_uses
+        # Process tool_uses
         tool_uses = []
         for tu in entity.tool_uses:
             tool_uses.append(ToolUseResponse(
@@ -232,7 +232,7 @@ class MessageResponse(BaseModel):
                 input=tu.input,
             ))
 
-        # 處理 metadata
+        # Process metadata
         metadata = None
         if entity.metadata:
             meta = entity.metadata
@@ -246,7 +246,7 @@ class MessageResponse(BaseModel):
                 source=meta.get("source"),
             )
 
-        # 生成 content_blocks
+        # Generate content_blocks
         content_blocks = None
         if isinstance(content, str):
             content_blocks = [{"type": "text", "text": content}]
@@ -276,7 +276,7 @@ class MessageResponse(BaseModel):
 
 
 class MessageListResponse(BaseModel):
-    """訊息列表回應."""
+    """Message list response."""
 
     items: List[MessageResponse]
     total: int
@@ -285,21 +285,21 @@ class MessageListResponse(BaseModel):
 
 
 class QueueMessageResponse(BaseModel):
-    """佇列訊息回應."""
+    """Queue message response."""
 
     success: bool = True
     message: MessageResponse
 
 
 class QueueListResponse(BaseModel):
-    """佇列列表回應."""
+    """Queue list response."""
 
     items: List[MessageResponse]
     total: int
 
 
 class BulkCreateResponse(BaseModel):
-    """批次建立回應."""
+    """Bulk create response."""
 
     success: bool = True
     created_count: int

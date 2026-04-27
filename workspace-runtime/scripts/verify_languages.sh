@@ -1,12 +1,12 @@
 #!/bin/bash
-# 語言環境驗證腳本
-# 用於驗證 Codex-Universal 中所有語言環境是否正確安裝
-# 可選執行：docker exec <container_id> bash /workspace-runtime/scripts/verify_languages.sh
+# Language environment verification script
+# Verifies that all Codex-Universal language environments are installed correctly.
+# Optional command: docker exec <container_id> bash /workspace-runtime/scripts/verify_languages.sh
 
-echo "🔍 驗證語言環境..."
+echo "🔍 Verifying language environments..."
 echo ""
 
-# 計數器
+# Counters
 TOTAL_CHECKS=0
 PASSED_CHECKS=0
 
@@ -22,7 +22,7 @@ check_command() {
         ((PASSED_CHECKS++))
         return 0
     else
-        echo "❌ $name: 未安裝"
+        echo "❌ $name: not installed"
         return 1
     fi
 }
@@ -102,7 +102,7 @@ check_command "Composer" "composer"
 echo ""
 
 # ============================================================================
-# Swift (僅 amd64)
+# Swift (amd64 only)
 # ============================================================================
 if [ "$(uname -m)" = "x86_64" ]; then
     echo "📦 Swift:"
@@ -110,7 +110,7 @@ if [ "$(uname -m)" = "x86_64" ]; then
     echo ""
 else
     echo "📦 Swift:"
-    echo "⚠️  Swift 不支援 $(uname -m) 架構"
+    echo "⚠️  Swift does not support the $(uname -m) architecture"
     echo ""
 fi
 
@@ -119,7 +119,7 @@ fi
 # ============================================================================
 echo "📦 Elixir:"
 check_command "Elixir" "elixir"
-check_command "Erlang" "erl" || echo "❌ Erlang: 未找到"
+check_command "Erlang" "erl" || echo "❌ Erlang: not found"
 echo ""
 
 # ============================================================================
@@ -130,15 +130,15 @@ check_command "Bun" "bun"
 echo ""
 
 # ============================================================================
-# 開發工具
+# Development tools
 # ============================================================================
-echo "🛠️  開發工具:"
+echo "🛠️  Development tools:"
 
 if command -v git &> /dev/null; then
     echo "✅ Git: $(git --version)"
     ((PASSED_CHECKS++))
 else
-    echo "❌ Git: 未安裝"
+    echo "❌ Git: not installed"
 fi
 ((TOTAL_CHECKS++))
 
@@ -146,7 +146,7 @@ if command -v docker &> /dev/null; then
     echo "✅ Docker: $(docker --version)"
     ((PASSED_CHECKS++))
 else
-    echo "❌ Docker: 未安裝"
+    echo "❌ Docker: not installed"
 fi
 ((TOTAL_CHECKS++))
 
@@ -154,7 +154,7 @@ if command -v claude &> /dev/null; then
     echo "✅ Claude CLI: $(which claude)"
     ((PASSED_CHECKS++))
 else
-    echo "❌ Claude CLI: 未安裝"
+    echo "❌ Claude CLI: not installed"
 fi
 ((TOTAL_CHECKS++))
 
@@ -162,24 +162,24 @@ if command -v uv &> /dev/null; then
     echo "✅ uv: $(uv --version)"
     ((PASSED_CHECKS++))
 else
-    echo "❌ uv: 未安裝"
+    echo "❌ uv: not installed"
 fi
 ((TOTAL_CHECKS++))
 
 if command -v supervisor &> /dev/null; then
-    echo "✅ Supervisor: 已安裝"
+    echo "✅ Supervisor: installed"
     ((PASSED_CHECKS++))
 else
-    echo "❌ Supervisor: 未安裝"
+    echo "❌ Supervisor: not installed"
 fi
 ((TOTAL_CHECKS++))
 
 echo ""
 
 # ============================================================================
-# 環境變數檢查
+# Environment variable checks
 # ============================================================================
-echo "🔧 環境變數:"
+echo "🔧 Environment variables:"
 echo "   - PYTHONPATH: $PYTHONPATH"
 echo "   - NPM_CONFIG_PREFIX: $NPM_CONFIG_PREFIX"
 echo "   - GOPATH: $GOPATH"
@@ -187,29 +187,29 @@ echo "   - PATH: ${PATH:0:80}..."
 echo ""
 
 # ============================================================================
-# 系統信息
+# System information
 # ============================================================================
-echo "🖥️  系統信息:"
-echo "   - 架構: $(uname -m)"
-echo "   - 操作系統: $(uname -s)"
-echo "   - 內核版本: $(uname -r)"
-echo "   - 發行版本: $(lsb_release -d 2>/dev/null | cut -f2)"
+echo "🖥️  System information:"
+echo "   - Architecture: $(uname -m)"
+echo "   - Operating system: $(uname -s)"
+echo "   - Kernel version: $(uname -r)"
+echo "   - Distribution: $(lsb_release -d 2>/dev/null | cut -f2)"
 echo ""
 
 # ============================================================================
-# 總結
+# Summary
 # ============================================================================
 PERCENT=$((PASSED_CHECKS * 100 / TOTAL_CHECKS))
-echo "📊 驗證結果: $PASSED_CHECKS/$TOTAL_CHECKS 通過 ($PERCENT%)"
+echo "📊 Verification result: $PASSED_CHECKS/$TOTAL_CHECKS passed ($PERCENT%)"
 echo ""
 
 if [ $PERCENT -ge 80 ]; then
-    echo "✅ 語言環境驗證完成，大部分環境已正確安裝"
+    echo "✅ Language environment verification complete; most environments are installed correctly"
     exit 0
 elif [ $PERCENT -ge 50 ]; then
-    echo "⚠️  語言環境驗證完成，部分環境缺失"
+    echo "⚠️  Language environment verification complete; some environments are missing"
     exit 1
 else
-    echo "❌ 語言環境驗證失敗，大部分環境缺失"
+    echo "❌ Language environment verification failed; most environments are missing"
     exit 2
 fi

@@ -1,4 +1,4 @@
-"""CLI Skills 模組"""
+"""CLI Skills module"""
 
 from .config import SkillTool
 from .router import create_skills_router

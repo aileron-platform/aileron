@@ -1,4 +1,4 @@
-"""Hooks 路由"""
+"""Hooks Routes"""
 
 from __future__ import annotations
 
@@ -24,13 +24,13 @@ router = APIRouter(prefix="/hooks", tags=["Claude Code - Hooks"])
 @router.get(
     "",
     response_model=HookScopesResponse,
-    summary="取得所有 Hook 範圍",
+    summary="Get all hook scopes",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def list_hooks(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="可指定僅回傳某範圍"
+        None, description="Optionally return only specified scope"
     ),
     service: HookService = Depends(get_hook_service),
 ) -> HookScopesResponse:
@@ -40,13 +40,13 @@ async def list_hooks(
 @router.get(
     "/export",
     response_model=HookExportResponse,
-    summary="匯出 Hook 設定",
+    summary="Export hook settings",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def export_hooks(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="若提供則僅匯出指定範圍"
+        None, description="If provided, export only specified scope"
     ),
     service: HookService = Depends(get_hook_service),
 ) -> HookExportResponse:
@@ -57,12 +57,12 @@ async def export_hooks(
 @router.get(
     "/{scope}",
     response_model=HookScopeResponse,
-    summary="取得指定範圍 Hook",
+    summary="Get hooks for specified scope",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_scope_hooks(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Hook 範圍"),
+    scope: DocumentScope = Path(..., description="Hook scope"),
     service: HookService = Depends(get_hook_service),
 ) -> HookScopeResponse:
     return service.get_scope(workspace_id, scope)
@@ -71,13 +71,13 @@ async def get_scope_hooks(
 @router.put(
     "/{scope}",
     response_model=HookScopeResponse,
-    summary="更新 Hook 範圍",
+    summary="Update hook scope",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def update_scope_hooks(
     payload: HookScopeUpsertRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Hook 範圍"),
+    scope: DocumentScope = Path(..., description="Hook scope"),
     service: HookService = Depends(get_hook_service),
 ) -> HookScopeResponse:
     return service.update_scope(workspace_id, scope, payload)
@@ -86,12 +86,12 @@ async def update_scope_hooks(
 @router.delete(
     "/{scope}",
     response_model=HookDeleteResponse,
-    summary="刪除 Hook 範圍",
+    summary="Delete hook scope",
     responses=build_responses(400, 401, 403, 404, 500),
 )
 async def delete_scope_hooks(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Hook 範圍"),
+    scope: DocumentScope = Path(..., description="Hook scope"),
     service: HookService = Depends(get_hook_service),
 ) -> HookDeleteResponse:
     return service.delete_scope(workspace_id, scope)
@@ -100,7 +100,7 @@ async def delete_scope_hooks(
 @router.post(
     "/import",
     response_model=HookImportResponse,
-    summary="匯入 Hook 設定",
+    summary="Import hook settings",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def import_hooks(

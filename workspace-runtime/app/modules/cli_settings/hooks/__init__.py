@@ -1,4 +1,4 @@
-"""CLI Hooks 模組"""
+"""CLI Hooks module"""
 
 from .config import HookTool
 from .router import create_hooks_router

@@ -1,1 +1,1 @@
-"""Slash Commands 測試模組."""
+"""Slash Commands test module."""

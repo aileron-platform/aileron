@@ -1,6 +1,6 @@
-"""Git Diff 與內容操作
+"""Git diff and content operations
 
-提供 Git diff 查詢和 blob 內容讀取功能。
+Provides Git diff query and blob content reading functionality.
 """
 
 from __future__ import annotations
@@ -22,17 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 class DiffOperations:
-    """Git Diff 與內容操作
+    """Git diff and content operations
 
-    提供 diff 查詢、blob 內容讀取等功能。
+    Provides diff query, blob content reading and other functionality.
     """
 
     def __init__(self, utils: GitUtils, cache: Optional["GitCache"] = None) -> None:
-        """初始化
+        """Initialize
 
         Args:
-            utils: Git 工具類實例
-            cache: 快取層（可選）
+            utils: Git utility class instance
+            cache: Cache layer (optional)
         """
         self._utils = utils
         self.cache = cache
@@ -47,38 +47,38 @@ class DiffOperations:
         include_metadata: bool = False,
         context_id: Optional[str] = None,
     ) -> DiffResponse:
-        """獲取檔案的差異內容
+        """Get file diff content
 
         Args:
-            workspace_id: 工作區 ID
-            path: 檔案路徑
-            base: 比較基準（預設為 HEAD）
-            head: 比較目標（None/WORKTREE=工作目錄, INDEX=索引, 其他=提交ID）
-            context: 上下文行數
-            include_metadata: 是否包含檔案元資料
+            workspace_id: Workspace ID
+            path: File path
+            base: Comparison base (default is HEAD)
+            head: Comparison target (None/WORKTREE=working directory, INDEX=index, other=commit ID)
+            context: Context line count
+            include_metadata: Whether to include file metadata
 
         Returns:
-            DiffResponse: 包含差異內容的回應
+            DiffResponse: Response containing diff content
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         normalized = path.lstrip("/\\")
 
         if head in (None, "WORKTREE"):
-            # 未暫存的變更：比較索引與工作目錄
+            # Unstaged changes: compare index with working directory
             base_ref, head_label = "INDEX", "WORKTREE"
             diff_text = self._get_worktree_diff(repo, normalized, context)
         elif head == "INDEX":
-            # 已暫存的變更：比較 HEAD 與索引
+            # Staged changes: compare HEAD with index
             base_ref = base or "HEAD"
             head_label = "INDEX"
             diff_text = self._get_staged_diff(repo, normalized, base_ref, context)
         else:
-            # 提交間差異：比較兩個提交
+            # Inter-commit diff: compare two commits
             base_ref = base or "HEAD"
             head_label = head
             diff_text = self._get_commit_diff(repo, normalized, base_ref, head, context)
 
-        # 獲取檔案元資料
+        # Get file metadata
         metadata = self._get_file_metadata(repo, normalized, base_ref) if include_metadata else None
 
         return DiffResponse(
@@ -97,18 +97,18 @@ class DiffOperations:
         revision: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> BlobResponse:
-        """獲取檔案內容
+        """Get file content
 
         Args:
-            workspace_id: 工作區 ID
-            path: 檔案路徑
-            revision: 版本（預設為 HEAD）
+            workspace_id: Workspace ID
+            path: File path
+            revision: Version (default is HEAD)
 
         Returns:
-            BlobResponse: 包含檔案內容的回應
+            BlobResponse: Response containing file content
 
         Raises:
-            VersionControlError: 檔案不存在
+            VersionControlError: File does not exist
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         normalized = path.lstrip("/\\")
@@ -124,20 +124,20 @@ class DiffOperations:
         return BlobResponse(path=normalized, revision=rev, encoding="utf-8", content=encoded, isBase64=True)
 
     def _get_worktree_diff(self, repo: Repo, path: str, context: int) -> str:
-        """獲取工作目錄與索引的差異"""
+        """Get diff between working directory and index"""
         try:
-            # 使用 -c core.quotepath=false 支援中文檔名
+            # Use -c core.quotepath=false to support Chinese filenames
             diff_text = repo.git.execute(
                 ["git", "-c", "core.quotepath=false", "diff", f"-U{context}", "--", path]
             )
 
-            # 檢查是否為二進位檔案
+            # Check if binary file
             if "Binary files" in diff_text or not diff_text:
                 file_path = Path(repo.working_tree_dir) / path
                 if file_path.exists() and self._is_binary_file(file_path):
                     return f"Binary file: {path}\n(Binary files cannot be displayed)"
 
-            # 處理未追蹤的新檔案
+            # Handle untracked new files
             if not diff_text:
                 try:
                     result = repo.git.execute(
@@ -153,7 +153,7 @@ class DiffOperations:
             return ""
 
     def _get_staged_diff(self, repo: Repo, path: str, base_ref: str, context: int) -> str:
-        """獲取已暫存變更的差異"""
+        """Get diff of staged changes"""
         try:
             if self._utils.has_head(repo):
                 diff_text = repo.git.diff(base_ref, "--cached", f"-U{context}", "--", path)
@@ -168,28 +168,28 @@ class DiffOperations:
             return ""
 
     def _get_commit_diff(self, repo: Repo, path: str, base_ref: str, head_ref: str, context: int) -> str:
-        """獲取提交間的差異"""
+        """Get diff between commits"""
         try:
             return repo.git.diff(base_ref, head_ref, f"-U{context}", "--", path)
         except GitCommandError:
             return ""
 
     def _is_binary_file(self, file_path: Path) -> bool:
-        """檢測檔案是否為二進位檔案"""
+        """Detect if file is binary"""
         try:
-            # 檢查檔案大小（超過 10MB 視為二進位）
+            # Check file size (consider as binary if over 10MB)
             if file_path.stat().st_size > 10 * 1024 * 1024:
                 return True
 
-            # 讀取前 8192 bytes 檢測
+            # Read first 8192 bytes for detection
             with open(file_path, 'rb') as f:
                 chunk = f.read(8192)
 
-            # 檢查是否包含 null byte（二進位檔案的特徵）
+            # Check if contains null byte (characteristic of binary files)
             if b'\x00' in chunk:
                 return True
 
-            # 嘗試解碼為 UTF-8
+            # Try to decode as UTF-8
             try:
                 chunk.decode('utf-8', errors='ignore')
                 return False
@@ -200,18 +200,18 @@ class DiffOperations:
             return True
 
     def _create_new_file_diff(self, repo: Repo, path: str) -> str:
-        """為新建檔案創建 diff 格式內容"""
+        """Create diff format content for new files"""
         file_path = Path(repo.working_tree_dir) / path
         if not file_path.exists() or not file_path.is_file():
             return ""
 
-        # 檢查是否為二進位檔案
+        # Check if binary file
         if self._is_binary_file(file_path):
             file_size = file_path.stat().st_size
             size_str = self._format_file_size(file_size)
             return f"Binary file: {path}\nSize: {size_str}\n(Binary files cannot be displayed)"
 
-        # 檢查檔案大小（超過 1MB 的文字檔案也不顯示完整內容）
+        # Check file size (text files over 1MB also won't show full content)
         file_size = file_path.stat().st_size
         if file_size > 1 * 1024 * 1024:  # 1MB
             size_str = self._format_file_size(file_size)
@@ -223,7 +223,7 @@ class DiffOperations:
 
             lines = content.splitlines()
 
-            # 限制最多顯示 1000 行
+            # Limit to maximum 1000 lines
             if len(lines) > 1000:
                 diff_lines = [
                     "--- /dev/null",
@@ -248,7 +248,7 @@ class DiffOperations:
 
     @staticmethod
     def _format_file_size(size_bytes: int) -> str:
-        """格式化檔案大小"""
+        """Format file size"""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size_bytes < 1024.0:
                 return f"{size_bytes:.1f} {unit}"
@@ -256,7 +256,7 @@ class DiffOperations:
         return f"{size_bytes:.1f} TB"
 
     def _get_file_metadata(self, repo: Repo, path: str, base_ref: str) -> Optional[dict]:
-        """獲取檔案元資料"""
+        """Get file metadata"""
         if base_ref in ("INDEX", "WORKTREE"):
             return None
 

@@ -1,7 +1,7 @@
 """
 Tools package for multi-SDK support.
 
-比照 agor-main 的架構設計。
+Architecture design modeled after agor-main.
 """
 
 from .base.streaming_callbacks import StreamingCallbacks

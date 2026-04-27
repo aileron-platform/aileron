@@ -1,4 +1,4 @@
-"""Internal API 資料模型"""
+"""Internal API data models"""
 
 from __future__ import annotations
 
@@ -8,22 +8,22 @@ from pydantic import BaseModel, Field
 
 
 class EnvironmentVariable(BaseModel):
-    """環境變數模型"""
-    key: str = Field(..., description="環境變數名稱")
-    value: str = Field(..., description="環境變數值")
+    """Environment variable model"""
+    key: str = Field(..., description="Environment variable name")
+    value: str = Field(..., description="Environment variable value")
 
 
 class SSHKeysRequest(BaseModel):
-    """SSH Keys 設定請求"""
-    private_key: str = Field(..., alias="privateKey", description="SSH 私鑰")
-    public_key: str = Field(..., alias="publicKey", description="SSH 公鑰")
+    """SSH Keys configuration request"""
+    private_key: str = Field(..., alias="privateKey", description="SSH private key")
+    public_key: str = Field(..., alias="publicKey", description="SSH public key")
 
     class Config:
         populate_by_name = True
 
 
 class OAuthAccountInfo(BaseModel):
-    """OAuth 帳戶資訊"""
+    """OAuth account information"""
     account_uuid: Optional[str] = Field(None, alias="accountUuid")
     email_address: Optional[str] = Field(None, alias="emailAddress")
     organization_uuid: Optional[str] = Field(None, alias="organizationUuid")
@@ -38,11 +38,11 @@ class OAuthAccountInfo(BaseModel):
 
 
 class ClaudeCodeRequest(BaseModel):
-    """Claude Code 設定請求"""
+    """Claude Code configuration request"""
     auth_method: Optional[str] = Field(
         None,
         alias="authMethod",
-        description="認證方式 (subscription 或 api_key)"
+        description="Authentication method (subscription or api_key)"
     )
     subscription_access_token: Optional[str] = Field(
         None,
@@ -57,12 +57,12 @@ class ClaudeCodeRequest(BaseModel):
     subscription_expires_at: Optional[int | str] = Field(
         None,
         alias="subscriptionExpiresAt",
-        description="Token 過期時間（毫秒時間戳，舊版可能為 ISO8601 字串）",
+        description="Token expiration time (millisecond timestamp, legacy may be ISO8601 string)",
     )
     oauth_account: Optional[OAuthAccountInfo] = Field(
         None,
         alias="oauthAccount",
-        description="OAuth 帳戶資訊"
+        description="OAuth account information"
     )
     api_key: Optional[str] = Field(
         None,
@@ -72,12 +72,12 @@ class ClaudeCodeRequest(BaseModel):
     model: Optional[str] = Field(
         None,
         alias="model",
-        description="統一的模型選擇（不論 subscription 或 apikey 都使用這個）"
+        description="Unified model choice (used for both subscription and apikey)"
     )
     environment_variables: List[EnvironmentVariable] = Field(
         default_factory=list,
         alias="environmentVariables",
-        description="環境變數列表"
+        description="Environment variable list"
     )
 
     class Config:
@@ -85,44 +85,44 @@ class ClaudeCodeRequest(BaseModel):
 
 
 class GitSettingsRequest(BaseModel):
-    """Git 設定請求"""
-    user_name: str = Field(..., alias="userName", description="Git 使用者名稱")
-    user_email: str = Field(..., alias="userEmail", description="Git 使用者信箱")
+    """Git configuration request"""
+    user_name: str = Field(..., alias="userName", description="Git user name")
+    user_email: str = Field(..., alias="userEmail", description="Git user email")
 
     class Config:
         populate_by_name = True
 
 
 class FirewallConfigRequest(BaseModel):
-    """防火牆設定請求"""
-    network_access_enabled: bool = Field(..., alias="networkAccessEnabled", description="網路存取權限開關")
-    domain_access_mode: str = Field(..., alias="domainAccessMode", description="允許網域模式 (all/specific)")
-    allowed_domains: List[str] = Field(default_factory=list, alias="allowedDomains", description="允許的網域列表")
+    """Firewall configuration request"""
+    network_access_enabled: bool = Field(..., alias="networkAccessEnabled", description="Network access permission switch")
+    domain_access_mode: str = Field(..., alias="domainAccessMode", description="Allowed domain mode (all/specific)")
+    allowed_domains: List[str] = Field(default_factory=list, alias="allowedDomains", description="Allowed domain list")
 
     class Config:
         populate_by_name = True
 
 
 class InternalApiResponse(BaseModel):
-    """Internal API 統一回應格式"""
-    success: bool = Field(..., description="操作是否成功")
-    message: str = Field(..., description="回應訊息")
-    details: Optional[dict] = Field(None, description="詳細資訊")
+    """Internal API unified response format"""
+    success: bool = Field(..., description="Whether operation succeeded")
+    message: str = Field(..., description="Response message")
+    details: Optional[dict] = Field(None, description="Detailed information")
 
 
 class SetupCheckDetail(BaseModel):
-    """初始化檢查項目的詳細狀態"""
+    """Detailed status of initialization check items"""
 
-    status: str = Field(..., description="項目狀態")
-    message: str = Field(..., description="狀態描述")
+    status: str = Field(..., description="Item status")
+    message: str = Field(..., description="Status description")
 
 
 class WorkspaceSetupStatusResponse(BaseModel):
-    """Workspace 初始化狀態回應"""
+    """Workspace initialization status response"""
 
-    success: bool = Field(..., description="是否成功取得狀態")
-    message: str = Field(..., description="回應訊息")
-    checks: Dict[str, SetupCheckDetail] = Field(default_factory=dict, description="各檢查項目狀態")
+    success: bool = Field(..., description="Whether status retrieval succeeded")
+    message: str = Field(..., description="Response message")
+    checks: Dict[str, SetupCheckDetail] = Field(default_factory=dict, description="Status of each check item")
 
 
 __all__ = [

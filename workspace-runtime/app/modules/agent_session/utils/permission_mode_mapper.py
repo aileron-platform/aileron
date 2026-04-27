@@ -1,10 +1,10 @@
 """Permission Mode Mapper.
 
-支援不同 AI 代理之間的權限模式轉換。
-參考 agor 的 permission-mode-mapper.ts 實現。
+Supports permission mode conversion between different AI agents.
+References agor's permission-mode-mapper.ts implementation.
 
-當生成跨代理會話時（例如從 Claude 會話生成 Gemini 會話），
-此模組負責將權限模式映射到目標代理的對應模式。
+When generating cross-agent sessions (e.g., from Claude session to Gemini session)，
+this module maps permission modes to corresponding modes of the target agent.
 """
 
 from __future__ import annotations
@@ -14,19 +14,19 @@ from typing import Literal, TypedDict
 from ..domain.enums import AgenticTool, CodexApprovalPolicy, CodexSandboxMode, PermissionMode
 
 
-# 擴展的權限模式類型（包含所有代理的模式）
+# Extended permission mode types (includes all agent modes)
 ExtendedPermissionMode = Literal[
-    # Claude Code 原生模式
+    # Claude Code native modes
     "default",
     "acceptEdits",
     "bypassPermissions",
     "plan",
     "dontAsk",
     "auto",
-    # Gemini 原生模式
+    # Gemini native modes
     "autoEdit",
     "yolo",
-    # Codex 原生模式
+    # Codex native modes
     "ask",
     "on-failure",
     "allow-all",
@@ -34,7 +34,7 @@ ExtendedPermissionMode = Literal[
 
 
 class CodexPermissionConfig(TypedDict):
-    """Codex 特定的權限配置."""
+    """Codex-specific permission configuration."""
 
     sandbox_mode: CodexSandboxMode
     approval_policy: CodexApprovalPolicy
@@ -45,19 +45,19 @@ def map_permission_mode(
     mode: str,
     target_tool: AgenticTool,
 ) -> PermissionMode:
-    """將權限模式映射到目標代理的對應模式.
+    """Map permission mode to corresponding mode of target agent.
 
-    支援不同 AI 代理之間的權限模式轉換：
+    Supports permission mode conversion between different AI agents:
     - Claude Code: default, acceptEdits, bypassPermissions, plan
     - Gemini: default, autoEdit, yolo
     - Codex: ask, auto, on-failure, allow-all
 
     Args:
-        mode: 源權限模式
-        target_tool: 目標代理工具
+        mode: Source permission mode
+        target_tool: Target agent tool
 
     Returns:
-        映射後的權限模式（PermissionMode 枚舉）
+        Mapped permission mode (PermissionMode enum)
     """
     if target_tool == AgenticTool.CLAUDE_CODE:
         return _map_to_claude_code(mode)
@@ -66,16 +66,16 @@ def map_permission_mode(
     elif target_tool == AgenticTool.CODEX:
         return _map_to_codex(mode)
     elif target_tool == AgenticTool.OPENCODE:
-        # OpenCode 使用與 Gemini 相同的模式
+        # OpenCode uses same modes as Gemini
         return _map_to_gemini(mode)
     else:
-        # 預設返回 ACCEPT_EDITS
+        # Default return ACCEPT_EDITS
         return PermissionMode.ACCEPT_EDITS
 
 
 def _map_to_claude_code(mode: str) -> PermissionMode:
-    """映射到 Claude Code 權限模式."""
-    # Claude Code 原生模式直接返回
+    """Map to Claude Code permission mode."""
+    # Claude Code native modes return directly
     if mode in ("default", "acceptEdits", "bypassPermissions", "plan", "dontAsk", "auto"):
         mode_map = {
             "default": PermissionMode.DEFAULT,
@@ -87,12 +87,12 @@ def _map_to_claude_code(mode: str) -> PermissionMode:
         }
         return mode_map[mode]
 
-    # 其他代理模式映射
+    # Other agent mode mappings
     mapping = {
-        # Gemini 模式
+        # Gemini modes
         "autoEdit": PermissionMode.ACCEPT_EDITS,
         "yolo": PermissionMode.BYPASS_PERMISSIONS,
-        # Codex 模式
+        # Codex modes
         "ask": PermissionMode.DEFAULT,
         "on-failure": PermissionMode.ACCEPT_EDITS,
         "allow-all": PermissionMode.BYPASS_PERMISSIONS,
@@ -102,12 +102,12 @@ def _map_to_claude_code(mode: str) -> PermissionMode:
 
 
 def _map_to_gemini(mode: str) -> PermissionMode:
-    """映射到 Gemini 權限模式.
+    """Map to Gemini permission mode.
 
-    Gemini 支援的模式：default, autoEdit, yolo
-    返回最接近的 Claude Code 對應模式。
+    Gemini supported modes: default, autoEdit, yolo
+    Return closest Claude Code equivalent mode.
     """
-    # Gemini/OpenCode 原生模式
+    # Gemini/OpenCode native modes
     if mode == "autoEdit":
         return PermissionMode.ACCEPT_EDITS
     elif mode == "yolo":
@@ -115,7 +115,7 @@ def _map_to_gemini(mode: str) -> PermissionMode:
     elif mode == "default":
         return PermissionMode.DEFAULT
 
-    # 其他模式映射
+    # Other mode mappings
     mapping = {
         "acceptEdits": PermissionMode.ACCEPT_EDITS,
         "bypassPermissions": PermissionMode.BYPASS_PERMISSIONS,
@@ -131,12 +131,12 @@ def _map_to_gemini(mode: str) -> PermissionMode:
 
 
 def _map_to_codex(mode: str) -> PermissionMode:
-    """映射到 Codex 權限模式.
+    """Map to Codex permission mode.
 
-    Codex 支援的模式：ask, auto, on-failure, allow-all
-    返回最接近的 Claude Code 對應模式。
+    Codex supported modes: ask, auto, on-failure, allow-all
+    Return closest Claude Code equivalent mode.
     """
-    # Codex 原生模式
+    # Codex native modes
     codex_modes = {
         "ask": PermissionMode.DEFAULT,
         "auto": PermissionMode.ACCEPT_EDITS,
@@ -147,7 +147,7 @@ def _map_to_codex(mode: str) -> PermissionMode:
     if mode in codex_modes:
         return codex_modes[mode]
 
-    # 其他模式映射
+    # Other mode mappings
     mapping = {
         "default": PermissionMode.DEFAULT,
         "acceptEdits": PermissionMode.ACCEPT_EDITS,
@@ -162,19 +162,19 @@ def _map_to_codex(mode: str) -> PermissionMode:
 
 
 def map_to_codex_permission_config(mode: str) -> CodexPermissionConfig:
-    """將統一的 PermissionMode 轉換為 Codex 特定配置.
+    """Convert unified PermissionMode to Codex-specific configuration.
 
-    Codex 使用不同的配置結構：
+    Codex uses different configuration structure:
     - sandboxMode: strict, relaxed, off
     - approvalPolicy: auto, manual, suggest
 
     Args:
-        mode: 權限模式字符串
+        mode: Permission mode string
 
     Returns:
-        Codex 專用的權限配置字典
+        Codex-specific permission configuration dict
     """
-    # 先映射到 Codex 內部模式
+    # First map to Codex internal mode
     codex_mode = _get_codex_mode(mode)
 
     configs = {
@@ -211,12 +211,12 @@ def map_to_codex_permission_config(mode: str) -> CodexPermissionConfig:
 
 
 def _get_codex_mode(mode: str) -> str:
-    """獲取對應的 Codex 內部模式名稱."""
-    # Codex 原生模式
+    """Get corresponding Codex internal mode name."""
+    # Codex native modes
     if mode in ("ask", "auto", "on-failure", "allow-all"):
         return mode
 
-    # 其他模式映射到 Codex 模式
+    # Map other modes to Codex modes
     mapping = {
         "default": "ask",
         "acceptEdits": "auto",

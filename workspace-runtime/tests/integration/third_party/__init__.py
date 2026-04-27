@@ -1,1 +1,1 @@
-"""第三方整合測試"""
+"""Third-party integration tests"""

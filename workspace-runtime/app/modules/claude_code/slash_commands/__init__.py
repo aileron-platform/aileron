@@ -1,4 +1,4 @@
-"""Slash Commands 子模組"""
+"""Slash Commands Submodule"""
 
 from __future__ import annotations
 

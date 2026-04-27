@@ -1,4 +1,4 @@
-"""測試共用設定"""
+"""Test shared configuration"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.modules.file_system.dependencies import get_file_service_sync
 from app.modules.version_control import GitService, get_git_service
 from app.services.auth_service import SimpleUser
 
-# 導入測試基礎設施 fixtures
+# Import test infrastructure fixtures
 pytest_plugins = [
     "tests.fixtures.database",
     "tests.fixtures.redis",
@@ -27,9 +27,9 @@ pytest_plugins = [
 
 @pytest.fixture
 def client() -> TestClient:
-    """建立 FastAPI 測試客戶端並重置檔案服務"""
+    """Create FastAPI test client and reset file service"""
 
-    # 清除全域狀態
+    # Clear global state
     from app.modules.file_system.dependencies import _file_service
     _file_service.clear() if _file_service else None
 
@@ -59,7 +59,7 @@ def client() -> TestClient:
 
 @pytest.fixture
 def event_loop():
-    """建立事件循環供異步測試使用"""
+    """Create event loop for async tests"""
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
@@ -67,35 +67,35 @@ def event_loop():
 
 @pytest.fixture
 def websocket_test_overrides():
-    """WebSocket 測試依賴覆寫 fixture"""
+    """WebSocket test dependency override fixture"""
     from tests.integration.core.helpers import create_websocket_test_overrides
 
     overrides = create_websocket_test_overrides()
 
-    # 保存原始覆寫
+    # Save original overrides
     original_overrides = {}
     for dependency in overrides:
         if dependency in app.dependency_overrides:
             original_overrides[dependency] = app.dependency_overrides[dependency]
 
-    # 設置測試覆寫
+    # Set up test overrides
     for dependency, provider in overrides.items():
         app.dependency_overrides[dependency] = provider
 
     yield overrides
 
-    # 恢復原始覆寫
+    # Restore original overrides
     for dependency in overrides:
         app.dependency_overrides.pop(dependency, None)
 
-    # 恢復原始覆寫
+    # Restore original overrides
     for dependency, provider in original_overrides.items():
         app.dependency_overrides[dependency] = provider
 
 
 @pytest.fixture
 def git_workspace(tmp_path_factory) -> tuple[str, Repo, GitService]:
-    """建立實際 Git 工作區供版本控制測試使用"""
+    """Create actual Git workspace for version control testing"""
 
     base_path = tmp_path_factory.mktemp("git-workspaces")
     service = GitService(base_path=base_path)

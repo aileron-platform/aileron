@@ -1,4 +1,4 @@
-"""Internal API 測試共用工具"""
+"""Internal API test shared utilities"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from app.main import app
 
 @contextmanager
 def override_dependency(dependency: Callable[..., Any], provider: Callable[[], Any]):
-    """暫時覆寫 FastAPI 依賴"""
+    """Temporarily override FastAPI dependency"""
     app.dependency_overrides[dependency] = provider
     try:
         yield

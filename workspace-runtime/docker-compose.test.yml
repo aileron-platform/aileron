@@ -1,5 +1,5 @@
 services:
-  # PostgreSQL測試資料庫
+  # PostgreSQL test database
   postgres-test:
     image: postgres:15-alpine
     container_name: workspace-runtime-postgres-test
@@ -11,7 +11,7 @@ services:
     ports:
       - "5435:5432"
     volumes:
-      # 初始化腳本（可選）
+      # Optional initialization script
       - ./tests/fixtures/test-db-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d test_workspace_runtime"]
@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # 使用tmpfs提升測試速度
+    # Use tmpfs to improve test speed.
     tmpfs:
       - /var/lib/postgresql/data
     command: >
@@ -34,7 +34,7 @@ services:
     networks:
       - test-network
 
-  # Redis測試實例
+  # Redis test instance
   redis-test:
     image: redis:7-alpine
     container_name: workspace-runtime-redis-test
@@ -56,11 +56,11 @@ services:
     networks:
       - test-network
 
-  # Workspace Runtime測試容器
+  # Workspace Runtime test container
   workspace-runtime-test:
     build:
-      # Dockerfile 內使用了 workspace-runtime/... 路徑，
-      # build context 必須指向 repo root 才能正確解析 COPY。
+      # The Dockerfile uses workspace-runtime/... paths, so the build context
+      # must point at the repo root to resolve COPY statements correctly.
       context: ..
       dockerfile: workspace-runtime/Dockerfile
       target: development
@@ -70,8 +70,8 @@ services:
         GEMINI_VERSION: ${WORKSPACE_RUNTIME_GEMINI_VERSION:-latest}
         AGENT_BROWSER_CLI_VERSION: ${WORKSPACE_RUNTIME_AGENT_BROWSER_CLI_VERSION:-0.23.0}
         CODEX_CLI_VERSION: ${WORKSPACE_RUNTIME_CODEX_CLI_VERSION:-latest}
-      # workspace-runtime/Dockerfile 以 FROM runtime-base 起頭；
-      # 測試 compose 需提供對應的預建 base image。
+      # workspace-runtime/Dockerfile starts with FROM runtime-base, so this
+      # test compose file must provide the corresponding prebuilt base image.
       additional_contexts:
         runtime-base: docker-image://${WORKSPACE_RUNTIME_BASE_IMAGE:-ailerondocker/codex-universal:latest-amd64}
     container_name: workspace-runtime-test
@@ -81,32 +81,32 @@ services:
       redis-test:
         condition: service_healthy
     environment:
-      # 資料庫配置
+      # Database configuration
       DATABASE_URL: postgresql+asyncpg://test_user:test_password@postgres-test:5432/test_workspace_runtime
-      # Redis配置
+      # Redis configuration
       REDIS_URL: redis://redis-test:6379/0
-      # 測試環境標記
+      # Test environment marker
       TESTING: "true"
       PYTHONPATH: /app
-      # 日誌等級
+      # Log level
       LOG_LEVEL: DEBUG
     volumes:
-      # 掛載代碼（開發模式）
+      # Mount code in development mode.
       - ./app:/app/app:ro
       - ./scripts:/app/scripts:ro
       - ./tests:/app/tests:rw
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
       - ./README.md:/app/README.md:ro
-      # 測試結果輸出
+      # Test result output
       - ./test-results:/app/test-results:rw
       - ./htmlcov:/app/htmlcov:rw
-      # 測試工作區
+      # Test workspace
       - test_workspace:/workspace
     working_dir: /app
     networks:
       - test-network
-    # 測試命令（可在運行時覆蓋）
+    # Test command, overridable at runtime.
     command: >
       sh -c "
         echo '🔧 Installing dependencies...' &&

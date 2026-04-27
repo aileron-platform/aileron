@@ -1,4 +1,4 @@
-"""工作區資料服務 - 用於檔案服務獲取工作區資料"""
+"""Workspace data service - for file service to get workspace data"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class WorkspaceInfo(BaseModel):
-    """工作區資訊"""
+    """Workspace information"""
 
     id: str
     name: str
@@ -25,21 +25,21 @@ class WorkspaceInfo(BaseModel):
 
 
 class WorkspaceEnvVar(BaseModel):
-    """工作區環境變數"""
+    """Workspace environment variable"""
 
     key: str
     value: str
 
 
 class WorkspaceDataService:
-    """工作區資料存取服務"""
+    """Workspace data access service"""
 
     def __init__(self) -> None:
         self.settings = get_settings()
         self._client = httpx.AsyncClient(timeout=10.0)
 
     async def get_workspace(self, workspace_id: str) -> Optional[WorkspaceInfo]:
-        """從 Workspace Manager 獲取工作區資訊"""
+        """Get workspace information from Workspace Manager"""
         try:
             url = f"{self.settings.MANAGER_URL}/api/v1/workspaces/{workspace_id}"
             headers = self.settings.manager_headers
@@ -59,18 +59,18 @@ class WorkspaceDataService:
             )
 
         except httpx.HTTPError as e:
-            logger.error(f"無法從 Workspace Manager 獲取工作區 {workspace_id}: {e}")
+            logger.error(f"Unable to get workspace {workspace_id} from Workspace Manager: {e}")
             return None
         except Exception as e:
-            logger.error(f"獲取工作區資訊時發生未預期的錯誤: {e}")
+            logger.error(f"Unexpected error while getting workspace information: {e}")
             return None
 
     def get_current_workspace_id(self) -> str:
-        """獲取當前工作區 ID"""
+        """Get current workspace ID"""
         return self.settings.WORKSPACE_ID
 
     async def close(self) -> None:
-        """關閉 HTTP 客戶端"""
+        """Close HTTP client"""
         await self._client.aclose()
 
 

@@ -1,8 +1,8 @@
-"""CLI Skills API 路由
+"""CLI Skills API routes
 
-工廠函數，為每個 CLI 工具產生 skills 端點集合。
-端點結構與原 claude_code/file_collections/skills_router.py 完全相同，
-以確保前端 API 呼叫無需修改。
+Factory function that generates skills endpoint collections for each CLI tool.
+Endpoint structure is identical to the original claude_code/file_collections/skills_router.py,
+ensuring no frontend API call modifications needed.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from .service import CliSkillService
 
 
 def create_skills_router(tool: SkillTool) -> APIRouter:
-    """為指定的 CLI 工具建立 skills 路由"""
+    """Create skills router for specified CLI tool"""
 
     from .config import get_skill_config
 
@@ -48,14 +48,14 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.get(
         "/tree",
         response_model=FileTreeResponse,
-        summary="取得 Skills 檔案樹",
+        summary="Get skills file tree",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def get_skills_tree(
-        path: str = Query(default="/", description="目標路徑"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-        includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-        maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度"),
+        path: str = Query(default="/", description="Target path"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+        includeHidden: bool = Query(default=False, description="Include hidden files"),
+        maxDepth: Optional[int] = Query(default=None, ge=1, description="Maximum depth"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -70,14 +70,14 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.get(
         "/tree/children",
         response_model=FileTreeResponse,
-        summary="懶載入子節點",
+        summary="Lazy load child nodes",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def get_skills_children(
-        path: str = Query(description="父節點路徑"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-        includeHidden: bool = Query(default=False, description="是否包含隱藏檔"),
-        maxDepth: Optional[int] = Query(default=None, ge=1, description="最大深度"),
+        path: str = Query(description="Parent node path"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+        includeHidden: bool = Query(default=False, description="Include hidden files"),
+        maxDepth: Optional[int] = Query(default=None, ge=1, description="Maximum depth"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -92,12 +92,12 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.get(
         "/content",
         response_model=FileContentResponse,
-        summary="讀取 Skill 檔案",
+        summary="Read skill file",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def read_skill(
-        path: str = Query(description="檔案路徑"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
+        path: str = Query(description="File path"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -112,14 +112,14 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.put(
         "/content",
         response_model=FileOperationResponse,
-        summary="寫入 Skill 檔案",
+        summary="Write skill file",
         responses=build_responses(400, 401, 403, 404, 409, 422, 500),
     )
     async def write_skill(
-        path: str = Query(description="檔案路徑"),
-        content: str = Query(description="檔案內容"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-        expectedVersionId: Optional[str] = Query(default=None, description="預期版本ID"),
+        path: str = Query(description="File path"),
+        content: str = Query(description="File content"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+        expectedVersionId: Optional[str] = Query(default=None, description="Expected version ID"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -145,14 +145,14 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
         "",
         response_model=FileOperationResponse,
         status_code=status.HTTP_201_CREATED,
-        summary="建立 Skill",
+        summary="Create skill",
         responses=build_responses(400, 401, 404, 409, 422, 500),
     )
     async def create_skill(
-        path: str = Query(description="路徑"),
-        type: str = Query(description="類型 (file/directory)"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-        content: Optional[str] = Query(default="", description="檔案內容"),
+        path: str = Query(description="Path"),
+        type: str = Query(description="Type (file/directory)"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+        content: Optional[str] = Query(default="", description="File content"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -171,13 +171,13 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.delete(
         "",
         response_model=FileOperationResponse,
-        summary="刪除 Skill",
+        summary="Delete skill",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def delete_skill(
-        path: str = Query(description="路徑"),
-        scope: Optional[str] = Query(default=None, description="範圍 (project/user/plugin)"),
-        recursive: bool = Query(default=False, description="是否遞迴刪除"),
+        path: str = Query(description="Path"),
+        scope: Optional[str] = Query(default=None, description="Scope (project/user/plugin)"),
+        recursive: bool = Query(default=False, description="Delete recursively"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -200,15 +200,15 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.post(
         "/copy",
         response_model=FileOperationResponse,
-        summary="複製 Skill",
+        summary="Copy skill",
         responses=build_responses(400, 401, 404, 409, 422, 500),
     )
     async def copy_skill(
-        sourcePath: str = Query(description="源路徑"),
-        destPath: str = Query(description="目標路徑"),
-        sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-        destScope: Optional[str] = Query(default=None, description="目標範圍"),
-        overwrite: bool = Query(default=False, description="是否覆蓋"),
+        sourcePath: str = Query(description="Source path"),
+        destPath: str = Query(description="Destination path"),
+        sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+        destScope: Optional[str] = Query(default=None, description="Destination scope"),
+        overwrite: bool = Query(default=False, description="Overwrite"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -233,15 +233,15 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.post(
         "/move",
         response_model=FileOperationResponse,
-        summary="移動 Skill",
+        summary="Move skill",
         responses=build_responses(400, 401, 404, 409, 422, 500),
     )
     async def move_skill(
-        sourcePath: str = Query(description="源路徑"),
-        destPath: str = Query(description="目標路徑"),
-        sourceScope: Optional[str] = Query(default=None, description="源範圍"),
-        destScope: Optional[str] = Query(default=None, description="目標範圍"),
-        overwrite: bool = Query(default=False, description="是否覆蓋"),
+        sourcePath: str = Query(description="Source path"),
+        destPath: str = Query(description="Destination path"),
+        sourceScope: Optional[str] = Query(default=None, description="Source scope"),
+        destScope: Optional[str] = Query(default=None, description="Destination scope"),
+        overwrite: bool = Query(default=False, description="Overwrite"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -266,13 +266,13 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
     @router.post(
         "/batch-delete",
         response_model=BatchOperationResponse,
-        summary="批次刪除 Skills",
+        summary="Batch delete skills",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def batch_delete_skills(
-        paths: List[str] = Query(description="路徑列表"),
-        scope: Optional[str] = Query(default=None, description="範圍"),
-        recursive: bool = Query(default=False, description="是否遞迴刪除"),
+        paths: List[str] = Query(description="Path list"),
+        scope: Optional[str] = Query(default=None, description="Scope"),
+        recursive: bool = Query(default=False, description="Delete recursively"),
         service: CliSkillService = Depends(get_service),
     ):
         try:
@@ -289,7 +289,7 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
         @router.get(
             "/plugins",
             response_model=List[PluginSkillInfo],
-            summary="取得插件 Skills",
+            summary="Get plugin skills",
             responses=build_responses(401, 500),
         )
         async def get_plugin_skills(

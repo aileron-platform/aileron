@@ -1,4 +1,4 @@
-"""CLI Agents MD 模組"""
+"""CLI Agents MD module"""
 
 from .router import create_agents_md_router
 from .service import AgentsMdTool

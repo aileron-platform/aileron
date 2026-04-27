@@ -5,123 +5,123 @@ log() {
   echo "[firewall] $1"
 }
 
-log "開始配置防火牆規則..."
+log "Starting firewall configuration..."
 
-# 清除現有規則
+# Clear existing rules
 iptables -F INPUT
 iptables -F OUTPUT
 
-# === INPUT 規則（連入流量）===
-log "設定 INPUT 規則..."
+# === INPUT rules (incoming traffic) ===
+log "Setting INPUT rules..."
 
-# 預設允許所有連入流量
+# Default accept all incoming traffic
 iptables -P INPUT ACCEPT
 
-# 允許本地迴環
+# Allow local loopback
 iptables -A INPUT -i lo -j ACCEPT
 
-# 允許已建立的連線
+# Allow established connections
 iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# 明確允許 HTTP/HTTPS 連入（80, 443）
+# Explicitly allow HTTP/HTTPS incoming (80, 443)
 iptables -A INPUT -p tcp --dport 80 -j ACCEPT
 iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 
-# 允許 SSH 連入（22）
+# Allow SSH incoming (22)
 iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 
-# 允許 FastAPI 連入（3002）
+# Allow FastAPI incoming (3002)
 iptables -A INPUT -p tcp --dport 3002 -j ACCEPT
 
-log "INPUT 規則設定完成"
+log "INPUT rules configuration complete"
 
-# === OUTPUT 規則（連出流量）===
-log "設定 OUTPUT 規則..."
+# === OUTPUT rules (outgoing traffic) ===
+log "Setting OUTPUT rules..."
 
-# 網路存取權限控制
+# Network access permission control
 {% if not firewall.network_access_enabled %}
-log "網路存取已關閉 - 封鎖對外連線（保留內部網路）"
+log "Network access disabled - blocking external connections (preserving internal network)"
 
-# 預設拒絕對外連線
+# Default deny external connections
 iptables -P OUTPUT DROP
 
-# 允許本地迴環
+# Allow local loopback
 iptables -A OUTPUT -o lo -j ACCEPT
 
-# 允許已建立的連線
+# Allow established connections
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# 允許 Docker 內部網路通訊（172.16.0.0/12 包含常見的 Docker 網段）
+# Allow Docker internal network communication (172.16.0.0/12 includes common Docker subnets)
 iptables -A OUTPUT -d 172.16.0.0/12 -j ACCEPT
 iptables -A OUTPUT -d 10.0.0.0/8 -j ACCEPT
 
-# 允許連接到 workspace-manager（透過 Docker DNS）
+# Allow connection to workspace-manager (via Docker DNS)
 iptables -A OUTPUT -p tcp --dport 3001 -j ACCEPT
 
-# 允許 DNS 查詢
+# Allow DNS queries
 iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
 
-log "防火牆設定完成：網路存取已關閉（保留內部網路）"
+log "Firewall configuration complete: network access disabled (internal network preserved)"
 exit 0
 {% endif %}
 
-log "網路存取已開啟"
+log "Network access enabled"
 
-# 允許網域模式控制
+# Allow domain mode control
 {% if firewall.domain_access_mode == "all" %}
-log "允許網域模式：全部（不受限制）"
+log "Domain access mode: all (unrestricted)"
 
-# 允許所有對外連線
+# Allow all external connections
 iptables -P OUTPUT ACCEPT
 
-# 允許本地迴環
+# Allow local loopback
 iptables -A OUTPUT -o lo -j ACCEPT
 
-# 允許已建立的連線
+# Allow established connections
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 {% elif firewall.domain_access_mode == "specific" %}
-log "允許網域模式：指定網域"
+log "Domain access mode: specific domains"
 
-# 預設拒絕對外連線
+# Default deny external connections
 iptables -P OUTPUT DROP
 
-# 允許本地迴環
+# Allow local loopback
 iptables -A OUTPUT -o lo -j ACCEPT
 
-# 允許已建立的連線
+# Allow established connections
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 
-# 允許 Docker 內部網路通訊
+# Allow Docker internal network communication
 iptables -A OUTPUT -d 172.16.0.0/12 -j ACCEPT
 iptables -A OUTPUT -d 10.0.0.0/8 -j ACCEPT
 
-# 允許連接到 workspace-manager
+# Allow connection to workspace-manager
 iptables -A OUTPUT -p tcp --dport 3001 -j ACCEPT
 
-# 允許 DNS 查詢（必要）
+# Allow DNS queries (required)
 iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
 
-# 為每個允許的網域建立規則
+# Create rules for each allowed domain
 {% for domain in firewall.allowed_domains %}
-log "允許網域: {{ domain }}"
+log "Allowing domain: {{ domain }}"
 
-# 解析網域的 IP 地址
+# Resolve IP addresses for the domain
 DOMAIN_IPS=$(dig +short {{ domain }} A {{ domain }} AAAA 2>/dev/null | grep -E '^[0-9a-f.:]+$' || true)
 
 if [ -n "$DOMAIN_IPS" ]; then
   for IP in $DOMAIN_IPS; do
-    log "  允許 IP: $IP ({{ domain }})"
+    log "  Allowing IP: $IP ({{ domain }})"
     iptables -A OUTPUT -d "$IP" -j ACCEPT
   done
 else
-  log "  警告: 無法解析網域 {{ domain }}"
+  log "  Warning: Unable to resolve domain {{ domain }}"
 fi
 {% endfor %}
 
 {% endif %}
 
-log "防火牆設定完成"
+log "Firewall configuration complete"
 

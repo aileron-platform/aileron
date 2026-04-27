@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# 檢查必要的環境變數（由容器佈建時注入）
+# Check required environment variables injected during container provisioning.
 if [ -z "$ANTHROPIC_BASE_URL" ]; then
     echo "WARNING: ANTHROPIC_BASE_URL not set"
 fi
@@ -9,7 +9,7 @@ if [ -z "$ANTHROPIC_AUTH_TOKEN" ]; then
     echo "WARNING: ANTHROPIC_AUTH_TOKEN not set"
 fi
 
-echo "Starting Workspace Runtime 服務..."
+echo "Starting Workspace Runtime service..."
 echo "ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-<not set>}"
 echo "ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:+${ANTHROPIC_AUTH_TOKEN:0:8}...}"
 
@@ -32,5 +32,5 @@ else
     echo "Skipping dependency sync (WORKSPACE_RUNTIME_SYNC_DEPENDENCIES=${SYNC_DEPENDENCIES})"
 fi
 
-# 啟動 FastAPI (使用完整路徑)
+# Start FastAPI using the full path.
 exec /workspace-runtime/.venv/bin/python -m app.main

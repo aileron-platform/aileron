@@ -1,13 +1,13 @@
-"""Git 版本控制服務
+"""Git version control service
 
-提供 Git 版本控制操作的統一介面（Facade 模式）。
+Provides unified interface for Git version control operations (Facade pattern).
 
-此服務整合了以下操作模組：
-- StatusOperations: 狀態與分支操作
-- StagingOperations: 變更與暫存操作
-- CommitOperations: 提交與歷史操作
-- RemoteOperations: 遠端倉庫操作
-- DiffOperations: Diff 與內容操作
+This service integrates the following operation modules:
+- StatusOperations: Status and branch operations
+- StagingOperations: Changes and staging operations
+- CommitOperations: Commit and history operations
+- RemoteOperations: Remote repository operations
+- DiffOperations: Diff and content operations
 """
 
 from __future__ import annotations
@@ -56,34 +56,34 @@ logger = logging.getLogger(__name__)
 
 
 class GitService:
-    """Git 版本控制服務（Facade）
+    """Git version control service (Facade)
 
-    提供 Git 操作的統一介面，委派給專門的操作類別處理。
+    Provides unified interface for Git operations, delegates to specialized operation classes.
 
-    效能優化：
-    - Redis 快取層減少重複計算
-    - 批次操作優化
-    - 優化的 diff 計算
-    - 快速的總數計算
+    Performance optimizations:
+    - Redis cache layer reduces redundant computation
+    - Batch operation optimization
+    - Optimized diff computation
+    - Fast total count calculation
     """
 
     def __init__(self, base_path: Optional[Path | str] = None, cache: Optional[GitCache] = None) -> None:
-        """初始化 Git 服務
+        """Initialize Git service
 
         Args:
-            base_path: 工作區根目錄
-            cache: 快取層（可選）
+            base_path: Workspace root directory
+            cache: Cache layer (optional)
         """
         root = Path(base_path) if base_path else Path(__file__).resolve().parents[3] / "tests" / "git_workspaces"
         self._root_path = root.resolve()
         self._root_path.mkdir(parents=True, exist_ok=True)
         self.cache = cache
 
-        # 初始化工具類
+        # Initialize utility class
         self._utils = GitUtils(self._root_path, cache)
         self._snapshot_provider = WorkingTreeSnapshotProvider(self._utils, cache)
 
-        # 初始化操作類
+        # Initialize operation classes
         self._status_ops = StatusOperations(self._utils, cache, self._snapshot_provider)
         self._staging_ops = StagingOperations(self._utils, cache, self._snapshot_provider)
         self._commit_ops = CommitOperations(self._utils, cache)
@@ -91,55 +91,55 @@ class GitService:
         self._diff_ops = DiffOperations(self._utils, cache)
 
     # ------------------------------------------------------------------
-    # 相容 wrapper
+    # Compatibility wrapper
     # ------------------------------------------------------------------
     def _workspace_path(self, workspace_id: str) -> Path:
-        """向後相容：取得 workspace 路徑。"""
+        """Backward compatibility: Get workspace path."""
         return self._utils.workspace_path(workspace_id)
 
     def _repo(self, workspace_id: str):
-        """向後相容：取得 Git repo。"""
+        """Backward compatibility: Get Git repo."""
         return self._utils.get_repo(workspace_id)
 
     def _has_head(self, repo) -> bool:
-        """向後相容：檢查 repo 是否有 HEAD。"""
+        """Backward compatibility: Check if repo has HEAD."""
         return self._utils.has_head(repo)
 
     def _current_branch(self, repo) -> tuple[str, bool]:
-        """向後相容：取得目前分支。"""
+        """Backward compatibility: Get current branch."""
         return self._utils.current_branch(repo)
 
     def _tracking_delta(self, repo) -> tuple[int, int]:
-        """向後相容：取得追蹤分支 ahead/behind。"""
+        """Backward compatibility: Get tracking branch ahead/behind."""
         return self._utils.tracking_delta(repo)
 
     def _should_ignore_file(self, file_path: str) -> bool:
-        """向後相容：判斷檔案是否應忽略。"""
+        """Backward compatibility: Determine if file should be ignored."""
         return self._utils.should_ignore_file(file_path)
 
     def _normalize_paths(self, repo, paths):
-        """向後相容：正規化路徑清單。"""
+        """Backward compatibility: Normalize path list."""
         return self._utils.normalize_paths(repo, paths)
 
     def _map_change_type(self, change_type: str) -> str:
-        """向後相容：映射變更類型。"""
+        """Backward compatibility: Map change type."""
         return self._utils.map_change_type(change_type)
 
     # ------------------------------------------------------------------
-    # 狀態與分支操作
+    # Status and branch operations
     # ------------------------------------------------------------------
     def list_contexts(self, workspace_id: str) -> GitContextListResponse:
         """List available Git contexts for a workspace."""
         return self._utils.list_contexts(workspace_id)
 
     def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
-        """取得 Git 狀態
+        """Get Git status
 
         Args:
-            workspace_id: 工作區 ID
+            workspace_id: Workspace ID
 
         Returns:
-            版本控制狀態
+            Version control status
         """
         return self._status_ops.get_status(workspace_id, context_id)
 
@@ -151,15 +151,15 @@ class GitService:
         context_id: Optional[str] = None,
         include_metadata: bool = True,
     ) -> BranchListResponse:
-        """列出分支
+        """List branches
 
         Args:
-            workspace_id: 工作區 ID
-            include_remote: 是否包含遠端分支
-            search: 搜尋關鍵字
+            workspace_id: Workspace ID
+            include_remote: Whether to include remote branches
+            search: Search keyword
 
         Returns:
-            分支列表回應
+            Branch list response
         """
         return self._status_ops.list_branches(workspace_id, include_remote, search, context_id, include_metadata)
 
@@ -170,20 +170,20 @@ class GitService:
         payload: CheckoutRequest,
         context_id: Optional[str] = None,
     ) -> CheckoutResponse:
-        """切換分支
+        """Checkout branch
 
         Args:
-            workspace_id: 工作區 ID
-            branch_name: 目標分支名稱
-            payload: 切換請求
+            workspace_id: Workspace ID
+            branch_name: Target branch name
+            payload: Checkout request
 
         Returns:
-            切換回應
+            Checkout response
         """
         return self._status_ops.checkout_branch(workspace_id, branch_name, payload, context_id)
 
     # ------------------------------------------------------------------
-    # 變更與暫存操作
+    # Changes and staging operations
     # ------------------------------------------------------------------
     def get_changes(
         self,
@@ -192,66 +192,66 @@ class GitService:
         page_size: int = 100,
         context_id: Optional[str] = None,
     ) -> ChangesResponse:
-        """取得檔案變更
+        """Get file changes
 
         Args:
-            workspace_id: 工作區 ID
-            page: 頁碼
-            page_size: 每頁大小
+            workspace_id: Workspace ID
+            page: Page number
+            page_size: Items per page
 
         Returns:
-            變更回應
+            Changes response
         """
         return self._staging_ops.get_changes(workspace_id, page, page_size, context_id)
 
     def stage(self, workspace_id: str, payload: StageRequest, context_id: Optional[str] = None) -> StageResponse:
-        """暫存檔案
+        """Stage files
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 暫存請求
+            workspace_id: Workspace ID
+            payload: Stage request
 
         Returns:
-            暫存回應
+            Stage response
         """
         return self._staging_ops.stage(workspace_id, payload, context_id)
 
     def unstage(self, workspace_id: str, payload: UnstageRequest, context_id: Optional[str] = None) -> UnstageResponse:
-        """取消暫存檔案
+        """Unstage files
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 取消暫存請求
+            workspace_id: Workspace ID
+            payload: Unstage request
 
         Returns:
-            取消暫存回應
+            Unstage response
         """
         return self._staging_ops.unstage(workspace_id, payload, context_id)
 
     def discard(self, workspace_id: str, payload: DiscardRequest, context_id: Optional[str] = None) -> DiscardResponse:
-        """放棄變更
+        """Discard changes
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 放棄請求
+            workspace_id: Workspace ID
+            payload: Discard request
 
         Returns:
-            放棄回應
+            Discard response
         """
         return self._staging_ops.discard(workspace_id, payload, context_id)
 
     # ------------------------------------------------------------------
-    # 提交與歷史操作
+    # Commit and history operations
     # ------------------------------------------------------------------
     def commit(self, workspace_id: str, payload: CommitRequest, context_id: Optional[str] = None) -> CommitResponse:
-        """建立提交
+        """Create commit
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 提交請求
+            workspace_id: Workspace ID
+            payload: Commit request
 
         Returns:
-            提交回應
+            Commit response
         """
         return self._commit_ops.commit(workspace_id, payload, context_id)
 
@@ -264,85 +264,85 @@ class GitService:
         search: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> CommitListResponse:
-        """列出提交歷史
+        """List commit history
 
         Args:
-            workspace_id: 工作區 ID
-            page: 頁碼
-            page_size: 每頁大小
-            branch: 分支名稱
-            search: 搜尋關鍵字
+            workspace_id: Workspace ID
+            page: Page number
+            page_size: Items per page
+            branch: Branch name
+            search: Search keyword
 
         Returns:
-            提交列表回應
+            Commit list response
         """
         return self._commit_ops.list_commits(workspace_id, page, page_size, branch, search, context_id)
 
     def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitDetailResponse:
-        """取得提交詳情
+        """Get commit details
 
         Args:
-            workspace_id: 工作區 ID
-            commit_id: 提交 ID
+            workspace_id: Workspace ID
+            commit_id: Commit ID
 
         Returns:
-            提交詳情回應
+            Commit detail response
         """
         return self._commit_ops.get_commit(workspace_id, commit_id, context_id)
 
     def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitFilesResponse:
-        """取得提交的檔案列表
+        """Get commit file list
 
         Args:
-            workspace_id: 工作區 ID
-            commit_id: 提交 ID
+            workspace_id: Workspace ID
+            commit_id: Commit ID
 
         Returns:
-            提交檔案回應
+            Commit file response
         """
         return self._commit_ops.get_commit_files(workspace_id, commit_id, context_id)
 
     # ------------------------------------------------------------------
-    # 遠端操作
+    # Remote operations
     # ------------------------------------------------------------------
     def push(self, workspace_id: str, payload: PushRequest, context_id: Optional[str] = None) -> PushResponse:
-        """推送到遠端
+        """Push to remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 推送請求
+            workspace_id: Workspace ID
+            payload: Push request
 
         Returns:
-            推送回應
+            Push response
         """
         return self._remote_ops.push(workspace_id, payload, context_id)
 
     def pull(self, workspace_id: str, payload: PullRequest, context_id: Optional[str] = None) -> PullResponse:
-        """從遠端拉取
+        """Pull from remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 拉取請求
+            workspace_id: Workspace ID
+            payload: Pull request
 
         Returns:
-            拉取回應
+            Pull response
         """
         return self._remote_ops.pull(workspace_id, payload, context_id)
 
     def fetch(self, workspace_id: str, payload: FetchRequest, context_id: Optional[str] = None) -> FetchResponse:
-        """從遠端取得更新
+        """Fetch updates from remote
 
         Args:
-            workspace_id: 工作區 ID
-            payload: Fetch 請求
+            workspace_id: Workspace ID
+            payload: Fetch request
 
         Returns:
-            Fetch 回應
+            Fetch response
         """
         return self._remote_ops.fetch(workspace_id, payload, context_id)
 
     # ------------------------------------------------------------------
-    # Diff 與內容操作
+    # Diff and content operations
     # ------------------------------------------------------------------
     def diff(
         self,
@@ -354,18 +354,18 @@ class GitService:
         include_metadata: bool = False,
         context_id: Optional[str] = None,
     ) -> DiffResponse:
-        """獲取檔案的差異內容
+        """Get file diff content
 
         Args:
-            workspace_id: 工作區 ID
-            path: 檔案路徑
-            base: 比較基準
-            head: 比較目標
-            context: 上下文行數
-            include_metadata: 是否包含檔案元資料
+            workspace_id: Workspace ID
+            path: File path
+            base: Comparison base
+            head: Comparison target
+            context: Context line count
+            include_metadata: Whether to include file metadata
 
         Returns:
-            Diff 回應
+            Diff response
         """
         return self._diff_ops.diff(workspace_id, path, base, head, context, include_metadata, context_id)
 
@@ -376,15 +376,15 @@ class GitService:
         revision: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> BlobResponse:
-        """獲取檔案內容
+        """Get file content
 
         Args:
-            workspace_id: 工作區 ID
-            path: 檔案路徑
-            revision: 版本
+            workspace_id: Workspace ID
+            path: File path
+            revision: Version
 
         Returns:
-            Blob 回應
+            Blob response
         """
         return self._diff_ops.blob(workspace_id, path, revision, context_id)
 

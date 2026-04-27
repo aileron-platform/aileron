@@ -1,6 +1,6 @@
 """Message Service.
 
-提供訊息的業務邏輯，包含建立、查詢、佇列管理等功能。
+Provides business logic for messages, including creation, query, queue management, etc.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ..websocket.events import EventEmitter, get_event_emitter
 
 
 class MessageServiceError(Exception):
-    """Message Service 錯誤."""
+    """Message Service error."""
 
     pass
 
@@ -34,7 +34,7 @@ class MessageServiceError(Exception):
 class MessageService:
     """Message Service.
 
-    處理訊息相關的業務邏輯。
+    Handles message-related business logic.
     """
 
     def __init__(
@@ -44,13 +44,13 @@ class MessageService:
         session_repo: Optional[AgentSessionRepository] = None,
         emitter: Optional[EventEmitter] = None,
     ):
-        """初始化 Service.
+        """Initialize Service.
 
         Args:
-            db: 資料庫 session
-            message_repo: Message Repository (可注入)
-            session_repo: Session Repository (可注入)
-            emitter: WebSocket 事件發送器 (可注入)
+            db: Database session
+            message_repo: Message Repository (injectable)
+            session_repo: Session Repository (injectable)
+            emitter: WebSocket event emitter (injectable)
         """
         self.db = db
         self.message_repo = message_repo or MessageRepository(db)
@@ -61,21 +61,21 @@ class MessageService:
         self,
         data: MessageCreate,
     ) -> Message:
-        """建立訊息.
+        """Create message.
 
         Args:
-            data: 建立請求資料
+            data: Creation request data
 
         Returns:
-            建立的訊息實體
+            Created message entity
         """
         message_id = str(uuid.uuid4())
         now = utcnow()
 
-        # 取得下一個索引
+        # Get next index
         next_index = await self.message_repo.get_next_index(data.session_id)
 
-        # 建立 data blob
+        # Create data blob
         data_blob: Dict[str, Any] = {
             "content": data.content,
         }
@@ -89,10 +89,10 @@ class MessageService:
         if data.metadata:
             data_blob["metadata"] = data.metadata
 
-        # 計算內容預覽
+        # Calculate content preview
         content_preview = self._get_content_preview(data.content)
 
-        # 建立記錄 (data 序列化為 JSON 字串存入 TEXT 欄位)
+        # Create record (data serialized to JSON string stored in TEXT field)
         model = await self.message_repo.create({
             "message_id": message_id,
             "created_at": now,
@@ -107,10 +107,10 @@ class MessageService:
             "data": self._json_dumps(data_blob),
         })
 
-        # 更新 session 的 message_count
+        # Update session's message_count
         await self.session_repo.increment_message_count(data.session_id)
 
-        # 如果是第一個用戶訊息，自動設定 session title
+        # If first user message, auto-set session title
         if data.role == MessageRole.USER and next_index == 0:
             await self._update_session_title_from_first_message(
                 data.session_id, content_preview
@@ -122,13 +122,13 @@ class MessageService:
         self,
         message_id: str,
     ) -> Optional[Message]:
-        """取得訊息.
+        """Get message.
 
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
 
         Returns:
-            訊息實體或 None
+            Message entity or None
         """
         model = await self.message_repo.find_by_id(message_id)
         if not model:
@@ -140,18 +140,18 @@ class MessageService:
         self,
         query: MessageQuery,
     ) -> Tuple[List[Message], int]:
-        """查詢訊息列表.
+        """Query message list.
 
         Args:
-            query: 查詢參數
+            query: Query parameters
 
         Returns:
-            (訊息列表, 總數)
+            (Message list, total)
         """
         if not query.session_id:
             raise MessageServiceError("session_id is required")
 
-        # 查詢
+        # Query
         models = await self.message_repo.find_by_session(
             session_id=query.session_id,
             task_id=query.task_id,
@@ -160,7 +160,7 @@ class MessageService:
             offset=query.offset,
         )
 
-        # 計算總數
+        # Calculate total
         filters = {"session_id": query.session_id, "status": None}
         if query.task_id:
             filters["task_id"] = query.task_id
@@ -169,7 +169,7 @@ class MessageService:
 
         total = await self.message_repo.count(filters)
 
-        # 轉換為實體
+        # Convert to entities
         messages = [self.message_repo.to_entity(m) for m in models]
 
         return messages, total
@@ -180,15 +180,15 @@ class MessageService:
         limit: int = 100,
         offset: int = 0,
     ) -> List[Message]:
-        """依任務 ID 查詢訊息.
+        """Query messages by task ID.
 
         Args:
-            task_id: 任務 ID
-            limit: 最大筆數
-            offset: 偏移量
+            task_id: Task ID
+            limit: Max count
+            offset: Offset
 
         Returns:
-            訊息列表
+            Message list
         """
         models = await self.message_repo.find_by_task(task_id, limit, offset)
         return [self.message_repo.to_entity(m) for m in models]
@@ -199,15 +199,15 @@ class MessageService:
         start_index: int,
         end_index: int,
     ) -> List[Message]:
-        """依索引範圍查詢訊息.
+        """Query messages by index range.
 
         Args:
-            session_id: 會話 ID
-            start_index: 起始索引
-            end_index: 結束索引
+            session_id: Session ID
+            start_index: Start index
+            end_index: End index
 
         Returns:
-            訊息列表
+            Message list
         """
         models = await self.message_repo.find_by_range(
             session_id,
@@ -220,13 +220,13 @@ class MessageService:
         self,
         messages: List[MessageCreate],
     ) -> List[Message]:
-        """批次建立訊息.
+        """Batch create messages.
 
         Args:
-            messages: 訊息建立請求列表
+            messages: Message creation request list
 
         Returns:
-            建立的訊息列表
+            Created message list
         """
         if not messages:
             return []
@@ -234,10 +234,10 @@ class MessageService:
         session_id = messages[0].session_id
         now = utcnow()
 
-        # 取得起始索引
+        # Get starting index
         start_index = await self.message_repo.get_next_index(session_id)
 
-        # 準備批次資料
+        # Prepare batch data
         bulk_data = []
         for i, data in enumerate(messages):
             message_id = str(uuid.uuid4())
@@ -271,10 +271,10 @@ class MessageService:
                 "data": self._json_dumps(data_blob),
             })
 
-        # 批次建立
+        # Batch create
         models = await self.message_repo.create_bulk(bulk_data)
 
-        # 更新 session 的 message_count
+        # Update session's message_count
         await self.session_repo.increment_message_count(session_id, len(messages))
 
         return [self.message_repo.to_entity(m) for m in models]
@@ -283,20 +283,20 @@ class MessageService:
         self,
         message_id: str,
     ) -> bool:
-        """刪除訊息.
+        """Delete message.
 
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
 
         Returns:
-            是否成功刪除
+            Whether deletion was successful
         """
         return await self.message_repo.delete(message_id)
 
-    # === 佇列管理方法（已移至 Queue Management Methods 區塊）===
-    # 舊的實作已移除，使用新的 create_queued_message, get_queued_messages 等方法
+    # === Queue management methods (moved to Queue Management Methods block)===
+    # Old implementation removed, use new create_queued_message, get_queued_messages, etc.
 
-    # === 權限請求相關 ===
+    # === Permission request related ===
 
     async def create_permission_request(
         self,
@@ -311,26 +311,26 @@ class MessageService:
         raw_tool_call: Optional[Dict[str, Any]] = None,
         tool_call_id: Optional[str] = None,
     ) -> Message:
-        """建立權限請求訊息.
+        """Create permission request message.
 
         Args:
-            session_id: 會話 ID
-            task_id: 任務 ID
-            request_id: 請求 ID
-            tool_name: 工具名稱
-            tool_input: 工具輸入
+            session_id: Session ID
+            task_id: Task ID
+            request_id: Request ID
+            tool_name: Tool name
+            tool_input: Tool input
             tool_use_id: Tool Use ID
 
         Returns:
-            建立的權限請求訊息
+            Created permission request message
         """
         message_id = str(uuid.uuid4())
         now = utcnow()
 
-        # 取得下一個索引
+        # Get next index
         next_index = await self.message_repo.get_next_index(session_id)
 
-        # 建立權限請求內容
+        # Create permission request content
         permission_content = {
             "request_id": request_id,
             "tool_name": tool_name,
@@ -366,7 +366,7 @@ class MessageService:
             "data": self._json_dumps(data_blob),
         })
 
-        # 更新 session 的 message_count
+        # Update session's message_count
         await self.session_repo.increment_message_count(session_id)
 
         return self.message_repo.to_entity(model)
@@ -384,23 +384,23 @@ class MessageService:
         reason: Optional[str] = None,
         decision_content: Optional[str] = None,
     ) -> Optional[Message]:
-        """更新權限請求狀態.
+        """Update permission request status.
 
         Args:
-            session_id: 會話 ID
-            request_id: 請求 ID
-            status: 新狀態
-            scope: 權限範圍
-            approved_by: 批准者
+            session_id: Session ID
+            request_id: Request ID
+            status: New status
+            scope: Permission scope
+            approved_by: Approver
 
         Returns:
-            更新後的訊息或 None
+            Updated message or None
         """
         model = await self.message_repo.find_permission_request(session_id, request_id)
         if not model:
             return None
 
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = self._json_loads(model.data)
         content = data.get("content", {})
 
@@ -423,7 +423,7 @@ class MessageService:
 
         data["content"] = content
 
-        # 序列化後更新 (dict -> JSON 字符串)
+        # Serialize and update (dict -> JSON string)
         updated_model = await self.message_repo.update(model.message_id, {"data": self._json_dumps(data)})
         if not updated_model:
             return None
@@ -441,18 +441,18 @@ class MessageService:
         metadata: Optional[Dict[str, Any]] = None,
         queued_by_user_id: Optional[str] = None,
     ) -> Message:
-        """建立佇列訊息.
+        """Create queued message.
 
         Args:
-            session_id: 會話 ID
-            prompt: Prompt 內容
-            metadata: 額外的 metadata
-            queued_by_user_id: 建立此訊息的使用者 ID（用於認證保留）
+            session_id: Session ID
+            prompt: Prompt content
+            metadata: Additional metadata
+            queued_by_user_id: User ID who created this message (for authentication)
 
         Returns:
-            建立的 queued message entity
+            Created queued message entity
         """
-        # 合併 metadata，加入認證資訊
+        # Merge metadata, add authentication info
         combined_metadata = metadata or {}
         if queued_by_user_id:
             combined_metadata["queued_by_user_id"] = queued_by_user_id
@@ -466,80 +466,80 @@ class MessageService:
         return self.message_repo.to_entity(model)
 
     async def count_queued_messages(self, session_id: str) -> int:
-        """計算 session 中的 queued messages 數量.
+        """Count queued messages in session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            Queued messages 數量
+            Queued messages count
         """
         return await self.message_repo.count_queued(session_id)
 
     async def get_queued_messages(self, session_id: str) -> List[Message]:
-        """取得所有 queued messages.
+        """Get all queued messages.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            Queued messages 列表
+            Queued messages list
         """
         models = await self.message_repo.find_queued(session_id)
         return [self.message_repo.to_entity(m) for m in models]
 
     async def delete_queued_message(self, message_id: str) -> bool:
-        """刪除 queued message.
+        """Delete queued message.
 
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
 
         Returns:
-            是否成功刪除
+            Whether deletion was successful
         """
         return await self.message_repo.delete_queued(message_id)
 
     async def claim_next_queued_message(self, session_id: str) -> Optional[Message]:
-        """Claim 下一個 queued message 並標記為 dispatching."""
+        """Claim next queued message and mark as dispatching."""
         model = await self.message_repo.claim_next_queued(session_id)
         if not model:
             return None
         return self.message_repo.to_entity(model)
 
     async def restore_dispatching_message(self, message_id: str) -> bool:
-        """將 dispatching message 還原為 queued."""
+        """Restore dispatching message to queued."""
         return await self.message_repo.restore_dispatching(message_id)
 
     async def finalize_dispatching_message(self, message_id: str) -> bool:
-        """刪除已成功接手執行的 dispatching message."""
+        """Delete dispatching message that was successfully executed."""
         return await self.message_repo.delete_dispatching(message_id)
 
-    # NOTE: 舊的別名方法 add_to_queue, get_queue 已移除
-    # 直接使用 create_queued_message, get_queued_messages
+    # NOTE: Old alias methods add_to_queue, get_queue removed
+    # Use create_queued_message, get_queued_messages directly
 
     def _json_dumps(self, data: Dict[str, Any]) -> str:
-        """將字典序列化為 JSON 字串（用於存入 TEXT 欄位）.
+        """Serialize dict to JSON string (for storing in TEXT field).
 
-        會自動清理 NULL 字元 (\\x00)，因為 PostgreSQL TEXT 欄位不支援。
+        Automatically cleans NULL bytes (\\x00), as PostgreSQL TEXT field doesn't support them.
 
         Args:
-            data: 要序列化的字典
+            data: Dict to serialize
 
         Returns:
-            JSON 字串（已清理 NULL 字元）
+            JSON string (NULL bytes cleaned)
         """
         json_str = json.dumps(data, ensure_ascii=False)
-        # 清理 NULL 字元，避免 PostgreSQL 錯誤
+        # Clean NULL bytes to avoid PostgreSQL errors
         return json_str.replace('\x00', '')
 
     def _json_loads(self, data: Optional[str]) -> Dict[str, Any]:
-        """將 JSON 字串反序列化為字典（從 TEXT 欄位讀取）.
+        """Deserialize JSON string to dict (read from TEXT field).
 
         Args:
-            data: JSON 字串或 None
+            data: JSON string or None
 
         Returns:
-            字典，如果 data 為 None 或解析失敗則返回空字典
+            Dict, or empty dict if data is None or parsing fails
         """
         if not data:
             return {}
@@ -561,27 +561,27 @@ class MessageService:
         content: Union[str, List[Dict[str, Any]], Dict[str, Any]],
         max_length: int = 200,
     ) -> str:
-        """取得內容預覽.
+        """Get content preview.
 
         Args:
-            content: 訊息內容
-            max_length: 最大長度
+            content: Message content
+            max_length: Maximum length
 
         Returns:
-            內容預覽字串
+            Content preview string
         """
         if isinstance(content, str):
             return content[:max_length]
 
         if isinstance(content, list):
-            # 找第一個 text block
+            # Find first text block
             for block in content:
                 if block.get("type") == "text":
                     text = block.get("text", "")
                     return text[:max_length]
 
         if isinstance(content, dict):
-            # 可能是 PermissionRequestContent
+            # May be PermissionRequestContent
             if "request_id" in content:
                 return f"Permission request: {content.get('tool_name', '')}"
             if "text" in content:
@@ -595,34 +595,34 @@ class MessageService:
         content_preview: str,
         max_length: int = 50,
     ) -> None:
-        """從第一個訊息更新 session title.
+        """Update session title from first message.
 
         Args:
-            session_id: 會話 ID
-            content_preview: 訊息內容預覽
-            max_length: title 最大長度
+            session_id: Session ID
+            content_preview: Message content preview
+            max_length: title Maximum length
         """
-        # 檢查 session 是否已有 title
+        # Check if session already has a title
         session_model = await self.session_repo.find_by_id(session_id)
         if not session_model:
             return
 
         session = self.session_repo.to_entity(session_model)
         if session.title:
-            # 已有 title，不覆蓋
+            # Title already exists, not overwriting
             return
 
-        # 截斷並清理 title
+        # Truncate and clean title
         title = content_preview.strip()
         if len(title) > max_length:
             title = title[:max_length - 3] + "..."
 
-        # 移除換行符
+        # Remove newline characters
         title = title.replace("\n", " ").replace("\r", "")
 
-        # 更新 session title
+        # Update session title
         if title:
-            # 反序列化 data (JSON 字符串 -> dict)
+            # Deserialize data (JSON string -> dict)
             try:
                 data = json.loads(session_model.data) if session_model.data else {}
             except (json.JSONDecodeError, TypeError) as e:
@@ -635,11 +635,11 @@ class MessageService:
                 )
                 data = {}
             data["title"] = title
-            # 序列化後更新 (dict -> JSON 字符串，清理 NULL 字元)
+            # Serialize and update (dict -> JSON string, clean NULL bytes)
             json_str = json.dumps(data, ensure_ascii=False).replace('\x00', '')
             await self.session_repo.update(session_id, {"data": json_str})
 
-            # 發送 WebSocket 事件通知前端更新 session 列表
+            # Emit WebSocket event to notify frontend to update session list
             await self.emitter.emit_session_patched(
                 session_id,
                 {

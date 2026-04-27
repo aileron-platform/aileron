@@ -1,4 +1,4 @@
-"""Slash Commands 模組資料模型"""
+"""Slash Commands Module Data Models"""
 
 from __future__ import annotations
 
@@ -10,102 +10,102 @@ from ..common import DocumentScope
 
 
 class SlashCommandDocumentSummary(BaseModel):
-    """Slash Command 檔案摘要"""
+    """Slash Command file summary"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    namespace: str | None = Field(None, description="命名空間")
-    description: str | None = Field(None, description="指令描述")
-    scope: DocumentScope = Field(..., description="檔案範圍")
-    size: str = Field(..., description="檔案大小")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    namespace: str | None = Field(None, description="Namespace")
+    description: str | None = Field(None, description="Command description")
+    scope: DocumentScope = Field(..., description="File scope")
+    size: str = Field(..., description="File size")
 
-    # 新增：Plugin 來源資訊（當 scope='plugin' 時有值）
+    # Added: Plugin source information (has value when scope='plugin')
     plugin_name: str | None = Field(
         None,
         alias="pluginName",
-        description="Plugin 名稱（僅 scope='plugin' 時有值）"
+        description="Plugin name (has value only when scope='plugin')"
     )
     marketplace_name: str | None = Field(
         None,
         alias="marketplaceName",
-        description="Marketplace 名稱（僅 scope='plugin' 時有值）"
+        description="Marketplace name (has value only when scope='plugin')"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class SlashCommandDocumentDetail(SlashCommandDocumentSummary):
-    """Slash Command 完整內容"""
+    """Slash Command full content"""
 
-    content: str = Field(..., description="Markdown 內容")
+    content: str = Field(..., description="Markdown content")
 
 
 class SlashCommandScopeGroup(BaseModel):
-    """同一範圍的命令清單"""
+    """Command list in same scope"""
 
-    scope: DocumentScope = Field(..., description="檔案範圍")
+    scope: DocumentScope = Field(..., description="File scope")
     documents: List[SlashCommandDocumentSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
 
 class SlashCommandScopesResponse(BaseModel):
-    """列出所有範圍的命令"""
+    """List commands in all scopes"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
     scopes: List[SlashCommandScopeGroup] = Field(
-        default_factory=list, description="依範圍分類的命令"
+        default_factory=list, description="Commands grouped by scope"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class SlashCommandScopeResponse(BaseModel):
-    """單一範圍命令列表"""
+    """Command list in single scope"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="命令範圍")
+    scope: DocumentScope = Field(..., description="Command scope")
     documents: List[SlashCommandDocumentSummary] = Field(
-        default_factory=list, description="檔案列表"
+        default_factory=list, description="File list"
     )
 
     model_config = {"populate_by_name": True}
 
 
 class SlashCommandDocumentResponse(BaseModel):
-    """單一檔案內容"""
+    """Single file content"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="檔案範圍")
-    document: SlashCommandDocumentDetail = Field(..., description="檔案內容")
+    scope: DocumentScope = Field(..., description="File scope")
+    document: SlashCommandDocumentDetail = Field(..., description="File content")
 
     model_config = {"populate_by_name": True}
 
 
 class SlashCommandCreateRequest(BaseModel):
-    """建立 Slash Command 請求"""
+    """Create Slash Command request"""
 
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    content: str = Field(..., description="Markdown 內容")
-    namespace: str | None = Field(None, description="命名空間預設值")
-    description: str | None = Field(None, description="指令描述預設值")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    content: str = Field(..., description="Markdown content")
+    namespace: str | None = Field(None, description="Namespace default value")
+    description: str | None = Field(None, description="Command description default value")
 
     model_config = {"populate_by_name": True}
 
 
 class SlashCommandUpdateRequest(BaseModel):
-    """更新 Slash Command 請求"""
+    """Update Slash Command request"""
 
-    content: str = Field(..., description="Markdown 內容")
-    namespace: str | None = Field(None, description="命名空間預設值")
-    description: str | None = Field(None, description="指令描述預設值")
+    content: str = Field(..., description="Markdown content")
+    namespace: str | None = Field(None, description="Namespace default value")
+    description: str | None = Field(None, description="Command description default value")
 
 
 class SlashCommandDeleteResponse(BaseModel):
-    """刪除命令的回應"""
+    """Delete command response"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="命令範圍")
-    file_name: str = Field(..., alias="fileName", description="檔案名稱")
-    deleted: bool = Field(True, description="刪除狀態")
+    scope: DocumentScope = Field(..., description="Command scope")
+    file_name: str = Field(..., alias="fileName", description="File name")
+    deleted: bool = Field(True, description="Deletion status")
 
     model_config = {"populate_by_name": True}

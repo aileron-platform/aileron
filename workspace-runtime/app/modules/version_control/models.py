@@ -1,4 +1,4 @@
-"""版本控制模型定義"""
+"""Version control model definitions"""
 from __future__ import annotations
 
 from typing import Literal, Optional
@@ -7,10 +7,10 @@ from pydantic import BaseModel, Field
 
 
 class CommitAuthor(BaseModel):
-    """提交作者資訊"""
+    """Commit author information"""
 
-    name: str = Field(description="作者名稱")
-    email: str = Field(description="作者電子郵件")
+    name: str = Field(description="Author name")
+    email: str = Field(description="Author email")
 
 
 class GitContext(BaseModel):
@@ -36,77 +36,77 @@ class GitContextListResponse(BaseModel):
 
 
 class VersionControlStatus(BaseModel):
-    """Git 狀態摘要"""
+    """Git status summary"""
 
-    branch: str = Field(description="目前分支")
-    ahead: int = Field(default=0, description="領先遠端提交數")
-    behind: int = Field(default=0, description="落後遠端提交數")
-    detached: bool = Field(default=False, description="是否為分離 HEAD 狀態")
-    hasConflicts: bool = Field(default=False, description="是否存在衝突")
-    stagedCount: int = Field(default=0, description="暫存檔案數量")
-    unstagedCount: int = Field(default=0, description="未暫存檔案數量")
-    untrackedCount: int = Field(default=0, description="未追蹤檔案數量")
+    branch: str = Field(description="Current branch")
+    ahead: int = Field(default=0, description="Number of commits ahead of remote")
+    behind: int = Field(default=0, description="Number of commits behind remote")
+    detached: bool = Field(default=False, description="Whether HEAD is detached")
+    hasConflicts: bool = Field(default=False, description="Whether conflicts exist")
+    stagedCount: int = Field(default=0, description="Number of staged files")
+    unstagedCount: int = Field(default=0, description="Number of unstaged files")
+    untrackedCount: int = Field(default=0, description="Number of untracked files")
     lastFetchedAt: Optional[str] = Field(
-        default=None, description="最後一次遠端同步時間 (ISO8601)"
+        default=None, description="Last remote sync time (ISO8601)"
     )
 
 
 class BranchCommitInfo(BaseModel):
-    """分支最後一次提交資訊"""
+    """Branch last commit information"""
 
-    id: str = Field(description="提交 ID")
-    message: str = Field(description="提交訊息")
-    author: str = Field(description="作者名稱")
-    email: Optional[str] = Field(default=None, description="作者電子郵件")
-    timestamp: str = Field(description="提交時間 (ISO8601)")
+    id: str = Field(description="Commit ID")
+    message: str = Field(description="Commit message")
+    author: str = Field(description="Author name")
+    email: Optional[str] = Field(default=None, description="Author email")
+    timestamp: str = Field(description="Commit time (ISO8601)")
 
 
 class BranchInfo(BaseModel):
-    """分支資訊"""
+    """Branch information"""
 
-    name: str = Field(description="分支完整名稱")
-    displayName: str = Field(description="顯示名稱")
-    isActive: bool = Field(description="是否為目前檢出分支")
-    isRemote: bool = Field(description="是否為遠端分支")
-    ahead: int = Field(default=0, description="領先提交數")
-    behind: int = Field(default=0, description="落後提交數")
+    name: str = Field(description="Branch full name")
+    displayName: str = Field(description="Display name")
+    isActive: bool = Field(description="Whether this is the active branch")
+    isRemote: bool = Field(description="Whether this is a remote branch")
+    ahead: int = Field(default=0, description="Number of commits ahead")
+    behind: int = Field(default=0, description="Number of commits behind")
     lastCommit: Optional[BranchCommitInfo] = Field(
-        default=None, description="最後提交資訊"
+        default=None, description="Last commit information"
     )
 
 
 class BranchListResponse(BaseModel):
-    """分支列表回應"""
+    """Branch list response"""
 
-    branches: list[BranchInfo] = Field(description="分支清單")
+    branches: list[BranchInfo] = Field(description="Branch list")
 
 
 class CheckoutRequest(BaseModel):
-    """切換分支請求"""
+    """Switch branch request"""
 
-    create: bool = Field(default=False, description="是否建立新分支")
+    create: bool = Field(default=False, description="Whether to create new branch")
     startPoint: Optional[str] = Field(
-        default=None, description="新分支起始點，預設為目前 HEAD"
+        default=None, description="New branch starting point, default is current HEAD"
     )
-    stashChanges: bool = Field(default=False, description="切換前是否建立 stash")
+    stashChanges: bool = Field(default=False, description="Whether to create stash before switching")
 
 
 class CheckoutResponse(BaseModel):
-    """切換分支回應"""
+    """Switch branch response"""
 
-    branch: str = Field(description="最終分支名稱")
-    created: bool = Field(description="是否建立了新分支")
+    branch: str = Field(description="Final branch name")
+    created: bool = Field(description="Whether new branch was created")
     stashedChanges: Optional[str] = Field(
-        default=None, description="建立的 stash 名稱 (若有)"
+        default=None, description="Name of created stash (if any)"
     )
 
 
 class FileChange(BaseModel):
-    """檔案變更資訊"""
+    """File change information"""
 
-    name: str = Field(description="檔案名稱")
-    path: str = Field(description="檔案相對路徑")
-    status: str = Field(description="Git 狀態代碼")
+    name: str = Field(description="File name")
+    path: str = Field(description="File relative path")
+    status: str = Field(description="Git status code")
     type: Literal[
         "added",
         "modified",
@@ -116,243 +116,243 @@ class FileChange(BaseModel):
         "typechange",
         "unmerged",
         "untracked",
-    ] = Field(description="變更類型")
-    additions: int = Field(default=0, description="新增行數")
-    deletions: int = Field(default=0, description="刪除行數")
-    diff: Optional[str] = Field(default=None, description="差異內容 (如適用)")
+    ] = Field(description="Change type")
+    additions: int = Field(default=0, description="Number of added lines")
+    deletions: int = Field(default=0, description="Number of deleted lines")
+    diff: Optional[str] = Field(default=None, description="Diff content (if applicable)")
 
 
 class ChangesResponse(BaseModel):
-    """檔案變更回應"""
+    """File change response"""
 
-    staged: list[FileChange] = Field(default_factory=list, description="暫存變更")
-    unstaged: list[FileChange] = Field(default_factory=list, description="未暫存變更")
-    untracked: list[FileChange] = Field(default_factory=list, description="未追蹤檔案")
-    # 分頁資訊
-    untrackedTotal: int = Field(default=0, description="未追蹤檔案總數")
-    untrackedPage: int = Field(default=1, description="當前頁碼")
-    untrackedPageSize: int = Field(default=100, description="每頁數量")
-    untrackedHasMore: bool = Field(default=False, description="是否還有更多檔案")
+    staged: list[FileChange] = Field(default_factory=list, description="Staged changes")
+    unstaged: list[FileChange] = Field(default_factory=list, description="Unstaged changes")
+    untracked: list[FileChange] = Field(default_factory=list, description="Untracked files")
+    # Pagination info
+    untrackedTotal: int = Field(default=0, description="Total number of untracked files")
+    untrackedPage: int = Field(default=1, description="Current page number")
+    untrackedPageSize: int = Field(default=100, description="Items per page")
+    untrackedHasMore: bool = Field(default=False, description="Whether there are more files")
 
 
 class StageRequest(BaseModel):
-    """暫存檔案請求"""
+    """Stage files request"""
 
-    paths: list[str] = Field(description="要暫存的檔案或資料夾")
+    paths: list[str] = Field(description="Files or directories to stage")
     includeUntracked: bool = Field(
-        default=False, description="是否一併暫存未追蹤檔案"
+        default=False, description="Whether to also stage untracked files"
     )
 
 
 class StageResponse(BaseModel):
-    """暫存檔案回應"""
+    """Stage files response"""
 
-    staged: list[str] = Field(description="成功暫存的路徑")
-    unstaged: list[str] = Field(description="仍未暫存的路徑")
+    staged: list[str] = Field(description="Successfully staged paths")
+    unstaged: list[str] = Field(description="Paths that remain unstaged")
 
 
 class UnstageRequest(BaseModel):
-    """取消暫存請求"""
+    """Unstage files request"""
 
-    paths: list[str] = Field(description="要取消暫存的檔案或資料夾")
+    paths: list[str] = Field(description="Files or directories to unstage")
 
 
 class UnstageResponse(BaseModel):
-    """取消暫存回應"""
+    """Unstage files response"""
 
-    unstaged: list[str] = Field(description="取消暫存的路徑")
-    remainingStaged: int = Field(description="仍暫存在索引中的檔案數量")
+    unstaged: list[str] = Field(description="Unstaged paths")
+    remainingStaged: int = Field(description="Number of files still staged in index")
 
 
 class DiscardRequest(BaseModel):
-    """丟棄未暫存變更請求"""
+    """Discard unstaged changes request"""
 
-    paths: list[str] = Field(description="要還原的檔案或資料夾")
+    paths: list[str] = Field(description="Files or directories to restore")
     resetMode: Literal["soft", "mixed", "hard"] = Field(
-        default="mixed", description="Git reset 模式"
+        default="mixed", description="Git reset mode"
     )
 
 
 class DiscardResponse(BaseModel):
-    """丟棄變更回應"""
+    """Discard changes response"""
 
-    discarded: list[str] = Field(description="已還原的路徑")
-    warnings: list[str] = Field(default_factory=list, description="額外警告訊息")
+    discarded: list[str] = Field(description="Restored paths")
+    warnings: list[str] = Field(default_factory=list, description="Additional warning messages")
 
 
 class CommitStats(BaseModel):
-    """提交統計資訊"""
+    """Commit statistics"""
 
-    additions: int = Field(description="新增行數")
-    deletions: int = Field(description="刪除行數")
-    files: int = Field(description="受影響檔案數")
+    additions: int = Field(description="Number of added lines")
+    deletions: int = Field(description="Number of deleted lines")
+    files: int = Field(description="Number of affected files")
 
 
 class CommitChange(BaseModel):
-    """提交中的單一檔案變更"""
+    """Single file change in commit"""
 
-    name: str = Field(description="檔案名稱")
-    path: str = Field(description="檔案路徑")
-    status: str = Field(description="變更狀態")
-    additions: int = Field(description="新增行數")
-    deletions: int = Field(description="刪除行數")
-    patch: Optional[str] = Field(default=None, description="差異內容")
+    name: str = Field(description="File name")
+    path: str = Field(description="File path")
+    status: str = Field(description="Change status")
+    additions: int = Field(description="Number of added lines")
+    deletions: int = Field(description="Number of deleted lines")
+    patch: Optional[str] = Field(default=None, description="Diff content")
 
 
 class CommitSummary(BaseModel):
-    """提交摘要資訊"""
+    """Commit summary information"""
 
-    id: str = Field(description="提交 ID")
-    message: str = Field(description="提交訊息")
-    author: CommitAuthor = Field(description="作者資訊")
-    timestamp: str = Field(description="提交時間 (ISO8601)")
-    additions: int = Field(description="新增行數")
-    deletions: int = Field(description="刪除行數")
+    id: str = Field(description="Commit ID")
+    message: str = Field(description="Commit message")
+    author: CommitAuthor = Field(description="Author information")
+    timestamp: str = Field(description="Commit time (ISO8601)")
+    additions: int = Field(description="Number of added lines")
+    deletions: int = Field(description="Number of deleted lines")
 
 
 class CommitRequest(BaseModel):
-    """建立提交請求"""
+    """Create commit request"""
 
-    message: str = Field(description="提交訊息")
+    message: str = Field(description="Commit message")
     author: Optional[CommitAuthor] = Field(
-        default=None, description="提交作者，未提供則使用預設"
+        default=None, description="Commit author, uses default if not provided"
     )
-    amend: bool = Field(default=False, description="是否為 amend 提交")
+    amend: bool = Field(default=False, description="Whether this is an amend commit")
     paths: Optional[list[str]] = Field(
-        default=None, description="限定提交的檔案，未提供則提交索引全部"
+        default=None, description="Limit commit to specific files, commits entire index if not provided"
     )
 
 
 class CommitResponse(BaseModel):
-    """建立提交回應"""
+    """Create commit response"""
 
-    commit: CommitSummary = Field(description="新提交資訊")
+    commit: CommitSummary = Field(description="New commit information")
 
 
 class CommitListItem(BaseModel):
-    """提交列表項目"""
+    """Commit list item"""
 
-    id: str = Field(description="提交 ID")
-    message: str = Field(description="提交訊息")
-    author: str = Field(description="作者名稱")
-    email: Optional[str] = Field(default=None, description="作者電子郵件")
-    timestamp: int = Field(description="提交時間 (epoch ms)")
-    branch: str = Field(description="所屬分支")
-    additions: int = Field(description="新增行數")
-    deletions: int = Field(description="刪除行數")
-    files: int = Field(description="受影響檔案數")
+    id: str = Field(description="Commit ID")
+    message: str = Field(description="Commit message")
+    author: str = Field(description="Author name")
+    email: Optional[str] = Field(default=None, description="Author email")
+    timestamp: int = Field(description="Commit time (epoch ms)")
+    branch: str = Field(description="Branch name")
+    additions: int = Field(description="Number of added lines")
+    deletions: int = Field(description="Number of deleted lines")
+    files: int = Field(description="Number of affected files")
 
 
 class CommitListResponse(BaseModel):
-    """提交列表回應"""
+    """Commit list response"""
 
-    page: int = Field(description="頁碼")
-    pageSize: int = Field(description="每頁筆數")
-    total: int = Field(description="提交總數")
-    items: list[CommitListItem] = Field(description="提交清單")
+    page: int = Field(description="Page number")
+    pageSize: int = Field(description="Items per page")
+    total: int = Field(description="Total commits")
+    items: list[CommitListItem] = Field(description="Commit list")
 
 
 class CommitDetailResponse(BaseModel):
-    """單一提交詳細資訊"""
+    """Single commit detail information"""
 
-    id: str = Field(description="提交 ID")
-    message: str = Field(description="提交訊息")
-    author: CommitAuthor = Field(description="作者資訊")
-    timestamp: str = Field(description="提交時間 (ISO8601)")
-    branch: str = Field(description="分支名稱")
-    stats: CommitStats = Field(description="統計資訊")
-    changes: list[CommitChange] = Field(description="檔案變更清單")
+    id: str = Field(description="Commit ID")
+    message: str = Field(description="Commit message")
+    author: CommitAuthor = Field(description="Author information")
+    timestamp: str = Field(description="Commit time (ISO8601)")
+    branch: str = Field(description="Branch name")
+    stats: CommitStats = Field(description="Statistics information")
+    changes: list[CommitChange] = Field(description="File change list")
 
 
 class CommitFilesResponse(BaseModel):
-    """提交檔案差異回應"""
+    """Commit file diff response"""
 
-    commitId: str = Field(description="提交 ID")
-    files: list[CommitChange] = Field(description="檔案差異清單")
+    commitId: str = Field(description="Commit ID")
+    files: list[CommitChange] = Field(description="File diff list")
 
 
 class PushRequest(BaseModel):
-    """推送請求"""
+    """Push request"""
 
-    remote: str = Field(default="origin", description="遠端名稱")
-    branch: Optional[str] = Field(default=None, description="推送目標分支")
-    force: bool = Field(default=False, description="是否強制推送")
+    remote: str = Field(default="origin", description="Remote name")
+    branch: Optional[str] = Field(default=None, description="Push target branch")
+    force: bool = Field(default=False, description="Whether to force push")
 
 
 class PushUpdate(BaseModel):
-    """推送結果資訊"""
+    """Push result information"""
 
-    ref: str = Field(description="更新的引用")
-    status: str = Field(description="推送狀態")
+    ref: str = Field(description="Updated reference")
+    status: str = Field(description="Push status")
 
 
 class PushResponse(BaseModel):
-    """推送回應"""
+    """Push response"""
 
-    remote: str = Field(description="遠端名稱")
-    branch: str = Field(description="推送分支")
-    updates: list[PushUpdate] = Field(description="推送結果清單")
+    remote: str = Field(description="Remote name")
+    branch: str = Field(description="Pushed branch")
+    updates: list[PushUpdate] = Field(description="Push result list")
 
 
 class PullRequest(BaseModel):
-    """拉取請求"""
+    """Pull request"""
 
-    remote: str = Field(default="origin", description="遠端名稱")
-    branch: Optional[str] = Field(default=None, description="拉取分支")
-    rebase: bool = Field(default=False, description="是否使用 rebase")
-    autostash: bool = Field(default=False, description="是否自動 stash 變更")
+    remote: str = Field(default="origin", description="Remote name")
+    branch: Optional[str] = Field(default=None, description="Pull branch")
+    rebase: bool = Field(default=False, description="Whether to use rebase")
+    autostash: bool = Field(default=False, description="Whether to auto stash changes")
 
 
 class PullCommitInfo(BaseModel):
-    """拉取後的提交資訊"""
+    """Commit information after pull"""
 
-    id: str = Field(description="提交 ID")
-    message: str = Field(description="提交訊息")
-    author: str = Field(description="作者名稱")
+    id: str = Field(description="Commit ID")
+    message: str = Field(description="Commit message")
+    author: str = Field(description="Author name")
 
 
 class PullResponse(BaseModel):
-    """拉取回應"""
+    """Pull response"""
 
-    remote: str = Field(description="遠端名稱")
-    branch: str = Field(description="分支名稱")
-    fastForward: bool = Field(description="是否為快轉合併")
-    commits: list[PullCommitInfo] = Field(description="新增提交清單")
+    remote: str = Field(description="Remote name")
+    branch: str = Field(description="Branch name")
+    fastForward: bool = Field(description="Whether this is a fast-forward merge")
+    commits: list[PullCommitInfo] = Field(description="New commit list")
 
 
 class FetchRequest(BaseModel):
-    """同步遠端引用請求"""
+    """Sync remote references request"""
 
-    remote: str = Field(default="origin", description="遠端名稱")
-    prune: bool = Field(default=False, description="是否移除遠端已刪除分支")
+    remote: str = Field(default="origin", description="Remote name")
+    prune: bool = Field(default=False, description="Whether to remove remote-deleted branches")
 
 
 class FetchResponse(BaseModel):
-    """同步遠端引用回應"""
+    """Sync remote references response"""
 
-    remote: str = Field(description="遠端名稱")
-    fetchedRefs: list[str] = Field(description="同步的引用清單")
+    remote: str = Field(description="Remote name")
+    fetchedRefs: list[str] = Field(description="Synced reference list")
 
 
 class DiffResponse(BaseModel):
-    """差異結果回應"""
+    """Diff result response"""
 
-    path: str = Field(description="檔案路徑")
-    base: str = Field(description="比較基準")
-    head: str = Field(description="比較目標")
-    context: int = Field(description="上下文行數")
-    patch: str = Field(description="差異內容")
-    metadata: Optional[dict] = Field(default=None, description="額外中繼資料")
+    path: str = Field(description="File path")
+    base: str = Field(description="Comparison base")
+    head: str = Field(description="Comparison target")
+    context: int = Field(description="Context line count")
+    patch: str = Field(description="Diff content")
+    metadata: Optional[dict] = Field(default=None, description="Additional metadata")
 
 
 class BlobResponse(BaseModel):
-    """檔案內容回應"""
+    """File content response"""
 
-    path: str = Field(description="檔案路徑")
-    revision: str = Field(description="提交或引用")
-    encoding: str = Field(default="utf-8", description="內容編碼")
-    content: str = Field(description="Base64 編碼內容")
-    isBase64: bool = Field(default=True, description="是否為 Base64 編碼")
+    path: str = Field(description="File path")
+    revision: str = Field(description="Commit or reference")
+    encoding: str = Field(default="utf-8", description="Content encoding")
+    content: str = Field(description="Base64 encoded content")
+    isBase64: bool = Field(default=True, description="Whether Base64 encoded")
 
 
 __all__ = [

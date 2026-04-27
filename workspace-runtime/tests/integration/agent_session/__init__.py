@@ -1,1 +1,1 @@
-"""Agent Session 整合測試."""
+"""Agent Session integration tests."""

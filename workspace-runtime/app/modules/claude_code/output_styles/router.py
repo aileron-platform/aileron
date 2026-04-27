@@ -1,4 +1,4 @@
-"""Output Styles 路由"""
+"""Output Styles Routes"""
 
 from __future__ import annotations
 
@@ -17,11 +17,11 @@ from .models import (
 )
 from .service import OutputStyleService
 
-router = APIRouter(prefix="/output-styles", tags=["Claude Code - 輸出樣式"])
+router = APIRouter(prefix="/output-styles", tags=["Claude Code - Output Styles"])
 
 
 def _check_output_style_writable(scope: DocumentScope) -> None:
-    """檢查 Output Style scope 是否可寫入"""
+    """Check if Output Style scope is writable"""
     try:
         check_scope_writable(scope)
     except ValueError as e:
@@ -34,13 +34,13 @@ def _check_output_style_writable(scope: DocumentScope) -> None:
 @router.get(
     "",
     response_model=OutputStyleCollectionResponse,
-    summary="列出所有樣式",
+    summary="List all styles",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def list_output_styles(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="可選擇僅回傳指定範圍"
+        None, description="Optionally return only specified scope"
     ),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleCollectionResponse:
@@ -50,12 +50,12 @@ async def list_output_styles(
 @router.get(
     "/{scope}",
     response_model=OutputStyleScopeResponse,
-    summary="取得指定範圍樣式",
+    summary="Get styles for specified scope",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_scope_output_styles(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="樣式範圍"),
+    scope: DocumentScope = Path(..., description="Style scope"),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleScopeResponse:
     return service.get_scope(workspace_id, scope)
@@ -64,13 +64,13 @@ async def get_scope_output_styles(
 @router.get(
     "/{scope}/{file_name}",
     response_model=OutputStyleDocumentResponse,
-    summary="取得樣式內容",
+    summary="Get style content",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_output_style(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="樣式範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Style scope"),
+    file_name: str = Path(..., description="File name"),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleDocumentResponse:
     return service.get_document(workspace_id, scope, file_name)
@@ -80,13 +80,13 @@ async def get_output_style(
     "/{scope}",
     response_model=OutputStyleDocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增樣式",
+    summary="Create style",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def create_output_style(
     payload: OutputStyleCreateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="樣式範圍"),
+    scope: DocumentScope = Path(..., description="Style scope"),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleDocumentResponse:
     _check_output_style_writable(scope)
@@ -96,14 +96,14 @@ async def create_output_style(
 @router.put(
     "/{scope}/{file_name}",
     response_model=OutputStyleDocumentResponse,
-    summary="更新樣式",
+    summary="Update style",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def update_output_style(
     payload: OutputStyleUpdateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="樣式範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Style scope"),
+    file_name: str = Path(..., description="File name"),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleDocumentResponse:
     _check_output_style_writable(scope)
@@ -113,13 +113,13 @@ async def update_output_style(
 @router.delete(
     "/{scope}/{file_name}",
     response_model=OutputStyleDeleteResponse,
-    summary="刪除樣式",
+    summary="Delete style",
     responses=build_responses(400, 401, 403, 404, 500),
 )
 async def delete_output_style(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="樣式範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Style scope"),
+    file_name: str = Path(..., description="File name"),
     service: OutputStyleService = Depends(get_output_style_service),
 ) -> OutputStyleDeleteResponse:
     _check_output_style_writable(scope)

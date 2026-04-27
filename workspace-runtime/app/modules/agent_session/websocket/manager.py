@@ -1,6 +1,6 @@
 """WebSocket Connection Manager.
 
-管理 WebSocket 連線，提供訊息廣播和分組功能。
+Manages WebSocket connections, provides message broadcast and grouping functionality.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Connection:
-    """WebSocket 連線資訊."""
+    """WebSocket connection information."""
 
     websocket: WebSocket
     user_id: Optional[str] = None
@@ -33,34 +33,34 @@ class Connection:
 class ConnectionManager:
     """WebSocket Connection Manager.
 
-    管理所有 WebSocket 連線，提供：
-    - 連線/斷線管理
-    - 按 session 分組
-    - 廣播訊息
-    - 使用者通知
+    Manages all WebSocket connections, provides:
+    - Connection/disconnection management
+    - Group by session
+    - Broadcast messages
+    - User notifications
     """
 
     def __init__(
         self,
         replay_store: Optional[RedisWebSocketReplayStore] = None,
     ):
-        """初始化 Manager."""
-        # 所有活躍連線
+        """Initialize Manager."""
+        # All active connections
         self._connections: Dict[str, Connection] = {}
         # session_id -> connection_ids
         self._session_subscriptions: Dict[str, Set[str]] = {}
         # user_id -> connection_ids
         self._user_connections: Dict[str, Set[str]] = {}
-        # 連線 ID 計數器
+        # Connection ID counter
         self._connection_counter = 0
-        # 鎖
+        # Lock
         self._lock = asyncio.Lock()
-        # WebSocket replay 儲存（可注入，便於測試）
+        # WebSocket replay storage (injectable for testing)
         self._replay_store = replay_store
 
     @property
     def replay_store(self) -> RedisWebSocketReplayStore:
-        """取得 replay store."""
+        """Get replay store."""
         if self._replay_store is None:
             self._replay_store = get_websocket_replay_store()
         return self._replay_store
@@ -70,7 +70,7 @@ class ConnectionManager:
         session_id: str,
         message: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """確保 session 訊息帶有 seq，缺失時即時寫入 replay store."""
+        """Ensure session messages have seq, write to replay store immediately when missing."""
         existing_seq = message.get("seq")
         if isinstance(existing_seq, int):
             return message
@@ -81,11 +81,11 @@ class ConnectionManager:
             enriched["seq"] = seq
             return enriched
 
-        # append_event 失敗時 replay_store 已自行記錄警告，這裡僅回退原訊息。
+        # When append_event fails replay_store already logged warning, here just fallback to original message.
         return message
 
     def _generate_connection_id(self) -> str:
-        """產生連線 ID."""
+        """Generate connection ID."""
         self._connection_counter += 1
         return f"conn_{self._connection_counter}"
 
@@ -94,7 +94,7 @@ class ConnectionManager:
         connection: Connection,
         message: Dict[str, Any],
     ) -> bool:
-        """若連線處於 replay 模式，先把訊息放入暫存佇列."""
+        """If connection is in replay mode, put message in temporary queue first."""
         if not connection.metadata.get("replay_mode"):
             return False
 
@@ -112,15 +112,15 @@ class ConnectionManager:
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
     ) -> str:
-        """建立連線.
+        """Establish connection.
 
         Args:
-            websocket: WebSocket 實例
-            user_id: 使用者 ID
-            session_id: 初始訂閱的 session ID
+            websocket: WebSocket instance
+            user_id: User ID
+            session_id: Initial subscribed session ID
 
         Returns:
-            連線 ID
+            Connection ID
         """
         await websocket.accept()
 
@@ -134,14 +134,14 @@ class ConnectionManager:
 
             self._connections[connection_id] = connection
 
-            # 訂閱 session
+            # Subscribe to session
             if session_id:
                 connection.session_ids.add(session_id)
                 if session_id not in self._session_subscriptions:
                     self._session_subscriptions[session_id] = set()
                 self._session_subscriptions[session_id].add(connection_id)
 
-            # 記錄使用者連線
+            # Record user connection
             if user_id:
                 if user_id not in self._user_connections:
                     self._user_connections[user_id] = set()
@@ -150,31 +150,31 @@ class ConnectionManager:
             return connection_id
 
     async def disconnect(self, connection_id: str) -> None:
-        """斷開連線.
+        """Disconnect connection.
 
         Args:
-            connection_id: 連線 ID
+            connection_id: Connection ID
         """
         async with self._lock:
             connection = self._connections.get(connection_id)
             if not connection:
                 return
 
-            # 移除 session 訂閱
+            # Remove session subscription
             for session_id in connection.session_ids:
                 if session_id in self._session_subscriptions:
                     self._session_subscriptions[session_id].discard(connection_id)
                     if not self._session_subscriptions[session_id]:
                         del self._session_subscriptions[session_id]
 
-            # 移除使用者連線
+            # Remove user connection
             if connection.user_id:
                 if connection.user_id in self._user_connections:
                     self._user_connections[connection.user_id].discard(connection_id)
                     if not self._user_connections[connection.user_id]:
                         del self._user_connections[connection.user_id]
 
-            # 移除連線
+            # Remove connection
             del self._connections[connection_id]
 
     async def subscribe_session(
@@ -182,14 +182,14 @@ class ConnectionManager:
         connection_id: str,
         session_id: str,
     ) -> bool:
-        """訂閱 session.
+        """Subscribe to session.
 
         Args:
-            connection_id: 連線 ID
+            connection_id: Connection ID
             session_id: Session ID
 
         Returns:
-            是否成功訂閱
+            Whether subscription succeeded
         """
         async with self._lock:
             connection = self._connections.get(connection_id)
@@ -209,14 +209,14 @@ class ConnectionManager:
         connection_id: str,
         session_id: str,
     ) -> bool:
-        """取消訂閱 session.
+        """Unsubscribe from session.
 
         Args:
-            connection_id: 連線 ID
+            connection_id: Connection ID
             session_id: Session ID
 
         Returns:
-            是否成功取消訂閱
+            Whether unsubscription succeeded
         """
         async with self._lock:
             connection = self._connections.get(connection_id)
@@ -233,7 +233,7 @@ class ConnectionManager:
             return True
 
     async def start_replay_mode(self, connection_id: str) -> bool:
-        """啟用 replay 模式（暫存即時訊息，待回放完成後再送出）."""
+        """Enable replay mode (buffer real-time messages, send after replay completes)."""
         async with self._lock:
             connection = self._connections.get(connection_id)
             if not connection:
@@ -244,16 +244,16 @@ class ConnectionManager:
             return True
 
     async def finish_replay_mode(self, connection_id: str) -> int:
-        """結束 replay 模式並送出暫存佇列.
+        """Finish replay mode and send buffered queue.
 
-        為了維持順序，會在 replay_mode=True 的狀態下持續清空佇列，
-        直到佇列為空才真正關閉 replay_mode。
+        To maintain order, will continuously drain queue while replay_mode=True,
+        only close replay_mode when queue is empty.
 
-        重要：此方法在鎖外對 connection.websocket 執行 send_text，
-        因此必須確保呼叫端不會同時對同一個 connection 進行
-        bypass_replay_queue=True 的發送。目前 router.py 中
-        _replay_session_events 與 finish_replay_mode 為序列呼叫，
-        滿足此前提。若未來調整執行順序，需加入 per-connection 發送鎖。
+        Important: this method calls send_text on connection.websocket outside the lock,
+        therefore must ensure caller does not simultaneously perform
+        bypass_replay_queue=True sends to the same connection. Currently in router.py
+        _replay_session_events and finish_replay_mode are called serially,
+        satisfying this premise. If execution order changes in future, need to add per-connection send lock.
         """
         sent_count = 0
 
@@ -285,13 +285,13 @@ class ConnectionManager:
                     return sent_count
 
     async def broadcast(self, message: Dict[str, Any]) -> int:
-        """廣播訊息給所有連線.
+        """Broadcast message to all connections.
 
         Args:
-            message: 訊息內容
+            message: Message content
 
         Returns:
-            成功發送的連線數
+            Number of successfully sent connections
         """
         json_message = json.dumps(message)
         sent_count = 0
@@ -320,14 +320,14 @@ class ConnectionManager:
         session_id: str,
         message: Dict[str, Any],
     ) -> int:
-        """發送訊息給訂閱指定 session 的連線.
+        """Send message to connections subscribed to specified session.
 
         Args:
             session_id: Session ID
-            message: 訊息內容
+            message: Message content
 
         Returns:
-            成功發送的連線數
+            Number of successfully sent connections
         """
         connection_ids = self._session_subscriptions.get(session_id, set())
         if not connection_ids:
@@ -372,14 +372,14 @@ class ConnectionManager:
         user_id: str,
         message: Dict[str, Any],
     ) -> int:
-        """發送訊息給指定使用者的所有連線.
+        """Send message to all connections of specified user.
 
         Args:
-            user_id: 使用者 ID
-            message: 訊息內容
+            user_id: User ID
+            message: Message content
 
         Returns:
-            成功發送的連線數
+            Number of successfully sent connections
         """
         connection_ids = self._user_connections.get(user_id, set())
         if not connection_ids:
@@ -416,14 +416,14 @@ class ConnectionManager:
         *,
         bypass_replay_queue: bool = False,
     ) -> bool:
-        """發送訊息給指定連線.
+        """Send message to specified connection.
 
         Args:
-            connection_id: 連線 ID
-            message: 訊息內容
+            connection_id: Connection ID
+            message: Message content
 
         Returns:
-            是否成功發送
+            Whether send succeeded
         """
         connection = self._connections.get(connection_id)
         if not connection:
@@ -447,45 +447,45 @@ class ConnectionManager:
             return False
 
     def get_connection_count(self) -> int:
-        """取得連線數量.
+        """Get connection count.
 
         Returns:
-            連線數量
+            Connection count
         """
         return len(self._connections)
 
     def get_session_subscriber_count(self, session_id: str) -> int:
-        """取得 session 訂閱者數量.
+        """Get session subscriber count.
 
         Args:
             session_id: Session ID
 
         Returns:
-            訂閱者數量
+            Subscriber count
         """
         return len(self._session_subscriptions.get(session_id, set()))
 
     def get_user_connection_count(self, user_id: str) -> int:
-        """取得使用者連線數量.
+        """Get user connection count.
 
         Args:
-            user_id: 使用者 ID
+            user_id: User ID
 
         Returns:
-            連線數量
+            Connection count
         """
         return len(self._user_connections.get(user_id, set()))
 
 
-# 全域 Manager 實例
+# Global Manager instance
 _global_manager: Optional[ConnectionManager] = None
 
 
 def get_connection_manager() -> ConnectionManager:
-    """取得全域 Connection Manager.
+    """Get global Connection Manager.
 
     Returns:
-        Connection Manager 實例
+        Connection Manager instance
     """
     global _global_manager
     if _global_manager is None:
@@ -494,9 +494,9 @@ def get_connection_manager() -> ConnectionManager:
 
 
 def reset_connection_manager() -> None:
-    """重置全域 Connection Manager.
+    """Reset global Connection Manager.
 
-    主要用於測試。
+    Mainly used for testing.
     """
     global _global_manager
     _global_manager = None

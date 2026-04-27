@@ -1,4 +1,4 @@
-"""Hooks 模組依賴"""
+"""Hooks Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import HookService
 
 @lru_cache()
 def get_hook_service() -> HookService:
-    """提供 HookService"""
+    """Provide HookService"""
 
     return HookService()

@@ -1,4 +1,4 @@
-"""MCP 模組資料模型"""
+"""MCP Module Data Models"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from ..common import DocumentScope
 
 
 class McpTransportType(str, Enum):
-    """MCP 伺服器支援的傳輸協定"""
+    """Transport protocols supported by MCP server"""
 
     STDIO = "stdio"
     HTTP = "http"
@@ -21,23 +21,23 @@ class McpTransportType(str, Enum):
 
 
 class McpServerConfig(BaseModel):
-    """MCP 伺服器的基本設定"""
+    """MCP server basic configuration"""
 
     type: McpTransportType = Field(
         default=McpTransportType.STDIO,
-        description="伺服器傳輸型態",
+        description="Server transport type",
     )
-    command: str | None = Field(None, description="啟動命令")
-    url: str | None = Field(None, description="遠端伺服器 URL")
-    args: List[str] | None = Field(None, description="命令參數")
-    env: Dict[str, str] | None = Field(None, description="環境變數")
-    headers: Dict[str, str] | None = Field(None, description="HTTP 標頭")
+    command: str | None = Field(None, description="Startup command")
+    url: str | None = Field(None, description="Remote server URL")
+    args: List[str] | None = Field(None, description="Command arguments")
+    env: Dict[str, str] | None = Field(None, description="Environment variables")
+    headers: Dict[str, str] | None = Field(None, description="HTTP headers")
 
     model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode='after')
     def validate_transport_requirements(self):
-        """驗證不同 transport 類型的必要欄位"""
+        """Validate required fields for different transport types"""
         if self.type in [McpTransportType.HTTP, McpTransportType.SSE]:
             if not self.url:
                 raise ValueError(f"URL is required for transport type '{self.type}'")
@@ -48,112 +48,111 @@ class McpServerConfig(BaseModel):
 
 
 class McpServerRuntime(McpServerConfig):
-    """回應使用的 MCP 伺服器資訊，與 McpServerConfig 相同"""
-    enabled: bool = Field(default=True, description="是否啟用此伺服器")
+    """MCP server information used in response, same as McpServerConfig"""
+    enabled: bool = Field(default=True, description="Whether this server is enabled")
 
-    # 新增：Plugin 來源資訊（當 scope='plugin' 時有值）
+    # Added: Plugin source information (has value when scope='plugin')
     plugin_name: str | None = Field(
         None,
         alias="pluginName",
-        description="Plugin 名稱（僅 scope='plugin' 時有值）"
+        description="Plugin name (has value only when scope='plugin')"
     )
     marketplace_name: str | None = Field(
         None,
         alias="marketplaceName",
-        description="Marketplace 名稱（僅 scope='plugin' 時有值）"
+        description="Marketplace name (has value only when scope='plugin')"
     )
 
 
 class McpScopeServers(BaseModel):
-    """單一 scope 的 MCP 伺服器列表"""
+    """MCP server list for single scope"""
 
-    scope: DocumentScope = Field(..., description="設定範圍")
+    scope: DocumentScope = Field(..., description="Configuration scope")
     mcpServers: Dict[str, McpServerRuntime] = Field(
-        default_factory=dict, description="伺服器設定"
+        default_factory=dict, description="Server configuration"
     )
 
 
 class McpServerCollectionResponse(BaseModel):
-    """列出全部 MCP 伺服器的回應"""
+    """Response listing all MCP servers"""
 
     workspaceId: str = Field(..., description="Workspace ID")
-    scopes: List[McpScopeServers] = Field(default_factory=list, description="範圍清單")
+    scopes: List[McpScopeServers] = Field(default_factory=list, description="Scope list")
 
 
 class McpScopeResponse(BaseModel):
-    """單一範圍或伺服器的回應"""
+    """Response for single scope or server"""
 
     workspaceId: str = Field(..., description="Workspace ID")
-    scope: DocumentScope = Field(..., description="設定範圍")
+    scope: DocumentScope = Field(..., description="Configuration scope")
     mcpServers: Dict[str, McpServerRuntime] = Field(
-        default_factory=dict, description="伺服器設定"
+        default_factory=dict, description="Server configuration"
     )
 
 
 class McpServerCreateRequest(BaseModel):
-    """建立 MCP 伺服器的請求"""
+    """Request to create MCP server"""
 
     mcpServers: Dict[str, McpServerConfig] = Field(
-        ..., min_length=1, description="要建立的伺服器集合"
+        ..., min_length=1, description="Server collection to create"
     )
 
 
 class McpServerUpdateRequest(BaseModel):
-    """更新 MCP 伺服器的請求"""
+    """Request to update MCP server"""
 
     mcpServers: Dict[str, McpServerConfig] = Field(
-        ..., min_length=1, description="更新後的伺服器設定"
+        ..., min_length=1, description="Updated server configuration"
     )
 
 
 class McpServerDeleteResponse(BaseModel):
-    """刪除 MCP 伺服器的結果"""
+    """Result of deleting MCP server"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: DocumentScope = Field(..., description="設定範圍")
+    scope: DocumentScope = Field(..., description="Configuration scope")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class McpImportRequest(BaseModel):
-    """匯入 MCP 設定的請求"""
+    """Request to import MCP configuration"""
 
-    scope: DocumentScope = Field(..., description="匯入目標範圍")
+    scope: DocumentScope = Field(..., description="Import target scope")
     mcpServers: Dict[str, McpServerConfig] = Field(
-        ..., min_length=1, description="要匯入的伺服器設定"
+        ..., min_length=1, description="Server configuration to import"
     )
     overwrite: bool = Field(
-        False, description="若存在相同名稱時是否覆寫既有設定"
+        False, description="Whether to overwrite existing configuration if same name exists"
     )
 
 
 class McpImportUploadRequest(BaseModel):
-    """上傳檔案匯入 MCP 設定的請求"""
+    """Request to import MCP configuration via file upload"""
 
-    scope: DocumentScope = Field(..., description="匯入目標範圍")
-    file: bytes = Field(..., description="上傳的 JSON 檔案內容")
+    scope: DocumentScope = Field(..., description="Import target scope")
+    file: bytes = Field(..., description="Uploaded JSON file content")
     overwrite: bool = Field(
-        False, description="若存在相同名稱時是否覆寫既有設定"
+        False, description="Whether to overwrite existing configuration if same name exists"
     )
 
 
 class McpImportResponse(BaseModel):
-    """匯入 MCP 設定的結果"""
+    """Result of importing MCP configuration"""
 
     workspaceId: str = Field(..., description="Workspace ID")
-    scope: DocumentScope = Field(..., description="設定範圍")
-    created: List[str] = Field(default_factory=list, description="新增的伺服器")
-    updated: List[str] = Field(default_factory=list, description="更新的伺服器")
-    skipped: List[str] = Field(default_factory=list, description="因重複而跳過的伺服器")
+    scope: DocumentScope = Field(..., description="Configuration scope")
+    created: List[str] = Field(default_factory=list, description="Created servers")
+    updated: List[str] = Field(default_factory=list, description="Updated servers")
+    skipped: List[str] = Field(default_factory=list, description="Servers skipped due to duplication")
 
 
 class McpServerExportResponse(BaseModel):
-    """匯出 MCP 設定的回應"""
+    """Response exporting MCP configuration"""
 
     workspaceId: str = Field(..., description="Workspace ID")
-    scope: DocumentScope = Field(..., description="設定範圍")
+    scope: DocumentScope = Field(..., description="Configuration scope")
     mcpServers: Dict[str, McpServerConfig] = Field(
-        default_factory=dict, description="伺服器設定"
+        default_factory=dict, description="Server configuration"
     )
-
 

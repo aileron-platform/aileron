@@ -1,4 +1,4 @@
-"""Canvas 模組路由"""
+"""Canvas module router"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}/canvas", tags=["Canvas"])
 @router.get(
     "/detect",
     response_model=CanvasDetectResponse,
-    summary="偵測 Canvas 類型",
+    summary="Detect Canvas type",
     responses=build_responses(401, 404, 500),
 )
 async def detect_canvas(
@@ -35,7 +35,7 @@ async def detect_canvas(
 @router.get(
     "/routes",
     response_model=CanvasRoutesResponse,
-    summary="取得 Canvas 路由列表",
+    summary="Get Canvas route list",
     responses=build_responses(401, 404, 500),
 )
 async def get_canvas_routes(
@@ -48,7 +48,7 @@ async def get_canvas_routes(
 @router.get(
     "/health",
     response_model=CanvasHealthResponse,
-    summary="檢查 Canvas 健康狀態",
+    summary="Check Canvas health status",
     responses=build_responses(401, 404, 500),
 )
 async def check_canvas_health(
@@ -61,7 +61,7 @@ async def check_canvas_health(
 @router.get(
     "/logs",
     response_model=CanvasLogsResponse,
-    summary="取得 Canvas 日誌",
+    summary="Get Canvas logs",
     responses=build_responses(401, 404, 500),
 )
 async def get_canvas_logs(
@@ -75,7 +75,7 @@ async def get_canvas_logs(
     "/sync",
     response_model=CanvasActionResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="同步 workspace 到 Canvas snapshot",
+    summary="Sync workspace to Canvas snapshot",
     responses=build_responses(401, 404, 422, 500),
 )
 async def sync_canvas(
@@ -89,7 +89,7 @@ async def sync_canvas(
     "/reset",
     response_model=CanvasActionResponse,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="重置 Canvas snapshot",
+    summary="Reset Canvas snapshot",
     responses=build_responses(401, 404, 422, 500),
 )
 async def reset_canvas(

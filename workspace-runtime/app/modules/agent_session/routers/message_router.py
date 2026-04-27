@@ -1,6 +1,6 @@
 """Message API Router.
 
-提供訊息相關的 REST API 端點。
+Provides REST API endpoints for messages.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/agent-sessions", tags=["agent-session-messages"])
 
 
 async def get_message_service(db: AsyncSession = Depends(get_async_db)) -> MessageService:
-    """取得 Message Service."""
+    """Get Message Service."""
     return MessageService(db)
 
 
@@ -35,25 +35,25 @@ async def get_message_service(db: AsyncSession = Depends(get_async_db)) -> Messa
     "/{session_id}/messages",
     response_model=MessageResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立訊息",
-    description="在會話中建立新的訊息。",
+    summary="Create message",
+    description="Create a new message in the session.",
 )
 async def create_message(
     session_id: str,
     data: MessageCreate,
     service: MessageService = Depends(get_message_service),
 ) -> MessageResponse:
-    """建立訊息.
+    """Create message.
 
     Args:
-        session_id: 會話 ID
-        data: 建立請求
+        session_id: Session ID
+        data: Creation request
         service: Message Service
 
     Returns:
-        建立的訊息
+        Created message
     """
-    # 確保 data 中的 session_id 與路徑參數一致
+    # Ensure session_id in data matches path parameter
     data.session_id = session_id
     message = await service.create_message(data)
     return MessageResponse.from_entity(message)
@@ -62,25 +62,25 @@ async def create_message(
 @router.get(
     "/{session_id}/messages/{message_id}",
     response_model=MessageResponse,
-    summary="取得訊息",
-    description="依 ID 取得訊息詳細資料，支援短 ID。",
+    summary="Get message",
+    description="Get message details by ID, supports short ID.",
 )
 async def get_message(
     session_id: str,
     message_id: str,
     service: MessageService = Depends(get_message_service),
 ) -> MessageResponse:
-    """取得訊息.
+    """Get message.
 
     Args:
-        message_id: 訊息 ID
+        message_id: Message ID
         service: Message Service
 
     Returns:
-        訊息資料
+        Message data
 
     Raises:
-        HTTPException: 訊息不存在
+        HTTPException: Message not found
     """
     message = await service.get_message(message_id)
     if not message:
@@ -94,31 +94,31 @@ async def get_message(
 @router.get(
     "/{session_id}/messages",
     response_model=MessageListResponse,
-    summary="查詢訊息列表",
-    description="查詢會話的訊息列表，支援多種過濾條件。",
+    summary="List messages",
+    description="Query message list for session, supports various filter conditions.",
 )
 async def list_messages(
     session_id: str,
-    task_id: Optional[str] = Query(None, description="任務 ID"),
-    type: Optional[MessageType] = Query(None, description="訊息類型"),
-    role: Optional[MessageRole] = Query(None, description="訊息角色"),
-    limit: int = Query(100, ge=1, le=500, description="最大筆數"),
-    offset: int = Query(0, ge=0, description="偏移量"),
+    task_id: Optional[str] = Query(None, description="Task ID"),
+    type: Optional[MessageType] = Query(None, description="Message type"),
+    role: Optional[MessageRole] = Query(None, description="Message role"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum number of records"),
+    offset: int = Query(0, ge=0, description="Offset"),
     service: MessageService = Depends(get_message_service),
 ) -> MessageListResponse:
-    """查詢訊息列表.
+    """List messages.
 
     Args:
-        session_id: 會話 ID
-        task_id: 任務 ID
-        type: 訊息類型
-        role: 訊息角色
-        limit: 最大筆數
-        offset: 偏移量
+        session_id: Session ID
+        task_id: Task ID
+        type: Message type
+        role: Message role
+        limit: Maximum number of records
+        offset: Offset
         service: Message Service
 
     Returns:
-        訊息列表
+        Message list
     """
     query = MessageQuery(
         session_id=session_id,
@@ -148,22 +148,22 @@ async def list_messages(
 @router.delete(
     "/{session_id}/messages/{message_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="刪除訊息",
-    description="刪除訊息。",
+    summary="Delete message",
+    description="Delete message.",
 )
 async def delete_message(
     session_id: str,
     message_id: str,
     service: MessageService = Depends(get_message_service),
 ) -> None:
-    """刪除訊息.
+    """Delete message.
 
     Args:
-        message_id: 訊息 ID
+        message_id: Message ID
         service: Message Service
 
     Raises:
-        HTTPException: 訊息不存在
+        HTTPException: Message not found
     """
     success = await service.delete_message(message_id)
     if not success:
@@ -177,25 +177,25 @@ async def delete_message(
     "/{session_id}/messages/bulk",
     response_model=BulkCreateResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="批次建立訊息",
-    description="批次建立多個訊息。",
+    summary="Bulk create messages",
+    description="Create multiple messages in bulk.",
 )
 async def create_messages_bulk(
     session_id: str,
     data: MessageBulkCreate,
     service: MessageService = Depends(get_message_service),
 ) -> BulkCreateResponse:
-    """批次建立訊息.
+    """Bulk create messages.
 
     Args:
-        session_id: 會話 ID
-        data: 批次建立請求
+        session_id: Session ID
+        data: Bulk creation request
         service: Message Service
 
     Returns:
-        建立結果
+        Creation result
     """
-    # 確保所有訊息的 session_id 一致
+    # Ensure all messages have consistent session_id
     for msg in data.messages:
         msg.session_id = session_id
     messages = await service.create_bulk(data.messages)
@@ -206,10 +206,10 @@ async def create_messages_bulk(
     )
 
 
-# NOTE: Queue API 已整合至 agent_session_router.py
-# - GET /agent-sessions/{session_id}/queued-messages 取得佇列訊息
-# - DELETE /agent-sessions/{session_id}/messages/{message_id} 刪除佇列訊息
-# - 佇列訊息透過 execute_prompt 自動建立
+# NOTE: Queue API has been integrated into agent_session_router.py
+# - GET /agent-sessions/{session_id}/queued-messages get queued messages
+# - DELETE /agent-sessions/{session_id}/messages/{message_id} delete queued message
+# - Queued messages are automatically created via execute_prompt
 
 
 __all__ = ["router"]

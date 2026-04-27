@@ -1,6 +1,6 @@
-"""CLI MCP 伺服器後端服務
+"""CLI MCP server backend service
 
-為 Gemini、Codex、OpenCode 提供 MCP 設定的 CRUD 操作。
+Provides CRUD operations for MCP configuration in Gemini, Codex, and OpenCode.
 """
 
 from __future__ import annotations
@@ -35,47 +35,47 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 
-# === 例外 ==============================================================
+# === Exceptions ==========================================================
 
 
 class CliMcpScopeNotSupportedError(ValueError):
-    """指定的 scope 不支援"""
+    """Specified scope is not supported"""
 
 
 class CliMcpServerAlreadyExistsError(RuntimeError):
-    """伺服器名稱重複"""
+    """Server name already exists"""
 
 
 class CliMcpServerNotFoundError(KeyError):
-    """伺服器不存在"""
+    """Server does not exist"""
 
 
 class CliMcpToggleNotSupportedError(ValueError):
-    """此工具不支援 toggle"""
+    """This tool does not support toggle"""
 
 
-# === 工具 Enum ==========================================================
+# === Tool Enum ==========================================================
 
 
 class McpTool(str, Enum):
-    """支援 MCP 的 CLI 工具"""
+    """CLI tools that support MCP"""
 
     GEMINI = "gemini"
     OPENCODE = "opencode"
     CODEX = "codex"
 
 
-# === 工具設定 ============================================================
+# === Tool Configuration ==================================================
 
 
 @dataclass(frozen=True)
 class CliMcpToolConfig:
-    """每個 CLI 工具的 MCP 設定檔資訊"""
+    """MCP configuration file information for each CLI tool"""
 
     tool: McpTool
-    project_file: str  # 相對於 workspace root 的路徑
-    user_file_path: Path  # 絕對路徑
-    servers_key: str  # JSON/TOML 中存放 servers 的 key
+    project_file: str  # Path relative to workspace root
+    user_file_path: Path  # Absolute path
+    servers_key: str  # Key for storing servers in JSON/TOML
     strategy: ConfigFileStrategy
     supports_toggle: bool = True
 
@@ -120,16 +120,16 @@ def get_mcp_tool_config(tool: McpTool) -> CliMcpToolConfig:
     return configs[tool]
 
 
-# === 服務 ================================================================
+# === Service =============================================================
 
 
 class CliMcpService:
-    """管理 CLI 工具 MCP 伺服器設定的檔案服務"""
+    """File service for managing CLI tool MCP server configuration"""
 
     def __init__(self, config: CliMcpToolConfig) -> None:
         self._config = config
 
-    # --- 公開 CRUD -------------------------------------------------------
+    # --- Public CRUD ------------------------------------------------------
 
     def list_servers(
         self, workspace_id: str, scope: CliMcpScope | None = None
@@ -259,7 +259,7 @@ class CliMcpService:
             mcpServers={server_name: runtime},
         )
 
-    # --- Import / Export -------------------------------------------------
+    # --- Import / Export --------------------------------------------------
 
     def import_servers(
         self, workspace_id: str, payload: CliMcpImportRequest
@@ -338,7 +338,7 @@ class CliMcpService:
             mcpServers={server_name: config},
         )
 
-    # === 內部工具 ========================================================
+    # === Internal Utilities ================================================
 
     def _scope_file(self, workspace_id: str, scope: CliMcpScope) -> Path:
         if scope == CliMcpScope.PROJECT:
@@ -377,8 +377,8 @@ class CliMcpService:
             if not key:
                 continue
 
-            # 驗證 server_name 格式：只允許字母數字、連字線、底線
-            # 這是為了防止特殊字元導致設定檔損壞
+            # Validate server_name format: only alphanumeric, hyphens, underscores allowed
+            # This is to prevent special characters from corrupting the configuration file
             if not re.match(r'^[a-zA-Z0-9_-]+$', key):
                 raise ValueError(
                     f"Invalid MCP server name '{key}': "
@@ -388,32 +388,32 @@ class CliMcpService:
             prepared[key] = config
         return prepared
 
-    # --- 格式轉換：原生 <-> 統一 -----------------------------------------
+    # --- Format Conversion: Native <-> Unified -----------------------------
 
     def _normalize_from_native(
         self, native: Dict[str, Any]
     ) -> CliMcpServerConfig:
-        """將原生格式轉換為統一的 CliMcpServerConfig"""
+        """Convert native format to unified CliMcpServerConfig"""
         tool = self._config.tool
 
         if tool == McpTool.OPENCODE:
             return self._opencode_from_native(native)
         if tool == McpTool.CODEX:
             return self._codex_from_native(native)
-        # Gemini: 幾乎與 Claude 相同
+        # Gemini: almost identical to Claude
         return CliMcpServerConfig.model_validate(native)
 
     def _normalize_to_native(
         self, config: CliMcpServerConfig
     ) -> Dict[str, Any]:
-        """將統一的 CliMcpServerConfig 轉換為原生格式"""
+        """Convert unified CliMcpServerConfig to native format"""
         tool = self._config.tool
 
         if tool == McpTool.OPENCODE:
             return self._opencode_to_native(config)
         if tool == McpTool.CODEX:
             return self._codex_to_native(config)
-        # Gemini: 直接輸出
+        # Gemini: direct output
         return config.model_dump(exclude_none=True)
 
     def _to_runtime(
@@ -435,15 +435,15 @@ class CliMcpService:
             for name, entry in sorted(servers.items())
         }
 
-    # --- OpenCode 格式轉換 -----------------------------------------------
+    # --- OpenCode Format Conversion -----------------------------------------
 
     @staticmethod
     def _opencode_from_native(native: Dict[str, Any]) -> CliMcpServerConfig:
         """
-        OpenCode 原生格式:
+        OpenCode native format:
           - type: "local" -> stdio, "remote" -> http
           - command: ["npx", "-y", "..."] (list) -> command + args
-          - url: 遠端 URL
+          - url: remote URL
           - environment: {...} -> env
         """
         data: Dict[str, Any] = {}
@@ -475,7 +475,7 @@ class CliMcpService:
 
     @staticmethod
     def _opencode_to_native(config: CliMcpServerConfig) -> Dict[str, Any]:
-        """統一格式 -> OpenCode 原生格式"""
+        """Unified format -> OpenCode native format"""
         native: Dict[str, Any] = {}
 
         if config.type in (CliMcpTransportType.HTTP, CliMcpTransportType.SSE):
@@ -500,15 +500,15 @@ class CliMcpService:
 
         return native
 
-    # --- Codex 格式轉換 --------------------------------------------------
+    # --- Codex Format Conversion -------------------------------------------
 
     @staticmethod
     def _codex_from_native(native: Dict[str, Any]) -> CliMcpServerConfig:
         """
-        Codex 原生格式:
-          - 無 type 欄位，依 url 有無判斷
-          - command, args, env 與 Claude 相同
-          - enabled 原生支援
+        Codex native format:
+          - No type field, determined by presence of url
+          - command, args, env same as Claude
+          - enabled natively supported
         """
         data: Dict[str, Any] = {}
 
@@ -533,7 +533,7 @@ class CliMcpService:
 
     @staticmethod
     def _codex_to_native(config: CliMcpServerConfig) -> Dict[str, Any]:
-        """統一格式 -> Codex 原生格式（不儲存 type 欄位）"""
+        """Unified format -> Codex native format (does not save type field)"""
         native: Dict[str, Any] = {}
 
         if config.type in (CliMcpTransportType.HTTP, CliMcpTransportType.SSE):

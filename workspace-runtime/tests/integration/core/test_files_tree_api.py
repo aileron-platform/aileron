@@ -1,4 +1,4 @@
-"""核心檔案樹相關 API 測試"""
+"""Core file tree related API tests"""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
-"""CLI Hooks API 路由
+"""CLI Hooks API router
 
-工廠函數，為每個 CLI 工具產生相同的 Hooks 端點集合。
+Factory function to generate identical Hooks endpoint sets for each CLI tool.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from .service import CliHookService
 
 
 def create_hooks_router(tool: HookTool) -> APIRouter:
-    """為指定的 CLI 工具建立 Hooks 路由"""
+    """Create Hooks router for specified CLI tool"""
 
     router = APIRouter(
         prefix=f"/{tool.value}",
@@ -37,13 +37,13 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.get(
         "/hooks",
         response_model=CliHookScopesResponse,
-        summary="取得所有 Hook 範圍",
+        summary="Get all Hook scopes",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def list_hooks(
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: CliHookScope | None = Query(
-            None, description="可指定僅回傳某範圍"
+            None, description="Optionally specify to return only one scope"
         ),
         service: CliHookService = Depends(get_service),
     ) -> CliHookScopesResponse:
@@ -52,13 +52,13 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.get(
         "/hooks/export",
         response_model=CliHookExportResponse,
-        summary="匯出 Hook 設定",
+        summary="Export Hook configuration",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def export_hooks(
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: CliHookScope | None = Query(
-            None, description="若提供則僅匯出指定範圍"
+            None, description="If provided, export only specified scope"
         ),
         service: CliHookService = Depends(get_service),
     ) -> CliHookExportResponse:
@@ -68,12 +68,12 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.get(
         "/hooks/{scope}",
         response_model=CliHookScopeResponse,
-        summary="取得指定範圍 Hook",
+        summary="Get specified scope Hooks",
         responses=build_responses(400, 401, 404, 500),
     )
     async def get_scope_hooks(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: CliHookScope = Path(..., description="Hook 範圍"),
+        scope: CliHookScope = Path(..., description="Hook scope"),
         service: CliHookService = Depends(get_service),
     ) -> CliHookScopeResponse:
         return service.get_scope(workspace_id, scope)
@@ -81,13 +81,13 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.put(
         "/hooks/{scope}",
         response_model=CliHookScopeResponse,
-        summary="更新 Hook 範圍",
+        summary="Update Hook scope",
         responses=build_responses(400, 401, 403, 404, 422, 500),
     )
     async def update_scope_hooks(
         payload: CliHookScopeUpsertRequest,
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: CliHookScope = Path(..., description="Hook 範圍"),
+        scope: CliHookScope = Path(..., description="Hook scope"),
         service: CliHookService = Depends(get_service),
     ) -> CliHookScopeResponse:
         return service.update_scope(workspace_id, scope, payload)
@@ -95,12 +95,12 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.delete(
         "/hooks/{scope}",
         response_model=CliHookDeleteResponse,
-        summary="刪除 Hook 範圍",
+        summary="Delete Hook scope",
         responses=build_responses(400, 401, 403, 404, 500),
     )
     async def delete_scope_hooks(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: CliHookScope = Path(..., description="Hook 範圍"),
+        scope: CliHookScope = Path(..., description="Hook scope"),
         service: CliHookService = Depends(get_service),
     ) -> CliHookDeleteResponse:
         return service.delete_scope(workspace_id, scope)
@@ -108,7 +108,7 @@ def create_hooks_router(tool: HookTool) -> APIRouter:
     @router.post(
         "/hooks/import",
         response_model=CliHookImportResponse,
-        summary="匯入 Hook 設定",
+        summary="Import Hook configuration",
         responses=build_responses(400, 401, 403, 404, 422, 500),
     )
     async def import_hooks(

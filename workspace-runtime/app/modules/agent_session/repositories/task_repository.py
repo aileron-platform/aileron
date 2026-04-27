@@ -1,6 +1,6 @@
 """Task Repository.
 
-提供任務資料的存取操作。
+Provides data access operations for tasks.
 """
 
 from __future__ import annotations
@@ -28,15 +28,15 @@ logger = logging.getLogger(__name__)
 class TaskRepository(BaseRepository[AgentTaskModel]):
     """Task Repository.
 
-    提供任務的 CRUD 操作和狀態管理方法。
+    Provides CRUD operations and state management methods for tasks.
     """
 
     def __init__(self, db: AsyncSession):
-        """初始化 Repository."""
+        """Initialize Repository."""
         super().__init__(db, AgentTaskModel, "task_id")
 
     def _get_id_column(self) -> Any:
-        """取得主鍵欄位."""
+        """Get primary key column."""
         return AgentTaskModel.task_id
 
     async def find_by_session(
@@ -46,26 +46,26 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         limit: int = 50,
         offset: int = 0,
     ) -> List[AgentTaskModel]:
-        """依會話 ID 查詢任務.
+        """Query tasks by session ID.
 
         Args:
-            session_id: 會話 ID
-            status: 任務狀態過濾（單個或多個）
-            limit: 最大筆數
-            offset: 偏移量
+            session_id: Session ID
+            status: Task status filter (single or multiple)
+            limit: Max results
+            offset: Offset
 
         Returns:
-            任務列表
+            Task list
         """
         conditions = [AgentTaskModel.session_id == session_id]
 
         if status:
             if isinstance(status, list):
-                # 多個狀態
+                # Multiple statuses
                 status_values = [s.value for s in status]
                 conditions.append(AgentTaskModel.status.in_(status_values))
             else:
-                # 單個狀態
+                # Single status
                 conditions.append(AgentTaskModel.status == status.value)
 
         stmt = (
@@ -85,15 +85,15 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         limit: int = 50,
         offset: int = 0,
     ) -> List[AgentTaskModel]:
-        """依狀態查詢任務.
+        """Query tasks by status.
 
         Args:
-            status: 任務狀態
-            limit: 最大筆數
-            offset: 偏移量
+            status: Task status
+            limit: Max results
+            offset: Offset
 
         Returns:
-            任務列表
+            Task list
         """
         stmt = (
             select(AgentTaskModel)
@@ -110,13 +110,13 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         self,
         session_id: str,
     ) -> Optional[AgentTaskModel]:
-        """查詢會話中活躍的任務.
+        """Query active task in session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            活躍的任務或 None
+            Active task or None
         """
         active_statuses = [
             TaskStatus.CREATED.value,
@@ -140,14 +140,14 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         task_id: str,
         started_at: Optional[datetime] = None,
     ) -> Optional[AgentTaskModel]:
-        """開始執行任務.
+        """Start executing task.
 
         Args:
-            task_id: 任務 ID
-            started_at: 開始時間
+            task_id: Task ID
+            started_at: Start time
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         return await self.update(
             task_id,
@@ -164,33 +164,33 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         computed_context_window: Optional[int] = None,
         completed_at: Optional[datetime] = None,
     ) -> Optional[AgentTaskModel]:
-        """完成任務.
+        """Complete task.
 
         Args:
-            task_id: 任務 ID
-            raw_sdk_response: SDK 原始回應
-            computed_context_window: 計算的 Context Window
-            completed_at: 完成時間
+            task_id: Task ID
+            raw_sdk_response: Raw SDK response
+            computed_context_window: Computed Context Window
+            completed_at: Completion time
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
         now = ensure_utc(completed_at) or datetime.now(timezone.utc)
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
 
-        # 計算執行時間
+        # Calculate execution time
         if task.started_at:
             started_at = ensure_utc(task.started_at)
             if started_at:
                 duration_ms = int((now - started_at).total_seconds() * 1000)
                 data["duration_ms"] = duration_ms
 
-        # 儲存 SDK 回應
+        # Store SDK response
         if raw_sdk_response:
             data["raw_sdk_response"] = raw_sdk_response
 
@@ -212,25 +212,25 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         error_message: Optional[str] = None,
         completed_at: Optional[datetime] = None,
     ) -> Optional[AgentTaskModel]:
-        """標記任務失敗.
+        """Mark task as failed.
 
         Args:
-            task_id: 任務 ID
-            error_message: 錯誤訊息
-            completed_at: 完成時間
+            task_id: Task ID
+            error_message: Error message
+            completed_at: Completion time
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
         now = ensure_utc(completed_at) or datetime.now(timezone.utc)
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
 
-        # 計算執行時間
+        # Calculate execution time
         if task.started_at:
             started_at = ensure_utc(task.started_at)
             if started_at:
@@ -254,24 +254,24 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         task_id: str,
         completed_at: Optional[datetime] = None,
     ) -> Optional[AgentTaskModel]:
-        """停止任務.
+        """Stop task.
 
         Args:
-            task_id: 任務 ID
-            completed_at: 完成時間
+            task_id: Task ID
+            completed_at: Completion time
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
         now = completed_at or datetime.now(timezone.utc)
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
 
-        # 計算執行時間
+        # Calculate execution time
         if task.started_at:
             duration_ms = int((now - task.started_at).total_seconds() * 1000)
             data["duration_ms"] = duration_ms
@@ -290,20 +290,20 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         task_id: str,
         permission_request: Dict[str, Any],
     ) -> Optional[AgentTaskModel]:
-        """設定任務等待權限.
+        """Set task awaiting permission.
 
         Args:
-            task_id: 任務 ID
-            permission_request: 權限請求資訊
+            task_id: Task ID
+            permission_request: Permission request info
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
         data["permission_request"] = permission_request
 
@@ -320,20 +320,20 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         task_id: str,
         message_range: MessageRange,
     ) -> Optional[AgentTaskModel]:
-        """更新訊息範圍.
+        """Update message range.
 
         Args:
-            task_id: 任務 ID
-            message_range: 訊息範圍
+            task_id: Task ID
+            message_range: Message range
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
         data["message_range"] = message_range.to_dict()
 
@@ -344,20 +344,20 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         task_id: str,
         count: int = 1,
     ) -> Optional[AgentTaskModel]:
-        """增加工具使用計數.
+        """Increment tool use count.
 
         Args:
-            task_id: 任務 ID
-            count: 增加數量
+            task_id: Task ID
+            count: Increment amount
 
         Returns:
-            更新後的任務或 None
+            Updated task or None
         """
         task = await self.find_by_id(task_id)
         if not task:
             return None
 
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(task.data, task_id, "task")
         tool_use_count = data.get("tool_use_count", 0) + count
         data["tool_use_count"] = tool_use_count
@@ -365,15 +365,15 @@ class TaskRepository(BaseRepository[AgentTaskModel]):
         return await self.update(task_id, {"data": json.dumps(data, ensure_ascii=False)})
 
     def to_entity(self, model: AgentTaskModel) -> Task:
-        """將 ORM 模型轉換為領域實體.
+        """Convert ORM model to domain entity.
 
         Args:
-            model: ORM 模型
+            model: ORM model
 
         Returns:
-            領域實體
+            Domain entity
         """
-        # 反序列化 data (JSON 字符串 -> dict)
+        # Deserialize data (JSON string -> dict)
         data = safe_json_loads(model.data, model.task_id, "task") if model.data else None
 
         return Task.from_db_row({

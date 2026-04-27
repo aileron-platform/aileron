@@ -1,10 +1,10 @@
-"""日誌配置模組
+"""Logging configuration module
 
-提供統一的日誌配置，支援：
-- 結構化日誌（JSON 格式，適合生產環境）
-- 控制台日誌（人類可讀格式，適合開發環境）
-- 日誌等級控制
-- 第三方庫日誌過濾
+Provides unified logging configuration with support for:
+- Structured logging (JSON format, suitable for production)
+- Console logging (human-readable format, suitable for development)
+- Log level control
+- Third-party library log filtering
 """
 
 import logging
@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 
 
 class StructuredFormatter(logging.Formatter):
-    """結構化日誌格式化器（JSON 格式）"""
+    """Structured log formatter (JSON format)"""
 
     def format(self, record: logging.LogRecord) -> str:
         import json
@@ -27,7 +27,7 @@ class StructuredFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
 
-        # 添加額外欄位
+        # Add extra fields
         if hasattr(record, "request_id"):
             log_data["request_id"] = record.request_id
 
@@ -37,11 +37,11 @@ class StructuredFormatter(logging.Formatter):
         if hasattr(record, "task_id"):
             log_data["task_id"] = record.task_id
 
-        # 添加異常資訊
+        # Add exception info
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
 
-        # 添加來源位置
+        # Add source location
         if record.levelno >= logging.WARNING:
             log_data["location"] = f"{record.filename}:{record.lineno}"
 
@@ -49,7 +49,7 @@ class StructuredFormatter(logging.Formatter):
 
 
 class ConsoleFormatter(logging.Formatter):
-    """控制台日誌格式化器（人類可讀格式）"""
+    """Console log formatter (human-readable format)"""
 
     COLORS = {
         "DEBUG": "\033[36m",     # Cyan
@@ -65,20 +65,20 @@ class ConsoleFormatter(logging.Formatter):
         self.use_colors = use_colors and sys.stdout.isatty()
 
     def format(self, record: logging.LogRecord) -> str:
-        # 基本格式
+        # Basic format
         timestamp = self.formatTime(record, "%Y-%m-%d %H:%M:%S")
         level = record.levelname.ljust(8)
         name = record.name[-30:] if len(record.name) > 30 else record.name
 
-        # 構建訊息
+        # Build message
         message = record.getMessage()
 
-        # 添加顏色
+        # Add colors
         if self.use_colors:
             color = self.COLORS.get(record.levelname, "")
             level = f"{color}{level}{self.RESET}"
 
-        # 添加上下文
+        # Add context
         context_parts = []
         if hasattr(record, "request_id"):
             context_parts.append(f"req={record.request_id[:8]}")
@@ -89,7 +89,7 @@ class ConsoleFormatter(logging.Formatter):
 
         formatted = f"{timestamp} | {level} | {name}{context} | {message}"
 
-        # 添加異常資訊
+        # Add exception info
         if record.exc_info:
             formatted += f"\n{self.formatException(record.exc_info)}"
 
@@ -97,32 +97,32 @@ class ConsoleFormatter(logging.Formatter):
 
 
 def setup_logging(config: Optional[Dict[str, Any]] = None) -> None:
-    """設置日誌配置
+    """Setup logging configuration
 
     Args:
-        config: 配置字典，支援以下選項：
-            - log_level: 日誌等級 (DEBUG, INFO, WARNING, ERROR)
-            - log_format: 日誌格式 ("json" 或 "console")
-            - use_colors: 是否使用顏色（僅 console 格式）
+        config: Configuration dictionary with the following options:
+            - log_level: Log level (DEBUG, INFO, WARNING, ERROR)
+            - log_format: Log format ("json" or "console")
+            - use_colors: Whether to use colors (console format only)
     """
     config = config or {}
 
-    # 從環境變數或配置取得設定
+    # Get settings from environment or config
     log_level = config.get("log_level", os.getenv("LOG_LEVEL", "INFO"))
     log_format = config.get("log_format", os.getenv("LOG_FORMAT", "console"))
     use_colors = config.get("use_colors", os.getenv("LOG_COLORS", "true").lower() == "true")
 
-    # 設定根 logger
+    # Setup root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
-    # 清除現有 handlers
+    # Clear existing handlers
     root_logger.handlers.clear()
 
-    # 建立 handler
+    # Create handler
     handler = logging.StreamHandler(sys.stdout)
 
-    # 選擇格式化器
+    # Choose formatter
     if log_format.lower() == "json":
         handler.setFormatter(StructuredFormatter())
     else:
@@ -130,28 +130,28 @@ def setup_logging(config: Optional[Dict[str, Any]] = None) -> None:
 
     root_logger.addHandler(handler)
 
-    # 配置第三方庫日誌等級
+    # Configure third-party library log levels
     _configure_third_party_loggers(log_level)
 
     logging.info(f"Logging configured: level={log_level}, format={log_format}")
 
 
 def _configure_third_party_loggers(app_log_level: str) -> None:
-    """配置第三方庫的日誌等級"""
-    # 減少 uvicorn 和 fastapi 的詳細日誌
+    """Configure third-party library log levels"""
+    # Reduce verbose logging from uvicorn and fastapi
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     logging.getLogger("fastapi").setLevel(logging.WARNING)
 
-    # SQLAlchemy - 只在 DEBUG 模式下顯示 SQL
+    # SQLAlchemy - show SQL only in DEBUG mode
     if app_log_level.upper() == "DEBUG":
         logging.getLogger("sqlalchemy.engine").setLevel(logging.INFO)
     else:
         logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
         logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
 
-    # httpx/httpcore（Claude SDK 使用）
+    # httpx/httpcore (used by Claude SDK)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
@@ -163,21 +163,21 @@ def _configure_third_party_loggers(app_log_level: str) -> None:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """取得 logger 實例
+    """Get logger instance
 
     Args:
-        name: Logger 名稱（通常使用 __name__）
+        name: Logger name (usually use __name__)
 
     Returns:
-        Logger 實例
+        Logger instance
     """
     return logging.getLogger(name)
 
 
 class LoggerAdapter(logging.LoggerAdapter):
-    """帶有上下文的 Logger Adapter
+    """Logger Adapter with context
 
-    可以添加 request_id, session_id 等上下文資訊。
+    Can add context information like request_id, session_id, etc.
     """
 
     def process(self, msg: str, kwargs: Dict[str, Any]) -> tuple:
@@ -193,16 +193,16 @@ def get_context_logger(
     session_id: Optional[str] = None,
     task_id: Optional[str] = None,
 ) -> LoggerAdapter:
-    """取得帶有上下文的 Logger
+    """Get logger with context
 
     Args:
-        name: Logger 名稱
-        request_id: 請求 ID
-        session_id: 會話 ID
-        task_id: 任務 ID
+        name: Logger name
+        request_id: Request ID
+        session_id: Session ID
+        task_id: Task ID
 
     Returns:
-        LoggerAdapter 實例
+        LoggerAdapter instance
     """
     logger = logging.getLogger(name)
     extra = {}

@@ -1,7 +1,7 @@
 """
 Client Browser Relay Router
 
-WebSocket 和 HTTP 路由端點
+WebSocket and HTTP route endpoints
 """
 
 import json
@@ -31,23 +31,23 @@ router = APIRouter(
 
 
 # ============================================================================
-# HTTP 端點
+# HTTP Endpoints
 # ============================================================================
 
 
 @router.get(
     "/",
     response_model=RelayStatusResponse,
-    summary="健康檢查和狀態資訊",
-    description="取得 Relay Server 的狀態資訊，包括 WebSocket 端點和擴展連接狀態",
+    summary="Health check and status information",
+    description="Get relay server status information, including WebSocket endpoint and extension connection status",
     responses=build_responses(500),
 )
 async def get_relay_status(request: Request) -> RelayStatusResponse:
-    """健康檢查和狀態資訊"""
+    """Health check and status information"""
     settings = get_settings()
     service = get_relay_service()
 
-    # 從 request 取得 host
+    # Get host from request
     host = request.headers.get("host", f"localhost:{settings.PORT}")
     if ":" in host:
         host_name, port_str = host.rsplit(":", 1)
@@ -72,12 +72,12 @@ async def get_relay_status(request: Request) -> RelayStatusResponse:
 @router.get(
     "/pages",
     response_model=NamedPagesResponse,
-    summary="列出命名頁面",
-    description="取得所有命名頁面的列表",
+    summary="List named pages",
+    description="Get list of all named pages",
     responses=build_responses(500),
 )
 async def list_named_pages() -> NamedPagesResponse:
-    """列出命名頁面"""
+    """List named pages"""
     service = get_relay_service()
     return NamedPagesResponse(pages=service.get_named_pages())
 
@@ -85,22 +85,22 @@ async def list_named_pages() -> NamedPagesResponse:
 @router.post(
     "/pages",
     response_model=CreatePageResponse,
-    summary="獲取或建立命名頁面",
-    description="獲取指定名稱的頁面，如果不存在則建立新頁面",
+    summary="Get or create named page",
+    description="Get page with specified name, create new page if it doesn't exist",
     responses=build_responses(400, 500, 503),
 )
 async def get_or_create_page(
     request: Request,
     body: CreatePageRequest,
 ) -> CreatePageResponse:
-    """獲取或建立命名頁面"""
+    """Get or create named page"""
     settings = get_settings()
     service = get_relay_service()
 
     if not body.name:
         raise HTTPException(status_code=400, detail="name is required")
 
-    # 從 request 取得 host
+    # Get host from request
     host = request.headers.get("host", f"localhost:{settings.PORT}")
     if ":" in host:
         host_name, port_str = host.rsplit(":", 1)
@@ -135,37 +135,37 @@ async def get_or_create_page(
 @router.delete(
     "/pages/{name}",
     response_model=DeletePageResponse,
-    summary="刪除命名頁面",
-    description="移除頁面的名稱映射（不會關閉標籤頁）",
+    summary="Delete named page",
+    description="Remove page name mapping (does not close tab)",
     responses=build_responses(500),
 )
 async def delete_named_page(name: str) -> DeletePageResponse:
-    """刪除命名頁面"""
+    """Delete named page"""
     service = get_relay_service()
     deleted = await service.delete_named_page(name)
     return DeletePageResponse(success=deleted)
 
 
 # ============================================================================
-# WebSocket 端點
+# WebSocket Endpoints
 # ============================================================================
 
 
 @router.websocket("/cdp/{client_id}")
 async def cdp_endpoint_with_id(websocket: WebSocket, client_id: str) -> None:
-    """Playwright 客戶端 WebSocket 端點（帶 client_id）"""
+    """Playwright client WebSocket endpoint (with client_id)"""
     await _handle_cdp_connection(websocket, client_id)
 
 
 @router.websocket("/cdp")
 async def cdp_endpoint(websocket: WebSocket) -> None:
-    """Playwright 客戶端 WebSocket 端點"""
+    """Playwright client WebSocket endpoint"""
     client_id = f"client-{uuid.uuid4().hex[:8]}"
     await _handle_cdp_connection(websocket, client_id)
 
 
 async def _handle_cdp_connection(websocket: WebSocket, client_id: str) -> None:
-    """處理 Playwright 客戶端 WebSocket 連接"""
+    """Handle Playwright client WebSocket connection"""
     service = get_relay_service()
 
     await websocket.accept()
@@ -265,7 +265,7 @@ async def _handle_cdp_connection(websocket: WebSocket, client_id: str) -> None:
 
 @router.websocket("/extension")
 async def extension_endpoint(websocket: WebSocket) -> None:
-    """Chrome 擴展 WebSocket 端點"""
+    """Chrome extension WebSocket endpoint"""
     import time
     connection_id = f"conn-{int(time.time() * 1000)}"
     logger.info(f"[{connection_id}] Extension WebSocket connection initiated")
@@ -290,7 +290,7 @@ async def extension_endpoint(websocket: WebSocket) -> None:
             except WebSocketDisconnect:
                 break
 
-            # 處理回應
+            # Handle response
             if "id" in message and isinstance(message.get("id"), int):
                 service.handle_extension_response(
                     message["id"],
@@ -299,7 +299,7 @@ async def extension_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
-            # 處理日誌訊息
+            # Handle log message
             if message.get("method") == "log":
                 params = message.get("params", {})
                 level = params.get("level", "info")
@@ -307,7 +307,7 @@ async def extension_endpoint(websocket: WebSocket) -> None:
                 logger.info(f"[extension:{level}] {' '.join(str(a) for a in args)}")
                 continue
 
-            # 處理 CDP 事件
+            # Handle CDP event
             if message.get("method") == "forwardCDPEvent":
                 event_params = message.get("params", {})
                 method = event_params.get("method", "")
@@ -336,6 +336,6 @@ async def extension_endpoint(websocket: WebSocket) -> None:
     except Exception as e:
         logger.error(f"Extension WebSocket error: {e}")
     finally:
-        # 只有當這是當前的 extension 連接時才清理
+        # Only clean up if this is the current extension connection
         if service.extension_ws == websocket:
             await service.unregister_extension()

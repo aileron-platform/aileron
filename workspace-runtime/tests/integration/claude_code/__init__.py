@@ -1,1 +1,1 @@
-"""Claude Code API 整合測試"""
+"""Claude Code API integration tests"""

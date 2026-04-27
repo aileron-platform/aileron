@@ -1,14 +1,14 @@
 """
 SDK Message Processor.
 
-比照 agor-main 的 message-processor.ts
-處理 Claude Agent SDK 訊息並轉換為結構化事件。
+References agor-main's message-processor.ts
+Processes Claude Agent SDK messages and converts them to structured events.
 
-職責：
-- 處理所有 SDK 訊息類型
-- 追蹤對話狀態（session ID, 訊息計數, 活動時間）
-- 發送串流事件（實時 UI 更新）
-- 產生結構化事件（資料庫持久化）
+Responsibilities:
+- Handles all SDK message types
+- Tracks conversation state(session ID, message count, activity time)
+- Sends streaming events(real-time UI updates)
+- Generates structured events(database persistence)
 """
 
 import logging
@@ -47,7 +47,7 @@ from app.modules.agent_session.services.tools.base.types import (
 
 @dataclass
 class ProcessorOptions:
-    """Processor 選項."""
+    """Processor options."""
     
     session_id: str
     existing_sdk_session_id: Optional[str] = None
@@ -57,7 +57,7 @@ class ProcessorOptions:
 
 @dataclass
 class ContentBlockInfo:
-    """Content block 資訊（用於追蹤 tool_complete）."""
+    """Content block info(for tracking tool_complete)."""
     
     index: int
     type: str  # 'text', 'tool_use', 'thinking'
@@ -67,7 +67,7 @@ class ContentBlockInfo:
 
 @dataclass
 class ProcessorState:
-    """Processor 狀態."""
+    """Processor state."""
 
     session_id: str
     existing_sdk_session_id: Optional[str]
@@ -80,7 +80,7 @@ class ProcessorState:
     idle_timeout_ms: int = 300000
     content_block_stack: List[ContentBlockInfo] = field(default_factory=list)
     tool_input_chunk_count: int = 0
-    # 追蹤 tool_use_id -> tool_name 的映射，用於處理 tool_result
+    # Track tool_use_id -> tool_name mapping, for handling tool_result
     tool_use_registry: Dict[str, str] = field(default_factory=dict)
 
 
@@ -88,12 +88,12 @@ class SDKMessageProcessor:
     """
     SDK Message Processor.
     
-    狀態化處理器，處理 SDK 訊息並發送結構化事件。
-    每個 query/conversation 建立一個實例。
+    Stateful processor that handles SDK messages and sends structured events.
+    One instance per query/conversation.
     """
     
     def __init__(self, options: ProcessorOptions):
-        """初始化 Processor."""
+        """Initialize Processor."""
         self.state = ProcessorState(
             session_id=options.session_id,
             existing_sdk_session_id=options.existing_sdk_session_id,
@@ -103,20 +103,20 @@ class SDKMessageProcessor:
     
     async def process(self, msg: Any) -> List[ProcessedEvent]:
         """
-        處理 SDK 訊息並返回 0 或多個事件.
+        Process SDK message and return 0 or more events.
 
         Args:
-            msg: SDK 訊息
+            msg: SDK message
 
         Returns:
-            事件列表
+            Event list
         """
         self.state.message_count += 1
         self.state.last_activity_time = time.time()
 
         events: List[ProcessedEvent] = []
 
-        # 處理不同類型的訊息
+        # Handle different message types
         if isinstance(msg, AssistantMessage):
             events.extend(await self._handle_assistant_message(msg))
         elif isinstance(msg, ResultMessage):
@@ -131,21 +131,21 @@ class SDKMessageProcessor:
         return events
     
     def has_timed_out(self) -> bool:
-        """檢查是否超時."""
+        """Check if timeout has occurred."""
         idle_time_ms = (time.time() - self.state.last_activity_time) * 1000
         return idle_time_ms > self.state.idle_timeout_ms
     
     def get_state(self) -> ProcessorState:
-        """取得目前狀態."""
+        """Get current state."""
         return self.state
 
     async def _handle_assistant_message(
         self, msg: AssistantMessage
     ) -> List[ProcessedEvent]:
-        """處理完整助手訊息."""
+        """Handle complete assistant message."""
         events: List[ProcessedEvent] = []
 
-        # 處理 content blocks
+        # Process content blocks
         content_blocks = []
         tool_uses = []
 
@@ -154,7 +154,7 @@ class SDKMessageProcessor:
                 content_blocks.append({"type": "text", "text": block.text})
             elif isinstance(block, ThinkingBlock):
                 content_blocks.append({"type": "thinking", "thinking": block.thinking})
-                # 發送思考完成事件
+                # Send thinking complete event
                 events.append(ThinkingCompleteEvent())
             elif isinstance(block, ToolUseBlock):
                 content_blocks.append({
@@ -168,18 +168,18 @@ class SDKMessageProcessor:
                     "name": block.name,
                     "input": block.input,
                 })
-                # 註冊 tool_use_id -> tool_name 映射
+                # Register tool_use_id -> tool_name mapping
                 self.state.tool_use_registry[block.id] = block.name
-                # 發送工具開始事件
+                # Send tool start event
                 events.append(ToolStartEvent(
                     tool_use_id=block.id,
                     tool_name=block.name,
                 ))
             elif isinstance(block, ToolResultBlock):
-                # 檢查對應的 tool_name，對 AskUserQuestion 特殊處理
+                # Check corresponding tool_name, special handling for AskUserQuestion
                 tool_name = self.state.tool_use_registry.get(block.tool_use_id)
-                # AskUserQuestion 使用 PermissionResultAllow + updated_input 返回用戶答案
-                # 確保用戶回答不會被標記為錯誤
+                # AskUserQuestion uses PermissionResultAllow + updated_input to return user answer
+                # Ensure user answer is not marked as error
                 is_error = block.is_error
                 if tool_name == "AskUserQuestion":
                     is_error = False
@@ -189,10 +189,10 @@ class SDKMessageProcessor:
                     "content": block.content,
                     "is_error": is_error,
                 })
-                # 發送工具完成事件
+                # Send tool complete event
                 events.append(ToolCompleteEvent(tool_use_id=block.tool_use_id))
 
-        # 發送完成事件（包含完整的 content blocks）
+        # Send complete event (with full content blocks)
         events.append(CompleteEvent(
             role=MessageRole.ASSISTANT,
             content=content_blocks,
@@ -205,14 +205,14 @@ class SDKMessageProcessor:
     async def _handle_result_message(
         self, msg: ResultMessage
     ) -> List[ProcessedEvent]:
-        """處理結果訊息."""
+        """Handle result message."""
         events: List[ProcessedEvent] = []
 
-        # 捕獲 agent session ID
+        # Capture agent session ID
         if msg.session_id and not self.state.captured_agent_session_id:
             self.state.captured_agent_session_id = msg.session_id
 
-        # 提取 token usage
+        # Extract token usage
         token_usage = None
         if msg.usage:
             token_usage = TokenUsage(
@@ -222,7 +222,7 @@ class SDKMessageProcessor:
                 cache_creation=msg.usage.get("cache_creation_input_tokens"),
             )
 
-        # 提取 structured_output（SDK 文件：JSON 結果僅出現在 ResultMessage 中）
+        # Extract structured_output (SDK docs: JSON results only appear in ResultMessage)
         structured_output = getattr(msg, "structured_output", None)
         if structured_output is not None:
             logger.info(
@@ -230,7 +230,7 @@ class SDKMessageProcessor:
                 self.state.session_id[:8],
             )
 
-        # 建立 raw SDK message
+        # Build raw SDK message
         raw_sdk_message = {
             "type": "claude",
             "session_id": msg.session_id,
@@ -243,14 +243,14 @@ class SDKMessageProcessor:
         if structured_output is not None:
             raw_sdk_message["structured_output"] = structured_output
 
-        # 發送結果事件
+        # Send result event
         events.append(ResultEvent(
             raw_sdk_message=raw_sdk_message,
             token_usage=token_usage,
             structured_output=structured_output,
         ))
 
-        # 發送結束事件
+        # Send end event
         events.append(EndEvent(reason="result"))
 
         return events
@@ -258,33 +258,33 @@ class SDKMessageProcessor:
     async def _handle_user_message(
         self, msg: UserMessage
     ) -> List[ProcessedEvent]:
-        """處理使用者訊息."""
+        """Handle user message."""
         events: List[ProcessedEvent] = []
 
-        # 處理 content blocks
+        # Process content blocks
         content_blocks = []
         for block in msg.content:
             if isinstance(block, TextBlock):
                 content_blocks.append({"type": "text", "text": block.text})
             elif isinstance(block, ToolResultBlock):
-                # 檢查對應的 tool_name，對 AskUserQuestion 特殊處理
+                # Check corresponding tool_name, special handling for AskUserQuestion
                 tool_name = self.state.tool_use_registry.get(block.tool_use_id)
-                # AskUserQuestion 使用 PermissionResultAllow + updated_input 返回用戶答案
-                # 確保用戶回答不會被標記為錯誤
+                # AskUserQuestion uses PermissionResultAllow + updated_input to return user answer
+                # Ensure user answer is not marked as error
                 is_error = block.is_error
                 if tool_name == "AskUserQuestion":
                     is_error = False
-                # 處理工具結果
+                # Handle tool result
                 content_blocks.append({
                     "type": "tool_result",
                     "tool_use_id": block.tool_use_id,
                     "content": block.content,
                     "is_error": is_error,
                 })
-                # 發送工具完成事件
+                # Send tool complete event
                 events.append(ToolCompleteEvent(tool_use_id=block.tool_use_id))
 
-        # 發送完成事件（只在有內容時）
+        # Send complete event (only if has content)
         if content_blocks:
             events.append(CompleteEvent(
                 role=MessageRole.USER,
@@ -296,12 +296,12 @@ class SDKMessageProcessor:
     async def _handle_stream_event(
         self, msg: StreamEvent
     ) -> List[ProcessedEvent]:
-        """處理串流事件.
+        """Handle stream event.
 
-        StreamEvent 格式：
-        - uuid: str (事件 UUID)
-        - session_id: str (會話 ID)
-        - event: dict (原始 Anthropic API stream 事件)
+        StreamEvent format:
+        - uuid: str (event UUID)
+        - session_id: str (session ID)
+        - event: dict (raw Anthropic API stream event)
         - parent_tool_use_id: Optional[str]
         """
         if not self.state.enable_token_streaming:
@@ -312,7 +312,7 @@ class SDKMessageProcessor:
 
         event_type = event.get("type")
 
-        # Message start event - 捕獲 model
+        # Message start event - capture model
         if event_type == "message_start":
             message = event.get("message", {})
             if message.get("model"):
@@ -328,7 +328,7 @@ class SDKMessageProcessor:
                 tool_name = block.get("name", "")
                 tool_id = block.get("id", "")
 
-                # 追蹤這個 tool_use block
+                # Track this tool_use block
                 self.state.content_block_stack.append(ContentBlockInfo(
                     index=block_index,
                     type="tool_use",
@@ -336,7 +336,7 @@ class SDKMessageProcessor:
                     tool_name=tool_name,
                 ))
 
-                # 註冊 tool_use_id -> tool_name 映射（用於 tool_result 處理）
+                # Register tool_use_id -> tool_name mapping (for tool_result handling)
                 self.state.tool_use_registry[tool_id] = tool_name
 
                 events.append(ToolStartEvent(
@@ -382,7 +382,7 @@ class SDKMessageProcessor:
         elif event_type == "content_block_stop":
             block_index = event.get("index")
 
-            # 找到剛完成的 block
+            # Find the just-completed block
             completed_block = None
             for b in self.state.content_block_stack:
                 if b.index == block_index:
@@ -401,21 +401,21 @@ class SDKMessageProcessor:
     async def _handle_system_message(
         self, msg: SystemMessage
     ) -> List[ProcessedEvent]:
-        """處理系統訊息.
+        """Handle system message.
 
-        SystemMessage 格式：
-        - subtype: str (訊息子類型)
-        - data: dict (訊息資料)
+        SystemMessage format:
+        - subtype: str (message subtype)
+        - data: dict (message data)
         """
         events: List[ProcessedEvent] = []
 
-        # 從 SystemMessage 中提取 model 信息
+        # Extract model info from SystemMessage
         if msg.data:
             if "model" in msg.data:
                 self.state.resolved_model = msg.data["model"]
 
-        # SystemMessage 只包含 metadata，不需要建立訊息記錄
-        # 只發送事件通知前端
+        # SystemMessage only contains metadata, no need to create message record
+        # Only send event to notify frontend
         events.append(CompleteEvent(
             role=MessageRole.SYSTEM,
             content=[{

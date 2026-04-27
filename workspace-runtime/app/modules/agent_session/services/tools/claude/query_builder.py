@@ -1,8 +1,8 @@
 """
 Query Builder.
 
-比照 agor-main 的 query-builder.ts
-建構 Claude Agent SDK 的 Query 物件。
+References agor-main's query-builder.ts
+Builds Claude Agent SDK Query objects.
 """
 
 import logging
@@ -22,7 +22,7 @@ from app.database import async_session_scope
 from app.modules.agent_session.domain.enums import PermissionMode as BackendPermissionMode
 from app.modules.agent_session.repositories.agent_session_repository import AgentSessionRepository
 
-# 預設 max_turns 限制，防止 agent 無限循環消耗 token
+# Default max_turns limit to prevent agent infinite loop consuming tokens
 DEFAULT_MAX_TURNS = 200
 
 
@@ -30,26 +30,26 @@ def to_sdk_permission_mode(mode: BackendPermissionMode | None) -> SDKPermissionM
     """
     Convert backend permission mode to SDK permission mode.
 
-    Backend 現在直接使用 Claude SDK 原生模式：
-    - default: 每個工具都提示（最嚴格）
-    - acceptEdits: 自動接受編輯，其他工具提示
-    - bypassPermissions: 允許所有操作（不提示）
-    - plan: 計劃模式（生成計劃但不執行）
-    - dontAsk: 允許所有操作（不提示、不詢問）
-    - auto: 自動決定權限模式
+    Backend now directly uses Claude SDK native modes:
+    - default: prompt for every tool (strictest)
+    - acceptEdits: auto-accept edits, prompt for other tools
+    - bypassPermissions: allow all operations (no prompt)
+    - plan: plan mode (generate plan but don't execute)
+    - dontAsk: allow all operations (no prompt, no ask)
+    - auto: automatically determine permission mode
 
-    由於後端已使用原生模式，直接返回對應的 SDK 值即可。
+    Since backend uses native modes, directly return corresponding SDK value.
     """
     if mode is None:
         return None
 
-    # 後端 enum 值已經是 Claude SDK 原生模式，直接返回
+    # Backend enum values are already Claude SDK native modes, return directly
     return mode.value
 
 
 @dataclass
 class QueryOptions:
-    """Query 選項."""
+    """Query options."""
 
     task_id: Optional[str] = None
     resume: bool = True
@@ -61,9 +61,9 @@ class QueryBuilder:
     """
     Query Builder.
 
-    建構 Claude Agent SDK 的 Query 物件。
+    Builds Claude Agent SDK Query objects.
 
-    無狀態：每次呼叫 setup_query 都建立一個短期 DB session 讀取會話設定。
+    Stateless: each setup_query call creates a short-lived DB session to read session settings.
     """
 
     def __init__(
@@ -71,7 +71,7 @@ class QueryBuilder:
         api_key: Optional[str] = None,
     ):
         """
-        初始化 Query Builder.
+        Initialize Query Builder.
 
         Args:
             api_key: Anthropic API key
@@ -85,17 +85,17 @@ class QueryBuilder:
         options: QueryOptions,
     ) -> ClaudeAgentOptions:
         """
-        設定 Query.
+        Setup Query.
 
         Args:
-            session_id: 會話 ID
-            prompt: 使用者 prompt
-            options: Query 選項
+            session_id: Session ID
+            prompt: User prompt
+            options: Query options
 
         Returns:
-            ClaudeAgentOptions: Claude Agent 選項
+            ClaudeAgentOptions: Claude Agent options
         """
-        # 取得 session（短期 session，避免長時間持有連線）
+        # Get session (short-lived session, avoid holding connection for long)
         async with async_session_scope() as db:
             session_repo = AgentSessionRepository(db)
             session_model = await session_repo.find_by_id(session_id)
@@ -104,35 +104,35 @@ class QueryBuilder:
 
             session = session_repo.to_entity(session_model)
 
-        # 取得 workspace path
+        # Get workspace path
         workspace_path = session.custom_context.get("workspace_path", "/workspace")
         custom_ctx = session.custom_context or {}
 
-        # 轉換權限模式：runtime 傳入的優先，否則讀 session 儲存的設定
+        # Convert permission mode: prioritize runtime-passed, otherwise read session-saved settings
         sdk_permission_mode = None
         if options.permission_mode:
             sdk_permission_mode = to_sdk_permission_mode(options.permission_mode)
         elif session.permission_config:
             sdk_permission_mode = to_sdk_permission_mode(session.permission_config.mode)
 
-        # 工具白/黑名單（從 custom_context 讀取）
-        # 使用 dict.get(key, fallback) 而非 or，保留空列表 []（表示禁止所有工具）
+        # Tool whitelist/blacklist (read from custom_context)
+        # Use dict.get(key, fallback) instead of or, preserve empty list [] (means forbid all tools)
         allowed_tools = custom_ctx.get("allowed_tools", custom_ctx.get("allowedTools"))
         disallowed_tools = custom_ctx.get("disallowed_tools", custom_ctx.get("disallowedTools"))
 
-        # max_turns：從 custom_context 讀取，預設 DEFAULT_MAX_TURNS
+        # max_turns: read from custom_context, default DEFAULT_MAX_TURNS
         max_turns = custom_ctx.get("max_turns") or custom_ctx.get("maxTurns") or DEFAULT_MAX_TURNS
 
-        # Thinking 模式處理：
-        # SDK 文件警告：當 max_thinking_tokens 明確設定時，StreamEvent 不會被發送。
-        # 因此需要在設定 thinking tokens 時停用 include_partial_messages。
+        # Thinking mode handling:
+        # SDK docs warn: when max_thinking_tokens is explicitly set, StreamEvent will not be sent.
+        # Therefore need to disable include_partial_messages when setting thinking tokens.
         max_thinking_tokens = None
         include_partial = True
         if session.model_settings and session.model_settings.thinking_mode:
             thinking_mode = session.model_settings.thinking_mode
             if thinking_mode == "manual" and session.model_settings.manual_thinking_tokens:
                 max_thinking_tokens = session.model_settings.manual_thinking_tokens
-                # 明確設定 max_thinking_tokens 會導致 StreamEvent 不發送
+                # Explicitly setting max_thinking_tokens causes StreamEvent not to be sent
                 include_partial = False
                 logger.info(
                     "Extended thinking enabled with %d tokens; "
@@ -140,35 +140,35 @@ class QueryBuilder:
                     max_thinking_tokens,
                 )
 
-        # 建立選項參數，優先取用已存在的 session / context 設定
+        # Build option parameters, prioritize existing session/context settings
         option_kwargs: Dict[str, Any] = {
             "cwd": workspace_path,
             "resume": session.sdk_session_id if options.resume else None,
             "model": session.model_settings.model if session.model_settings else None,
             "mcp_servers": custom_ctx.get("mcp_servers") or custom_ctx.get("mcpServers"),
-            # 使用 preset 類型避免 SDK 帶入 --system-prompt ""
+            # Use preset type to avoid SDK injecting --system-prompt ""
             "system_prompt": SystemPromptPreset(type="preset", preset="claude_code"),
-            # 串流控制：當 extended thinking 明確設定時停用（SDK 限制）
+            # Streaming control: disable when extended thinking explicitly set (SDK limitation)
             "include_partial_messages": include_partial,
-            # 設定來源優先順序：user > project > local
+            # Setting source priority: user > project > local
             "setting_sources": ["user", "project", "local"],
-            # 權限模式
+            # Permission mode
             "permission_mode": sdk_permission_mode,
-            # 權限回調（當 permission_mode 為 default 時會呼叫）
+            # Permission callback (called when permission_mode is default)
             "can_use_tool": options.can_use_tool,
-            # 增加 JSON 緩衝區大小至 10MB，避免大型回應導致 session 中斷
+            # Increase JSON buffer size to 10MB, avoid large responses causing session disconnect
             "max_buffer_size": 10 * 1024 * 1024,
-            # 工具限制
+            # Tool restrictions
             "allowed_tools": allowed_tools,
             "disallowed_tools": disallowed_tools,
-            # 對話輪數限制，防止 agent 無限循環
+            # Conversation turn limit, prevent agent infinite loop
             "max_turns": max_turns,
             # Extended thinking
             "max_thinking_tokens": max_thinking_tokens,
-            # TODO: 添加其他選項（hooks, commands, subagents, output_styles, env）
+            # TODO: add other options (hooks, commands, subagents, output_styles, env)
         }
 
-        # 過濾 None，避免覆寫 SDK 預設值
+        # Filter None to avoid overriding SDK defaults
         filtered_kwargs = {key: value for key, value in option_kwargs.items() if value is not None}
 
         agent_options = ClaudeAgentOptions(**filtered_kwargs)

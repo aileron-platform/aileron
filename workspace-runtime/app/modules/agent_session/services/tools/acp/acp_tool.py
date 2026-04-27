@@ -43,8 +43,8 @@ DEFAULT_ARGS = {
 class AcpTool(ITool):
     """ACP tool for codex/gemini/opencode.
 
-    無狀態：不持有 DB session，每個 DB 操作使用短期 session
-    （透過 async_session_scope），避免長時間執行任務時佔用連線池。
+    Stateless: does not hold DB session, each DB operation uses short-lived session
+    (via async_session_scope), avoiding connection pool occupation during long-running tasks.
     """
 
     def __init__(
@@ -98,7 +98,7 @@ class AcpTool(ITool):
             self._tool_type.value,
             len(prompt or ""),
         )
-        # 取得下一個訊息索引並建立使用者訊息（短期 session）
+        # Get next message index and create user message (short-lived session)
         async with async_session_scope() as db:
             message_repo = MessageRepository(db)
             message_service = MessageService(db)
@@ -112,14 +112,14 @@ class AcpTool(ITool):
                 index=next_index,
                 message_service=message_service,
             )
-            # session 在 context 結束時自動 commit
+            # Session auto-commits when context ends
 
         if streaming_callbacks:
             await streaming_callbacks.on_message_created(user_message)
 
         next_index += 1
 
-        # 取得 session 與 workspace 設定（短期 session）
+        # Get session and workspace settings (short-lived session)
         async with async_session_scope() as db:
             session_repo = AgentSessionRepository(db)
             session_model = await session_repo.find_by_id(session_id)
@@ -157,7 +157,7 @@ class AcpTool(ITool):
             emit_event=emit_event,
         )
 
-        # 確保 ACP session 存在
+        # Ensure ACP session exists
         sdk_session_id = await self._ensure_sdk_session(connection, session_id, session.sdk_session_id, cwd)
 
         stream_start = time.time()
@@ -220,7 +220,7 @@ class AcpTool(ITool):
         if not content_blocks:
             content_blocks.append({"type": "text", "text": ""})
 
-        # 建立 assistant 訊息（短期 session）
+        # Create assistant message (short-lived session)
         async with async_session_scope() as db:
             message_service = MessageService(db)
             assistant_message = await create_assistant_message(

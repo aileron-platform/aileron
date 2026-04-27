@@ -1,4 +1,4 @@
-"""WebSocket 整合測試."""
+"""WebSocket integration tests."""
 
 import pytest
 import asyncio
@@ -21,23 +21,23 @@ from app.modules.agent_session.websocket.events import (
 
 
 class TestConnectionManager:
-    """ConnectionManager 測試."""
+    """ConnectionManager tests."""
 
     @pytest.fixture(autouse=True)
     def reset_manager(self):
-        """每個測試前重置 manager."""
+        """Reset manager before each test."""
         reset_connection_manager()
         yield
         reset_connection_manager()
 
     @pytest.fixture
     def manager(self):
-        """建立 ConnectionManager."""
+        """Create ConnectionManager."""
         return ConnectionManager()
 
     @pytest.fixture
     def mock_websocket(self):
-        """建立 Mock WebSocket."""
+        """Create Mock WebSocket."""
         ws = AsyncMock(spec=WebSocket)
         ws.accept = AsyncMock()
         ws.send_text = AsyncMock()
@@ -46,7 +46,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_connect(self, manager, mock_websocket):
-        """測試連線."""
+        """Test connection."""
         connection_id = await manager.connect(
             mock_websocket,
             user_id="user-123",
@@ -59,7 +59,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_disconnect(self, manager, mock_websocket):
-        """測試斷線."""
+        """Test disconnection."""
         connection_id = await manager.connect(mock_websocket)
         assert manager.get_connection_count() == 1
 
@@ -68,7 +68,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_subscribe_session(self, manager, mock_websocket):
-        """測試訂閱 Session."""
+        """Test subscribe Session."""
         connection_id = await manager.connect(mock_websocket)
 
         result = await manager.subscribe_session(connection_id, "session-abc")
@@ -78,7 +78,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_unsubscribe_session(self, manager, mock_websocket):
-        """測試取消訂閱 Session."""
+        """Test unsubscribe Session."""
         connection_id = await manager.connect(
             mock_websocket,
             session_id="session-xyz",
@@ -92,7 +92,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_broadcast(self, manager):
-        """測試廣播."""
+        """Test broadcast."""
         ws1 = AsyncMock(spec=WebSocket)
         ws1.accept = AsyncMock()
         ws1.send_text = AsyncMock()
@@ -112,7 +112,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_send_to_session(self, manager):
-        """測試發送到 Session."""
+        """Test send to Session."""
         ws1 = AsyncMock(spec=WebSocket)
         ws1.accept = AsyncMock()
         ws1.send_text = AsyncMock()
@@ -135,7 +135,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_send_to_user(self, manager):
-        """測試發送到使用者."""
+        """Test send to user."""
         ws1 = AsyncMock(spec=WebSocket)
         ws1.accept = AsyncMock()
         ws1.send_text = AsyncMock()
@@ -158,7 +158,7 @@ class TestConnectionManager:
 
     @pytest.mark.asyncio
     async def test_multiple_sessions_per_connection(self, manager, mock_websocket):
-        """測試單一連線訂閱多個 Sessions."""
+        """Test single connection subscribing to multiple Sessions."""
         connection_id = await manager.connect(mock_websocket)
 
         await manager.subscribe_session(connection_id, "session-1")
@@ -171,11 +171,11 @@ class TestConnectionManager:
 
 
 class TestEventEmitter:
-    """EventEmitter 測試."""
+    """EventEmitter tests."""
 
     @pytest.fixture(autouse=True)
     def reset_emitter(self):
-        """每個測試前重置 emitter."""
+        """Reset emitter before each test."""
         reset_event_emitter()
         reset_connection_manager()
         yield
@@ -184,12 +184,12 @@ class TestEventEmitter:
 
     @pytest.fixture
     def emitter(self):
-        """建立 EventEmitter."""
+        """Create EventEmitter."""
         return EventEmitter()
 
     @pytest.mark.asyncio
     async def test_emit_session_created(self, emitter):
-        """測試發送 session created 事件."""
+        """Test emit session created event."""
         mock_ws = AsyncMock(spec=WebSocket)
         mock_ws.accept = AsyncMock()
         mock_ws.send_text = AsyncMock()
@@ -209,7 +209,7 @@ class TestEventEmitter:
 
     @pytest.mark.asyncio
     async def test_emit_streaming_chunk(self, emitter):
-        """測試發送 streaming chunk 事件."""
+        """Test emit streaming chunk event."""
         mock_ws = AsyncMock(spec=WebSocket)
         mock_ws.accept = AsyncMock()
         mock_ws.send_text = AsyncMock()
@@ -232,7 +232,7 @@ class TestEventEmitter:
 
     @pytest.mark.asyncio
     async def test_event_listener(self, emitter):
-        """測試事件監聽器."""
+        """Test event listener."""
         received_events = []
 
         def listener(event):
@@ -240,7 +240,7 @@ class TestEventEmitter:
 
         emitter.on(EventType.SESSIONS_CREATED, listener)
 
-        # 即使沒有 WebSocket 連線，監聽器也應該被呼叫
+        # Even without WebSocket connection, listener should be called
         await emitter.emit(
             WebSocketEvent.session_created(
                 "listener-session",
@@ -253,7 +253,7 @@ class TestEventEmitter:
 
     @pytest.mark.asyncio
     async def test_remove_event_listener(self, emitter):
-        """測試移除事件監聯器."""
+        """Test remove event listener."""
         received_events = []
 
         def listener(event):
@@ -274,10 +274,10 @@ class TestEventEmitter:
 
 
 class TestWebSocketEvent:
-    """WebSocketEvent 測試."""
+    """WebSocketEvent tests."""
 
     def test_session_created_event(self):
-        """測試 session created 事件."""
+        """Test session created event."""
         event = WebSocketEvent.session_created(
             "session-123",
             {"session_id": "session-123", "status": "idle"},
@@ -288,7 +288,7 @@ class TestWebSocketEvent:
         assert event.data["session_id"] == "session-123"
 
     def test_streaming_chunk_event(self):
-        """測試 streaming chunk 事件."""
+        """Test streaming chunk event."""
         event = WebSocketEvent.streaming_chunk(
             "session-123",
             "task-456",
@@ -303,7 +303,7 @@ class TestWebSocketEvent:
         assert event.data["is_partial"] is False
 
     def test_thinking_event(self):
-        """測試 thinking 事件."""
+        """Test thinking event."""
         event = WebSocketEvent.thinking_chunk(
             "session-123",
             "task-456",
@@ -315,7 +315,7 @@ class TestWebSocketEvent:
         assert event.data["content"] == "Analyzing the problem..."
 
     def test_tool_complete_event(self):
-        """測試 tool complete 事件."""
+        """Test tool complete event."""
         event = WebSocketEvent.tool_complete(
             "session-123",
             "task-456",
@@ -332,7 +332,7 @@ class TestWebSocketEvent:
         assert event.data["is_error"] is False
 
     def test_event_to_dict(self):
-        """測試事件轉換為字典."""
+        """Test event convert to dict."""
         event = WebSocketEvent.session_patched(
             "session-123",
             {"status": "running"},

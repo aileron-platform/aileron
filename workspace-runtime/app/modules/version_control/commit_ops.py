@@ -1,6 +1,6 @@
-"""Git 提交與歷史操作
+"""Git commit and history operations
 
-提供 Git 提交建立和歷史記錄查詢功能。
+Provides Git commit creation and history query functionality.
 """
 
 from __future__ import annotations
@@ -34,33 +34,33 @@ logger = logging.getLogger(__name__)
 
 
 class CommitOperations:
-    """Git 提交與歷史操作
+    """Git commit and history operations
 
-    提供提交建立、提交列表、提交詳情等功能。
+    Provides commit creation, commit list, commit detail and other functionality.
     """
 
     def __init__(self, utils: GitUtils, cache: Optional["GitCache"] = None) -> None:
-        """初始化
+        """Initialize
 
         Args:
-            utils: Git 工具類實例
-            cache: 快取層（可選）
+            utils: Git utility class instance
+            cache: Cache layer (optional)
         """
         self._utils = utils
         self.cache = cache
 
     def commit(self, workspace_id: str, payload: CommitRequest, context_id: Optional[str] = None) -> CommitResponse:
-        """建立提交
+        """Create commit
 
         Args:
-            workspace_id: 工作區 ID
-            payload: 提交請求
+            workspace_id: Workspace ID
+            payload: Commit request
 
         Returns:
-            提交回應
+            Commit response
 
         Raises:
-            VersionControlError: 提交失敗
+            VersionControlError: Commit failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         author = payload.author or CommitAuthor(name="Workspace Bot", email="workspace@example.com")
@@ -93,7 +93,7 @@ class CommitOperations:
         except GitCommandError as exc:
             raise VersionControlError(str(exc), error_code="VC_COMMIT_FAILED") from exc
 
-        # 提交成功後，清除相關快取
+        # Clear related caches after successful commit
         if self.cache:
             self.cache.invalidate(workspace_id, CacheKeys.CHANGES)
             self.cache.invalidate(workspace_id, CacheKeys.STATUS)
@@ -122,46 +122,46 @@ class CommitOperations:
         search: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> CommitListResponse:
-        """列出提交歷史
+        """List commit history
 
         Args:
-            workspace_id: 工作區 ID
-            page: 頁碼
-            page_size: 每頁大小
-            branch: 分支名稱
-            search: 搜尋關鍵字
+            workspace_id: Workspace ID
+            page: Page number
+            page_size: Items per page
+            branch: Branch name
+            search: Search keyword
 
         Returns:
-            提交列表回應
+            Commit list response
 
         Raises:
-            VersionControlError: 查詢失敗
+            VersionControlError: Query failed
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         if branch:
             target = branch
         else:
             target, _ = self._utils.current_branch(repo)
-            # 如果當前分支是 HEAD 或無效，嘗試使用實際的分支
+            # If current branch is HEAD or invalid, try using actual branch
             if target == "HEAD" or target.startswith("HEAD"):
                 try:
                     if repo.branches:
-                        # 優先使用 main 或 master
+                        # Prefer main or master
                         for branch_name in ["main", "master"]:
                             if branch_name in [b.name for b in repo.branches]:
                                 target = branch_name
                                 break
                         else:
-                            # 使用第一個可用分支
+                            # Use first available branch
                             target = repo.branches[0].name
                 except (AttributeError, IndexError, GitCommandError):
                     pass
 
-        # 檢查是否有提交記錄
+        # Check if there are commit records
         if not self._utils.has_head(repo):
             return CommitListResponse(page=page, pageSize=page_size, total=0, items=[])
 
-        # 效能優化: 如果有搜尋條件，需要載入更多 commits 來搜尋
+        # Performance optimization: if search condition, need to load more commits to search
         if search:
             try:
                 commits = list(repo.iter_commits(target, max_count=1000))
@@ -181,12 +181,12 @@ class CommitOperations:
             end = start + page_size
             page_commits = filtered_commits[start:end]
         else:
-            # 無搜尋: 使用 Git 原生分頁 - 大幅提升效能
+            # No search: use Git native pagination - significantly improve performance
             skip = max(page - 1, 0) * page_size
             try:
                 page_commits = list(repo.iter_commits(target, max_count=page_size, skip=skip))
 
-                # 優化：使用 git rev-list --count 快速取得總數
+                # Optimization: use git rev-list --count to quickly get total
                 try:
                     total = int(repo.git.rev_list("--count", target))
                 except GitCommandError:
@@ -210,7 +210,7 @@ class CommitOperations:
                     email=getattr(commit.author, "email", None),
                     timestamp=int(commit.committed_datetime.replace(tzinfo=timezone.utc).timestamp() * 1000),
                     branch=branch_name,
-                    additions=0,  # 不在列表中計算，提升效能
+                    additions=0,  # Not calculated in list, improve performance
                     deletions=0,
                     files=0,
                 )
@@ -218,17 +218,17 @@ class CommitOperations:
         return CommitListResponse(page=page, pageSize=page_size, total=total, items=items)
 
     def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitDetailResponse:
-        """取得提交詳情
+        """Get commit details
 
         Args:
-            workspace_id: 工作區 ID
-            commit_id: 提交 ID
+            workspace_id: Workspace ID
+            commit_id: Commit ID
 
         Returns:
-            提交詳情回應
+            Commit detail response
 
         Raises:
-            VersionControlError: 提交不存在
+            VersionControlError: Commit not found
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         try:
@@ -236,7 +236,7 @@ class CommitOperations:
         except (ValueError, GitCommandError) as exc:
             raise VersionControlError("Commit not found", status_code=404, error_code="VC_COMMIT_NOT_FOUND") from exc
 
-        # 處理 parent commit
+        # Handle parent commit
         diff_parent = NULL_TREE
         if commit.parents:
             try:
@@ -246,7 +246,7 @@ class CommitOperations:
             except (ValueError, GitCommandError):
                 diff_parent = NULL_TREE
 
-        # 獲取統計資訊
+        # Get statistics
         stats = {}
         per_file_stats = {}
         try:
@@ -257,7 +257,7 @@ class CommitOperations:
             stats = {"insertions": 0, "deletions": 0, "files": 0, "lines": 0}
             per_file_stats = {}
 
-        # 獲取 diff
+        # Get diff
         try:
             diffs = commit.diff(diff_parent, create_patch=True)
         except GitCommandError as exc:
@@ -304,7 +304,7 @@ class CommitOperations:
                 )
             )
 
-        # 如果 stats 為空，使用手動計算的值
+        # If stats is empty, use manually calculated values
         if not stats or stats.get("insertions", 0) == 0:
             stats = {
                 "insertions": total_additions,
@@ -331,17 +331,17 @@ class CommitOperations:
         return detail
 
     def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> CommitFilesResponse:
-        """取得提交的檔案列表
+        """Get commit file list
 
         Args:
-            workspace_id: 工作區 ID
-            commit_id: 提交 ID
+            workspace_id: Workspace ID
+            commit_id: Commit ID
 
         Returns:
-            提交檔案回應
+            Commit file response
 
         Raises:
-            VersionControlError: 提交不存在
+            VersionControlError: Commit not found
         """
         repo = self._utils.get_repo(workspace_id, context_id)
         try:
@@ -349,7 +349,7 @@ class CommitOperations:
         except (ValueError, GitCommandError) as exc:
             raise VersionControlError("Commit not found", status_code=404, error_code="VC_COMMIT_NOT_FOUND") from exc
 
-        # 效能優化: 使用 git diff-tree 批量取得檔案資訊和統計
+        # Performance optimization: use git diff-tree to batch get file info and statistics
         try:
             numstat_output = repo.git.diff_tree('-r', '--numstat', '--root', commit.hexsha)
             file_stats = {}
@@ -370,7 +370,7 @@ class CommitOperations:
         except GitCommandError:
             file_stats = {}
 
-        # 使用 git show 命令獲取 patch
+        # Use git show command to get patch
         try:
             show_output = repo.git.show(commit.hexsha, format="", no_color=True, no_ext_diff=True)
         except GitCommandError as exc:
@@ -380,7 +380,7 @@ class CommitOperations:
                 error_code="VC_DIFF_FAILED"
             ) from exc
 
-        # 解析 git show 輸出，按檔案分組
+        # Parse git show output, group by file
         file_patches = {}
         current_file = None
         current_patch_lines = []
@@ -402,12 +402,12 @@ class CommitOperations:
         if current_file and current_patch_lines:
             file_patches[current_file] = '\n'.join(current_patch_lines)
 
-        # 構建檔案列表
+        # Build file list
         files: list[CommitChange] = []
         for path, patch_text in file_patches.items():
             stat = file_stats.get(path, {})
 
-            # 從 patch 中判斷變更類型
+            # Determine change type from patch
             status = "M"
             if "new file mode" in patch_text:
                 status = "A"

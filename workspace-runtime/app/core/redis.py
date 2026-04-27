@@ -1,4 +1,4 @@
-"""Redis 連接管理器"""
+"""Redis connection manager"""
 
 import json
 import logging
@@ -15,14 +15,14 @@ logger = logging.getLogger(__name__)
 
 
 class RedisManager:
-    """Redis 連接和操作管理器"""
+    """Redis connection and operation manager"""
 
     def __init__(self):
         self._redis: Optional[aioredis.Redis] = None  # type: ignore
         self._settings = get_settings()
 
     async def get_redis(self) -> aioredis.Redis:  # type: ignore
-        """取得 Redis 連接"""
+        """Get Redis connection"""
         if self._redis is None:
             try:
                 self._redis = await aioredis.from_url(
@@ -32,7 +32,7 @@ class RedisManager:
                     socket_connect_timeout=5,
                     socket_timeout=5,
                 )
-                # 測試連接
+                # Test connection
                 await self._redis.ping()
                 logger.info("Redis connection established successfully")
             except Exception as e:
@@ -41,7 +41,7 @@ class RedisManager:
         return self._redis
 
     async def get(self, key: str) -> Optional[Any]:
-        """從 Redis 取得值"""
+        """Get value from Redis"""
         try:
             redis = await self.get_redis()
             value = await redis.get(key)
@@ -56,7 +56,7 @@ class RedisManager:
             return None
 
     async def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
-        """設定 Redis 值"""
+        """Set Redis value"""
         try:
             redis = await self.get_redis()
             if isinstance(value, (dict, list)):
@@ -72,7 +72,7 @@ class RedisManager:
             return False
 
     async def delete(self, key: str) -> bool:
-        """刪除 Redis 鍵"""
+        """Delete Redis key"""
         try:
             redis = await self.get_redis()
             await redis.delete(key)
@@ -82,7 +82,7 @@ class RedisManager:
             return False
 
     async def exists(self, key: str) -> bool:
-        """檢查鍵是否存在"""
+        """Check if key exists"""
         try:
             redis = await self.get_redis()
             return await redis.exists(key) > 0
@@ -91,13 +91,13 @@ class RedisManager:
             return False
 
     async def close(self) -> None:
-        """關閉 Redis 連接"""
+        """Close Redis connection"""
         if self._redis:
             await self._redis.close()
             self._redis = None
 
 
-# 全域 Redis Manager 實例
+# Global Redis Manager instance
 redis_manager = RedisManager()
 
 __all__ = ["RedisManager", "redis_manager"]

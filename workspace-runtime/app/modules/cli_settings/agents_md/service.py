@@ -1,4 +1,4 @@
-"""CLI Agents MD 服務"""
+"""CLI Agents MD service"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from .models import (
 
 
 class AgentsMdTool(str, Enum):
-    """支援的 CLI 工具"""
+    """Supported CLI tools"""
 
     GEMINI = "gemini"
     OPENCODE = "opencode"
@@ -66,7 +66,7 @@ def get_agents_md_config(tool: AgentsMdTool) -> AgentsMdToolConfig:
 
 
 class AgentsMdService:
-    """管理 CLI agents md 檔案的服務"""
+    """Service for managing CLI agents md files"""
 
     def __init__(self, config: AgentsMdToolConfig) -> None:
         self._config = config

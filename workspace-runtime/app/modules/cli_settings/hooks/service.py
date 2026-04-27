@@ -1,6 +1,6 @@
-"""CLI Hook 設定服務
+"""CLI Hook configuration service
 
-為 Gemini 等 CLI 工具提供 Hooks 設定的 CRUD 操作。
+Provides CRUD operations for Hooks configuration for CLI tools like Gemini.
 """
 
 from __future__ import annotations
@@ -36,12 +36,12 @@ def _utcnow() -> datetime:
 
 
 class CliHookService:
-    """管理 CLI 工具 Hooks 的檔案服務"""
+    """File service for managing CLI tool Hooks"""
 
     def __init__(self, config: CliHookToolConfig) -> None:
         self._config = config
 
-    # --- 公開方法 ---------------------------------------------------------
+    # --- Public methods ----------------------------------------------------
 
     def list_scopes(
         self, workspace_id: str, scope: CliHookScope | None = None
@@ -157,7 +157,7 @@ class CliHookService:
             skipped=skipped,
         )
 
-    # --- 內部方法 ---------------------------------------------------------
+    # --- Internal methods --------------------------------------------------
 
     def _validate_scope(self, scope: CliHookScope) -> None:
         if scope not in self._config.supported_scopes:

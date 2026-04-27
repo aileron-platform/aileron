@@ -1,6 +1,6 @@
 """WebSocket Router.
 
-提供 Agent Session WebSocket 端點。
+Provides Agent Session WebSocket endpoints.
 """
 
 from __future__ import annotations
@@ -30,9 +30,9 @@ async def websocket_session_endpoint(
     user_id: Optional[str] = Query(None),
     last_seq: Optional[int] = Query(None, ge=0),
 ):
-    """WebSocket 連線端點 - 訂閱特定 session.
+    """WebSocket connection endpoint - subscribe to specific session.
     
-    連線後會自動訂閱該 session 的所有事件：
+    After connecting, automatically subscribes to all events for this session:
     - sessions patched
     - tasks created/patched
     - messages created
@@ -41,64 +41,64 @@ async def websocket_session_endpoint(
     - permission:request/approved/denied
     - tool:complete
     
-    Client 可以發送的訊息：
-    - {"type": "ping"} - 心跳
-    - {"type": "subscribe", "session_id": "..."} - 訂閱其他 session
-    - {"type": "unsubscribe", "session_id": "..."} - 取消訂閱
+    Messages client can send:
+    - {"type": "ping"} - Heartbeat
+    - {"type": "subscribe", "session_id": "..."} - Subscribe to other session
+    - {"type": "unsubscribe", "session_id": "..."} - Unsubscribe
     
     Args:
-        websocket: WebSocket 連線
-        session_id: 要訂閱的 session ID
-        user_id: 可選的用戶 ID
-        last_seq: 用於 replay 的最後已接收序號（可選）
+        websocket: WebSocket connection
+        session_id: Session ID to subscribe to
+        user_id: Optional user ID
+        last_seq: Last received sequence number for replay (optional)
     """
     manager = get_connection_manager()
     authenticated_user = await _authenticate_websocket(websocket)
     if authenticated_user is None:
         return
 
-    # 建立連線並訂閱 session
+    # Establish connection and subscribe to session
     connection_id = await manager.connect(
         websocket,
         user_id=authenticated_user.id,
         session_id=session_id,
     )
     logger.info(f"🔵 WebSocket connected: {connection_id} -> session {session_id[:8]}")
-    logger.info(f"   當前連線數: {manager.get_connection_count()}")
+    logger.info(f"   Current connections: {manager.get_connection_count()}")
 
     replay_enabled = last_seq is not None and last_seq >= 0
     if replay_enabled:
         replay_enabled = await manager.start_replay_mode(connection_id)
 
-    # 訂閱成功後，查詢會話狀態並發送給客戶端
+    # After successful subscription, query session state and send to client
     try:
         from ..services.agent_session_service import AgentSessionService
 
         async with async_session_scope() as db:
             service = AgentSessionService(db)
-            logger.info(f"🔄 正在查詢會話狀態: {session_id[:8]}")
+            logger.info(f"🔄 Querying session state: {session_id[:8]}")
             session = await service.get_session(session_id)
             if session:
-                # 發送 session:init 事件（初始化會話狀態，與真正的 sessions created 區分）
+                # Send session:init event (initialize session state, distinct from real sessions created)
                 event_data = AgentSessionService._session_to_event_data(session)
-                logger.info(f"📤 準備發送會話狀態給連線 {connection_id}")
-                logger.info(f"   事件數據: {event_data}")
+                logger.info(f"📤 Preparing to send session state to connection {connection_id}")
+                logger.info(f"   Event data: {event_data}")
                 success = await manager.send_to_connection(connection_id, {
                     "type": "session:init",
                     "session_id": session_id,
                     "data": event_data,
                 }, bypass_replay_queue=True)
                 if success:
-                    logger.info(f"✅ 已發送初始會話狀態給連線 {connection_id}")
+                    logger.info(f"✅ Sent initial session state to connection {connection_id}")
                 else:
-                    logger.error(f"❌ 發送會話狀態失敗")
+                    logger.error(f"❌ Failed to send session state")
             else:
-                logger.warning(f"❌ 找不到會話: {session_id}")
+                logger.warning(f"❌ Session not found: {session_id}")
 
-        # 重播 pending tool decision（如 AskUserQuestion）
+        # Replay pending tool decision (e.g., AskUserQuestion)
         await _replay_pending_tool_decision(manager, connection_id, session_id)
 
-        # 若客戶端提供 last_seq，回放缺失事件
+        # If client provides last_seq, replay missing events
         if replay_enabled and last_seq is not None:
             replayed_count = await _replay_session_events(
                 manager=manager,
@@ -107,7 +107,7 @@ async def websocket_session_endpoint(
                 last_seq=last_seq,
             )
             logger.info(
-                "🔁 Replay sent: session=%s last_seq=%s count=%s",
+                "Replay sent: session=%s last_seq=%s count=%s",
                 session_id[:8],
                 last_seq,
                 replayed_count,
@@ -121,14 +121,14 @@ async def websocket_session_endpoint(
             queued_count = await manager.finish_replay_mode(connection_id)
             if queued_count > 0:
                 logger.info(
-                    "📬 Flushed queued events after replay: session=%s count=%s",
+                    "Flushed queued events after replay: session=%s count=%s",
                     session_id[:8],
                     queued_count,
                 )
 
     try:
         while True:
-            # 接收客戶端訊息
+            # Receive client message
             data = await websocket.receive_text()
             
             try:
@@ -153,25 +153,25 @@ async def websocket_global_endpoint(
     websocket: WebSocket,
     user_id: Optional[str] = Query(None),
 ):
-    """全域 WebSocket 連線端點.
+    """Global WebSocket connection endpoint.
     
-    可以動態訂閱/取消訂閱多個 sessions。
+    Can dynamically subscribe/unsubscribe to multiple sessions.
     
-    Client 可以發送的訊息：
-    - {"type": "ping"} - 心跳
-    - {"type": "subscribe", "session_id": "..."} - 訂閱 session
-    - {"type": "unsubscribe", "session_id": "..."} - 取消訂閱
+    Messages client can send:
+    - {"type": "ping"} - Heartbeat
+    - {"type": "subscribe", "session_id": "..."} - Subscribe to session
+    - {"type": "unsubscribe", "session_id": "..."} - Unsubscribe
     
     Args:
-        websocket: WebSocket 連線
-        user_id: 可選的用戶 ID
+        websocket: WebSocket connection
+        user_id: Optional user ID
     """
     manager = get_connection_manager()
     authenticated_user = await _authenticate_websocket(websocket)
     if authenticated_user is None:
         return
     
-    # 建立連線 (不訂閱任何 session)
+    # Establish connection (do not subscribe to any session)
     connection_id = await manager.connect(websocket, user_id=authenticated_user.id)
     logger.info(f"Global WebSocket connected: {connection_id}")
     
@@ -201,21 +201,21 @@ async def _handle_client_message(
     connection_id: str,
     message: Dict[str, Any],
 ) -> None:
-    """處理客戶端訊息.
+    """Handle client message.
     
     Args:
         manager: Connection Manager
-        connection_id: 連線 ID
-        message: 客戶端訊息
+        connection_id: Connection ID
+        message: Client message
     """
     msg_type = message.get("type")
     
     if msg_type == "ping":
-        # 心跳回應
+        # Heartbeat response
         await manager.send_to_connection(connection_id, {"type": "pong"})
         
     elif msg_type == "subscribe":
-        # 訂閱 session
+        # Subscribe to session
         session_id = message.get("session_id")
         if session_id:
             success = await manager.subscribe_session(connection_id, session_id)
@@ -225,17 +225,17 @@ async def _handle_client_message(
                 "success": success,
             })
 
-            # 訂閱成功後，查詢會話狀態並發送給客戶端
+            # After successful subscription, query session state and send to client
             if success:
                 try:
-                    # 動態導入以避免循環導入
+                    # Dynamic import to avoid circular import
                     from ..services.agent_session_service import AgentSessionService
 
                     async with async_session_scope() as db:
                         service = AgentSessionService(db)
                         session = await service.get_session(session_id)
                         if session:
-                            # 發送 session:init 事件（初始化會話狀態）
+                            # Send session:init event (initialize session state)
                             event_data = AgentSessionService._session_to_event_data(session)
                             await manager.send_to_connection(connection_id, {
                                 "type": "session:init",
@@ -245,7 +245,7 @@ async def _handle_client_message(
                 except Exception as e:
                     logger.warning(f"Failed to fetch session state on subscribe: {e}")
 
-                # 重播 pending tool decision（如 AskUserQuestion）
+                # Replay pending tool decision (e.g., AskUserQuestion)
                 await _replay_pending_tool_decision(manager, connection_id, session_id)
         else:
             await manager.send_to_connection(connection_id, {
@@ -254,7 +254,7 @@ async def _handle_client_message(
             })
             
     elif msg_type == "unsubscribe":
-        # 取消訂閱 session
+        # Unsubscribe from session
         session_id = message.get("session_id")
         if session_id:
             success = await manager.unsubscribe_session(connection_id, session_id)
@@ -270,7 +270,7 @@ async def _handle_client_message(
             })
             
     else:
-        # 未知訊息類型
+        # Unknown message type
         await manager.send_to_connection(connection_id, {
             "type": "error",
             "message": f"Unknown message type: {msg_type}",
@@ -278,7 +278,7 @@ async def _handle_client_message(
 
 
 async def _authenticate_websocket(websocket: WebSocket) -> Optional[SimpleUser]:
-    """驗證 agent-session WebSocket 連線。"""
+    """Authenticate agent-session WebSocket connection."""
     token = _extract_websocket_token(websocket)
     if not token:
         await websocket.close(code=4401, reason="Missing authentication token")
@@ -298,7 +298,7 @@ async def _authenticate_websocket(websocket: WebSocket) -> Optional[SimpleUser]:
 
 
 def _extract_websocket_token(websocket: WebSocket) -> Optional[str]:
-    """從 WebSocket handshake 取得 access token。"""
+    """Extract access token from WebSocket handshake."""
     authorization = websocket.headers.get("authorization", "")
     if authorization.lower().startswith("bearer "):
         token = authorization.split(" ", 1)[1].strip()
@@ -325,11 +325,11 @@ async def _replay_pending_tool_decision(
     connection_id: str,
     session_id: str,
 ) -> None:
-    """重播 pending tool decision 給重新連線的客戶端.
+    """Replay pending tool decision to reconnected client.
 
-    當客戶端重新連線或訂閱 session 時，若 session 有正在等待使用者決策的
-    tool decision（如 AskUserQuestion 或 permission request），重新發送
-    tool-decision:request 事件，確保前端能恢復互動狀態。
+    When client reconnects or subscribes to session, if session has a tool decision waiting for user decision
+    (e.g., AskUserQuestion or permission request), resend
+    tool-decision:request event to ensure frontend can restore interaction state.
     """
     import json as _json
 
@@ -344,7 +344,7 @@ async def _replay_pending_tool_decision(
             if not task or task.status != TaskStatus.AWAITING_PERMISSION.value:
                 return
 
-            # 解析 task.data 取得 permission_request
+            # Parse task.data to get permission_request
             if not task.data:
                 return
             try:
@@ -365,18 +365,18 @@ async def _replay_pending_tool_decision(
             if not request_id:
                 return
 
-            # 根據 decision_type 重建 options
+            # Rebuild options based on decision_type
             if decision_type == "user_input":
                 options = [
-                    {"option_id": "submit", "name": "提交", "kind": "allow_once", "scope": "once"},
-                    {"option_id": "cancel", "name": "取消", "kind": "reject_once", "scope": "once"},
+                    {"option_id": "submit", "name": "Submit", "kind": "allow_once", "scope": "once"},
+                    {"option_id": "cancel", "name": "Cancel", "kind": "reject_once", "scope": "once"},
                 ]
                 timeout = 300
             else:
                 options = [
-                    {"option_id": "allow_once", "name": "允許一次", "kind": "allow_once", "scope": "once"},
-                    {"option_id": "allow_session", "name": "允許此會話", "kind": "allow_always", "scope": "session"},
-                    {"option_id": "reject_once", "name": "拒絕", "kind": "reject_once", "scope": "once"},
+                    {"option_id": "allow_once", "name": "Allow Once", "kind": "allow_once", "scope": "once"},
+                    {"option_id": "allow_session", "name": "Allow This Session", "kind": "allow_always", "scope": "session"},
+                    {"option_id": "reject_once", "name": "Deny", "kind": "reject_once", "scope": "once"},
                 ]
                 timeout = 60
 
@@ -401,7 +401,7 @@ async def _replay_pending_tool_decision(
             }, bypass_replay_queue=True)
 
             logger.info(
-                "🔄 Replayed pending tool decision: session=%s type=%s tool=%s",
+                "Replayed pending tool decision: session=%s type=%s tool=%s",
                 session_id[:8], decision_type, tool_name,
             )
     except Exception as e:
@@ -414,7 +414,7 @@ async def _replay_session_events(
     session_id: str,
     last_seq: int,
 ) -> int:
-    """回放 session 事件到指定連線."""
+    """Replay session events to specified connection."""
     replay_store = get_websocket_replay_store()
     cursor = max(int(last_seq), 0)
     total = 0
@@ -444,14 +444,14 @@ async def _replay_session_events(
                 cursor = seq
             total += 1
 
-        # 保護：避免異常資料導致無限迴圈
+        # Protection: avoid infinite loop from anomalous data
         if cursor <= previous_cursor:
             break
 
         if len(events) < batch_size:
             break
 
-        # 讓出事件迴圈，避免大量回放時阻塞其他協程
+        # Yield event loop to avoid blocking other coroutines during large replays
         await asyncio.sleep(0)
 
     return total

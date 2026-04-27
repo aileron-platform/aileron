@@ -1,6 +1,6 @@
-"""CLI MCP 設定檔讀寫策略
+"""CLI MCP configuration file read/write strategies
 
-提供 JSON 和 TOML 兩種設定檔的讀寫支援。
+Provides read/write support for JSON and TOML configuration files.
 """
 
 from __future__ import annotations
@@ -24,19 +24,19 @@ import tomli_w
 
 
 class ConfigFileStrategy(ABC):
-    """設定檔讀寫策略的抽象基類"""
+    """Abstract base class for configuration file read/write strategies"""
 
     @abstractmethod
     def read(self, path: Path) -> Dict[str, Any]:
-        """讀取設定檔，若檔案不存在或格式錯誤回傳空 dict"""
+        """Read configuration file, return empty dict if file doesn't exist or format error"""
 
     @abstractmethod
     def write(self, path: Path, data: Dict[str, Any]) -> None:
-        """寫入設定檔並確保目錄存在"""
+        """Write configuration file and ensure directory exists"""
 
 
 class JsonConfigStrategy(ConfigFileStrategy):
-    """JSON 設定檔策略（支援 JSONC 註解移除）"""
+    """JSON configuration file strategy (supports JSONC comment removal)"""
 
     def read(self, path: Path) -> Dict[str, Any]:
         if not path.exists():
@@ -61,7 +61,7 @@ class JsonConfigStrategy(ConfigFileStrategy):
 
 
 class TomlConfigStrategy(ConfigFileStrategy):
-    """TOML 設定檔策略（用於 Codex）"""
+    """TOML configuration file strategy (for Codex)"""
 
     def read(self, path: Path) -> Dict[str, Any]:
         if not path.exists():
@@ -82,13 +82,13 @@ class TomlConfigStrategy(ConfigFileStrategy):
 
 
 def _strip_json_comments(text: str) -> str:
-    """移除 JSONC 中的單行 (//) 和多行 (/* */) 註解，保留字串中的內容"""
+    """Remove single-line (//) and multi-line (/* */) comments from JSONC, preserving content in strings"""
     result: list[str] = []
     i = 0
     length = len(text)
     while i < length:
         ch = text[i]
-        # 字串
+        # String
         if ch in ('"', "'"):
             quote = ch
             result.append(ch)
@@ -103,12 +103,12 @@ def _strip_json_comments(text: str) -> str:
                         i += 1
                 elif c == quote:
                     break
-        # 單行註解
+        # Single-line comment
         elif ch == "/" and i + 1 < length and text[i + 1] == "/":
             i += 2
             while i < length and text[i] != "\n":
                 i += 1
-        # 多行註解
+        # Multi-line comment
         elif ch == "/" and i + 1 < length and text[i + 1] == "*":
             i += 2
             while i + 1 < length and not (text[i] == "*" and text[i + 1] == "/"):

@@ -1,4 +1,4 @@
-"""共用模型"""
+"""Common models"""
 
 from datetime import datetime
 from typing import Optional
@@ -9,17 +9,17 @@ from app.utils.datetime_utils import utcnow
 
 
 class APIResponse(BaseModel):
-    """標準 API 回應格式"""
+    """Standard API response format"""
 
-    status: str = Field(default="success", description="狀態")
-    message: Optional[str] = Field(default=None, description="訊息")
+    status: str = Field(default="success", description="Status")
+    message: Optional[str] = Field(default=None, description="Message")
 
 
 class TimestampMixin(BaseModel):
-    """包含時間戳記欄位"""
+    """Mixin containing timestamp fields"""
 
-    created_at: datetime = Field(default_factory=utcnow, description="建立時間")
-    updated_at: datetime = Field(default_factory=utcnow, description="更新時間")
+    created_at: datetime = Field(default_factory=utcnow, description="Creation time")
+    updated_at: datetime = Field(default_factory=utcnow, description="Update time")
 
     class Config:
         orm_mode = True

@@ -1,6 +1,6 @@
 """Task Service.
 
-提供任務的業務邏輯，包含建立、狀態轉換、完成等功能。
+Provides business logic for tasks, including creation, state transitions, completion, etc.
 """
 
 from __future__ import annotations
@@ -26,13 +26,13 @@ from ..websocket.events import EventEmitter, get_event_emitter
 
 
 class TaskServiceError(Exception):
-    """Task Service 錯誤."""
+    """Task Service error."""
 
     pass
 
 
 class InvalidStateTransitionError(TaskServiceError):
-    """無效的狀態轉換."""
+    """Invalid state transition."""
 
     pass
 
@@ -40,7 +40,7 @@ class InvalidStateTransitionError(TaskServiceError):
 class TaskService:
     """Task Service.
 
-    處理任務相關的業務邏輯。
+    Handles task-related business logic.
     """
 
     def __init__(
@@ -50,13 +50,13 @@ class TaskService:
         session_repo: Optional[AgentSessionRepository] = None,
         emitter: Optional[EventEmitter] = None,
     ):
-        """初始化 Service.
+        """Initialize Service.
 
         Args:
-            db: 資料庫 session
-            task_repo: Task Repository (可注入)
-            session_repo: Session Repository (可注入)
-            emitter: Event Emitter (可注入)
+            db: Database session
+            task_repo: Task Repository (injectable)
+            session_repo: Session Repository (injectable)
+            emitter: Event Emitter (injectable)
         """
         self.db = db
         self.task_repo = task_repo or TaskRepository(db)
@@ -69,26 +69,26 @@ class TaskService:
         full_prompt: str,
         created_by: str = "anonymous",
     ) -> Task:
-        """建立任務.
+        """Create task.
 
         Args:
-            session_id: 會話 ID
-            full_prompt: 完整 prompt
-            created_by: 建立者
+            session_id: Session ID
+            full_prompt: Full prompt
+            created_by: Creator
 
         Returns:
-            建立的任務實體
+            Created task entity
         """
         task_id = str(uuid.uuid4())
         now = utcnow()
 
-        # 建立 data blob
+        # Create data blob
         data_blob: Dict[str, Any] = {
             "full_prompt": full_prompt,
             "tool_use_count": 0,
         }
 
-        # 建立記錄 (data 序列化為 JSON 字串存入 TEXT 欄位)
+        # Create record (data serialized to JSON string stored in TEXT field)
         model = await self.task_repo.create({
             "task_id": task_id,
             "session_id": session_id,
@@ -98,12 +98,12 @@ class TaskService:
             "data": json.dumps(data_blob, ensure_ascii=False),
         })
 
-        # 將 task 加入 session
+        # Add task to session
         await self.session_repo.add_task(session_id, task_id)
 
         task_entity = self.task_repo.to_entity(model)
 
-        # 發送 tasks:created 事件
+        # Emit tasks:created event
         await self.emitter.emit_task_created(
             session_id=session_id,
             task_id=task_id,
@@ -116,13 +116,13 @@ class TaskService:
         self,
         task_id: str,
     ) -> Optional[Task]:
-        """取得任務.
+        """Get task.
 
         Args:
-            task_id: 任務 ID
+            task_id: Task ID
 
         Returns:
-            任務實體或 None
+            Task entity or None
         """
         model = await self.task_repo.find_by_id(task_id)
         if not model:
@@ -134,15 +134,15 @@ class TaskService:
         self,
         query: TaskQuery,
     ) -> Tuple[List[Task], int]:
-        """查詢任務列表.
+        """Query task list.
 
         Args:
-            query: 查詢參數
+            query: Query parameters
 
         Returns:
-            (任務列表, 總數)
+            (Task list, total)
         """
-        # 建立過濾條件
+        # Build filter conditions
         filters: Dict[str, Any] = {}
 
         if query.session_id:
@@ -150,7 +150,7 @@ class TaskService:
         if query.status:
             filters["status"] = query.status.value
 
-        # 查詢
+        # Query
         models = await self.task_repo.find_all(
             filters=filters,
             limit=query.limit,
@@ -159,10 +159,10 @@ class TaskService:
             order_desc=True,
         )
 
-        # 計算總數
+        # Count total
         total = await self.task_repo.count(filters)
 
-        # 轉換為實體
+        # Convert to entities
         tasks = [self.task_repo.to_entity(m) for m in models]
 
         return tasks, total
@@ -171,19 +171,19 @@ class TaskService:
         self,
         task_id: str,
     ) -> Task:
-        """開始執行任務.
+        """Start executing task.
 
-        將任務狀態從 CREATED 轉換為 RUNNING。
+        Convert task status from CREATED to RUNNING.
 
         Args:
-            task_id: 任務 ID
+            task_id: Task ID
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在
-            InvalidStateTransitionError: 無效的狀態轉換
+            TaskServiceError: Task not found
+            InvalidStateTransitionError: Invalid state transition
         """
         task = await self.get_task(task_id)
         if not task:
@@ -198,17 +198,17 @@ class TaskService:
         if not model:
             raise TaskServiceError(f"Failed to start task: {task_id}")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(task.session_id, AgentSessionStatus.RUNNING)
 
-        # 發送 task patched 事件通知前端 task 已開始
+        # Emit task patched event to notify frontend task started
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "running"}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.RUNNING.value}
@@ -222,18 +222,18 @@ class TaskService:
         raw_sdk_response: Optional[Dict[str, Any]] = None,
         computed_context_window: Optional[int] = None,
     ) -> Task:
-        """完成任務.
+        """Complete task.
 
         Args:
-            task_id: 任務 ID
-            raw_sdk_response: SDK 原始回應
-            computed_context_window: 計算的 Context Window
+            task_id: Task ID
+            raw_sdk_response: Raw SDK response
+            computed_context_window: Computed Context Window
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在或操作失敗
+            TaskServiceError: Task not found or operation failed
         """
         task = await self.get_task(task_id)
         if not task:
@@ -247,23 +247,23 @@ class TaskService:
         if not model:
             raise TaskServiceError(f"Failed to complete task: {task_id}")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(task.session_id, AgentSessionStatus.IDLE)
 
-        # 發送 task patched 事件通知前端 task 已完成
+        # Emit task patched event to notify frontend task completed
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "completed"}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.IDLE.value}
         )
 
-        # 更新 context usage
+        # Update context usage
         if computed_context_window is not None:
             await self.session_repo.update_context_usage(
                 task.session_id,
@@ -277,17 +277,17 @@ class TaskService:
         task_id: str,
         error_message: Optional[str] = None,
     ) -> Task:
-        """標記任務失敗.
+        """Mark task as failed.
 
         Args:
-            task_id: 任務 ID
-            error_message: 錯誤訊息
+            task_id: Task ID
+            error_message: Error message
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在或操作失敗
+            TaskServiceError: Task not found or operation failed
         """
         task = await self.get_task(task_id)
         if not task:
@@ -297,17 +297,17 @@ class TaskService:
         if not model:
             raise TaskServiceError(f"Failed to fail task: {task_id}")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(task.session_id, AgentSessionStatus.IDLE)
 
-        # 發送 task patched 事件通知前端 task 已失敗
+        # Emit task patched event to notify frontend task failed
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "failed", "error_message": error_message}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.IDLE.value}
@@ -319,52 +319,52 @@ class TaskService:
         self,
         task_id: str,
     ) -> Task:
-        """停止任務.
+        """Stop task.
 
         Args:
-            task_id: 任務 ID
+            task_id: Task ID
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在
-            InvalidStateTransitionError: 無效的狀態轉換
+            TaskServiceError: Task not found
+            InvalidStateTransitionError: Invalid state transition
         """
         task = await self.get_task(task_id)
         if not task:
             raise TaskServiceError(f"Task not found: {task_id}")
 
-        # 根據當前狀態決定目標狀態
+        # Determine target state based on current state
         model = None
         if task.status in [TaskStatus.RUNNING, TaskStatus.AWAITING_PERMISSION, TaskStatus.STOPPING]:
-            # 直接設為 stopped
-            # 這樣可以處理多個 stop_task 調用的競態條件
+            # Set to stopped directly
+            # This handles race conditions from multiple stop_task calls
             model = await self.task_repo.stop_task(task_id)
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(task.session_id, AgentSessionStatus.IDLE)
 
-        # 發送 task patched 事件通知前端 task 已停止
+        # Emit task patched event to notify frontend task stopped
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "stopped"}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.IDLE.value}
         )
 
-        # 發送 task stop 事件
+        # Emit task stop event
         await self.emitter.emit_task_stopped(
             session_id=task.session_id,
             task_id=task.id,
         )
 
-        # 如果 model 是 None，重新獲取
+        # If model is None, re-fetch
         if not model:
             model = await self.task_repo.find_by_id(task_id)
 
@@ -375,32 +375,32 @@ class TaskService:
         task_id: str,
         permission_request: Dict[str, Any],
     ) -> Task:
-        """設定任務等待權限.
+        """Set task awaiting permission.
 
-        此方法設計為冪等操作，以處理競態條件：
-        - 如果狀態是 running，正常轉換到 awaiting_permission
-        - 如果狀態已經是 awaiting_permission，只更新 permission_request（可能是連續的權限請求）
-        - 其他狀態才拋出錯誤
+        This method is designed as idempotent to handle race conditions:
+        - If status is running, transition to awaiting_permission normally
+        - If status is already awaiting_permission, only update permission_request (possibly continuous permission requests)
+        - Other statuses throw errors
 
         Args:
-            task_id: 任務 ID
-            permission_request: 權限請求資訊
+            task_id: Task ID
+            permission_request: Permission request info
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在
-            InvalidStateTransitionError: 無效的狀態轉換
+            TaskServiceError: Task not found
+            InvalidStateTransitionError: Invalid state transition
         """
         task = await self.get_task(task_id)
         if not task:
             raise TaskServiceError(f"Task not found: {task_id}")
 
-        # 冪等性處理：如果已經是 awaiting_permission 狀態，只更新 permission_request
-        # 這可能發生在：
-        # 1. 權限批准後 DB 還沒更新完成，Claude SDK 就請求下一個權限
-        # 2. 連續多個工具需要權限的情況
+        # Idempotency handling: if already awaiting_permission status, only update permission_request
+        # This can happen when:
+        # 1. After permission approved, DB not yet updated, Claude SDK requests next permission
+        # 2. Multiple tools need permissions in succession
         if task.status == TaskStatus.AWAITING_PERMISSION:
             logger.info(f"Task {task_id} is already awaiting_permission, updating permission_request only")
             model = await self.task_repo.set_awaiting_permission(task_id, permission_request)
@@ -417,20 +417,20 @@ class TaskService:
         if not model:
             raise TaskServiceError(f"Failed to set awaiting permission: {task_id}")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(
             task.session_id,
             AgentSessionStatus.AWAITING_PERMISSION,
         )
 
-        # 發送 task patched 事件通知前端 task 等待權限
+        # Emit task patched event to notify frontend task awaiting permission
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "awaiting_permission"}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.AWAITING_PERMISSION.value}
@@ -442,28 +442,28 @@ class TaskService:
         self,
         task_id: str,
     ) -> Task:
-        """權限批准後恢復執行.
+        """Resume execution after permission approved.
 
-        此方法設計為冪等操作，以處理競態條件和重複請求：
-        - 如果狀態是 awaiting_permission，正常 resume
-        - 如果狀態已經是 running，視為成功（可能是重複請求或競態條件）
-        - 其他狀態才拋出錯誤
+        This method is designed as idempotent to handle race conditions and duplicate requests:
+        - If status is awaiting_permission, resume normally
+        - If status is already running, treat as success (possibly duplicate request or race condition)
+        - Other statuses throw errors
 
         Args:
-            task_id: 任務 ID
+            task_id: Task ID
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在
-            InvalidStateTransitionError: 無效的狀態轉換
+            TaskServiceError: Task not found
+            InvalidStateTransitionError: Invalid state transition
         """
         task = await self.get_task(task_id)
         if not task:
             raise TaskServiceError(f"Task not found: {task_id}")
 
-        # 冪等性處理：如果已經是 running 狀態，直接返回（可能是重複請求或競態條件）
+        # Idempotency handling: if already running status, return directly (possibly duplicate request or race condition)
         if task.status == TaskStatus.RUNNING:
             logger.info(f"Task {task_id} is already running, treating as idempotent success")
             return task
@@ -477,17 +477,17 @@ class TaskService:
         if not model:
             raise TaskServiceError(f"Failed to resume task: {task_id}")
 
-        # 更新 session 狀態
+        # Update session status
         await self.session_repo.update_status(task.session_id, AgentSessionStatus.RUNNING)
 
-        # 發送 task patched 事件通知前端 task 恢復執行
+        # Emit task patched event to notify frontend task resumed
         await self.emitter.emit_task_patched(
             task.session_id,
             task_id,
             {"task_id": task_id, "status": "running"}
         )
 
-        # 發送 session patched 事件通知前端
+        # Emit session patched event to notify frontend
         await self.emitter.emit_session_patched(
             task.session_id,
             {"session_id": task.session_id, "status": AgentSessionStatus.RUNNING.value}
@@ -503,20 +503,20 @@ class TaskService:
         start_timestamp: str,
         end_timestamp: Optional[str] = None,
     ) -> Task:
-        """更新訊息範圍.
+        """Update message range.
 
         Args:
-            task_id: 任務 ID
-            start_index: 起始索引
-            end_index: 結束索引
-            start_timestamp: 起始時間
-            end_timestamp: 結束時間
+            task_id: Task ID
+            start_index: Start index
+            end_index: End index
+            start_timestamp: Start timestamp
+            end_timestamp: End timestamp
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在或操作失敗
+            TaskServiceError: Task not found or operation failed
         """
         message_range = MessageRange(
             start_index=start_index,
@@ -536,17 +536,17 @@ class TaskService:
         task_id: str,
         count: int = 1,
     ) -> Task:
-        """增加工具使用計數.
+        """Increment tool use count.
 
         Args:
-            task_id: 任務 ID
-            count: 增加數量
+            task_id: Task ID
+            count: Increment amount
 
         Returns:
-            更新後的任務
+            Updated task
 
         Raises:
-            TaskServiceError: 任務不存在或操作失敗
+            TaskServiceError: Task not found or operation failed
         """
         model = await self.task_repo.increment_tool_use_count(task_id, count)
         if not model:
@@ -558,13 +558,13 @@ class TaskService:
         self,
         session_id: str,
     ) -> Optional[Task]:
-        """取得會話中活躍的任務.
+        """Get active task in session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            活躍的任務或 None
+            Active task or None
         """
         model = await self.task_repo.find_active_by_session(session_id)
         if not model:
@@ -574,13 +574,13 @@ class TaskService:
 
     @staticmethod
     def extract_token_usage(raw_sdk_response: Dict[str, Any]) -> Optional[TokenUsage]:
-        """從 SDK 回應提取 token 使用量.
+        """Extract token usage from SDK response.
 
         Args:
-            raw_sdk_response: SDK 原始回應
+            raw_sdk_response: Raw SDK response
 
         Returns:
-            Token 使用量或 None
+            Token usage or None
         """
         sdk_type = raw_sdk_response.get("type")
         response = raw_sdk_response.get("response", {})
@@ -630,16 +630,16 @@ class TaskService:
         return None
 
     async def get_active_tasks(self, session_id: str) -> List[Task]:
-        """取得會話的所有 active tasks.
+        """Get all active tasks in session.
 
-        Active tasks 包含 CREATED, RUNNING 和 AWAITING_PERMISSION 狀態的任務。
-        CREATED 狀態表示 task 已建立但尚未開始執行，也應視為 active。
+        Active tasks include tasks with CREATED, RUNNING, and AWAITING_PERMISSION statuses.
+        CREATED status means task created but not yet started, should also be considered active.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            Active tasks 列表
+            Active tasks list
         """
         models = await self.task_repo.find_by_session(
             session_id=session_id,
@@ -649,15 +649,15 @@ class TaskService:
 
     @staticmethod
     def _task_to_event_data(task: Task) -> Dict[str, Any]:
-        """將 Task 實體轉換為事件數據.
+        """Convert Task entity to event data.
 
-        包含完整的任務資訊，用於 WebSocket 事件廣播。
+        Contains complete task info for WebSocket event broadcast.
 
         Args:
-            task: Task 實體
+            task: Task entity
 
         Returns:
-            事件數據字典
+            Event data dictionary
         """
         data = {
             "task_id": task.id,
@@ -667,9 +667,9 @@ class TaskService:
             "status": task.status,
         }
 
-        # 添加 Task 實體中的信息
+        # Add info from Task entity
         if task.full_prompt:
-            data["description"] = task.full_prompt[:100]  # 前 100 個字符作為摘要
+            data["description"] = task.full_prompt[:100]  # First 100 chars as summary
         if task.tool_use_count > 0:
             data["tool_use_count"] = task.tool_use_count
 

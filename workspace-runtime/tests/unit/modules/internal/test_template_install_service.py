@@ -799,7 +799,7 @@ class TestInitCommandsExecution:
             )
 
             assert success is False
-            assert "超時" in stderr
+        assert "timeout" in stderr
 
     @pytest.mark.asyncio
     async def test_execute_init_commands_exception(self, service):
@@ -817,7 +817,7 @@ class TestInitCommandsExecution:
             )
 
             assert success is False
-            assert "發生錯誤" in stderr
+        assert "Error occurred" in stderr
 
 
 class TestServiceInitializationEdgeCases:

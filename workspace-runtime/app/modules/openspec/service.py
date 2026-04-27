@@ -93,7 +93,7 @@ class OpenSpecCustomizationTarget:
 
 
 class OpenSpecService:
-    """聚合 workspace OpenSpec 狀態與 actions。"""
+    """Aggregate workspace OpenSpec state and actions."""
 
     def __init__(self, workspace_path: str | Path | None = None) -> None:
         self._workspace_path = Path(workspace_path or get_workspace_path())
@@ -316,12 +316,12 @@ class OpenSpecService:
         )
 
     def log_cli_probe(self) -> None:
-        """在 runtime 啟動時記錄 OpenSpec CLI 狀態。"""
+        """Log OpenSpec CLI status at runtime startup."""
         version = self._get_cli_version()
         if version:
-            logger.info("✅ OpenSpec CLI 已就緒: %s", version)
+            logger.info("✅ OpenSpec CLI ready: %s", version)
             return
-        logger.warning("⚠️ OpenSpec CLI 未安裝或不可用")
+        logger.warning("⚠️ OpenSpec CLI not installed or unavailable")
 
     def _build_actions(
         self,

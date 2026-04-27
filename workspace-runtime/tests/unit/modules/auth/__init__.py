@@ -1,1 +1,1 @@
-"""auth 模組測試套件。"""
+"""auth module test suite."""

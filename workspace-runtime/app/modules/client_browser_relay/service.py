@@ -1,7 +1,7 @@
 """
 Client Browser Relay Service
 
-CDP Relay 服務核心邏輯，作為 Playwright 客戶端和 Chrome 擴展程式之間的橋接層
+CDP Relay service core logic, acting as a bridge layer between Playwright clients and Chrome extensions
 """
 
 import asyncio
@@ -21,38 +21,38 @@ logger = logging.getLogger(__name__)
 
 
 class RelayService:
-    """CDP Relay 服務核心邏輯"""
+    """CDP Relay service core logic"""
 
     def __init__(self) -> None:
-        # 已連接的 targets (sessionId -> ConnectedTarget)
+        # Connected targets (sessionId -> ConnectedTarget)
         self.connected_targets: dict[str, ConnectedTarget] = {}
-        # 命名頁面映射 (name -> sessionId)
+        # Named page mapping (name -> sessionId)
         self.named_pages: dict[str, str] = {}
-        # Playwright 客戶端連接 (clientId -> PlaywrightClient)
+        # Playwright client connections (clientId -> PlaywrightClient)
         self.playwright_clients: dict[str, PlaywrightClient] = {}
-        # Playwright WebSocket 連接 (clientId -> WebSocket)
+        # Playwright WebSocket connections (clientId -> WebSocket)
         self.playwright_websockets: dict[str, WebSocket] = {}
-        # Chrome 擴展 WebSocket 連接
+        # Chrome extension WebSocket connection
         self.extension_ws: Optional[WebSocket] = None
-        # 擴展請求的 pending futures
+        # Pending futures for extension requests
         self.extension_pending_requests: dict[int, asyncio.Future] = {}
-        # 訊息 ID 計數器
+        # Message ID counter
         self._message_id = 0
-        # 等待 target attached 的 futures (targetId -> asyncio.Future)
+        # Futures waiting for target attached (targetId -> asyncio.Future)
         self._target_attachment_futures: dict[str, asyncio.Future] = {}
-        # 並發保護鎖：保護對共享狀態的訪問
+        # Concurrency protection lock: protect access to shared state
         self._lock = asyncio.Lock()
 
     def _log(self, *args: Any) -> None:
-        """日誌輸出"""
+        """Log output"""
         logger.info("[relay] %s", " ".join(str(a) for a in args))
 
     # ============================================================================
-    # Playwright 客戶端管理
+    # Playwright Client Management
     # ============================================================================
 
     async def register_playwright_client(self, client_id: str, ws: WebSocket) -> bool:
-        """註冊 Playwright 客戶端"""
+        """Register Playwright client"""
         async with self._lock:
             if client_id in self.playwright_clients:
                 self._log(f"Rejecting duplicate client ID: {client_id}")
@@ -64,7 +64,7 @@ class RelayService:
             return True
 
     async def unregister_playwright_client(self, client_id: str) -> None:
-        """取消註冊 Playwright 客戶端"""
+        """Unregister Playwright client"""
         async with self._lock:
             self.playwright_clients.pop(client_id, None)
             self.playwright_websockets.pop(client_id, None)
@@ -73,7 +73,7 @@ class RelayService:
     async def send_to_playwright(
         self, message: dict[str, Any], client_id: Optional[str] = None
     ) -> None:
-        """發送訊息到 Playwright 客戶端"""
+        """Send message to Playwright client"""
         message_str = json.dumps(message)
 
         if client_id:
@@ -84,7 +84,7 @@ class RelayService:
                 except Exception as e:
                     self._log(f"Error sending to client {client_id}: {e}")
         else:
-            # 廣播到所有客戶端
+            # Broadcast to all clients
             for cid, ws in list(self.playwright_websockets.items()):
                 try:
                     await ws.send_text(message_str)
@@ -97,7 +97,7 @@ class RelayService:
         client_id: Optional[str] = None,
         waiting_for_debugger: bool = False,
     ) -> None:
-        """發送 Target.attachedToTarget 事件（帶去重）"""
+        """Send Target.attachedToTarget event (with deduplication)"""
         event = {
             "method": "Target.attachedToTarget",
             "params": {
@@ -121,18 +121,18 @@ class RelayService:
                     client.known_targets.add(target.target_id)
                     await self.send_to_playwright(event, client_id)
             else:
-                # 廣播到所有不知道這個 target 的客戶端
+                # Broadcast to all clients that don't know about this target
                 for cid, client in self.playwright_clients.items():
                     if target.target_id not in client.known_targets:
                         client.known_targets.add(target.target_id)
                         await self.send_to_playwright(event, cid)
 
     # ============================================================================
-    # Chrome 擴展管理
+    # Chrome Extension Management
     # ============================================================================
 
     async def register_extension(self, ws: WebSocket) -> None:
-        """註冊 Chrome 擴展連接"""
+        """Register Chrome extension connection"""
         self._log(f"register_extension called, existing ws: {id(self.extension_ws) if self.extension_ws else 'None'}, new ws: {id(ws)}")
 
         async with self._lock:
@@ -144,7 +144,7 @@ class RelayService:
                 except Exception as e:
                     self._log(f"Error closing existing connection: {e}")
 
-                # 清理狀態
+                # Clean up state
                 self.connected_targets.clear()
                 self.named_pages.clear()
                 for future in self.extension_pending_requests.values():
@@ -155,11 +155,11 @@ class RelayService:
             self._log(f"Extension connected (ws id: {id(ws)})")
 
     async def unregister_extension(self) -> None:
-        """取消註冊 Chrome 擴展"""
+        """Unregister Chrome extension"""
         self._log("Extension disconnected")
 
         async with self._lock:
-            # 拒絕所有 pending 請求
+            # Reject all pending requests
             for future in self.extension_pending_requests.values():
                 if not future.done():
                     future.set_exception(Exception("Extension connection closed"))
@@ -169,7 +169,7 @@ class RelayService:
             self.connected_targets.clear()
             self.named_pages.clear()
 
-            # 關閉所有 Playwright 客戶端
+            # Close all Playwright clients
             for client_id, ws in list(self.playwright_websockets.items()):
                 try:
                     await ws.close(code=1000, reason="Extension disconnected")
@@ -184,7 +184,7 @@ class RelayService:
         params: Optional[dict[str, Any]] = None,
         timeout: float = 30.0,
     ) -> Any:
-        """發送命令到擴展並等待回應"""
+        """Send command to extension and wait for response"""
         if not self.extension_ws:
             raise Exception("Extension not connected")
 
@@ -195,7 +195,7 @@ class RelayService:
         message = {"id": msg_id, "method": method, "params": params or {}}
         await self.extension_ws.send_text(json.dumps(message))
 
-        # 建立 future 等待回應
+        # Create future to wait for response
         loop = asyncio.get_running_loop()
         future: asyncio.Future = loop.create_future()
 
@@ -210,10 +210,10 @@ class RelayService:
             raise Exception(f"Extension request timeout after {timeout}s: {method}")
 
     def handle_extension_response(self, msg_id: int, result: Any, error: Optional[str]) -> None:
-        """處理擴展的回應"""
-        # 注意：這是同步方法，但修改了 extension_pending_requests
-        # 由於這是在 on_message 回調中調用的，且無法改為 async
-        # 我們需要確保操作是原子性的（dict.pop 是原子操作）
+        """Handle extension response"""
+        # Note: This is a synchronous method but modifies extension_pending_requests
+        # Since this is called in on_message callback and cannot be changed to async
+        # We need to ensure the operation is atomic (dict.pop is atomic)
         future = self.extension_pending_requests.pop(msg_id, None)
         if not future:
             self._log(f"Unexpected response with id: {msg_id}")
@@ -225,7 +225,7 @@ class RelayService:
             future.set_result(result)
 
     # ============================================================================
-    # CDP 命令路由
+    # CDP Command Routing
     # ============================================================================
 
     async def route_cdp_command(
@@ -234,10 +234,10 @@ class RelayService:
         params: Optional[dict[str, Any]] = None,
         session_id: Optional[str] = None,
     ) -> Any:
-        """路由 CDP 命令"""
+        """Route CDP command"""
         params = params or {}
 
-        # 處理一些本地 CDP 命令
+        # Handle some local CDP commands
         match method:
             case "Browser.getVersion":
                 return {
@@ -326,7 +326,7 @@ class RelayService:
         )
 
     def _target_info_to_dict(self, info: TargetInfo) -> dict[str, Any]:
-        """將 TargetInfo 轉換為字典"""
+        """Convert TargetInfo to dictionary"""
         return {
             "targetId": info.target_id,
             "type": info.type,
@@ -337,13 +337,13 @@ class RelayService:
         }
 
     # ============================================================================
-    # Target 生命週期事件處理
+    # Target Lifecycle Event Handling
     # ============================================================================
 
     async def handle_target_attached(
         self, session_id: str, target_info_dict: dict[str, Any]
     ) -> None:
-        """處理 Target.attachedToTarget 事件"""
+        """Handle Target.attachedToTarget event"""
         target_info = TargetInfo(
             target_id=target_info_dict.get("targetId", ""),
             type=target_info_dict.get("type", "page"),
@@ -364,20 +364,20 @@ class RelayService:
 
         self._log(f"Target attached: {target_info.url} ({session_id})")
 
-        # Resolve 等待該 target 的 future（如果存在）
+        # Resolve future waiting for this target (if exists)
         future = self._target_attachment_futures.pop(target_info.target_id, None)
         if future and not future.done():
             future.set_result(session_id)
 
-        # 使用去重功能發送事件
+        # Send event with deduplication
         await self.send_attached_to_target(target)
 
     async def handle_target_detached(self, session_id: str) -> None:
-        """處理 Target.detachedFromTarget 事件"""
+        """Handle Target.detachedFromTarget event"""
         async with self._lock:
             self.connected_targets.pop(session_id, None)
 
-            # 移除命名頁面映射
+            # Remove named page mapping
             for name, sid in list(self.named_pages.items()):
                 if sid == session_id:
                     del self.named_pages[name]
@@ -391,7 +391,7 @@ class RelayService:
         })
 
     async def handle_target_info_changed(self, target_info_dict: dict[str, Any]) -> None:
-        """處理 Target.targetInfoChanged 事件"""
+        """Handle Target.targetInfoChanged event"""
         target_id = target_info_dict.get("targetId")
 
         async with self._lock:
@@ -413,24 +413,24 @@ class RelayService:
         })
 
     # ============================================================================
-    # 命名頁面管理
+    # Named Page Management
     # ============================================================================
 
     def get_named_pages(self) -> list[str]:
-        """獲取所有命名頁面"""
+        """Get all named pages"""
         return list(self.named_pages.keys())
 
     async def get_or_create_named_page(
         self, name: str, host: str, port: int
     ) -> Optional[dict[str, Any]]:
-        """獲取或建立命名頁面"""
-        # 檢查頁面是否已存在（需要鎖保護）
+        """Get or create named page"""
+        # Check if page already exists (needs lock protection)
         async with self._lock:
             existing_session_id = self.named_pages.get(name)
             if existing_session_id:
                 target = self.connected_targets.get(existing_session_id)
                 if target:
-                    # 啟用該標籤頁
+                    # Activate this tab
                     await self.send_to_extension(
                         "forwardCDPCommand",
                         {
@@ -444,10 +444,10 @@ class RelayService:
                         "targetId": target.target_id,
                         "url": target.target_info.url,
                     }
-                # Session 不再有效，移除它
+                # Session no longer valid, remove it
                 del self.named_pages[name]
 
-        # 建立新標籤頁（檢查 extension_ws 不需要鎖，因為它只是讀取）
+        # Create new tab (checking extension_ws doesn't need lock as it's read-only)
         if not self.extension_ws:
             return None
 
@@ -460,21 +460,21 @@ class RelayService:
         if not target_id:
             return None
 
-        # 使用 Future 等待 Target.attachedToTarget 事件
-        # 這比 asyncio.sleep(0.2) 更可靠，因為它會在事件發生時立即返回
+        # Use Future to wait for Target.attachedToTarget event
+        # This is more reliable than asyncio.sleep(0.2) as it returns immediately when event occurs
         future = asyncio.Future()
         async with self._lock:
             self._target_attachment_futures[target_id] = future
 
         try:
-            # 等待 target 被附加，超時 2 秒
+            # Wait for target to be attached, timeout 2 seconds
             session_id = await asyncio.wait_for(future, timeout=2.0)
 
-            # 找到並命名新 target（需要鎖保護）
+            # Find and name new target (needs lock protection)
             async with self._lock:
                 if target_id in self.connected_targets:
                     self.named_pages[name] = session_id
-                    # 啟用該標籤頁
+                    # Activate this tab
                     await self.send_to_extension(
                         "forwardCDPCommand",
                         {
@@ -491,26 +491,26 @@ class RelayService:
                         }
 
         except asyncio.TimeoutError:
-            # 超時：target 未在 2 秒內附加
+            # Timeout: target not attached within 2 seconds
             self._log(f"Target {target_id} attachment timed out")
         finally:
-            # 確保 future 被清理
+            # Ensure future is cleaned up
             async with self._lock:
                 self._target_attachment_futures.pop(target_id, None)
 
         return None
 
     async def delete_named_page(self, name: str) -> bool:
-        """刪除命名頁面（僅移除名稱，不關閉標籤頁）"""
+        """Delete named page (only removes name, does not close tab)"""
         async with self._lock:
             return self.named_pages.pop(name, None) is not None
 
     # ============================================================================
-    # 狀態查詢
+    # Status Query
     # ============================================================================
 
     def get_status(self, host: str, port: int) -> dict[str, Any]:
-        """獲取 Relay Server 狀態"""
+        """Get Relay Server status"""
         return {
             "wsEndpoint": f"ws://{host}:{port}/api/v1/client-browser-relay/cdp",
             "extensionConnected": self.extension_ws is not None,
@@ -520,12 +520,12 @@ class RelayService:
         }
 
 
-# 全域單例實例
+# Global singleton instance
 _relay_service: Optional[RelayService] = None
 
 
 def get_relay_service() -> RelayService:
-    """獲取 RelayService 單例實例"""
+    """Get RelayService singleton instance"""
     global _relay_service
     if _relay_service is None:
         _relay_service = RelayService()

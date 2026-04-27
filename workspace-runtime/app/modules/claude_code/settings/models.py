@@ -1,4 +1,4 @@
-"""Claude Code Settings 模型定義"""
+"""Claude Code Settings Model Definitions"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 def _normalize_rule_list(values: Iterable[Any]) -> List[str]:
-    """將權限規則轉換成不重複且去除空白的清單"""
+    """Convert permission rules to deduplicated list without empty entries"""
 
     normalized: List[str] = []
     seen: set[str] = set()
@@ -26,7 +26,7 @@ def _normalize_rule_list(values: Iterable[Any]) -> List[str]:
 
 
 def _normalize_env(env: Mapping[str, Any] | None) -> Dict[str, str]:
-    """確保環境變數鍵值皆為字串且移除空鍵"""
+    """Ensure environment variable keys and values are strings and remove empty keys"""
 
     if not env:
         return {}
@@ -43,7 +43,7 @@ def _normalize_env(env: Mapping[str, Any] | None) -> Dict[str, str]:
 
 
 def _normalize_model(value: Optional[str]) -> Optional[str]:
-    """清理模型名稱字串"""
+    """Clean model name string"""
 
     if value is None:
         return None
@@ -52,7 +52,7 @@ def _normalize_model(value: Optional[str]) -> Optional[str]:
 
 
 def _normalize_enabled_plugins(plugins: Mapping[str, Any] | Dict[str, bool] | None) -> Dict[str, bool]:
-    """確保 enabledPlugins 鍵為字串且值為布林值"""
+    """Ensure enabledPlugins keys are strings and values are booleans"""
 
     if plugins is None:
         return {}
@@ -65,13 +65,13 @@ def _normalize_enabled_plugins(plugins: Mapping[str, Any] | Dict[str, bool] | No
         key_str = str(key).strip()
         if not key_str:
             continue
-        # 將值轉換為布林值
+        # Convert value to boolean
         normalized[key_str] = bool(raw_value)
     return normalized
 
 
 def _normalize_optional_string(value: Any) -> Optional[str]:
-    """去除字串前後空白，空值回傳 None"""
+    """Remove leading/trailing whitespace from string, return None for empty values"""
 
     if value is None:
         return None
@@ -82,16 +82,16 @@ def _normalize_optional_string(value: Any) -> Optional[str]:
 
 
 def _normalize_int(value: Any) -> Optional[int]:
-    """嘗試將輸入轉為非負整數"""
+    """Try to convert input to non-negative integer"""
 
     if value is None:
         return None
     if isinstance(value, bool):
-        # 避免 True/False 被轉為 1/0
+        # Avoid True/False being converted to 1/0
         raise ValueError("Invalid integer value")
     try:
         integer = int(value)
-    except (TypeError, ValueError) as exc:  # pragma: no cover - 由驗證流程捕捉
+    except (TypeError, ValueError) as exc:  # pragma: no cover - caught by validation process
         raise ValueError("Invalid integer value") from exc
     if integer < 0:
         raise ValueError("Value must be greater than or equal to 0")
@@ -99,9 +99,9 @@ def _normalize_int(value: Any) -> Optional[int]:
 
 
 class McpServerPolicy(BaseModel):
-    """MCP 伺服器允許/拒絕清單項目"""
+    """MCP server allow/deny list item"""
 
-    server_name: str = Field(..., alias="serverName", description="MCP 伺服器名稱")
+    server_name: str = Field(..., alias="serverName", description="MCP server name")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -115,7 +115,7 @@ class McpServerPolicy(BaseModel):
 
 
 def _normalize_mcp_policy_list(values: Iterable[Any] | None) -> List[McpServerPolicy]:
-    """正規化 MCP 伺服器策略列表"""
+    """Normalize MCP server policy list"""
 
     if not values:
         return []
@@ -130,7 +130,7 @@ def _normalize_mcp_policy_list(values: Iterable[Any] | None) -> List[McpServerPo
         elif isinstance(value, Mapping):
             entry = McpServerPolicy(**value)
         else:
-            # 允許直接傳入字串形式
+            # Allow passing string form directly
             entry = McpServerPolicy(serverName=str(value))
 
         if entry.server_name in seen:
@@ -142,7 +142,7 @@ def _normalize_mcp_policy_list(values: Iterable[Any] | None) -> List[McpServerPo
 
 
 class PermissionMode(str, Enum):
-    """Claude Code 權限模式枚舉"""
+    """Claude Code permission mode enum"""
 
     DEFAULT = "default"
     ACCEPT_EDITS = "acceptEdits"
@@ -153,15 +153,15 @@ class PermissionMode(str, Enum):
 
 
 class PermissionRules(BaseModel):
-    """權限規則清單"""
+    """Permission rule list"""
 
-    allow: List[str] = Field(default_factory=list, description="允許的操作規則")
-    deny: List[str] = Field(default_factory=list, description="拒絕的操作規則")
-    ask: List[str] = Field(default_factory=list, description="需要確認的操作規則")
+    allow: List[str] = Field(default_factory=list, description="Allowed operation rules")
+    deny: List[str] = Field(default_factory=list, description="Denied operation rules")
+    ask: List[str] = Field(default_factory=list, description="Operation rules requiring confirmation")
     additional_directories: List[str] = Field(
         default_factory=list,
         alias="additionalDirectories",
-        description="允許存取的額外目錄",
+        description="Additional allowed directories",
     )
 
     model_config = ConfigDict(populate_by_name=True)
@@ -175,7 +175,7 @@ class PermissionRules(BaseModel):
         return self
 
     def is_empty(self) -> bool:
-        """檢查是否擁有任何規則"""
+        """Check if has any rules"""
         return (
             not self.allow
             and not self.deny
@@ -185,71 +185,71 @@ class PermissionRules(BaseModel):
 
 
 class ClaudeCodeSettings(BaseModel):
-    """Claude Code 設定內容"""
+    """Claude Code settings content"""
 
     mode: PermissionMode = Field(
-        default=PermissionMode.DEFAULT, description="目前生效的權限模式"
+        default=PermissionMode.DEFAULT, description="Currently effective permission mode"
     )
     default_mode: PermissionMode | None = Field(
-        default=None, alias="defaultMode", description="設定檔儲存用的模式欄位"
+        default=None, alias="defaultMode", description="Mode field for settings file storage"
     )
     output_style: str | None = Field(
-        default=None, alias="outputStyle", description="預設的輸出樣式檔名"
+        default=None, alias="outputStyle", description="Default output style filename"
     )
     permissions: PermissionRules = Field(
-        default_factory=PermissionRules, description="允許與拒絕的權限集合"
+        default_factory=PermissionRules, description="Allowed and denied permission set"
     )
     env: Dict[str, str] = Field(
-        default_factory=dict, description="附帶的環境變數設定"
+        default_factory=dict, description="Attached environment variable settings"
     )
     model: Optional[str] = Field(
-        default=None, alias="model", description="指定的模型覆寫"
+        default=None, alias="model", description="Specified model override"
     )
     enabled_plugins: Optional[Dict[str, bool]] = Field(
-        default=None, alias="enabledPlugins", description="啟用的 Plugins 設定"
+        default=None, alias="enabledPlugins", description="Enabled plugins settings"
     )
     api_key_helper: Optional[str] = Field(
-        default=None, alias="apiKeyHelper", description="產生 API Key 的 helper 腳本"
+        default=None, alias="apiKeyHelper", description="Helper script for generating API Key"
     )
     cleanup_period_days: Optional[int] = Field(
         default=None,
         alias="cleanupPeriodDays",
-        description="聊天紀錄保留天數",
+        description="Chat history retention days",
     )
     include_co_authored_by: bool = Field(
         default=True,
         alias="includeCoAuthoredBy",
-        description="Git Commit 是否加入 co-authored-by Claude",
+        description="Whether to add co-authored-by Claude in Git Commit",
     )
     disable_all_hooks: bool = Field(
         default=False,
         alias="disableAllHooks",
-        description="是否停用所有 hooks",
+        description="Whether to disable all hooks",
     )
     enable_all_project_mcp_servers: bool = Field(
         default=False,
         alias="enableAllProjectMcpServers",
-        description="自動核准專案中所有 MCP 伺服器",
+        description="Auto-approve all MCP servers in project",
     )
     enabled_mcpjson_servers: List[str] = Field(
         default_factory=list,
         alias="enabledMcpjsonServers",
-        description="從 .mcp.json 核准的伺服器",
+        description="Servers approved from .mcp.json",
     )
     disabled_mcpjson_servers: List[str] = Field(
         default_factory=list,
         alias="disabledMcpjsonServers",
-        description="從 .mcp.json 拒絕的伺服器",
+        description="Servers denied from .mcp.json",
     )
     allowed_mcp_servers: List[McpServerPolicy] = Field(
         default_factory=list,
         alias="allowedMcpServers",
-        description="允許的 MCP 伺服器清單",
+        description="Allowed MCP server list",
     )
     denied_mcp_servers: List[McpServerPolicy] = Field(
         default_factory=list,
         alias="deniedMcpServers",
-        description="拒絕的 MCP 伺服器清單",
+        description="Denied MCP server list",
     )
 
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
@@ -257,7 +257,7 @@ class ClaudeCodeSettings(BaseModel):
     @field_validator("enabled_plugins", mode="before")
     @classmethod
     def _validate_enabled_plugins(cls, value: Any) -> Dict[str, bool]:
-        """驗證並正規化 enabled_plugins"""
+        """Validate and normalize enabled_plugins"""
         return _normalize_enabled_plugins(value)
 
     @field_validator("api_key_helper", mode="before")
@@ -286,7 +286,7 @@ class ClaudeCodeSettings(BaseModel):
     def _sync_defaults(self) -> "ClaudeCodeSettings":
         self.env = _normalize_env(self.env)
         self.model = _normalize_model(self.model)
-        # enabled_plugins 已經在 field_validator 中正規化
+        # enabled_plugins already normalized in field_validator
         if self.enabled_plugins is None:
             self.enabled_plugins = {}
         if self.default_mode is None:
@@ -295,76 +295,76 @@ class ClaudeCodeSettings(BaseModel):
 
     @property
     def effective_mode(self) -> PermissionMode:
-        """取得實際生效的模式值"""
+        """Get actual effective mode value"""
         return self.default_mode or self.mode
 
 
 class ClaudeCodeSettingsUpdateRequest(BaseModel):
-    """更新 Claude Code 設定請求"""
+    """Update Claude Code settings request"""
 
     mode: PermissionMode | None = Field(
-        default=None, description="新的權限模式值"
+        default=None, description="New permission mode value"
     )
     default_mode: PermissionMode | None = Field(
-        default=None, alias="defaultMode", description="儲存使用的模式值"
+        default=None, alias="defaultMode", description="Mode value for storage"
     )
     output_style: str | None = Field(
-        default=None, alias="outputStyle", description="要啟用的輸出樣式名稱"
+        default=None, alias="outputStyle", description="Output style name to enable"
     )
     model: Optional[str] = Field(
-        default=None, alias="model", description="要覆寫的模型名稱"
+        default=None, alias="model", description="Model name to override"
     )
     permissions: PermissionRules | None = Field(
-        default=None, description="新的權限規則"
+        default=None, description="New permission rules"
     )
     env: Dict[str, str] | None = Field(
-        default=None, description="要覆寫的環境變數"
+        default=None, description="Environment variables to override"
     )
     enabled_plugins: Optional[Dict[str, bool]] = Field(
-        default=None, alias="enabledPlugins", description="要覆寫的 Plugins 設定"
+        default=None, alias="enabledPlugins", description="Plugins settings to override"
     )
     api_key_helper: Optional[str] = Field(
-        default=None, alias="apiKeyHelper", description="更新 API Key helper 腳本"
+        default=None, alias="apiKeyHelper", description="Update API Key helper script"
     )
     cleanup_period_days: Optional[int] = Field(
         default=None,
         alias="cleanupPeriodDays",
-        description="聊天紀錄保留天數",
+        description="Chat history retention days",
     )
     include_co_authored_by: Optional[bool] = Field(
         default=None,
         alias="includeCoAuthoredBy",
-        description="是否加入 co-authored-by Claude",
+        description="Whether to add co-authored-by Claude",
     )
     disable_all_hooks: Optional[bool] = Field(
         default=None,
         alias="disableAllHooks",
-        description="停用所有 hooks",
+        description="Disable all hooks",
     )
     enable_all_project_mcp_servers: Optional[bool] = Field(
         default=None,
         alias="enableAllProjectMcpServers",
-        description="自動核准專案定義的 MCP 伺服器",
+        description="Auto-approve project-defined MCP servers",
     )
     enabled_mcpjson_servers: Optional[List[str]] = Field(
         default=None,
         alias="enabledMcpjsonServers",
-        description="從 .mcp.json 核准的伺服器",
+        description="Servers approved from .mcp.json",
     )
     disabled_mcpjson_servers: Optional[List[str]] = Field(
         default=None,
         alias="disabledMcpjsonServers",
-        description="從 .mcp.json 拒絕的伺服器",
+        description="Servers denied from .mcp.json",
     )
     allowed_mcp_servers: Optional[List[McpServerPolicy]] = Field(
         default=None,
         alias="allowedMcpServers",
-        description="允許設定的 MCP 伺服器",
+        description="Allowed MCP servers to set",
     )
     denied_mcp_servers: Optional[List[McpServerPolicy]] = Field(
         default=None,
         alias="deniedMcpServers",
-        description="拒絕設定的 MCP 伺服器",
+        description="Denied MCP servers to set",
     )
 
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
@@ -372,7 +372,7 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
     @field_validator("enabled_plugins", mode="before")
     @classmethod
     def _validate_enabled_plugins(cls, value: Any) -> Optional[Dict[str, bool]]:
-        """驗證並正規化 enabled_plugins"""
+        """Validate and normalize enabled_plugins"""
         if value is None:
             return None
         return _normalize_enabled_plugins(value)
@@ -406,7 +406,7 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
         return _normalize_mcp_policy_list(value)
 
     def field_provided(self, field_name: str) -> bool:
-        """判斷欄位是否有在請求中出現"""
+        """Check if field appears in request"""
 
         if field_name in self.model_fields_set:
             return True
@@ -414,7 +414,7 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
         return bool(field and field.alias and field.alias in self.model_fields_set)
 
     def resolved_mode(self) -> PermissionMode | None:
-        """回傳請求中指定的模式值（defaultMode 優先）"""
+        """Return mode value specified in request (defaultMode prioritized)"""
 
         if self.field_provided("default_mode"):
             return self.default_mode
@@ -430,9 +430,9 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
             self.permissions = PermissionRules()
         if self.field_provided("model"):
             self.model = _normalize_model(self.model)
-        # enabled_plugins 已經在 field_validator 中正規化
+        # enabled_plugins already normalized in field_validator
         if self.field_provided("output_style"):
-            # 正規化 output_style:空字串轉為 None
+            # Normalize output_style: empty string to None
             if self.output_style is not None:
                 trimmed = self.output_style.strip()
                 self.output_style = trimmed if trimmed else None
@@ -448,56 +448,56 @@ class ClaudeCodeSettingsUpdateRequest(BaseModel):
 
 
 class PluginMetadata(BaseModel):
-    """Plugin 元數據"""
+    """Plugin metadata"""
 
-    name: str = Field(..., description="Plugin 名稱")
-    description: str = Field(..., description="Plugin 描述")
-    version: str = Field(default="1.0.0", description="Plugin 版本")
-    author: Optional[Dict[str, str]] = Field(default=None, description="作者資訊")
-    license: Optional[str] = Field(default=None, description="授權")
-    keywords: Optional[List[str]] = Field(default=None, description="關鍵字")
+    name: str = Field(..., description="Plugin name")
+    description: str = Field(..., description="Plugin description")
+    version: str = Field(default="1.0.0", description="Plugin version")
+    author: Optional[Dict[str, str]] = Field(default=None, description="Author information")
+    license: Optional[str] = Field(default=None, description="License")
+    keywords: Optional[List[str]] = Field(default=None, description="Keywords")
     source: Optional[str | Dict[str, Any]] = Field(
-        default=None, description="來源路徑或來源配置（支援相對路徑字串或 {'source': 'url', 'url': '...'} 格式）"
+        default=None, description="Source path or source config (supports relative path string or {'source': 'url', 'url': '...'} format)"
     )
-    strict: Optional[bool] = Field(default=None, description="嚴格模式")
-    commands: Optional[List[str]] = Field(default=None, description="命令列表")
-    agents: Optional[List[str]] = Field(default=None, description="Agent 列表")
+    strict: Optional[bool] = Field(default=None, description="Strict mode")
+    commands: Optional[List[str]] = Field(default=None, description="Command list")
+    agents: Optional[List[str]] = Field(default=None, description="Agent list")
     mcpServers: Optional[Dict[str, Any]] = Field(
-        default=None, alias="mcpServers", description="MCP 伺服器配置"
+        default=None, alias="mcpServers", description="MCP server configuration"
     )
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MarketplaceOwner(BaseModel):
-    """Marketplace 擁有者資訊"""
+    """Marketplace owner information"""
 
-    name: str = Field(..., description="擁有者名稱")
+    name: str = Field(..., description="Owner name")
     email: Optional[str] = Field(default=None, description="Email")
     url: Optional[str] = Field(default=None, description="URL")
 
 
 class MarketplaceMetadata(BaseModel):
-    """Marketplace 元數據"""
+    """Marketplace metadata"""
 
-    description: str = Field(..., description="Marketplace 描述")
-    version: str = Field(..., description="Marketplace 版本")
+    description: str = Field(..., description="Marketplace description")
+    version: str = Field(..., description="Marketplace version")
 
 
 class Marketplace(BaseModel):
-    """Marketplace 資訊"""
+    """Marketplace information"""
 
-    name: str = Field(..., description="Marketplace 名稱")
-    owner: MarketplaceOwner = Field(..., description="擁有者資訊")
-    metadata: MarketplaceMetadata = Field(..., description="元數據")
-    plugins: List[PluginMetadata] = Field(default_factory=list, description="Plugin 列表")
+    name: str = Field(..., description="Marketplace name")
+    owner: MarketplaceOwner = Field(..., description="Owner information")
+    metadata: MarketplaceMetadata = Field(..., description="Metadata")
+    plugins: List[PluginMetadata] = Field(default_factory=list, description="Plugin list")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class MarketplaceListResponse(BaseModel):
-    """Marketplace 列表回應"""
+    """Marketplace list response"""
 
     marketplaces: List[Marketplace] = Field(
-        default_factory=list, description="Marketplace 列表"
+        default_factory=list, description="Marketplace list"
     )

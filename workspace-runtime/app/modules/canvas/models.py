@@ -1,4 +1,4 @@
-"""Canvas 模組資料模型"""
+"""Canvas module data models"""
 
 from __future__ import annotations
 
@@ -12,16 +12,16 @@ CanvasManifestStatus = Literal["missing", "valid", "invalid"]
 
 
 class CanvasRoute(BaseModel):
-    """Canvas 路由資訊"""
+    """Canvas route information"""
 
-    path: str = Field(..., description="路由路徑")
-    file: str | None = Field(default=None, description="HTML renderer 對應檔案")
+    path: str = Field(..., description="Route path")
+    file: str | None = Field(default=None, description="Corresponding file for HTML renderer")
 
     model_config = {"populate_by_name": True}
 
 
 class CanvasDetectResponse(BaseModel):
-    """Canvas 偵測結果"""
+    """Canvas detection result"""
 
     workspace_id: str = Field(..., alias="workspaceId")
     type: CanvasType
@@ -35,21 +35,21 @@ class CanvasDetectResponse(BaseModel):
 
 
 class CanvasRoutesResponse(BaseModel):
-    """Canvas 路由列表回應"""
+    """Canvas route list response"""
 
     workspace_id: str = Field(..., alias="workspaceId")
     type: CanvasType = "default"
     manifest_status: CanvasManifestStatus = Field("missing", alias="manifestStatus")
     default_path: str = Field("/", alias="defaultPath")
     routes: list[CanvasRoute] = Field(default_factory=list)
-    total: int = Field(..., description="總路由數量")
-    scanned_at: datetime = Field(..., alias="scannedAt", description="掃描時間")
+    total: int = Field(..., description="Total route count")
+    scanned_at: datetime = Field(..., alias="scannedAt", description="Scan time")
 
     model_config = {"populate_by_name": True}
 
 
 class CanvasHealthResponse(BaseModel):
-    """Canvas 健康狀態"""
+    """Canvas health status"""
 
     workspace_id: str = Field(..., alias="workspaceId")
     status: str
@@ -65,7 +65,7 @@ class CanvasHealthResponse(BaseModel):
 
 
 class CanvasActionResponse(BaseModel):
-    """Canvas 操作回應"""
+    """Canvas action response"""
 
     workspace_id: str = Field(..., alias="workspaceId")
     status: str
@@ -78,7 +78,7 @@ class CanvasActionResponse(BaseModel):
 
 
 class CanvasLogsResponse(BaseModel):
-    """Canvas 日誌回應"""
+    """Canvas log response"""
 
     workspace_id: str = Field(..., alias="workspaceId")
     logs: list[str] = Field(default_factory=list)

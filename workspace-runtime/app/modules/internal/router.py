@@ -1,4 +1,4 @@
-"""Internal API 路由"""
+"""Internal API router"""
 
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/internal",
-    tags=["內部 API"],
+    tags=["Internal API"],
     dependencies=[Depends(verify_internal_token)],
 )
 
@@ -58,28 +58,28 @@ router = APIRouter(
 @router.post(
     "/settings/ssh-keys",
     response_model=InternalApiResponse,
-    summary="同步 SSH Keys 設定",
-    description="接收 SSH 私鑰和公鑰，並在容器內建立對應的檔案"
+    summary="Sync SSH Keys settings",
+    description="Receive SSH private key and public key, create corresponding files in container"
 )
 async def sync_ssh_keys(
     request: SSHKeysRequest,
     service: Annotated[InternalService, Depends(get_internal_service)]
 ) -> InternalApiResponse:
-    """同步 SSH Keys 設定到 workspace-runtime"""
+    """Sync SSH Keys settings to workspace-runtime"""
     try:
-        logger.info("收到 SSH Keys 同步請求")
+        logger.info("Received SSH Keys sync request")
 
         details = await service.setup_ssh_keys(request)
 
-        logger.info("SSH Keys 同步成功")
+        logger.info("SSH Keys sync successful")
         return InternalApiResponse(
             success=True,
-            message="SSH Keys 已成功設定",
+            message="SSH Keys configured successfully",
             details=details
         )
 
     except Exception as e:
-        logger.error(f"SSH Keys 同步失敗: {e}")
+        logger.error(f"SSH Keys sync failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"SSH Keys setup failed: {str(e)}"
@@ -89,31 +89,31 @@ async def sync_ssh_keys(
 @router.post(
     "/settings/claude-code",
     response_model=InternalApiResponse,
-    summary="同步 Claude Code 設定",
-    description="設定 Claude Code 相關檔案和環境變數"
+    summary="Sync Claude Code settings",
+    description="Configure Claude Code related files and environment variables"
 )
 async def sync_claude_code(
     request: ClaudeCodeRequest,
     service: Annotated[InternalService, Depends(get_internal_service)]
 ) -> InternalApiResponse:
-    """同步 Claude Code 設定到 workspace-runtime"""
+    """Sync Claude Code settings to workspace-runtime"""
     try:
-        logger.info("收到 Claude Code 同步請求")
-        logger.info(f"原始請求物件: {request}")
-        logger.info(f"請求 model_dump: {request.model_dump()}")
-        logger.info(f"請求 model_dump(by_alias=True): {request.model_dump(by_alias=True)}")
+        logger.info("Received Claude Code sync request")
+        logger.info(f"Original request object: {request}")
+        logger.info(f"Request model_dump: {request.model_dump()}")
+        logger.info(f"Request model_dump(by_alias=True): {request.model_dump(by_alias=True)}")
 
         details = await service.setup_claude_code(request)
 
-        logger.info("Claude Code 同步成功")
+        logger.info("Claude Code sync successful")
         return InternalApiResponse(
             success=True,
-            message="Claude Code 設定已成功完成",
+            message="Claude Code configuration completed successfully",
             details=details
         )
 
     except Exception as e:
-        logger.error(f"Claude Code 同步失敗: {e}")
+        logger.error(f"Claude Code sync failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Claude Code setup failed: {str(e)}"
@@ -123,28 +123,28 @@ async def sync_claude_code(
 @router.post(
     "/settings/git",
     response_model=InternalApiResponse,
-    summary="同步 Git 全域設定",
-    description="設定 Git 全域使用者名稱和信箱"
+    summary="Sync Git global settings",
+    description="Configure Git global username and email"
 )
 async def sync_git_settings(
     request: GitSettingsRequest,
     service: Annotated[InternalService, Depends(get_internal_service)]
 ) -> InternalApiResponse:
-    """同步 Git 設定到 workspace-runtime"""
+    """Sync Git settings to workspace-runtime"""
     try:
-        logger.info("收到 Git 設定同步請求")
+        logger.info("Received Git settings sync request")
 
         details = await service.setup_git_settings(request)
 
-        logger.info("Git 設定同步成功")
+        logger.info("Git settings sync successful")
         return InternalApiResponse(
             success=True,
-            message="Git 全域設定已成功完成",
+            message="Git global configuration completed successfully",
             details=details
         )
 
     except Exception as e:
-        logger.error(f"Git 設定同步失敗: {e}")
+        logger.error(f"Git settings sync failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Git settings setup failed: {str(e)}"
@@ -154,38 +154,38 @@ async def sync_git_settings(
 @router.post(
     "/settings/firewall",
     response_model=InternalApiResponse,
-    summary="同步防火牆設定",
-    description="套用防火牆規則到容器"
+    summary="Sync firewall settings",
+    description="Apply firewall rules to container"
 )
 async def sync_firewall_settings(
     request: FirewallConfigRequest,
     service: Annotated[InternalService, Depends(get_internal_service)]
 ) -> InternalApiResponse:
-    """同步防火牆設定到 workspace-runtime"""
+    """Sync firewall settings to workspace-runtime"""
     try:
-        logger.info("收到防火牆設定同步請求")
-        logger.debug(f"防火牆配置: {request.model_dump()}")
+        logger.info("Received firewall settings sync request")
+        logger.debug(f"Firewall configuration: {request.model_dump()}")
 
         details = await service.apply_firewall_settings(request)
 
         if details.get("status") == "error":
-            logger.error(f"防火牆設定套用失敗: {details.get('message')}")
+            logger.error(f"Firewall settings application failed: {details.get('message')}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=details.get("message", "防火牆設定套用失敗")
+                detail=details.get("message", "Firewall settings application failed")
             )
 
-        logger.info("防火牆設定同步成功")
+        logger.info("Firewall settings sync successful")
         return InternalApiResponse(
             success=True,
-            message="防火牆設定已成功套用",
+            message="Firewall settings applied successfully",
             details=details
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"防火牆設定同步失敗: {e}", exc_info=True)
+        logger.error(f"Firewall settings sync failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Firewall settings sync failed: {str(e)}"
@@ -195,11 +195,11 @@ async def sync_firewall_settings(
 @router.get(
     "/health",
     response_model=InternalApiResponse,
-    summary="內部 API 健康檢查",
-    description="檢查內部 API 服務狀態"
+    summary="Internal API health check",
+    description="Check internal API service status"
 )
 async def internal_health_check() -> InternalApiResponse:
-    """內部 API 健康檢查"""
+    """Internal API health check"""
     return InternalApiResponse(
         success=True,
         message="Internal API is healthy",
@@ -213,22 +213,22 @@ async def internal_health_check() -> InternalApiResponse:
 @router.get(
     "/setup/status",
     response_model=WorkspaceSetupStatusResponse,
-    summary="查詢 Workspace 初始化狀態",
-    description="檢查 SSH、Git 與 Claude Code 等初始化項目的同步狀態"
+    summary="Query workspace initialization status",
+    description="Check sync status of SSH, Git, Claude Code and other initialization items"
 )
 async def get_workspace_setup_status(
     service: Annotated[InternalService, Depends(get_internal_service)]
 ) -> WorkspaceSetupStatusResponse:
-    """取得 Workspace 初始化同步的最新狀態"""
+    """Get latest status of workspace initialization sync"""
     try:
         checks = await service.get_setup_status()
         return WorkspaceSetupStatusResponse(
             success=True,
-            message="取得初始化狀態成功",
+            message="Fetch initialization status successful",
             checks=checks,
         )
     except Exception as exc:
-        logger.error(f"取得 Workspace 初始化狀態失敗: {exc}")
+        logger.error(f"Failed to fetch workspace initialization status: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch setup status: {exc}",
@@ -241,22 +241,22 @@ async def get_workspace_setup_status(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/slash-commands/install",
     response_model=SlashCommandInstallResponse,
-    summary="安裝 Slash Commands",
-    description="將模板的 Slash Commands 安裝到 USER scope (~/.claude/commands/)。若檔案名稱包含 '/'（如 'namespace/command.md'），則安裝到對應的 namespace 子目錄；否則直接安裝到 commands 目錄下"
+    summary="Install Slash Commands",
+    description="Install template Slash Commands to USER scope (~/.claude/commands/). If filename contains '/' (e.g., 'namespace/command.md'), install to corresponding namespace subdirectory; otherwise install directly to commands directory"
 )
 async def install_slash_commands(
     workspace_id: str,
     request: SlashCommandInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> SlashCommandInstallResponse:
-    """安裝 Slash Commands"""
+    """Install Slash Commands"""
     try:
         success, results = await service.install_slash_commands(workspace_id, request)
 
         total = len(request.commands)
-        message = f"成功安裝 {total} 個 slash commands"
+        message = f"Successfully installed {total} slash commands"
         if results.failed:
-            message = f"安裝 slash commands: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install slash commands: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return SlashCommandInstallResponse(
             success=success,
@@ -275,22 +275,22 @@ async def install_slash_commands(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/subagents/install",
     response_model=SubagentInstallResponse,
-    summary="安裝 Subagents",
-    description="將模板的 Subagents 安裝到 workspace 的 user scope"
+    summary="Install Subagents",
+    description="Install template Subagents to workspace user scope"
 )
 async def install_subagents(
     workspace_id: str,
     request: SubagentInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> SubagentInstallResponse:
-    """安裝 Subagents"""
+    """Install Subagents"""
     try:
         success, results = await service.install_subagents(workspace_id, request)
 
         total = len(request.subagents)
-        message = f"成功安裝 {total} 個 subagents"
+        message = f"Successfully installed {total} subagents"
         if results.failed:
-            message = f"安裝 subagents: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install subagents: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return SubagentInstallResponse(
             success=success,
@@ -309,22 +309,22 @@ async def install_subagents(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/output-styles/install",
     response_model=OutputStyleInstallResponse,
-    summary="安裝 Output Styles",
-    description="將模板的 Output Styles 安裝到 workspace 的 personal scope"
+    summary="Install Output Styles",
+    description="Install template Output Styles to workspace personal scope"
 )
 async def install_output_styles(
     workspace_id: str,
     request: OutputStyleInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> OutputStyleInstallResponse:
-    """安裝 Output Styles"""
+    """Install Output Styles"""
     try:
         success, results = await service.install_output_styles(workspace_id, request)
 
         total = len(request.outputStyles)
-        message = f"成功安裝 {total} 個 output styles"
+        message = f"Successfully installed {total} output styles"
         if results.failed:
-            message = f"安裝 output styles: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install output styles: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return OutputStyleInstallResponse(
             success=success,
@@ -343,15 +343,15 @@ async def install_output_styles(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/claude-md/install",
     response_model=ClaudeMdInstallResponse,
-    summary="安裝 Claude.md",
-    description="將模板的 Claude.md 安裝到 workspace 的 user scope"
+    summary="Install Claude.md",
+    description="Install template Claude.md to workspace user scope"
 )
 async def install_claude_md(
     workspace_id: str,
     request: ClaudeMdInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> ClaudeMdInstallResponse:
-    """安裝 Claude.md"""
+    """Install Claude.md"""
     try:
         success = await service.install_claude_md(workspace_id, request)
 
@@ -363,7 +363,7 @@ async def install_claude_md(
 
         return ClaudeMdInstallResponse(
             success=True,
-            message="成功安裝 Claude.md",
+            message="Successfully installed Claude.md",
             workspaceId=workspace_id
         )
     except HTTPException:
@@ -379,22 +379,22 @@ async def install_claude_md(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/mcp/install",
     response_model=McpInstallResponse,
-    summary="安裝 MCP Servers",
-    description="將模板的 MCP Servers 安裝到 workspace 的 user scope"
+    summary="Install MCP Servers",
+    description="Install template MCP Servers to workspace user scope"
 )
 async def install_mcp_servers(
     workspace_id: str,
     request: McpInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> McpInstallResponse:
-    """安裝 MCP Servers"""
+    """Install MCP Servers"""
     try:
         success, results = await service.install_mcp_servers(workspace_id, request)
 
         total = len(request.mcpServers)
-        message = f"成功安裝 {total} 個 MCP servers"
+        message = f"Successfully installed {total} MCP servers"
         if results.failed:
-            message = f"安裝 MCP servers: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install MCP servers: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return McpInstallResponse(
             success=success,
@@ -413,15 +413,15 @@ async def install_mcp_servers(
 @router.post(
     "/workspaces/{workspace_id}/claude-code/hooks/install",
     response_model=HooksInstallResponse,
-    summary="安裝 Hooks",
-    description="將模板的 Hooks 安裝到 workspace 的 user scope"
+    summary="Install Hooks",
+    description="Install template Hooks to workspace user scope"
 )
 async def install_hooks(
     workspace_id: str,
     request: HooksInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> HooksInstallResponse:
-    """安裝 Hooks"""
+    """Install Hooks"""
     try:
         success = await service.install_hooks(workspace_id, request)
 
@@ -433,7 +433,7 @@ async def install_hooks(
 
         return HooksInstallResponse(
             success=True,
-            message="成功安裝 hooks 配置",
+            message="Successfully installed hooks configuration",
             workspaceId=workspace_id
         )
     except HTTPException:
@@ -449,24 +449,24 @@ async def install_hooks(
 @router.post(
     "/workspaces/{workspace_id}/scripts/install",
     response_model=ScriptsInstallResponse,
-    summary="安裝 Scripts",
-    description="將模板的 Scripts 複製到 workspace 的 /scripts/{templateName}/ 目錄"
+    summary="Install Scripts",
+    description="Copy template Scripts to workspace /scripts/{templateName}/ directory"
 )
 async def install_scripts(
     workspace_id: str,
     request: ScriptsInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> ScriptsInstallResponse:
-    """安裝 Scripts"""
+    """Install Scripts"""
     try:
         success, results, target_path, total_size = await service.install_scripts(
             workspace_id, request
         )
 
         total = len(request.scripts)
-        message = f"成功安裝 {total} 個 scripts 到 {target_path}/"
+        message = f"Successfully installed {total} scripts to {target_path}/"
         if results.failed:
-            message = f"安裝 scripts: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install scripts: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return ScriptsInstallResponse(
             success=success,
@@ -488,24 +488,24 @@ async def install_scripts(
 @router.post(
     "/workspaces/{workspace_id}/skills/install",
     response_model=SkillsInstallResponse,
-    summary="安裝 Skills",
-    description="將模板的 Skills 複製到 workspace 對應 CLI 的 project scope 目錄"
+    summary="Install Skills",
+    description="Copy template Skills to workspace CLI's project scope directory"
 )
 async def install_skills(
     workspace_id: str,
     request: SkillsInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> SkillsInstallResponse:
-    """安裝 Skills 到 workspace project scope。"""
+    """Install Skills to workspace project scope."""
     try:
         success, results, target_path, total_size = await service.install_skills(
             workspace_id, request
         )
 
         total = len(request.skills)
-        message = f"成功安裝 {total} 個 skills 到 {target_path}/"
+        message = f"Successfully installed {total} skills to {target_path}/"
         if results.failed:
-            message = f"安裝 skills: {len(results.created)} 新建, {len(results.updated)} 更新, {len(results.failed)} 失敗"
+            message = f"Install skills: {len(results.created)} created, {len(results.updated)} updated, {len(results.failed)} failed"
 
         return SkillsInstallResponse(
             success=success,
@@ -527,15 +527,15 @@ async def install_skills(
 @router.post(
     "/workspaces/{workspace_id}/templates/install",
     response_model=TemplateInstallResponse,
-    summary="批次安裝模板配置",
-    description="一次性安裝模板的所有配置（Claude.md, Slash Commands, Subagents, MCP, Hooks, Scripts, Skills）"
+    summary="Batch install template configurations",
+    description="Install all template configurations at once (Claude.md, Slash Commands, Subagents, MCP, Hooks, Scripts, Skills)"
 )
 async def install_template(
     workspace_id: str,
     request: TemplateInstallRequest,
     service: Annotated[TemplateInstallService, Depends(get_template_install_service)]
 ) -> TemplateInstallResponse:
-    """批次安裝模板配置"""
+    """Batch install template configurations"""
     results = TemplateInstallResults()
     overall_success = True
 
@@ -680,11 +680,11 @@ async def install_template(
                 )
                 overall_success = False
 
-        message = "模板安裝完成" if overall_success else "模板安裝完成（部分失敗）"
+        message = "Template installation completed" if overall_success else "Template installation completed (with some failures)"
 
         if request.initCommands and request.initCommands.strip():
             try:
-                logger.info(f"開始執行模板初始化指令: {request.templateName}")
+                logger.info(f"Starting to execute template initialization commands: {request.templateName}")
                 success, stdout, stderr = await service.execute_init_commands(
                     workspace_id, request.initCommands
                 )
@@ -692,16 +692,16 @@ async def install_template(
                     redacted = (stderr or "").strip()
                     redacted_msg = redacted[:200] + ("..." if len(redacted) > 200 else "")
                     logger.warning(
-                        "模板初始化指令執行失敗 (workspace=%s, template=%s): %s",
+                        "Template initialization command execution failed (workspace=%s, template=%s): %s",
                         workspace_id,
                         request.templateId,
                         redacted_msg,
                     )
                     overall_success = False
-                    message = "模板安裝完成（初始化指令失敗）"
+                    message = "Template installation completed (initialization command failed)"
                 else:
                     logger.info(
-                        "模板初始化指令執行成功 (workspace=%s, template=%s, stdout_length=%d)",
+                        "Template initialization command execution succeeded (workspace=%s, template=%s, stdout_length=%d)",
                         workspace_id,
                         request.templateId,
                         len(stdout or ""),
@@ -709,7 +709,7 @@ async def install_template(
             except Exception as e:
                 logger.error(f"Failed to execute init commands in batch: {e}")
                 overall_success = False
-                message = "模板安裝完成（初始化指令失敗）"
+                message = "Template installation completed (initialization command failed)"
 
         return TemplateInstallResponse(
             success=overall_success,
@@ -719,7 +719,7 @@ async def install_template(
             results=results,
         )
 
-    # 安裝 Claude.md
+    # Install Claude.md
     if request.claudeMd:
         try:
             success = await service.install_claude_md(workspace_id, request.claudeMd)
@@ -742,7 +742,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Slash Commands
+    # Install Slash Commands
     if request.slashCommands:
         try:
             from .template_install_models import SlashCommandInstallRequest as SCRequest
@@ -767,7 +767,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Subagents
+    # Install Subagents
     if request.subagents:
         try:
             from .template_install_models import SubagentInstallRequest as SARequest
@@ -792,7 +792,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Output Styles
+    # Install Output Styles
     if request.outputStyles:
         try:
             from .template_install_models import OutputStyleInstallRequest as OSRequest
@@ -817,7 +817,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 MCP Servers
+    # Install MCP Servers
     if request.mcpServers:
         try:
             from .template_install_models import McpInstallRequest as McpRequest
@@ -842,7 +842,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Hooks
+    # Install Hooks
     if request.hooks:
         try:
             from .template_install_models import HooksInstallRequest as HooksRequest
@@ -867,7 +867,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Scripts
+    # Install Scripts
     if request.scripts:
         try:
             from .template_install_models import ScriptsInstallRequest as ScriptsRequest
@@ -897,7 +897,7 @@ async def install_template(
             )
             overall_success = False
 
-    # 安裝 Skills
+    # Install Skills
     if request.skills:
         try:
             from .template_install_models import SkillsInstallRequest as SkillsRequest
@@ -927,12 +927,12 @@ async def install_template(
             )
             overall_success = False
 
-    message = "模板安裝完成" if overall_success else "模板安裝完成（部分失敗）"
+    message = "Template installation completed" if overall_success else "Template installation completed (with some failures)"
 
-    # 執行初始化指令（在所有配置安裝完成後）
+    # Execute initialization commands (after all configurations are installed)
     if request.initCommands and request.initCommands.strip():
         try:
-            logger.info(f"開始執行模板初始化指令: {request.templateName}")
+            logger.info(f"Starting to execute template initialization commands: {request.templateName}")
             success, stdout, stderr = await service.execute_init_commands(
                 workspace_id, request.initCommands
             )
@@ -940,19 +940,19 @@ async def install_template(
                 redacted = (stderr or "").strip()
                 redacted_msg = redacted[:200] + ("..." if len(redacted) > 200 else "")
                 logger.warning(
-                    "初始化指令執行失敗，但不影響模板安裝 (workspace=%s, stderr=%s)",
+                    "Initialization command execution failed, but does not affect template installation (workspace=%s, stderr=%s)",
                     workspace_id,
                     redacted_msg,
                 )
-                # 初始化指令失敗不影響整體安裝結果
-                # 但會在 message 中提示（僅在未已有錯誤訊息時覆寫）
+                # Initialization command failure does not affect overall installation result
+                # But will hint in message (only override when no error message exists)
                 if overall_success:
-                    message = "模板安裝完成，但初始化指令執行失敗"
+                    message = "Template installation completed, but initialization command execution failed"
             else:
-                logger.info(f"初始化指令執行成功: {request.templateName}")
+                logger.info(f"Initialization command execution succeeded: {request.templateName}")
         except Exception as e:
-            logger.error(f"執行初始化指令時發生異常: {e}")
-            # 不影響整體安裝結果
+            logger.error(f"Exception occurred while executing initialization command: {e}")
+            # Does not affect overall installation result
 
     return TemplateInstallResponse(
         success=overall_success,

@@ -1,4 +1,4 @@
-"""Slash Command 服務"""
+"""Slash Command Service"""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 class SlashCommandService:
-    """管理 Slash Commands 的檔案服務"""
+    """File service for managing Slash Commands"""
 
     def __init__(self) -> None:
         self._repository = ScopedMarkdownRepository("commands", supports_namespace=True)
@@ -41,14 +41,14 @@ class SlashCommandService:
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> SlashCommandScopesResponse:
         """
-        列出所有 slash commands
+        List all slash commands
 
-        修改：自動整合 plugin commands
+        Modified: Auto-integrate plugin commands
         """
         groups = []
 
-        # 1. 載入檔案系統的 commands（project/user/local）
-        # 如果查詢的是 PLUGIN scope，跳過檔案系統載入
+        # 1. Load commands from file system (project/user/local)
+        # Skip file system loading if querying PLUGIN scope
         if scope != DocumentScope.PLUGIN:
             for scope_item in iter_requested_scopes(scope, allow_local=False, allow_plugin=False):
                 records = self._repository.list_records(workspace_id, scope_item)
@@ -56,7 +56,7 @@ class SlashCommandService:
                 documents.sort(key=lambda item: item.file_name)
                 groups.append(SlashCommandScopeGroup(scope=scope_item, documents=documents))
 
-        # 2. 載入 plugin commands（從 plugin loader）
+        # 2. Load plugin commands (from plugin loader)
         if scope is None or scope == DocumentScope.PLUGIN:
             try:
                 plugin_commands = self._load_plugin_commands(workspace_id)
@@ -85,11 +85,11 @@ class SlashCommandService:
     def get_document(
         self, workspace_id: str, scope: DocumentScope, file_name: str
     ) -> SlashCommandDocumentResponse:
-        # 如果是 PLUGIN scope，從 plugin 載入
+        # If PLUGIN scope, load from plugin
         if scope == DocumentScope.PLUGIN:
             return self._get_plugin_document(workspace_id, file_name)
 
-        # 否則從檔案系統載入
+        # Otherwise load from file system
         try:
             record = self._repository.get_record(workspace_id, scope, file_name)
         except AmbiguousDocumentError as error:
@@ -194,10 +194,10 @@ class SlashCommandService:
         self,
         workspace_id: str
     ) -> list[SlashCommandDocumentSummary]:
-        """載入 plugin commands
+        """Load plugin commands
 
         Returns:
-            List[SlashCommandDocumentSummary]: 包含 pluginName 和 marketplaceName 的文檔
+            List[SlashCommandDocumentSummary]: Documents with pluginName and marketplaceName
         """
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service
@@ -232,7 +232,7 @@ class SlashCommandService:
     def _get_plugin_document(
         self, workspace_id: str, file_name: str
     ) -> SlashCommandDocumentResponse:
-        """從 plugin 載入單個文檔"""
+        """Load single document from plugin"""
         from ..plugins.loader import get_plugin_loader
         from ..settings.dependencies import get_settings_service
 

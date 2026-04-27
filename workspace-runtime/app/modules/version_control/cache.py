@@ -1,4 +1,4 @@
-"""Git 操作快取層"""
+"""Git operation caching layer"""
 
 from __future__ import annotations
 
@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 class GitCache:
-    """Git 操作快取層
-    
-    提供 Redis 快取功能，減少重複的 Git 操作
+    """Git operation caching layer
+
+    Provides Redis caching to reduce duplicate Git operations
     """
 
     def __init__(self, redis_client: Optional[Redis] = None, ttl: int = 300, enabled: bool = True):
-        """初始化快取
-        
+        """Initialize cache
+
         Args:
-            redis_client: Redis 客戶端實例
-            ttl: 預設快取過期時間（秒），預設 5 分鐘
-            enabled: 是否啟用快取
+            redis_client: Redis client instance
+            ttl: Default cache TTL in seconds, default 5 minutes
+            enabled: Whether to enable caching
         """
         self.redis = redis_client
         self.ttl = ttl
@@ -37,31 +37,31 @@ class GitCache:
             logger.warning("GitCache is disabled (no Redis client provided)")
 
     def _make_key(self, workspace_id: str, operation: str, **params) -> str:
-        """生成快取鍵
-        
+        """Generate cache key
+
         Args:
             workspace_id: Workspace ID
-            operation: 操作名稱（如 'changes', 'commits', 'status'）
-            **params: 額外參數（會被序列化並雜湊）
-        
+            operation: Operation name (e.g., 'changes', 'commits', 'status')
+            **params: Additional parameters (will be serialized and hashed)
+
         Returns:
-            快取鍵字串
+            Cache key string
         """
-        # 將參數排序並序列化，確保相同參數產生相同的鍵
+        # Sort and serialize parameters to ensure same parameters generate same key
         param_str = json.dumps(params, sort_keys=True, default=str)
-        param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]  # 只取前 8 位
+        param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]  # Only take first 8 characters
         return f"{self.prefix}{workspace_id}:{operation}:{param_hash}"
 
     def get(self, workspace_id: str, operation: str, **params) -> Optional[Any]:
-        """取得快取資料
-        
+        """Get cached data
+
         Args:
             workspace_id: Workspace ID
-            operation: 操作名稱
-            **params: 額外參數
-        
+            operation: Operation name
+            **params: Additional parameters
+
         Returns:
-            快取的資料，如果不存在或已過期則返回 None
+            Cached data, returns None if not exists or expired
         """
         if not self.enabled:
             return None
@@ -89,17 +89,17 @@ class GitCache:
         ttl: Optional[int] = None,
         **params
     ) -> bool:
-        """設定快取資料
-        
+        """Set cached data
+
         Args:
             workspace_id: Workspace ID
-            operation: 操作名稱
-            data: 要快取的資料（必須可 JSON 序列化）
-            ttl: 快取過期時間（秒），None 則使用預設值
-            **params: 額外參數
-        
+            operation: Operation name
+            data: Data to cache (must be JSON serializable)
+            ttl: Cache TTL in seconds, uses default if None
+            **params: Additional parameters
+
         Returns:
-            是否成功設定快取
+            Whether cache was successfully set
         """
         if not self.enabled:
             return False
@@ -122,20 +122,20 @@ class GitCache:
             return False
 
     def invalidate(self, workspace_id: str, pattern: str = "*") -> int:
-        """使快取失效
+        """Invalidate cache
 
         Args:
             workspace_id: Workspace ID
-            pattern: 匹配模式（支援 * 通配符）
+            pattern: Match pattern (supports * wildcard)
 
         Returns:
-            刪除的鍵數量
+            Number of deleted keys
         """
         if not self.enabled:
             return 0
 
         try:
-            # 如果 pattern 不包含 *，則自動添加 :* 以匹配所有相關的快取鍵
+            # If pattern doesn't contain *, automatically add :* to match all related cache keys
             if "*" not in pattern:
                 pattern = f"{pattern}:*"
 
@@ -154,24 +154,24 @@ class GitCache:
             return 0
 
     def invalidate_all(self, workspace_id: str) -> int:
-        """使所有快取失效
-        
+        """Invalidate all cache
+
         Args:
             workspace_id: Workspace ID
-        
+
         Returns:
-            刪除的鍵數量
+            Number of deleted keys
         """
         return self.invalidate(workspace_id, "*")
 
     def get_stats(self, workspace_id: str) -> dict[str, Any]:
-        """取得快取統計資訊
-        
+        """Get cache statistics
+
         Args:
             workspace_id: Workspace ID
-        
+
         Returns:
-            包含快取統計的字典
+            Dictionary containing cache statistics
         """
         if not self.enabled:
             return {
@@ -183,10 +183,10 @@ class GitCache:
         try:
             search_pattern = f"{self.prefix}{workspace_id}:*"
             keys = list(self.redis.scan_iter(match=search_pattern, count=100))
-            
-            # 計算記憶體使用（估算）
+
+            # Calculate memory usage (estimate)
             memory_usage = 0
-            for key in keys[:100]:  # 只檢查前 100 個鍵
+            for key in keys[:100]:  # Only check first 100 keys
                 try:
                     memory_usage += self.redis.memory_usage(key) or 0
                 except RedisError:
@@ -207,10 +207,10 @@ class GitCache:
             }
 
     def clear_all(self) -> int:
-        """清除所有 Git 快取（危險操作）
-        
+        """Clear all Git cache (dangerous operation)
+
         Returns:
-            刪除的鍵數量
+            Number of deleted keys
         """
         if not self.enabled:
             return 0
@@ -231,9 +231,9 @@ class GitCache:
             return 0
 
 
-# 快取鍵常數
+# Cache key constants
 class CacheKeys:
-    """快取鍵名稱常數"""
+    """Cache key name constants"""
 
     CHANGES = "changes"
     WORKING_TREE_SNAPSHOT = "working_tree_snapshot"
@@ -247,26 +247,26 @@ class CacheKeys:
     BLOB = "blob"
 
 
-# 快取 TTL 常數（秒）
+# Cache TTL constants (seconds)
 class CacheTTL:
-    """快取過期時間常數"""
-    
-    VERY_SHORT = 10      # 10 秒 - 頻繁變更的資料（如 changes, status）
-    SHORT = 30           # 30 秒 - 一般資料
-    MEDIUM = 300         # 5 分鐘 - 較穩定的資料（如 branches）
-    LONG = 1800          # 30 分鐘 - 很少變更的資料（如 commit history）
-    VERY_LONG = 3600     # 1 小時 - 幾乎不變的資料（如 commit detail, blob）
+    """Cache TTL constants"""
+
+    VERY_SHORT = 10      # 10 seconds - frequently changing data (e.g., changes, status)
+    SHORT = 30           # 30 seconds - normal data
+    MEDIUM = 300         # 5 minutes - relatively stable data (e.g., branches)
+    LONG = 1800          # 30 minutes - rarely changing data (e.g., commit history)
+    VERY_LONG = 3600     # 1 hour - almost static data (e.g., commit detail, blob)
 
 
 def create_git_cache(redis_url: Optional[str] = None, enabled: bool = True) -> GitCache:
-    """建立 GitCache 實例的工廠函數
+    """Factory function to create GitCache instance
 
     Args:
-        redis_url: Redis 連接 URL（如 'redis://localhost:6379/0'）
-        enabled: 是否啟用快取
+        redis_url: Redis connection URL (e.g., 'redis://localhost:6379/0')
+        enabled: Whether to enable caching
 
     Returns:
-        GitCache 實例（如果 Redis 不可用則返回禁用的快取）
+        GitCache instance (returns disabled cache if Redis unavailable)
     """
     if not enabled:
         logger.warning("GitCache is disabled by configuration")
@@ -284,7 +284,7 @@ def create_git_cache(redis_url: Optional[str] = None, enabled: bool = True) -> G
             socket_timeout=5
         )
 
-        # 測試連接
+        # Test connection
         redis_client.ping()
         logger.info(f"GitCache enabled with Redis: {redis_url}")
 

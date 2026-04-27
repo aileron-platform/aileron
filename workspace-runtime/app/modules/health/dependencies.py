@@ -1,4 +1,4 @@
-"""健康檢查依賴注入"""
+"""Health Check Dependency Injection"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .service import HealthCheckService
 
 
 def get_health_check_service(db: Session = None) -> Generator[HealthCheckService, None, None]:
-    """獲取健康檢查服務實例"""
+    """Get health check service instance"""
     if db is None:
         from app.database.session import get_session_local
         session_local = get_session_local()

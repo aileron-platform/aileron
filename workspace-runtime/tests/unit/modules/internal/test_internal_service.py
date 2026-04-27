@@ -1,4 +1,4 @@
-"""Internal Service 單元測試"""
+"""Internal Service unit tests."""
 
 from __future__ import annotations
 
@@ -43,10 +43,10 @@ def tmp_paths(tmp_path):
 
 
 class TestInternalServiceInitialization:
-    """測試 Internal Service 初始化"""
+    """Test Internal Service initialization"""
 
     def test_init(self):
-        """測試服務初始化"""
+        """Test service initialization"""
         # Act
         with patch("app.modules.internal.service.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(WORKSPACE_ID="test-workspace")
@@ -60,11 +60,11 @@ class TestInternalServiceInitialization:
 
 
 class TestSetupSSHKeys:
-    """測試設定 SSH Keys"""
+    """Test setting up SSH Keys"""
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_success(self, internal_service, tmp_paths):
-        """測試成功設定 SSH Keys"""
+        """Test successfully setting up SSH Keys"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         request = SSHKeysRequest(
@@ -82,19 +82,19 @@ class TestSetupSSHKeys:
         assert result["authorized_keys_added"] is True
         assert result["total_authorized_keys"] == 1
 
-        # 驗證文件存在
+        # Verify files exist
         assert (tmp_paths["ssh"] / "id_rsa").exists()
         assert (tmp_paths["ssh"] / "id_rsa.pub").exists()
         assert (tmp_paths["ssh"] / "authorized_keys").exists()
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_adds_newline(self, internal_service, tmp_paths):
-        """測試自動添加換行符"""
+        """Test automatically adding newline"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         request = SSHKeysRequest(
-            private_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",  # 沒有結尾換行
-            public_key="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com",  # 沒有結尾換行
+            private_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----",  # No trailing newline
+            public_key="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com",  # No trailing newline
         )
 
         # Act
@@ -108,19 +108,19 @@ class TestSetupSSHKeys:
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_duplicate_public_key(self, internal_service, tmp_paths):
-        """測試重複的公鑰不會被重複添加"""
+        """Test duplicate public key is not added twice"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com"
 
-        # 先添加一次
+        # Add once first
         request1 = SSHKeysRequest(
             private_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----\n",
             public_key=public_key,
         )
         await internal_service.setup_ssh_keys(request1)
 
-        # Act - 再次添加相同的公鑰
+        # Act - Add same public key again
         request2 = SSHKeysRequest(
             private_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----\n",
             public_key=public_key,
@@ -133,16 +133,16 @@ class TestSetupSSHKeys:
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_preserves_existing_keys(self, internal_service, tmp_paths):
-        """測試保留現有的 authorized_keys"""
+        """Test preserving existing authorized_keys"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 預先添加一個公鑰
+        # Pre-add a public key
         existing_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ existing@example.com"
         (tmp_paths["ssh"] / "authorized_keys").write_text(f"{existing_key}\n")
 
-        # Act - 添加新公鑰
+        # Act - Add new public key
         new_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ new@example.com"
         request = SSHKeysRequest(
             private_key="-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----\n",
@@ -158,7 +158,7 @@ class TestSetupSSHKeys:
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_directory_permissions(self, internal_service, tmp_paths):
-        """測試 SSH 目錄權限"""
+        """Test SSH directory permissions"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         request = SSHKeysRequest(
@@ -175,7 +175,7 @@ class TestSetupSSHKeys:
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_file_permissions(self, internal_service, tmp_paths):
-        """測試 SSH 文件權限"""
+        """Test SSH file permissions"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         request = SSHKeysRequest(
@@ -197,7 +197,7 @@ class TestSetupSSHKeys:
 
     @pytest.mark.asyncio
     async def test_setup_ssh_keys_error_handling(self, internal_service):
-        """測試 SSH Keys 設定錯誤處理"""
+        """Test SSH Keys setup error handling"""
         # Arrange - Mock mkdir to raise permission error
         with patch.object(Path, 'mkdir', side_effect=PermissionError("Permission denied")):
             internal_service.ssh_dir = Path("/test/.ssh")
@@ -212,11 +212,11 @@ class TestSetupSSHKeys:
 
 
 class TestSetupClaudeCode:
-    """測試設定 Claude Code"""
+    """Test setting up Claude Code"""
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_subscription(self, internal_service, tmp_paths):
-        """測試設定 Subscription 認證"""
+        """Test setting up Subscription authentication"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -247,20 +247,20 @@ class TestSetupClaudeCode:
         assert result["has_credentials"] is True
         assert (tmp_paths["claude"] / ".credentials.json").exists()
 
-        # 驗證 credentials 內容
+        # Verify credentials content
         credentials = json.loads((tmp_paths["claude"] / ".credentials.json").read_text())
         assert credentials["authMethod"] == "subscription"
         assert credentials["claudeAiOauth"]["accessToken"] == "test-access-token"
         assert credentials["claudeAiOauth"]["refreshToken"] == "test-refresh-token"
 
-        # 驗證 .claude.json 內容
+        # Verify .claude.json content
         claude_json = json.loads((tmp_paths["home"] / ".claude.json").read_text())
         assert "oauthAccount" in claude_json
         assert claude_json["oauthAccount"]["emailAddress"] == "test@example.com"
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_api_key(self, internal_service, tmp_paths):
-        """測試設定 API Key 認證"""
+        """Test setting up API Key authentication"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
@@ -280,7 +280,7 @@ class TestSetupClaudeCode:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_api_key_clears_stale_oauth_state(self, internal_service, tmp_paths):
-        """測試切換到 API Key 時會清除舊的 OAuth 狀態"""
+        """Test switching to API Key clears stale OAuth state"""
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -308,7 +308,7 @@ class TestSetupClaudeCode:
     async def test_setup_claude_code_subscription_merges_existing_claude_json(
         self, internal_service, tmp_paths
     ):
-        """測試 subscription 模式會保留既有 ~/.claude.json 欄位並更新 oauthAccount。"""
+        """Test subscription mode preserves existing ~/.claude.json fields and updates oauthAccount."""
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         (tmp_paths["home"] / ".claude.json").write_text(json.dumps({"existing": "value"}))
@@ -337,7 +337,7 @@ class TestSetupClaudeCode:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_environment_variables(self, internal_service, tmp_paths):
-        """測試設定環境變數到 .bashrc"""
+        """Test setting up environment variables to .bashrc"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
@@ -368,7 +368,7 @@ class TestSetupClaudeCode:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_subscription_no_env_vars(self, internal_service, tmp_paths):
-        """測試 Subscription 模式不同步環境變數"""
+        """Test Subscription mode does not sync environment variables"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
@@ -391,18 +391,18 @@ class TestSetupClaudeCode:
 
         # Assert
         assert len(result["environment_variables_set"]) == 0
-        # Subscription 模式不應該寫入 .bashrc
+        # Subscription mode should not write to .bashrc
         if bashrc_path.exists():
             bashrc_content = bashrc_path.read_text()
             assert "TEST_VAR" not in bashrc_content
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_auto_detect_auth_method(self, internal_service, tmp_paths):
-        """測試自動檢測認證方式"""
+        """Test auto-detecting authentication method"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
-        # 測試 1: 有 subscription token -> subscription
+        # Test 1: Has subscription token -> subscription
         request1 = ClaudeCodeRequest(
             subscription_access_token="test-token",
             subscription_refresh_token="test-refresh",
@@ -412,7 +412,7 @@ class TestSetupClaudeCode:
         result1 = await internal_service.setup_claude_code(request1)
         assert result1["auth_method"] == "subscription"
 
-        # 測試 2: 有 api_key -> api_key
+        # Test 2: Has api_key -> api_key
         request2 = ClaudeCodeRequest(
             api_key="test-api-key",
         )
@@ -422,7 +422,7 @@ class TestSetupClaudeCode:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_normalize_expires_at_integer(self, internal_service, tmp_paths):
-        """測試正規化整數類型的 expiresAt"""
+        """Test normalizing integer type expiresAt"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -430,7 +430,7 @@ class TestSetupClaudeCode:
             auth_method="subscription",
             subscription_access_token="test-token",
             subscription_refresh_token="test-refresh",
-            subscription_expires_at=1234567890000,  # 整數
+            subscription_expires_at=1234567890000,  # Integer
         )
 
         # Act
@@ -442,7 +442,7 @@ class TestSetupClaudeCode:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_normalize_expires_at_iso_string(self, internal_service, tmp_paths):
-        """測試正規化 ISO8601 字符串的 expiresAt"""
+        """Test normalizing ISO8601 string expiresAt"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -450,7 +450,7 @@ class TestSetupClaudeCode:
             auth_method="subscription",
             subscription_access_token="test-token",
             subscription_refresh_token="test-refresh",
-            subscription_expires_at="2024-01-01T00:00:00Z",  # ISO8601 字符串
+            subscription_expires_at="2024-01-01T00:00:00Z",  # ISO8601 string
         )
 
         # Act
@@ -463,7 +463,7 @@ class TestSetupClaudeCode:
     @pytest.mark.asyncio
     @patch("app.modules.internal.service.SettingsService")
     async def test_setup_claude_code_with_model_override(self, mock_settings_service, internal_service, tmp_paths):
-        """測試模型覆蓋設定"""
+        """Test model override setting"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         mock_instance = MagicMock()
@@ -482,47 +482,47 @@ class TestSetupClaudeCode:
 
 
 class TestNormalizeExpiresAt:
-    """測試 expiresAt 正規化"""
+    """Test expiresAt normalization"""
 
     def test_normalize_expires_at_integer(self):
-        """測試整數"""
+        """Test integer"""
         result = InternalService._normalize_expires_at(1234567890000)
         assert result == 1234567890000
 
     def test_normalize_expires_at_string_integer(self):
-        """測試字符串整數"""
+        """Test string integer"""
         result = InternalService._normalize_expires_at("1234567890000")
         assert result == 1234567890000
 
     def test_normalize_expires_at_iso8601(self):
-        """測試 ISO8601 格式"""
+        """Test ISO8601 format"""
         result = InternalService._normalize_expires_at("2024-01-01T00:00:00Z")
         assert isinstance(result, int)
         assert result > 0
 
     def test_normalize_expires_at_none(self):
-        """測試 None"""
+        """Test None"""
         result = InternalService._normalize_expires_at(None)
         assert result is None
 
     def test_normalize_expires_at_empty_string(self):
-        """測試空字符串"""
+        """Test empty string"""
         result = InternalService._normalize_expires_at("")
         assert result is None
 
     def test_normalize_expires_at_invalid_string(self):
-        """測試無效字符串"""
+        """Test invalid string"""
         result = InternalService._normalize_expires_at("invalid")
         assert result is None
 
 
 class TestSetupGitSettings:
-    """測試設定 Git 設定"""
+    """Test setting up Git settings"""
 
     @pytest.mark.asyncio
     @patch("subprocess.run")
     async def test_setup_git_settings_success(self, mock_run, internal_service):
-        """測試成功設定 Git 設定"""
+        """Test successfully setting up Git settings"""
         # Arrange
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
 
@@ -540,25 +540,25 @@ class TestSetupGitSettings:
         assert result["verified_name"] == ""
         assert result["verified_email"] == ""
 
-        # 驗證 git config 命令被調用
+        # Verify git config commands were called
         assert mock_run.call_count == 4  # set name, set email, verify name, verify email
 
     @pytest.mark.asyncio
     async def test_setup_git_settings_verify(self, internal_service):
-        """測試驗證 Git 設定"""
+        """Test verifying Git settings"""
         # Arrange
         def run_side_effect(*args, **kwargs):
             cmd = args[0]
-            # 設置命令：["git", "config", "--global", "user.name", "Test User"]  (5 個元素)
-            # 驗證命令：["git", "config", "--global", "user.name"]  (4 個元素)
+            # Set command: ["git", "config", "--global", "user.name", "Test User"]  (5 elements)
+            # Verify command: ["git", "config", "--global", "user.name"]  (4 elements)
             if "user.name" in cmd and len(cmd) == 4:
-                # 這是讀取命令
+                # This is read command
                 return MagicMock(returncode=0, stdout="Test User\n", stderr="")
             elif "user.email" in cmd and len(cmd) == 4:
-                # 這是讀取命令
+                # This is read command
                 return MagicMock(returncode=0, stdout="test@example.com\n", stderr="")
             else:
-                # 這是設置命令或其他
+                # This is set command or other
                 return MagicMock(returncode=0, stdout="", stderr="")
 
         with patch("subprocess.run", side_effect=run_side_effect):
@@ -577,7 +577,7 @@ class TestSetupGitSettings:
     @pytest.mark.asyncio
     @patch("subprocess.run")
     async def test_setup_git_settings_command_failure(self, mock_run, internal_service):
-        """測試 Git 命令失敗"""
+        """Test Git command failure"""
         # Arrange
         mock_run.side_effect = subprocess.CalledProcessError(1, "git")
 
@@ -593,11 +593,11 @@ class TestSetupGitSettings:
 
 
 class TestGetSetupStatus:
-    """測試取得設定狀態"""
+    """Test getting setup status"""
 
     @pytest.mark.asyncio
     async def test_get_setup_status(self, internal_service):
-        """測試取得設定狀態"""
+        """Test getting setup status"""
         # Act
         with patch.object(internal_service, "_check_ssh_status", return_value={"status": "success"}):
             with patch.object(internal_service, "_check_claude_status", return_value={"status": "success"}):
@@ -611,15 +611,15 @@ class TestGetSetupStatus:
 
 
 class TestCheckSSHStatus:
-    """測試檢查 SSH 狀態"""
+    """Test checking SSH status"""
 
     def test_check_ssh_status_success(self, internal_service, tmp_paths):
-        """測試 SSH 完全配置"""
+        """Test SSH fully configured"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 創建所需文件
+        # Create required files
         (tmp_paths["ssh"] / "id_rsa").write_text("private key")
         (tmp_paths["ssh"] / "id_rsa.pub").write_text("public key")
         (tmp_paths["ssh"] / "authorized_keys").write_text("public key")
@@ -631,7 +631,7 @@ class TestCheckSSHStatus:
         assert result["status"] == "success"
 
     def test_check_ssh_status_pending(self, internal_service, tmp_paths):
-        """測試 SSH 未配置"""
+        """Test SSH not configured"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
 
@@ -822,7 +822,7 @@ class TestApplyFirewallSettings:
         rendered_script = mock_write_text.call_args.args[0]
         assert "iptables -P OUTPUT DROP" in rendered_script
         assert "iptables -A OUTPUT -p udp --dport 53 -j ACCEPT" in rendered_script
-        assert "log \"網路存取已關閉" in rendered_script
+        assert "log \"Network access disabled" in rendered_script
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_renders_allowlist_rules_for_specific_domains(
@@ -916,7 +916,7 @@ class TestApplyFirewallSettings:
 
                         # Assert
                         assert result["status"] == "error"
-                        assert "超時" in result["message"]
+                    assert "timeout" in result["message"]
 
 
 class TestSetupClaudeCodeEdgeCases:
@@ -1144,7 +1144,7 @@ class TestCheckSSHStatusEdgeCases:
 
         # Assert
         assert result["status"] == "failed"
-        assert "未包含當前公鑰" in result["message"]
+        assert "does not contain current public key" in result["message"]
 
     def test_check_ssh_status_read_error(self, internal_service, tmp_paths):
         """測試讀取 SSH 文件失敗"""
@@ -1180,7 +1180,7 @@ class TestCheckSSHStatusEdgeCases:
 
         # Assert
         assert result["status"] == "failed"
-        assert "authorized_keys 未配置" in result["message"]
+        assert "authorized_keys not configured" in result["message"]
 
     def test_check_ssh_status_check_exception(self, internal_service):
         """測試檢查時發生異常"""
@@ -1193,7 +1193,7 @@ class TestCheckSSHStatusEdgeCases:
 
             # Assert
             assert result["status"] == "failed"
-            assert "檢查失敗" in result["message"]
+            assert "Check failed" in result["message"]
 
 
 class TestClearClaudeOauthState:
@@ -1338,7 +1338,7 @@ class TestCheckClaudeStatusEdgeCases:
 
             # Assert
             assert result["status"] == "failed"
-            assert "缺少必要的環境變數" in result["message"]
+            assert "Missing required environment variables" in result["message"]
         finally:
             os.environ.pop(internal_service._auth_method_env, None)
             os.environ.pop(internal_service._env_keys_env, None)
@@ -1357,7 +1357,7 @@ class TestCheckClaudeStatusEdgeCases:
 
             # Assert
             assert result["status"] == "pending"
-            assert "尚未設定" in result["message"]
+            assert "not yet configured" in result["message"]
         finally:
             os.environ.pop(internal_service._auth_method_env, None)
 
@@ -1378,7 +1378,7 @@ class TestCheckClaudeStatusEdgeCases:
             result = internal_service._check_claude_status()
 
             assert result["status"] == "success"
-            assert "環境變數已同步" in result["message"]
+            assert "environment variables synced" in result["message"]
         finally:
             os.environ.pop(internal_service._auth_method_env, None)
             os.environ.pop(internal_service._env_keys_env, None)
@@ -1394,7 +1394,7 @@ class TestCheckClaudeStatusEdgeCases:
 
         # Assert
         assert result["status"] == "pending"
-        assert "尚未同步" in result["message"]
+        assert "not yet synced" in result["message"]
 
     def test_check_claude_status_exception(self, internal_service):
         """測試檢查時發生異常"""
@@ -1407,7 +1407,7 @@ class TestCheckClaudeStatusEdgeCases:
 
             # Assert
             assert result["status"] == "failed"
-            assert "檢查失敗" in result["message"]
+            assert "Check failed" in result["message"]
 
 
 class TestCheckGitStatusEdgeCases:
@@ -1424,7 +1424,7 @@ class TestCheckGitStatusEdgeCases:
 
         # Assert
         assert result["status"] == "failed"
-        assert "檢查失敗" in result["message"]
+        assert "Check failed" in result["message"]
 
 
 class TestEnsureDirectoryExists:

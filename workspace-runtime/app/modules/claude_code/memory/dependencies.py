@@ -1,4 +1,4 @@
-"""Claude Code Memory 模組依賴"""
+"""Claude Code Memory Module Dependencies"""
 
 from __future__ import annotations
 
@@ -9,6 +9,6 @@ from .service import MemoryService
 
 @lru_cache()
 def get_memory_service() -> MemoryService:
-    """提供 MemoryService"""
+    """Provide MemoryService"""
 
     return MemoryService()

@@ -1,4 +1,4 @@
-"""核心檔案內容相關 API 測試"""
+"""Core file content related API tests"""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from .helpers import override_dependency
 
 
 class ReadonlyFileServiceStub:
-    """只會拋出唯讀錯誤的檔案服務"""
+    """File service that only raises readonly errors"""
 
-    def write_file(self, *args, **kwargs):  # pragma: no cover - 簡單 stub
+    def write_file(self, *args, **kwargs):  # pragma: no cover - simple stub
         raise ReadonlyScopeException("project")
 
 
@@ -108,7 +108,7 @@ def test_fl_008_write_file_readonly_scope(client):
 
 
 def test_fl_009_batch_write_multiple_files(client, tmp_path):
-    """FL-009 多檔案一次寫入"""
+    """FL-009 Multi-file single write"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "file1.txt").write_text("original 1", encoding="utf-8")
@@ -140,13 +140,13 @@ def test_fl_009_batch_write_multiple_files(client, tmp_path):
 
 
 def test_fl_010_create_file_and_directory(client, tmp_path):
-    """FL-010 建立新檔與資料夾"""
+    """FL-010 Create new file and folder"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)
 
     with override_dependency(get_new_file_service, lambda: service):
-        # 建立檔案
+        # Create file
         response1 = client.post(
             "/api/v1/files",
             json={"path": "newfile.txt", "type": "file", "content": "hello"},
@@ -154,7 +154,7 @@ def test_fl_010_create_file_and_directory(client, tmp_path):
         assert response1.status_code == 201
         assert (workspace / "newfile.txt").exists()
 
-        # 建立資料夾
+        # Create directory
         response2 = client.post(
             "/api/v1/files",
             json={"path": "newfolder", "type": "directory"},
@@ -164,7 +164,7 @@ def test_fl_010_create_file_and_directory(client, tmp_path):
 
 
 def test_fl_011_create_duplicate_file_conflict(client, tmp_path):
-    """FL-011 重複建立觸發衝突"""
+    """FL-011 Duplicate creation triggers conflict"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "existing.txt").write_text("already here", encoding="utf-8")
@@ -182,7 +182,7 @@ def test_fl_011_create_duplicate_file_conflict(client, tmp_path):
 
 
 def test_fl_012_delete_file_success(client, tmp_path):
-    """FL-012 刪除檔案成功"""
+    """FL-012 Delete file success"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "temp.txt").write_text("to be deleted", encoding="utf-8")
@@ -196,7 +196,7 @@ def test_fl_012_delete_file_success(client, tmp_path):
 
 
 def test_fl_013_delete_non_empty_directory_without_recursive(client, tmp_path):
-    """FL-013 未遞迴刪除非空資料夾"""
+    """FL-013 Delete non-empty folder without recursive"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "dir").mkdir()
@@ -212,12 +212,12 @@ def test_fl_013_delete_non_empty_directory_without_recursive(client, tmp_path):
 
 
 def test_fl_014_batch_delete_mixed_results(client, tmp_path):
-    """FL-014 批次刪除混合狀態"""
+    """FL-014 Batch delete mixed status"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "file1.txt").write_text("content 1", encoding="utf-8")
     (workspace / "file2.txt").write_text("content 2", encoding="utf-8")
-    # file3.txt 不存在
+    # file3.txt does not exist
 
     service = FileService(root_path=workspace)
 
@@ -232,7 +232,7 @@ def test_fl_014_batch_delete_mixed_results(client, tmp_path):
     assert payload["succeeded"] == 2
     assert payload["total"] == 3
     assert payload["failed"] == 1
-    # 檢查結果中包含成功和失敗的檔案
+    # Check results contain successful and failed files
     results = payload["results"]
     success_results = [r for r in results if r["status"] == "success"]
     failed_results = [r for r in results if r["status"] == "failed"]
@@ -241,7 +241,7 @@ def test_fl_014_batch_delete_mixed_results(client, tmp_path):
 
 
 def test_fl_015_copy_file_with_overwrite_protection(client, tmp_path):
-    """FL-015 複製檔案與覆寫保護"""
+    """FL-015 Copy file with overwrite protection"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "a.txt").write_text("source content", encoding="utf-8")
@@ -250,7 +250,7 @@ def test_fl_015_copy_file_with_overwrite_protection(client, tmp_path):
     service = FileService(root_path=workspace)
 
     with override_dependency(get_new_file_service, lambda: service):
-        # 第一次複製：成功
+        # First copy: success
         response1 = client.post(
             "/api/v1/files/copy",
             json={"sourcePath": "a.txt", "destPath": "backup/a.txt", "overwrite": False},
@@ -258,7 +258,7 @@ def test_fl_015_copy_file_with_overwrite_protection(client, tmp_path):
         assert response1.status_code == 200
         assert (workspace / "backup" / "a.txt").read_text(encoding="utf-8") == "source content"
 
-        # 第二次複製：衝突
+        # Second copy: conflict
         response2 = client.post(
             "/api/v1/files/copy",
             json={"sourcePath": "a.txt", "destPath": "backup/a.txt", "overwrite": False},
@@ -267,7 +267,7 @@ def test_fl_015_copy_file_with_overwrite_protection(client, tmp_path):
 
 
 def test_fl_016_move_file_success_and_conflict(client, tmp_path):
-    """FL-016 移動檔案"""
+    """FL-016 Move file"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "a.txt").write_text("content to move", encoding="utf-8")
@@ -276,7 +276,7 @@ def test_fl_016_move_file_success_and_conflict(client, tmp_path):
     service = FileService(root_path=workspace)
 
     with override_dependency(get_new_file_service, lambda: service):
-        # 移動成功
+        # Move success
         response1 = client.post(
             "/api/v1/files/move",
             json={"sourcePath": "a.txt", "destPath": "tmp/a.txt", "overwrite": False},
@@ -285,7 +285,7 @@ def test_fl_016_move_file_success_and_conflict(client, tmp_path):
         assert not (workspace / "a.txt").exists()
         assert (workspace / "tmp" / "a.txt").exists()
 
-        # 嘗試移動到已存在的位置（衝突）
+        # Attempt to move to existing location (conflict)
         (workspace / "b.txt").write_text("another file", encoding="utf-8")
         response2 = client.post(
             "/api/v1/files/move",
@@ -295,7 +295,7 @@ def test_fl_016_move_file_success_and_conflict(client, tmp_path):
 
 
 def test_fl_017_upload_multiple_files_with_rename_strategy(client, tmp_path):
-    """FL-017 多檔案上傳與自動改名"""
+    """FL-017 Multi-file upload with auto rename"""
     from io import BytesIO
 
     workspace = tmp_path / "workspace"
@@ -304,7 +304,7 @@ def test_fl_017_upload_multiple_files_with_rename_strategy(client, tmp_path):
 
     service = FileService(root_path=workspace)
 
-    # 建立兩個同名的上傳檔案
+    # Create two upload files with same name
     file1 = BytesIO(b"file content 1")
     file2 = BytesIO(b"file content 2")
 
@@ -322,14 +322,14 @@ def test_fl_017_upload_multiple_files_with_rename_strategy(client, tmp_path):
     payload = response.json()
     assert len(payload["uploaded"]) == 2
     assert len(payload["skipped"]) == 0
-    # 驗證檔名
+    # Verify filenames
     uploaded_paths = [item["path"] for item in payload["uploaded"]]
     assert "uploads/test.txt" in uploaded_paths
     assert "uploads/test_1.txt" in uploaded_paths
 
 
 def test_fl_018_upload_zip_without_extract_stores_archive(client, tmp_path):
-    """FL-018 ZIP 預設僅保存，不自動解壓"""
+    """FL-018 ZIP default storage only, no auto extract"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)
@@ -354,7 +354,7 @@ def test_fl_018_upload_zip_without_extract_stores_archive(client, tmp_path):
 
 
 def test_fl_019_upload_zip_with_extract_and_keep_archive(client, tmp_path):
-    """FL-019 ZIP 解壓並保留原始壓縮檔"""
+    """FL-019 ZIP extract and keep original archive"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)
@@ -384,7 +384,7 @@ def test_fl_019_upload_zip_with_extract_and_keep_archive(client, tmp_path):
 
 
 def test_fl_020_upload_zip_rejects_path_traversal(client, tmp_path):
-    """FL-020 ZIP 路徑穿越必須被拒絕"""
+    """FL-020 ZIP path traversal must be rejected"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)
@@ -407,7 +407,7 @@ def test_fl_020_upload_zip_rejects_path_traversal(client, tmp_path):
 
 
 def test_fl_021_upload_zip_reject_strategy_aborts_on_conflict(client, tmp_path):
-    """FL-021 ZIP 在 reject 策略下遇到衝突必須失敗"""
+    """FL-021 ZIP must fail on conflict under reject strategy"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     (workspace / "uploads").mkdir()
@@ -433,7 +433,7 @@ def test_fl_021_upload_zip_reject_strategy_aborts_on_conflict(client, tmp_path):
 
 
 def test_fl_022_extract_zip_runs_as_background_operation(client, tmp_path):
-    """FL-022 既有 ZIP 可透過背景任務解壓並查詢狀態"""
+    """FL-022 Existing ZIP can extract via background task and query status"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)
@@ -464,7 +464,7 @@ def test_fl_022_extract_zip_runs_as_background_operation(client, tmp_path):
 
 
 def test_fl_023_extract_zip_status_reports_failure(client, tmp_path):
-    """FL-023 背景解壓失敗時狀態查詢應回傳 failed"""
+    """FL-023 Background extract failure status query should return failed"""
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     service = FileService(root_path=workspace)

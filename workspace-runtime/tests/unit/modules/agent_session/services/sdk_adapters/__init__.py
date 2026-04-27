@@ -1,1 +1,1 @@
-"""SDK Adapters 單元測試."""
+"""SDK Adapters unit tests."""

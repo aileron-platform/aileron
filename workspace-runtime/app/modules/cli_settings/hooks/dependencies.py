@@ -1,4 +1,4 @@
-"""CLI Hooks 模組依賴注入"""
+"""CLI Hooks module dependency injection"""
 
 from __future__ import annotations
 

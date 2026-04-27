@@ -1,7 +1,7 @@
 """
-Keycloak 認證模組 (Workspace Runtime)
+Keycloak authentication module (Workspace Runtime)
 
-提供 JWT token 驗證功能，用於驗證前端傳來的 Keycloak access token。
+Provides JWT token validation functionality to verify Keycloak access tokens from frontend.
 """
 
 from app.modules.auth.config import KeycloakConfig, get_keycloak_config

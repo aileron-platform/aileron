@@ -1,22 +1,22 @@
 """
-Client Browser Relay 模組
+Client Browser Relay module
 
-CDP Relay Server 用於控制用戶端的 Chrome 瀏覽器
-此模組作為 Playwright 客戶端和 Chrome 擴展程式之間的橋接層
+CDP Relay Server for controlling client-side Chrome browser
+This module serves as a bridge layer between Playwright client and Chrome extension
 
-技術架構:
-    Playwright 客戶端 <-> Relay Server <-> Chrome Extension <-> Chrome Browser
+Technical Architecture:
+    Playwright Client <-> Relay Server <-> Chrome Extension <-> Chrome Browser
            (WebSocket /cdp)    (WebSocket /extension)     (CDP)
 
-WebSocket 端點:
-    - /api/v1/client-browser-relay/cdp - Playwright 客戶端連接
-    - /api/v1/client-browser-relay/extension - Chrome 擴展連接
+WebSocket Endpoints:
+    - /api/v1/client-browser-relay/cdp - Playwright client connection
+    - /api/v1/client-browser-relay/extension - Chrome extension connection
 
-HTTP 端點:
-    - GET /api/v1/client-browser-relay/ - 健康檢查和狀態
-    - GET /api/v1/client-browser-relay/pages - 列出命名頁面
-    - POST /api/v1/client-browser-relay/pages - 建立命名頁面
-    - DELETE /api/v1/client-browser-relay/pages/{name} - 刪除命名頁面
+HTTP Endpoints:
+    - GET /api/v1/client-browser-relay/ - Health check and status
+    - GET /api/v1/client-browser-relay/pages - List named pages
+    - POST /api/v1/client-browser-relay/pages - Create named page
+    - DELETE /api/v1/client-browser-relay/pages/{name} - Delete named page
 """
 
 from .router import router

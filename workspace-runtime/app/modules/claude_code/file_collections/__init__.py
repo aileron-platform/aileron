@@ -1,4 +1,4 @@
-"""File Collections 模組 - Skills / Scripts 統一管理"""
+"""File Collections Module - Unified management for Skills / Scripts"""
 
 from __future__ import annotations
 

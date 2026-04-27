@@ -14,15 +14,15 @@ def safe_json_loads(
     entity_id: str = "",
     entity_type: str = "entity"
 ) -> Dict[str, Any]:
-    """安全地反序列化 JSON 字串.
+    """Safely deserialize JSON string.
 
     Args:
-        data: JSON 字串或 None
-        entity_id: 實體 ID（用於錯誤日誌）
-        entity_type: 實體類型名稱（用於錯誤日誌）
+        data: JSON string or None
+        entity_id: Entity ID (for error logging)
+        entity_type: Entity type name (for error logging)
 
     Returns:
-        字典，如果 data 為 None 或解析失敗則返回空字典
+        Dictionary, returns empty dict if data is None or parsing fails
     """
     if not data:
         return {}

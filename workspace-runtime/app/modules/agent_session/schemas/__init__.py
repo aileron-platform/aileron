@@ -1,4 +1,4 @@
-"""Schema 層 - API 請求/回應模型."""
+"""Schema layer - API request/response models."""
 
 from .content_blocks import (
     ContentBlock,

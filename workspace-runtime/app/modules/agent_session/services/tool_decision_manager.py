@@ -1,98 +1,98 @@
 """
 Tool Decision Manager.
 
-全域 Tool Decision 管理器，參考 agor 的 permission-manager.ts 設計。
-將 Tool Decision 決策路由到正確的 session。
+Global Tool Decision Manager, references agor's permission-manager.ts design.
+Routes Tool Decision decisions to correct session.
 
-職責分離說明：
-- ToolDecisionManager（本模組）：全域單例，管理內存中的 DecisionHooks 路由
-  - 負責 register/unregister hooks
-  - 路由決策到正確的 session callback
-  - 不需要資料庫存取
+Responsibility separation explanation:
+- ToolDecisionManager (this module): Global singleton, manages DecisionHooks routing in memory
+  - Responsible for register/unregister hooks
+  - Route decisions to correct session callback
+  - No database access needed
 
-- ToolDecisionService（tool_decision_service.py）：每請求實例，處理資料庫操作
-  - 建立/更新決策請求訊息
-  - 管理 asyncio 事件的等待/通知
-  - 需要資料庫存取
+- ToolDecisionService (tool_decision_service.py): Per-request instance, handles database operations
+  - Create/update decision request messages
+  - Manage asyncio event waiting/notification
+  - Requires database access
 
-兩者配合工作：API endpoint 調用 ToolDecisionManager 來喚醒 SDK callback，
-而 ToolDecisionService 負責持久化狀態到資料庫。
+Both work together: API endpoint calls ToolDecisionManager to wake up SDK callback,
+while ToolDecisionService handles persisting state to database.
 """
 
 from typing import Any, Dict, Optional, Protocol
 
 
 class DecisionHooksProtocol(Protocol):
-    """DecisionHooks 的協議定義（用於類型檢查）."""
+    """Protocol definition for DecisionHooks (for type checking)."""
 
     def resolve_decision(self, decision: Dict[str, Any]) -> bool:
-        """解決 Tool Decision."""
+        """Resolve Tool Decision."""
         ...
 
 
 class ToolDecisionManager:
     """
-    全域 Tool Decision 管理器.
+    Global Tool Decision Manager.
 
-    職責：
-    - register_hooks(): 註冊 session 的 DecisionHooks
-    - unregister_hooks(): 取消註冊
-    - resolve_decision(): 路由決策到正確的 hooks（喚醒等待中的 SDK callback）
-    - get_hooks(): 取得指定 session 的 hooks
+    Responsibilities:
+    - register_hooks(): Register session's DecisionHooks
+    - unregister_hooks(): Unregister
+    - resolve_decision(): Route decision to correct hooks (wake waiting SDK callback)
+    - get_hooks(): Get hooks for specified session
 
-    注意：
-    - DecisionHooks 處理 SDK callback 的等待/喚醒
-    - ToolDecisionService 處理 DB 狀態更新（由 API 單獨調用）
+    Notes:
+    - DecisionHooks handle SDK callback wait/wake
+    - ToolDecisionService handles DB state updates (called by API endpoint)
     """
 
     def __init__(self):
-        """初始化 ToolDecisionManager."""
+        """Initialize ToolDecisionManager."""
         self._hooks: Dict[str, DecisionHooksProtocol] = {}
 
     def register_hooks(self, session_id: str, hooks: DecisionHooksProtocol) -> None:
         """
-        註冊 session 的 DecisionHooks.
+        Register DecisionHooks for session.
 
         Args:
-            session_id: 會話 ID
-            hooks: DecisionHooks 實例
+            session_id: Session ID
+            hooks: DecisionHooks instance
         """
         self._hooks[session_id] = hooks
 
     def unregister_hooks(self, session_id: str) -> None:
         """
-        取消註冊 session 的 DecisionHooks.
+        Unregister DecisionHooks for session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
         """
         if session_id in self._hooks:
             del self._hooks[session_id]
 
     def get_hooks(self, session_id: str) -> Optional[DecisionHooksProtocol]:
         """
-        取得指定 session 的 DecisionHooks.
+        Get DecisionHooks for specified session.
 
         Args:
-            session_id: 會話 ID
+            session_id: Session ID
 
         Returns:
-            DecisionHooks 或 None
+            DecisionHooks or None
         """
         return self._hooks.get(session_id)
 
     def resolve_decision(self, session_id: str, decision: Dict[str, Any]) -> bool:
         """
-        路由 Tool Decision 到正確的 hooks.
+        Route Tool Decision to correct hooks.
 
-        喚醒等待中的 SDK callback。由 API endpoint 調用。
+        Wake waiting SDK callback. Called by API endpoint.
 
         Args:
-            session_id: 會話 ID
-            decision: 決策資料，包含 request_id, outcome 等
+            session_id: Session ID
+            decision: Decision data, includes request_id, outcome, etc.
 
         Returns:
-            bool: 是否成功解決
+            bool: Whether resolution succeeded
         """
         hooks = self._hooks.get(session_id)
         if hooks:
@@ -100,20 +100,20 @@ class ToolDecisionManager:
         return False
 
     def resolve_tool_input(self, session_id: str, decision: Dict[str, Any]) -> bool:
-        """保留既有 user_input 路由的相容入口."""
+        """Preserve legacy user_input routing compatibility entry."""
         return self.resolve_decision(session_id, decision)
 
     @property
     def active_session_count(self) -> int:
-        """取得活躍 session 數量."""
+        """Get active session count."""
         return len(self._hooks)
 
     def has_session(self, session_id: str) -> bool:
-        """檢查是否有指定 session 的 hooks."""
+        """Check if hooks exist for specified session."""
         return session_id in self._hooks
 
 
-# 全域單例
+# Global singleton
 global_tool_decision_manager = ToolDecisionManager()
 
 

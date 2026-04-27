@@ -1,4 +1,4 @@
-"""Claude Code 設定子模組"""
+"""Claude Code Settings Submodule"""
 
 from __future__ import annotations
 

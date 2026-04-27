@@ -1,4 +1,4 @@
-"""Draw.io 整合 API 測試"""
+"""Draw.io integration API tests"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .helpers import override_dependency
 
 
 class DrawioFileServiceStub:
-    """提供可配置回傳的檔案服務 stub"""
+    """File service stub providing configurable return"""
 
     def __init__(self, content: str = "<mxfile></mxfile>") -> None:
         self.content = content
@@ -23,22 +23,22 @@ class DrawioFileServiceStub:
         self.read_error = None
         self.write_error = None
 
-    def read_file(self, path: str, scope: str = None):  # pragma: no cover - 測試 stub
+    def read_file(self, path: str, scope: str = None):  # pragma: no cover - test stub
         if self.read_error:
             raise self.read_error
         if self.raise_missing:
             raise FileNotFoundException(path)
         return {"content": self.content, "path": path, "scope": scope}
 
-    def write_file(self, request, scope: str = None, expected_version_id: str = None):  # pragma: no cover - 測試 stub
+    def write_file(self, request, scope: str = None, expected_version_id: str = None):  # pragma: no cover - test stub
         if self.write_error:
             raise self.write_error
-        # 處理 SaveFileRequest 或直接參數
+        # Handle SaveFileRequest or direct parameters
         if hasattr(request, 'path') and hasattr(request, 'content'):
             path = request.path
             content = request.content
         else:
-            # 向後相容：如果直接傳入參數
+            # Backward compatibility: if passing parameters directly
             path = request if isinstance(request, str) else "unknown"
             content = scope if isinstance(scope, str) else ""
             scope = expected_version_id
@@ -48,18 +48,18 @@ class DrawioFileServiceStub:
 
 
 class TranslateStub:
-    def translate(self, key: str, **kwargs):  # pragma: no cover - 測試 stub
+    def translate(self, key: str, **kwargs):  # pragma: no cover - test stub
         if kwargs:
             parts = ",".join(f"{k}={v}" for k, v in sorted(kwargs.items()))
             return f"{key}:{parts}"
         return key
 
-    def __call__(self, key: str, **kwargs):  # pragma: no cover - 測試 stub
-        # 使物件可調用，直接呼叫 translate 方法
+    def __call__(self, key: str, **kwargs):  # pragma: no cover - test stub
+        # Make object callable, directly call translate method
         return self.translate(key, **kwargs)
 
 
-# 創建一個模擬的 I18nService 實例
+# Create a mock I18nService instance
 class MockI18nService:
     def __call__(self, key: str, **kwargs):
         if kwargs:
@@ -127,13 +127,13 @@ def test_drawio_viewer_empty_file_returns_error(client):
         )
 
     assert response.status_code == 400
-    # 確認錯誤訊息與空檔案相關
+    # Confirm error message relates to empty file
     error_detail = response.json()["detail"]
     assert "empty_file" in error_detail
 
 
 def test_drawio_viewer_file_not_found(client):
-    """測試檔案不存在的錯誤處理"""
+    """Test file not found error handling"""
     service = DrawioFileServiceStub()
     service.raise_missing = True
 
@@ -149,7 +149,7 @@ def test_drawio_viewer_file_not_found(client):
 
 
 def test_drawio_viewer_invalid_path_returns_400(client):
-    """測試 viewer 非法路徑回 400 而不是 500"""
+    """Test viewer invalid path returns 400 instead of 500"""
     service = DrawioFileServiceStub()
     service.read_error = InvalidPathException("../diagram.drawio", "path traversal")
 
@@ -164,7 +164,7 @@ def test_drawio_viewer_invalid_path_returns_400(client):
 
 
 def test_drawio_viewer_unavailable_returns_503(client, monkeypatch):
-    """測試 viewer 在 Draw.io 停用時回結構化 503"""
+    """Test viewer returns structured 503 when Draw.io is disabled"""
 
     async def _unavailable(settings, *, force_refresh=False):
         return DrawioAvailability(False, "DISABLED", datetime.now(timezone.utc))
@@ -185,7 +185,7 @@ def test_drawio_viewer_unavailable_returns_503(client, monkeypatch):
 
 
 def test_drawio_viewer_unreachable_returns_503(client, monkeypatch):
-    """測試 viewer 在 Draw.io container 不可達時回結構化 503"""
+    """Test viewer returns structured 503 when Draw.io container is unreachable"""
 
     async def _unavailable(settings, *, force_refresh=False):
         return DrawioAvailability(False, "UNREACHABLE", datetime.now(timezone.utc))
@@ -206,7 +206,7 @@ def test_drawio_viewer_unreachable_returns_503(client, monkeypatch):
 
 
 def test_drawio_save_success(client):
-    """測試成功儲存 Draw.io 檔案"""
+    """Test successfully save Draw.io file"""
     service = DrawioFileServiceStub()
     content = "<mxfile><diagram id=\"1\">test content</diagram></mxfile>"
 
@@ -221,14 +221,14 @@ def test_drawio_save_success(client):
     payload = response.json()
     assert payload["success"] is True
     assert payload["file_path"] == "diagram.drawio"
-    # 驗證檔案服務的 write_file 被呼叫
+    # Verify file service's write_file was called
     assert service.saved_request is not None
     assert service.saved_request["path"] == "diagram.drawio"
     assert service.saved_request["content"] == content
 
 
 def test_drawio_save_empty_content_error(client):
-    """測試儲存空內容的錯誤處理"""
+    """Test save empty content error handling"""
     service = DrawioFileServiceStub()
 
     with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
@@ -244,7 +244,7 @@ def test_drawio_save_empty_content_error(client):
 
 
 def test_drawio_save_invalid_xml_error(client):
-    """測試儲存無效 XML 的錯誤處理"""
+    """Test save invalid XML error handling"""
     service = DrawioFileServiceStub()
 
     with override_dependency(get_file_service_sync, lambda: service), override_dependency(get_i18n_service, lambda: _translation_service):
@@ -260,7 +260,7 @@ def test_drawio_save_invalid_xml_error(client):
 
 
 def test_drawio_save_invalid_path_returns_400(client):
-    """測試 save 非法路徑回 400 而不是 500"""
+    """Test save invalid path returns 400 instead of 500"""
     service = DrawioFileServiceStub()
     service.write_error = InvalidPathException("../diagram.drawio", "path traversal")
 
@@ -276,7 +276,7 @@ def test_drawio_save_invalid_path_returns_400(client):
 
 
 def test_drawio_save_file_too_large_returns_413(client):
-    """測試 save 超大檔回 413 而不是 500"""
+    """Test save oversized file returns 413 instead of 500"""
     service = DrawioFileServiceStub()
     service.write_error = FileTooLargeException("diagram.drawio", 10, 1)
 
@@ -292,7 +292,7 @@ def test_drawio_save_file_too_large_returns_413(client):
 
 
 def test_drawio_save_unavailable_returns_503_without_write(client, monkeypatch):
-    """測試 save 在 Draw.io 不可用時不進入寫檔"""
+    """Test save does not write file when Draw.io is unavailable"""
 
     async def _unavailable(settings, *, force_refresh=False):
         return DrawioAvailability(False, "UNREACHABLE", datetime.now(timezone.utc))
@@ -315,7 +315,7 @@ def test_drawio_save_unavailable_returns_503_without_write(client, monkeypatch):
 
 
 def test_drawio_save_disabled_returns_503_without_write(client, monkeypatch):
-    """測試 save 在 Draw.io 停用時不進入寫檔"""
+    """Test save does not write file when Draw.io is disabled"""
 
     async def _unavailable(settings, *, force_refresh=False):
         return DrawioAvailability(False, "DISABLED", datetime.now(timezone.utc))
@@ -346,7 +346,7 @@ def test_drawio_save_disabled_returns_503_without_write(client, monkeypatch):
     ],
 )
 def test_drawio_availability_endpoint_returns_state(client, monkeypatch, available, reason):
-    """測試 availability endpoint 回傳 helper 狀態"""
+    """Test availability endpoint returns helper state"""
 
     checked_at = datetime.now(timezone.utc)
 

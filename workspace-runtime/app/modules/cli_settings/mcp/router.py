@@ -1,6 +1,6 @@
-"""CLI MCP API 路由
+"""CLI MCP API routes
 
-工廠函數，為每個 CLI 工具產生相同的 MCP 端點集合。
+Factory function that generates identical MCP endpoint collections for each CLI tool.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from .service import (
 )
 
 
-# === 錯誤轉換 helpers ===================================================
+# === Error conversion helpers ==============================================
 
 
 def _scope_error(error: CliMcpScopeNotSupportedError) -> HTTPException:
@@ -84,15 +84,15 @@ def _toggle_not_supported(error: CliMcpToggleNotSupportedError) -> HTTPException
     )
 
 
-# === 路由工廠 ============================================================
+# === Router Factory ====================================================
 
 
 def create_mcp_router(tool: McpTool) -> APIRouter:
-    """為指定的 CLI 工具建立 MCP 路由"""
+    """Create MCP routes for specified CLI tool"""
 
     router = APIRouter(
         prefix=f"/{tool.value}",
-        tags=[f"{tool.value} - MCP 伺服器"],
+        tags=[f"{tool.value} - MCP Servers"],
     )
 
     get_service = make_mcp_service_dependency(tool)
@@ -102,13 +102,13 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.get(
         "/mcp-servers",
         response_model=CliMcpServerCollectionResponse,
-        summary="列出 MCP 伺服器",
+        summary="List MCP servers",
         responses=build_responses(400, 401, 404, 422, 500),
     )
     async def list_servers(
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: CliMcpScope | None = Query(
-            None, description="若指定則僅回傳該範圍設定"
+            None, description="If specified, only return configuration for that scope"
         ),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpServerCollectionResponse:
@@ -122,11 +122,11 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.get(
         "/mcp-servers/{scope}",
         response_model=CliMcpScopeResponse,
-        summary="取得指定範圍的 MCP 伺服器",
+        summary="Get MCP servers for specified scope",
         responses=build_responses(400, 401, 404, 500),
     )
     async def get_scope(
-        scope: CliMcpScope = Path(..., description="設定範圍"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpScopeResponse:
@@ -140,12 +140,12 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.get(
         "/mcp-servers/{scope}/{server_name}",
         response_model=CliMcpScopeResponse,
-        summary="取得單一 MCP 伺服器",
+        summary="Get single MCP server",
         responses=build_responses(400, 401, 404, 500),
     )
     async def get_server(
-        scope: CliMcpScope = Path(..., description="設定範圍"),
-        server_name: str = Path(..., description="伺服器名稱"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
+        server_name: str = Path(..., description="Server name"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpScopeResponse:
@@ -161,12 +161,12 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.post(
         "/mcp-servers/{scope}",
         response_model=CliMcpScopeResponse,
-        summary="建立 MCP 伺服器",
+        summary="Create MCP servers",
         responses=build_responses(400, 401, 403, 404, 409, 422, 500),
     )
     async def create_server(
         payload: CliMcpServerCreateRequest,
-        scope: CliMcpScope = Path(..., description="設定範圍"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpScopeResponse:
@@ -184,13 +184,13 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.put(
         "/mcp-servers/{scope}/{server_name}",
         response_model=CliMcpScopeResponse,
-        summary="更新 MCP 伺服器",
+        summary="Update MCP server",
         responses=build_responses(400, 401, 403, 404, 409, 422, 500),
     )
     async def update_server(
         payload: CliMcpServerUpdateRequest,
-        scope: CliMcpScope = Path(..., description="設定範圍"),
-        server_name: str = Path(..., description="伺服器名稱"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
+        server_name: str = Path(..., description="Server name"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpScopeResponse:
@@ -212,12 +212,12 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.delete(
         "/mcp-servers/{scope}/{server_name}",
         response_model=CliMcpServerDeleteResponse,
-        summary="刪除 MCP 伺服器",
+        summary="Delete MCP server",
         responses=build_responses(400, 401, 403, 404, 500),
     )
     async def delete_server(
-        scope: CliMcpScope = Path(..., description="設定範圍"),
-        server_name: str = Path(..., description="伺服器名稱"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
+        server_name: str = Path(..., description="Server name"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpServerDeleteResponse:
@@ -233,13 +233,13 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.patch(
         "/mcp-servers/{scope}/{server_name}/toggle",
         response_model=CliMcpScopeResponse,
-        summary="切換 MCP 伺服器啟用狀態",
+        summary="Toggle MCP server enabled status",
         responses=build_responses(400, 401, 403, 404, 422, 500),
     )
     async def toggle_server_status(
-        scope: CliMcpScope = Path(..., description="設定範圍"),
-        server_name: str = Path(..., description="伺服器名稱"),
-        enabled: bool = Query(..., description="是否啟用"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
+        server_name: str = Path(..., description="Server name"),
+        enabled: bool = Query(..., description="Whether to enable"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpScopeResponse:
@@ -259,12 +259,12 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.get(
         "/mcp-servers/{scope}/{server_name}/export",
         response_model=CliMcpServerExportResponse,
-        summary="匯出 MCP 伺服器設定",
+        summary="Export MCP server configuration",
         responses=build_responses(400, 401, 404, 500),
     )
     async def export_server(
-        scope: CliMcpScope = Path(..., description="設定範圍"),
-        server_name: str = Path(..., description="伺服器名稱"),
+        scope: CliMcpScope = Path(..., description="Configuration scope"),
+        server_name: str = Path(..., description="Server name"),
         workspace_id: str = Path(..., description="Workspace ID"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpServerExportResponse:
@@ -280,14 +280,14 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     @router.post(
         "/mcp-import",
         response_model=CliMcpImportResponse,
-        summary="匯入 MCP 設定",
+        summary="Import MCP configuration",
         responses=build_responses(400, 401, 403, 404, 422, 500),
     )
     async def import_servers(
         workspace_id: str = Path(..., description="Workspace ID"),
-        scope: CliMcpScope = Form(..., description="匯入目標範圍"),
-        file: UploadFile = File(..., description="MCP 配置檔案 (JSON)"),
-        overwrite: bool = Form(False, description="是否覆寫既有設定"),
+        scope: CliMcpScope = Form(..., description="Import target scope"),
+        file: UploadFile = File(..., description="MCP configuration file (JSON)"),
+        overwrite: bool = Form(False, description="Whether to overwrite existing configuration"),
         service: CliMcpService = Depends(get_service),
     ) -> CliMcpImportResponse:
         try:

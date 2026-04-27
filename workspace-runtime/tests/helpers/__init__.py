@@ -1,1 +1,1 @@
-"""測試輔助工具模組."""
+"""Test helper utilities module."""

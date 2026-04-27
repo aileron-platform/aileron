@@ -1,4 +1,4 @@
-"""CLI MCP 模組依賴注入"""
+"""CLI MCP module dependency injection"""
 
 from __future__ import annotations
 

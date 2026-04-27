@@ -1,4 +1,4 @@
-"""Subagents 路由"""
+"""Subagents Routes"""
 
 from __future__ import annotations
 
@@ -17,20 +17,20 @@ from .models import (
 )
 from .service import SubagentService
 
-router = APIRouter(prefix="/subagents", tags=["Claude Code - 子代理"])
+router = APIRouter(prefix="/subagents", tags=["Claude Code - Subagents"])
 
 
 def _validate_subagent_scope(scope: DocumentScope, *, check_writable: bool = False) -> None:
-    """驗證 Subagents scope
+    """Validate Subagents scope
 
     Args:
-        scope: 要驗證的範圍
-        check_writable: 是否檢查可寫入性（用於 POST/PUT/DELETE 操作）
+        scope: Scope to validate
+        check_writable: Whether to check writability (for POST/PUT/DELETE operations)
     """
     if scope == DocumentScope.LOCAL:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"error": "INVALID_SCOPE", "message": "Subagents 不支援 LOCAL scope"},
+            detail={"error": "INVALID_SCOPE", "message": "Subagents does not support LOCAL scope"},
         )
 
     if check_writable:
@@ -46,13 +46,13 @@ def _validate_subagent_scope(scope: DocumentScope, *, check_writable: bool = Fal
 @router.get(
     "",
     response_model=SubagentCollectionResponse,
-    summary="列出所有 Subagents",
+    summary="List all subagents",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def list_subagents(
     workspace_id: str = Path(..., description="Workspace ID"),
     scope: DocumentScope | None = Query(
-        None, description="可選擇僅回傳指定範圍"
+        None, description="Optionally return only specified scope"
     ),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentCollectionResponse:
@@ -62,12 +62,12 @@ async def list_subagents(
 @router.get(
     "/{scope}",
     response_model=SubagentScopeResponse,
-    summary="取得指定範圍 Subagents",
+    summary="Get subagents for specified scope",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_scope_subagents(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Subagent 範圍"),
+    scope: DocumentScope = Path(..., description="Subagent scope"),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentScopeResponse:
     _validate_subagent_scope(scope, check_writable=False)
@@ -77,13 +77,13 @@ async def get_scope_subagents(
 @router.get(
     "/{scope}/{file_name}",
     response_model=SubagentDocumentResponse,
-    summary="取得 Subagent 內容",
+    summary="Get subagent content",
     responses=build_responses(400, 401, 404, 500),
 )
 async def get_subagent(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Subagent 範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Subagent scope"),
+    file_name: str = Path(..., description="File name"),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentDocumentResponse:
     _validate_subagent_scope(scope, check_writable=False)
@@ -94,13 +94,13 @@ async def get_subagent(
     "/{scope}",
     response_model=SubagentDocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="新增 Subagent",
+    summary="Create subagent",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def create_subagent(
     payload: SubagentCreateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Subagent 範圍"),
+    scope: DocumentScope = Path(..., description="Subagent scope"),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentDocumentResponse:
     _validate_subagent_scope(scope, check_writable=True)
@@ -110,14 +110,14 @@ async def create_subagent(
 @router.put(
     "/{scope}/{file_name}",
     response_model=SubagentDocumentResponse,
-    summary="更新 Subagent",
+    summary="Update subagent",
     responses=build_responses(400, 401, 403, 404, 409, 422, 500),
 )
 async def update_subagent(
     payload: SubagentUpdateRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Subagent 範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Subagent scope"),
+    file_name: str = Path(..., description="File name"),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentDocumentResponse:
     _validate_subagent_scope(scope, check_writable=True)
@@ -127,13 +127,13 @@ async def update_subagent(
 @router.delete(
     "/{scope}/{file_name}",
     response_model=SubagentDeleteResponse,
-    summary="刪除 Subagent",
+    summary="Delete subagent",
     responses=build_responses(400, 401, 403, 404, 500),
 )
 async def delete_subagent(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: DocumentScope = Path(..., description="Subagent 範圍"),
-    file_name: str = Path(..., description="檔案名稱"),
+    scope: DocumentScope = Path(..., description="Subagent scope"),
+    file_name: str = Path(..., description="File name"),
     service: SubagentService = Depends(get_subagent_service),
 ) -> SubagentDeleteResponse:
     _validate_subagent_scope(scope, check_writable=True)

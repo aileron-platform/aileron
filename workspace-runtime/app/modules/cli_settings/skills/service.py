@@ -1,6 +1,6 @@
-"""CLI Skills 服務
+"""CLI Skills service
 
-繼承 BaseFileService，為各 CLI 工具提供 skills 檔案管理。
+Inherits BaseFileService to provide skills file management for each CLI tool.
 """
 
 from __future__ import annotations
@@ -24,24 +24,24 @@ logger = logging.getLogger(__name__)
 
 
 class CliSkillService(BaseFileService):
-    """CLI Skills 檔案服務
+    """CLI Skills file service
 
-    支援的 scope:
-    - project: 專案級別
-    - user: 使用者級別
-    - plugin: 插件級別（僅 Claude，唯讀）
+    Supported scopes:
+    - project: Project level
+    - user: User level
+    - plugin: Plugin level (Claude only, read-only)
     """
 
     VALID_SCOPES = {SkillScope.PROJECT, SkillScope.USER, SkillScope.PLUGIN}
 
     def __init__(self, config: SkillToolConfig, workspace_id: str):
-        # 不需要 root_path，使用 scope 來解析路徑
+        # No need for root_path, use scope to resolve paths
         super().__init__(root_path=Path("/tmp"))
         self._config = config
         self._workspace_id = workspace_id
 
     def _scope_root(self, scope: str) -> Path:
-        """取得指定 scope 的 skills 根目錄"""
+        """Get skills root directory for specified scope"""
         if scope == SkillScope.USER:
             return self._config.user_root
         # PROJECT (and PLUGIN for claude handled separately)
@@ -72,7 +72,7 @@ class CliSkillService(BaseFileService):
     # --- Plugin Skills (Claude only) ---
 
     def get_plugin_skills(self) -> List[Dict]:
-        """取得所有插件的 Skills（僅 Claude 支援）"""
+        """Get all plugin Skills (Claude only)"""
         if not self._config.supports_plugin:
             return []
 

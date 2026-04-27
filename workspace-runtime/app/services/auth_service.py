@@ -1,4 +1,4 @@
-"""認證服務"""
+"""Authentication service"""
 
 import logging
 import time
@@ -8,27 +8,27 @@ logger = logging.getLogger(__name__)
 
 
 class SimpleUser:
-    """簡單的用戶對象（用於認證）"""
+    """Simple user object (for authentication)"""
 
     def __init__(self, user_id: str, email: Optional[str] = None, username: Optional[str] = None, roles: Optional[list] = None):
         self.id = user_id
-        self.user_id = user_id  # 兼容性
+        self.user_id = user_id  # Compatibility
         self.email = email
         self.username = username or user_id
         self.roles = roles or []
 
 
 class AuthService:
-    """提供基本的使用者認證流程（只讀驗證）
+    """Provide basic user authentication flow (read-only verification)
 
-    使用 JWT Token (Keycloak) 進行認證。
+    Use JWT Token (Keycloak) for authentication.
     """
 
     def __init__(self) -> None:
         self._jwt_utils = None
         self._keycloak_enabled = False
 
-        # 嘗試導入 JWT 工具
+        # Try importing JWT utilities
         try:
             from app.modules.auth import get_keycloak_config, get_jwt_utils
             config = get_keycloak_config()
@@ -44,20 +44,20 @@ class AuthService:
             logger.warning(f"Failed to initialize JWT auth, all tokens will be rejected: {e}", exc_info=True)
 
     async def validate_access_token(self, token: str) -> Optional[SimpleUser]:
-        """驗證 access token 並返回用戶對象
+        """Validate access token and return user object
 
         Args:
             token: JWT Access token
 
         Returns:
-            SimpleUser 對象或 None
+            SimpleUser object or None
         """
         if not self._keycloak_enabled or self._jwt_utils is None:
             logger.warning("JWT authentication not enabled, rejecting token")
             return None
 
         try:
-            # JWT tokens 有點號分隔
+            # JWT tokens have dot separators
             if '.' not in token or len(token.split('.')) != 3:
                 logger.debug("Token is not a valid JWT format")
                 return None
@@ -92,12 +92,12 @@ class AuthService:
             return None
 
 
-# 全域 AuthService 實例
+# Global AuthService instance
 _auth_service: Optional[AuthService] = None
 
 
 def get_auth_service() -> AuthService:
-    """獲取 AuthService 單例"""
+    """Get AuthService singleton"""
     global _auth_service
     if _auth_service is None:
         _auth_service = AuthService()

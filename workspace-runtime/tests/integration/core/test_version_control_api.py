@@ -1,4 +1,4 @@
-"""核心模組 Version Control API 測試"""
+"""Core module Version Control API tests"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .helpers import override_dependency
 
 
 class ChangesResult:
-    """模擬 Changes 服務結果的類別"""
+    """Class to mock Changes service result"""
     def __init__(self, staged: list, unstaged: list, untracked: list,
                  staged_total: int, unstaged_total: int, untracked_total: int,
                  untracked_page: int = 1, untracked_page_size: int = 100,
@@ -30,7 +30,7 @@ class ChangesResult:
         self.untrackedHasMore = untracked_has_more
 
     def to_dict(self):
-        """轉換為字典格式以符合 API 回應模型"""
+        """Convert to dict format to match API response model"""
         return {
             "staged": self.staged,
             "unstaged": self.unstaged,
@@ -45,7 +45,7 @@ class ChangesResult:
 
 
 class StubGitService:
-    """可控制的 GitService stub"""
+    """Controllable GitService stub"""
 
     def __init__(self, workspace_path: Path) -> None:
         self.workspace_path = workspace_path

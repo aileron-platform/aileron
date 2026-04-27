@@ -1,6 +1,6 @@
 """Task API Router.
 
-提供任務相關的 REST API 端點。
+Provides REST API endpoints for tasks.
 """
 
 from __future__ import annotations
@@ -34,12 +34,12 @@ router = APIRouter(prefix="/agent-sessions", tags=["agent-session-tasks"])
 
 
 async def get_task_service(db: AsyncSession = Depends(get_async_db)) -> TaskService:
-    """取得 Task Service."""
+    """Get Task Service."""
     return TaskService(db)
 
 
 async def get_execution_service(db: AsyncSession = Depends(get_async_db)) -> ExecutionService:
-    """取得 Execution Service."""
+    """Get Execution Service."""
     return ExecutionService(db)
 
 
@@ -47,23 +47,23 @@ async def get_execution_service(db: AsyncSession = Depends(get_async_db)) -> Exe
     "/{session_id}/tasks",
     response_model=TaskResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立任務",
-    description="在會話中建立新的任務。",
+    summary="Create task",
+    description="Create a new task in the session.",
 )
 async def create_task(
     session_id: str,
     data: TaskCreate,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    """建立任務.
+    """Create task.
 
     Args:
-        session_id: 會話 ID
-        data: 建立請求
+        session_id: Session ID
+        data: Creation request
         service: Task Service
 
     Returns:
-        建立的任務
+        Created task
     """
     task = await service.create_task(
         session_id=session_id,
@@ -76,25 +76,25 @@ async def create_task(
 @router.get(
     "/{session_id}/tasks/{task_id}",
     response_model=TaskResponse,
-    summary="取得任務",
-    description="依 ID 取得任務詳細資料，支援短 ID。",
+    summary="Get task",
+    description="Get task details by ID, supports short ID.",
 )
 async def get_task(
     session_id: str,
     task_id: str,
     service: TaskService = Depends(get_task_service),
 ) -> TaskResponse:
-    """取得任務.
+    """Get task.
 
     Args:
-        task_id: 任務 ID
+        task_id: Task ID
         service: Task Service
 
     Returns:
-        任務資料
+        Task data
 
     Raises:
-        HTTPException: 任務不存在
+        HTTPException: Task not found
     """
     task = await service.get_task(task_id)
     if not task:
@@ -108,27 +108,27 @@ async def get_task(
 @router.get(
     "/{session_id}/tasks",
     response_model=TaskListResponse,
-    summary="查詢任務列表",
-    description="查詢會話的任務列表，支援多種過濾條件。",
+    summary="List tasks",
+    description="Query task list for session, supports various filter conditions.",
 )
 async def list_tasks(
     session_id: str,
-    status: Optional[TaskStatus] = Query(None, description="任務狀態"),
-    limit: int = Query(50, ge=1, le=200, description="最大筆數"),
-    offset: int = Query(0, ge=0, description="偏移量"),
+    status: Optional[TaskStatus] = Query(None, description="Task status"),
+    limit: int = Query(50, ge=1, le=200, description="Maximum number of records"),
+    offset: int = Query(0, ge=0, description="Offset"),
     service: TaskService = Depends(get_task_service),
 ) -> TaskListResponse:
-    """查詢任務列表.
+    """List tasks.
 
     Args:
-        session_id: 會話 ID
-        status: 任務狀態
-        limit: 最大筆數
-        offset: 偏移量
+        session_id: Session ID
+        status: Task status
+        limit: Maximum number of records
+        offset: Offset
         service: Task Service
 
     Returns:
-        任務列表
+        Task list
     """
     query = TaskQuery(
         session_id=session_id,
@@ -150,8 +150,8 @@ async def list_tasks(
 @router.post(
     "/{session_id}/tasks/{task_id}/stop",
     response_model=StopTaskResponse,
-    summary="停止任務",
-    description="請求停止正在執行的任務。",
+    summary="Stop task",
+    description="Request to stop a currently running task.",
 )
 async def stop_task(
     session_id: str,
@@ -159,33 +159,33 @@ async def stop_task(
     service: TaskService = Depends(get_task_service),
     execution_service: ExecutionService = Depends(get_execution_service),
 ) -> StopTaskResponse:
-    """停止任務.
+    """Stop task.
 
     Args:
-        session_id: 會話 ID
-        task_id: 任務 ID
+        session_id: Session ID
+        task_id: Task ID
         service: Task Service
         execution_service: Execution Service
 
     Returns:
-        停止結果
+        Stop result
 
     Raises:
-        HTTPException: 任務不存在或狀態不允許停止
+        HTTPException: Task not found or state does not allow stopping
     """
     try:
-        # 1. 先調用 execution_service 來實際中斷 SDK
-        # 這會設定 stop_requested 標記並調用 client.interrupt()
+        # 1. Call execution_service first to actually interrupt SDK
+        # This sets stop_requested flag and calls client.interrupt()
         try:
             await execution_service.stop_task(
                 session_id=session_id,
                 task_id=task_id,
             )
         except Exception as e:
-            # 即使 execution_service 失敗，也繼續更新狀態
+            # Continue updating state even if execution_service fails
             logger.warning("execution_service.stop_task failed: %s", e)
 
-        # 2. 更新數據庫狀態和發送 WebSocket 事件
+        # 2. Update database state and send WebSocket events
         task = await service.stop_task(task_id)
         return StopTaskResponse(
             success=True,

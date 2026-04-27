@@ -1,4 +1,4 @@
-"""Claude.md 模組資料模型"""
+"""Claude.md Module Data Models"""
 
 from __future__ import annotations
 
@@ -10,18 +10,18 @@ from ..common import DocumentScope
 
 
 class ClaudeMdScope(str, Enum):
-    """Claude.md 支援的範圍"""
+    """Claude.md supported scopes"""
 
     PROJECT = DocumentScope.PROJECT.value
     USER = DocumentScope.USER.value
 
 
 class ClaudeMdDocument(BaseModel):
-    """Claude.md 文件內容"""
+    """Claude.md document content"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: ClaudeMdScope = Field(..., description="檔案範圍")
-    content: str = Field(..., description="Claude.md 原始內容")
+    scope: ClaudeMdScope = Field(..., description="File scope")
+    content: str = Field(..., description="Claude.md raw content")
 
     model_config = {
         "populate_by_name": True,
@@ -29,11 +29,11 @@ class ClaudeMdDocument(BaseModel):
 
 
 class ClaudeMdUpdateRequest(BaseModel):
-    """更新 Claude.md 的請求"""
+    """Request to update Claude.md"""
 
-    scope: ClaudeMdScope = Field(..., description="更新範圍")
-    content: str = Field(..., description="新的 Claude.md 內容")
-    message: str | None = Field(None, description="變更說明")
+    scope: ClaudeMdScope = Field(..., description="Update scope")
+    content: str = Field(..., description="New Claude.md content")
+    message: str | None = Field(None, description="Change description")
 
     model_config = {
         "populate_by_name": True,
@@ -41,10 +41,10 @@ class ClaudeMdUpdateRequest(BaseModel):
 
 
 class ClaudeMdUpdateResponse(BaseModel):
-    """更新 Claude.md 的結果"""
+    """Result of updating Claude.md"""
 
     workspace_id: str = Field(..., alias="workspaceId", description="Workspace ID")
-    scope: ClaudeMdScope = Field(..., description="更新範圍")
+    scope: ClaudeMdScope = Field(..., description="Update scope")
 
     model_config = {
         "populate_by_name": True,

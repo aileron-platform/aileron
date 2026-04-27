@@ -152,7 +152,7 @@ async def test_internal_install_routes_success_and_partial_failure() -> None:
     )
     template_result = await install_template("ws", template_req, service)
     assert template_result.success is False
-    assert "部分失敗" in template_result.message
+    assert "some failures" in template_result.message
 
 
 @pytest.mark.asyncio
@@ -257,7 +257,7 @@ async def test_install_template_success_with_init_commands() -> None:
     result = await install_template("ws", template_req, service)
 
     assert result.success is True
-    assert result.message == "模板安裝完成"
+    assert result.message == "Template installation completed"
     assert result.results.hooks is not None
     assert result.results.hooks.success is True
     assert result.results.skills is not None

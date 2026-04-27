@@ -1,1 +1,1 @@
-"""claude_code settings 模組測試套件。"""
+"""claude_code settings module test suite."""

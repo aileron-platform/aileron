@@ -1,5 +1,5 @@
 """
-錯誤處理中介軟體
+Error handling middleware
 """
 
 import logging
@@ -11,16 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
-    """錯誤處理中介軟體"""
+    """Error handling middleware"""
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        """處理請求並捕獲錯誤"""
+        """Process request and catch errors"""
         try:
             response = await call_next(request)
             return response
         except Exception as e:
-            logger.error(f"未處理的錯誤: {e}", exc_info=True)
+            logger.error(f"Unhandled error: {e}", exc_info=True)
             return JSONResponse(
                 status_code=500,
-                content={"error": "內部伺服器錯誤", "detail": str(e)}
+                content={"error": "Internal server error", "detail": str(e)}
             )

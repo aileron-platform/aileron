@@ -1,1 +1,1 @@
-"""claude_code mcp 模組測試套件。"""
+"""claude_code mcp module test suite."""

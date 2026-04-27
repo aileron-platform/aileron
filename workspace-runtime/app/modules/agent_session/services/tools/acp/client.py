@@ -119,7 +119,7 @@ class AcpClient:
         **kwargs: Any,
     ) -> RequestPermissionResponse:
         request_id = str(uuid4())
-        # 預先註冊等待事件，避免 emit_event 立即回應時的 race condition
+        # Pre-register wait event to avoid race condition when emit_event responds immediately
         if request_id not in self._pending_decisions:
             self._pending_decisions[request_id] = asyncio.Event()
         options_payload = [opt.model_dump(by_alias=True, exclude_none=True) for opt in options]
@@ -127,7 +127,7 @@ class AcpClient:
         tool_name = tool_call.title or (tool_call.kind.value if hasattr(tool_call.kind, "value") else tool_call.kind) or "tool"
         tool_input = tool_call.raw_input if tool_call.raw_input is not None else {}
 
-        # 建立 DB 訊息與更新狀態（使用獨立 DB session）
+        # Create DB messages and update status (using separate DB session)
         async with async_session_scope() as db:
             message_service = MessageService(db)
             task_service = TaskService(db)

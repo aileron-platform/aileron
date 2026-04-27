@@ -1,4 +1,4 @@
-"""Hooks 子模組"""
+"""Hooks Submodule"""
 
 from __future__ import annotations
 

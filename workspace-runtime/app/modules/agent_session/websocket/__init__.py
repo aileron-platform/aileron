@@ -1,4 +1,4 @@
-"""WebSocket 層 - 即時通訊和事件廣播."""
+"""WebSocket layer - Real-time communication and event broadcasting."""
 
 from .manager import ConnectionManager, get_connection_manager
 from .events import (

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 
 class OpenSpecActionAvailability(str, Enum):
-    """OpenSpec action 可用性狀態。"""
+    """OpenSpec action availability status."""
 
     ENABLED = "enabled"
     DISABLED = "disabled"
@@ -19,7 +19,7 @@ class OpenSpecActionAvailability(str, Enum):
 
 
 class OpenSpecActionGroup(str, Enum):
-    """OpenSpec action 分組。"""
+    """OpenSpec action group."""
 
     START = "start"
     PLAN = "plan"
@@ -29,14 +29,14 @@ class OpenSpecActionGroup(str, Enum):
 
 
 class OpenSpecActionProfile(str, Enum):
-    """OpenSpec action 所屬 workflow profile。"""
+    """OpenSpec action workflow profile."""
 
     CORE = "core"
     EXPANDED = "expanded"
 
 
 class OpenSpecWorkspaceProfile(str, Enum):
-    """OpenSpec workspace 目前啟用的 workflow profile。"""
+    """OpenSpec workspace currently enabled workflow profile."""
 
     CORE = "core"
     EXPANDED = "expanded"
@@ -44,7 +44,7 @@ class OpenSpecWorkspaceProfile(str, Enum):
 
 
 class OpenSpecActionInputKind(str, Enum):
-    """OpenSpec action 在 UI 需要的輸入型別。"""
+    """OpenSpec action UI input type."""
 
     NONE = "none"
     CHANGE = "change"
@@ -52,7 +52,7 @@ class OpenSpecActionInputKind(str, Enum):
 
 
 class OpenSpecChangeStatus(str, Enum):
-    """OpenSpec change 導覽狀態。"""
+    """OpenSpec change navigation status."""
 
     IN_PROGRESS = "in-progress"
     COMPLETE = "complete"
@@ -60,7 +60,7 @@ class OpenSpecChangeStatus(str, Enum):
 
 
 class OpenSpecActionContextSubview(str, Enum):
-    """OpenSpec action 解析所依據的前端 subview。"""
+    """OpenSpec action frontend subview for resolution."""
 
     IN_PROGRESS = "in-progress"
     COMPLETE = "complete"
@@ -69,94 +69,94 @@ class OpenSpecActionContextSubview(str, Enum):
 
 
 class OpenSpecChangeSummary(BaseModel):
-    """OpenSpec change 摘要。"""
+    """OpenSpec change summary."""
 
-    name: str = Field(description="Change 名稱")
-    status: str | None = Field(default=None, description="Change 狀態")
-    completedTasks: int = Field(default=0, description="已完成任務數")
-    totalTasks: int = Field(default=0, description="總任務數")
-    lastModified: str | None = Field(default=None, description="最後更新時間")
+    name: str = Field(description="Change name")
+    status: str | None = Field(default=None, description="Change status")
+    completedTasks: int = Field(default=0, description="Number of completed tasks")
+    totalTasks: int = Field(default=0, description="Total tasks")
+    lastModified: str | None = Field(default=None, description="Last update time")
 
 
 class OpenSpecSpecDocument(BaseModel):
-    """OpenSpec spec 文件摘要。"""
+    """OpenSpec spec document summary."""
 
-    capabilityName: str = Field(description="Capability 名稱")
-    path: str = Field(description="Spec 文件路徑")
+    capabilityName: str = Field(description="Capability name")
+    path: str = Field(description="Spec document path")
 
 
 class OpenSpecNavigationChange(BaseModel):
-    """OpenSpec 第二欄導覽所需的 change 資料。"""
+    """OpenSpec second column navigation change data."""
 
-    name: str = Field(description="Change 名稱")
-    status: OpenSpecChangeStatus = Field(description="Change 導覽狀態")
-    archived: bool = Field(description="是否為 archived change")
-    proposalPath: str | None = Field(default=None, description="proposal.md 路徑")
-    designPath: str | None = Field(default=None, description="design.md 路徑")
-    tasksPath: str | None = Field(default=None, description="tasks.md 路徑")
-    specs: list[OpenSpecSpecDocument] = Field(default_factory=list, description="Spec 文件列表")
-    completedTasks: int = Field(default=0, description="已完成 checklist task 數")
-    totalTasks: int = Field(default=0, description="checklist task 總數")
-    lastModified: str | None = Field(default=None, description="最後更新時間")
+    name: str = Field(description="Change name")
+    status: OpenSpecChangeStatus = Field(description="Change navigation status")
+    archived: bool = Field(description="Whether this is an archived change")
+    proposalPath: str | None = Field(default=None, description="proposal.md path")
+    designPath: str | None = Field(default=None, description="design.md path")
+    tasksPath: str | None = Field(default=None, description="tasks.md path")
+    specs: list[OpenSpecSpecDocument] = Field(default_factory=list, description="Spec document list")
+    completedTasks: int = Field(default=0, description="Number of completed checklist tasks")
+    totalTasks: int = Field(default=0, description="Total checklist tasks")
+    lastModified: str | None = Field(default=None, description="Last update time")
 
 
 class OpenSpecActionItem(BaseModel):
-    """OpenSpec action 定義。"""
+    """OpenSpec action definition."""
 
     id: str = Field(description="Action ID")
-    title: str = Field(description="顯示標題")
-    description: str = Field(description="描述")
-    group: OpenSpecActionGroup = Field(description="分組")
-    profile: OpenSpecActionProfile = Field(description="所屬 profile")
-    availability: OpenSpecActionAvailability = Field(description="可用性")
-    reason: str | None = Field(default=None, description="狀態原因")
-    recommended: bool = Field(default=False, description="是否推薦")
-    recommendedReason: str | None = Field(default=None, description="推薦原因")
-    requiresChange: bool = Field(default=False, description="是否需要 change context")
-    supportsChangeArgument: bool = Field(default=False, description="是否支援 change name 參數")
-    inputKind: OpenSpecActionInputKind = Field(default=OpenSpecActionInputKind.NONE, description="UI 輸入型別")
-    exampleCommand: str | None = Field(default=None, description="範例指令")
-    draftTemplate: str = Field(description="插入 chat draft 的預設內容")
+    title: str = Field(description="Display title")
+    description: str = Field(description="Description")
+    group: OpenSpecActionGroup = Field(description="Group")
+    profile: OpenSpecActionProfile = Field(description="Belonging profile")
+    availability: OpenSpecActionAvailability = Field(description="Availability")
+    reason: str | None = Field(default=None, description="Status reason")
+    recommended: bool = Field(default=False, description="Whether recommended")
+    recommendedReason: str | None = Field(default=None, description="Recommended reason")
+    requiresChange: bool = Field(default=False, description="Whether change context is required")
+    supportsChangeArgument: bool = Field(default=False, description="Whether change name parameter is supported")
+    inputKind: OpenSpecActionInputKind = Field(default=OpenSpecActionInputKind.NONE, description="UI input type")
+    exampleCommand: str | None = Field(default=None, description="Example command")
+    draftTemplate: str = Field(description="Default content to insert in chat draft")
 
 
 class OpenSpecWorkspaceState(BaseModel):
-    """Workspace OpenSpec 狀態。"""
+    """Workspace OpenSpec state."""
 
-    cliInstalled: bool = Field(description="是否安裝 OpenSpec CLI")
-    cliVersion: str | None = Field(default=None, description="OpenSpec CLI 版本")
-    initialized: bool = Field(description="是否已初始化 openspec/")
-    profile: OpenSpecWorkspaceProfile = Field(description="目前 profile")
-    projectSynced: bool | None = Field(default=None, description="專案是否與 workflow 設定同步")
-    activeChanges: list[OpenSpecChangeSummary] = Field(default_factory=list, description="進行中的 changes")
+    cliInstalled: bool = Field(description="Whether OpenSpec CLI is installed")
+    cliVersion: str | None = Field(default=None, description="OpenSpec CLI version")
+    initialized: bool = Field(description="Whether openspec/ is initialized")
+    profile: OpenSpecWorkspaceProfile = Field(description="Current profile")
+    projectSynced: bool | None = Field(default=None, description="Whether project is synced with workflow settings")
+    activeChanges: list[OpenSpecChangeSummary] = Field(default_factory=list, description="Changes in progress")
 
 
 class OpenSpecWorkspaceSummaryCounts(BaseModel):
     """Workspace OpenSpec grouped counts for generic surfaces."""
 
-    inProgress: int = Field(default=0, description="進行中 changes 數量")
-    complete: int = Field(default=0, description="已完成 changes 數量")
-    archived: int = Field(default=0, description="已封存 changes 數量")
+    inProgress: int = Field(default=0, description="Number of in-progress changes")
+    complete: int = Field(default=0, description="Number of completed changes")
+    archived: int = Field(default=0, description="Number of archived changes")
 
 
 class OpenSpecWorkspaceSummaryResponse(BaseModel):
-    """Workspace OpenSpec 輕量 summary 回應。"""
+    """Workspace OpenSpec lightweight summary response."""
 
     workspaceId: str = Field(description="Workspace ID")
-    initialized: bool = Field(description="是否已初始化 openspec/")
-    counts: OpenSpecWorkspaceSummaryCounts = Field(description="依狀態分組的 change 計數")
+    initialized: bool = Field(description="Whether openspec/ is initialized")
+    counts: OpenSpecWorkspaceSummaryCounts = Field(description="Change counts grouped by status")
 
 
 class OpenSpecWorkspaceResponse(BaseModel):
-    """OpenSpec workspace 狀態與 actions 聚合回應。"""
+    """OpenSpec workspace state and actions aggregate response."""
 
     workspaceId: str = Field(description="Workspace ID")
-    state: OpenSpecWorkspaceState = Field(description="OpenSpec 狀態")
-    actions: list[OpenSpecActionItem] = Field(default_factory=list, description="可用 actions")
-    changes: list[OpenSpecNavigationChange] = Field(default_factory=list, description="OpenSpec 導覽 changes")
+    state: OpenSpecWorkspaceState = Field(description="OpenSpec state")
+    actions: list[OpenSpecActionItem] = Field(default_factory=list, description="Available actions")
+    changes: list[OpenSpecNavigationChange] = Field(default_factory=list, description="OpenSpec navigation changes")
 
 
 class OpenSpecCustomizationFileKind(str, Enum):
-    """Customization 檔案種類。"""
+    """Customization file kind."""
 
     CONFIG = "config"
     SCHEMA = "schema"
@@ -164,117 +164,117 @@ class OpenSpecCustomizationFileKind(str, Enum):
 
 
 class OpenSpecCustomizationTemplateFile(BaseModel):
-    """Schema template 檔案摘要。"""
+    """Schema template file summary."""
 
-    name: str = Field(description="Template 檔名")
-    path: str = Field(description="Template 路徑")
+    name: str = Field(description="Template filename")
+    path: str = Field(description="Template path")
 
 
 class OpenSpecCustomizationSchema(BaseModel):
-    """Project-local schema 摘要。"""
+    """Project-local schema summary."""
 
-    name: str = Field(description="Schema 名稱")
-    path: str = Field(description="Schema 目錄路徑")
-    schemaPath: str = Field(description="schema.yaml 路徑")
-    isDefault: bool = Field(description="是否為目前 default schema")
-    isInvalid: bool = Field(description="Schema 是否驗證失敗")
-    templateFiles: list[OpenSpecCustomizationTemplateFile] = Field(default_factory=list, description="Template 檔案")
+    name: str = Field(description="Schema name")
+    path: str = Field(description="Schema directory path")
+    schemaPath: str = Field(description="schema.yaml path")
+    isDefault: bool = Field(description="Whether this is the current default schema")
+    isInvalid: bool = Field(description="Whether schema validation failed")
+    templateFiles: list[OpenSpecCustomizationTemplateFile] = Field(default_factory=list, description="Template files")
 
 
 class OpenSpecCustomizationStateResponse(BaseModel):
-    """Customization explorer 所需的聚合狀態。"""
+    """Customization explorer aggregate state."""
 
     workspaceId: str = Field(description="Workspace ID")
-    configPath: str = Field(description="config.yaml 路徑")
-    configPresent: bool = Field(description="config.yaml 是否存在")
-    defaultSchema: str | None = Field(default=None, description="目前 project default schema")
-    builtInSchemas: list[str] = Field(default_factory=list, description="可 fork 的 built-in schemas")
+    configPath: str = Field(description="config.yaml path")
+    configPresent: bool = Field(description="Whether config.yaml exists")
+    defaultSchema: str | None = Field(default=None, description="Current project default schema")
+    builtInSchemas: list[str] = Field(default_factory=list, description="Built-in schemas available for fork")
     schemas: list[OpenSpecCustomizationSchema] = Field(default_factory=list, description="Project-local schemas")
 
 
 class OpenSpecCustomizationFileResponse(BaseModel):
-    """Customization 檔案內容。"""
+    """Customization file content."""
 
     workspaceId: str = Field(description="Workspace ID")
-    path: str = Field(description="檔案路徑")
-    name: str = Field(description="檔名")
-    kind: OpenSpecCustomizationFileKind = Field(description="檔案種類")
-    content: str = Field(description="檔案內容")
-    editable: bool = Field(description="是否可編輯")
-    language: str = Field(description="編輯器語言")
-    schemaName: str | None = Field(default=None, description="所屬 schema")
-    metadata: dict[str, object] = Field(default_factory=dict, description="附加 metadata")
+    path: str = Field(description="File path")
+    name: str = Field(description="Filename")
+    kind: OpenSpecCustomizationFileKind = Field(description="File kind")
+    content: str = Field(description="File content")
+    editable: bool = Field(description="Whether editable")
+    language: str = Field(description="Editor language")
+    schemaName: str | None = Field(default=None, description="Belonging schema")
+    metadata: dict[str, object] = Field(default_factory=dict, description="Additional metadata")
 
 
 class OpenSpecCustomizationFileUpdateRequest(BaseModel):
-    """更新 customization 檔案內容。"""
+    """Update customization file content."""
 
-    content: str = Field(description="新的檔案內容")
+    content: str = Field(description="New file content")
 
 
 class OpenSpecCustomizationSchemaForkRequest(BaseModel):
-    """Fork schema 請求。"""
+    """Fork schema request."""
 
-    sourceSchema: str = Field(description="來源 schema")
-    destinationSchema: str = Field(description="目標 schema 名稱")
+    sourceSchema: str = Field(description="Source schema")
+    destinationSchema: str = Field(description="Target schema name")
 
 
 class OpenSpecCustomizationSchemaCreateRequest(BaseModel):
-    """建立 schema 請求。"""
+    """Create schema request."""
 
-    name: str = Field(description="Schema 名稱")
-    description: str | None = Field(default=None, description="Schema 描述")
+    name: str = Field(description="Schema name")
+    description: str | None = Field(default=None, description="Schema description")
     artifacts: list[str] = Field(default_factory=list, description="Artifacts")
 
 
 class OpenSpecCustomizationActionResponse(BaseModel):
-    """Customization action 一般回應。"""
+    """Customization action generic response."""
 
-    success: bool = Field(default=True, description="是否成功")
-    message: str = Field(description="訊息")
-    schemaName: str | None = Field(default=None, description="Schema 名稱")
-    path: str | None = Field(default=None, description="相關路徑")
+    success: bool = Field(default=True, description="Whether successful")
+    message: str = Field(description="Message")
+    schemaName: str | None = Field(default=None, description="Schema name")
+    path: str | None = Field(default=None, description="Related path")
 
 
 class OpenSpecCustomizationValidationRequest(BaseModel):
-    """Validation 請求。"""
+    """Validation request."""
 
-    path: str = Field(description="目前 context 路徑")
+    path: str = Field(description="Current context path")
 
 
 class OpenSpecCustomizationDiagnostic(BaseModel):
-    """Validation diagnostics。"""
+    """Validation diagnostics."""
 
-    level: str = Field(description="等級")
-    message: str = Field(description="訊息")
+    level: str = Field(description="Level")
+    message: str = Field(description="Message")
 
 
 class OpenSpecCustomizationValidationResponse(BaseModel):
-    """Customization validation 結果。"""
+    """Customization validation result."""
 
     workspaceId: str = Field(description="Workspace ID")
-    targetPath: str = Field(description="驗證來源 path")
-    schemaName: str | None = Field(default=None, description="驗證的 schema")
-    valid: bool = Field(description="是否通過")
-    diagnostics: list[OpenSpecCustomizationDiagnostic] = Field(default_factory=list, description="診斷結果")
+    targetPath: str = Field(description="Validation source path")
+    schemaName: str | None = Field(default=None, description="Validated schema")
+    valid: bool = Field(description="Whether passed")
+    diagnostics: list[OpenSpecCustomizationDiagnostic] = Field(default_factory=list, description="Diagnostic results")
 
 
 class OpenSpecCustomizationResolutionStep(BaseModel):
-    """Schema resolution step。"""
+    """Schema resolution step."""
 
-    order: int = Field(description="順序")
-    label: str = Field(description="步驟名稱")
-    value: str | None = Field(default=None, description="該步驟值")
-    selected: bool = Field(default=False, description="是否為採用來源")
+    order: int = Field(description="Order")
+    label: str = Field(description="Step name")
+    value: str | None = Field(default=None, description="Step value")
+    selected: bool = Field(default=False, description="Whether this is the adopted source")
 
 
 class OpenSpecCustomizationDebugResponse(BaseModel):
-    """Customization debug / schema resolution 結果。"""
+    """Customization debug / schema resolution result."""
 
     workspaceId: str = Field(description="Workspace ID")
-    targetPath: str = Field(description="來源 path")
-    schemaName: str | None = Field(default=None, description="推導出的 schema 名稱")
-    resolvedName: str | None = Field(default=None, description="最終 resolved schema")
-    source: str | None = Field(default=None, description="來源")
+    targetPath: str = Field(description="Source path")
+    schemaName: str | None = Field(default=None, description="Derived schema name")
+    resolvedName: str | None = Field(default=None, description="Final resolved schema")
+    source: str | None = Field(default=None, description="Source")
     path: str | None = Field(default=None, description="resolved path")
     resolutionOrder: list[OpenSpecCustomizationResolutionStep] = Field(default_factory=list, description="Resolution steps")

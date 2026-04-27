@@ -1,4 +1,4 @@
-"""健康檢查服務"""
+"""Health Check Service"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_terminal_service_status() -> dict[str, object]:
-    """回報 terminal-service readiness，避免與主 API 健康狀態混淆。"""
+    """Report terminal-service readiness, avoiding confusion with main API health status."""
     port = int(os.getenv("TERMINAL_PORT", "3004"))
 
     try:
@@ -28,7 +28,7 @@ def get_terminal_service_status() -> dict[str, object]:
 
 
 class HealthCheckResult(TypedDict, total=False):
-    """健康檢查結果類型"""
+    """Health check result type"""
     status: Literal["healthy", "unhealthy", "degraded"]
     service: str
     workspace_id: str
@@ -42,7 +42,7 @@ class HealthCheckResult(TypedDict, total=False):
 
 
 class HealthCheckService:
-    """健康檢查服務，負責檢查並更新資料庫狀態"""
+    """Health check service, responsible for checking and updating database status"""
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -50,14 +50,14 @@ class HealthCheckService:
 
     def get_container_id(self) -> Optional[str]:
         """
-        獲取當前容器的 Container ID
-        
-        在 Docker 容器內，hostname 通常就是 container ID 的前 12 位
+        Get current container ID
+
+        In Docker container, hostname is usually the first 12 characters of container ID
         """
         try:
             return socket.gethostname()
         except Exception as e:
-            logger.warning(f"無法獲取容器 ID: {e}")
+            logger.warning(f"Cannot get container ID: {e}")
             return None
 
     @staticmethod
@@ -66,21 +66,21 @@ class HealthCheckService:
 
     def check_and_update_workspace_status(self) -> HealthCheckResult:
         """
-        檢查並更新 workspace 的 runtime 狀態
+        Check and update workspace runtime status
 
         Returns:
-            健康檢查結果
+            Health check result
         """
         workspace_id = self.settings.WORKSPACE_ID
         container_id = self.get_container_id()
         current_time = utcnow()
 
         try:
-            # 查詢 workspace
+            # Query workspace
             workspace = self.db.query(Workspace).filter(Workspace.id == workspace_id).first()
 
             if not workspace:
-                logger.error(f"找不到 workspace: {workspace_id}")
+                logger.error(f"Workspace not found: {workspace_id}")
                 return {
                     "status": "unhealthy",
                     "service": "workspace-runtime",
@@ -90,33 +90,33 @@ class HealthCheckService:
                     "terminal_service": self.get_terminal_service_status(),
                 }
 
-            # 檢查並更新狀態
+            # Check and update status
             needs_update = False
             updates = {}
 
-            # 檢查 runtime_status
+            # Check runtime_status
             if not workspace.runtime_status or workspace.runtime_status not in ["running", "starting"]:
                 updates["runtime_status"] = "running"
                 needs_update = True
-                logger.info(f"更新 runtime_status: {workspace.runtime_status} -> running")
+                logger.info(f"Update runtime_status: {workspace.runtime_status} -> running")
 
-            # 檢查 runtime_container_id
+            # Check runtime_container_id
             if container_id and workspace.runtime_container_id != container_id:
                 updates["runtime_container_id"] = container_id
                 needs_update = True
-                logger.info(f"更新 runtime_container_id: {workspace.runtime_container_id} -> {container_id}")
+                logger.info(f"Update runtime_container_id: {workspace.runtime_container_id} -> {container_id}")
 
-            # 更新 last_seen
+            # Update last_seen
             updates["runtime_last_seen"] = current_time
             needs_update = True
 
-            # 執行更新
+            # Execute update
             if needs_update:
                 for key, value in updates.items():
                     setattr(workspace, key, value)
                 
                 self.db.commit()
-                logger.info(f"已更新 workspace {workspace_id} 的狀態: {updates}")
+                logger.info(f"Updated workspace {workspace_id} status: {updates}")
 
             return {
                 "status": "healthy",
@@ -131,7 +131,7 @@ class HealthCheckService:
             }
 
         except Exception as e:
-            logger.error(f"健康檢查時更新資料庫失敗: {e}", exc_info=True)
+            logger.error(f"Failed to update database during health check: {e}", exc_info=True)
             self.db.rollback()
             return {
                 "status": "degraded",

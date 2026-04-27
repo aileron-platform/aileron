@@ -1,7 +1,7 @@
 """
-共用類型定義.
+Common type definitions.
 
-比照 agor-main 的 types.ts
+Modeled after agor-main's types.ts
 """
 
 from dataclasses import dataclass
@@ -12,8 +12,8 @@ from app.modules.agent_session.domain.enums import MessageRole
 
 
 class ToolType(str, Enum):
-    """Tool 類型."""
-    
+    """Tool type."""
+
     CLAUDE_CODE = "claude-code"
     GEMINI = "gemini"
     CODEX = "codex"
@@ -22,9 +22,9 @@ class ToolType(str, Enum):
 
 @dataclass
 class ToolCapabilities:
-    """Tool 能力標記."""
+    """Tool capability flags."""
 
-    # 基本能力（對應 ToolCapabilityResponse schema）
+    # Basic capabilities (corresponds to ToolCapabilityResponse schema)
     streaming: bool = True
     thinking: bool = False
     multimodal: bool = False
@@ -33,7 +33,7 @@ class ToolCapabilities:
     local_execution: bool = False
     built_in_tools: list[str] = None
 
-    # 進階能力（內部使用）
+    # Advanced capabilities (internal use)
     supports_session_import: bool = False
     supports_session_create: bool = False
     supports_live_execution: bool = False
@@ -42,15 +42,15 @@ class ToolCapabilities:
     supports_git_state: bool = False
 
     def __post_init__(self):
-        """初始化後處理."""
+        """Post-initialization processing."""
         if self.built_in_tools is None:
             self.built_in_tools = []
 
 
 @dataclass
 class TokenUsage:
-    """Token 使用量."""
-    
+    """Token usage."""
+
     input: int = 0
     output: int = 0
     cache_read: Optional[int] = None
@@ -59,8 +59,8 @@ class TokenUsage:
 
 @dataclass
 class TaskResult:
-    """任務執行結果."""
-    
+    """Task execution result."""
+
     user_message_id: str
     assistant_message_ids: List[str]
     token_usage: Optional[TokenUsage] = None
@@ -74,17 +74,17 @@ class TaskResult:
     was_stopped: bool = False
 
 
-# ProcessedEvent 類型定義（比照 agor-main 的 ProcessedEvent）
+# ProcessedEvent type definitions (modeled after agor-main's ProcessedEvent)
 @dataclass
 class BaseProcessedEvent:
-    """基礎處理事件."""
+    """Base processing event."""
 
     type: str = ""
 
 
 @dataclass
 class PartialEvent(BaseProcessedEvent):
-    """部分文字事件（串流）."""
+    """Partial text event (streaming)."""
 
     text: str = ""
     resolved_model: Optional[str] = None
@@ -93,7 +93,7 @@ class PartialEvent(BaseProcessedEvent):
 
 @dataclass
 class ThinkingPartialEvent(BaseProcessedEvent):
-    """思考部分事件（串流）."""
+    """Thinking partial event (streaming)."""
 
     thinking_chunk: str = ""
     type: Literal["thinking_partial"] = "thinking_partial"
@@ -101,14 +101,14 @@ class ThinkingPartialEvent(BaseProcessedEvent):
 
 @dataclass
 class ThinkingCompleteEvent(BaseProcessedEvent):
-    """思考完成事件."""
+    """Thinking complete event."""
 
     type: Literal["thinking_complete"] = "thinking_complete"
 
 
 @dataclass
 class CompleteEvent(BaseProcessedEvent):
-    """訊息完成事件."""
+    """Message complete event."""
 
     role: MessageRole = MessageRole.ASSISTANT
     content: List[Dict[str, Any]] = None
@@ -118,14 +118,14 @@ class CompleteEvent(BaseProcessedEvent):
     resolved_model: Optional[str] = None
 
     def __post_init__(self):
-        """初始化後處理."""
+        """Post-initialization processing."""
         if self.content is None:
             self.content = []
 
 
 @dataclass
 class ResultEvent(BaseProcessedEvent):
-    """結果事件（包含 token usage）."""
+    """Result event (includes token usage)."""
 
     raw_sdk_message: Dict[str, Any] = None
     type: Literal["result"] = "result"
@@ -135,29 +135,29 @@ class ResultEvent(BaseProcessedEvent):
     structured_output: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
-        """初始化後處理."""
+        """Post-initialization processing."""
         if self.raw_sdk_message is None:
             self.raw_sdk_message = {}
 
 
 @dataclass
 class EndEvent(BaseProcessedEvent):
-    """結束事件."""
-    
+    """End event."""
+
     type: Literal["end"] = "end"
     reason: str = "conversation_ended"
 
 
 @dataclass
 class StoppedEvent(BaseProcessedEvent):
-    """停止事件."""
-    
+    """Stopped event."""
+
     type: Literal["stopped"] = "stopped"
 
 
 @dataclass
 class ToolStartEvent(BaseProcessedEvent):
-    """工具開始事件."""
+    """Tool start event."""
 
     tool_use_id: str = ""
     tool_name: str = ""
@@ -166,7 +166,7 @@ class ToolStartEvent(BaseProcessedEvent):
 
 @dataclass
 class ToolCompleteEvent(BaseProcessedEvent):
-    """工具完成事件."""
+    """Tool complete event."""
 
     tool_use_id: str = ""
     type: Literal["tool_complete"] = "tool_complete"

@@ -1,112 +1,112 @@
-"""統一的檔案管理資料模型"""
+"""Unified file management data models"""
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
-# ============ 檔案樹節點 ============
+# ============ File Tree Nodes ============
 
 class FileNode(BaseModel):
-    """統一的檔案樹節點"""
-    id: str = Field(description="節點唯一識別（通常為路徑）")
-    name: str = Field(description="節點名稱")
-    path: str = Field(description="相對路徑（不含 scope 前綴）")
-    type: Literal["file", "directory"] = Field(description="節點類型")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    size: int = Field(default=0, description="檔案大小（bytes）")
-    updatedAt: str = Field(description="最後修改時間（ISO8601）")
-    depth: int = Field(default=0, description="樹中的層級")
-    children: List["FileNode"] = Field(default_factory=list, description="子節點")
-    hasChildren: bool = Field(default=False, description="是否有子節點")
-    
-    # 可選的擴展欄位
-    extension: Optional[str] = Field(default=None, description="副檔名")
-    fileType: Optional[str] = Field(default=None, description="檔案類型")
-    metadata: Optional[Dict[str, Any]] = Field(default=None, description="額外元數據")
-    skillName: Optional[str] = Field(default=None, description="Skill 名稱（僅 SKILL.md 節點，從 front matter 解析）")
-    skillDescription: Optional[str] = Field(default=None, description="Skill 描述（僅 SKILL.md 節點，從 front matter 解析）")
+    """Unified file tree node"""
+    id: str = Field(description="Unique node identifier (usually path)")
+    name: str = Field(description="Node name")
+    path: str = Field(description="Relative path (without scope prefix)")
+    type: Literal["file", "directory"] = Field(description="Node type")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    size: int = Field(default=0, description="File size (bytes)")
+    updatedAt: str = Field(description="Last modification time (ISO8601)")
+    depth: int = Field(default=0, description="Level in tree")
+    children: List["FileNode"] = Field(default_factory=list, description="Child nodes")
+    hasChildren: bool = Field(default=False, description="Whether has child nodes")
+
+    # Optional extension fields
+    extension: Optional[str] = Field(default=None, description="File extension")
+    fileType: Optional[str] = Field(default=None, description="File type")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional metadata")
+    skillName: Optional[str] = Field(default=None, description="Skill name (only for SKILL.md nodes, parsed from front matter)")
+    skillDescription: Optional[str] = Field(default=None, description="Skill description (only for SKILL.md nodes, parsed from front matter)")
 
 
-# ============ 請求模型 ============
+# ============ Request Models ============
 
 class FileTreeRequest(BaseModel):
-    """檔案樹請求"""
-    path: str = Field(default="/", description="目標路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    includeHidden: bool = Field(default=False, description="是否包含隱藏檔")
-    maxDepth: int = Field(default=1, ge=1, le=3, description="最大深度")
+    """File tree request"""
+    path: str = Field(default="/", description="Target path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    includeHidden: bool = Field(default=False, description="Whether to include hidden files")
+    maxDepth: int = Field(default=1, ge=1, le=3, description="Maximum depth")
 
 
 class FileContentRequest(BaseModel):
-    """讀取檔案請求"""
-    path: str = Field(description="檔案路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
+    """Read file request"""
+    path: str = Field(description="File path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
 
 
 class FileWriteRequest(BaseModel):
-    """寫入檔案請求"""
-    path: str = Field(description="檔案路徑")
-    content: str = Field(description="檔案內容")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    expectedVersionId: Optional[str] = Field(default=None, description="預期版本ID（衝突檢測）")
+    """Write file request"""
+    path: str = Field(description="File path")
+    content: str = Field(description="File content")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    expectedVersionId: Optional[str] = Field(default=None, description="Expected version ID (conflict detection)")
 
 
 class FileCreateRequest(BaseModel):
-    """建立檔案或目錄請求"""
-    path: str = Field(description="路徑")
-    type: Literal["file", "directory"] = Field(description="類型")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    content: Optional[str] = Field(default="", description="檔案內容（僅檔案）")
-    encoding: Optional[Literal["utf-8", "base64"]] = Field(default="utf-8", description="內容編碼方式")
+    """Create file or directory request"""
+    path: str = Field(description="Path")
+    type: Literal["file", "directory"] = Field(description="Type")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    content: Optional[str] = Field(default="", description="File content (files only)")
+    encoding: Optional[Literal["utf-8", "base64"]] = Field(default="utf-8", description="Content encoding method")
 
 
 class FileDeleteRequest(BaseModel):
-    """刪除請求"""
-    path: str = Field(description="路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    recursive: bool = Field(default=False, description="是否遞迴刪除目錄")
+    """Delete request"""
+    path: str = Field(description="Path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    recursive: bool = Field(default=False, description="Whether to recursively delete directory")
 
 
 class FileCopyRequest(BaseModel):
-    """複製請求"""
-    sourcePath: str = Field(description="源路徑")
-    destPath: str = Field(description="目標路徑")
-    sourceScope: Optional[str] = Field(default=None, description="源範圍")
-    destScope: Optional[str] = Field(default=None, description="目標範圍")
-    overwrite: bool = Field(default=False, description="是否覆蓋")
+    """Copy request"""
+    sourcePath: str = Field(description="Source path")
+    destPath: str = Field(description="Destination path")
+    sourceScope: Optional[str] = Field(default=None, description="Source scope")
+    destScope: Optional[str] = Field(default=None, description="Destination scope")
+    overwrite: bool = Field(default=False, description="Whether to overwrite")
 
 
 class FileMoveRequest(BaseModel):
-    """移動請求"""
-    sourcePath: str = Field(description="源路徑")
-    destPath: str = Field(description="目標路徑")
-    sourceScope: Optional[str] = Field(default=None, description="源範圍")
-    destScope: Optional[str] = Field(default=None, description="目標範圍")
-    overwrite: bool = Field(default=False, description="是否覆蓋")
+    """Move request"""
+    sourcePath: str = Field(description="Source path")
+    destPath: str = Field(description="Destination path")
+    sourceScope: Optional[str] = Field(default=None, description="Source scope")
+    destScope: Optional[str] = Field(default=None, description="Destination scope")
+    overwrite: bool = Field(default=False, description="Whether to overwrite")
 
 
 class BatchDeleteRequest(BaseModel):
-    """批次刪除請求"""
-    paths: List[str] = Field(description="路徑列表")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    recursive: bool = Field(default=False, description="是否遞迴刪除目錄")
+    """Batch delete request"""
+    paths: List[str] = Field(description="Path list")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    recursive: bool = Field(default=False, description="Whether to recursively delete directory")
 
 
 class BatchWriteRequest(BaseModel):
-    """批次寫入請求"""
-    files: List[Dict[str, str]] = Field(description="檔案列表 [{'path': '...', 'content': '...'}, ...]")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
+    """Batch write request"""
+    files: List[Dict[str, str]] = Field(description="File list [{'path': '...', 'content': '...'}, ...]")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
 
 
-# ============ 回應模型 ============
+# ============ Response Models ============
 
 class FileTreeResponse(BaseModel):
-    """檔案樹回應"""
-    path: str = Field(description="路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    nodes: List[FileNode] = Field(description="節點列表")
-    total: int = Field(description="總節點數")
+    """File tree response"""
+    path: str = Field(description="Path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    nodes: List[FileNode] = Field(description="Node list")
+    total: int = Field(description="Total node count")
 
     @model_validator(mode="before")
     @classmethod
@@ -123,14 +123,14 @@ class FileTreeResponse(BaseModel):
 
 
 class FileContentResponse(BaseModel):
-    """檔案內容回應"""
-    path: str = Field(description="檔案路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    content: str = Field(description="檔案內容")
-    size: int = Field(description="檔案大小")
-    updatedAt: str = Field(description="最後修改時間")
-    versionId: Optional[str] = Field(default=None, description="版本ID")
-    contentHash: Optional[str] = Field(default=None, description="內容雜湊")
+    """File content response"""
+    path: str = Field(description="File path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    content: str = Field(description="File content")
+    size: int = Field(description="File size")
+    updatedAt: str = Field(description="Last modification time")
+    versionId: Optional[str] = Field(default=None, description="Version ID")
+    contentHash: Optional[str] = Field(default=None, description="Content hash")
 
     @model_validator(mode="before")
     @classmethod
@@ -150,20 +150,20 @@ class FileContentResponse(BaseModel):
 
 
 class FileOperationResponse(BaseModel):
-    """檔案操作回應"""
-    success: bool = Field(description="是否成功")
-    path: Optional[str] = Field(default=None, description="路徑")
-    scope: Optional[str] = Field(default=None, description="範圍識別")
-    message: Optional[str] = Field(default=None, description="訊息")
-    data: Optional[Dict[str, Any]] = Field(default=None, description="額外資料")
+    """File operation response"""
+    success: bool = Field(description="Success")
+    path: Optional[str] = Field(default=None, description="Path")
+    scope: Optional[str] = Field(default=None, description="Scope identifier")
+    message: Optional[str] = Field(default=None, description="Message")
+    data: Optional[Dict[str, Any]] = Field(default=None, description="Additional data")
 
 
 class BatchOperationResponse(BaseModel):
-    """批次操作回應"""
-    total: int = Field(description="總數")
-    succeeded: int = Field(description="成功數")
-    failed: int = Field(description="失敗數")
-    results: List[Dict[str, Any]] = Field(description="詳細結果")
+    """Batch operation response"""
+    total: int = Field(description="Total")
+    succeeded: int = Field(description="Succeeded count")
+    failed: int = Field(description="Failed count")
+    results: List[Dict[str, Any]] = Field(description="Detailed results")
 
     @model_validator(mode="before")
     @classmethod
@@ -183,57 +183,57 @@ class BatchOperationResponse(BaseModel):
 
 
 class FileError(BaseModel):
-    """檔案錯誤"""
-    code: str = Field(description="錯誤代碼")
-    message: str = Field(description="錯誤訊息")
-    details: Optional[Dict[str, Any]] = Field(default=None, description="錯誤細節")
+    """File error"""
+    code: str = Field(description="Error code")
+    message: str = Field(description="Error message")
+    details: Optional[Dict[str, Any]] = Field(default=None, description="Error details")
 
 class UploadResult(BaseModel):
-    """單一檔案上傳結果"""
-    path: str = Field(description="檔案儲存路徑")
-    size: int = Field(description="檔案大小")
-    lastModified: str = Field(description="最後修改時間")
-    type: Literal["file", "directory"] = Field(default="file", description="結果類型")
+    """Single file upload result"""
+    path: str = Field(description="File storage path")
+    size: int = Field(description="File size")
+    lastModified: str = Field(description="Last modification time")
+    type: Literal["file", "directory"] = Field(default="file", description="Result type")
 
 
 class UploadResponse(BaseModel):
-    """上傳檔案回應"""
-    uploaded: List[UploadResult] = Field(description="成功上傳清單")
-    extracted: List[UploadResult] = Field(default_factory=list, description="成功解壓清單")
-    skipped: List[str] = Field(default_factory=list, description="略過的檔案")
+    """Upload file response"""
+    uploaded: List[UploadResult] = Field(description="Successfully uploaded list")
+    extracted: List[UploadResult] = Field(default_factory=list, description="Successfully extracted list")
+    skipped: List[str] = Field(default_factory=list, description="Skipped files")
 
 
 class ExtractArchiveRequest(BaseModel):
-    """解壓縮請求"""
-    archivePath: str = Field(description="既有 ZIP 檔案路徑")
-    targetPath: Optional[str] = Field(default=None, description="解壓目標目錄，預設為 ZIP 所在目錄")
+    """Extract archive request"""
+    archivePath: str = Field(description="Existing ZIP file path")
+    targetPath: Optional[str] = Field(default=None, description="Extraction target directory, defaults to ZIP's directory")
     conflictStrategy: Literal["rename", "overwrite", "reject"] = Field(
         default="rename",
-        description="衝突處理策略",
+        description="Conflict handling strategy",
     )
 
 
 class ExtractArchiveAcceptedResponse(BaseModel):
-    """接受背景解壓請求的回應"""
-    operationId: str = Field(description="背景解壓 operation ID")
-    status: Literal["pending", "running"] = Field(description="目前狀態")
-    message: str = Field(description="狀態訊息")
-    startedAt: datetime = Field(description="建立時間")
+    """Accept background extraction request response"""
+    operationId: str = Field(description="Background extraction operation ID")
+    status: Literal["pending", "running"] = Field(description="Current status")
+    message: str = Field(description="Status message")
+    startedAt: datetime = Field(description="Creation time")
 
 
 class ExtractArchiveResult(BaseModel):
-    """背景解壓結果"""
-    extracted: List[UploadResult] = Field(default_factory=list, description="成功解壓的項目")
-    extractedPaths: List[str] = Field(default_factory=list, description="成功解壓的路徑")
+    """Background extraction result"""
+    extracted: List[UploadResult] = Field(default_factory=list, description="Successfully extracted items")
+    extractedPaths: List[str] = Field(default_factory=list, description="Successfully extracted paths")
 
 
 class ExtractArchiveStatusResponse(BaseModel):
-    """背景解壓狀態回應"""
-    operationId: str = Field(description="背景解壓 operation ID")
-    status: Literal["pending", "running", "completed", "failed"] = Field(description="目前狀態")
-    progress: float = Field(default=0.0, description="進度 0.0-1.0", ge=0.0, le=1.0)
-    message: str = Field(description="狀態訊息")
-    startedAt: datetime = Field(description="建立時間")
-    completedAt: Optional[datetime] = Field(default=None, description="完成時間")
-    error: Optional[str] = Field(default=None, description="失敗訊息")
-    result: Optional[ExtractArchiveResult] = Field(default=None, description="成功結果")
+    """Background extraction status response"""
+    operationId: str = Field(description="Background extraction operation ID")
+    status: Literal["pending", "running", "completed", "failed"] = Field(description="Current status")
+    progress: float = Field(default=0.0, description="Progress 0.0-1.0", ge=0.0, le=1.0)
+    message: str = Field(description="Status message")
+    startedAt: datetime = Field(description="Creation time")
+    completedAt: Optional[datetime] = Field(default=None, description="Completion time")
+    error: Optional[str] = Field(default=None, description="Failure message")
+    result: Optional[ExtractArchiveResult] = Field(default=None, description="Success result")

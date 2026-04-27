@@ -1,81 +1,81 @@
 """
-測試 Workspace Runtime 的 JWT Token 驗證功能
+Test Workspace Runtime JWT Token validation functionality
 """
 
 import asyncio
 import sys
 from pathlib import Path
 
-# 添加項目根目錄到 Python 路徑
+# Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
 async def test_jwt_auth():
-    """測試 JWT 認證功能"""
+    """Test JWT authentication functionality"""
     print("=" * 70)
-    print("🧪 Workspace Runtime JWT 認證測試")
+    print("🧪 Workspace Runtime JWT Authentication Test")
     print("=" * 70)
     print()
 
-    # 導入必要的模組
+    # Import necessary modules
     try:
         from app.modules.auth import get_keycloak_config, get_jwt_utils
         from app.services.auth_service import get_auth_service
     except ImportError as e:
-        print(f"❌ 導入模組失敗: {e}")
-        print("請確保已安裝所有依賴: pip install python-jose[cryptography]")
+        print(f"❌ Module import failed: {e}")
+        print("Please ensure all dependencies are installed: pip install python-jose[cryptography]")
         return False
 
-    # 1. 檢查配置
-    print("步驟 1: 檢查 Keycloak 配置")
+    # 1. Check configuration
+    print("Step 1: Check Keycloak configuration")
     print("-" * 70)
 
     try:
         config = get_keycloak_config()
-        print(f"認證啟用: {config.enabled}")
+        print(f"Authentication enabled: {config.enabled}")
 
         if not config.enabled:
-            print("⚠️  Keycloak 認證未啟用")
-            print("請在 workspace-manager/.env 中設置 ENABLE_AUTH=true")
+            print("⚠️  Keycloak authentication not enabled")
+            print("Please set ENABLE_AUTH=true in workspace-manager/.env")
             return False
 
-        print(f"伺服器 URL: {config.server_url}")
+        print(f"Server URL: {config.server_url}")
         print(f"Realm: {config.realm}")
         print(f"Client ID: {config.client_id}")
         print()
 
     except Exception as e:
-        print(f"❌ 配置讀取失敗: {e}")
+        print(f"❌ Configuration read failed: {e}")
         return False
 
-    # 2. 測試 JWKS 端點
-    print("步驟 2: 測試 JWKS 端點")
+    # 2. Test JWKS endpoint
+    print("Step 2: Test JWKS endpoint")
     print("-" * 70)
 
     try:
         jwt_utils = get_jwt_utils()
         jwks = await jwt_utils.fetch_jwks()
-        print(f"✅ JWKS 端點可訪問")
-        print(f"Keys 數量: {len(jwks.get('keys', []))}")
+        print(f"✅ JWKS endpoint accessible")
+        print(f"Keys count: {len(jwks.get('keys', []))}")
         print()
 
     except Exception as e:
-        print(f"❌ JWKS 端點訪問失敗: {e}")
-        print("請確保 Keycloak 容器正在運行")
+        print(f"❌ JWKS endpoint access failed: {e}")
+        print("Please ensure Keycloak container is running")
         return False
 
-    # 3. 測試 Token 驗證
-    print("步驟 3: 測試 Token 驗證")
+    # 3. Test Token validation
+    print("Step 3: Test Token validation")
     print("-" * 70)
     print()
 
-    # 獲取測試 token（從 workspace-manager 獲取）
-    print("從 workspace-manager 獲取測試 token...")
+    # Get test token (from workspace-manager)
+    print("Getting test token from workspace-manager...")
     import subprocess
 
     try:
-        # 使用腳本從 Keycloak 獲取 token
+        # Use script to get token from Keycloak
         token_cmd = [
             "docker", "exec", "aileron-workspace-manager-dev",
             "wget", "-q", "-O-", "--timeout=10",
@@ -87,44 +87,44 @@ async def test_jwt_auth():
         result = subprocess.run(token_cmd, capture_output=True, text=True, timeout=15)
 
         if result.returncode != 0:
-            print(f"❌ Token 獲取失敗: {result.stderr}")
+            print(f"❌ Token retrieval failed: {result.stderr}")
             return False
 
-        # 解析 token
+        # Parse token
         import json
         token_data = json.loads(result.stdout)
         test_token = token_data.get("access_token")
 
         if not test_token:
-            print(f"❌ Token 獲取失敗: {token_data}")
+            print(f"❌ Token retrieval failed: {token_data}")
             return False
 
-        print(f"✅ Token 獲取成功 (長度: {len(test_token)} 字符)")
+        print(f"✅ Token retrieved successfully (length: {len(test_token)} characters)")
         print()
 
     except Exception as e:
-        print(f"❌ Token 獲取異常: {e}")
+        print(f"❌ Token retrieval exception: {e}")
         return False
 
-    # 4. 驗證 Token
-    print("步驟 4: 驗證 JWT Token")
+    # 4. Validate Token
+    print("Step 4: Validate JWT Token")
     print("-" * 70)
 
     try:
         payload = await jwt_utils.decode_token_async(test_token)
-        print(f"✅ Token 驗證成功！")
-        print(f"用戶 ID: {payload.get('sub')}")
-        print(f"用戶名: {payload.get('preferred_username')}")
+        print(f"✅ Token validation successful!")
+        print(f"User ID: {payload.get('sub')}")
+        print(f"Username: {payload.get('preferred_username')}")
         print(f"Email: {payload.get('email')}")
-        print(f"角色: {payload.get('realm_access', {}).get('roles', [])}")
+        print(f"Roles: {payload.get('realm_access', {}).get('roles', [])}")
         print()
 
     except Exception as e:
-        print(f"❌ Token 驗證失敗: {e}")
+        print(f"❌ Token validation failed: {e}")
         return False
 
-    # 5. 測試 AuthService
-    print("步驟 5: 測試 AuthService")
+    # 5. Test AuthService
+    print("Step 5: Test AuthService")
     print("-" * 70)
 
     try:
@@ -132,36 +132,36 @@ async def test_jwt_auth():
         user = await auth_service.validate_access_token(test_token)
 
         if user:
-            print(f"✅ AuthService 驗證成功！")
-            print(f"用戶 ID: {user.id}")
-            print(f"用戶名: {user.username}")
+            print(f"✅ AuthService validation successful!")
+            print(f"User ID: {user.id}")
+            print(f"Username: {user.username}")
             print(f"Email: {user.email}")
-            print(f"角色: {user.roles}")
+            print(f"Roles: {user.roles}")
             print()
 
         else:
-            print(f"❌ AuthService 驗證失敗: user is None")
+            print(f"❌ AuthService validation failed: user is None")
             return False
 
     except Exception as e:
-        print(f"❌ AuthService 驗證異常: {e}")
+        print(f"❌ AuthService validation exception: {e}")
         import traceback
         traceback.print_exc()
         return False
 
-    # 總結
+    # Summary
     print("=" * 70)
-    print("✅ 所有測試通過！")
+    print("✅ All tests passed!")
     print("=" * 70)
     print()
-    print("📋 測試結果：")
-    print("   ✅ Keycloak 配置正確")
-    print("   ✅ JWKS 端點可訪問")
-    print("   ✅ Token 獲取成功")
-    print("   ✅ Token 驗證成功")
-    print("   ✅ AuthService 整合成功")
+    print("📋 Test Results:")
+    print("   ✅ Keycloak configuration correct")
+    print("   ✅ JWKS endpoint accessible")
+    print("   ✅ Token retrieval successful")
+    print("   ✅ Token validation successful")
+    print("   ✅ AuthService integration successful")
     print()
-    print("🚀 Workspace Runtime JWT 認證已就緒！")
+    print("🚀 Workspace Runtime JWT authentication ready!")
 
     return True
 

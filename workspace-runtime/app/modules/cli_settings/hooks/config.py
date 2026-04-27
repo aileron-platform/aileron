@@ -1,6 +1,6 @@
-"""CLI Hooks 工具設定
+"""CLI Hooks tool configuration
 
-定義各 CLI 工具的 hooks 設定檔路徑與讀寫策略。
+Defines hooks configuration file paths and read/write strategies for each CLI tool.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ from ..mcp.config_strategies import ConfigFileStrategy, JsonConfigStrategy
 
 
 class HookTool(str, Enum):
-    """支援 Hooks 的 CLI 工具"""
+    """CLI tools that support Hooks"""
 
     GEMINI = "gemini"
 
 
 class CliHookScope(str, Enum):
-    """CLI Hooks 支援的設定範圍"""
+    """Configuration scopes supported by CLI Hooks"""
 
     PROJECT = "project"
     USER = "user"
@@ -28,12 +28,12 @@ class CliHookScope(str, Enum):
 
 @dataclass(frozen=True)
 class CliHookToolConfig:
-    """每個 CLI 工具的 Hooks 設定檔資訊"""
+    """Hooks configuration file information for each CLI tool"""
 
     tool: HookTool
-    project_file: str          # 相對於 workspace root 的路徑
-    user_file_path: Path       # 絕對路徑
-    hooks_key: str             # JSON 中存放 hooks 的 key
+    project_file: str          # Path relative to workspace root
+    user_file_path: Path       # Absolute path
+    hooks_key: str             # Key where hooks are stored in JSON
     strategy: ConfigFileStrategy
     supported_scopes: List[CliHookScope]
 

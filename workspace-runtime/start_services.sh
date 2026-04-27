@@ -1,125 +1,125 @@
 #!/bin/bash
-# Aileron - Workspace Runtime 啟動服務腳本
-# 整合語言環境配置、Python 依賴、權限設定、Git Clone 和 Supervisor 啟動
+# Aileron - Workspace Runtime service startup script
+# Configures language runtimes, Python dependencies, permissions, Git clone, and Supervisor.
 
 set -e
 
-# 清除空值環境變數，避免 .env 的空設定（如 ANTHROPIC_AUTH_TOKEN=）影響 container 行為
+# Remove empty environment variables so blank .env entries such as ANTHROPIC_AUTH_TOKEN= do not affect container behavior.
 while IFS= read -r line; do
     [[ "$line" =~ ^([^=]+)=$ ]] && unset "${BASH_REMATCH[1]}"
 done < <(env)
 
-echo "🚀 Aileron - Workspace Runtime 啟動中..."
+echo "🚀 Starting Aileron Workspace Runtime..."
 echo ""
 
 # ============================================================================
-# 1. 檢查環境變數
+# 1. Check environment variables
 # ============================================================================
 if [ -z "$WORKSPACE_ID" ]; then
-    echo "❌ WORKSPACE_ID 環境變數未設定"
+    echo "❌ WORKSPACE_ID environment variable is not set"
     exit 1
 fi
 
-echo "📋 工作區信息："
+echo "📋 Workspace information:"
 echo "   - Workspace ID: $WORKSPACE_ID"
 echo "   - Node Env: ${NODE_ENV:-development}"
 echo ""
 
 # ============================================================================
-# 2. 配置語言運行環境
+# 2. Configure language runtimes
 # ============================================================================
-echo "🔧 配置語言運行環境..."
+echo "🔧 Configuring language runtimes..."
 if [ -f "/opt/codex/setup_universal.sh" ]; then
     source /opt/codex/setup_universal.sh
-    echo "✅ 語言環境配置完成"
+    echo "✅ Language runtime configuration complete"
 else
-    echo "⚠️  setup_universal.sh 不存在，跳過語言環境配置"
+    echo "⚠️  setup_universal.sh does not exist; skipping language runtime configuration"
 fi
 echo ""
 
 # ============================================================================
-# 3. Python 依賴同步
+# 3. Sync Python dependencies
 # ============================================================================
-echo "📦 同步 Python 依賴..."
+echo "📦 Syncing Python dependencies..."
 cd /workspace-runtime
 if [ ! -f ".venv/bin/python" ]; then
     if [ "${NODE_ENV}" = "production" ]; then
-        echo "📦 使用 uv sync --no-dev (生產模式)"
+        echo "📦 Using uv sync --no-dev (production mode)"
         uv sync --no-dev
     else
-        echo "📦 使用 uv sync --dev (開發模式)"
+        echo "📦 Using uv sync --dev (development mode)"
         uv sync --dev
     fi
-    echo "✅ Python 依賴安裝完成"
+    echo "✅ Python dependencies installed"
 else
-    echo "✅ Python 依賴已安裝，跳過同步"
+    echo "✅ Python dependencies are already installed; skipping sync"
 fi
 echo ""
 
 # ============================================================================
-# 4. 設定 Docker Socket 權限（讓 developer 用戶可以執行 docker 指令）
+# 4. Configure Docker socket permissions so the developer user can run Docker commands.
 # ============================================================================
 if [ -S /var/run/docker.sock ]; then
-    echo "🐳 設定 Docker Socket 權限..."
+    echo "🐳 Configuring Docker socket permissions..."
     DOCKER_SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
     if [ "$DOCKER_SOCK_GID" = "0" ]; then
-        # macOS Docker Desktop: socket 屬於 root，改用 docker 群組管控（chmod 660）
+        # macOS Docker Desktop: the socket belongs to root, so use the docker group with chmod 660.
         groupadd -g 999 docker 2>/dev/null || true
         usermod -aG docker developer 2>/dev/null || true
         chmod 660 /var/run/docker.sock 2>/dev/null || true
         chgrp docker /var/run/docker.sock 2>/dev/null || true
-        echo "  ✓ Docker socket 權限已設定 (chmod 660 + docker 群組)"
+        echo "  ✓ Docker socket permissions configured (chmod 660 + docker group)"
     else
-        # Linux: 同步容器內 docker GID 與 host 一致
+        # Linux: align the docker GID inside the container with the host.
         groupmod -g ${DOCKER_SOCK_GID} docker 2>/dev/null || true
         usermod -aG docker developer 2>/dev/null || true
-        echo "  ✓ Docker 群組 GID 已調整為 ${DOCKER_SOCK_GID}"
+        echo "  ✓ Docker group GID adjusted to ${DOCKER_SOCK_GID}"
     fi
 fi
 echo ""
 
 # ============================================================================
-# 5. 設定目錄權限
+# 5. Configure directory permissions
 # ============================================================================
-echo "📁 設定工作區目錄權限..."
+echo "📁 Configuring workspace directory permissions..."
 chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2>/dev/null || true
-# bind-mount 可能讓 host 上的 script 失去 +x（Dockerfile 的 chmod 被覆蓋），在這裡補回
+# Bind mounts can remove +x from host scripts, overriding Dockerfile chmod; restore it here.
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 
-echo "🔧 修復 /root Cargo 工具鏈訪問權限..."
+echo "🔧 Fixing /root Cargo toolchain access permissions..."
 for dir in /root /root/.cargo /root/.cargo/bin; do
     [ -d "$dir" ] && chmod o+x "$dir" 2>/dev/null && echo "  ✓ $dir" || true
 done
 
-# volume mount 可能導致 .venv/bin 執行權限丟失
+# Volume mounts can drop execute permissions from .venv/bin.
 if [ -d "/workspace-runtime/.venv" ]; then
-    echo "🔧 修復 .venv 執行權限..."
+    echo "🔧 Fixing .venv execute permissions..."
     chmod -R u+x /workspace-runtime/.venv/bin 2>/dev/null || true
     chmod -R u+x /workspace-runtime/.venv/lib/python*/bin 2>/dev/null || true
 fi
 
-# agent-browser daemon 若以 root 執行會建立 root 所有的 socket 目錄，需預先修正
+# If the agent-browser daemon runs as root, it creates root-owned socket directories; prepare ownership up front.
 mkdir -p /home/developer/.agent-browser
 chown -R developer:developer /home/developer/.agent-browser
 
-echo "✅ 目錄權限設定完成"
+echo "✅ Directory permissions configured"
 echo ""
 
 # ============================================================================
-# 5.1 安裝 Agent 預設配置（skills、mcp.json）
+# 5.1 Install agent default configuration (skills and mcp.json)
 # ============================================================================
 AGENT_DEFAULTS_DIR="/workspace-runtime/agent-defaults"
 if [ -d "$AGENT_DEFAULTS_DIR" ]; then
-    echo "📋 安裝 Agent 預設配置..."
+    echo "📋 Installing agent default configuration..."
 
-    # 複製預設 skills 到 ~/.claude/skills/（不覆蓋已存在的）
+    # Copy default skills to ~/.claude/skills/ without overwriting existing directories.
     if [ -d "$AGENT_DEFAULTS_DIR/skills" ] && [ "$(ls -A "$AGENT_DEFAULTS_DIR/skills" 2>/dev/null)" ]; then
         CLAUDE_SKILLS_DIR="/home/developer/.claude/skills"
         mkdir -p "$CLAUDE_SKILLS_DIR"
         for skill_dir in "$AGENT_DEFAULTS_DIR/skills"/*/; do
             skill_name=$(basename "$skill_dir")
             target="$CLAUDE_SKILLS_DIR/$skill_name"
-            # 移除衝突的 symlink 或檔案（非目錄），確保 cp -r 能正常寫入
+            # Remove conflicting symlinks or files so cp -r can write a directory.
             if [ -L "$target" ] || ([ -e "$target" ] && [ ! -d "$target" ]); then
                 rm -f "$target"
             fi
@@ -127,41 +127,41 @@ if [ -d "$AGENT_DEFAULTS_DIR" ]; then
                 cp -r "$skill_dir" "$target"
                 echo "  ✓ Skill: $skill_name"
             else
-                echo "  - Skill: $skill_name (已存在，跳過)"
+                echo "  - Skill: $skill_name (already exists; skipping)"
             fi
         done
         chown -R developer:developer /home/developer/.claude
     fi
 
-    # 複製預設 mcp.json 到 /workspace/.mcp.json（不覆蓋已存在的）
+    # Copy default mcp.json to /workspace/.mcp.json without overwriting existing files.
     if [ -f "$AGENT_DEFAULTS_DIR/mcp.json" ]; then
         if [ ! -f "/workspace/.mcp.json" ]; then
             cp "$AGENT_DEFAULTS_DIR/mcp.json" /workspace/.mcp.json
             chown developer:developer /workspace/.mcp.json
-            echo "  ✓ MCP 配置已安裝"
+            echo "  ✓ MCP configuration installed"
         else
-            echo "  - MCP 配置已存在，跳過"
+            echo "  - MCP configuration already exists; skipping"
         fi
     fi
 
-    echo "✅ Agent 預設配置安裝完成"
+    echo "✅ Agent default configuration installed"
 else
-    echo "⚠️  agent-defaults 目錄不存在，跳過預設配置安裝"
+    echo "⚠️  agent-defaults directory does not exist; skipping default configuration installation"
 fi
 echo ""
 
 # ============================================================================
-# 6. 設定 Git 配置
+# 6. Configure Git
 # ============================================================================
-echo "🔧 設定 Git 配置..."
+echo "🔧 Configuring Git..."
 if [ -n "${GIT_USER_NAME:-}" ] && [ -n "${GIT_USER_EMAIL:-}" ]; then
     git config --global user.name "$GIT_USER_NAME"
     git config --global user.email "$GIT_USER_EMAIL"
-    echo "✅ Git 用戶配置已設定"
+    echo "✅ Git user configuration set"
 else
     git config --global user.name "Developer"
     git config --global user.email "developer@workspace.local"
-    echo "✅ Git 用戶使用默認配置"
+    echo "✅ Git user uses default configuration"
 fi
 git config --global --add safe.directory /workspace 2>/dev/null || true
 git config --global --add safe.directory /workspace-runtime 2>/dev/null || true
@@ -171,14 +171,14 @@ echo ""
 # 7. Git Clone
 # ============================================================================
 if [ -n "${GIT_REPO_URL:-}" ]; then
-    echo "🔀 克隆 Git 倉庫..."
+    echo "🔀 Cloning Git repository..."
 
-    # 忽略 .git / .gitkeep，判斷工作區是否為空
+    # Ignore .git and .gitkeep when determining whether the workspace is empty.
     if [ -z "$(ls -A /workspace 2>/dev/null | grep -v '\.git' | grep -v '\.gitkeep')" ]; then
         GIT_BRANCH="${GIT_BRANCH:-main}"
 
         if [ -n "${SSH_PRIVATE_KEY:-}" ]; then
-            echo "🔑 配置 SSH 密鑰..."
+            echo "🔑 Configuring SSH keys..."
             mkdir -p /home/developer/.ssh
             echo "$SSH_PRIVATE_KEY" > /home/developer/.ssh/id_rsa
             chmod 600 /home/developer/.ssh/id_rsa
@@ -189,7 +189,7 @@ if [ -n "${GIT_REPO_URL:-}" ]; then
             eval "$(ssh-agent -s)" 2>/dev/null || true
             ssh-add /home/developer/.ssh/id_rsa 2>/dev/null || true
             chown -R developer:developer /home/developer/.ssh
-            echo "✅ SSH 密鑰已配置"
+            echo "✅ SSH keys configured"
         fi
 
         cd /tmp
@@ -201,12 +201,12 @@ if [ -n "${GIT_REPO_URL:-}" ]; then
         git config --global --add safe.directory /workspace
         git -C /workspace config --local user.name "${GIT_USER_NAME:-Developer}"
         git -C /workspace config --local user.email "${GIT_USER_EMAIL:-developer@workspace.local}"
-        echo "✅ 倉庫克隆完成"
+        echo "✅ Repository clone complete"
     else
-        echo "⚠️  /workspace 目錄不為空，跳過克隆"
+        echo "⚠️  /workspace directory is not empty; skipping clone"
     fi
 else
-    echo "⚠️  GIT_REPO_URL 未設定，跳過 Git 克隆"
+    echo "⚠️  GIT_REPO_URL is not set; skipping Git clone"
 fi
 
 /workspace-runtime/scripts/bootstrap_git_repo.sh
@@ -215,36 +215,36 @@ chown -R developer:developer /workspace 2>/dev/null || true
 echo ""
 
 # ============================================================================
-# 8. 初始化 OpenSpec
+# 8. Initialize OpenSpec
 # ============================================================================
-echo "🧭 檢查 OpenSpec 初始化狀態..."
+echo "🧭 Checking OpenSpec initialization status..."
 OPENSPEC_INIT_TOOLS="${OPENSPEC_INIT_TOOLS:-claude,codex,opencode,gemini}"
 if [ "${OPENSPEC_AUTO_INIT:-1}" = "1" ]; then
     if command -v openspec >/dev/null 2>&1; then
         if [ ! -d "/workspace/openspec" ]; then
-            echo "📋 執行 OpenSpec 初始化..."
+            echo "📋 Running OpenSpec initialization..."
             if HOME=/home/developer XDG_CONFIG_HOME=/home/developer/.config su developer -s /bin/bash -c "export PATH=/home/developer/.local/bin:/home/developer/.npm-global/bin:/home/developer/.cargo/bin:\$PATH; cd /workspace && openspec init --tools ${OPENSPEC_INIT_TOOLS}"; then
-                echo "✅ OpenSpec 初始化完成"
+                echo "✅ OpenSpec initialization complete"
                 chown -R developer:developer /workspace /home/developer/.config /home/developer/.claude /home/developer/.codex 2>/dev/null || true
             else
-                echo "⚠️  OpenSpec 初始化失敗，略過自動初始化"
+                echo "⚠️  OpenSpec initialization failed; skipping automatic initialization"
             fi
         else
-            echo "✅ OpenSpec 已初始化，跳過"
+            echo "✅ OpenSpec is already initialized; skipping"
         fi
     else
-        echo "⚠️  找不到 openspec CLI，跳過自動初始化"
+        echo "⚠️  openspec CLI not found; skipping automatic initialization"
     fi
 else
-    echo "⏭️  OPENSPEC_AUTO_INIT=0，跳過自動初始化"
+    echo "⏭️  OPENSPEC_AUTO_INIT=0; skipping automatic initialization"
 fi
 echo ""
 
 # ============================================================================
-# 9. 設定 SSH 密鑰
+# 9. Configure SSH keys
 # ============================================================================
 if [ -n "${SSH_PUBLIC_KEY:-}" ] && [ -n "${SSH_PRIVATE_KEY:-}" ]; then
-    echo "🔑 設定 SSH 訪問..."
+    echo "🔑 Configuring SSH access..."
     mkdir -p /home/developer/.ssh
     echo "$SSH_PRIVATE_KEY" > /home/developer/.ssh/id_rsa
     chmod 600 /home/developer/.ssh/id_rsa
@@ -253,59 +253,59 @@ if [ -n "${SSH_PUBLIC_KEY:-}" ] && [ -n "${SSH_PRIVATE_KEY:-}" ]; then
     echo "$SSH_PUBLIC_KEY" > /home/developer/.ssh/authorized_keys
     chmod 600 /home/developer/.ssh/authorized_keys
     chown -R developer:developer /home/developer/.ssh
-    echo "✅ SSH 訪問已配置"
+    echo "✅ SSH access configured"
 else
-    echo "⚠️  SSH_PUBLIC_KEY 或 SSH_PRIVATE_KEY 未設定，跳過 SSH 密鑰配置"
+    echo "⚠️  SSH_PUBLIC_KEY or SSH_PRIVATE_KEY is not set; skipping SSH key configuration"
 fi
 echo ""
 
 # ============================================================================
-# 10. 設定日誌目錄
+# 10. Configure log directory
 # ============================================================================
-echo "📋 設定日誌目錄..."
+echo "📋 Configuring log directory..."
 mkdir -p /var/log/supervisor
 chown -R developer:developer /var/log/supervisor 2>/dev/null || true
-echo "✅ 日誌目錄設定完成"
+echo "✅ Log directory configured"
 echo ""
 
 # ============================================================================
-# 11. 建立 Terminal Service 快取目錄
+# 11. Create Terminal Service cache directory
 # ============================================================================
-echo "🔧 準備 Terminal Service 快取目錄..."
+echo "🔧 Preparing Terminal Service cache directory..."
 mkdir -p "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}"
 chown -R developer:developer "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}" 2>/dev/null || true
-echo "✅ Terminal Service 將由 supervisord 啟動時自行解析 binary"
+echo "✅ Terminal Service will resolve its binary when started by supervisord"
 echo ""
 
 # ============================================================================
-# 12. 啟動 Supervisor
+# 12. Start Supervisor
 # ============================================================================
-echo "🎯 啟動服務管理器..."
+echo "🎯 Starting service manager..."
 
 if [ "${NODE_ENV}" = "production" ]; then
     SUPERVISOR_CONFIG="/workspace-runtime/supervisord.conf"
-    echo "📋 使用生產環境配置: $SUPERVISOR_CONFIG"
+    echo "📋 Using production configuration: $SUPERVISOR_CONFIG"
 else
     SUPERVISOR_CONFIG="/workspace-runtime/supervisord.dev.conf"
     if [ ! -f "$SUPERVISOR_CONFIG" ]; then
         SUPERVISOR_CONFIG="/workspace-runtime/supervisord.conf"
-        echo "📋 開發配置不存在，使用標準配置: $SUPERVISOR_CONFIG"
+        echo "📋 Development configuration does not exist; using standard configuration: $SUPERVISOR_CONFIG"
     else
-        echo "📋 使用開發環境配置: $SUPERVISOR_CONFIG"
+        echo "📋 Using development configuration: $SUPERVISOR_CONFIG"
     fi
 fi
 
 echo ""
-echo "✅ 所有服務已啟動"
+echo "✅ All services started"
 echo ""
-echo "🎉 Workspace Runtime 已準備就緒！"
+echo "🎉 Workspace Runtime is ready!"
 echo ""
-echo "📊 活動服務："
+echo "📊 Active services:"
 echo "   - FastAPI:          http://localhost:3002"
 echo "   - SSH:              localhost:22"
 echo "   - Terminal Service: http://localhost:3004"
-echo "   - Canvas Runtime:  http://localhost:3003 (可選)"
+echo "   - Canvas Runtime:  http://localhost:3003 (optional)"
 echo ""
 
-# nodaemon=true：前台運行，保持容器活動
+# nodaemon=true runs in the foreground to keep the container active.
 exec /usr/bin/supervisord -c "$SUPERVISOR_CONFIG"

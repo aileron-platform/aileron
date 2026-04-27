@@ -1,4 +1,4 @@
-"""版本控制路由"""
+"""Version control router"""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from .service import GitService, VersionControlError
 
 router = APIRouter(
     prefix="/workspaces/{workspace_id}/version-control",
-    tags=["版本控制"],
+    tags=["Version control"],
 )
 
 
@@ -51,7 +51,7 @@ def _handle_error(exc: VersionControlError) -> HTTPException:
 @router.get(
     "/contexts",
     response_model=GitContextListResponse,
-    summary="取得 Git contexts",
+    summary="Get Git contexts",
     responses=build_responses(401, 404, 500),
 )
 async def list_contexts(
@@ -67,7 +67,7 @@ async def list_contexts(
 @router.get(
     "/status",
     response_model=VersionControlStatus,
-    summary="取得 Git 狀態",
+    summary="Get Git status",
     responses=build_responses(401, 404, 500),
 )
 async def get_status(
@@ -84,14 +84,14 @@ async def get_status(
 @router.get(
     "/branches",
     response_model=BranchListResponse,
-    summary="取得分支列表",
+    summary="Get branch list",
     responses=build_responses(401, 404, 422, 500),
 )
 async def list_branches(
     workspace_id: str = Path(..., description="Workspace ID"),
-    include_remote: bool = Query(True, alias="includeRemote", description="是否包含遠端"),
-    search: str | None = Query(None, description="名稱過濾"),
-    include_metadata: bool = Query(True, alias="includeMetadata", description="是否包含分支統計與最後提交資訊"),
+    include_remote: bool = Query(True, alias="includeRemote", description="Whether to include remotes"),
+    search: str | None = Query(None, description="Name filter"),
+    include_metadata: bool = Query(True, alias="includeMetadata", description="Whether to include branch statistics and last commit info"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> BranchListResponse:
@@ -110,13 +110,13 @@ async def list_branches(
 @router.post(
     "/branches/{branch_name:path}/checkout",
     response_model=CheckoutResponse,
-    summary="切換或建立分支",
+    summary="Switch to or create branch",
     responses=build_responses(400, 401, 404, 422, 409, 500),
 )
 async def checkout_branch(
     payload: CheckoutRequest,
     workspace_id: str = Path(..., description="Workspace ID"),
-    branch_name: str = Path(..., description="目標分支"),
+    branch_name: str = Path(..., description="Target branch"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CheckoutResponse:
@@ -129,14 +129,14 @@ async def checkout_branch(
 @router.get(
     "/changes",
     response_model=ChangesResponse,
-    summary="取得變更列表",
+    summary="Get change list",
     responses=build_responses(401, 404, 422, 500),
 )
 async def get_changes(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: str = Query("all", description="過濾範圍"),
-    page: int = Query(1, ge=1, description="頁碼(僅用於 untracked)"),
-    page_size: int = Query(100, ge=1, le=500, alias="pageSize", description="每頁數量"),
+    scope: str = Query("all", description="Filter scope"),
+    page: int = Query(1, ge=1, description="Page number (for untracked only)"),
+    page_size: int = Query(100, ge=1, le=500, alias="pageSize", description="Items per page"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> ChangesResponse:
@@ -181,7 +181,7 @@ async def get_changes(
 @router.post(
     "/stage",
     response_model=StageResponse,
-    summary="暫存檔案",
+    summary="Stage files",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def stage_changes(
@@ -199,7 +199,7 @@ async def stage_changes(
 @router.post(
     "/unstage",
     response_model=UnstageResponse,
-    summary="取消暫存",
+    summary="Unstage files",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def unstage_changes(
@@ -217,7 +217,7 @@ async def unstage_changes(
 @router.post(
     "/discard",
     response_model=DiscardResponse,
-    summary="丟棄未暫存變更",
+    summary="Discard unstaged changes",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def discard_changes(
@@ -236,7 +236,7 @@ async def discard_changes(
     "/commit",
     response_model=CommitResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="建立提交",
+    summary="Create commit",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def create_commit(
@@ -254,15 +254,15 @@ async def create_commit(
 @router.get(
     "/commits",
     response_model=CommitListResponse,
-    summary="列出提交紀錄",
+    summary="List commit history",
     responses=build_responses(401, 404, 422, 500),
 )
 async def list_commits(
     workspace_id: str = Path(..., description="Workspace ID"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
-    branch: str | None = Query(None, description="分支名稱"),
-    search: str | None = Query(None, description="搜尋關鍵字"),
+    branch: str | None = Query(None, description="Branch name"),
+    search: str | None = Query(None, description="Search keyword"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitListResponse:
@@ -275,12 +275,12 @@ async def list_commits(
 @router.get(
     "/commits/{commit_id}",
     response_model=CommitDetailResponse,
-    summary="取得提交詳細",
+    summary="Get commit details",
     responses=build_responses(401, 404, 500),
 )
 async def get_commit(
     workspace_id: str = Path(..., description="Workspace ID"),
-    commit_id: str = Path(..., description="提交 ID"),
+    commit_id: str = Path(..., description="Commit ID"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitDetailResponse:
@@ -293,12 +293,12 @@ async def get_commit(
 @router.get(
     "/commits/{commit_id}/files",
     response_model=CommitFilesResponse,
-    summary="取得提交檔案差異",
+    summary="Get commit file differences",
     responses=build_responses(401, 404, 500),
 )
 async def get_commit_files(
     workspace_id: str = Path(..., description="Workspace ID"),
-    commit_id: str = Path(..., description="提交 ID"),
+    commit_id: str = Path(..., description="Commit ID"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> CommitFilesResponse:
@@ -311,7 +311,7 @@ async def get_commit_files(
 @router.post(
     "/push",
     response_model=PushResponse,
-    summary="推送至遠端",
+    summary="Push to remote",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def push_changes(
@@ -329,7 +329,7 @@ async def push_changes(
 @router.post(
     "/pull",
     response_model=PullResponse,
-    summary="拉取遠端更新",
+    summary="Pull remote updates",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def pull_changes(
@@ -347,7 +347,7 @@ async def pull_changes(
 @router.post(
     "/fetch",
     response_model=FetchResponse,
-    summary="同步遠端引用",
+    summary="Sync remote references",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def fetch_changes(
@@ -365,16 +365,16 @@ async def fetch_changes(
 @router.get(
     "/diff",
     response_model=DiffResponse,
-    summary="取得差異",
+    summary="Get diff",
     responses=build_responses(401, 404, 422, 500),
 )
 async def get_diff(
     workspace_id: str = Path(..., description="Workspace ID"),
-    path: str = Query(..., description="檔案路徑"),
-    base: str | None = Query(None, description="比較基準"),
-    head: str | None = Query(None, description="比較目標"),
-    context: int = Query(3, ge=0, description="上下文行數"),
-    include_metadata: bool = Query(False, alias="includeMetadata", description="是否包含中繼資料"),
+    path: str = Query(..., description="File path"),
+    base: str | None = Query(None, description="Comparison base"),
+    head: str | None = Query(None, description="Comparison target"),
+    context: int = Query(3, ge=0, description="Context line count"),
+    include_metadata: bool = Query(False, alias="includeMetadata", description="Whether to include metadata"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> DiffResponse:
@@ -395,13 +395,13 @@ async def get_diff(
 @router.get(
     "/blob",
     response_model=BlobResponse,
-    summary="讀取指定版本的檔案內容",
+    summary="Read file content at specified version",
     responses=build_responses(401, 404, 422, 500),
 )
 async def get_blob(
     workspace_id: str = Path(..., description="Workspace ID"),
-    path: str = Query(..., description="檔案路徑"),
-    revision: str | None = Query(None, description="提交或引用"),
+    path: str = Query(..., description="File path"),
+    revision: str | None = Query(None, description="Commit or reference"),
     context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
     service: GitService = Depends(get_git_service),
 ) -> BlobResponse:

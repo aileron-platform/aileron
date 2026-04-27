@@ -1,4 +1,4 @@
-"""Claude.md 模組路由"""
+"""Claude.md Module Routes"""
 
 from __future__ import annotations
 
@@ -20,12 +20,12 @@ router = APIRouter(prefix="/claude-md", tags=["Claude Code - CLAUDE.md"])
 @router.get(
     "",
     response_model=ClaudeMdDocument,
-    summary="取得 Claude.md 內容",
+    summary="Get Claude.md content",
     responses=build_responses(400, 401, 404, 422, 500),
 )
 async def get_claude_md(
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: ClaudeMdScope = Query(..., description="檔案範圍"),
+    scope: ClaudeMdScope = Query(..., description="File scope"),
     service: ClaudeMdService = Depends(get_claude_md_service),
 ) -> ClaudeMdDocument:
     return service.get_document(workspace_id, scope)
@@ -34,7 +34,7 @@ async def get_claude_md(
 @router.put(
     "",
     response_model=ClaudeMdUpdateResponse,
-    summary="更新 Claude.md 內容",
+    summary="Update Claude.md content",
     responses=build_responses(400, 401, 403, 404, 422, 500),
 )
 async def update_claude_md(

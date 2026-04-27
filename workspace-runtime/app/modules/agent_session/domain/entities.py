@@ -1,10 +1,10 @@
-"""Domain 實體定義.
+"""Domain entity definitions.
 
-領域實體 (Entities) 具有唯一識別碼，代表系統中的核心業務對象。
-包括：
-- Session: 會話實體
-- Task: 任務實體
-- Message: 訊息實體
+Domain entities have unique identifiers and represent core business objects in the system.
+Includes:
+- Session: Session entity
+- Task: Task entity
+- Message: Message entity
 """
 
 from __future__ import annotations
@@ -37,19 +37,19 @@ from .value_objects import (
 
 @dataclass(slots=True)
 class AgentSession:
-    """Agent 會話實體.
+    """Agent session entity.
 
-    代表與 AI 助手的一個持續對話會話。
-    採用 Session-Task-Message 三層架構的頂層容器。
+    Represents a continuous conversation session with an AI assistant.
+    Top-level container using Session-Task-Message three-layer architecture.
     """
 
-    # 主鍵和時間戳
+    # Primary keys and timestamps
     id: str
     created_at: datetime
     updated_at: Optional[datetime] = None
     created_by: str = "anonymous"
 
-    # 狀態欄位
+    # State fields
     status: AgentSessionStatus = AgentSessionStatus.IDLE
     agentic_tool: AgenticTool = AgenticTool.CLAUDE_CODE
     workspace_id: str = ""
@@ -58,42 +58,42 @@ class AgentSession:
     archived: bool = False
     archived_reason: Optional[ArchivedReason] = None
 
-    # JSON data blob 欄位
+    # JSON data blob fields
     agentic_tool_version: Optional[str] = None
     sdk_session_id: Optional[str] = None
     mcp_token: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     context_files: List[str] = field(default_factory=list)
-    tasks: List[str] = field(default_factory=list)  # Task ID 陣列
+    tasks: List[str] = field(default_factory=list)  # Task ID array
     message_count: int = 0
 
-    # 配置
+    # Configuration
     permission_config: Optional[PermissionConfig] = None
     model_settings: Optional[ModelConfig] = None
 
-    # Context Window 追蹤
+    # Context Window tracking
     current_context_usage: Optional[int] = None
     context_window_limit: Optional[int] = None
     last_context_update_at: Optional[str] = None
 
-    # 自訂 Context
+    # Custom context
     custom_context: Dict[str, Any] = field(default_factory=dict)
 
-    # 回調配置
+    # Callback configuration
     callback_config: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_db_row(cls, row: Dict[str, Any]) -> "AgentSession":
-        """從資料庫記錄建立實體."""
+        """Create entity from database record."""
         data = row.get("data", {}) or {}
 
-        # 解析 permission_config
+        # Parse permission_config
         permission_config = None
         if data.get("permission_config"):
             permission_config = PermissionConfig.from_dict(data["permission_config"])
 
-        # 解析 model_settings (stored as model_config in DB)
+        # Parse model_settings (stored as model_config in DB)
         model_settings = None
         if data.get("model_config"):
             model_settings = ModelConfig.from_dict(data["model_config"])
@@ -110,7 +110,7 @@ class AgentSession:
             ready_for_prompt=row.get("ready_for_prompt", False),
             archived=row.get("archived", False),
             archived_reason=ArchivedReason(row["archived_reason"]) if row.get("archived_reason") else None,
-            # Data blob 欄位
+            # Data blob fields
             agentic_tool_version=data.get("agentic_tool_version"),
             sdk_session_id=data.get("sdk_session_id"),
             mcp_token=data.get("mcp_token"),
@@ -129,7 +129,7 @@ class AgentSession:
         )
 
     def to_data_blob(self) -> Dict[str, Any]:
-        """轉換為 data blob 字典."""
+        """Convert to data blob dictionary."""
         data: Dict[str, Any] = {
             "contextFiles": self.context_files,
             "tasks": self.tasks,
@@ -166,25 +166,25 @@ class AgentSession:
 
 @dataclass(slots=True)
 class Task:
-    """任務實體.
+    """Task entity.
 
-    代表一次 prompt 執行的生命週期，追蹤狀態和 token 使用。
+    Represents the lifecycle of a prompt execution, tracking state and token usage.
     """
 
-    # 主鍵和外鍵
+    # Primary keys and foreign keys
     id: str
     session_id: str
     created_at: datetime
     created_by: str = "anonymous"
 
-    # 時間追蹤
+    # Time tracking
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    # 狀態
+    # State
     status: TaskStatus = TaskStatus.CREATED
 
-    # JSON data blob 欄位
+    # JSON data blob fields
     description: Optional[str] = None
     full_prompt: Optional[str] = None
     message_range: Optional[MessageRange] = None
@@ -199,10 +199,10 @@ class Task:
 
     @classmethod
     def from_db_row(cls, row: Dict[str, Any]) -> "Task":
-        """從資料庫記錄建立實體."""
+        """Create entity from database record."""
         data = row.get("data", {}) or {}
 
-        # 解析 message_range
+        # Parse message_range
         message_range = None
         if data.get("message_range"):
             message_range = MessageRange.from_dict(data["message_range"])
@@ -215,7 +215,7 @@ class Task:
             started_at=row.get("started_at"),
             completed_at=row.get("completed_at"),
             status=TaskStatus(row["status"]),
-            # Data blob 欄位
+            # Data blob fields
             description=data.get("description"),
             full_prompt=data.get("full_prompt"),
             message_range=message_range,
@@ -230,7 +230,7 @@ class Task:
         )
 
     def to_data_blob(self) -> Dict[str, Any]:
-        """轉換為 data blob 字典."""
+        """Convert to data blob dictionary."""
         data: Dict[str, Any] = {
             "tool_use_count": self.tool_use_count,
         }
@@ -259,12 +259,12 @@ class Task:
         return data
 
     def can_transition_to(self, new_status: TaskStatus) -> bool:
-        """檢查是否可以轉換到指定狀態."""
-        # 終止狀態不能再轉換
+        """Check if can transition to specified status."""
+        # Terminal states cannot transition
         if self.status.is_terminal:
             return False
 
-        # 定義有效的狀態轉換
+        # Define valid state transitions
         valid_transitions: Dict[TaskStatus, set[TaskStatus]] = {
             TaskStatus.CREATED: {TaskStatus.RUNNING},
             TaskStatus.RUNNING: {
@@ -285,24 +285,24 @@ class Task:
         return new_status in allowed
 
 
-# ContentBlock 類型定義
+# ContentBlock type definition
 ContentBlock = Dict[str, Any]
 
 
 @dataclass(slots=True)
 class Message:
-    """訊息實體.
+    """Message entity.
 
-    代表對話中的一條訊息，支援多種內容類型。
+    Represents a message in a conversation, supporting multiple content types.
     """
 
-    # 主鍵和外鍵
+    # Primary keys and foreign keys
     id: str
     session_id: str
     task_id: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
-    # 訊息屬性
+    # Message attributes
     type: MessageType = MessageType.USER
     role: MessageRole = MessageRole.USER
     index: int = 0
@@ -312,27 +312,27 @@ class Message:
     status: Optional[MessageStatus] = None
     queue_position: Optional[int] = None
 
-    # JSON data blob 欄位
+    # JSON data blob fields
     content: Union[str, List[ContentBlock], PermissionRequestContent, None] = None
     tool_uses: List[ToolUse] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_db_row(cls, row: Dict[str, Any]) -> "Message":
-        """從資料庫記錄建立實體."""
+        """Create entity from database record."""
         data = row.get("data", {}) or {}
 
-        # 解析 tool_uses
+        # Parse tool_uses
         tool_uses = []
         for tu in data.get("tool_uses", []):
             tool_uses.append(ToolUse.from_dict(tu))
 
-        # 解析 content
+        # Parse content
         content = data.get("content")
         if isinstance(content, dict) and "request_id" in content:
             content = PermissionRequestContent.from_dict(content)
 
-        # 解析 status
+        # Parse status
         status = None
         if row.get("status"):
             status = MessageStatus(row["status"])
@@ -350,14 +350,14 @@ class Message:
             parent_tool_use_id=row.get("parent_tool_use_id"),
             status=status,
             queue_position=row.get("queue_position"),
-            # Data blob 欄位
+            # Data blob fields
             content=content,
             tool_uses=tool_uses,
             metadata=data.get("metadata", {}),
         )
 
     def to_data_blob(self) -> Dict[str, Any]:
-        """轉換為 data blob 字典."""
+        """Convert to data blob dictionary."""
         data: Dict[str, Any] = {}
 
         if self.content is not None:
@@ -375,7 +375,7 @@ class Message:
         return data
 
     def get_content_preview(self, max_length: int = 200) -> str:
-        """取得內容預覽."""
+        """Get content preview."""
         if self.content_preview:
             return self.content_preview
 
@@ -383,7 +383,7 @@ class Message:
             return self.content[:max_length]
 
         if isinstance(self.content, list):
-            # 找第一個 text block
+            # Find first text block
             for block in self.content:
                 if block.get("type") == "text":
                     text = block.get("text", "")

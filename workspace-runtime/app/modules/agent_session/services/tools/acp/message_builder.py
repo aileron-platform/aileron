@@ -1,7 +1,7 @@
 """
-ACP 訊息建構函數.
+ACP message builder functions.
 
-提供建立 user/assistant 訊息的共用方法。
+Provides common methods for creating user/assistant messages.
 """
 
 from typing import Any, Dict, List, Optional
@@ -18,7 +18,7 @@ async def create_user_message(
     index: int,
     message_service: MessageService,
 ) -> Dict[str, Any]:
-    """建立使用者訊息."""
+    """Create user message."""
     data = MessageCreate(
         session_id=session_id,
         task_id=task_id,
@@ -58,7 +58,7 @@ async def create_assistant_message(
     tool_uses: Optional[List[Dict[str, Any]]] = None,
     metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """建立助手訊息並回傳 WebSocket 可用 payload."""
+    """Create assistant message and return WebSocket-compatible payload."""
     data = MessageCreate(
         session_id=session_id,
         task_id=task_id,

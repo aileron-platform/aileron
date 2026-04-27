@@ -1,4 +1,4 @@
-"""CLI Slash Commands 模組依賴注入"""
+"""CLI Slash Commands module dependency injection"""
 
 from __future__ import annotations
 

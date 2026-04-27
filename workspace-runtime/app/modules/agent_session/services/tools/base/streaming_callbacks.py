@@ -1,7 +1,7 @@
 """
-串流回調介面.
+Streaming callback interface.
 
-比照 agor-main 的 StreamingCallbacks
+Modeled after agor-main's StreamingCallbacks
 """
 
 from typing import Any, Dict, Optional, Protocol
@@ -9,36 +9,36 @@ from typing import Any, Dict, Optional, Protocol
 
 class StreamingCallbacks(Protocol):
     """
-    串流回調介面.
-    
-    用於實時 UI 更新（打字機效果）。
+    Streaming callback interface.
+
+    Used for real-time UI updates (typewriter effect).
     """
     
     async def on_stream_start(self, message_id: str) -> None:
         """
-        開始串流文字.
+        Start streaming text.
         
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
         """
         ...
     
     async def on_stream_chunk(self, message_id: str, chunk: str) -> None:
         """
-        接收文字片段.
+        Receive text chunk.
         
         Args:
-            message_id: 訊息 ID
-            chunk: 文字片段（3-10 個字）
+            message_id: Message ID
+            chunk: Text chunk (3-10 characters)
         """
         ...
     
     async def on_stream_end(self, message_id: str) -> None:
         """
-        結束串流文字.
+        End streaming text.
         
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
         """
         ...
     
@@ -48,49 +48,49 @@ class StreamingCallbacks(Protocol):
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
-        開始思考.
+        Start thinking.
         
         Args:
-            message_id: 訊息 ID
-            metadata: 元數據（例如 budget）
+            message_id: Message ID
+            metadata: Metadata (e.g., budget)
         """
         ...
     
     async def on_thinking_chunk(self, message_id: str, chunk: str) -> None:
         """
-        接收思考片段.
+        Receive thinking chunk.
         
         Args:
-            message_id: 訊息 ID
-            chunk: 思考片段
+            message_id: Message ID
+            chunk: Thinking chunk
         """
         ...
     
     async def on_thinking_end(self, message_id: str) -> None:
         """
-        結束思考.
+        End thinking.
         
         Args:
-            message_id: 訊息 ID
+            message_id: Message ID
         """
         ...
 
     async def on_message_created(self, message: Dict[str, Any]) -> None:
         """
-        訊息建立通知.
+        Message created notification.
 
         Args:
-            message: 訊息資料
+            message: Message data
         """
         ...
 
     def emit_event(self, event_name: str, data: Dict[str, Any]) -> None:
         """
-        發送 WebSocket 事件.
+        Emit WebSocket event.
 
         Args:
-            event_name: 事件名稱 (e.g., 'permission:request')
-            data: 事件資料
+            event_name: Event name (e.g., 'permission:request')
+            data: Event data
         """
         ...
 

@@ -1,6 +1,6 @@
-"""CLI Slash Commands 格式策略
+"""CLI Slash Commands format strategies
 
-根據不同 CLI 工具的檔案格式（Markdown / TOML），提供統一的讀寫介面。
+Provides unified read/write interface based on different CLI tool file formats (Markdown / TOML).
 """
 
 from __future__ import annotations
@@ -26,38 +26,38 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ParsedDocument:
-    """解析後的文件資料"""
+    """Parsed document data"""
 
-    content: str  # 原始檔案完整文字
+    content: str  # Raw file full text
     description: str | None
     namespace: str | None
 
 
 class DocumentFormatStrategy(ABC):
-    """文件格式策略基類"""
+    """Document format strategy base class"""
 
     @abstractmethod
     def parse(self, file_path: Path, root_dir: Path) -> ParsedDocument:
-        """解析檔案
+        """Parse file
 
         Args:
-            file_path: 檔案路徑
-            root_dir: scope 根目錄（用於推導 namespace）
+            file_path: File path
+            root_dir: Scope root directory (used to infer namespace)
         """
 
     @abstractmethod
     def write(self, file_path: Path, content: str, description: str | None = None) -> None:
-        """寫入檔案
+        """Write file
 
         Args:
-            file_path: 檔案路徑
-            content: 完整原始內容（前端負責組裝格式）
-            description: 描述（部分格式可能忽略）
+            file_path: File path
+            content: Complete raw content (frontend responsible for assembling format)
+            description: Description (some formats may ignore)
         """
 
 
 def _infer_namespace(file_path: Path, root_dir: Path) -> str | None:
-    """從檔案路徑推導命名空間"""
+    """Infer namespace from file path"""
     try:
         relative = file_path.parent.relative_to(root_dir)
     except ValueError:
@@ -68,9 +68,9 @@ def _infer_namespace(file_path: Path, root_dir: Path) -> str | None:
 
 
 class MarkdownFormatStrategy(DocumentFormatStrategy):
-    """Markdown 格式策略（Codex / OpenCode）
+    """Markdown format strategy (Codex / OpenCode)
 
-    支援 YAML frontmatter 解析 description。
+    Supports YAML frontmatter parsing for description.
     """
 
     def parse(self, file_path: Path, root_dir: Path) -> ParsedDocument:
@@ -85,7 +85,7 @@ class MarkdownFormatStrategy(DocumentFormatStrategy):
 
     @staticmethod
     def _extract_description(content: str) -> str | None:
-        """從 YAML frontmatter 解析 description"""
+        """Parse description from YAML frontmatter"""
         if not content.startswith("---"):
             return None
         parts = content.split("\n---", 1)
@@ -100,9 +100,9 @@ class MarkdownFormatStrategy(DocumentFormatStrategy):
 
 
 class TomlFormatStrategy(DocumentFormatStrategy):
-    """TOML 格式策略（Gemini）
+    """TOML format strategy (Gemini)
 
-    Gemini slash commands 使用 TOML 格式，包含 prompt 和 description 欄位。
+    Gemini slash commands use TOML format, containing prompt and description fields.
     """
 
     def parse(self, file_path: Path, root_dir: Path) -> ParsedDocument:

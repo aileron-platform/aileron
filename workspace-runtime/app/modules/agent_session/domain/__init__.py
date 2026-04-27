@@ -1,4 +1,4 @@
-"""Domain 層 - 領域模型、列舉和值對象."""
+"""Domain layer - Domain models, enums, and value objects."""
 
 from .enums import (
     AgenticTool,

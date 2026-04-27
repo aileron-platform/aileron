@@ -1,7 +1,7 @@
 """
-Client Browser Relay 資料模型
+Client Browser Relay data models
 
-定義 CDP Relay Server 所需的資料結構
+Defines data structures required by CDP Relay Server
 """
 
 from dataclasses import dataclass, field
@@ -11,12 +11,12 @@ from pydantic import BaseModel, Field
 
 
 # ============================================================================
-# Target 相關模型
+# Target-related models
 # ============================================================================
 
 
 class TargetInfo(BaseModel):
-    """CDP Target 資訊"""
+    """CDP Target information"""
 
     target_id: str = Field(..., alias="targetId")
     type: str = "page"
@@ -31,7 +31,7 @@ class TargetInfo(BaseModel):
 
 @dataclass
 class ConnectedTarget:
-    """已連接的 Target"""
+    """Connected Target"""
 
     session_id: str
     target_id: str
@@ -40,19 +40,19 @@ class ConnectedTarget:
 
 @dataclass
 class PlaywrightClient:
-    """Playwright 客戶端連接"""
+    """Playwright client connection"""
 
     id: str
     known_targets: set[str] = field(default_factory=set)
 
 
 # ============================================================================
-# API 回應模型
+# API Response models
 # ============================================================================
 
 
 class RelayStatusResponse(BaseModel):
-    """Relay Server 狀態回應"""
+    """Relay Server status response"""
 
     ws_endpoint: str = Field(..., alias="wsEndpoint")
     extension_connected: bool = Field(..., alias="extensionConnected")
@@ -65,19 +65,19 @@ class RelayStatusResponse(BaseModel):
 
 
 class NamedPagesResponse(BaseModel):
-    """命名頁面列表回應"""
+    """Named pages list response"""
 
     pages: list[str] = Field(default_factory=list)
 
 
 class CreatePageRequest(BaseModel):
-    """建立頁面請求"""
+    """Create page request"""
 
     name: str
 
 
 class CreatePageResponse(BaseModel):
-    """建立頁面回應"""
+    """Create page response"""
 
     ws_endpoint: str = Field(..., alias="wsEndpoint")
     name: str
@@ -89,6 +89,6 @@ class CreatePageResponse(BaseModel):
 
 
 class DeletePageResponse(BaseModel):
-    """刪除頁面回應"""
+    """Delete page response"""
 
     success: bool
