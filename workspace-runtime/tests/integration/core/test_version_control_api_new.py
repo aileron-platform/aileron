@@ -96,7 +96,7 @@ class StubGitService:
         create = payload_dict.get("create", False)
 
         if create and branch_name not in [b["name"] for b in self.branches]:
-            Create new branch
+            # Create new branch.
             new_branch = BranchInfo(
                 name=branch_name,
                 displayName=branch_name,

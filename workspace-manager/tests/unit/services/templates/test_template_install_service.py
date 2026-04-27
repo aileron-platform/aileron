@@ -1,4 +1,4 @@
-"""TemplateInstallService 單元測試"""
+"""TemplateInstallService 單元Testing"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from app.services.template_install_service import TemplateInstallError, Template
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Data庫 Session"""
     session = MagicMock()
     session.query = MagicMock()
     return session
@@ -27,7 +27,7 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_template_db():
-    """範例模板資料庫模型"""
+    """範例TemplateData庫Model"""
     return TemplateDB(
         id="test-template",
         name="Test Template",
@@ -48,7 +48,7 @@ def mock_template_db():
 
 @pytest.fixture
 def mock_workspace():
-    """範例 Workspace 模型"""
+    """範例 Workspace Model"""
     workspace = MagicMock(spec=Workspace)
     workspace.id = "workspace-123"
     workspace.name = "Test Workspace"
@@ -60,7 +60,7 @@ def mock_workspace():
 
 @pytest.fixture
 def install_service(mock_db_session):
-    """TemplateInstallService 實例"""
+    """TemplateInstallService Instance"""
     with patch('app.services.template_install_service.get_settings') as mock_settings:
         mock_settings.return_value.INTERNAL_API_TOKEN = "test-token"
         service = TemplateInstallService(mock_db_session)
@@ -73,7 +73,7 @@ def install_service(mock_db_session):
 
 @pytest.mark.unit
 class TestInstallation:
-    """模板安裝測試"""
+    """TemplateInstallingTesting"""
 
     @pytest.mark.asyncio
     async def test_install_template_success(
@@ -83,7 +83,7 @@ class TestInstallation:
         mock_template_db,
         mock_workspace
     ):
-        """測試：安裝模板成功"""
+        """Testing：InstallingTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -113,7 +113,7 @@ class TestInstallation:
 
     @pytest.mark.asyncio
     async def test_install_template_workspace_not_found(self, install_service, mock_db_session):
-        """測試：Workspace does not exist時安裝失敗"""
+        """Testing：Workspace does not exist時InstallingUnsuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -134,7 +134,7 @@ class TestInstallation:
         mock_db_session,
         mock_workspace
     ):
-        """測試：Workspace 未運行時安裝失敗"""
+        """Testing：Workspace 未Run時InstallingUnsuccessfully"""
         # Arrange
         mock_workspace.runtime_status = "stopped"
         mock_query = MagicMock()
@@ -156,7 +156,7 @@ class TestInstallation:
         mock_db_session,
         mock_workspace
     ):
-        """測試：Template does not exist時安裝失敗"""
+        """Testing：Template does not exist時InstallingUnsuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -180,7 +180,7 @@ class TestInstallation:
 
 @pytest.mark.unit
 class TestPayloadPreparation:
-    """安裝資料準備測試"""
+    """InstallingDataPrepareTesting"""
 
     @pytest.mark.asyncio
     async def test_prepare_install_payload_basic(
@@ -188,7 +188,7 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備基本安裝資料"""
+        """Testing：PrepareBasicInstallingData"""
         with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
             mock_compile.return_value = InstallPlan(
                 target=CanonicalTarget.CLAUDE_CODE,
@@ -209,7 +209,7 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備含 install plan 的安裝資料"""
+        """Testing：Prepare含 install plan 的InstallingData"""
         with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
             mock_compile.return_value = InstallPlan(
                 target=CanonicalTarget.CLAUDE_CODE,
@@ -229,7 +229,7 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：安裝 payload 攜帶 compiled files 而非 legacy commands 欄位"""
+        """Testing：Installing payload Carrying compiled files 而非 legacy commands 欄位"""
         with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
             mock_compile.return_value = InstallPlan(
                 target=CanonicalTarget.CLAUDE_CODE,
@@ -256,7 +256,7 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備含 MCP compile hint 的安裝資料"""
+        """Testing：Prepare含 MCP compile hint 的InstallingData"""
         with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
             mock_compile.return_value = InstallPlan(
                 target=CanonicalTarget.CLAUDE_CODE,
@@ -285,7 +285,7 @@ class TestPayloadPreparation:
         install_service,
         mock_template_db
     ):
-        """測試：準備含 Skills 的安裝資料"""
+        """Testing：Prepare含 Skills 的InstallingData"""
         with patch.object(install_service.template_compiler, "compile_template") as mock_compile:
             mock_compile.return_value = InstallPlan(
                 target=CanonicalTarget.CLAUDE_CODE,
@@ -313,11 +313,11 @@ class TestPayloadPreparation:
 
 @pytest.mark.unit
 class TestRuntimeAPICall:
-    """Runtime API 呼叫測試"""
+    """Runtime API CallTesting"""
 
     @pytest.mark.asyncio
     async def test_call_runtime_install_api_success(self, install_service, mock_workspace):
-        """測試：呼叫 Runtime API 成功"""
+        """Testing：Call Runtime API Successfully"""
         # Arrange
         runtime_url = "http://runtime:8080"
         workspace_id = "workspace-123"
@@ -347,7 +347,7 @@ class TestRuntimeAPICall:
 
     @pytest.mark.asyncio
     async def test_call_runtime_install_api_http_error(self, install_service):
-        """測試：Runtime API 返回 HTTP 錯誤"""
+        """Testing：Runtime API 返Back HTTP Incorrectly"""
         # Arrange
         runtime_url = "http://runtime:8080"
         workspace_id = "workspace-123"
@@ -380,7 +380,7 @@ class TestRuntimeAPICall:
 
     @pytest.mark.asyncio
     async def test_call_runtime_install_api_connection_error(self, install_service):
-        """測試：Runtime API 連接失敗"""
+        """Testing：Runtime API ConnectedUnsuccessfully"""
         # Arrange
         runtime_url = "http://runtime:8080"
         workspace_id = "workspace-123"
@@ -410,10 +410,10 @@ class TestRuntimeAPICall:
 
 @pytest.mark.unit
 class TestWorkspaceRetrieval:
-    """Workspace 檢索測試"""
+    """Workspace 檢索Testing"""
 
     def test_get_workspace_success(self, install_service, mock_db_session, mock_workspace):
-        """測試：取得 Workspace 成功"""
+        """Testing：Get Workspace Successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -426,7 +426,7 @@ class TestWorkspaceRetrieval:
         assert result == mock_workspace
 
     def test_get_workspace_not_found(self, install_service, mock_db_session):
-        """測試：Workspace does not exist返回 None"""
+        """Testing：Workspace does not exist返Back None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -445,16 +445,16 @@ class TestWorkspaceRetrieval:
 
 @pytest.mark.unit
 class TestRuntimeURL:
-    """Runtime URL 測試"""
+    """Runtime URL Testing"""
 
     def test_get_runtime_url_prefers_internal_url(self, install_service, mock_workspace):
-        """測試：有 internal URL 時優先使用 internal URL"""
+        """Testing：有 internal URL 時優先Use internal URL"""
         result = install_service._get_runtime_url(mock_workspace)
 
         assert result == "http://runtime-internal:8080"
 
     def test_get_runtime_url_falls_back_to_external_url(self, install_service, mock_workspace):
-        """測試：沒有 internal URL 時回退到 external URL"""
+        """Testing：None internal URL 時Back退To external URL"""
         mock_workspace.runtime_internal_url = None
 
         result = install_service._get_runtime_url(mock_workspace)
@@ -462,7 +462,7 @@ class TestRuntimeURL:
         assert result == "http://localhost:8080"
 
     def test_get_runtime_url_no_url(self, install_service, mock_workspace):
-        """測試：無 Runtime URL 拋出異常"""
+        """Testing：無 Runtime URL 拋OutAbnormal"""
         # Arrange
         mock_workspace.runtime_internal_url = None
         mock_workspace.runtime_external_url = None
@@ -479,7 +479,7 @@ class TestRuntimeURL:
 
 @pytest.mark.unit
 class TestIntegration:
-    """整合測試"""
+    """整合Testing"""
 
     @pytest.mark.asyncio
     async def test_full_installation_flow(
@@ -489,7 +489,7 @@ class TestIntegration:
         mock_template_db,
         mock_workspace
     ):
-        """測試：完整安裝流程"""
+        """Testing：完整Installing流程"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -540,7 +540,7 @@ class TestIntegration:
         mock_template_db,
         mock_workspace
     ):
-        """測試：安裝包含所有組件的模板"""
+        """Testing：Installing包含AllComponent的Template"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_workspace
@@ -586,7 +586,7 @@ class TestIntegration:
             # Assert
             assert result["success"] is True
 
-            # 驗證 API 被呼叫，並且 payload 包含所有組件
+            # Verifying API 被Call，並且 payload 包含AllComponent
             call_args = mock_client_instance.post.call_args
             assert call_args is not None
             payload = call_args[1]["json"]

@@ -1,4 +1,4 @@
-"""TemplateService 單元測試"""
+"""TemplateService 單元Testing"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from app.services.template_service import TemplateService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Data庫 Session"""
     session = MagicMock()
     session.query = MagicMock()
     session.add = MagicMock()
@@ -42,7 +42,7 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_template_db():
-    """範例模板資料庫模型"""
+    """範例TemplateData庫Model"""
     return TemplateDB(
         id="test-template",
         name="Test Template",
@@ -63,7 +63,7 @@ def mock_template_db():
 
 @pytest.fixture
 def mock_template_create():
-    """範例模板建立請求"""
+    """範例TemplateBuildingRequest"""
     return TemplateCreate(
         template_id="new-template",
         name="New Template",
@@ -83,7 +83,7 @@ def mock_template_create():
 
 @pytest.fixture
 def template_service(mock_db_session, tmp_path):
-    """TemplateService 實例"""
+    """TemplateService Instance"""
     with patch('app.services.template_service.get_settings') as mock_settings:
         mock_settings.return_value.TEMPLATE_STORAGE_PATH = str(tmp_path)
         service = TemplateService(mock_db_session)
@@ -97,10 +97,10 @@ def template_service(mock_db_session, tmp_path):
 
 @pytest.mark.unit
 class TestTemplateCRUD:
-    """模板 CRUD 操作測試"""
+    """Template CRUD OperationTesting"""
 
     def test_list_templates_success(self, template_service, mock_db_session, mock_template_db):
-        """測試：列出所有模板成功"""
+        """Testing：ListingOutAllTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.count.return_value = 1
@@ -129,7 +129,7 @@ class TestTemplateCRUD:
             assert len(result.items) == 1
 
     def test_list_templates_with_filters(self, template_service, mock_db_session, mock_template_db):
-        """測試：使用篩選條件列出模板"""
+        """Testing：Use篩選ConditionsListingOutTemplate"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -163,7 +163,7 @@ class TestTemplateCRUD:
             assert mock_query.filter.called
 
     def test_get_template_success(self, template_service, mock_db_session, mock_template_db):
-        """測試：取得單一模板成功"""
+        """Testing：Get單一TemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -189,7 +189,7 @@ class TestTemplateCRUD:
             mock_db_session.query.assert_called_once()
 
     def test_get_template_not_found(self, template_service, mock_db_session):
-        """測試：取得does not exist的模板返回 None"""
+        """Testing：Getdoes not exist的Template返Back None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -202,7 +202,7 @@ class TestTemplateCRUD:
         assert result is None
 
     def test_create_template_success(self, template_service, mock_db_session, mock_template_create, tmp_path):
-        """測試：建立新模板成功"""
+        """Testing：BuildingNewTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -231,7 +231,7 @@ class TestTemplateCRUD:
             mock_db_session.commit.assert_called()
 
     def test_create_template_duplicate_id(self, template_service, mock_db_session, mock_template_create, mock_template_db):
-        """測試：建立重複 ID 的模板失敗"""
+        """Testing：BuildingRepeat ID 的TemplateUnsuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -242,7 +242,7 @@ class TestTemplateCRUD:
             template_service.create(mock_template_create)
 
     def test_create_template_invalid_id_format(self, template_service, mock_db_session):
-        """測試：建立無效 ID 格式的模板失敗"""
+        """Testing：BuildingInvalid ID Format的TemplateUnsuccessfully"""
         # Arrange
         invalid_template = TemplateCreate(
             template_id="Invalid_Template_123",  # 不符合 kebab-case
@@ -263,7 +263,7 @@ class TestTemplateCRUD:
             template_service.create(invalid_template)
 
     def test_update_template_success(self, template_service, mock_db_session, mock_template_db):
-        """測試：更新模板成功"""
+        """Testing：MoreNewTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -296,7 +296,7 @@ class TestTemplateCRUD:
             assert mock_db_session.commit.call_count >= 1
 
     def test_update_template_not_found(self, template_service, mock_db_session):
-        """測試：更新does not exist的模板返回 None"""
+        """Testing：MoreNewdoes not exist的Template返Back None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -311,13 +311,13 @@ class TestTemplateCRUD:
         assert result is None
 
     def test_delete_template_success(self, template_service, mock_db_session, mock_template_db, tmp_path):
-        """測試：刪除模板成功"""
+        """Testing：DeleteTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        # 建立模板目錄
+        # BuildingTemplateCatalog
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
 
@@ -331,7 +331,7 @@ class TestTemplateCRUD:
             mock_db_session.commit.assert_called_once()
 
     def test_delete_template_not_found(self, template_service, mock_db_session):
-        """測試：刪除does not exist的模板返回 False"""
+        """Testing：Deletedoes not exist的Template返Back False"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -350,16 +350,16 @@ class TestTemplateCRUD:
 
 @pytest.mark.unit
 class TestTemplateImportExport:
-    """模板匯入匯出測試"""
+    """Template匯入匯OutTesting"""
 
     def test_export_template_success(self, template_service, mock_db_session, mock_template_db, tmp_path):
-        """測試：匯出模板成功"""
+        """Testing：匯OutTemplateSuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        # 建立模板目錄和檔案
+        # BuildingTemplateCatalog和File
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
         (template_dir / "test.txt").write_text("test content")
@@ -376,7 +376,7 @@ class TestTemplateImportExport:
             assert result.suffix == ".zip"
 
     def test_export_template_not_found(self, template_service, mock_db_session):
-        """測試：匯出does not exist的模板返回 None"""
+        """Testing：匯Outdoes not exist的Template返Back None"""
         # Arrange
         with patch.object(template_service, '_get_template') as mock_get:
             mock_get.return_value = None
@@ -391,9 +391,9 @@ class TestTemplateImportExport:
     async def test_import_template_success(
         self, template_service, mock_db_session, tmp_path, upload_file_factory
     ):
-        """測試：匯入模板成功"""
+        """Testing：匯入TemplateSuccessfully"""
         # Arrange
-        # 建立 ZIP 檔案
+        # Building ZIP File
         zip_path = tmp_path / "test-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             manifest_data = {
@@ -407,7 +407,7 @@ class TestTemplateImportExport:
             }
             zipf.writestr(".claude-plugin/manifest.json", json.dumps(manifest_data))
 
-        # 建立 mock UploadFile
+        # Building mock UploadFile
         mock_file = upload_file_factory("test-template.zip", zip_path.read_bytes())
 
         with patch.object(template_service, '_get_template') as mock_get, \
@@ -435,7 +435,7 @@ class TestTemplateImportExport:
 
     @pytest.mark.asyncio
     async def test_import_template_missing_package_manifest(self, template_service, tmp_path):
-        """測試：匯入缺少 manifest.json 的模板失敗"""
+        """Testing：匯入缺Less manifest.json 的TemplateUnsuccessfully"""
         # Arrange
         zip_path = tmp_path / "invalid-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
@@ -453,7 +453,7 @@ class TestTemplateImportExport:
     async def test_import_template_rejects_legacy_marketplace_json_only(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：只有 legacy marketplace.json 時會要求 manifest.json"""
+        """Testing：Only legacy marketplace.json 時會Requirement manifest.json"""
         zip_path = tmp_path / "legacy-marketplace-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -470,7 +470,7 @@ class TestTemplateImportExport:
     async def test_import_template_prefers_manifest_json_when_legacy_file_also_exists(
         self, template_service, mock_db_session, tmp_path, upload_file_factory
     ):
-        """測試：manifest.json 與 marketplace.json 並存時只使用 manifest.json"""
+        """Testing：manifest.json 與 marketplace.json 並存時只Use manifest.json"""
         zip_path = tmp_path / "dual-manifest-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -507,7 +507,7 @@ class TestTemplateImportExport:
 
     @pytest.mark.asyncio
     async def test_import_template_missing_id(self, template_service, tmp_path, upload_file_factory):
-        """測試：manifest.json 缺少 id 時會失敗"""
+        """Testing：manifest.json 缺Less id 時會Unsuccessfully"""
         zip_path = tmp_path / "missing-id-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -524,7 +524,7 @@ class TestTemplateImportExport:
     async def test_import_template_overwrite_updates_existing_template(
         self, template_service, mock_db_session, mock_template_db, tmp_path, upload_file_factory
     ):
-        """測試：覆蓋匯入會更新既有模板與檔案"""
+        """Testing：覆蓋匯入會MoreNew既有Template與File"""
         zip_path = tmp_path / "overwrite-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             plugin_data = {
@@ -570,7 +570,7 @@ class TestTemplateImportExport:
     async def test_import_template_new_template_uses_defaults(
         self, template_service, mock_db_session, tmp_path, upload_file_factory
     ):
-        """測試：匯入新模板時會套用預設欄位值"""
+        """Testing：匯入NewTemplate時會套用Default欄位Value"""
         zip_path = tmp_path / "defaults-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -614,7 +614,7 @@ class TestTemplateImportExport:
     async def test_import_template_normalizes_legacy_status_and_cli_type(
         self, template_service, mock_db_session, tmp_path, upload_file_factory
     ):
-        """測試：匯入會將 legacy status/cli_type 正規化為資料庫可接受值"""
+        """Testing：匯入會將 legacy status/cli_type 正規化為Data庫可AcceptingValue"""
         zip_path = tmp_path / "legacy-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -660,7 +660,7 @@ class TestTemplateImportExport:
     async def test_import_template_supports_single_root_directory_zip(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：匯入支援 ZIP 內多包一層模板根目錄"""
+        """Testing：匯入Supporting ZIP WithinMany包一層Template根Catalog"""
         zip_path = tmp_path / "nested-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -690,7 +690,7 @@ class TestTemplateImportExport:
     async def test_import_template_normalizes_claudecode_cli_type(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：匯入支援 legacy 的 ClaudeCode cli_type"""
+        """Testing：匯入Supporting legacy 的 ClaudeCode cli_type"""
         zip_path = tmp_path / "claudecode-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -720,7 +720,7 @@ class TestTemplateImportExport:
     async def test_import_template_rejects_invalid_cli_type_with_friendly_message(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：非法 cli_type 會回傳明確錯誤訊息"""
+        """Testing：非法 cli_type 會Return明確Incorrectly訊息"""
         zip_path = tmp_path / "invalid-cli-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(
@@ -737,7 +737,7 @@ class TestTemplateImportExport:
     async def test_import_template_rejects_invalid_json_with_friendly_message(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：非法 manifest.json 會回傳明確錯誤訊息"""
+        """Testing：非法 manifest.json 會Return明確Incorrectly訊息"""
         zip_path = tmp_path / "invalid-json-template.zip"
         with zipfile.ZipFile(zip_path, "w") as zipf:
             zipf.writestr(".claude-plugin/manifest.json", "{invalid json")
@@ -751,7 +751,7 @@ class TestTemplateImportExport:
     async def test_import_template_rejects_bad_zip_with_friendly_message(
         self, template_service, tmp_path, upload_file_factory
     ):
-        """測試：損壞 ZIP 會回傳明確錯誤訊息"""
+        """Testing：損Bad ZIP 會Return明確Incorrectly訊息"""
         bad_zip_path = tmp_path / "broken-template.zip"
         bad_zip_path.write_bytes(b"not a real zip file")
 
@@ -767,10 +767,10 @@ class TestTemplateImportExport:
 
 @pytest.mark.unit
 class TestTemplateStructure:
-    """模板結構管理測試"""
+    """TemplateStructureManagingTesting"""
 
     def test_create_template_structure(self, template_service, mock_template_create, tmp_path):
-        """測試：建立模板檔案結構"""
+        """Testing：BuildingTemplateFileStructure"""
         # Act
         template_service._create_template_structure("new-template", mock_template_create)
 
@@ -788,13 +788,13 @@ class TestTemplateStructure:
         template_yaml_path = template_dir / "template.yaml"
         assert template_yaml_path.exists()
 
-        # 驗證 template.yaml 內容
+        # Verifying template.yaml Within容
         template_data = yaml.safe_load(template_yaml_path.read_text())
         assert template_data["id"] == "new-template"
         assert template_data["name"] == "New Template"
 
     def test_delete_template_structure(self, template_service, tmp_path):
-        """測試：刪除模板檔案結構"""
+        """Testing：DeleteTemplateFileStructure"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
@@ -813,10 +813,10 @@ class TestTemplateStructure:
 
 @pytest.mark.unit
 class TestServiceDelegation:
-    """服務委派測試"""
+    """Service委派Testing"""
 
     def test_get_mcp_config_delegation(self, template_service):
-        """測試：MCP 配置委派"""
+        """Testing：MCP Setup委派"""
         # Arrange
         with patch.object(template_service.mcp_service, 'get_mcp_config') as mock_method:
             mock_method.return_value = {"servers": {}}
@@ -829,7 +829,7 @@ class TestServiceDelegation:
             assert result == {"servers": {}}
 
     def test_get_hooks_config_delegation(self, template_service):
-        """測試：Hooks 配置委派"""
+        """Testing：Hooks Setup委派"""
         # Arrange
         with patch.object(template_service.hooks_service, 'get_hooks_config') as mock_method:
             mock_method.return_value = {"hooks": {}}
@@ -842,7 +842,7 @@ class TestServiceDelegation:
             assert result == {"hooks": {}}
 
     def test_get_commands_delegation(self, template_service):
-        """測試：Slash Commands 委派"""
+        """Testing：Slash Commands 委派"""
         # Arrange
         with patch.object(template_service.commands_service, 'get_commands_files') as mock_method:
             mock_method.return_value = []
@@ -887,7 +887,7 @@ class TestServiceDelegation:
     def test_wrapper_delegations(
         self, template_service, service_attr, service_method, wrapper_name, args, expected_result
     ):
-        """測試：各 wrapper 會正確委派到對應子服務"""
+        """Testing：各 wrapper 會Correctly委派ToRight應子Service"""
         service = getattr(template_service, service_attr)
         with patch.object(service, service_method, return_value=expected_result) as mock_method:
             result = getattr(template_service, wrapper_name)(*args)
@@ -896,7 +896,7 @@ class TestServiceDelegation:
         assert result == expected_result
 
     def test_file_wrapper_delegations(self, template_service):
-        """測試：檔案 wrapper 會正確轉接到新的 file_service API"""
+        """Testing：File wrapper 會Correctly轉接ToNew的 file_service API"""
         with patch.object(template_service.file_service, "get_tree", return_value={"nodes": []}) as mock_get_tree, \
              patch.object(template_service.file_service, "read_file", return_value={"content": "file"}) as mock_read_file, \
              patch.object(template_service.file_service, "create_entry", return_value={"created": True}) as mock_create_entry, \
@@ -1001,7 +1001,7 @@ class TestServiceDelegation:
 
     @pytest.mark.asyncio
     async def test_upload_files_delegation(self, template_service):
-        """測試：upload_files 會正確委派給 file_service"""
+        """Testing：upload_files 會Correctly委派給 file_service"""
         files = [Mock(filename="one.txt")]
 
         with patch.object(template_service.file_service, "upload_files", new=AsyncMock(return_value={"uploaded": 1})) as mock_method:
@@ -1029,10 +1029,10 @@ class TestServiceDelegation:
 
 @pytest.mark.unit
 class TestErrorHandling:
-    """錯誤處理測試"""
+    """IncorrectlyHandleTesting"""
 
     def test_create_template_filesystem_error_rollback(self, template_service, mock_db_session, mock_template_create):
-        """測試：建立模板時檔案系統錯誤會回滾資料庫"""
+        """Testing：BuildingTemplate時FileSystemIncorrectly會Back滾Data庫"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -1045,17 +1045,17 @@ class TestErrorHandling:
             with pytest.raises(Exception, match="Filesystem error"):
                 template_service.create(mock_template_create)
 
-            # 驗證回滾
+            # VerifyingBack滾
             mock_db_session.delete.assert_called_once()
             assert mock_db_session.commit.call_count >= 1
 
     def test_export_template_with_filesystem_error(self, template_service, mock_db_session, mock_template_db, tmp_path):
-        """測試：匯出模板時檔案系統錯誤處理"""
+        """Testing：匯OutTemplate時FileSystemIncorrectlyHandle"""
         # Arrange
         with patch.object(template_service, '_get_template') as mock_get:
             mock_get.return_value = mock_template_db
 
-            # 建立一個會導致錯誤的目錄結構
+            # Building一個會導致Incorrectly的CatalogStructure
             template_dir = tmp_path / "plugins" / "test-template"
             template_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1069,7 +1069,7 @@ class TestErrorHandling:
                 assert result is None
 
     def test_list_templates_with_keywords_filter(self, template_service, mock_db_session, mock_template_db):
-        """測試：使用關鍵字篩選列出模板"""
+        """Testing：UseKey字篩選ListingOutTemplate"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -1090,7 +1090,7 @@ class TestErrorHandling:
         assert mock_query.filter.call_count >= 2
 
     def test_list_templates_with_empty_keywords(self, template_service, mock_db_session, mock_template_db):
-        """測試：使用空白關鍵字篩選不會出錯"""
+        """Testing：Use空白Key字篩選不會OutWrong"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -1108,7 +1108,7 @@ class TestErrorHandling:
         assert result is not None
 
     def test_update_template_with_author(self, template_service, mock_db_session, mock_template_db):
-        """測試：更新模板作者資訊"""
+        """Testing：MoreNewTemplate作者Information"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -1135,7 +1135,7 @@ class TestErrorHandling:
         mock_db_session.commit.assert_called()
 
     def test_delete_template_with_filesystem_error(self, template_service, mock_db_session, mock_template_db, tmp_path):
-        """測試：刪除模板時檔案系統錯誤處理"""
+        """Testing：DeleteTemplate時FileSystemIncorrectlyHandle"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -1154,7 +1154,7 @@ class TestErrorHandling:
             mock_db_session.commit.assert_called()
 
     def test_db_to_pydantic_with_all_configs(self, template_service, mock_template_db):
-        """測試：_db_to_pydantic 載入所有配置"""
+        """Testing：_db_to_pydantic LoadAllSetup"""
         # Arrange
         with patch.object(template_service.mcp_service, 'load_mcp_servers') as mock_mcp:
             with patch.object(template_service.hooks_service, 'load_hooks') as mock_hooks:

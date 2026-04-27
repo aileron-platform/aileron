@@ -1,4 +1,4 @@
-"""Knowledge base settings 測試。"""
+"""Knowledge base settings Test。"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""角色與權限裝飾器單元測試"""
+"""Role and Permission Decorator Unit Test"""
 
 from __future__ import annotations
 

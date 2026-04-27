@@ -1,4 +1,4 @@
-"""AutomationService 單元測試"""
+"""AutomationService 單元Testing"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ from app.utils.datetime_utils import utcnow
 
 @pytest.fixture
 def db_session():
-    """Mock 資料庫 Session"""
+    """Mock Data庫 Session"""
     session = MagicMock(spec=Session)
     session.execute = MagicMock()
     session.add = MagicMock()
@@ -46,13 +46,13 @@ def db_session():
 
 @pytest.fixture
 def automation_service(db_session):
-    """AutomationService 實例"""
+    """AutomationService Instance"""
     return AutomationService(db=db_session)
 
 
 @pytest.fixture
 def sample_job_record():
-    """範例自動化任務記錄"""
+    """範例自動化TaskRecord"""
     now = utcnow()
     return db_models.AutomationJob(
         id="job-123",
@@ -82,7 +82,7 @@ def sample_job_record():
 
 @pytest.fixture
 def sample_workspace_record():
-    """範例工作區記錄"""
+    """範例WorkingDistrictRecord"""
     return db_models.Workspace(
         id="ws-123",
         name="Test Workspace",
@@ -95,7 +95,7 @@ def sample_workspace_record():
 
 @pytest.fixture
 def sample_execution_record():
-    """範例執行記錄"""
+    """範例執行Record"""
     now = utcnow()
     return db_models.JobExecution(
         id="exec-123",
@@ -116,7 +116,7 @@ def sample_execution_record():
 
 @pytest.fixture
 def sample_job_create_request():
-    """範例任務創建請求"""
+    """範例Task創建Request"""
     return JobCreateRequest(
         name="Test Job",
         description="Test Description",
@@ -134,15 +134,15 @@ def sample_job_create_request():
 
 
 # ============================================================================
-# 任務 CRUD 測試
+# Task CRUD Testing
 # ============================================================================
 
 @pytest.mark.unit
 class TestAutomationJobCRUD:
-    """自動化任務 CRUD 測試"""
+    """自動化Task CRUD Testing"""
 
     def test_list_tasks_success(self, automation_service, db_session, sample_job_record, sample_workspace_record):
-        """測試：查詢任務列表成功"""
+        """Testing：查詢TaskListing表Successfully"""
         # Arrange
         mock_result = MagicMock()
         mock_result.all.return_value = [(sample_job_record, sample_workspace_record)]
@@ -159,7 +159,7 @@ class TestAutomationJobCRUD:
         assert result.items[0].workspace_name == "Test Workspace"
 
     def test_list_tasks_empty(self, automation_service, db_session):
-        """測試：查詢空任務列表"""
+        """Testing：查詢空TaskListing表"""
         # Arrange
         mock_result = MagicMock()
         mock_result.all.return_value = []
@@ -173,7 +173,7 @@ class TestAutomationJobCRUD:
         assert len(result.items) == 0
 
     def test_get_job_exists(self, automation_service, db_session, sample_job_record):
-        """測試：查詢現有任務成功"""
+        """Testing：查詢現有TaskSuccessfully"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -187,7 +187,7 @@ class TestAutomationJobCRUD:
         db_session.get.assert_called_once_with(db_models.AutomationJob, "job-123")
 
     def test_get_job_not_found(self, automation_service, db_session):
-        """測試：查詢does not exist的任務返回 None"""
+        """Testing：查詢does not exist的Task返Back None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -198,11 +198,11 @@ class TestAutomationJobCRUD:
         assert result is None
 
     def test_create_job_success(self, automation_service, db_session, sample_job_create_request):
-        """測試：建立新任務成功"""
+        """Testing：BuildingNewTaskSuccessfully"""
         # Arrange
         def mock_refresh(obj):
             if isinstance(obj, db_models.AutomationJob):
-                # 確保所有必要的字段都有值
+                # 確保AllNecessary的字段都有Value
                 if not hasattr(obj, 'success_count') or obj.success_count is None:
                     obj.success_count = 0
                 if not hasattr(obj, 'failure_count') or obj.failure_count is None:
@@ -222,7 +222,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_update_job_success(self, automation_service, db_session, sample_job_record):
-        """測試：更新任務成功"""
+        """Testing：MoreNewTaskSuccessfully"""
         # Arrange
         db_session.get.return_value = sample_job_record
         update_request = JobUpdateRequest(
@@ -240,7 +240,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_update_job_not_found(self, automation_service, db_session):
-        """測試：更新does not exist的任務返回 None"""
+        """Testing：MoreNewdoes not exist的Task返Back None"""
         # Arrange
         db_session.get.return_value = None
         update_request = JobUpdateRequest(name="Updated Job Name")
@@ -253,11 +253,11 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_not_called()
 
     def test_update_job_with_schedule_update(self, automation_service, db_session, sample_job_record):
-        """測試：更新任務排程時重新計算下次執行時間"""
+        """Testing：MoreNewTaskArranging程時Retry計算Below次執行Time"""
         # Arrange
         db_session.get.return_value = sample_job_record
         update_request = JobUpdateRequest(
-            schedule="0 12 * * *"  # 改為每天中午 12 點
+            schedule="0 12 * * *"  # 改為每Day中午 12 Point
         )
 
         # Act
@@ -270,7 +270,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_delete_job_success(self, automation_service, db_session, sample_job_record):
-        """測試：刪除任務成功"""
+        """Testing：DeleteTaskSuccessfully"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -282,7 +282,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_called_once()
 
     def test_delete_job_not_found(self, automation_service, db_session):
-        """測試：刪除does not exist的任務不報錯"""
+        """Testing：Deletedoes not exist的Task不報Wrong"""
         # Arrange
         db_session.get.return_value = None
 
@@ -294,7 +294,7 @@ class TestAutomationJobCRUD:
         db_session.commit.assert_not_called()
 
     def test_update_task_status_success(self, automation_service, db_session, sample_job_record):
-        """測試：更新任務狀態成功"""
+        """Testing：MoreNewTask狀態Successfully"""
         # Arrange
         db_session.get.return_value = sample_job_record
         status_update = JobStatusUpdate(status="paused")
@@ -309,15 +309,15 @@ class TestAutomationJobCRUD:
 
 
 # ============================================================================
-# 任務執行測試
+# Task執行Testing
 # ============================================================================
 
 @pytest.mark.unit
 class TestAutomationJobExecution:
-    """自動化任務執行測試"""
+    """自動化Task執行Testing"""
 
     def test_execute_task_now_active_job(self, automation_service, db_session, sample_job_record, sample_execution_record):
-        """測試：立即執行活動任務成功"""
+        """Testing：Immediate執行活動TaskSuccessfully"""
         # Arrange
         db_session.get.side_effect = [sample_job_record, sample_execution_record]
 
@@ -334,7 +334,7 @@ class TestAutomationJobExecution:
             mock_task.apply_async.assert_called_once()
 
     def test_execute_task_now_paused_job(self, automation_service, db_session, sample_job_record, sample_execution_record):
-        """測試：立即執行暫停任務成功"""
+        """Testing：Immediate執行PauseTaskSuccessfully"""
         # Arrange
         sample_job_record.status = "paused"
         db_session.get.side_effect = [sample_job_record, sample_execution_record]
@@ -350,7 +350,7 @@ class TestAutomationJobExecution:
             assert result.trigger == "manual"
 
     def test_execute_task_now_not_found(self, automation_service, db_session):
-        """測試：執行does not exist的任務拋出異常"""
+        """Testing：執行does not exist的Task拋OutAbnormal"""
         # Arrange
         db_session.get.return_value = None
 
@@ -359,7 +359,7 @@ class TestAutomationJobExecution:
             automation_service.execute_task_now("nonexistent-job")
 
     def test_execute_task_now_invalid_status(self, automation_service, db_session, sample_job_record):
-        """測試：執行草稿狀態任務拋出異常"""
+        """Testing：執行草稿狀態Task拋OutAbnormal"""
         # Arrange
         sample_job_record.status = "draft"
         db_session.get.return_value = sample_job_record
@@ -370,7 +370,7 @@ class TestAutomationJobExecution:
 
     @patch('app.tasks.run_automation_job')
     def test_execute_task_now_dispatch_failure(self, mock_task, automation_service, db_session, sample_job_record, sample_execution_record):
-        """測試：任務派送失敗拋出異常"""
+        """Testing：Task派DeliveringUnsuccessfully拋OutAbnormal"""
         # Arrange
         from celery.exceptions import CeleryError
         db_session.get.side_effect = [sample_job_record, sample_execution_record, sample_execution_record]
@@ -382,15 +382,15 @@ class TestAutomationJobExecution:
 
 
 # ============================================================================
-# 執行記錄管理測試
+# 執行RecordManagingTesting
 # ============================================================================
 
 @pytest.mark.unit
 class TestJobExecutionManagement:
-    """執行記錄管理測試"""
+    """執行RecordManagingTesting"""
 
     def test_list_executions_all(self, automation_service, db_session, sample_execution_record):
-        """測試：查詢所有執行記錄"""
+        """Testing：查詢All執行Record"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_execution_record]
@@ -405,7 +405,7 @@ class TestJobExecutionManagement:
         assert result.items[0].id == "exec-123"
 
     def test_list_executions_by_job_id(self, automation_service, db_session, sample_execution_record):
-        """測試：按任務 ID 查詢執行記錄"""
+        """Testing：按Task ID 查詢執行Record"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_execution_record]
@@ -419,7 +419,7 @@ class TestJobExecutionManagement:
         assert result.items[0].job_id == "job-123"
 
     def test_list_executions_with_limit(self, automation_service, db_session):
-        """測試：查詢執行記錄帶限制"""
+        """Testing：查詢執行RecordBringingLimitation"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
@@ -432,7 +432,7 @@ class TestJobExecutionManagement:
         assert result.total == 0
 
     def test_get_execution_record_exists(self, automation_service, db_session, sample_execution_record):
-        """測試：獲取存在的執行記錄"""
+        """Testing：獲Getting存At的執行Record"""
         # Arrange
         db_session.get.return_value = sample_execution_record
 
@@ -444,7 +444,7 @@ class TestJobExecutionManagement:
         assert result.id == "exec-123"
 
     def test_get_execution_record_not_found(self, automation_service, db_session):
-        """測試：獲取does not exist的執行記錄返回 None"""
+        """Testing：獲Gettingdoes not exist的執行Record返Back None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -455,7 +455,7 @@ class TestJobExecutionManagement:
         assert result is None
 
     def test_get_stuck_executions(self, automation_service, db_session):
-        """測試：獲取卡住的執行記錄"""
+        """Testing：獲Getting卡住的執行Record"""
         # Arrange
         stuck_time = utcnow() - timedelta(hours=2)
         stuck_execution = db_models.JobExecution(
@@ -479,7 +479,7 @@ class TestJobExecutionManagement:
         assert result[0].status == "running"
 
     def test_enqueue_execution_success(self, automation_service, db_session, sample_job_record):
-        """測試：創建排隊執行記錄成功"""
+        """Testing：創建Arranging隊執行RecordSuccessfully"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -505,7 +505,7 @@ class TestJobExecutionManagement:
         db_session.commit.assert_called_once()
 
     def test_enqueue_execution_job_not_found(self, automation_service, db_session):
-        """測試：為does not exist的任務創建執行記錄返回 None"""
+        """Testing：為does not exist的Task創建執行Record返Back None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -519,7 +519,7 @@ class TestJobExecutionManagement:
         assert result is None
 
     def test_mark_execution_running_success(self, automation_service, db_session, sample_execution_record):
-        """測試：標記執行記錄為運行中成功"""
+        """Testing：Mark執行Record為Run中Successfully"""
         # Arrange
         db_session.get.return_value = sample_execution_record
 
@@ -536,7 +536,7 @@ class TestJobExecutionManagement:
         assert result.summary == "Running now"
 
     def test_mark_execution_running_not_found(self, automation_service, db_session):
-        """測試：標記does not exist的執行記錄為運行中返回 None"""
+        """Testing：Markdoes not exist的執行Record為Run中返Back None"""
         # Arrange
         db_session.get.return_value = None
 
@@ -547,7 +547,7 @@ class TestJobExecutionManagement:
         assert result is None
 
     def test_complete_execution_success(self, automation_service, db_session, sample_job_record):
-        """測試：完成執行記錄成功"""
+        """Testing：Complete執行RecordSuccessfully"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -575,7 +575,7 @@ class TestJobExecutionManagement:
         assert result.session_id == "session-123"
 
     def test_complete_execution_with_error(self, automation_service, db_session, sample_job_record):
-        """測試：完成執行記錄（失敗）"""
+        """Testing：Complete執行Record（Unsuccessfully）"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -601,7 +601,7 @@ class TestJobExecutionManagement:
         assert result.error_message == "Test error message"
 
     def test_mark_execution_waiting_success(self, automation_service, db_session, sample_execution_record):
-        """測試：標記執行記錄為等待狀態成功"""
+        """Testing：Mark執行Record為Waiting狀態Successfully"""
         # Arrange
         db_session.get.return_value = sample_execution_record
 
@@ -619,7 +619,7 @@ class TestJobExecutionManagement:
         assert result.queued_at is not None
 
     def test_cancel_execution_success(self, automation_service, db_session, sample_job_record):
-        """測試：取消排隊執行記錄成功"""
+        """Testing：Getting消Arranging隊執行RecordSuccessfully"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -645,7 +645,7 @@ class TestJobExecutionManagement:
             mock_manager.cancel.assert_called_once()
 
     def test_cancel_execution_not_waiting(self, automation_service, db_session, sample_execution_record):
-        """測試：取消非等待狀態的執行記錄失敗"""
+        """Testing：Getting消非Waiting狀態的執行RecordUnsuccessfully"""
         # Arrange
         sample_execution_record.status = "running"
         db_session.get.return_value = sample_execution_record
@@ -659,15 +659,15 @@ class TestJobExecutionManagement:
 
 
 # ============================================================================
-# 任務排程測試
+# TaskArranging程Testing
 # ============================================================================
 
 @pytest.mark.unit
 class TestJobScheduling:
-    """任務排程測試"""
+    """TaskArranging程Testing"""
 
     def test_list_due_tasks(self, automation_service, db_session, sample_job_record):
-        """測試：查詢到期任務"""
+        """Testing：查詢To期Task"""
         # Arrange
         sample_job_record.next_run_at = utcnow() - timedelta(minutes=5)
         mock_result = MagicMock()
@@ -682,22 +682,22 @@ class TestJobScheduling:
         assert result[0].id == "job-123"
 
     def test_estimate_next_run_cron(self, automation_service):
-        """測試：計算 cron 任務的下次執行時間"""
+        """Testing：計算 cron Task的Below次執行Time"""
         # Act
         result = automation_service._estimate_next_run(
             trigger="cron",
-            schedule="0 0 * * *",  # 每天午夜
+            schedule="0 0 * * *",  # 每Day午夜
             timezone="Asia/Taipei",
             reference=datetime(2025, 1, 1, 12, 0, 0)
         )
 
         # Assert
         assert result is not None
-        # 下次執行應該是第二天的午夜
-        assert result.hour == 16  # UTC 時間 (午夜 CST = 16:00 UTC 前一天)
+        # Below次執行應該Yes第二Day的午夜
+        assert result.hour == 16  # UTC Time (午夜 CST = 16:00 UTC Front一Day)
 
     def test_estimate_next_run_manual(self, automation_service):
-        """測試：manual 觸發器不計算下次執行時間"""
+        """Testing：manual 觸發器不計算Below次執行Time"""
         # Act
         result = automation_service._estimate_next_run(
             trigger="manual",
@@ -709,7 +709,7 @@ class TestJobScheduling:
         assert result is None
 
     def test_estimate_next_run_invalid_cron(self, automation_service):
-        """測試：無效的 cron 表達式返回 None"""
+        """Testing：Invalid的 cron Expressing式返Back None"""
         # Act
         result = automation_service._estimate_next_run(
             trigger="cron",
@@ -722,15 +722,15 @@ class TestJobScheduling:
 
 
 # ============================================================================
-# 統計與指標測試
+# Statistics與指標Testing
 # ============================================================================
 
 @pytest.mark.unit
 class TestMetricsAndStatistics:
-    """統計與指標測試"""
+    """Statistics與指標Testing"""
 
     def test_get_metrics(self, automation_service, db_session):
-        """測試：獲取自動化指標"""
+        """Testing：獲Getting自動化指標"""
         # Arrange
         # Mock execution stats
         exec_stats_result = MagicMock()
@@ -763,7 +763,7 @@ class TestMetricsAndStatistics:
         assert result.average_duration == 3000  # 36000/12
 
     def test_get_calendar_events(self, automation_service, db_session, sample_job_record):
-        """測試：獲取行事曆事件"""
+        """Testing：獲Getting行事曆事件"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_job_record]
@@ -781,7 +781,7 @@ class TestMetricsAndStatistics:
         assert result.items[0].end is not None
 
     def test_get_workspace_queue(self, automation_service, db_session, sample_execution_record):
-        """測試：獲取工作區佇列資訊"""
+        """Testing：獲GettingWorkingDistrict佇ListingInformation"""
         # Arrange
         sample_execution_record.status = "waiting"
         mock_result = MagicMock()
@@ -803,15 +803,15 @@ class TestMetricsAndStatistics:
 
 
 # ============================================================================
-# 錯誤處理測試
+# IncorrectlyHandleTesting
 # ============================================================================
 
 @pytest.mark.unit
 class TestErrorHandling:
-    """錯誤處理測試"""
+    """IncorrectlyHandleTesting"""
 
     def test_create_execution_with_all_statuses(self, automation_service, db_session, sample_job_record):
-        """測試：創建不同狀態的執行記錄"""
+        """Testing：創建Different狀態的執行Record"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -832,7 +832,7 @@ class TestErrorHandling:
         assert result.status == "queued"
 
     def test_mark_execution_dispatch_failed(self, automation_service, db_session, sample_job_record):
-        """測試：標記執行記錄派送失敗"""
+        """Testing：Mark執行Record派DeliveringUnsuccessfully"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -856,7 +856,7 @@ class TestErrorHandling:
         assert execution.duration == 0
 
     def test_update_task_statistics_success(self, automation_service, db_session, sample_job_record):
-        """測試：更新任務統計（成功）"""
+        """Testing：MoreNewTaskStatistics（Successfully）"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -877,7 +877,7 @@ class TestErrorHandling:
         assert sample_job_record.total_duration == 30
 
     def test_update_task_statistics_failure(self, automation_service, db_session, sample_job_record):
-        """測試：更新任務統計（失敗）"""
+        """Testing：MoreNewTaskStatistics（Unsuccessfully）"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -897,7 +897,7 @@ class TestErrorHandling:
         assert sample_job_record.last_duration == 20
 
     def test_get_job_record_exists(self, automation_service, db_session, sample_job_record):
-        """測試：get_job_record 獲取存在的任務記錄"""
+        """Testing：get_job_record 獲Getting存At的TaskRecord"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -910,7 +910,7 @@ class TestErrorHandling:
         db_session.get.assert_called_once_with(db_models.AutomationJob, "job-123")
 
     def test_get_job_record_not_found(self, automation_service, db_session):
-        """測試：get_job_record 任務does not exist"""
+        """Testing：get_job_record Taskdoes not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -922,7 +922,7 @@ class TestErrorHandling:
         db_session.get.assert_called_once_with(db_models.AutomationJob, "nonexistent")
 
     def test_update_job_with_all_field_types(self, automation_service, db_session, sample_job_record):
-        """測試：update_job 更新所有特殊欄位類型"""
+        """Testing：update_job MoreNewAllSpecial欄位Type"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -945,7 +945,7 @@ class TestErrorHandling:
         assert sample_job_record.webhook_api_key == "new-api-key"
 
     def test_update_task_status_not_found(self, automation_service, db_session):
-        """測試：update_task_status 任務does not exist"""
+        """Testing：update_task_status Taskdoes not exist"""
         # Arrange
         db_session.get.return_value = None
         payload = JobStatusUpdate(status="paused")
@@ -957,7 +957,7 @@ class TestErrorHandling:
         assert result is None
 
     def test_execute_task_now_enqueue_failure(self, automation_service, db_session, sample_job_record):
-        """測試：execute_task_now 無法建立執行記錄"""
+        """Testing：execute_task_now 無法Building執行Record"""
         # Arrange
         db_session.get.return_value = sample_job_record
 
@@ -968,7 +968,7 @@ class TestErrorHandling:
                 automation_service.execute_task_now("job-123")
 
     def test_create_execution_running_status(self, automation_service, db_session, sample_job_record):
-        """測試：create_execution 創建 running 狀態的執行記錄"""
+        """Testing：create_execution 創建 running 狀態的執行Record"""
         # Arrange
         execution_record = db_models.JobExecution(
             id="exec-123",
@@ -994,7 +994,7 @@ class TestErrorHandling:
                 assert result is not None
 
     def test_create_execution_success_status(self, automation_service, db_session, sample_job_record):
-        """測試：create_execution 創建 success 狀態的執行記錄"""
+        """Testing：create_execution 創建 success 狀態的執行Record"""
         # Arrange
         execution_record = db_models.JobExecution(
             id="exec-123",
@@ -1022,7 +1022,7 @@ class TestErrorHandling:
                     assert result is not None
 
     def test_create_execution_enqueue_failure(self, automation_service, db_session):
-        """測試：create_execution 無法 enqueue"""
+        """Testing：create_execution 無法 enqueue"""
         # Arrange
         with patch.object(automation_service, 'enqueue_execution', return_value=None):
             # Act
@@ -1037,7 +1037,7 @@ class TestErrorHandling:
             assert result is None
 
     def test_create_execution_running_mark_failure(self, automation_service, db_session, sample_job_record):
-        """測試：create_execution running 狀態但 mark_execution_running 失敗"""
+        """Testing：create_execution running 狀態但 mark_execution_running Unsuccessfully"""
         # Arrange
         execution_record = db_models.JobExecution(
             id="exec-123",
@@ -1061,7 +1061,7 @@ class TestErrorHandling:
                 assert result is None
 
     def test_enqueue_execution_cron_trigger_next_run_warning(self, automation_service, db_session, sample_job_record):
-        """測試：enqueue_execution cron trigger 但無法計算下次執行時間"""
+        """Testing：enqueue_execution cron trigger 但無法計算Below次執行Time"""
         # Arrange
         sample_job_record.trigger = "cron"
         sample_job_record.schedule = "invalid cron"
@@ -1081,7 +1081,7 @@ class TestErrorHandling:
             # next_run_at should remain unchanged
 
     def test_complete_execution_not_found(self, automation_service, db_session):
-        """測試：complete_execution 執行記錄does not exist"""
+        """Testing：complete_execution 執行Recorddoes not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -1096,7 +1096,7 @@ class TestErrorHandling:
         assert result is None
 
     def test_complete_execution_with_metadata(self, automation_service, db_session, sample_job_record):
-        """測試：complete_execution 設置 metadata"""
+        """Testing：complete_execution Setting up metadata"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -1128,7 +1128,7 @@ class TestErrorHandling:
         assert execution.execution_metadata == {"test_key": "test_value"}
 
     def test_get_calendar_events_with_naive_datetime(self, automation_service, db_session):
-        """測試：get_calendar_events 處理 naive datetime"""
+        """Testing：get_calendar_events Handle naive datetime"""
         from zoneinfo import ZoneInfo
 
         # Arrange
@@ -1167,7 +1167,7 @@ class TestErrorHandling:
         assert result.items[0].start.tzinfo is not None
 
     def test_update_task_statistics_non_final_status(self, automation_service, db_session, sample_job_record):
-        """測試：_update_task_statistics 處理非最終狀態"""
+        """Testing：_update_task_statistics Handle非Most終狀態"""
         # Arrange
         execution = db_models.JobExecution(
             id="exec-123",
@@ -1188,7 +1188,7 @@ class TestErrorHandling:
         assert sample_job_record.failure_count == initial_failure_count
 
     def test_update_task_statistics_cron_trigger_update_next_run(self, automation_service, db_session, sample_job_record):
-        """測試：_update_task_statistics 更新 cron trigger 的 next_run_at"""
+        """Testing：_update_task_statistics MoreNew cron trigger 的 next_run_at"""
         # Arrange
         past_time = utcnow() - timedelta(days=1)
         sample_job_record.trigger = "cron"
@@ -1215,7 +1215,7 @@ class TestErrorHandling:
         assert sample_job_record.next_run_at != past_time
 
     def test_update_task_statistics_non_cron_trigger_clears_next_run(self, automation_service, db_session, sample_job_record):
-        """測試：_update_task_statistics 清除非 cron trigger 的 next_run_at"""
+        """Testing：_update_task_statistics Clear非 cron trigger 的 next_run_at"""
         # Arrange
         sample_job_record.trigger = "manual"
         sample_job_record.next_run_at = utcnow() + timedelta(days=1)
@@ -1237,7 +1237,7 @@ class TestErrorHandling:
         assert sample_job_record.next_run_at is None
 
     def test_mark_execution_waiting_not_found(self, automation_service, db_session):
-        """測試：mark_execution_waiting 執行記錄does not exist"""
+        """Testing：mark_execution_waiting 執行Recorddoes not exist"""
         # Arrange
         db_session.get.return_value = None
 
@@ -1252,7 +1252,7 @@ class TestErrorHandling:
         assert result is None
 
     def test_cancel_execution_not_found(self, automation_service, db_session):
-        """測試：cancel_execution 執行記錄does not exist"""
+        """Testing：cancel_execution 執行Recorddoes not exist"""
         # Arrange
         db_session.get.return_value = None
 

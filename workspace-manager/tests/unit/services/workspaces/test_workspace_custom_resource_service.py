@@ -1,4 +1,4 @@
-"""WorkspaceCustomResourceService 單元測試"""
+"""WorkspaceCustomResourceService Unit Test"""
 
 from __future__ import annotations
 

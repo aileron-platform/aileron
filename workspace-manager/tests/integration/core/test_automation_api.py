@@ -1,4 +1,4 @@
-"""自動化任務 API 整合測試。"""
+"""Automation任務 API Integration Test。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _build_job_payload(user_id: str, **overrides):
         "owner": "test-owner",
         "userId": user_id,
         "workspaceId": str(uuid.uuid4()),
-        "prompt": "執行自動化測試",
+        "prompt": "ExecuteAutomationTest",
         "status": "active",
         "trigger": "manual",
         "schedule": "0 2 * * *",
@@ -35,7 +35,7 @@ def _build_job_payload(user_id: str, **overrides):
 
 
 class TestAutomationAPI:
-    """僅保留不依賴外部 broker 的自動化 API 測試。"""
+    """僅保留不DependentExternal broker 的Automation API Test。"""
 
     @pytest.mark.integration
     def test_automation_001_create_task(self, authenticated_client):
@@ -120,7 +120,7 @@ class TestAutomationAPI:
             json={
                 "status": "success",
                 "trigger": "manual",
-                "summary": "手動執行成功",
+                "summary": "手動ExecuteSuccess",
                 "duration": 120,
                 "sessionId": str(uuid.uuid4()),
                 "errorMessage": None,
@@ -195,7 +195,7 @@ class TestAutomationAPI:
             json={
                 "name": "Updated Task Name",
                 "description": "Updated description",
-                "prompt": "更新後的提示",
+                "prompt": "Update後的提示",
                 "schedule": "0 9 * * *",
                 "tags": ["test", "updated"],
             },
@@ -265,7 +265,7 @@ class TestAutomationAPI:
         with patch(
             "app.routers.automation.AutomationService.execute_task_now",
             side_effect=JobNotRunnableError(
-                f"自動化任務 {job_id} 目前狀態為 archived，不可執行",
+                f"Automation任務 {job_id} 目前Status為 archived，不可Execute",
                 code="AUTOMATION_JOB_NOT_RUNNABLE",
                 params={"jobId": job_id, "status": "archived"},
             ),
@@ -277,11 +277,11 @@ class TestAutomationAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         with patch(
             "app.routers.automation.AutomationService.execute_task_now",
-            side_effect=JobDispatchError("無法派送自動化任務至 Celery", code="AUTOMATION_DISPATCH_FAILED"),
+            side_effect=JobDispatchError("無法派送Automation任務至 Celery", code="AUTOMATION_DISPATCH_FAILED"),
         ):
             zh_response = client.post(f"/api/v1/automation/jobs/{job_id}/execute")
             assert zh_response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-            assert zh_response.json()["detail"] == "無法將自動化任務派送到 Celery"
+            assert zh_response.json()["detail"] == "無法將Automation任務派送到 Celery"
 
     @pytest.mark.integration
     def test_automation_014_queue_and_cancel_generic_errors_are_localized(self, authenticated_client):
@@ -302,4 +302,4 @@ class TestAutomationAPI:
         ):
             zh_response = client.post(f"/api/v1/automation/executions/{uuid.uuid4()}/cancel")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "取消排隊任務失敗"
+            assert zh_response.json()["detail"] == "取消排隊任務Failed"

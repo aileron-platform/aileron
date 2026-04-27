@@ -15,7 +15,7 @@ def _find_ops_path() -> Path:
         candidate = parent / "scripts" / "dev" / "docker" / "ops.py"
         if candidate.is_file():
             return candidate
-    raise FileNotFoundError("找不到 scripts/dev/docker/ops.py")
+    raise FileNotFoundError("scripts/dev/docker/ops.py not found")
 
 
 def _find_compose_path() -> Path:

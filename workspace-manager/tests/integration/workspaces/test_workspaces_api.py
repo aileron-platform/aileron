@@ -1,4 +1,4 @@
-"""Workspace API 整合測試"""
+"""Workspace API Integration Test"""
 
 from __future__ import annotations
 

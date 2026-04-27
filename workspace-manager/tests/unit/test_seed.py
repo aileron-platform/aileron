@@ -1,4 +1,4 @@
-"""seed 模組單元測試"""
+"""Seed Module Unit Test"""
 
 from __future__ import annotations
 

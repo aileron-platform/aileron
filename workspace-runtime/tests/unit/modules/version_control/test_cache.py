@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -140,7 +141,8 @@ class TestGitCache:
         # Check call parameters
         call_args = mock_redis.setex.call_args
         assert "workspace-1" in call_args[0][0]  # key contains workspace id
-        assert json.loads(call_args[0][1]) == test_data  # data is correct
+        assert call_args[0][1] == timedelta(seconds=300)  # TTL is correct
+        assert json.loads(call_args[0][2]) == test_data  # data is correct
 
     def test_set_with_custom_ttl(self):
         """Test using custom TTL"""
@@ -152,7 +154,7 @@ class TestGitCache:
         assert result is True
         # Check TTL parameter
         call_args = mock_redis.setex.call_args
-        assert call_args[0][1] == 600
+        assert call_args[0][1] == timedelta(seconds=600)
 
     def test_set_redis_error(self):
         """Test return False on Redis error"""

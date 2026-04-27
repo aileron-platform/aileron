@@ -1,4 +1,4 @@
-"""Knowledge base attachment service 單元測試。"""
+"""Knowledge base attachment service UnitTest。"""
 
 from __future__ import annotations
 
@@ -238,10 +238,10 @@ def test_attach_propagates_tombstoned_kb_error(
     )
     mock_db_session.get.side_effect = [workspace]
     attachment_service.kb_service.get_kb = MagicMock(
-        side_effect=KnowledgeBaseNotFoundError("知識庫does not exist")
+        side_effect=KnowledgeBaseNotFoundError("Knowledgedoes not exist")
     )
 
-    with pytest.raises(KnowledgeBaseNotFoundError, match="知識庫does not exist"):
+    with pytest.raises(KnowledgeBaseNotFoundError, match="Knowledgedoes not exist"):
         attachment_service.attach(
             user_id="owner-1",
             workspace_id="ws-1",

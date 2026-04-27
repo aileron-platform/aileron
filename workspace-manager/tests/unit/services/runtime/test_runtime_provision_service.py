@@ -1,4 +1,4 @@
-"""RuntimeProvisionService 單元測試"""
+"""RuntimeProvisionService UnitTest"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from app.db import models as db_models
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.get = MagicMock(return_value=None)
     session.add = MagicMock()
@@ -73,7 +73,7 @@ def mock_template_engine():
 
 @pytest.fixture
 def sample_workspace():
-    """範例工作區"""
+    """Example Workspace"""
     workspace = Mock(spec=db_models.Workspace)
     workspace.id = "workspace-123"
     workspace.owner_id = "user-123"
@@ -99,7 +99,7 @@ def sample_workspace():
 
 @pytest.fixture
 def provision_service(mock_db_session, mock_settings, mock_template_engine):
-    """RuntimeProvisionService 實例"""
+    """RuntimeProvisionService Instance"""
     with patch("app.services.runtime_provision_service.get_settings", return_value=mock_settings):
         with patch("app.services.runtime_provision_service.ScriptTemplateEngine", return_value=mock_template_engine):
             service = RuntimeProvisionService(mock_db_session)
@@ -122,7 +122,7 @@ class TestRuntimeProvisionService:
     def test_execute_runtime_provision_success(
         self, provision_service, mock_db_session, sample_workspace, mock_orchestrator
     ):
-        """測試：成功執行佈建流程"""
+        """Test: Successfully Execute Build Flow"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         
@@ -170,7 +170,7 @@ class TestRuntimeProvisionService:
             assert sample_workspace.terminal_external_url == "http://localhost:8082"
 
     def test_build_runtime_context(self, provision_service, sample_workspace, mock_template_engine):
-        """測試：構建 RuntimeContext"""
+        """Test: Build RuntimeContext"""
         # Arrange
         with patch("app.services.container_image_service.get_container_image_service") as mock_image_service_getter:
             mock_image_service = MagicMock()
@@ -193,7 +193,7 @@ class TestRuntimeProvisionService:
             assert any(v.target == "/workspace" for v in context.volumes)
             
             # Ports
-            # 目前 runtime context 只包含主服務、終端機與自訂映射
+            # Currently runtime context only contains main Service, terminal and custom Mapping
             assert len(context.ports) == 3
             
             # Template rendered
@@ -370,7 +370,7 @@ class TestRuntimeProvisionService:
         assert ranges == ((50000, 50010),)
 
     def test_handle_failure(self, provision_service, mock_db_session, sample_workspace):
-        """測試：處理失敗"""
+        """Test：HandleFailed"""
         # Arrange
         job = Mock(spec=db_models.WorkspaceRuntimeJob)
         error = Exception("Test Error")
@@ -384,7 +384,7 @@ class TestRuntimeProvisionService:
         assert sample_workspace.runtime_status == "error"
 
     def test_update_workspace_runtime(self, provision_service, sample_workspace, mock_db_session):
-        """測試：更新工作區信息"""
+        """Test：UpdateWorkspaceInfo"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         sample_workspace.knowledge_base_attachments = [

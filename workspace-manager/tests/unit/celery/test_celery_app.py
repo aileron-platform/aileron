@@ -1,4 +1,4 @@
-"""Celery app 設定單元測試。"""
+"""Celery app Configuration Unit Test."""
 
 from __future__ import annotations
 

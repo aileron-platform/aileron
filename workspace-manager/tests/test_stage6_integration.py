@@ -1,96 +1,96 @@
 """
-階段 6 集成測試 - 驗證中間件不會破壞現有功能
+Stage 6 集成Test - VerifyMiddleware不會破Bad現有Function
 
-測試項目：
-1. 主應用可以正常啟動（中間件導入無誤）
-2. 排除路徑不需要認證
-3. 中間件正確注入 request.state
-4. ENABLE_AUTH=false 時不影響現有行為
-5. 路由端點仍然可訪問
+TestProject：
+1. 主Application可以NormalInitiating（Middleware導入無誤）
+2. Arranging除Road徑不NeedingAuthentication
+3. MiddlewareCorrectly注入 request.state
+4. ENABLE_AUTH=false 時不Impact現有行為
+5. RouteEndpointStill可Access
 """
 
 import sys
 from pathlib import Path
 
-# 添加項目根目錄到 Python 路徑
+# 添加Project根CatalogTo Python Road徑
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
 def test_main_app_import():
-    """測試主應用可以正常導入（驗證中間件導入正確）"""
-    print("\n🚀 測試 1: 主應用導入")
+    """Test主Application可以Normal導入（VerifyMiddleware導入Correctly）"""
+    print("\n🚀 Test 1: 主Application導入")
     print("-" * 60)
 
     try:
-        # 嘗試導入主應用
+        # Trying導入主Application
         from app.main import app
-        print("   ✅ 主應用導入成功")
+        print("   ✅ 主Application導入Success")
 
-        # 驗證應用類型
+        # VerifyApplicationType
         from fastapi import FastAPI
-        assert isinstance(app, FastAPI), "應用不是 FastAPI 實例"
-        print("   ✅ 應用類型正確 (FastAPI)")
+        assert isinstance(app, FastAPI), "Application不Yes FastAPI Instance"
+        print("   ✅ ApplicationTypeCorrectly (FastAPI)")
 
-        # 檢查應用標題
+        # CheckApplicationTitle
         assert app.title == "Aileron - Workspace Manager"
-        print(f"   ✅ 應用標題: {app.title}")
+        print(f"   ✅ ApplicationTitle: {app.title}")
 
         return True
     except Exception as e:
-        print(f"   ❌ 導入失敗: {e}")
+        print(f"   ❌ 導入Failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_middleware_registered():
-    """測試中間件已正確註冊到應用"""
-    print("\n🔧 測試 2: 中間件註冊")
+    """TestMiddleware已Correctly註冊ToApplication"""
+    print("\n🔧 Test 2: Middleware註冊")
     print("-" * 60)
 
     try:
         from app.main import app
         from app.modules.auth import JWTAuthenticationMiddleware
 
-        # 檢查用戶中間件
+        # CheckUserMiddleware
         user_middleware = [m for m in app.user_middleware
                           if m.cls == JWTAuthenticationMiddleware]
 
         if user_middleware:
             print(f"   ✅ JWTAuthenticationMiddleware 已註冊")
-            print(f"   - 中間件數量: {len(user_middleware)}")
+            print(f"   - MiddlewareQuantity: {len(user_middleware)}")
             return True
         else:
-            print("   ⚠️  JWTAuthenticationMiddleware 未找到")
-            print("   這可能是正常的，如果它以其他方式註冊")
+            print("   ⚠️  JWTAuthenticationMiddleware 未找To")
+            print("   這PossiblyYesNormal的，如果它以OtherWay註冊")
             return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_routes_accessible():
-    """測試現有路由仍然可訪問"""
-    print("\n🛣️  測試 3: 路由可訪問性")
+    """Test現有RouteStill可Access"""
+    print("\n🛣️  Test 3: Route可Access性")
     print("-" * 60)
 
     try:
         from app.main import app
 
-        # 獲取所有路由
+        # GetAllRoute
         routes = []
         for route in app.routes:
             if hasattr(route, 'path') and hasattr(route, 'methods'):
                 for method in route.methods or []:
                     routes.append(f"{method} {route.path}")
 
-        print(f"   找到 {len(routes)} 個路由端點")
+        print(f"   找To {len(routes)} 個RouteEndpoint")
 
-        # 檢查關鍵路由是否存在
+        # CheckKeyRouteYesNo存At
         key_routes = [
             "/",
             "/health",
@@ -105,45 +105,45 @@ def test_routes_accessible():
             status = "✅" if found else "⚠️ "
             print(f"   {status} {route_path}")
 
-        print(f"\n   ✅ 路由總數: {len(routes)}")
+        print(f"\n   ✅ Route總數: {len(routes)}")
         return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_middleware_functionality():
-    """測試中間件核心功能"""
-    print("\n🔐 測試 4: 中間件功能")
+    """TestMiddlewareCoreFunction"""
+    print("\n🔐 Test 4: MiddlewareFunction")
     print("-" * 60)
 
     try:
         from app.modules.auth import JWTAuthenticationMiddleware
 
-        # 創建模擬應用
+        # Create模擬Application
         class MockApp:
             pass
 
-        # 創建中間件實例
+        # CreateMiddlewareInstance
         middleware = JWTAuthenticationMiddleware(
             MockApp(),
             exclude_paths=["/test-public"],
             exclude_patterns=["/public/*"],
         )
 
-        print("   ✅ 中間件創建成功")
+        print("   ✅ MiddlewareCreateSuccess")
 
-        # 測試路徑排除
+        # TestRoad徑Arranging除
         test_cases = [
-            ("/health", True, "健康檢查"),
+            ("/health", True, "健康Check"),
             ("/docs", True, "API 文檔"),
-            ("/test-public", True, "測試公開路徑"),
-            ("/public/api", True, "公開 API 模式"),
-            ("/api/workspaces", False, "受保護的工作區 API"),
-            ("/api/teams", False, "受保護的團隊 API"),
+            ("/test-public", True, "TestPublicRoad徑"),
+            ("/public/api", True, "Public API Pattern"),
+            ("/api/workspaces", False, "受Protect的Workspace API"),
+            ("/api/teams", False, "受Protect的Team API"),
         ]
 
         all_pass = True
@@ -155,22 +155,22 @@ def test_middleware_functionality():
             print(f"   {status} {description}: {path} -> {result}")
 
         if all_pass:
-            print("\n   ✅ 所有路徑排除測試通過")
+            print("\n   ✅ AllRoad徑Arranging除TestPassed")
         else:
-            print("\n   ⚠️  部分路徑排除測試失敗")
+            print("\n   ⚠️  PartRoad徑Arranging除TestFailed")
 
         return all_pass
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_bearer_token_extraction():
-    """測試 Bearer token 提取功能"""
-    print("\n🎫 測試 5: Bearer Token 提取")
+    """Test Bearer token ExtractFunction"""
+    print("\n🎫 Test 5: Bearer Token Extract")
     print("-" * 60)
 
     try:
@@ -185,11 +185,11 @@ def test_bearer_token_extraction():
 
         middleware = JWTAuthenticationMiddleware(MockApp())
 
-        # 測試用例
+        # Test用例
         test_cases = [
-            ({"Authorization": "Bearer test-token"}, "test-token", "有效 token"),
-            ({}, None, "缺少 Authorization header"),
-            ({"Authorization": "InvalidFormat token"}, None, "無效格式"),
+            ({"Authorization": "Bearer test-token"}, "test-token", "Valid token"),
+            ({}, None, "缺Less Authorization header"),
+            ({"Authorization": "InvalidFormat token"}, None, "InvalidFormat"),
             ({"Authorization": "Bearer "}, None, "空 token"),
         ]
 
@@ -203,22 +203,22 @@ def test_bearer_token_extraction():
             print(f"   {status} {description}: {repr(result)}")
 
         if all_pass:
-            print("\n   ✅ 所有 token 提取測試通過")
+            print("\n   ✅ All token ExtractTestPassed")
         else:
-            print("\n   ⚠️  部分 token 提取測試失敗")
+            print("\n   ⚠️  Part token ExtractTestFailed")
 
         return all_pass
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_auth_decorators():
-    """測試認證裝飾器仍然可用"""
-    print("\n🔒 測試 6: 認證裝飾器")
+    """TestAuthenticationDecoratorStillAvailable"""
+    print("\n🔒 Test 6: AuthenticationDecorator")
     print("-" * 60)
 
     try:
@@ -231,27 +231,27 @@ def test_auth_decorators():
             has_role,
         )
 
-        print("   ✅ 所有認證裝飾器導入成功")
+        print("   ✅ AllAuthenticationDecorator導入Success")
 
-        # 測試權限檢查函數
+        # TestPermissionCheck函數
         assert has_permission("workspace:read", ["workspace:read"]) is True
-        print("   ✅ has_permission 正常")
+        print("   ✅ has_permission Normal")
 
         assert has_role("admin", ["admin", "user"]) is True
-        print("   ✅ has_role 正常")
+        print("   ✅ has_role Normal")
 
         return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_module_exports():
-    """測試模組導出完整性"""
-    print("\n📤 測試 7: 模組導出")
+    """TestModule導Out完整性"""
+    print("\n📤 Test 7: Module導Out")
     print("-" * 60)
 
     try:
@@ -282,22 +282,22 @@ def test_module_exports():
                 missing_exports.append(export)
 
         if missing_exports:
-            print(f"   ❌ 缺少導出: {', '.join(missing_exports)}")
+            print(f"   ❌ 缺Less導Out: {', '.join(missing_exports)}")
             return False
         else:
-            print(f"   ✅ 所有必要符號已導出 ({len(auth.__all__)} 個)")
+            print(f"   ✅ AllNecessary符Number已導Out ({len(auth.__all__)} 個)")
             return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_config_integration():
-    """測試配置整合"""
-    print("\n⚙️  測試 8: 配置整合")
+    """TestConfigurationIntegration"""
+    print("\n⚙️  Test 8: ConfigurationIntegration")
     print("-" * 60)
 
     try:
@@ -305,28 +305,28 @@ def test_config_integration():
 
         config = get_keycloak_config()
 
-        print(f"   ✅ 配置載入成功")
-        print(f"   - 認證啟用: {config.enabled}")
+        print(f"   ✅ ConfigurationLoadSuccess")
+        print(f"   - AuthenticationEnabled: {config.enabled}")
         print(f"   - Keycloak URL: {config.server_url}")
         print(f"   - Realm: {config.realm}")
 
-        # 驗證配置類型
+        # VerifyConfigurationType
         from app.modules.auth import KeycloakConfig
         assert isinstance(config, KeycloakConfig)
-        print(f"   ✅ 配置類型正確")
+        print(f"   ✅ ConfigurationTypeCorrectly")
 
         return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_backward_compatibility():
-    """測試向後兼容性（認證未啟用時）"""
-    print("\n🔄 測試 9: 向後兼容性")
+    """TestTowardsBack兼容性（Authentication未Enabled時）"""
+    print("\n🔄 Test 9: TowardsBack兼容性")
     print("-" * 60)
 
     try:
@@ -335,66 +335,66 @@ def test_backward_compatibility():
         config = get_keycloak_config()
 
         if not config.enabled:
-            print("   ✅ 認證未啟用（ENABLE_AUTH=false）")
-            print("   ✅ 現有功能應該不受影響")
-            print("\n   預期行為：")
-            print("   - 中間件跳過 token 驗證")
+            print("   ✅ Authentication未Enabled（ENABLE_AUTH=false）")
+            print("   ✅ 現有FunctionShould不受Impact")
+            print("\n   Expected行為：")
+            print("   - Middleware跳過 token Verify")
             print("   - request.state.auth_enabled = False")
             print("   - request.state.current_user = None")
             return True
         else:
-            print("   ℹ️  認證已啟用（ENABLE_AUTH=true）")
-            print("   ℹ️  要測試向後兼容性，請設置 ENABLE_AUTH=false")
+            print("   ℹ️  Authentication已Enabled（ENABLE_AUTH=true）")
+            print("   ℹ️  要TestTowardsBack兼容性，請Setup ENABLE_AUTH=false")
             return True
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def main():
-    """執行所有集成測試"""
+    """ExecuteAll集成Test"""
     print("=" * 60)
-    print("🧪 階段 6 集成測試 - 驗證中間件不破壞現有功能")
+    print("🧪 Stage 6 集成Test - VerifyMiddleware不破Bad現有Function")
     print("=" * 60)
 
     results = []
 
-    # 運行所有測試
-    results.append(("主應用導入", test_main_app_import()))
-    results.append(("中間件註冊", test_middleware_registered()))
-    results.append(("路由可訪問性", test_routes_accessible()))
-    results.append(("中間件功能", test_middleware_functionality()))
-    results.append(("Bearer Token 提取", test_bearer_token_extraction()))
-    results.append(("認證裝飾器", test_auth_decorators()))
-    results.append(("模組導出", test_module_exports()))
-    results.append(("配置整合", test_config_integration()))
-    results.append(("向後兼容性", test_backward_compatibility()))
+    # RunAllTest
+    results.append(("主Application導入", test_main_app_import()))
+    results.append(("Middleware註冊", test_middleware_registered()))
+    results.append(("Route可Access性", test_routes_accessible()))
+    results.append(("MiddlewareFunction", test_middleware_functionality()))
+    results.append(("Bearer Token Extract", test_bearer_token_extraction()))
+    results.append(("AuthenticationDecorator", test_auth_decorators()))
+    results.append(("Module導Out", test_module_exports()))
+    results.append(("ConfigurationIntegration", test_config_integration()))
+    results.append(("TowardsBack兼容性", test_backward_compatibility()))
 
-    # 總結
+    # Summary
     print("\n" + "=" * 60)
-    print("📊 測試總結")
+    print("📊 TestSummary")
     print("=" * 60)
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
-        status = "✅ 通過" if result else "❌ 失敗"
+        status = "✅ Passed" if result else "❌ Failed"
         print(f"{status}  {test_name}")
 
     print()
-    print(f"通過率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
+    print(f"Passed率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
 
     if passed == total:
-        print("\n🎉 所有測試通過！中間件不會破壞現有功能。")
-        print("\n✅ 可以安全地繼續實施下一階段任務。")
+        print("\n🎉 AllTestPassed！Middleware不會破Bad現有Function。")
+        print("\n✅ 可以Safe地ContinueImplementBelow一StageTask。")
         return 0
     else:
-        print("\n⚠️  部分測試失敗，請檢查上述錯誤訊息。")
-        print("\n💡 建議修復問題後再繼續實施下一階段。")
+        print("\n⚠️  PartTestFailed，請CheckAbove述ErrorMessage。")
+        print("\n💡 SuggestFixProblemBack再ContinueImplementBelow一Stage。")
         return 1
 
 

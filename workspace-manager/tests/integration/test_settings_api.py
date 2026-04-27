@@ -1,4 +1,4 @@
-"""使用者設定 API 整合測試。"""
+"""UserSettings API Integration Test。"""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestSettingsAPI:
-    """只保留目前產品實際使用的設定 CRUD 測試。"""
+    """只保留目FrontProductActuallyUse的Settings CRUD Test。"""
 
     @pytest.mark.integration
     def test_settings_001_get_user_settings(self, authenticated_client):
-        """ST-001 可以取得既有使用者設定"""
+        """ST-001 可以Get既有UserSettings"""
         client, user = authenticated_client
 
-        # 取得用戶設定
+        # Get用HouseholdSettings
         response = client.get(f"/api/v1/users/{user.id}/settings")
 
         assert response.status_code == status.HTTP_200_OK
@@ -31,10 +31,10 @@ class TestSettingsAPI:
 
     @pytest.mark.integration
     def test_settings_002_update_user_settings(self, authenticated_client):
-        """ST-002 可以更新既有使用者設定"""
+        """ST-002 可以Update既有UserSettings"""
         client, user = authenticated_client
 
-        # 更新用戶設定
+        # Update用HouseholdSettings
         payload = {
             "general": {
                 "theme": "dark",
@@ -81,7 +81,7 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/settings/sync")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "同步失敗"
+            assert zh_response.json()["detail"] == "同步Failed"
 
     @pytest.mark.integration
     def test_settings_004_generate_ssh_key_error_is_localized(self, authenticated_client):
@@ -102,16 +102,16 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/ssh-keys/generate")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "產生 SSH Key 失敗"
+            assert zh_response.json()["detail"] == "Producing SSH Key Failed"
 
 
 @pytest.fixture
 def test_data_factory():
-    """測試資料工廠 fixture"""
+    """TestData工廠 fixture"""
     return TestDataFactory()
 
 
 @pytest.fixture
 def mock_responses():
-    """Mock 回應 fixture"""
+    """Mock Response fixture"""
     return MockResponses()

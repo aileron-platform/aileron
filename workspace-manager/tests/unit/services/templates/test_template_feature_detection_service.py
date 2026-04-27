@@ -1,4 +1,4 @@
-"""TemplateFeatureDetectionService 單元測試"""
+"""TemplateFeatureDetectionService 單元Testing"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from app.services.template_feature_detection_service import (
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Data庫 Session"""
     session = MagicMock()
     session.query = MagicMock()
     session.add = MagicMock()
@@ -46,13 +46,13 @@ def mock_template_base_service(tmp_path):
 
 @pytest.fixture
 def feature_detection_service(mock_db_session, mock_template_base_service):
-    """TemplateFeatureDetectionService 實例"""
+    """TemplateFeatureDetectionService Instance"""
     return TemplateFeatureDetectionService(mock_db_session, mock_template_base_service)
 
 
 @pytest.fixture
 def mock_template_db():
-    """範例模板資料庫模型"""
+    """範例TemplateData庫Model"""
     return TemplateDB(
         id="test-template",
         name="Test Template",
@@ -70,7 +70,7 @@ def mock_template_db():
 
 @pytest.fixture
 def mock_features():
-    """範例 Feature 列表"""
+    """範例 Feature Listing表"""
     return [
         TemplateFeature(
             id="feat-mcp",
@@ -105,10 +105,10 @@ def mock_features():
 
 @pytest.mark.unit
 class TestFeatureDetection:
-    """Feature 偵測測試"""
+    """Feature 偵測Testing"""
 
     def test_detect_mcp_feature_exists(self, feature_detection_service, tmp_path):
-        """測試：MCP YAML 檔案存在時偵測成功"""
+        """Testing：MCP YAML File存At時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -123,7 +123,7 @@ class TestFeatureDetection:
         assert result["mcp"] is True
 
     def test_detect_mcp_feature_not_exists(self, feature_detection_service, tmp_path):
-        """測試：MCP 檔案不存在時偵測失敗"""
+        """Testing：MCP File不存At時偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -135,7 +135,7 @@ class TestFeatureDetection:
         assert result["mcp"] is False
 
     def test_detect_mcp_non_yaml_file(self, feature_detection_service, tmp_path):
-        """測試：MCP 目錄沒有 YAML 檔案時偵測失敗"""
+        """Testing：MCP CatalogNone YAML File時偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -150,7 +150,7 @@ class TestFeatureDetection:
         assert result["mcp"] is False
 
     def test_detect_mcp_empty_directory(self, feature_detection_service, tmp_path):
-        """測試：MCP 目錄為空時偵測失敗"""
+        """Testing：MCP Catalog為空時偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -163,7 +163,7 @@ class TestFeatureDetection:
         assert result["mcp"] is False
 
     def test_detect_commands_exists(self, feature_detection_service, tmp_path):
-        """測試：Commands 目錄有檔案時偵測成功"""
+        """Testing：Commands Catalog有File時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -178,7 +178,7 @@ class TestFeatureDetection:
         assert result["commands"] is True
 
     def test_detect_commands_empty_directory(self, feature_detection_service, tmp_path):
-        """測試：Commands 目錄為空時偵測失敗"""
+        """Testing：Commands Catalog為空時偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -192,7 +192,7 @@ class TestFeatureDetection:
         assert result["commands"] is False
 
     def test_detect_commands_only_gitkeep(self, feature_detection_service, tmp_path):
-        """測試：只有 .gitkeep 的目錄偵測失敗"""
+        """Testing：Only .gitkeep 的Catalog偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -207,7 +207,7 @@ class TestFeatureDetection:
         assert result["commands"] is False
 
     def test_detect_hooks_exists(self, feature_detection_service, tmp_path):
-        """測試：Hooks YAML 檔案存在時偵測成功"""
+        """Testing：Hooks YAML File存At時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -222,7 +222,7 @@ class TestFeatureDetection:
         assert result["hooks"] is True
 
     def test_detect_agents_md_exists(self, feature_detection_service, tmp_path):
-        """測試：AGENTS.md 存在時偵測成功"""
+        """Testing：AGENTS.md 存At時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -236,7 +236,7 @@ class TestFeatureDetection:
         assert result["agentsMd"] is True
 
     def test_detect_agents_md_too_small(self, feature_detection_service, tmp_path):
-        """測試：AGENTS.md 太小時偵測失敗"""
+        """Testing：AGENTS.md TooSmall時偵測Unsuccessfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -250,7 +250,7 @@ class TestFeatureDetection:
         assert result["agentsMd"] is False
 
     def test_detect_agents_exists(self, feature_detection_service, tmp_path):
-        """測試：Agents 目錄有檔案時偵測成功"""
+        """Testing：Agents Catalog有File時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -265,7 +265,7 @@ class TestFeatureDetection:
         assert result["agents"] is True
 
     def test_detect_output_style_exists(self, feature_detection_service, tmp_path):
-        """測試：Output Style 檔案存在時偵測成功"""
+        """Testing：Output Style File存At時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -279,7 +279,7 @@ class TestFeatureDetection:
         assert result["outputStyle"] is True
 
     def test_detect_scripts_exists(self, feature_detection_service, tmp_path):
-        """測試：Scripts 目錄有檔案時偵測成功"""
+        """Testing：Scripts Catalog有File時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -294,7 +294,7 @@ class TestFeatureDetection:
         assert result["scripts"] is True
 
     def test_detect_skills_exists(self, feature_detection_service, tmp_path):
-        """測試：Skills 目錄有檔案時偵測成功"""
+        """Testing：Skills Catalog有File時偵測Successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -309,7 +309,7 @@ class TestFeatureDetection:
         assert result["skills"] is True
 
     def test_detect_no_features(self, feature_detection_service, tmp_path):
-        """測試：空模板無任何 Feature"""
+        """Testing：空Template無Any Feature"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -322,7 +322,7 @@ class TestFeatureDetection:
             assert detected is False
 
     def test_detect_all_features(self, feature_detection_service, tmp_path):
-        """測試：模板包含所有 Feature"""
+        """Testing：Template包含All Feature"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -377,13 +377,13 @@ class TestFeatureDetection:
 
 @pytest.mark.unit
 class TestFeatureIndexing:
-    """Feature 索引測試"""
+    """Feature IndexTesting"""
 
     def test_index_features_creates_mappings(
         self, feature_detection_service, mock_db_session, mock_template_base_service,
         mock_template_db, mock_features, tmp_path
     ):
-        """測試：成功建立 Feature mappings"""
+        """Testing：SuccessfullyBuilding Feature mappings"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True)
@@ -430,7 +430,7 @@ class TestFeatureIndexing:
     def test_index_features_template_not_found(
         self, feature_detection_service, mock_template_base_service
     ):
-        """測試：模板不存在時索引失敗"""
+        """Testing：Template不存At時IndexUnsuccessfully"""
         # Arrange
         mock_template_base_service._get_template.return_value = None
 
@@ -445,7 +445,7 @@ class TestFeatureIndexing:
         self, feature_detection_service, mock_db_session, mock_template_base_service,
         mock_template_db
     ):
-        """測試：索引過程異常時正確處理"""
+        """Testing：IndexProcessAbnormal時CorrectlyHandle"""
         # Arrange
         mock_template_base_service._get_template.return_value = mock_template_db
         mock_db_session.query.side_effect = Exception("Database error")
@@ -465,12 +465,12 @@ class TestFeatureIndexing:
 
 @pytest.mark.unit
 class TestFeatureQuery:
-    """Feature 查詢測試"""
+    """Feature 查詢Testing"""
 
     def test_get_template_features_returns_list(
         self, feature_detection_service, mock_db_session, mock_features
     ):
-        """測試：查詢已索引 Feature 回傳列表"""
+        """Testing：查詢已Index Feature ReturnListing表"""
         # Arrange
         mock_mapping1 = MagicMock()
         mock_mapping1.feature_id = "feat-mcp"
@@ -517,7 +517,7 @@ class TestFeatureQuery:
     def test_get_template_features_empty(
         self, feature_detection_service, mock_db_session
     ):
-        """測試：查詢無索引 Feature 的模板"""
+        """Testing：查詢無Index Feature 的Template"""
         # Arrange
         mock_query = MagicMock()
         mock_join = MagicMock()
@@ -538,7 +538,7 @@ class TestFeatureQuery:
     def test_get_template_features_handles_exception(
         self, feature_detection_service, mock_db_session
     ):
-        """測試：查詢異常時回傳空列表"""
+        """Testing：查詢Abnormal時Return空Listing表"""
         # Arrange
         mock_db_session.query.side_effect = Exception("Database error")
 

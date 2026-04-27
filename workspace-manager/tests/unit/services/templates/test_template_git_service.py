@@ -1,4 +1,4 @@
-"""TemplateGitService 單元測試"""
+"""TemplateGitService 單元Testing"""
 
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def mock_repo():
 
 @pytest.fixture
 def git_service(tmp_path):
-    """TemplateGitService 實例"""
+    """TemplateGitService Instance"""
     with patch('app.services.template_git_service.get_settings') as mock_settings:
         mock_settings.return_value.TEMPLATE_STORAGE_PATH = str(tmp_path)
         service = TemplateGitService()
@@ -52,10 +52,10 @@ def git_service(tmp_path):
 
 @pytest.mark.unit
 class TestRepositoryDetection:
-    """倉庫檢測測試"""
+    """倉庫檢測Testing"""
 
     def test_is_git_repository_true(self, git_service, mock_repo):
-        """測試：檢測到 Git 倉庫"""
+        """Testing：檢測To Git 倉庫"""
         # Arrange
         with patch('app.services.template_git_service.Repo') as mock_repo_class:
             mock_repo_class.return_value = mock_repo
@@ -67,7 +67,7 @@ class TestRepositoryDetection:
             assert result is True
 
     def test_is_git_repository_false(self, git_service):
-        """測試：未檢測到 Git 倉庫"""
+        """Testing：未檢測To Git 倉庫"""
         # Arrange
         with patch('app.services.template_git_service.Repo') as mock_repo_class:
             mock_repo_class.side_effect = InvalidGitRepositoryError("Not a git repo")
@@ -79,7 +79,7 @@ class TestRepositoryDetection:
             assert result is False
 
     def test_repository_status_not_initialized_with_local_content(self, git_service, tmp_path):
-        """測試：未初始化且已有本地內容時禁止直接 clone"""
+        """Testing：未初始化且已有LocalWithin容時ForbiddingDirectly clone"""
         (tmp_path / "templates").mkdir()
         (tmp_path / "templates" / "demo.yaml").write_text("name: demo\n")
 
@@ -92,7 +92,7 @@ class TestRepositoryDetection:
         assert result.clone_blocked_reason == "GIT_CLONE_TARGET_NOT_EMPTY"
 
     def test_repository_status_initialized_without_origin(self, tmp_path):
-        """測試：已初始化但未設定 origin"""
+        """Testing：已初始化但未Configure origin"""
         repo = Repo.init(tmp_path)
         (tmp_path / "README.md").write_text("hello\n")
 
@@ -110,7 +110,7 @@ class TestRepositoryDetection:
         assert result.can_clone_safely is False
 
     def test_init_repository_creates_git_repo(self, git_service):
-        """測試：可從模板中心初始化 Git 倉庫"""
+        """Testing：可FromTemplateCenter初始化 Git 倉庫"""
         result = git_service.init_repository()
 
         assert result.success is True
@@ -119,7 +119,7 @@ class TestRepositoryDetection:
         assert git_service.get_repository_status().is_git_repo is True
 
     def test_clone_repository_blocks_non_empty_uninitialized_directory(self, git_service, tmp_path):
-        """測試：非 Git 且已有內容時 clone 不會隱式覆蓋"""
+        """Testing：非 Git 且已有Within容時 clone 不會隱式覆蓋"""
         (tmp_path / "existing.md").write_text("keep me\n")
 
         result = git_service.clone_repository("https://example.com/repo.git")
@@ -135,10 +135,10 @@ class TestRepositoryDetection:
 
 @pytest.mark.unit
 class TestGitStatus:
-    """Git 狀態測試"""
+    """Git 狀態Testing"""
 
     def test_get_git_status_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫返回預設狀態"""
+        """Testing：非 Git 倉庫返BackDefault狀態"""
         # Arrange
         git_service._repo = None
         with patch.object(git_service, '_get_repo', return_value=None):
@@ -153,7 +153,7 @@ class TestGitStatus:
             assert result.has_changes is False
 
     def test_get_git_status_clean_repo(self, git_service, mock_repo):
-        """測試：乾淨的倉庫狀態"""
+        """Testing：乾淨的倉庫狀態"""
         # Arrange
         mock_repo.index.diff.return_value = []
         mock_repo.untracked_files = []
@@ -172,7 +172,7 @@ class TestGitStatus:
             assert result.behind_count == 0
 
     def test_get_git_status_with_changes(self, git_service, mock_repo):
-        """測試：有變更的倉庫狀態"""
+        """Testing：有Change的倉庫狀態"""
         # Arrange
         mock_diff = MagicMock()
         mock_repo.index.diff.return_value = [mock_diff]
@@ -188,7 +188,7 @@ class TestGitStatus:
             assert result.has_changes is True
 
     def test_get_git_status_with_untracked(self, git_service, mock_repo):
-        """測試：有未追蹤檔案的倉庫狀態"""
+        """Testing：有未TrackingFile的倉庫狀態"""
         # Arrange
         mock_repo.index.diff.return_value = []
         mock_repo.untracked_files = ["newfile.txt"]
@@ -203,13 +203,13 @@ class TestGitStatus:
             assert result.has_changes is True
 
     def test_get_git_status_with_remote(self, git_service, mock_repo):
-        """測試：含遠端的倉庫狀態"""
+        """Testing：含Far端的倉庫狀態"""
         # Arrange
         mock_remote = MagicMock()
         mock_remote.url = "https://github.com/user/repo.git"
         mock_remote.fetch.return_value = None
 
-        # 創建一個 MagicMock remotes 對象，既可以迭代又有 origin 屬性
+        # 創建一個 MagicMock remotes Right象，既可以迭代又有 origin Property
         mock_remotes = MagicMock()
         mock_remotes.__iter__.return_value = iter([mock_remote])
         mock_remotes.origin = mock_remote
@@ -339,10 +339,10 @@ class TestTemplateVersionControlOperations:
 
 @pytest.mark.unit
 class TestUserConfig:
-    """使用者配置測試"""
+    """Use者SetupTesting"""
 
     def test_get_user_config_success(self, git_service):
-        """測試：取得使用者配置成功"""
+        """Testing：GetUse者SetupSuccessfully"""
         # Arrange
         with patch('git.GitConfigParser') as mock_parser_class:
             mock_parser = MagicMock()
@@ -360,7 +360,7 @@ class TestUserConfig:
             assert result.user_email == "test@example.com"
 
     def test_get_user_config_error(self, git_service):
-        """測試：取得使用者配置失敗返回 None"""
+        """Testing：GetUse者SetupUnsuccessfully返Back None"""
         # Arrange
         with patch('git.GitConfigParser') as mock_parser_class:
             mock_parser_class.side_effect = Exception("Config error")
@@ -373,7 +373,7 @@ class TestUserConfig:
             assert result.user_email is None
 
     def test_update_user_config_success(self, git_service):
-        """測試：更新使用者配置成功"""
+        """Testing：MoreNewUse者SetupSuccessfully"""
         # Arrange
         with patch('git.GitConfigParser') as mock_parser_class:
             mock_parser = MagicMock()
@@ -390,7 +390,7 @@ class TestUserConfig:
             mock_parser.set_value.assert_called()
 
     def test_update_user_config_empty_values(self, git_service):
-        """測試：更新使用者配置時空值失敗"""
+        """Testing：MoreNewUse者Setup時空ValueUnsuccessfully"""
         # Act
         result = git_service.update_user_config("", "")
 
@@ -405,10 +405,10 @@ class TestUserConfig:
 
 @pytest.mark.unit
 class TestRemoteUrl:
-    """遠端 URL 測試"""
+    """Far端 URL Testing"""
 
     def test_set_remote_url_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫設定遠端 URL 失敗"""
+        """Testing：非 Git 倉庫ConfigureFar端 URL Unsuccessfully"""
         # Arrange
         with patch.object(git_service, '_get_repo', return_value=None):
 
@@ -420,7 +420,7 @@ class TestRemoteUrl:
             assert result.code == "GIT_REPO_NOT_FOUND"
 
     def test_set_remote_url_empty(self, git_service, mock_repo):
-        """測試：設定空 URL 失敗"""
+        """Testing：Configure空 URL Unsuccessfully"""
         # Arrange
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
 
@@ -432,7 +432,7 @@ class TestRemoteUrl:
             assert result.code == "GIT_REMOTE_URL_EMPTY"
 
     def test_set_remote_url_create_new(self, git_service, mock_repo):
-        """測試：建立新的遠端 URL"""
+        """Testing：BuildingNew的Far端 URL"""
         # Arrange
         mock_repo.remotes = []
         with patch.object(git_service, '_get_repo', return_value=mock_repo):
@@ -447,7 +447,7 @@ class TestRemoteUrl:
             mock_repo.create_remote.assert_called_once_with("origin", "https://github.com/user/repo.git")
 
     def test_set_remote_url_update_existing(self, git_service, mock_repo):
-        """測試：更新現有遠端 URL"""
+        """Testing：MoreNew現有Far端 URL"""
         # Arrange
         mock_remote = MagicMock()
         # Make remotes a MagicMock that supports both 'in' operator and .origin attribute
@@ -474,11 +474,11 @@ class TestRemoteUrl:
 
 @pytest.mark.unit
 class TestSSHKeys:
-    """SSH Keys 測試"""
+    """SSH Keys Testing"""
 
     def test_get_ssh_keys_not_exist(self, tmp_path):
-        """測試：SSH Keys 不存在"""
-        # Arrange - 使用空的臨時目錄作為 SSH 目錄
+        """Testing：SSH Keys 不存At"""
+        # Arrange - Use空的臨時Catalog作為 SSH Catalog
         fake_ssh_dir = tmp_path / ".ssh"
         fake_ssh_dir.mkdir()
 
@@ -495,8 +495,8 @@ class TestSSHKeys:
         assert result["fingerprint"] is None
 
     def test_get_ssh_keys_exist(self, tmp_path):
-        """測試：取得存在的 SSH Keys"""
-        # Arrange - 使用臨時目錄作為 SSH 目錄
+        """Testing：Get存At的 SSH Keys"""
+        # Arrange - Use臨時Catalog作為 SSH Catalog
         fake_ssh_dir = tmp_path / ".ssh"
         fake_ssh_dir.mkdir()
 
@@ -523,8 +523,8 @@ class TestSSHKeys:
         assert result["fingerprint"] is not None
 
     def test_delete_ssh_keys(self, tmp_path):
-        """測試：刪除 SSH Keys"""
-        # Arrange - 使用臨時目錄作為 SSH 目錄
+        """Testing：Delete SSH Keys"""
+        # Arrange - Use臨時Catalog作為 SSH Catalog
         fake_ssh_dir = tmp_path / ".ssh"
         fake_ssh_dir.mkdir()
 
@@ -552,10 +552,10 @@ class TestSSHKeys:
 
 @pytest.mark.unit
 class TestCloneRepository:
-    """克隆倉庫測試"""
+    """克隆倉庫Testing"""
 
     def test_clone_repository_empty_url(self, git_service):
-        """測試：空 URL 克隆失敗"""
+        """Testing：空 URL 克隆Unsuccessfully"""
         # Act
         result = git_service.clone_repository("")
 
@@ -564,7 +564,7 @@ class TestCloneRepository:
         assert result.code == "GIT_REMOTE_URL_EMPTY"
 
     def test_clone_repository_already_exists_with_changes(self, git_service, mock_repo):
-        """測試：已存在有變更的倉庫克隆失敗"""
+        """Testing：已存At有Change的倉庫克隆Unsuccessfully"""
         # Arrange
         with patch.object(git_service, 'is_git_repository', return_value=True), \
              patch.object(git_service, '_get_repo', return_value=mock_repo), \
@@ -593,7 +593,7 @@ class TestCloneRepository:
 
 @pytest.mark.unit
 class TestRegistryFlow:
-    """canonical registry Git flow 測試"""
+    """canonical registry Git flow Testing"""
 
     def test_bootstrap_registry_rejects_non_empty_templates_dir(self, git_service, tmp_path):
         registry_dir = tmp_path / "templates"
@@ -682,10 +682,10 @@ class TestRegistryFlow:
 
 @pytest.mark.unit
 class TestScanTemplates:
-    """掃描模板測試"""
+    """掃描TemplateTesting"""
 
     def test_scan_templates_no_plugins_dir(self, git_service, tmp_path):
-        """測試：無 templates 目錄掃描失敗"""
+        """Testing：無 templates Catalog掃描Unsuccessfully"""
         # Act
         result = git_service.scan_and_sync_templates()
 
@@ -695,7 +695,7 @@ class TestScanTemplates:
         assert len(result.templates) == 0
 
     def test_scan_templates_success(self, git_service, tmp_path):
-        """測試：掃描模板成功"""
+        """Testing：掃描TemplateSuccessfully"""
         # Arrange
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
@@ -733,7 +733,7 @@ class TestScanTemplates:
         assert result.templates[0]["name"] == "Test Template"
 
     def test_scan_templates_supports_canonical_template_yaml(self, git_service, tmp_path):
-        """測試：掃描優先支援 canonical template.yaml"""
+        """Testing：掃描優先Supporting canonical template.yaml"""
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
 
@@ -772,7 +772,7 @@ class TestScanTemplates:
         assert result.templates[0]["status"] == "draft"
 
     def test_scan_templates_ignores_legacy_plugins_root(self, git_service, tmp_path):
-        """測試：存在 templates/ 與 plugins/ 時只掃描 templates/"""
+        """Testing：存At templates/ 與 plugins/ 時只掃描 templates/"""
         templates_dir = tmp_path / "templates"
         plugins_dir = tmp_path / "plugins"
         templates_dir.mkdir(parents=True, exist_ok=True)
@@ -799,7 +799,7 @@ class TestScanTemplates:
         assert result.templates[0]["id"] == "canonical-template"
 
     def test_scan_templates_invalid_yaml(self, git_service, tmp_path):
-        """測試：無效 YAML 跳過模板"""
+        """Testing：Invalid YAML 跳過Template"""
         # Arrange
         templates_dir = tmp_path / "templates"
         templates_dir.mkdir(parents=True, exist_ok=True)
@@ -823,10 +823,10 @@ class TestScanTemplates:
 
 @pytest.mark.unit
 class TestConflictCheck:
-    """衝突檢查測試"""
+    """衝突CheckTesting"""
 
     def test_check_conflicts_not_a_repo(self, git_service):
-        """測試：非 Git 倉庫無衝突"""
+        """Testing：非 Git 倉庫無衝突"""
         # Arrange
         with patch.object(git_service, '_get_repo', return_value=None):
 
@@ -838,7 +838,7 @@ class TestConflictCheck:
             assert len(conflict_files) == 0
 
     def test_check_conflicts_no_conflicts(self, git_service, mock_repo):
-        """測試：無衝突"""
+        """Testing：無衝突"""
         # Arrange
         mock_repo.index.entries = {}
 

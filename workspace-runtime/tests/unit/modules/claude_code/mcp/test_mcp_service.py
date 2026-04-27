@@ -405,7 +405,7 @@ class TestImportServers:
     def test_import_servers_skip_existing(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        "Test skipping existing servers during import.""
+        """Test skipping existing servers during import."""
         from app.modules.claude_code.mcp.models import McpImportRequest
 
         # Arrange
@@ -441,7 +441,7 @@ class TestImportServers:
 
 
 class TestImportServersFromFile:
-    "Test importing MCP servers from file.""
+    """Test importing MCP servers from file."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -449,7 +449,7 @@ class TestImportServersFromFile:
     def test_import_from_file_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        "Test successful import from file.""
+        """Test successful import from file."""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -480,7 +480,7 @@ class TestImportServersFromFile:
         assert "test-server" in result.created
 
     def test_import_from_file_invalid_json(self, mcp_service):
-        "Test importing invalid JSON file.""
+        """Test importing invalid JSON file."""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -498,7 +498,7 @@ class TestImportServersFromFile:
             mcp_service.import_servers_from_file(workspace_id, payload)
 
     def test_import_from_file_missing_mcpservers(self, mcp_service):
-        "Test importing file missing mcpServers field.""
+        """Test importing file missing mcpServers field."""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -517,14 +517,14 @@ class TestImportServersFromFile:
 
 
 class TestErrorHandling:
-    "Test error handling.""
+    """Test error handling."""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_create_duplicate_server(
         self, mock_resolve, mock_read_json, mcp_service, tmp_path
     ):
-        "Test creating duplicate server.""
+        """Test creating duplicate server."""
         from app.modules.claude_code.mcp.service import McpServerAlreadyExistsError
 
         # Arrange
@@ -556,7 +556,7 @@ class TestErrorHandling:
     def test_update_nonexistent_server(
         self, mock_resolve, mock_read_json, mcp_service, tmp_path
     ):
-        "Test updating non-existent server.""
+        """Test updating non-existent server."""
         from app.modules.claude_code.mcp.service import McpServerNotFoundError
 
         # Arrange
@@ -576,7 +576,7 @@ class TestErrorHandling:
             )
 
     def test_create_empty_payload(self, mcp_service):
-        "Test creating empty payload.""
+        """Test creating empty payload."""
         # Arrange
         from pydantic import ValidationError
 
@@ -589,7 +589,7 @@ class TestMcpServerEntry:
     """Test McpServerEntry data class."""
 
     def test_to_runtime(self):
-        "Test converting to runtime model.""
+        """Test converting to runtime model."""
         # Arrange
         config = McpServerConfig(
             type=McpTransportType.STDIO,
@@ -606,7 +606,7 @@ class TestMcpServerEntry:
         assert runtime.command == "test-command"
 
     def test_to_storage(self):
-        "Test converting to storage format.""
+        """Test converting to storage format."""
         # Arrange
         config = McpServerConfig(
             type=McpTransportType.STDIO,

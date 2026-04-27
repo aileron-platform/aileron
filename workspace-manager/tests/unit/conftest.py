@@ -1,4 +1,4 @@
-"""單元測試共用設定與 Mock Fixtures"""
+"""UnitTest共用Settingsand Mock Fixtures"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import pytest
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-# 設置測試環境
+# SetupTestEnvironment
 os.environ.setdefault("ENV", "testing")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
@@ -20,12 +20,12 @@ from app.db import models as db_models
 
 
 # ============================================================================
-# 資料庫 Mock Fixtures
+# Database Mock Fixtures
 # ============================================================================
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Database Session"""
     session = MagicMock(spec=Session)
     session.query.return_value.filter.return_value.first.return_value = None
     session.query.return_value.filter.return_value.all.return_value = []
@@ -40,12 +40,12 @@ def mock_db_session():
 
 
 # ============================================================================
-# 外部服務 Mock Fixtures
+# Outside部Service Mock Fixtures
 # ============================================================================
 
 @pytest.fixture
 def mock_redis():
-    """Mock Redis 客戶端"""
+    """Mock Redis 客Household端"""
     redis_mock = MagicMock()
     redis_mock.get.return_value = None
     redis_mock.set.return_value = True
@@ -97,7 +97,7 @@ def mock_docker_client():
 
 @pytest.fixture
 def mock_celery_app():
-    """Mock Celery 應用"""
+    """Mock Celery Application"""
     celery_mock = MagicMock()
     celery_mock.send_task.return_value = MagicMock(id="task-id-123")
 
@@ -113,7 +113,7 @@ def mock_celery_app():
 
 @pytest.fixture
 def mock_filesystem():
-    """Mock 文件系統操作"""
+    """Mock DocumentSystemOperation"""
     fs_mock = MagicMock()
     fs_mock.exists.return_value = True
     fs_mock.is_file.return_value = True
@@ -127,12 +127,12 @@ def mock_filesystem():
 
 
 # ============================================================================
-# 資料工廠 Fixtures
+# DataFactory Fixtures
 # ============================================================================
 
 @pytest.fixture
 def user_factory():
-    """用戶工廠"""
+    """UserFactory"""
     _counter = 0
 
     def create_user(**kwargs) -> db_models.User:
@@ -160,7 +160,7 @@ def user_factory():
 
 @pytest.fixture
 def team_factory():
-    """團隊工廠"""
+    """TeamFactory"""
     _counter = 0
 
     def create_team(**kwargs) -> db_models.Team:
@@ -184,7 +184,7 @@ def team_factory():
 
 @pytest.fixture
 def workspace_factory():
-    """工作區工廠"""
+    """WorkspaceFactory"""
     _counter = 0
 
     def create_workspace(**kwargs) -> db_models.Workspace:
@@ -214,7 +214,7 @@ def workspace_factory():
 
 @pytest.fixture
 def template_factory():
-    """範本工廠"""
+    """TemplateFactory"""
     _counter = 0
 
     def create_template(**kwargs) -> db_models.Template:
@@ -242,7 +242,7 @@ def template_factory():
 
 @pytest.fixture
 def automation_factory():
-    """自動化任務工廠"""
+    """自動化TaskFactory"""
     _counter = 0
 
     def create_automation(**kwargs) -> db_models.Automation:
@@ -271,7 +271,7 @@ def automation_factory():
 
 @pytest.fixture
 def token_factory():
-    """Token 工廠"""
+    """Token Factory"""
     _counter = 0
 
     def create_token(**kwargs) -> dict[str, Any]:
@@ -291,12 +291,12 @@ def token_factory():
 
 
 # ============================================================================
-# Mock OAuth 回應
+# Mock OAuth Back應
 # ============================================================================
 
 @pytest.fixture
 def mock_oauth_response():
-    """Mock OAuth 回應"""
+    """Mock OAuth Back應"""
     return {
         "access_token": "oauth-access-token",
         "refresh_token": "oauth-refresh-token",
@@ -314,7 +314,7 @@ def mock_oauth_response():
 
 @pytest.fixture
 def mock_oauth_user_info():
-    """Mock OAuth 用戶資訊"""
+    """Mock OAuth UserInformation"""
     return {
         "id": "oauth-user-123",
         "email": "oauth@example.com",
@@ -326,12 +326,12 @@ def mock_oauth_user_info():
 
 
 # ============================================================================
-# 通用測試輔助
+# CommonTest輔助
 # ============================================================================
 
 @pytest.fixture
 def mock_datetime():
-    """Mock datetime 以便測試時間相關功能"""
+    """Mock datetime 以便TestTimeRelatedFunction"""
     test_now = datetime(2025, 1, 1, 12, 0, 0)
 
     with patch("datetime.datetime") as mock_dt:
@@ -343,7 +343,7 @@ def mock_datetime():
 
 @pytest.fixture
 def mock_uuid():
-    """Mock UUID 生成以便測試"""
+    """Mock UUID Generating以便Test"""
     _counter = 0
 
     def mock_uuid4():
@@ -359,7 +359,7 @@ def mock_uuid():
 
 @pytest.fixture
 def request_factory():
-    """建立具備一致 state / headers 結構的 Request mock"""
+    """Create具備一致 state / headers Structure的 Request mock"""
 
     def build_request(
         path: str, headers: dict[str, str] | None = None, method: str = "GET"
@@ -376,7 +376,7 @@ def request_factory():
 
 @pytest.fixture
 def httpx_response_factory():
-    """建立可客製化的 httpx 回應 mock"""
+    """Create可客製化的 httpx Back應 mock"""
 
     def build_response(
         *,
@@ -401,7 +401,7 @@ def httpx_response_factory():
 
 @pytest.fixture
 def upload_file_factory():
-    """建立具備固定 filename/read 介面的 UploadFile mock"""
+    """Create具備固定 filename/read 介Surface的 UploadFile mock"""
 
     def build_upload_file(filename: str, content: bytes) -> AsyncMock:
         file = AsyncMock()
@@ -413,11 +413,11 @@ def upload_file_factory():
 
 
 # ============================================================================
-# 測試標記配置
+# TestMarkConfiguration
 # ============================================================================
 
 def pytest_configure(config):
-    """配置單元測試標記"""
+    """ConfigurationUnitTestMark"""
     config.addinivalue_line(
         "markers", "unit: marks tests as unit tests"
     )

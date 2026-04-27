@@ -1,4 +1,4 @@
-"""Public routing 設定測試"""
+"""Public Routing Configuration Test"""
 
 from __future__ import annotations
 

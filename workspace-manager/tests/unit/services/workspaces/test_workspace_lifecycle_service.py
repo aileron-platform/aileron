@@ -1,4 +1,4 @@
-"""WorkspaceLifecycleService 單元測試"""
+"""WorkspaceLifecycleService UnitTest"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.services.workspace_lifecycle_service import WorkspaceLifecycleService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock 資料庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.get = MagicMock(return_value=None)
     session.add = MagicMock()
@@ -70,7 +70,7 @@ def sample_workspace():
 
 @pytest.fixture
 def lifecycle_service(mock_db_session, mock_settings):
-    """WorkspaceLifecycleService 實例"""
+    """WorkspaceLifecycleService Instance"""
     with patch("app.services.workspace_lifecycle_service.get_settings", return_value=mock_settings):
         service = WorkspaceLifecycleService(mock_db_session)
         return service
@@ -83,12 +83,12 @@ def lifecycle_service(mock_db_session, mock_settings):
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestDeleteWorkspace:
-    """刪除 workspace 測試"""
+    """Delete workspace Test"""
 
     def test_delete_workspace_success(
         self, lifecycle_service, mock_db_session, sample_workspace, mock_docker_client
     ):
-        """測試：成功刪除 workspace"""
+        """Test：SuccessDelete workspace"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         docker_client, container = mock_docker_client
@@ -99,18 +99,18 @@ class TestDeleteWorkspace:
                 lifecycle_service.delete_workspace_task("workspace-123")
 
                 # Assert
-                # 驗證容器被停止和刪除
+                # VerifyContainer被Stop和Delete
                 container.stop.assert_called_once_with(timeout=10)
                 container.remove.assert_called_once_with(force=True)
 
-                # 驗證 workspace 被刪除
+                # Verify workspace 被Delete
                 mock_db_session.delete.assert_called_once_with(sample_workspace)
                 mock_db_session.commit.assert_called()
 
     def test_delete_workspace_not_found(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：workspace does not exist時優雅處理"""
+        """Test：workspace does not exist時優雅Handle"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -118,13 +118,13 @@ class TestDeleteWorkspace:
         lifecycle_service.delete_workspace_task("nonexistent-workspace")
 
         # Assert
-        # 不應該嘗試刪除
+        # 不ShouldTryingDelete
         mock_db_session.delete.assert_not_called()
 
     def test_delete_workspace_without_container(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：沒有關聯 container 的 workspace 刪除"""
+        """Test：NoneOff聯 container 的 workspace Delete"""
         # Arrange
         sample_workspace.runtime_container_id = None
         mock_db_session.get.return_value = sample_workspace
@@ -134,13 +134,13 @@ class TestDeleteWorkspace:
             lifecycle_service.delete_workspace_task("workspace-123")
 
             # Assert
-            # 仍然應該刪除 workspace
+            # StillShouldDelete workspace
             mock_db_session.delete.assert_called_once_with(sample_workspace)
 
     def test_delete_workspace_with_docker_error(
         self, lifecycle_service, mock_db_session, sample_workspace, mock_docker_client
     ):
-        """測試：Docker 錯誤時繼續執行並完成刪除"""
+        """Test：Docker Error時ContinueExecute並CompleteDelete"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         docker_client, container = mock_docker_client
@@ -152,13 +152,13 @@ class TestDeleteWorkspace:
                 lifecycle_service.delete_workspace_task("workspace-123")
 
                 # Assert
-                # Docker 錯誤不會阻止刪除流程,應該仍然刪除 workspace
+                # Docker Error不會阻止DeleteFlow,ShouldStillDelete workspace
                 mock_db_session.delete.assert_called_once_with(sample_workspace)
 
     def test_delete_workspace_with_container_not_found(
         self, lifecycle_service, mock_db_session, sample_workspace, mock_docker_client
     ):
-        """測試：容器does not exist時優雅處理"""
+        """Test：Containerdoes not exist時優雅Handle"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         docker_client, _ = mock_docker_client
@@ -170,13 +170,13 @@ class TestDeleteWorkspace:
                 lifecycle_service.delete_workspace_task("workspace-123")
 
                 # Assert
-                # 應該繼續執行，刪除 workspace
+                # ShouldContinueExecute，Delete workspace
                 mock_db_session.delete.assert_called_once_with(sample_workspace)
 
     def test_delete_workspace_failure_marks_workspace_error(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：刪除流程失敗時會回滾並標記 workspace 為 error"""
+        """Test：DeleteFlowFailed時會Back滾並Mark workspace 為 error"""
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
 
         with patch.object(
@@ -259,12 +259,12 @@ class TestDeleteWorkspace:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestRestartWorkspace:
-    """重啟 workspace 測試"""
+    """Heavy啟 workspace Test"""
 
     def test_restart_workspace_success(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：成功重啟 workspace"""
+        """Test：SuccessHeavy啟 workspace"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         with patch(
@@ -294,7 +294,7 @@ class TestRestartWorkspace:
     def test_restart_workspace_not_found(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：workspace does not exist時優雅處理"""
+        """Test：workspace does not exist時優雅Handle"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -302,7 +302,7 @@ class TestRestartWorkspace:
         lifecycle_service.restart_workspace_task("nonexistent-workspace")
 
         # Assert
-        # 不應該嘗試任何操作
+        # 不ShouldTryingAnyOperation
         mock_db_session.commit.assert_not_called()
 
     def test_restart_kubernetes_workspace_dispatches_to_k8s_handler(
@@ -341,7 +341,7 @@ class TestRestartWorkspace:
     def test_restart_workspace_without_container(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：沒有關聯 container 的 workspace 重啟"""
+        """Test：NoneOff聯 container 的 workspace Heavy啟"""
         # Arrange
         sample_workspace.runtime_container_id = None
         mock_db_session.get.return_value = sample_workspace
@@ -350,13 +350,13 @@ class TestRestartWorkspace:
         lifecycle_service.restart_workspace_task("workspace-123")
 
         # Assert
-        # 不應該更新狀態為 running（因為沒有容器）
-        assert sample_workspace.runtime_status == "running"  # 初始值
+        # 不ShouldUpdateStatus為 running（Because ofNoneContainer）
+        assert sample_workspace.runtime_status == "running"  # 初始Value
 
     def test_restart_workspace_with_docker_error(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：Docker 錯誤時的錯誤處理"""
+        """Test：Docker Error時的ErrorHandle"""
         # Arrange
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
         with patch(
@@ -373,7 +373,7 @@ class TestRestartWorkspace:
     def test_restart_workspace_with_container_not_found(
         self, lifecycle_service, mock_db_session, sample_workspace
     ):
-        """測試：容器does not exist時的錯誤處理"""
+        """Test：Containerdoes not exist時的ErrorHandle"""
         # Arrange
         mock_db_session.get.side_effect = [sample_workspace, sample_workspace]
         with patch(
@@ -391,7 +391,7 @@ class TestRestartWorkspace:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestRestartBrowser:
-    """重啟 browser 測試"""
+    """Heavy啟 browser Test"""
 
     def test_restart_browser_success(
         self, lifecycle_service, mock_db_session, sample_workspace
@@ -439,12 +439,12 @@ class TestRestartBrowser:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestContainerOperations:
-    """容器操作測試"""
+    """ContainerOperationTest"""
 
     def test_stop_and_remove_container_success(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：成功停止並移除容器"""
+        """Test：SuccessStop並RemoveContainer"""
         # Arrange
         docker_client, container = mock_docker_client
 
@@ -459,31 +459,31 @@ class TestContainerOperations:
     def test_stop_and_remove_container_not_found(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：容器does not exist時優雅處理"""
+        """Test：Containerdoes not exist時優雅Handle"""
         # Arrange
         docker_client, _ = mock_docker_client
         docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
 
         with patch("docker.from_env", return_value=docker_client):
-            # Act & Assert (不應該拋出異常)
+            # Act & Assert (不ShouldThrowAbnormal)
             lifecycle_service._stop_and_remove_container("container-123", "workspace-123")
 
     def test_stop_and_remove_container_api_error(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：Docker API 錯誤時優雅處理"""
+        """Test：Docker API Error時優雅Handle"""
         # Arrange
         docker_client, container = mock_docker_client
         container.stop.side_effect = docker.errors.APIError("API error")
 
         with patch("docker.from_env", return_value=docker_client):
-            # Act & Assert (不應該拋出異常)
+            # Act & Assert (不ShouldThrowAbnormal)
             lifecycle_service._stop_and_remove_container("container-123", "workspace-123")
 
     def test_recreate_container_success(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：成功重建容器"""
+        """Test：SuccessHeavy建Container"""
         docker_client, container = mock_docker_client
         container.name = "workspace-runtime"
         container.attrs = {
@@ -522,7 +522,7 @@ class TestContainerOperations:
     def test_recreate_container_not_found(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：容器does not exist時拋出錯誤"""
+        """Test：Containerdoes not exist時ThrowError"""
         docker_client, _ = mock_docker_client
         docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
 
@@ -533,7 +533,7 @@ class TestContainerOperations:
     def test_recreate_container_api_error(
         self, lifecycle_service, mock_docker_client
     ):
-        """測試：Docker API 錯誤時拋出異常"""
+        """Test：Docker API Error時ThrowAbnormal"""
         docker_client, container = mock_docker_client
         container.name = "workspace-runtime"
         container.attrs = {
@@ -555,12 +555,12 @@ class TestContainerOperations:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestVolumeCleanup:
-    """卷清理測試"""
+    """卷清理Test"""
 
     def test_cleanup_workspace_volumes_success(
         self, lifecycle_service, mock_settings
     ):
-        """測試：成功清理 workspace 卷"""
+        """Test：Success清理 workspace 卷"""
         # Arrange
         workspace_id = "workspace-123-456"
 
@@ -580,7 +580,7 @@ class TestVolumeCleanup:
     def test_cleanup_workspace_volumes_directory_not_exists(
         self, lifecycle_service
     ):
-        """測試：目錄does not exist時優雅處理"""
+        """Test：Catalogdoes not exist時優雅Handle"""
         # Arrange
         workspace_id = "workspace-123"
 
@@ -590,19 +590,19 @@ class TestVolumeCleanup:
                 lifecycle_service._cleanup_workspace_volumes(workspace_id)
 
                 # Assert
-                # 不應該嘗試刪除does not exist的目錄
+                # 不ShouldTryingDeletedoes not exist的Catalog
                 mock_rmtree.assert_not_called()
 
     def test_cleanup_workspace_volumes_with_error(
         self, lifecycle_service
     ):
-        """測試：刪除失敗時優雅處理"""
+        """Test：DeleteFailed時優雅Handle"""
         # Arrange
         workspace_id = "workspace-123"
 
         with patch("shutil.rmtree", side_effect=PermissionError("Permission denied")):
             with patch("pathlib.Path.exists", return_value=True):
-                # Act & Assert (不應該拋出異常)
+                # Act & Assert (不ShouldThrowAbnormal)
                 lifecycle_service._cleanup_workspace_volumes(workspace_id)
 
 
@@ -613,17 +613,17 @@ class TestVolumeCleanup:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestEventLogging:
-    """事件日誌測試"""
+    """事件LogTest"""
 
     def test_log_event_success(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：成功記錄事件日誌"""
+        """Test：SuccessRecord事件Log"""
         # Act
         lifecycle_service._log_event(
             workspace_id="workspace-123",
             stage="deleting",
-            message="開始刪除",
+            message="On始Delete",
             metadata={"key": "value"}
         )
 
@@ -634,12 +634,12 @@ class TestEventLogging:
     def test_log_event_without_metadata(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：無元數據的事件日誌"""
+        """Test：無元Data的事件Log"""
         # Act
         lifecycle_service._log_event(
             workspace_id="workspace-123",
             stage="deleting",
-            message="開始刪除"
+            message="On始Delete"
         )
 
         # Assert
@@ -648,18 +648,18 @@ class TestEventLogging:
     def test_log_event_with_database_error(
         self, lifecycle_service, mock_db_session
     ):
-        """測試：資料庫錯誤時優雅處理"""
+        """Test：DatabaseError時優雅Handle"""
         # Arrange
         mock_db_session.add.side_effect = Exception("Database error")
 
-        # Act & Assert (不應該拋出異常)
+        # Act & Assert (不ShouldThrowAbnormal)
         lifecycle_service._log_event(
             workspace_id="workspace-123",
             stage="error",
-            message="錯誤"
+            message="Error"
         )
 
-        # 應該回滾
+        # ShouldBack滾
         mock_db_session.rollback.assert_called()
 
 
@@ -670,10 +670,10 @@ class TestEventLogging:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestBackgroundTaskEntryPoints:
-    """背景任務入口測試"""
+    """BackgroundTask入口Test"""
 
     def test_run_delete_workspace_task(self, sample_workspace):
-        """測試：刪除 workspace 背景任務入口"""
+        """Test：Delete workspace BackgroundTask入口"""
         # Arrange
         mock_db = MagicMock()
         mock_db.get.return_value = sample_workspace
@@ -691,7 +691,7 @@ class TestBackgroundTaskEntryPoints:
                 mock_db.close.assert_called_once()
 
     def test_run_restart_workspace_task(self, sample_workspace):
-        """測試：重啟 workspace 背景任務入口"""
+        """Test：Heavy啟 workspace BackgroundTask入口"""
         # Arrange
         mock_db = MagicMock()
         mock_db.get.return_value = sample_workspace
@@ -709,7 +709,7 @@ class TestBackgroundTaskEntryPoints:
                 mock_db.close.assert_called_once()
 
     def test_run_restart_browser_task(self, sample_workspace):
-        """測試：重啟 browser 背景任務入口"""
+        """Test：Heavy啟 browser BackgroundTask入口"""
         mock_db = MagicMock()
         mock_db.get.return_value = sample_workspace
 

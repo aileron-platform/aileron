@@ -1,4 +1,4 @@
-"""UserProfileService 單元測試"""
+"""UserProfileService 單元Testing"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from app.services.user_profile_service import UserProfileService
 
 @pytest.fixture
 def db_session():
-    """Mock 資料庫 Session"""
+    """Mock Data庫 Session"""
     session = MagicMock(spec=Session)
     session.query = MagicMock()
     session.commit = MagicMock()
@@ -34,13 +34,13 @@ def keycloak_sync():
 
 @pytest.fixture
 def user_profile_service(db_session, keycloak_sync):
-    """UserProfileService 實例"""
+    """UserProfileService Instance"""
     return UserProfileService(db=db_session, keycloak_sync=keycloak_sync)
 
 
 @pytest.fixture
 def sample_db_user():
-    """範例資料庫用戶"""
+    """範例Data庫用Household"""
     user = DBUser(
         id="user-123",
         username="testuser",
@@ -54,15 +54,15 @@ def sample_db_user():
 
 
 # ============================================================================
-# 個人檔案查詢測試
+# 個PersonFile查詢Testing
 # ============================================================================
 
 @pytest.mark.unit
 class TestGetProfile:
-    """個人檔案查詢測試"""
+    """個PersonFile查詢Testing"""
 
     def test_get_profile_exists(self, user_profile_service, db_session, sample_db_user):
-        """測試：查詢存在的個人檔案"""
+        """Testing：查詢存At的個PersonFile"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = sample_db_user
         db_session.query.return_value = mock_query
@@ -79,7 +79,7 @@ class TestGetProfile:
         assert result.avatar_url == "https://example.com/avatar.jpg"
 
     def test_get_profile_not_found(self, user_profile_service, db_session):
-        """測試：查詢不存在的個人檔案返回 None"""
+        """Testing：查詢不存At的個PersonFile返Back None"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
         db_session.query.return_value = mock_query
@@ -89,7 +89,7 @@ class TestGetProfile:
         assert result is None
 
     def test_get_profile_with_none_names(self, user_profile_service, db_session):
-        """測試：名字為 None 時返回空字串"""
+        """Testing：名字為 None 時返Back空String"""
         user = DBUser(
             id="user-123",
             username="testuser",
@@ -112,16 +112,16 @@ class TestGetProfile:
 
 
 # ============================================================================
-# 個人檔案更新測試
+# 個PersonFileMoreNewTesting
 # ============================================================================
 
 @pytest.mark.unit
 class TestUpdateProfile:
-    """個人檔案更新測試"""
+    """個PersonFileMoreNewTesting"""
 
     @pytest.mark.asyncio
     async def test_update_first_and_last_name(self, user_profile_service, db_session, sample_db_user):
-        """測試：更新名字和姓氏"""
+        """Testing：MoreNew名字和姓氏"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = sample_db_user
         db_session.query.return_value = mock_query
@@ -141,7 +141,7 @@ class TestUpdateProfile:
 
     @pytest.mark.asyncio
     async def test_update_avatar_only(self, user_profile_service, db_session, sample_db_user):
-        """測試：只更新頭像 URL"""
+        """Testing：只MoreNew頭像 URL"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = sample_db_user
         db_session.query.return_value = mock_query
@@ -155,7 +155,7 @@ class TestUpdateProfile:
 
     @pytest.mark.asyncio
     async def test_update_profile_user_not_found(self, user_profile_service, db_session):
-        """測試：更新不存在的用戶返回 None"""
+        """Testing：MoreNew不存At的用Household返Back None"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
         db_session.query.return_value = mock_query
@@ -169,7 +169,7 @@ class TestUpdateProfile:
 
     @pytest.mark.asyncio
     async def test_update_first_name_only(self, user_profile_service, db_session, sample_db_user):
-        """測試：只更新名字，display_name 自動計算"""
+        """Testing：只MoreNew名字，display_name 自動計算"""
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = sample_db_user
         db_session.query.return_value = mock_query

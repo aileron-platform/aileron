@@ -41,7 +41,7 @@ def tmp_workspace(tmp_path):
 
 
 class TestListScopes:
-    "Test listing hooks functionality.""
+    """Test listing hooks functionality."""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
@@ -49,7 +49,7 @@ class TestListScopes:
     def test_list_scopes_all(
         self, mock_load_plugins, mock_resolve, mock_read_json, hook_service, tmp_path
     ):
-        "Test listing all scope hooks.""
+        """Test listing all scope hooks."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -69,7 +69,7 @@ class TestListScopes:
     def test_list_scopes_project_only(
         self, mock_resolve, mock_read_json, hook_service, tmp_path
     ):
-        "Test listing only project scope hooks.""
+        """Test listing only project scope hooks."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -110,12 +110,12 @@ class TestListScopes:
 
 
 class TestGetScope:
-    "Test getting specific scope hooks.""
+    """Test getting specific scope hooks."""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_get_scope_success(self, mock_resolve, mock_read_json, hook_service, tmp_path):
-        "Test successfully getting scope.""
+        """Test successfully getting scope."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -154,7 +154,7 @@ class TestGetScope:
 
 
 class TestUpdateScope:
-    "Test updating hooks.""
+    """Test updating hooks."""
 
     @patch("app.modules.claude_code.hooks.service.write_json_file")
     @patch("app.modules.claude_code.hooks.service.read_json_file")
@@ -162,7 +162,7 @@ class TestUpdateScope:
     def test_update_scope_success(
         self, mock_resolve, mock_read_json, mock_write_json, hook_service, tmp_path
     ):
-        "Test successfully updating hooks.""
+        """Test successfully updating hooks."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -200,13 +200,13 @@ class TestUpdateScope:
 
 
 class TestDeleteScope:
-    "Test deleting scope.""
+    """Test deleting scope."""
 
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_delete_scope_success(
         self, mock_resolve, hook_service, tmp_path
     ):
-        "Test successfully deleting scope.""
+        """Test successfully deleting scope."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -229,12 +229,12 @@ class TestDeleteScope:
 
 
 class TestExportScopes:
-    "Test exporting hooks.""
+    """Test exporting hooks."""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_export_scopes_success(self, mock_resolve, mock_read_json, hook_service, tmp_path):
-        "Test successfully exporting hooks.""
+        """Test successfully exporting hooks."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -262,7 +262,7 @@ class TestExportScopes:
 
 
 class TestImportScopes:
-    "Test importing hooks.""
+    """Test importing hooks."""
 
     @patch("app.modules.claude_code.hooks.service.write_json_file")
     @patch("app.modules.claude_code.hooks.service.read_json_file")
@@ -270,7 +270,7 @@ class TestImportScopes:
     def test_import_scopes_success(
         self, mock_resolve, mock_read_json, mock_write_json, hook_service, tmp_path
     ):
-        "Test successfully importing hooks.""
+        """Test successfully importing hooks."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -364,10 +364,10 @@ class TestImportScopes:
 
 
 class TestServiceInitialization:
-    "Test service initialization.""
+    """Test service initialization."""
 
     def test_service_init(self):
-        "Test service initialization.""
+        """Test service initialization."""
         # Act
         service = HookService()
 

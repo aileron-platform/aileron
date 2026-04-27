@@ -1,4 +1,4 @@
-"""Knowledge base file service 單元測試。"""
+"""Knowledge base file service UnitTest。"""
 
 from __future__ import annotations
 

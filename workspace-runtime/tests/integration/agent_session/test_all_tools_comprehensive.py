@@ -12,7 +12,7 @@ from typing import Dict, List, Any
 
 # Global tool logger
 class ComprehensiveToolRecorder:
-    "Comprehensive tool logger - record execution status of each tool.""
+    """Comprehensive tool logger - record execution status of each tool."""
 
     _instance = None
 
@@ -32,7 +32,7 @@ class ComprehensiveToolRecorder:
         status: str = "success",
         error: str = None,
     ):
-        "Record tool execution.""
+        """Record tool execution."""
         execution = {
             "timestamp": datetime.utcnow().isoformat(),
             "tool_name": tool_name,
@@ -49,7 +49,7 @@ class ComprehensiveToolRecorder:
         self.tool_executions.append(execution)
 
     def save_report(self, output_dir: Path):
-        "Save report to file.""
+        """Save report to file."""
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
@@ -82,7 +82,7 @@ class ComprehensiveToolRecorder:
         return output_file, report
 
     def _generate_summary(self) -> Dict[str, Any]:
-        "Generate tool execution summary.""
+        """Generate tool execution summary."""
         summary = {}
         for execution in self.tool_executions:
             tool_name = execution["tool_name"]
@@ -113,7 +113,7 @@ class ComprehensiveToolRecorder:
         return summary
 
     def _extract_formats(self) -> Dict[str, Dict[str, Any]]:
-        "Extract input/output format of each tool.""
+        """Extract input/output format of each tool."""
         formats = {}
         for execution in self.tool_executions:
             tool_name = execution["tool_name"]
@@ -142,7 +142,7 @@ class ComprehensiveToolRecorder:
 
 @pytest.fixture(scope="session", autouse=True)
 def auto_save_report():
-    "Auto-save report.""
+    """Auto-save report."""
     yield
     recorder = ComprehensiveToolRecorder()
     output_dir = Path("/app/test-results/agent_session_messages")
@@ -184,7 +184,7 @@ class TestComprehensiveTools:
         assert output["total_count"] == 3
 
     def test_02_glob_tool_advanced(self):
-        "02. Glob tool - advanced mode.""
+        """02. Glob tool - advanced mode."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Glob"
         input_params = {
@@ -213,7 +213,7 @@ class TestComprehensiveTools:
         assert len(output["by_extension"]) == 3
 
     def test_03_read_tool_basic(self):
-        "03. Read tool - read text file.""
+        """03. Read tool - read text file."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Read"
         input_params = {"file_path": "/workspace/README.md"}
@@ -237,7 +237,7 @@ class TestComprehensiveTools:
         assert output["encoding"] == "utf-8"
 
     def test_04_read_tool_json(self):
-        "04. Read tool - read JSON file.""
+        """04. Read tool - read JSON file."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Read"
         input_params = {"file_path": "/workspace/package.json"}
@@ -261,7 +261,7 @@ class TestComprehensiveTools:
         assert output["is_json"] is True
 
     def test_05_grep_tool_basic(self):
-        "05. Grep tool - basic search.""
+        """05. Grep tool - basic search."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Grep"
         input_params = {
@@ -294,7 +294,7 @@ class TestComprehensiveTools:
         assert output["matches_found"] == 15
 
     def test_06_grep_tool_advanced(self):
-        "06. Grep tool - advanced search.""
+        """06. Grep tool - advanced search."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Grep"
         input_params = {
@@ -327,7 +327,7 @@ class TestComprehensiveTools:
         assert output["matches_found"] == 28
 
     def test_07_bash_tool_basic(self):
-        "07. Bash tool - basic command.""
+        """07. Bash tool - basic command."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Bash"
         input_params = {
@@ -354,7 +354,7 @@ class TestComprehensiveTools:
         assert output["exit_code"] == 0
 
     def test_08_bash_tool_complex(self):
-        "08. Bash tool - complex command.""
+        """08. Bash tool - complex command."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Bash"
         input_params = {
@@ -381,7 +381,7 @@ class TestComprehensiveTools:
         assert int(output["stdout"]) == 45
 
     def test_09_write_tool_basic(self):
-        "09. Write tool - create new file.""
+        """09. Write tool - create new file."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Write"
         input_params = {
@@ -408,7 +408,7 @@ class TestComprehensiveTools:
         assert output["status"] == "created"
 
     def test_10_write_tool_json(self):
-        "10. Write tool - write JSON file.""
+        """10. Write tool - write JSON file."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Write"
         input_params = {
@@ -434,7 +434,7 @@ class TestComprehensiveTools:
         assert output["is_valid_json"] is True
 
     def test_11_edit_tool_basic(self):
-        "11. Edit tool - edit file.""
+        """11. Edit tool - edit file."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Edit"
         input_params = {
@@ -462,7 +462,7 @@ class TestComprehensiveTools:
         assert output["status"] == "modified"
 
     def test_12_todo_write_tool(self):
-        "12. TodoWrite tool - task management.""
+        """12. TodoWrite tool - task management."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "TodoWrite"
         input_params = {
@@ -506,7 +506,7 @@ class TestComprehensiveTools:
         assert output["todos_created"] == 3
 
     def test_13_task_tool_explore(self):
-        "13. Task tool - Explore agent.""
+        """13. Task tool - Explore agent."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Task"
         input_params = {

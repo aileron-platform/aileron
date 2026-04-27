@@ -239,11 +239,11 @@ description: A test skill
 
 
 class TestGetPluginSkills:
-    "Test getting plugin skills.""
+    """Test getting plugin skills."""
 
     @patch("app.modules.claude_code.file_collections.service.get_plugin_loader")
     def test_get_plugin_skills_empty(self, mock_get_loader, file_collection_service):
-        "Test getting empty plugin skills.""
+        """Test getting empty plugin skills."""
         # Arrange
         mock_loader = MagicMock()
         mock_loader.get_all_skills.return_value = []
@@ -256,7 +256,7 @@ class TestGetPluginSkills:
         assert result == []
 
     def test_get_plugin_skills_with_data(self, file_collection_service):
-        "Test getting plugin skills with data.""
+        """Test getting plugin skills with data."""
         # Arrange
         mock_loader = MagicMock()
         mock_loader.get_all_skills.return_value = []
@@ -304,12 +304,12 @@ class TestGetPluginSkills:
 
 
 class TestGetTreeWithMetadata:
-    "Test getting file tree with metadata.""
+    """Test getting file tree with metadata."""
 
     @patch.object(FileCollectionService, 'get_tree')
     @patch.object(FileCollectionService, 'read_file')
     def test_get_tree_with_metadata_success(self, mock_read_file, mock_get_tree, file_collection_service):
-        "Test successfully getting file tree with metadata.""
+        """Test successfully getting file tree with metadata."""
         # Arrange
         mock_get_tree.return_value = {
             "nodes": [
@@ -336,7 +336,7 @@ class TestGetTreeWithMetadata:
 
     @patch.object(FileCollectionService, 'get_tree')
     def test_get_tree_with_metadata_no_files(self, mock_get_tree, file_collection_service):
-        "Test no files case.""
+        """Test no files case."""
         # Arrange
         mock_get_tree.return_value = {"nodes": []}
 
@@ -368,11 +368,11 @@ class TestGetTreeWithMetadata:
 
 
 class TestReadWriteOperations:
-    "Test read write operations.""
+    """Test read write operations."""
 
     @patch.object(FileCollectionService, 'resolve_scope_path')
     def test_read_file_simple(self, mock_resolve, file_collection_service, tmp_path):
-        "Test simple file reading.""
+        """Test simple file reading."""
         # Arrange
         test_file = tmp_path / "test.md"
         test_file.write_text("Test content")
@@ -387,7 +387,7 @@ class TestReadWriteOperations:
 
     @patch.object(FileCollectionService, 'resolve_scope_path')
     def test_write_file_simple(self, mock_resolve, file_collection_service, tmp_path):
-        "Test simple file writing.""
+        """Test simple file writing."""
         # Arrange
         test_file = tmp_path / "new.md"
         mock_resolve.return_value = test_file

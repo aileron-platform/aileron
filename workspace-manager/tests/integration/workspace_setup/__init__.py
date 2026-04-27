@@ -1,2 +1,2 @@
-"""Workspace Setup API 整合測試套件"""
+"""Workspace Setup API Integration Test Suite"""
 

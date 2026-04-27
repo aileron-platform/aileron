@@ -1,50 +1,50 @@
 """
-驗證 Keycloak Auth Router 註冊測試腳本
+Keycloak Auth Router Registration Verification Test Script
 
-檢查：
-1. Keycloak auth router 導入是否成功
-2. Router 是否正確註冊到主應用
-3. 路由端點是否可用
+Checks:
+1. Whether Keycloak auth router import is successful
+2. Whether router is correctly registered to main application
+3. Whether route endpoints are available
 """
 
 import sys
 from pathlib import Path
 
-# 添加項目根目錄到 Python 路徑
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 def test_keycloak_auth_module_import():
-    """測試 Keycloak auth 模組導入"""
-    print("📦 測試 1: Keycloak Auth 模組導入")
+    """Test Keycloak auth module import"""
+    print("📦 Test 1: Keycloak Auth Module Import")
     print("-" * 60)
 
     try:
         from app.modules.auth import auth_router as keycloak_auth_router
-        print("✅ Keycloak auth router 導入成功")
-        print(f"   Router 類型: {type(keycloak_auth_router)}")
-        print(f"   Router 前綴: {keycloak_auth_router.prefix}")
-        print(f"   Router 標籤: {keycloak_auth_router.tags}")
+        print("✅ Keycloak auth router imported successfully")
+        print(f"   Router type: {type(keycloak_auth_router)}")
+        print(f"   Router prefix: {keycloak_auth_router.prefix}")
+        print(f"   Router tags: {keycloak_auth_router.tags}")
         return keycloak_auth_router
     except Exception as e:
-        print(f"❌ 導入失敗: {e}")
+        print(f"❌ Import failed: {e}")
         import traceback
         traceback.print_exc()
         return None
 
 
 def test_keycloak_auth_routes(router):
-    """測試 Keycloak auth 路由端點"""
-    print("\n🛣️  測試 2: Keycloak Auth 路由端點")
+    """Test Keycloak auth route endpoints"""
+    print("\n🛣️  Test 2: Keycloak Auth Route Endpoints")
     print("-" * 60)
 
     if not router:
-        print("❌ Router 為 None，跳過測試")
+        print("❌ Router is None, skipping test")
         return False
 
     try:
         routes = router.routes
-        print(f"✅ 找到 {len(routes)} 個路由端點：\n")
+        print(f"✅ Found {len(routes)} route endpoints:\n")
 
         for route in routes:
             if hasattr(route, 'path') and hasattr(route, 'methods'):
@@ -53,7 +53,7 @@ def test_keycloak_auth_routes(router):
             elif hasattr(route, 'path'):
                 print(f"   • {route.path}")
 
-        # 驗證關鍵端點
+        # Verify key endpoints
         route_paths = [route.path for route in routes if hasattr(route, 'path')]
         key_endpoints = [
             '/oauth2/login',
@@ -64,7 +64,7 @@ def test_keycloak_auth_routes(router):
             '/oauth2/config',
         ]
 
-        print("\n🔍 驗證關鍵端點：")
+        print("\n🔍 Verify key endpoints:")
         all_present = True
         for endpoint in key_endpoints:
             present = endpoint in route_paths
@@ -76,99 +76,99 @@ def test_keycloak_auth_routes(router):
         return all_present
 
     except Exception as e:
-        print(f"❌ 測試失敗: {e}")
+        print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_main_app_import():
-    """測試主應用導入（驗證沒有循環導入）"""
-    print("\n🚀 測試 3: 主應用導入")
+    """Test main application import (verify no circular imports)"""
+    print("\n🚀 Test 3: Main Application Import")
     print("-" * 60)
 
     try:
-        # 延遲導入以避免初始化整個應用
+        # Lazy import to avoid initializing the entire application
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "app.main",
             project_root / "app" / "main.py"
         )
 
-        # 檢查是否可以訪問模組規範
+        # Check if module spec is accessible
         if spec and spec.loader:
-            print("✅ 主應用模組規格載入成功")
+            print("✅ Main application module spec loaded successfully")
 
-            # 檢查 main.py 是否包含 keycloak_auth_router
+            # Check if main.py contains keycloak_auth_router
             main_content = (project_root / "app" / "main.py").read_text()
 
             if "keycloak_auth_router" in main_content:
-                print("✅ 主應用包含 keycloak_auth_router 導入")
+                print("✅ Main application contains keycloak_auth_router import")
 
-                # 統計出現次數
+                # Count occurrences
                 import_count = main_content.count("keycloak_auth_router")
-                print(f"   - 導入語句: {import_count} 處")
+                print(f"   - Import statements: {import_count} locations")
 
                 if "app.include_router(keycloak_auth_router" in main_content:
-                    print("✅ Keycloak auth router 已註冊到主應用")
+                    print("✅ Keycloak auth router registered to main application")
                     return True
                 else:
-                    print("⚠️  Keycloak auth router 未註冊到主應用")
+                    print("⚠️  Keycloak auth router not registered to main application")
                     return False
             else:
-                print("⚠️  主應用不包含 keycloak_auth_router")
+                print("⚠️  Main application does not contain keycloak_auth_router")
                 return False
         else:
-            print("❌ 無法載入主應用模組規格")
+            print("❌ Unable to load main application module spec")
             return False
 
     except Exception as e:
-        print(f"❌ 測試失敗: {e}")
+        print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_module_exports():
-    """測試模組導出的符號"""
-    print("\n📤 測試 4: 模組導出符號")
+    """Test module exported symbols"""
+    print("\n📤 Test 4: Module Exported Symbols")
     print("-" * 60)
 
     try:
         from app.modules import auth
 
-        # 檢查 __all__ 定義
+        # Check __all__ definition
         if hasattr(auth, '__all__'):
             exports = auth.__all__
-            print(f"✅ 模組導出 {len(exports)} 個符號：")
+            print(f"✅ Module exports {len(exports)} symbols:")
 
-            # 分類導出
+            # Categorize exports
             categories = {
-                '配置類': [],
-                'JWT 工具': [],
-                'JWKS 快取': [],
-                '路由': [],
-                '用戶同步': [],
-                '裝飾器': [],
-                '其他': [],
+                'Configuration': [],
+                'JWT Utilities': [],
+                'JWKS Cache': [],
+                'Router': [],
+                'User Sync': [],
+                'Decorators': [],
+                'Other': [],
             }
 
             for symbol in exports:
                 symbol_lower = symbol.lower()
                 if 'config' in symbol_lower:
-                    categories['配置類'].append(symbol)
+                    categories['Configuration'].append(symbol)
                 elif 'jwt' in symbol_lower:
-                    categories['JWT 工具'].append(symbol)
+                    categories['JWT Utilities'].append(symbol)
                 elif 'jwks' in symbol_lower or 'cache' in symbol_lower:
-                    categories['JWKS 快取'].append(symbol)
+                    categories['JWKS Cache'].append(symbol)
                 elif 'router' in symbol_lower:
-                    categories['路由'].append(symbol)
+                    categories['Router'].append(symbol)
                 elif 'sync' in symbol_lower or 'user' in symbol_lower:
-                    categories['用戶同步'].append(symbol)
+                    categories['User Sync'].append(symbol)
                 elif 'require' in symbol_lower or 'permission' in symbol_lower:
-                    categories['裝飾器'].append(symbol)
+                    categories['Decorators'].append(symbol)
                 else:
-                    categories['其他'].append(symbol)
+                    categories['Other'].append(symbol)
 
             for category, symbols in categories.items():
                 if symbols:
@@ -178,62 +178,62 @@ def test_module_exports():
 
             return True
         else:
-            print("⚠️  模組未定義 __all__")
+            print("⚠️  Module does not define __all__")
             return False
 
     except Exception as e:
-        print(f"❌ 測試失敗: {e}")
+        print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def main():
-    """執行所有測試"""
+    """Execute all tests"""
     print("=" * 60)
-    print("🔐 Keycloak Auth Router 註冊驗證")
+    print("🔐 Keycloak Auth Router Registration Verification")
     print("=" * 60)
     print()
 
     results = []
 
-    # 測試 1: 模組導入
+    # Test 1: Module import
     router = test_keycloak_auth_module_import()
-    results.append(("模組導入", router is not None))
+    results.append(("Module Import", router is not None))
 
-    # 測試 2: 路由端點
+    # Test 2: Route endpoints
     if router:
         routes_ok = test_keycloak_auth_routes(router)
-        results.append(("路由端點", routes_ok))
+        results.append(("Route Endpoints", routes_ok))
 
-    # 測試 3: 主應用導入
+    # Test 3: Main application import
     main_ok = test_main_app_import()
-    results.append(("主應用註冊", main_ok))
+    results.append(("Main App Registration", main_ok))
 
-    # 測試 4: 模組導出
+    # Test 4: Module exports
     exports_ok = test_module_exports()
-    results.append(("模組導出", exports_ok))
+    results.append(("Module Exports", exports_ok))
 
-    # 總結
+    # Summary
     print("\n" + "=" * 60)
-    print("📊 測試總結")
+    print("📊 Test Summary")
     print("=" * 60)
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
-        status = "✅ 通過" if result else "❌ 失敗"
+        status = "✅ Passed" if result else "❌ Failed"
         print(f"{status}  {test_name}")
 
     print()
-    print(f"通過率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
+    print(f"Pass rate: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
 
     if passed == total:
-        print("\n🎉 所有測試通過！Keycloak auth router 已成功註冊。")
+        print("\n🎉 All tests passed! Keycloak auth router successfully registered.")
         return 0
     else:
-        print("\n⚠️  部分測試失敗，請檢查上述錯誤訊息。")
+        print("\n⚠️  Some tests failed, please check the error messages above.")
         return 1
 
 

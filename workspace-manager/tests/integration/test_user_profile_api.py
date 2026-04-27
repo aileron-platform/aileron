@@ -1,4 +1,4 @@
-"""User Profile API 整合測試"""
+"""User Profile API 整合Testing"""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from app.db import models as db_models
 def test_get_user_profile_returns_profile(
     internal_client, create_user
 ) -> None:
-    """測試獲取用戶個人檔案"""
+    """Testing獲Getting用Household個PersonFile"""
     client, _ = internal_client
     user = create_user(
         id="user-123",
         username="developer",
-        first_name="開發",
+        first_name="On發",
         last_name="者",
-        display_name="開發者",
+        display_name="On發者",
         email="developer@example.com",
         avatar_url="https://cdn.example.com/avatar.png",
     )
@@ -30,7 +30,7 @@ def test_get_user_profile_returns_profile(
     data = response.json()["data"]
     assert data["userId"] == "user-123"
     assert data["username"] == "developer"
-    assert data["firstName"] == "開發"
+    assert data["firstName"] == "On發"
     assert data["lastName"] == "者"
     assert data["email"] == "developer@example.com"
     assert data["avatarUrl"] == "https://cdn.example.com/avatar.png"
@@ -38,41 +38,41 @@ def test_get_user_profile_returns_profile(
 
 @pytest.mark.integration
 def test_update_user_profile_updates_fields(internal_client, create_user) -> None:
-    """測試更新用戶個人檔案"""
+    """TestingMoreNew用Household個PersonFile"""
     client, session_factory = internal_client
     user = create_user(
         id="user-234",
         first_name="原始",
-        last_name="名稱",
-        display_name="原始名稱",
+        last_name="Name",
+        display_name="原始Name",
         email="old@example.com",
     )
 
     payload = {
-        "firstName": "新",
-        "lastName": "名稱",
+        "firstName": "New",
+        "lastName": "Name",
         "avatarUrl": "https://cdn.example.com/new-avatar.png",
     }
 
     response = client.put(f"/api/v1/users/{user.id}/profile", json=payload)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["firstName"] == "新"
-    assert data["lastName"] == "名稱"
+    assert data["firstName"] == "New"
+    assert data["lastName"] == "Name"
 
-    # 驗證資料庫中的資料確實已更新
+    # VerifyingData庫中的DataIndeed已MoreNew
     with session_factory() as session:
         refreshed = session.get(db_models.User, user.id)
         assert refreshed is not None
-        assert refreshed.first_name == "新"
-        assert refreshed.last_name == "名稱"
-        assert refreshed.display_name == "新 名稱"
+        assert refreshed.first_name == "New"
+        assert refreshed.last_name == "Name"
+        assert refreshed.display_name == "New Name"
         assert refreshed.avatar_url == "https://cdn.example.com/new-avatar.png"
 
 
 @pytest.mark.integration
 def test_get_user_profile_not_found(internal_client) -> None:
-    """測試獲取不存在用戶的個人檔案時返回 404"""
+    """Testing獲Getting不存At用Household的個PersonFile時返Back 404"""
     client, _ = internal_client
 
     response = client.get("/api/v1/users/non-existent-user/profile")
@@ -83,10 +83,10 @@ def test_get_user_profile_not_found(internal_client) -> None:
 
 @pytest.mark.integration
 def test_update_user_profile_not_found(internal_client) -> None:
-    """測試更新不存在用戶的個人檔案時返回 404"""
+    """TestingMoreNew不存At用Household的個PersonFile時返Back 404"""
     client, _ = internal_client
 
-    payload = {"firstName": "新名稱"}
+    payload = {"firstName": "NewName"}
     response = client.put("/api/v1/users/non-existent-user/profile", json=payload)
 
     assert response.status_code == 404
@@ -95,31 +95,31 @@ def test_update_user_profile_not_found(internal_client) -> None:
 
 @pytest.mark.integration
 def test_update_user_profile_partial_update(internal_client, create_user) -> None:
-    """測試部分更新用戶個人檔案"""
+    """TestingPartMoreNew用Household個PersonFile"""
     client, session_factory = internal_client
     user = create_user(
         id="user-345",
         first_name="原始",
-        last_name="名稱",
-        display_name="原始名稱",
+        last_name="Name",
+        display_name="原始Name",
         email="original@example.com",
     )
 
-    # 只更新 firstName
-    payload = {"firstName": "新"}
+    # 只MoreNew firstName
+    payload = {"firstName": "New"}
     response = client.put(f"/api/v1/users/{user.id}/profile", json=payload)
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["firstName"] == "新"
-    assert data["lastName"] == "名稱"  # 保持原值
-    assert data["email"] == "original@example.com"  # 保持原值
+    assert data["firstName"] == "New"
+    assert data["lastName"] == "Name"  # Keeping原Value
+    assert data["email"] == "original@example.com"  # Keeping原Value
 
-    # 驗證資料庫中只有指定欄位被更新
+    # VerifyingData庫中Only指定欄位被MoreNew
     with session_factory() as session:
         refreshed = session.get(db_models.User, user.id)
         assert refreshed is not None
-        assert refreshed.first_name == "新"
-        assert refreshed.last_name == "名稱"
-        assert refreshed.display_name == "新 名稱"
+        assert refreshed.first_name == "New"
+        assert refreshed.last_name == "Name"
+        assert refreshed.display_name == "New Name"
         assert refreshed.email == "original@example.com"

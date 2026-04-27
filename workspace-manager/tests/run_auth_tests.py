@@ -1,94 +1,94 @@
 """
-Keycloak Auth 模組完整測試套件
+Keycloak Auth Module Complete Test Suite
 
-運行所有單元測試和集成測試，包括異步測試。
+Run all unit tests and integration tests, including async tests.
 """
 
 import sys
 import asyncio
 from pathlib import Path
 
-# 添加項目根目錄到 Python 路徑
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # ============================================================================
-# 同步測試
+# Synchronous Tests
 # ============================================================================
 
 def test_config_module():
-    """測試配置模組"""
+    """Test configuration module"""
     from app.modules.auth.config import KeycloakConfig, get_keycloak_config
 
-    print("📋 測試配置模組...")
+    print("📋 Testing configuration module...")
     config = get_keycloak_config()
     assert config is not None
     assert isinstance(config, KeycloakConfig)
-    print(f"   ✅ 配置載入成功 (enabled={config.enabled})")
+    print(f"   ✅ Configuration loaded successfully (enabled={config.enabled})")
     return True
 
 
 def test_jwt_utils_singleton():
-    """測試 JWT utils 單例模式"""
+    """Test JWT utils singleton pattern"""
     from app.modules.auth.jwt_utils import get_jwt_utils, clear_jwt_utils_cache
 
-    print("🔐 測試 JWT Utils 單例模式...")
+    print("🔐 Testing JWT Utils Singleton Pattern...")
     utils1 = get_jwt_utils()
     utils2 = get_jwt_utils()
     assert utils1 is utils2
-    print("   ✅ JWT Utils 單例模式正常")
+    print("   ✅ JWT Utils singleton pattern working")
 
     clear_jwt_utils_cache()
-    print("   ✅ 清除快取成功")
+    print("   ✅ Cache cleared successfully")
     return True
 
 
 def test_jwks_cache_singleton():
-    """測試 JWKS cache 單例模式"""
+    """Test JWKS cache singleton pattern"""
     from app.modules.auth.jwks_cache import get_jwks_cache, clear_jwks_cache
 
-    print("🔑 測試 JWKS Cache 單例模式...")
+    print("🔑 Testing JWKS Cache Singleton Pattern...")
     cache1 = get_jwks_cache()
     cache2 = get_jwks_cache()
     assert cache1 is cache2
-    print("   ✅ JWKS Cache 單例模式正常")
+    print("   ✅ JWKS Cache singleton pattern working")
 
     clear_jwks_cache()
-    print("   ✅ 清除快取成功")
+    print("   ✅ Cache cleared successfully")
     return True
 
 
 def test_user_sync_service_singleton():
-    """測試用戶同步服務單例模式"""
+    """Test user synchronization service singleton pattern"""
     from app.modules.auth.user_sync import get_user_sync_service
 
-    print("👤 測試 UserSyncService 單例模式...")
+    print("👤 Testing UserSyncService Singleton Pattern...")
     service1 = get_user_sync_service()
     service2 = get_user_sync_service()
     assert service1 is service2
-    print("   ✅ UserSyncService 單例模式正常")
+    print("   ✅ UserSyncService singleton pattern working")
     return True
 
 
 def test_role_mapping():
-    """測試角色映射"""
+    """Test role mapping"""
     from app.modules.auth.auth_decorators import get_user_permissions, load_role_mapping
 
-    print("🔑 測試角色映射...")
+    print("🔑 Testing role mapping...")
     role_mapping = load_role_mapping()
     assert isinstance(role_mapping, dict)
-    print(f"   ✅ 角色映射載入成功 ({len(role_mapping)} 個鍵)")
+    print(f"   ✅ Role mapping loaded successfully ({len(role_mapping)} keys)")
 
-    # 測試 admin 角色權限
+    # Test admin role permissions
     admin_permissions = get_user_permissions(['admin'])
     assert isinstance(admin_permissions, list)
     assert len(admin_permissions) > 0
-    print(f"   ✅ Admin 角色擁有 {len(admin_permissions)} 個權限")
+    print(f"   ✅ Admin role has {len(admin_permissions)} permissions")
     return True
 
 
 def test_permission_checkers():
-    """測試權限檢查函數"""
+    """Test permission checking functions"""
     from app.modules.auth.auth_decorators import (
         has_permission,
         has_role,
@@ -97,22 +97,22 @@ def test_permission_checkers():
         has_any_permission,
     )
 
-    print("✅ 測試權限檢查函數...")
+    print("✅ Testing permission checking functions...")
 
     # has_permission
     assert has_permission("workspace:read", ["workspace:read", "workspace:create"]) is True
     assert has_permission("workspace:delete", ["workspace:read"]) is False
-    print("   ✅ has_permission 正常")
+    print("   ✅ has_permission working")
 
     # has_role
     assert has_role("admin", ["admin", "user"]) is True
     assert has_role("admin", ["user"]) is False
-    print("   ✅ has_role 正常")
+    print("   ✅ has_role working")
 
     # has_any_role
     assert has_any_role(["admin", "developer"], ["user", "admin"]) is True
     assert has_any_role(["admin", "developer"], ["viewer"]) is False
-    print("   ✅ has_any_role 正常")
+    print("   ✅ has_any_role working")
 
     # has_all_permissions
     assert has_all_permissions(
@@ -123,7 +123,7 @@ def test_permission_checkers():
         ["workspace:read", "workspace:create"],
         ["workspace:read"]
     ) is False
-    print("   ✅ has_all_permissions 正常")
+    print("   ✅ has_all_permissions working")
 
     # has_any_permission
     assert has_any_permission(
@@ -134,16 +134,16 @@ def test_permission_checkers():
         ["workspace:create", "workspace:delete"],
         ["workspace:read"]
     ) is False
-    print("   ✅ has_any_permission 正常")
+    print("   ✅ has_any_permission working")
 
     return True
 
 
 def test_auth_router_endpoints():
-    """測試認證路由端點"""
+    """testauthrouteendpoint"""
     from app.modules.auth import auth_router
 
-    print("🛣️  測試認證路由端點...")
+    print("🛣️  testauthrouteendpoint...")
     routes = auth_router.routes
 
     expected_endpoints = [
@@ -159,17 +159,17 @@ def test_auth_router_endpoints():
     route_paths = [route.path for route in routes if hasattr(route, 'path')]
 
     for endpoint in expected_endpoints:
-        assert endpoint in route_paths, f"端點 {endpoint} 未找到"
+        assert endpoint in route_paths, f"endpoint {endpoint} not found"
 
-    print(f"   ✅ 所有 {len(expected_endpoints)} 個端點已定義")
+    print(f"   ✅ All {len(expected_endpoints)} endpoints defined")
     return True
 
 
 def test_module_exports():
-    """測試模組導出"""
+    """testmoduleexport"""
     from app.modules import auth
 
-    print("📤 測試模組導出...")
+    print("📤 testmoduleexport...")
     assert hasattr(auth, '__all__')
     exports = auth.__all__
 
@@ -192,44 +192,44 @@ def test_module_exports():
     ]
 
     for export in required_exports:
-        assert export in exports, f"導出 {export} 未找到"
+        assert export in exports, f"export {export} not found"
 
-    print(f"   ✅ 所有必要符號已導出 ({len(exports)} 個)")
+    print(f"   ✅ Allnecessarysymbols exported ({len(exports)} )")
     return True
 
 
 # ============================================================================
-# 異步測試
+# asynctest
 # ============================================================================
 
 async def test_jwks_cache_initialization():
-    """測試 JWKS 快取初始化"""
+    """test JWKS cacheinitialization"""
     from app.modules.auth.jwks_cache import get_jwks_cache
 
-    print("🔑 測試 JWKS 快取初始化...")
+    print("🔑 test JWKS cacheinitialization...")
     cache = get_jwks_cache()
 
-    # 測試快取狀態
+    # testcachestate
     stats = cache.get_stats()
     assert stats is not None
     assert 'is_cached' in stats
-    print(f"   ✅ JWKS 快取初始化成功 (快取狀態: {stats['is_cached']})")
+    print(f"   ✅ JWKS cacheinitializationsuccessfully (cachestate: {stats['is_cached']})")
     return True
 
 
 async def test_user_sync_role_extraction():
-    """測試用戶同步角色提取"""
+    """testusersyncroleextraction"""
     from app.modules.auth.user_sync import get_user_sync_service
 
-    print("👤 測試用戶同步角色提取...")
+    print("👤 testusersyncroleextraction...")
     service = get_user_sync_service()
 
-    # 測試空用戶信息
+    # Test empty user info
     roles_empty = service._extract_roles({})
     assert roles_empty == []
-    print("   ✅ 空用戶信息處理正常")
+    print("   ✅ Empty user info processing working")
 
-    # 測試 realm_access
+    # test realm_access
     user_info = {
         "realm_access": {
             "admin": True,
@@ -239,9 +239,9 @@ async def test_user_sync_role_extraction():
     roles = service._extract_roles(user_info)
     assert "admin" in roles
     assert "user" in roles
-    print("   ✅ realm_access 角色提取正常")
+    print("   ✅ realm_access roleextractionworking")
 
-    # 測試 resource_access
+    # test resource_access
     user_info = {
         "realm_access": {},
         "resource_access": {
@@ -253,80 +253,80 @@ async def test_user_sync_role_extraction():
     roles = service._extract_roles(user_info)
     assert "read" in roles
     assert "write" in roles
-    print("   ✅ resource_access 角色提取正常")
+    print("   ✅ resource_access roleextractionworking")
 
     return True
 
 
 async def test_decorator_functionality():
-    """測試裝飾器功能"""
+    """testdecoratorFunctionality"""
     from app.modules.auth.auth_decorators import require_role, require_permission
 
-    print("🔒 測試裝飾器功能...")
+    print("🔒 testdecoratorFunctionality...")
 
-    # 測試 require_role 裝飾器
+    # test require_role decorator
     @require_role("admin")
     async def admin_only_endpoint(current_user):
         return {"message": "Admin access"}
 
-    # 有權限的用戶
+    # Authorized user
     admin_user = {"sub": "user-123", "roles": ["admin"]}
     try:
         result = await admin_only_endpoint(current_user=admin_user)
         assert result["message"] == "Admin access"
-        print("   ✅ require_role 裝飾器（有權限）正常")
+        print("   ✅ require_role decorator (authorized) working")
     except Exception as e:
-        print(f"   ❌ require_role 裝飾器錯誤: {e}")
+        print(f"   ❌ require_role decoratorerror: {e}")
         return False
 
-    # 無權限的用戶
+    # Unauthorized user
     from app.modules.auth.auth_decorators import PermissionDeniedError
 
     normal_user = {"sub": "user-456", "roles": ["user"]}
     try:
         await admin_only_endpoint(current_user=normal_user)
-        print("   ❌ require_role 裝飾器未拒絕無權限用戶")
+        print("   ❌ require_role decorator did not reject unauthorized user")
         return False
     except PermissionDeniedError:
-        print("   ✅ require_role 裝飾器（無權限）正常")
+        print("   ✅ require_role decorator (unauthorized) working")
 
-    # 測試 require_permission 裝飾器
+    # test require_permission decorator
     @require_permission("workspace:create")
     async def create_workspace_endpoint(current_user):
         return {"message": "Workspace created"}
 
-    # admin 角色應該有 workspace:create 權限
+    # Admin role should have workspace:create permission
     admin_user = {"sub": "user-123", "roles": ["admin"]}
     try:
         result = await create_workspace_endpoint(current_user=admin_user)
         assert result["message"] == "Workspace created"
-        print("   ✅ require_permission 裝飾器正常")
+        print("   ✅ require_permission decoratorworking")
     except Exception as e:
-        print(f"   ❌ require_permission 裝飾器錯誤: {e}")
+        print(f"   ❌ require_permission decoratorerror: {e}")
         return False
 
     return True
 
 
 # ============================================================================
-# 主測試運行器
+# maintestRunner
 # ============================================================================
 
 def run_sync_tests():
-    """運行所有同步測試"""
+    """Run all sync tests"""
     print("\n" + "=" * 60)
-    print("🔍 同步測試")
+    print("🔍 synctest")
     print("=" * 60 + "\n")
 
     tests = [
-        ("配置模組", test_config_module),
-        ("JWT Utils 單例", test_jwt_utils_singleton),
-        ("JWKS Cache 單例", test_jwks_cache_singleton),
-        ("UserSyncService 單例", test_user_sync_service_singleton),
-        ("角色映射", test_role_mapping),
-        ("權限檢查函數", test_permission_checkers),
-        ("認證路由端點", test_auth_router_endpoints),
-        ("模組導出", test_module_exports),
+        ("Configurationmodule", test_config_module),
+        ("JWT Utils Singleton", test_jwt_utils_singleton),
+        ("JWKS Cache Singleton", test_jwks_cache_singleton),
+        ("UserSyncService Singleton", test_user_sync_service_singleton),
+        ("Role Mapping", test_role_mapping),
+        ("Permission Checkers", test_permission_checkers),
+        ("authrouteendpoint", test_auth_router_endpoints),
+        ("moduleexport", test_module_exports),
     ]
 
     results = []
@@ -336,21 +336,21 @@ def run_sync_tests():
             results.append((name, result, None))
         except Exception as e:
             results.append((name, False, str(e)))
-            print(f"   ❌ 錯誤: {e}")
+            print(f"   ❌ error: {e}")
 
     return results
 
 
 async def run_async_tests():
-    """運行所有異步測試"""
+    """Run all async tests"""
     print("\n" + "=" * 60)
-    print("⚡ 異步測試")
+    print("⚡ asynctest")
     print("=" * 60 + "\n")
 
     tests = [
-        ("JWKS 快取初始化", test_jwks_cache_initialization),
-        ("用戶同步角色提取", test_user_sync_role_extraction),
-        ("裝飾器功能", test_decorator_functionality),
+        ("JWKS cacheinitialization", test_jwks_cache_initialization),
+        ("usersyncroleextraction", test_user_sync_role_extraction),
+        ("decoratorFunctionality", test_decorator_functionality),
     ]
 
     results = []
@@ -360,49 +360,49 @@ async def run_async_tests():
             results.append((name, result, None))
         except Exception as e:
             results.append((name, False, str(e)))
-            print(f"   ❌ 錯誤: {e}")
+            print(f"   ❌ error: {e}")
 
     return results
 
 
 def main():
-    """主測試運行器"""
+    """maintestRunner"""
     print("=" * 60)
-    print("🧪 Keycloak Auth 模組完整測試套件")
+    print("🧪 Keycloak Auth Module Complete Test Suite")
     print("=" * 60)
 
     all_results = []
 
-    # 運行同步測試
+    # Run sync tests
     sync_results = run_sync_tests()
     all_results.extend(sync_results)
 
-    # 運行異步測試
+    # Run async tests
     async_results = asyncio.run(run_async_tests())
     all_results.extend(async_results)
 
-    # 總結
+    # Summary
     print("\n" + "=" * 60)
-    print("📊 測試總結")
+    print("📊 Test Summary")
     print("=" * 60)
 
     passed = sum(1 for _, result, _ in all_results if result)
     total = len(all_results)
 
     for name, result, error in all_results:
-        status = "✅ 通過" if result else "❌ 失敗"
+        status = "✅ Passed" if result else "❌ Failed"
         print(f"{status}  {name}")
         if error:
-            print(f"      錯誤: {error}")
+            print(f"      error: {error}")
 
     print()
-    print(f"通過率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
+    print(f"Pass rate: {passed}/{total} ({passed * 100 / total if total > 0 else 0}%)")
 
     if passed == total:
-        print("\n🎉 所有測試通過！Keycloak auth 模組運作正常。")
+        print("\n🎉 All tests passed! Keycloak auth module is working properly.")
         return 0
     else:
-        print("\n⚠️  部分測試失敗，請檢查上述錯誤訊息。")
+        print("\n⚠️  Some tests failed, please check the error messages above.")
         return 1
 
 

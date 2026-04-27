@@ -1,25 +1,25 @@
 """
-Keycloak 集成測試 - 驗證完整的 OAuth2 流程
+Keycloak 集成Test - Verify完整的 OAuth2 Flow
 
-測試前提：
-1. Keycloak 正在運行
-2. Realm 已配置：aileron
-3. Client 已配置：workspace-manager
-4. 測試用戶已創建
+TestFrontLifting：
+1. Keycloak 正AtRun
+2. Realm 已Configuration：aileron
+3. Client 已Configuration：workspace-manager
+4. TestUser已Create
 5. ENABLE_AUTH=true
 """
 
 import sys
 from pathlib import Path
 
-# 添加項目根目錄到 Python 路徑
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
 def test_keycloak_config():
-    """測試 Keycloak 配置"""
-    print("\n🔧 測試 1: Keycloak 配置")
+    """Test Keycloak Configuration"""
+    print("\n🔧 Test 1: Keycloak Configuration")
     print("-" * 60)
 
     try:
@@ -27,49 +27,49 @@ def test_keycloak_config():
 
         config = get_keycloak_config()
 
-        print(f"   配置信息:")
-        print(f"   - 認證啟用: {config.enabled}")
-        print(f"   - 伺服器 URL: {config.server_url}")
+        print(f"   ConfigurationInfo:")
+        print(f"   - AuthenticationEnabled: {config.enabled}")
+        print(f"   - Server URL: {config.server_url}")
         print(f"   - Realm: {config.realm}")
         print(f"   - Client ID: {config.client_id}")
 
         if not config.enabled:
-            print("\n   ❌ 認證未啟用！請設置 ENABLE_AUTH=true")
+            print("\n   ❌ Authentication not enabled! Please set ENABLE_AUTH=true")
             return False
 
         if not config.server_url:
-            print("\n   ❌ Keycloak 伺服器 URL 未配置！")
+            print("\n   ❌ Keycloak server URL not configured!")
             return False
 
         if not config.realm:
-            print("\n   ❌ Realm 未配置！")
+            print("\n   ❌ Realm not configured!")
             return False
 
-        print("\n   ✅ Keycloak 配置正確")
+        print("\n   ✅ Keycloak configuration correct")
         return True
 
     except Exception as e:
-        print(f"   ❌ 配置檢查失敗: {e}")
+        print(f"   ❌ ConfigurationCheckFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_oauth_endpoints():
-    """測試 OAuth2 端點"""
-    print("\n🔐 測試 2: OAuth2 端點")
+    """Test OAuth2 Endpoint"""
+    print("\n🔐 Test 2: OAuth2 Endpoint")
     print("-" * 60)
 
     try:
         from app.main import app
 
-        # 獲取路由
+        # Get routes
         oauth_routes = []
         for route in app.routes:
             if hasattr(route, 'path') and '/oauth2' in route.path:
                 oauth_routes.append(route.path)
 
-        print(f"   找到 {len(oauth_routes)} 個 OAuth2 端點")
+        print(f"   Found {len(oauth_routes)} OAuth2 endpoints")
 
         expected_endpoints = [
             "/api/v1/oauth2/login",
@@ -89,31 +89,31 @@ def test_oauth_endpoints():
                 all_found = False
 
         if all_found:
-            print("\n   ✅ 所有 OAuth2 端點已註冊")
+            print("\n   ✅ All OAuth2 endpoints registered")
         else:
-            print("\n   ⚠️  部分 OAuth2 端點缺失")
+            print("\n   ⚠️  Some OAuth2 endpoints missing")
 
         return all_found
 
     except Exception as e:
-        print(f"   ❌ 端點檢查失敗: {e}")
+        print(f"   ❌ EndpointCheckFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_jwks_endpoint():
-    """測試 JWKS 端點（Keycloak 公鑰端點）"""
-    print("\n🔑 測試 3: JWKS 端點")
+    """Test JWKS Endpoint (Keycloak Public Key Endpoint)"""
+    print("\n🔑 Test 3: JWKS Endpoint")
     print("-" * 60)
 
     try:
         import requests
 
-        # 構建 JWKS URL
+        # Build JWKS URL
         jwks_url = "http://localhost:8080/realms/aileron/protocol/openid-connect/certs"
 
-        print(f"   測試 URL: {jwks_url}")
+        print(f"   Test URL: {jwks_url}")
 
         try:
             response = requests.get(jwks_url, timeout=5)
@@ -122,8 +122,8 @@ def test_jwks_endpoint():
             jwks = response.json()
             keys = jwks.get('keys', [])
 
-            print(f"   ✅ JWKS 端點可訪問")
-            print(f"   - 找到 {len(keys)} 個公鑰")
+            print(f"   ✅ JWKS endpoint accessible")
+            print(f"   - Found {len(keys)} public keys")
 
             if keys:
                 for i, key in enumerate(keys):
@@ -134,28 +134,28 @@ def test_jwks_endpoint():
             return True
 
         except requests.exceptions.RequestException as e:
-            print(f"   ❌ JWKS 端點不可訪問: {e}")
+            print(f"   ❌ JWKS endpoint not accessible: {e}")
             return False
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_openid_configuration():
-    """測試 OpenID Connect 配置端點"""
-    print("\n📋 測試 4: OpenID Connect 配置")
+    """Test OpenID Connect ConfigurationEndpoint"""
+    print("\n📋 Test 4: OpenID Connect Configuration")
     print("-" * 60)
 
     try:
         import requests
 
-        # 構建配置 URL
+        # Build configuration URL
         config_url = "http://localhost:8080/realms/aileron/.well-known/openid-configuration"
 
-        print(f"   測試 URL: {config_url}")
+        print(f"   Test URL: {config_url}")
 
         try:
             response = requests.get(config_url, timeout=5)
@@ -163,7 +163,7 @@ def test_openid_configuration():
 
             config = response.json()
 
-            print(f"   ✅ OpenID 配置可訪問")
+            print(f"   ✅ OpenID configuration accessible")
             print(f"   - Issuer: {config.get('issuer', 'N/A')}")
             print(f"   - Authorization endpoint: {config.get('authorization_endpoint', 'N/A')}")
             print(f"   - Token endpoint: {config.get('token_endpoint', 'N/A')}")
@@ -172,19 +172,19 @@ def test_openid_configuration():
             return True
 
         except requests.exceptions.RequestException as e:
-            print(f"   ❌ 配置端點不可訪問: {e}")
+            print(f"   ❌ Configuration endpoint not accessible: {e}")
             return False
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def test_keycloak_users():
-    """測試 Keycloak 用戶配置"""
-    print("\n👤 測試 5: Keycloak 用戶")
+    """Test Keycloak UserConfiguration"""
+    print("\n👤 Test 5: Keycloak User")
     print("-" * 60)
 
     try:
@@ -193,16 +193,16 @@ def test_keycloak_users():
 
         config = get_keycloak_config()
 
-        # 構建用戶列表 URL
+        # 構建UserList URL
         users_url = f"{config.server_url}/{config.realm}/protocol/openid-connect/userinfo"
 
-        print(f"   測試用戶端點")
+        print(f"   TestUserEndpoint")
 
-        # 注意：這需要有效的 access token
-        # 我們只能測試端點是否存在，不能實際獲取用戶列表
+        # Noticing：這NeedingValid的 access token
+        # We只能TestEndpointYesNo存At，不能ActualGetUserList
 
         try:
-            # 測試管理端點（需要 admin 認證）
+            # TestManagementEndpoint（Needing admin Authentication）
             token_url = f"http://localhost:8080/realms/master/protocol/openid-connect/token"
             data = {
                 "grant_type": "password",
@@ -217,7 +217,7 @@ def test_keycloak_users():
                 token_data = response.json()
                 access_token = token_data.get('access_token')
 
-                # 使用 token 獲取用戶列表
+                # Use token GetUserList
                 users_url = f"http://localhost:8080/admin/realms/{config.realm}/users"
                 headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -225,73 +225,73 @@ def test_keycloak_users():
                 response.raise_for_status()
 
                 users = response.json()
-                print(f"   ✅ 找到 {len(users)} 個用戶")
+                print(f"   ✅ 找To {len(users)} 個User")
 
-                for user in users[:5]:  # 只顯示前 5 個
+                for user in users[:5]:  # 只DisplayFront 5 個
                     username = user.get('username', 'N/A')
                     email = user.get('email', 'N/A')
                     enabled = user.get('enabled', False)
-                    print(f"   - {username} ({email}) - {'啟用' if enabled else '禁用'}")
+                    print(f"   - {username} ({email}) - {'Enabled' if enabled else '禁用'}")
 
                 return True
             else:
-                print(f"   ⚠️  無法獲取 admin token")
-                print(f"   - 狀態碼: {response.status_code}")
+                print(f"   ⚠️  無法Get admin token")
+                print(f"   - StatusCode: {response.status_code}")
                 return False
 
         except requests.exceptions.RequestException as e:
-            print(f"   ❌ 用戶端點測試失敗: {e}")
+            print(f"   ❌ UserEndpointTestFailed: {e}")
             return False
 
     except Exception as e:
-        print(f"   ❌ 測試失敗: {e}")
+        print(f"   ❌ TestFailed: {e}")
         import traceback
         traceback.print_exc()
         return False
 
 
 def main():
-    """執行所有 Keycloak 集成測試"""
+    """ExecuteAll Keycloak 集成Test"""
     print("=" * 60)
-    print("🧪 Keycloak 集成測試")
+    print("🧪 Keycloak 集成Test")
     print("=" * 60)
 
     results = []
 
-    # 運行所有測試
-    results.append(("Keycloak 配置", test_keycloak_config()))
-    results.append(("OAuth2 端點", test_oauth_endpoints()))
-    results.append(("JWKS 端點", test_jwks_endpoint()))
-    results.append(("OpenID 配置", test_openid_configuration()))
-    results.append(("Keycloak 用戶", test_keycloak_users()))
+    # RunAllTest
+    results.append(("Keycloak Configuration", test_keycloak_config()))
+    results.append(("OAuth2 Endpoint", test_oauth_endpoints()))
+    results.append(("JWKS Endpoint", test_jwks_endpoint()))
+    results.append(("OpenID Configuration", test_openid_configuration()))
+    results.append(("Keycloak User", test_keycloak_users()))
 
-    # 總結
+    # Summary
     print("\n" + "=" * 60)
-    print("📊 測試總結")
+    print("📊 TestSummary")
     print("=" * 60)
 
     passed = sum(1 for _, result in results if result)
     total = len(results)
 
     for test_name, result in results:
-        status = "✅ 通過" if result else "❌ 失敗"
+        status = "✅ Passed" if result else "❌ Failed"
         print(f"{status}  {test_name}")
 
     print()
-    print(f"通過率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
+    print(f"Passed率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
 
     if passed == total:
-        print("\n🎉 所有測試通過！Keycloak 配置成功。")
-        print("\n📝 測試帳號：")
+        print("\n🎉 AllTestPassed！Keycloak ConfigurationSuccess。")
+        print("\n📝 Test帳Number：")
         print("   - Admin: admin / admin123")
         print("   - User: testuser / test123")
         print("\n🔗 Keycloak Admin Console:")
         print("   - URL: http://localhost:8080/admin")
         print("   - Realm: aileron")
-        print("\n✅ 可以開始測試完整的 OAuth2 流程！")
+        print("\n✅ 可以On始Test完整的 OAuth2 Flow！")
         return 0
     else:
-        print("\n⚠️  部分測試失敗，請檢查上述錯誤訊息。")
+        print("\n⚠️  PartTestFailed，請CheckAbove述ErrorMessage。")
         return 1
 
 
