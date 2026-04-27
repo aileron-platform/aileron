@@ -1,4 +1,4 @@
-"""Slash Command Service 單元測試"""
+"""Slash Command Service unit tests"""
 
 from __future__ import annotations
 
@@ -27,12 +27,12 @@ def mock_repository():
 
 
 class TestListScopes:
-    """測試列出 slash commands 功能."""
+    """Test listing slash commands functionality."""
 
     @patch.object(SlashCommandService, "_load_plugin_commands")
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_list_scopes_all(self, mock_repo_class, mock_load_plugins, slash_command_service):
-        """測試列出所有 scope 的 slash commands."""
+        """Test listing all scopes slash commands."""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -50,7 +50,7 @@ class TestListScopes:
 
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_list_scopes_project_only(self, mock_repo_class, slash_command_service):
-        """測試只列出 project scope 的 slash commands."""
+        """Test listing only project scope slash commands."""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -66,11 +66,11 @@ class TestListScopes:
 
 
 class TestGetScope:
-    """測試獲取特定 scope 的 slash commands."""
+    """Test getting specific scope slash commands."""
 
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_get_scope_success(self, mock_repo_class, slash_command_service):
-        """測試成功獲取 scope."""
+        """Test successful scope retrieval."""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -87,11 +87,11 @@ class TestGetScope:
 
 
 class TestCreateDocument:
-    """測試創建 slash command 文檔."""
+    """Test creating slash command document."""
 
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_create_document_success(self, mock_repo_class, slash_command_service):
-        """測試成功創建文檔."""
+        """Test successful document creation."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -125,11 +125,11 @@ class TestCreateDocument:
 
 
 class TestUpdateDocument:
-    """測試更新 slash command 文檔."""
+    """Test updating slash command document."""
 
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_update_document_success(self, mock_repo_class, slash_command_service):
-        """測試成功更新文檔."""
+        """Test successful document update."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -160,11 +160,11 @@ class TestUpdateDocument:
 
 
 class TestDeleteDocument:
-    """測試刪除 slash command 文檔."""
+    """Test deleting slash command document."""
 
     @patch("app.modules.claude_code.slash_commands.service.ScopedMarkdownRepository")
     def test_delete_document_success(self, mock_repo_class, slash_command_service):
-        """測試成功刪除文檔."""
+        """Test successful document deletion."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -183,10 +183,10 @@ class TestDeleteDocument:
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    """Test service initialization."""
 
     def test_service_init(self):
-        """測試服務初始化."""
+        """Test service initialization."""
         # Act
         service = SlashCommandService()
 

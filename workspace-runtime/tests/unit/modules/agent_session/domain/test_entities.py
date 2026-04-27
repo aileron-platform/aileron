@@ -1,4 +1,4 @@
-"""Entities 單元測試."""
+"""Entities unit tests."""
 
 from __future__ import annotations
 

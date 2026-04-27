@@ -1,4 +1,4 @@
-"""WebSocket replay store 單元測試."""
+"""WebSocket replay store unit tests."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ import pytest
 
 from app.modules.agent_session.websocket.replay_store import RedisWebSocketReplayStore
 
-# 使用合法 UUID 作為 session_id（replay store 會驗證格式）
+# Use valid UUID as session_id (replay store validates format)
 TEST_SESSION_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 
 
 @pytest.mark.asyncio
 async def test_append_event_assigns_seq_and_persists():
-    """append_event 會分配 seq 並寫入 Redis."""
+    """append_event assigns seq and writes to Redis."""
     store = RedisWebSocketReplayStore(max_events_per_session=100, ttl_seconds=300)
 
     mock_pipeline = AsyncMock()
@@ -49,7 +49,7 @@ async def test_append_event_assigns_seq_and_persists():
 
 @pytest.mark.asyncio
 async def test_list_events_since_filters_invalid_json():
-    """list_events_since 會忽略非法 JSON."""
+    """list_events_since ignores invalid JSON."""
     store = RedisWebSocketReplayStore()
 
     mock_redis = AsyncMock()
@@ -71,7 +71,7 @@ async def test_list_events_since_filters_invalid_json():
 
 @pytest.mark.asyncio
 async def test_append_event_rejects_invalid_session_id():
-    """非 UUID 格式的 session_id 應直接回傳 None，不接觸 Redis."""
+    """Non-UUID format session_id should directly return None without touching Redis."""
     store = RedisWebSocketReplayStore()
 
     result = await store.append_event(
@@ -83,7 +83,7 @@ async def test_append_event_rejects_invalid_session_id():
 
 @pytest.mark.asyncio
 async def test_list_events_since_rejects_invalid_session_id():
-    """非 UUID 格式的 session_id 應直接回傳空列表."""
+    """Non-UUID format session_id should directly return empty list."""
     store = RedisWebSocketReplayStore()
 
     events = await store.list_events_since("../../../etc/passwd", last_seq=0)

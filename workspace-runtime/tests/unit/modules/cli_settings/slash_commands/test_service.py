@@ -1,4 +1,4 @@
-"""CLI Slash Commands Service 單元測試"""
+"""CLI Slash Commands Service unit tests"""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ WORKSPACE_ID = "test-ws"
 
 
 class TestGeminiToml:
-    """Gemini TOML 格式 CRUD 測試"""
+    """Gemini TOML format CRUD tests"""
 
     def _service(self, tmp_path: Path) -> CliSlashCommandService:
         config = _gemini_config(tmp_path)
@@ -187,7 +187,7 @@ class TestGeminiToml:
 
 
 class TestCodexMarkdown:
-    """Codex Markdown 格式 CRUD 測試"""
+    """Codex Markdown format CRUD tests"""
 
     def _service(self, tmp_path: Path) -> CliSlashCommandService:
         config = _codex_config(tmp_path)
@@ -245,7 +245,7 @@ class TestCodexMarkdown:
 
 
 class TestOpencodeMarkdown:
-    """OpenCode Markdown 格式 CRUD 測試"""
+    """OpenCode Markdown format CRUD tests"""
 
     def _service(self, tmp_path: Path) -> CliSlashCommandService:
         config = _opencode_config(tmp_path)
@@ -287,7 +287,7 @@ class TestOpencodeMarkdown:
 
 
 class TestCrossToolParameterized:
-    """跨工具參數化測試"""
+    """Cross-tool parameterization tests"""
 
     @pytest.mark.parametrize(
         "config_factory,file_content,expected_ext",

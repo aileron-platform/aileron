@@ -1,4 +1,4 @@
-"""Skills Router 測試."""
+"""Skills Router tests."""
 
 from __future__ import annotations
 

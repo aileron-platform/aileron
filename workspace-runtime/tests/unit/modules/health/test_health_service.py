@@ -1,4 +1,4 @@
-"""Health Service 單元測試"""
+"""Health Service Unit Tests"""
 
 from __future__ import annotations
 
@@ -23,10 +23,10 @@ def health_service(mock_db):
 
 
 class TestGetContainerId:
-    """測試獲取容器 ID 功能."""
+    """Test getting container ID functionality."""
 
     def test_get_container_id_success(self, health_service):
-        """測試成功獲取容器 ID."""
+        """Test successfully getting container ID."""
         # Act
         result = health_service.get_container_id()
 
@@ -36,7 +36,7 @@ class TestGetContainerId:
 
     @patch("app.modules.health.service.socket.gethostname")
     def test_get_container_id_exception(self, mock_hostname, health_service):
-        """測試獲取容器 ID 異常."""
+        """Test getting container ID exception."""
         # Arrange
         mock_hostname.side_effect = Exception("Test error")
 
@@ -48,11 +48,11 @@ class TestGetContainerId:
 
 
 class TestCheckAndUpdateWorkspaceStatus:
-    """測試檢查並更新工作區狀態功能."""
+    """Test checking and updating workspace status functionality."""
 
     @patch("app.modules.health.service.utcnow")
     def test_check_workspace_not_found(self, mock_utcnow, health_service, mock_db):
-        """測試工作區不存在."""
+        """Test workspace not found."""
         # Arrange
         from datetime import datetime, timezone
         mock_utcnow.return_value = datetime(2024, 1, 1, tzinfo=timezone.utc)
@@ -67,7 +67,7 @@ class TestCheckAndUpdateWorkspaceStatus:
 
     @patch("app.modules.health.service.utcnow")
     def test_check_workspace_update_success(self, mock_utcnow, health_service, mock_db):
-        """測試成功更新工作區狀態."""
+        """Test successfully updating workspace status."""
         # Arrange
         from datetime import datetime, timezone
         mock_utcnow.return_value = datetime(2024, 1, 1, tzinfo=timezone.utc)
@@ -88,10 +88,10 @@ class TestCheckAndUpdateWorkspaceStatus:
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    """Test service initialization."""
 
     def test_service_init(self, mock_db):
-        """測試服務初始化."""
+        """Test service initialization."""
         # Arrange & Act
         with patch("app.modules.health.service.get_settings") as mock_settings:
             mock_settings.return_value.WORKSPACE_ID = "test-workspace"

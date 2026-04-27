@@ -1,4 +1,4 @@
-"""WebSocket 測試輔助工具."""
+"""WebSocket test helper utilities."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class WebSocketTestMessage(BaseModel):
-    """WebSocket 測試訊息模型."""
+    """WebSocket test message model."""
     type: str
     data: Optional[Dict[str, Any]] = None
     request_id: Optional[str] = None
@@ -24,7 +24,7 @@ class WebSocketTestMessage(BaseModel):
 
 
 class WebSocketTestClient:
-    """WebSocket 測試客戶端，模擬真實的 WebSocket 連線行為."""
+    """WebSocket test client, simulates real WebSocket connection behavior."""
 
     def __init__(self, base_url: str = "http://localhost:3002") -> None:
         self.base_url = base_url
@@ -33,39 +33,39 @@ class WebSocketTestClient:
         self.is_connected = False
 
     async def connect(self, endpoint: str) -> None:
-        """建立 WebSocket 連線."""
+        """Establish WebSocket connection."""
         ws_url = self.base_url.replace("http://", "ws://") + endpoint
         try:
             self.websocket = await websockets.connect(ws_url)
             self.is_connected = True
-            logger.info(f"[WS-Test] 連線建立: {ws_url}")
+            logger.info(f"[WS-Test] Connection established: {ws_url}")
         except Exception as e:
-            logger.error(f"[WS-Test] 連線失敗: {e}")
+            logger.error(f"[WS-Test] Connection failed: {e}")
             raise
 
     async def disconnect(self) -> None:
-        """斷開 WebSocket 連線."""
+        """Disconnect WebSocket connection."""
         if self.websocket:
             await self.websocket.close()
             self.is_connected = False
-            logger.info("[WS-Test] 連線已斷開")
+            logger.info("[WS-Test] Connection disconnected")
             self.websocket = None
 
     async def send_message(self, message: Union[Dict[str, Any], WebSocketTestMessage]) -> None:
-        """發送訊息到 WebSocket."""
+        """Send message to WebSocket."""
         if not self.websocket or not self.is_connected:
-            raise RuntimeError("WebSocket 未連線")
+            raise RuntimeError("WebSocket not connected")
 
         if isinstance(message, BaseModel):
             message = message.model_dump()
 
         await self.websocket.send(json.dumps(message))
-        logger.debug(f"[WS-Test] 發送訊息: {message.get('type')}")
+        logger.debug(f"[WS-Test] Sent message: {message.get('type')}")
 
     async def receive_message(self, timeout: float = 10.0) -> Optional[WebSocketTestMessage]:
-        """接收 WebSocket 訊息."""
+        """Receive WebSocket message."""
         if not self.websocket or not self.is_connected:
-            raise RuntimeError("WebSocket 未連線")
+            raise RuntimeError("WebSocket not connected")
 
         try:
             data = await asyncio.wait_for(
@@ -75,13 +75,13 @@ class WebSocketTestClient:
             message_dict = json.loads(data)
             message = WebSocketTestMessage(**message_dict)
             self.messages.append(message)
-            logger.debug(f"[WS-Test] 接收訊息: {message.type}")
+            logger.debug(f"[WS-Test] Received message: {message.type}")
             return message
         except asyncio.TimeoutError:
-            logger.warning(f"[WS-Test] 接收訊息超時 ({timeout}s)")
+            logger.warning(f"[WS-Test] Receive message timeout ({timeout}s)")
             return None
         except Exception as e:
-            logger.error(f"[WS-Test] 接收訊息錯誤: {e}")
+            logger.error(f"[WS-Test] Receive message error: {e}")
             return None
 
     async def receive_messages_until(
@@ -90,7 +90,7 @@ class WebSocketTestClient:
         timeout: float = 30.0,
         max_messages: int = 100
     ) -> List[WebSocketTestMessage]:
-        """接收訊息直到滿足條件或超時。"""
+        """Receive messages until condition is met or timeout."""
         messages = []
         start_time = asyncio.get_event_loop().time()
 
@@ -106,16 +106,16 @@ class WebSocketTestClient:
         return messages
 
     def get_messages_by_type(self, message_type: str) -> List[WebSocketTestMessage]:
-        """取得指定類型的訊息。"""
-        return [msg for msg in self.messages if msg.type == message_type]
+        """Get messages of specified type."""
+        return [msg for msg in self.messages if msg.type == message_type
 
     def clear_messages(self) -> None:
-        """清除已接收的訊息記錄。"""
+        """Clear received message records."""
         self.messages.clear()
 
 
 class MockWebSocket:
-    """模擬 WebSocket 物件，用於單元測試。"""
+    """Mock WebSocket object for unit testing."""
 
     def __init__(self, client_info: Optional[Dict[str, Any]] = None) -> None:
         self.client = client_info or {"host": "test-client", "port": 12345}
@@ -124,50 +124,50 @@ class MockWebSocket:
         self.is_closed = False
 
     async def accept(self) -> None:
-        """接受連線。"""
-        logger.debug("[Mock-WS] 接受連線")
+        """Accept connection."""
+        logger.debug("[Mock-WS] Connection accepted")
 
     async def send_text(self, data: str) -> None:
-        """發送文字訊息。"""
+        """Send text message."""
         if self.is_closed:
-            raise RuntimeError("WebSocket 已關閉")
+            raise RuntimeError("WebSocket closed")
 
         try:
             message = json.loads(data)
             self.messages_sent.append(message)
-            logger.debug(f"[Mock-WS] 發送訊息: {message.get('type')}")
+            logger.debug(f"[Mock-WS] Sent message: {message.get('type')}")
         except json.JSONDecodeError:
             self.messages_sent.append({"raw": data})
-            logger.debug("[Mock-WS] 發送原始訊息")
+            logger.debug("[Mock-WS] Sent raw message")
 
     async def receive_json(self) -> Dict[str, Any]:
-        """接收 JSON 訊息。"""
+        """Receive JSON message."""
         if self.is_closed:
-            raise RuntimeError("WebSocket 已關閉")
+            raise RuntimeError("WebSocket closed")
 
-        # 在測試中模擬接收訊息
+        # Simulate receiving messages in tests
         if self.messages_received:
             return self.messages_received.pop(0)
 
-        # 如果沒有預設訊息，返回一個預設的 ping 訊息
+        # If no preset messages, return a default ping message
         return {"type": "ping"}
 
     def add_received_message(self, message: Dict[str, Any]) -> None:
-        """添加預設的接收訊息。"""
+        """Add preset received message."""
         self.messages_received.append(message)
 
     async def close(self) -> None:
-        """關閉連線。"""
+        """Close connection."""
         self.is_closed = True
-        logger.debug("[Mock-WS] 連線已關閉")
+        logger.debug("[Mock-WS] Connection closed")
 
 
 class WebSocketTestHelper:
-    """WebSocket 測試輔助工具集合。"""
+    """WebSocket test helper utilities collection."""
 
     @staticmethod
     def create_approval_response(request_id: str, approved: bool, reason: Optional[str] = None) -> Dict[str, Any]:
-        """建立工具審批回應訊息。"""
+        """Create tool approval response message."""
         return {
             "type": "tool_approval_response",
             "request_id": request_id,
@@ -177,7 +177,7 @@ class WebSocketTestHelper:
 
     @staticmethod
     def create_approval_request_event(request_id: str, session_id: str, tool_name: str, tool_input: Dict[str, Any]) -> Dict[str, Any]:
-        """建立工具審批請求事件。"""
+        """Create tool approval request event."""
         return {
             "type": "tool_approval_request",
             "data": {
@@ -192,7 +192,7 @@ class WebSocketTestHelper:
 
     @staticmethod
     def create_session_message(session_id: str, role: str, content: str) -> Dict[str, Any]:
-        """建立 session 訊息。"""
+        """Create session message."""
         return {
             "type": "session_message",
             "data": {
@@ -205,7 +205,7 @@ class WebSocketTestHelper:
 
     @staticmethod
     def create_session_started_event(session_id: str, instruction: str) -> Dict[str, Any]:
-        """建立 session 開始事件。"""
+        """Create session started event."""
         return {
             "type": "session_started",
             "data": {
@@ -218,7 +218,7 @@ class WebSocketTestHelper:
 
     @staticmethod
     def create_session_completed_event(session_id: str, status: str, has_error: bool = False) -> Dict[str, Any]:
-        """建立 session 完成事件。"""
+        """Create session completed event."""
         return {
             "type": "session_completed",
             "data": {
@@ -236,7 +236,7 @@ class WebSocketTestHelper:
         message_type: str,
         timeout: float = 10.0
     ) -> Optional[WebSocketTestMessage]:
-        """等待特定類型的訊息。"""
+        """Wait for specific type of message."""
         start_time = asyncio.get_event_loop().time()
 
         while (asyncio.get_event_loop().time() - start_time) < timeout:
@@ -252,19 +252,19 @@ class WebSocketTestHelper:
         message: Optional[WebSocketTestMessage],
         expected_fields: Dict[str, Any]
     ) -> None:
-        """驗證訊息包含預期欄位。"""
-        assert message is not None, "訊息不應為空"
+        """Verify message contains expected fields."""
+        assert message is not None, "Message should not be empty"
 
         for field, expected_value in expected_fields.items():
             actual_value = getattr(message, field, None)
             if field == "data" and isinstance(expected_value, dict):
-                assert actual_value is not None, f"訊息缺少 data 欄位"
+                assert actual_value is not None, "Message missing data field"
                 for data_field, data_value in expected_value.items():
                     assert actual_value.get(data_field) == data_value, \
-                        f"data.{data_field} 應為 {data_value}，實際為 {actual_value.get(data_field)}"
+                        f"data.{data_field} should be {data_value}, actual is {actual_value.get(data_field)}"
             else:
                 assert actual_value == expected_value, \
-                    f"{field} 應為 {expected_value}，實際為 {actual_value}"
+                    f"{field} should be {expected_value}, actual is {actual_value}"
 
 
 __all__ = [

@@ -1,4 +1,4 @@
-"""AgentSessionService 單元測試."""
+"""AgentSessionService unit tests."""
 
 from __future__ import annotations
 

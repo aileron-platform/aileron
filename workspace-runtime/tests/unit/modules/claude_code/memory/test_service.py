@@ -1,4 +1,4 @@
-"""Claude Code Memory 服務測試"""
+"""Claude Code Memory service tests"""
 
 from __future__ import annotations
 

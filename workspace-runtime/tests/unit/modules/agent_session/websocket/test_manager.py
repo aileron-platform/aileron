@@ -1,4 +1,4 @@
-"""WebSocket ConnectionManager replay 模式測試."""
+"""WebSocket ConnectionManager replay mode tests."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.modules.agent_session.websocket.manager import (
 
 @pytest.mark.asyncio
 async def test_replay_mode_queues_then_flushes_messages():
-    """replay 模式下先排隊，結束 replay 後依序送出."""
+    """Queue messages in replay mode and send them sequentially after replay ends."""
     manager = ConnectionManager()
     websocket = AsyncMock()
     websocket.accept = AsyncMock()
@@ -52,7 +52,7 @@ async def test_replay_mode_queues_then_flushes_messages():
 
 @pytest.mark.asyncio
 async def test_send_to_session_appends_seq_when_missing():
-    """缺少 seq 的 session 事件，應在發送前補上 seq。"""
+    """Session events missing seq should have seq appended before sending."""
     replay_store = AsyncMock()
     replay_store.append_event = AsyncMock(return_value=42)
 
@@ -86,7 +86,7 @@ async def test_send_to_session_appends_seq_when_missing():
 
 @pytest.mark.asyncio
 async def test_send_to_session_preserves_existing_seq():
-    """若事件已有 seq，則不應重複寫入 replay store。"""
+    """Events that already have seq should not write to replay store again."""
     replay_store = AsyncMock()
     replay_store.append_event = AsyncMock()
 

@@ -1,4 +1,4 @@
-"""Claude Code 整合測試共用工具"""
+"""Claude Code integration test shared utilities"""
 
 from __future__ import annotations
 

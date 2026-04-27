@@ -1,4 +1,4 @@
-"""MCP Service 單元測試"""
+"""MCP Service unit tests"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def mcp_service():
 
 @pytest.fixture
 def tmp_workspace(tmp_path):
-    """創建臨時 workspace 目錄結構."""
+    """Create temporary workspace directory structure."""
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
 
@@ -36,12 +36,12 @@ def tmp_workspace(tmp_path):
 
 
 class TestListServers:
-    """測試列出 MCP servers 功能."""
+    """Test listing MCP servers functionality."""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_list_servers_all(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試列出所有 scope 的 MCP servers."""
+        """Test listing all scopes MCP servers."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -58,7 +58,7 @@ class TestListServers:
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_list_servers_project_only(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試只列出 project scope 的 MCP servers."""
+        """Test listing only project scope MCP servers."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -73,12 +73,12 @@ class TestListServers:
 
 
 class TestGetScope:
-    """測試獲取特定 scope 的 MCP servers."""
+    """Test getting specific scope MCP servers."""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_get_scope_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試成功獲取 scope."""
+        """Test successful scope retrieval."""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -101,7 +101,7 @@ class TestGetScope:
 
 
 class TestCreateServers:
-    """測試創建 MCP servers."""
+    """Test creating MCP servers."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -109,7 +109,7 @@ class TestCreateServers:
     def test_create_servers_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試成功創建 servers."""
+        """Test successful server creation."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -135,7 +135,7 @@ class TestCreateServers:
 
 
 class TestUpdateServer:
-    """測試更新 MCP server."""
+    """Test updating MCP server."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -143,7 +143,7 @@ class TestUpdateServer:
     def test_update_server_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試成功更新 server."""
+        """Test successful server update."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -176,7 +176,7 @@ class TestUpdateServer:
 
 
 class TestDeleteServer:
-    """測試刪除 MCP server."""
+    """Test deleting MCP server."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -184,7 +184,7 @@ class TestDeleteServer:
     def test_delete_server_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試成功刪除 server."""
+        """Test successful server deletion."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -210,12 +210,12 @@ class TestDeleteServer:
 
 
 class TestExportServer:
-    """測試導出 MCP server."""
+    """Test exporting MCP server."""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_export_server_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試成功導出 server."""
+        """Test successful server export."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -238,7 +238,7 @@ class TestExportServer:
 
 
 class TestToggleServerStatus:
-    """測試切換 MCP server 狀態."""
+    """Test toggling MCP server status."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -246,7 +246,7 @@ class TestToggleServerStatus:
     def test_toggle_server_status_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試成功切換 server 狀態."""
+        """Test successful server status toggle."""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -270,10 +270,10 @@ class TestToggleServerStatus:
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    """Test service initialization."""
 
     def test_service_init(self):
-        """測試服務初始化."""
+        """Test service initialization."""
         # Act
         service = McpService()
 
@@ -282,7 +282,7 @@ class TestServiceInitialization:
 
 
 class TestGetServer:
-    """測試獲取單一 MCP server."""
+    """Test getting single MCP server."""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")

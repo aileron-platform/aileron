@@ -1,4 +1,4 @@
-"""Slash Command Service 測試."""
+"""Slash Command Service tests."""
 
 from __future__ import annotations
 

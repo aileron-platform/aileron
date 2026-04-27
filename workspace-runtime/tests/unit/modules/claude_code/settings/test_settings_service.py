@@ -1,4 +1,4 @@
-"""Claude Code Settings Service 單元測試"""
+"""Claude Code Settings Service unit tests"""
 
 from __future__ import annotations
 
@@ -30,10 +30,10 @@ def settings_service():
 
 @pytest.fixture
 def mock_workspace(tmp_path):
-    """創建模擬的 workspace 目錄結構."""
+    """Create mock workspace directory structure."""
     workspace_id = "test-workspace"
 
-    # 創建目錄結構
+    # Create directory structure
     user_root = tmp_path / ".claude"
     project_root = tmp_path / "workspace" / ".claude"
 
@@ -44,12 +44,12 @@ def mock_workspace(tmp_path):
 
 
 class TestGetSettings:
-    """測試讀取設定功能."""
+    """Test settings reading functionality."""
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
     def test_get_settings_default(self, mock_read_json, mock_resolve, settings_service, mock_workspace):
-        """測試讀取預設設定."""
+        """Test reading default settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -72,7 +72,7 @@ class TestGetSettings:
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
     def test_get_settings_with_mode(self, mock_read_json, mock_resolve, settings_service, mock_workspace):
-        """測試讀取帶有 mode 的設定."""
+        """Test reading settings with mode."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -99,7 +99,7 @@ class TestGetSettings:
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
     def test_get_settings_with_env(self, mock_read_json, mock_resolve, settings_service, mock_workspace):
-        """測試讀取包含環境變數的設定."""
+        """Test reading settings with environment variables."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -126,7 +126,7 @@ class TestGetSettings:
 
 
 class TestUpdateSettings:
-    """測試更新設定功能."""
+    """Test settings update functionality."""
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
@@ -134,7 +134,7 @@ class TestUpdateSettings:
     def test_update_settings_mode(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 mode 設定."""
+        """Test updating mode settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -163,7 +163,7 @@ class TestUpdateSettings:
     def test_update_settings_env(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新環境變數設定."""
+        """Test updating environment variable settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -187,14 +187,14 @@ class TestUpdateSettings:
 
 
 class TestSettingsAggregation:
-    """測試設定合併功能."""
+    """Test settings merge functionality."""
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
     def test_settings_merge_order(
         self, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試設定按照正確順序合併（USER < PROJECT < LOCAL）."""
+        """Test settings merge in correct order (USER < PROJECT < LOCAL)."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -220,16 +220,16 @@ class TestSettingsAggregation:
         result = settings_service.get_settings(workspace_id)
 
         # Assert
-        # LOCAL 應該覆蓋 PROJECT 和 USER
+        # LOCAL should override PROJECT and USER
         assert result.mode == PermissionMode.ACCEPT_EDITS
 
 
 class TestGetMarketplaces:
-    """測試讀取 marketplaces 功能."""
+    """Test reading marketplaces functionality."""
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     def test_get_marketplaces_empty(self, mock_resolve, settings_service, mock_workspace):
-        """測試讀取空的 marketplaces."""
+        """Test reading empty marketplaces."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
         mock_resolve.return_value = user_root
@@ -243,12 +243,12 @@ class TestGetMarketplaces:
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     def test_get_marketplaces_with_data(self, mock_resolve, settings_service, mock_workspace):
-        """測試讀取包含數據的 marketplaces."""
+        """Test reading marketplaces with data."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
         mock_resolve.return_value = user_root
 
-        # 創建 marketplace 目錄和文件
+        # Create marketplace directory and files
         marketplace_dir = user_root / "plugins" / "marketplaces" / "test-marketplace"
         marketplace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -274,10 +274,10 @@ class TestGetMarketplaces:
 
 
 class TestPrivateMethods:
-    """測試私有方法."""
+    """Test private methods."""
 
     def test_extract_mode_valid(self, settings_service):
-        """測試從狀態中提取有效的 mode."""
+        """Test extracting valid mode from state."""
         # Arrange
         state = {"defaultMode": "plan"}
 
@@ -288,7 +288,7 @@ class TestPrivateMethods:
         assert result == PermissionMode.PLAN
 
     def test_extract_mode_invalid(self, settings_service):
-        """測試從狀態中提取無效的 mode."""
+        """Test extracting invalid mode from state."""
         # Arrange
         state = {"defaultMode": "invalid-mode"}
 
@@ -299,7 +299,7 @@ class TestPrivateMethods:
         assert result is None
 
     def test_normalize_string_list(self, settings_service):
-        """測試字串清單正規化."""
+        """Test string list normalization."""
         # Arrange
         values = ["tool1", "tool2", "tool1", "", "  tool3  ", None]
 
@@ -310,13 +310,13 @@ class TestPrivateMethods:
         assert result == ["tool1", "tool2", "tool3"]
 
     def test_extract_enabled_plugins(self, settings_service):
-        """測試提取 enabled plugins."""
+        """Test extracting enabled plugins."""
         # Arrange
         state = {
             "enabledPlugins": {
                 "plugin1": True,
                 "plugin2": False,
-                "  plugin3  ": "yes"  # 應該轉為 True
+                "  plugin3  ": "yes"  # Should convert to True
             }
         }
 
@@ -329,7 +329,7 @@ class TestPrivateMethods:
         assert result["plugin3"] is True
 
     def test_extract_model_valid(self, settings_service):
-        """測試提取有效的 model."""
+        """Test extracting valid model."""
         # Arrange
         state = {"model": "claude-3-5-sonnet"}
 
@@ -340,7 +340,7 @@ class TestPrivateMethods:
         assert result == "claude-3-5-sonnet"
 
     def test_extract_model_empty_string(self, settings_service):
-        """測試提取空字串 model."""
+        """Test extracting empty string model."""
         # Arrange
         state = {"model": "  "}
 
@@ -351,7 +351,7 @@ class TestPrivateMethods:
         assert result is None
 
     def test_extract_permissions_valid(self, settings_service):
-        """測試提取有效的 permissions."""
+        """Test extracting valid permissions."""
         # Arrange
         state = {
             "permissions": {
@@ -371,7 +371,7 @@ class TestPrivateMethods:
         assert result.ask == ["tool4"]
 
     def test_extract_permissions_with_additional_directories(self, settings_service):
-        """測試提取包含 additionalDirectories 的 permissions."""
+        """Test extracting permissions with additionalDirectories."""
         # Arrange
         state = {
             "permissions": {
@@ -388,7 +388,7 @@ class TestPrivateMethods:
         assert result.additional_directories == ["/path/to/dir"]
 
     def test_extract_api_key_helper(self, settings_service):
-        """測試提取 API key helper."""
+        """Test extracting API key helper."""
         # Arrange
         state = {"apiKeyHelper": "helper-command"}
 
@@ -399,7 +399,7 @@ class TestPrivateMethods:
         assert result == "helper-command"
 
     def test_extract_api_key_helper_empty(self, settings_service):
-        """測試提取空的 API key helper."""
+        """Test extracting empty API key helper."""
         # Arrange
         state = {"apiKeyHelper": ""}
 
@@ -410,7 +410,7 @@ class TestPrivateMethods:
         assert result is None
 
     def test_extract_cleanup_period(self, settings_service):
-        """測試提取 cleanup period."""
+        """Test extracting cleanup period."""
         # Arrange
         state = {"cleanupPeriodDays": 30}
 
@@ -421,7 +421,7 @@ class TestPrivateMethods:
         assert result == 30
 
     def test_extract_cleanup_period_zero(self, settings_service):
-        """測試提取零值的 cleanup period."""
+        """Test extracting zero value cleanup period."""
         # Arrange
         state = {"cleanupPeriodDays": 0}
 
@@ -432,7 +432,7 @@ class TestPrivateMethods:
         assert result == 0
 
     def test_extract_cleanup_period_negative(self, settings_service):
-        """測試提取負值的 cleanup period."""
+        """Test extracting negative value cleanup period."""
         # Arrange
         state = {"cleanupPeriodDays": -1}
 
@@ -443,7 +443,7 @@ class TestPrivateMethods:
         assert result is None
 
     def test_extract_bool_true(self, settings_service):
-        """測試提取布爾值 true."""
+        """Test extracting boolean value true."""
         # Arrange
         state = {"includeCoAuthoredBy": True}
 
@@ -454,7 +454,7 @@ class TestPrivateMethods:
         assert result is True
 
     def test_extract_bool_false(self, settings_service):
-        """測試提取布爾值 false."""
+        """Test extracting boolean value false."""
         # Arrange
         state = {"disableAllHooks": False}
 
@@ -465,7 +465,7 @@ class TestPrivateMethods:
         assert result is False
 
     def test_extract_bool_not_present(self, settings_service):
-        """測試提取不存在的布爾值."""
+        """Test extracting non-existent boolean value."""
         # Arrange
         state = {}
 
@@ -476,7 +476,7 @@ class TestPrivateMethods:
         assert result is None
 
     def test_extract_string_list(self, settings_service):
-        """測試提取字串列表."""
+        """Test extracting string list."""
         # Arrange
         state = {"enabledMcpjsonServers": ["server1", "server2"]}
 
@@ -488,7 +488,7 @@ class TestPrivateMethods:
         assert result == ["server1", "server2"]
 
     def test_extract_string_list_not_provided(self, settings_service):
-        """測試提取不存在的字串列表."""
+        """Test extracting non-existent string list."""
         # Arrange
         state = {}
 
@@ -500,7 +500,7 @@ class TestPrivateMethods:
         assert result == []
 
     def test_extract_mcp_policies(self, settings_service):
-        """測試提取 MCP policies."""
+        """Test extracting MCP policies."""
         # Arrange
         state = {
             "allowedMcpServers": [
@@ -518,7 +518,7 @@ class TestPrivateMethods:
         assert result[0].server_name == "server1"
 
     def test_extract_mcp_policies_with_duplicates(self, settings_service):
-        """測試提取包含重複的 MCP policies."""
+        """Test extracting MCP policies with duplicates."""
         # Arrange
         state = {
             "allowedMcpServers": [
@@ -535,7 +535,7 @@ class TestPrivateMethods:
         assert len(result) == 1
 
     def test_extract_mcp_policies_string_format(self, settings_service):
-        """測試提取字串格式的 MCP policies."""
+        """Test extracting string format MCP policies."""
         # Arrange
         state = {
             "allowedMcpServers": ["server1", "server2"]
@@ -549,7 +549,7 @@ class TestPrivateMethods:
         assert len(result) == 2
 
     def test_settings_file_user_scope(self, settings_service, tmp_path):
-        """測試獲取 USER scope 的設定文件路徑."""
+        """Test getting settings file path for USER scope."""
         # Arrange
         workspace_id = "test-workspace"
 
@@ -561,7 +561,7 @@ class TestPrivateMethods:
             assert result == tmp_path / "settings.json"
 
     def test_settings_file_project_scope(self, settings_service, tmp_path):
-        """測試獲取 PROJECT scope 的設定文件路徑."""
+        """Test getting settings file path for PROJECT scope."""
         # Arrange
         workspace_id = "test-workspace"
 
@@ -573,7 +573,7 @@ class TestPrivateMethods:
             assert result == tmp_path / "settings.json"
 
     def test_settings_file_local_scope(self, settings_service, tmp_path):
-        """測試獲取 LOCAL scope 的設定文件路徑."""
+        """Test getting settings file path for LOCAL scope."""
         # Arrange
         workspace_id = "test-workspace"
 
@@ -586,7 +586,7 @@ class TestPrivateMethods:
 
 
 class TestUpdateSettingsAdvanced:
-    """測試進階的設定更新功能."""
+    """Test advanced settings update functionality."""
 
     @patch("app.modules.claude_code.settings.service.resolve_scope_root")
     @patch("app.modules.claude_code.settings.service.read_json_file")
@@ -594,7 +594,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_permissions(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 permissions 設定."""
+        """Test updating permissions settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -626,7 +626,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_enabled_plugins(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 enabled plugins 設定."""
+        """Test updating enabled plugins settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -655,7 +655,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_output_style(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 output style 設定."""
+        """Test updating output style settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -682,7 +682,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_model(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 model 設定."""
+        """Test updating model settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -709,7 +709,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_mcp_servers(
         self, mock_write_json, mock_read_json, mock_resolve, settings_service, mock_workspace
     ):
-        """測試更新 MCP servers 設定."""
+        """Test updating MCP servers settings."""
         # Arrange
         workspace_id, tmp_path, user_root, project_root = mock_workspace
 
@@ -739,7 +739,7 @@ class TestUpdateSettingsAdvanced:
     def test_update_settings_remove_field(
         self, mock_read_json, mock_resolve, settings_service, mock_workspace, tmp_path
     ):
-        """測試移除設定欄位."""
+        """Test removing settings field."""
         # Arrange
         workspace_id, _, user_root, project_root = mock_workspace
 

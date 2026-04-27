@@ -1,4 +1,4 @@
-"""Enums 單元測試."""
+"""Enums unit tests."""
 
 import pytest
 from app.modules.agent_session.domain.enums import (
@@ -17,10 +17,10 @@ from app.modules.agent_session.domain.enums import (
 
 
 class TestAgentSessionStatus:
-    """AgentSessionStatus 測試."""
+    """AgentSessionStatus tests."""
 
     def test_values(self):
-        """測試所有狀態值."""
+        """Test all status values."""
         assert AgentSessionStatus.IDLE.value == "idle"
         assert AgentSessionStatus.RUNNING.value == "running"
         assert AgentSessionStatus.AWAITING_PERMISSION.value == "awaiting_permission"
@@ -28,16 +28,16 @@ class TestAgentSessionStatus:
         assert AgentSessionStatus.FAILED.value == "failed"
 
     def test_membership(self):
-        """測試成員檢查."""
+        """Test member checking."""
         assert "idle" in [s.value for s in AgentSessionStatus]
         assert "invalid" not in [s.value for s in AgentSessionStatus]
 
 
 class TestTaskStatus:
-    """TaskStatus 測試."""
+    """TaskStatus tests."""
 
     def test_values(self):
-        """測試所有狀態值."""
+        """Test all status values."""
         assert TaskStatus.CREATED.value == "created"
         assert TaskStatus.RUNNING.value == "running"
         assert TaskStatus.STOPPING.value == "stopping"
@@ -47,7 +47,7 @@ class TestTaskStatus:
         assert TaskStatus.STOPPED.value == "stopped"
 
     def test_terminal_states(self):
-        """測試終止狀態."""
+        """Test terminal states."""
         terminal = TaskStatus.terminal_states()
         assert TaskStatus.COMPLETED in terminal
         assert TaskStatus.FAILED in terminal
@@ -56,7 +56,7 @@ class TestTaskStatus:
         assert TaskStatus.CREATED not in terminal
 
     def test_is_terminal(self):
-        """測試 is_terminal 屬性."""
+        """Test is_terminal property."""
         assert TaskStatus.COMPLETED.is_terminal is True
         assert TaskStatus.FAILED.is_terminal is True
         assert TaskStatus.STOPPED.is_terminal is True
@@ -65,18 +65,18 @@ class TestTaskStatus:
         assert TaskStatus.AWAITING_PERMISSION.is_terminal is False
 
     def test_active_states(self):
-        """測試活躍狀態 (非終止狀態)."""
-        # is_active 是 not is_terminal，所以所有非終止狀態都是 active
+        """Test active states (non-terminal states)."""
+        # is_active is not is_terminal, so all non-terminal states are active
         assert TaskStatus.RUNNING.is_active is True
         assert TaskStatus.AWAITING_PERMISSION.is_active is True
         assert TaskStatus.STOPPING.is_active is True
-        assert TaskStatus.CREATED.is_active is True  # CREATED 也是非終止狀態
+        assert TaskStatus.CREATED.is_active is True  # CREATED is also non-terminal
         assert TaskStatus.COMPLETED.is_active is False
         assert TaskStatus.FAILED.is_active is False
         assert TaskStatus.STOPPED.is_active is False
 
     def test_is_active(self):
-        """測試 is_active 屬性."""
+        """Test is_active property."""
         assert TaskStatus.RUNNING.is_active is True
         assert TaskStatus.AWAITING_PERMISSION.is_active is True
         assert TaskStatus.STOPPING.is_active is True
@@ -85,31 +85,31 @@ class TestTaskStatus:
 
 
 class TestAgenticTool:
-    """AgenticTool 測試."""
+    """AgenticTool tests."""
 
     def test_values(self):
-        """測試所有工具值."""
+        """Test all tool values."""
         assert AgenticTool.CLAUDE_CODE.value == "claude-code"
         assert AgenticTool.CODEX.value == "codex"
         assert AgenticTool.GEMINI.value == "gemini"
         assert AgenticTool.OPENCODE.value == "opencode"
 
     def test_from_string(self):
-        """測試從字串轉換."""
+        """Test conversion from string."""
         assert AgenticTool("claude-code") == AgenticTool.CLAUDE_CODE
         assert AgenticTool("codex") == AgenticTool.CODEX
 
     def test_invalid_tool(self):
-        """測試無效工具."""
+        """Test invalid tool."""
         with pytest.raises(ValueError):
             AgenticTool("invalid-tool")
 
 
 class TestMessageType:
-    """MessageType 測試."""
+    """MessageType tests."""
 
     def test_values(self):
-        """測試所有類型值."""
+        """Test all type values."""
         assert MessageType.USER.value == "user"
         assert MessageType.ASSISTANT.value == "assistant"
         assert MessageType.SYSTEM.value == "system"
@@ -118,10 +118,10 @@ class TestMessageType:
 
 
 class TestContentBlockType:
-    """ContentBlockType 測試."""
+    """ContentBlockType tests."""
 
     def test_values(self):
-        """測試所有區塊類型."""
+        """Test all block types."""
         assert ContentBlockType.TEXT.value == "text"
         assert ContentBlockType.IMAGE.value == "image"
         assert ContentBlockType.TOOL_USE.value == "tool_use"
@@ -132,10 +132,10 @@ class TestContentBlockType:
 
 
 class TestPermissionEnums:
-    """Permission 相關列舉測試."""
+    """Permission-related enum tests."""
 
     def test_permission_mode(self):
-        """測試 PermissionMode (Claude SDK 原生模式)."""
+        """Test PermissionMode (Claude SDK native modes)."""
         assert PermissionMode.DEFAULT.value == "default"
         assert PermissionMode.ACCEPT_EDITS.value == "acceptEdits"
         assert PermissionMode.BYPASS_PERMISSIONS.value == "bypassPermissions"
@@ -144,14 +144,14 @@ class TestPermissionEnums:
         assert PermissionMode.AUTO.value == "auto"
 
     def test_permission_scope(self):
-        """測試 PermissionScope."""
+        """Test PermissionScope."""
         assert PermissionScope.ONCE.value == "once"
         assert PermissionScope.PROJECT.value == "project"
         assert PermissionScope.USER.value == "user"
         assert PermissionScope.LOCAL.value == "local"
 
     def test_permission_status(self):
-        """測試 PermissionStatus."""
+        """Test PermissionStatus."""
         assert PermissionStatus.PENDING.value == "pending"
         assert PermissionStatus.APPROVED.value == "approved"
         assert PermissionStatus.DENIED.value == "denied"

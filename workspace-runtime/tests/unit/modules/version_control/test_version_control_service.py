@@ -1,4 +1,4 @@
-"""Version Control Service 單元測試."""
+"""Version Control Service Unit Tests."""
 
 from __future__ import annotations
 
@@ -20,32 +20,32 @@ from app.modules.version_control.models import (
 
 @pytest.fixture
 def git_workspace(tmp_path):
-    """創建測試 Git 工作區."""
+    """Create test Git workspace."""
     workspace_id = "test-workspace"
     workspace_path = tmp_path / workspace_id
     workspace_path.mkdir()
 
-    # 初始化 Git 倉庫
+    # Initialize Git repository
     repo = Repo.init(workspace_path)
 
-    # 創建初始提交
+    # Create initial commit
     readme = workspace_path / "README.md"
     readme.write_text("# Test Repository\n")
     repo.index.add(["README.md"])
     actor = Actor("Test User", "test@example.com")
     repo.index.commit("Initial commit", author=actor, committer=actor)
 
-    # 創建 Git 服務
+    # Create Git service
     service = GitService(base_path=tmp_path)
 
     return service, workspace_id, workspace_path, repo
 
 
 class TestGitOperations:
-    """測試 Git 操作功能."""
+    """Test Git operations functionality."""
 
     def test_get_status_success(self, git_workspace):
-        """測試獲取倉庫狀態成功."""
+        """Test successful repository status retrieval."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -60,15 +60,15 @@ class TestGitOperations:
         assert status.untrackedCount == 0
 
     def test_get_status_with_changes(self, git_workspace):
-        """測試獲取有變更的倉庫狀態."""
+        """Test repository status with changes."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建新文件
+        # Create new file
         new_file = workspace_path / "new.txt"
         new_file.write_text("New file")
 
-        # 修改現有文件
+        # Modify existing file
         readme = workspace_path / "README.md"
         readme.write_text("# Modified README\n")
 
@@ -80,7 +80,7 @@ class TestGitOperations:
         assert status.unstagedCount + status.untrackedCount >= 2
 
     def test_get_status_nonexistent_workspace(self, tmp_path):
-        """測試獲取不存在的工作區狀態."""
+        """Test nonexistent workspace status."""
         # Arrange
         service = GitService(base_path=tmp_path)
 
@@ -93,10 +93,10 @@ class TestGitOperations:
 
 
 class TestBranchManagement:
-    """測試分支管理功能."""
+    """Test branch management functionality."""
 
     def test_list_branches_success(self, git_workspace):
-        """測試列出分支成功."""
+        """Test successful branch listing."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -106,14 +106,14 @@ class TestBranchManagement:
         # Assert
         assert result is not None
         assert len(result.branches) >= 1
-        # 應該至少有一個分支（通常是 main 或 master）
+        # Should have at least one branch (usually main or master)
 
     def test_checkout_branch_success(self, git_workspace):
-        """測試切換分支成功."""
+        """Test successful branch checkout."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建新分支
+        # Create new branch
         repo.create_head("feature-branch")
 
         # Act
@@ -124,7 +124,7 @@ class TestBranchManagement:
         assert result.branch == "feature-branch"
 
     def test_checkout_nonexistent_branch(self, git_workspace):
-        """測試切換不存在的分支."""
+        """Test checkout nonexistent branch."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -135,14 +135,14 @@ class TestBranchManagement:
 
 
 class TestStagingOperations:
-    """測試暫存操作功能."""
+    """Test staging operations functionality."""
 
     def test_stage_files_success(self, git_workspace):
-        """測試暫存檔案成功."""
+        """Test successful file staging."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建新文件
+        # Create new file
         new_file = workspace_path / "test.txt"
         new_file.write_text("Test content")
 
@@ -155,11 +155,11 @@ class TestStagingOperations:
         assert "test.txt" in result.staged
 
     def test_stage_all_changes(self, git_workspace):
-        """測試暫存所有變更."""
+        """Test staging all changes."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建多個新文件
+        # Create multiple new files
         for i in range(3):
             file_path = workspace_path / f"file{i}.txt"
             file_path.write_text(f"Content {i}")
@@ -172,11 +172,11 @@ class TestStagingOperations:
         assert len(result.staged) >= 3
 
     def test_unstage_files_success(self, git_workspace):
-        """測試取消暫存檔案成功."""
+        """Test successful file unstaging."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建並暫存新文件
+        # Create and stage new file
         new_file = workspace_path / "test.txt"
         new_file.write_text("Test content")
         repo.index.add(["test.txt"])
@@ -190,14 +190,14 @@ class TestStagingOperations:
 
 
 class TestCommitOperations:
-    """測試提交操作功能."""
+    """Test commit operations functionality."""
 
     def test_commit_success(self, git_workspace):
-        """測試提交成功."""
+        """Test successful commit."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建並暫存新文件
+        # Create and stage new file
         new_file = workspace_path / "commit_test.txt"
         new_file.write_text("Test content")
         repo.index.add(["commit_test.txt"])
@@ -217,7 +217,7 @@ class TestCommitOperations:
 
 
     def test_list_commits_success(self, git_workspace):
-        """測試列出提交成功."""
+        """Test successful commit listing."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -226,15 +226,15 @@ class TestCommitOperations:
 
         # Assert
         assert result is not None
-        assert len(result.items) >= 1  # 至少有初始提交
+        assert len(result.items) >= 1  # At least initial commit
         assert result.total >= 1
 
     def test_get_commit_success(self, git_workspace):
-        """測試獲取提交詳情成功."""
+        """Test successful commit detail retrieval."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 獲取最新提交
+        # Get latest commit
         commit_id = repo.head.commit.hexsha
 
         # Act
@@ -248,10 +248,10 @@ class TestCommitOperations:
 
 
 class TestChangesOperations:
-    """測試變更操作功能."""
+    """Test changes operations functionality."""
 
     def test_get_changes_no_changes(self, git_workspace):
-        """測試獲取無變更的倉庫."""
+        """Test repository with no changes."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -267,11 +267,11 @@ class TestChangesOperations:
         assert len(result.untracked) == 0
 
     def test_get_changes_with_modifications(self, git_workspace):
-        """測試獲取有修改的變更."""
+        """Test repository with modifications."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 修改文件
+        # Modify file
         readme = workspace_path / "README.md"
         readme.write_text("# Modified README\n")
 
@@ -286,11 +286,11 @@ class TestChangesOperations:
         assert any(f.path == "README.md" for f in all_changes)
 
     def test_get_changes_with_untracked(self, git_workspace):
-        """測試獲取有未追蹤檔案的變更."""
+        """Test repository with untracked files."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 創建新文件
+        # Create new file
         new_file = workspace_path / "untracked.txt"
         new_file.write_text("Untracked content")
 
@@ -304,10 +304,10 @@ class TestChangesOperations:
 
 
 class TestWorkspaceValidation:
-    """測試工作區驗證功能."""
+    """Test workspace validation functionality."""
 
     def test_non_git_repository(self, tmp_path):
-        """測試非 Git 倉庫."""
+        """Test non-Git repository."""
         # Arrange
         workspace_id = "non-git-workspace"
         workspace_path = tmp_path / workspace_id
@@ -322,7 +322,7 @@ class TestWorkspaceValidation:
         assert exc_info.value.error_code == "VC_REPOSITORY_NOT_INITIALIZED"
 
     def test_workspace_path_resolution(self, git_workspace):
-        """測試工作區路徑解析."""
+        """Test workspace path resolution."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -335,10 +335,10 @@ class TestWorkspaceValidation:
 
 
 class TestGitServiceInitialization:
-    """測試 Git 服務初始化功能."""
+    """Test Git service initialization functionality."""
 
     def test_init_with_base_path(self, tmp_path):
-        """測試使用指定路徑初始化."""
+        """Test initialization with specified path."""
         # Act
         service = GitService(base_path=tmp_path)
 
@@ -346,7 +346,7 @@ class TestGitServiceInitialization:
         assert service._root_path == tmp_path
 
     def test_init_creates_directory(self, tmp_path):
-        """測試初始化時創建目錄."""
+        """Test directory creation on initialization."""
         # Arrange
         new_path = tmp_path / "git_workspaces"
 
@@ -359,14 +359,14 @@ class TestGitServiceInitialization:
 
 
 class TestDiffOperations:
-    """測試差異操作功能."""
+    """Test diff operations functionality."""
 
     def test_diff_worktree(self, git_workspace):
-        """測試獲取工作區差異."""
+        """Test worktree diff retrieval."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 修改文件
+        # Modify file
         readme = workspace_path / "README.md"
         readme.write_text("# Modified Content\n")
 
@@ -380,11 +380,11 @@ class TestDiffOperations:
         assert len(result.patch) > 0
 
     def test_diff_staged(self, git_workspace):
-        """測試獲取暫存區差異."""
+        """Test staged diff retrieval."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 修改並暫存文件
+        # Modify and stage file
         readme = workspace_path / "README.md"
         readme.write_text("# Staged Content\n")
         repo.index.add(["README.md"])
@@ -399,10 +399,10 @@ class TestDiffOperations:
 
 
 class TestBranchState:
-    """測試分支狀態功能."""
+    """Test branch state functionality."""
 
     def test_current_branch(self, git_workspace):
-        """測試獲取當前分支."""
+        """Test getting current branch."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
@@ -414,11 +414,11 @@ class TestBranchState:
         assert detached is False
 
     def test_detached_head_state(self, git_workspace):
-        """測試分離 HEAD 狀態."""
+        """Test detached HEAD state."""
         # Arrange
         service, workspace_id, workspace_path, repo = git_workspace
 
-        # 切換到分離 HEAD 狀態
+        # Switch to detached HEAD state
         commit = repo.head.commit
         repo.git.checkout(commit.hexsha)
 
@@ -427,4 +427,4 @@ class TestBranchState:
 
         # Assert
         assert detached is True
-        assert len(branch_name) > 0  # 應該是 commit SHA 的短版本
+        assert len(branch_name) > 0  # Should be short version of commit SHA

@@ -51,7 +51,7 @@ def _make_json_config(
     servers_key: str,
     supports_toggle: bool = True,
 ) -> CliMcpToolConfig:
-    """建立使用 JSON 策略的測試 config"""
+    """Create test config using JSON strategy"""
     project_dir = tmp_path / "workspace"
     project_dir.mkdir(exist_ok=True)
     return CliMcpToolConfig(
@@ -69,7 +69,7 @@ def _make_toml_config(
     tool: McpTool = McpTool.CODEX,
     servers_key: str = "mcp_servers",
 ) -> CliMcpToolConfig:
-    """建立使用 TOML 策略的測試 config"""
+    """Create test config using TOML strategy"""
     project_dir = tmp_path / "workspace"
     project_dir.mkdir(exist_ok=True)
     return CliMcpToolConfig(
@@ -102,7 +102,7 @@ def _read_toml(path: Path) -> Dict[str, Any]:
 
 @pytest.fixture
 def workspace_path(tmp_path: Path, monkeypatch):
-    """設定 workspace path 為 tmp_path/workspace"""
+    """Set workspace path to tmp_path/workspace"""
     ws_path = tmp_path / "workspace"
     ws_path.mkdir(exist_ok=True)
     monkeypatch.setattr(
@@ -112,11 +112,11 @@ def workspace_path(tmp_path: Path, monkeypatch):
     return ws_path
 
 
-# === Gemini 測試 ==========================================================
+# === Gemini Tests ==================================================
 
 
 class TestGeminiMcp:
-    """Gemini MCP 測試 (JSON, mcpServers, no toggle)"""
+    """Gemini MCP tests (JSON, mcpServers, no toggle)"""
 
     def _make_service(self, tmp_path: Path) -> CliMcpService:
         config = _make_json_config(
@@ -145,7 +145,7 @@ class TestGeminiMcp:
         assert "my-server" in result.mcpServers
         assert result.mcpServers["my-server"].command == "npx"
 
-        # 驗證 list
+        # Verify list
         listed = svc.list_servers("ws1", CliMcpScope.PROJECT)
         assert "my-server" in listed.scopes[0].mcpServers
 
@@ -214,7 +214,7 @@ class TestGeminiMcp:
             svc.toggle_server_status("ws1", CliMcpScope.PROJECT, "srv", False)
 
     def test_enabled_always_true(self, tmp_path: Path, workspace_path: Path):
-        """Gemini 不支援 toggle，enabled 恆為 True"""
+        """Gemini does not support toggle, enabled is always True"""
         svc = self._make_service(tmp_path)
         svc.create_servers(
             "ws1",
@@ -246,11 +246,11 @@ class TestGeminiMcp:
         assert exported.mcpServers["srv"].command == "npx"
 
 
-# === Codex 測試 (TOML) ===================================================
+# === Codex Tests (TOML) ==================================================
 
 
 class TestCodexMcp:
-    """Codex MCP 測試 (TOML, mcp_servers, supports toggle)"""
+    """Codex MCP tests (TOML, mcp_servers, supports toggle)"""
 
     def _make_service(self, tmp_path: Path) -> CliMcpService:
         config = _make_toml_config(tmp_path)
@@ -273,17 +273,17 @@ class TestCodexMcp:
         )
         assert "codex-srv" in result.mcpServers
 
-        # 驗證 TOML 檔案被正確寫入
+        # Verify TOML file is written correctly
         toml_path = workspace_path / "config.toml"
         assert toml_path.exists()
         data = _read_toml(toml_path)
         assert "mcp_servers" in data
         assert "codex-srv" in data["mcp_servers"]
-        # Codex 原生不儲存 type 欄位
+        # Codex natively does not store type field
         assert "type" not in data["mcp_servers"]["codex-srv"]
 
     def test_toml_roundtrip(self, tmp_path: Path, workspace_path: Path):
-        """TOML 往返測試：寫入後讀回應一致"""
+        """TOML roundtrip test: write and read back should be consistent"""
         svc = self._make_service(tmp_path)
         svc.create_servers(
             "ws1",

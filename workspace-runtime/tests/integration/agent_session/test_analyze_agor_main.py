@@ -1,6 +1,6 @@
-"""分析 agor-main 項目的 Agent Session 測試.
+"""Agent Session test for analyzing agor-main project.
 
-此測試通過 Agent Session 發送分析提示並記錄所有回應消息。
+This test sends analysis prompts through Agent Session and records all response messages.
 """
 
 import pytest
@@ -13,14 +13,14 @@ from typing import List, Dict, Any
 
 
 class ProjectAnalysisRecorder:
-    """項目分析消息記錄器."""
+    """Project analysis message recorder."""
 
     def __init__(self):
         self.messages: List[Dict[str, Any]] = []
         self.start_time = datetime.utcnow()
 
     def record(self, message_type: str, data: dict, role: str = "system"):
-        """記錄消息."""
+        """Record a message."""
         record = {
             "timestamp": datetime.utcnow().isoformat(),
             "type": message_type,
@@ -30,7 +30,7 @@ class ProjectAnalysisRecorder:
         self.messages.append(record)
 
     def save(self, output_dir: Path):
-        """保存所有記錄到JSON文件."""
+        """Save all records to a JSON file."""
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
         output_file = output_dir / f"agor_main_analysis_{timestamp}.json"
@@ -52,7 +52,7 @@ class ProjectAnalysisRecorder:
             }
         }
 
-        # 統計消息類型
+        # Count message types
         for msg in self.messages:
             msg_type = msg.get("type", "unknown")
             report["statistics"]["message_types"][msg_type] = \
@@ -66,18 +66,18 @@ class ProjectAnalysisRecorder:
 
 @pytest.fixture
 def analysis_recorder():
-    """分析記錄器fixture."""
+    """Analysis recorder fixture."""
     return ProjectAnalysisRecorder()
 
 
 class TestAnalyzeAgorMain:
-    """分析 agor-main 項目的測試."""
+    """Tests for analyzing the agor-main project."""
 
     @pytest.mark.asyncio
     async def test_analyze_agor_main_project(self, analysis_recorder):
-        """分析 agor-main 項目並記錄所有消息."""
+        """Analyze the agor-main project and record all messages."""
 
-        # 1. 模擬 Session 創建
+        # 1. Simulate session creation
         session_data = {
             "session_id": "agor-analysis-001",
             "workspace_id": "workspace-001",
@@ -87,48 +87,48 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("session_created", session_data, role="system")
 
-        # 2. 用戶發起分析請求
+        # 2. User initiates analysis request
         user_prompt = {
-            "content": "請分析此專案",
+            "content": "Please analyze this project",
             "language": "zh-TW",
             "request_type": "project_analysis",
         }
         analysis_recorder.record("user_prompt", user_prompt, role="user")
 
-        # 3. 模擬 Agent 分析過程
+        # 3. Simulate Agent analysis process
         agent_thinking = {
-            "process": "分析項目結構、配置文件、核心代碼",
+            "process": "Analyze project structure, configuration files, core code",
             "workspace_mount": "/workspace (agor-main)",
             "analysis_steps": [
-                "讀取項目結構",
-                "檢查配置文件",
-                "分析核心模塊",
-                "評估技術棧",
-                "生成分析報告"
+                "Read project structure",
+                "Check configuration files",
+                "Analyze core modules",
+                "Evaluate technology stack",
+                "Generate analysis report"
             ],
         }
         analysis_recorder.record("agent_thinking", agent_thinking, role="assistant")
 
-        # 4. 模擬 Agent 执行分析工具调用
+        # 4. Simulate Agent executing analysis tool calls
         tool_calls = [
             {
                 "tool_id": "glob_001",
                 "tool_name": "Glob",
-                "purpose": "列出項目文件結構",
+                "purpose": "List project file structure",
                 "pattern": "**/*.{md,json,py,ts,yml}",
                 "status": "pending",
             },
             {
                 "tool_id": "read_001",
                 "tool_name": "Read",
-                "purpose": "讀取README文件",
+                "purpose": "Read README file",
                 "file_path": "/workspace/README.md",
                 "status": "pending",
             },
             {
                 "tool_id": "read_002",
                 "tool_name": "Read",
-                "purpose": "讀取AGENTS.md",
+                "purpose": "Read AGENTS.md",
                 "file_path": "/workspace/AGENTS.md",
                 "status": "pending",
             },
@@ -137,7 +137,7 @@ class TestAnalyzeAgorMain:
         for tool_call in tool_calls:
             analysis_recorder.record("tool_use", tool_call, role="assistant")
 
-        # 5. 模擬 Tool 執行結果
+        # 5. Simulate Tool execution results
         glob_result = {
             "tool_id": "glob_001",
             "status": "completed",
@@ -166,13 +166,13 @@ class TestAnalyzeAgorMain:
             "tool_id": "read_001",
             "file_path": "/workspace/README.md",
             "status": "completed",
-            "content_preview": "agor 是一個全棧AI開發者中樞...",
+            "content_preview": "agor is a full-stack AI developer hub...",
             "key_sections": [
-                "概述",
-                "功能",
-                "快速開始",
-                "架構",
-                "開發指南",
+                "Overview",
+                "Features",
+                "Quick Start",
+                "Architecture",
+                "Development Guide",
             ],
         }
         analysis_recorder.record("tool_result", readme_content, role="system")
@@ -186,10 +186,10 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("tool_result", agents_md_content, role="system")
 
-        # 6. Agent 處理結果並生成分析
+        # 6. Agent processes results and generates analysis
         analysis_summary = {
             "project_name": "agor",
-            "description": "全棧AI開發者中樞",
+            "description": "Full-stack AI developer hub",
             "project_type": "Full-stack web application",
             "primary_technologies": [
                 "TypeScript/React (Frontend)",
@@ -211,13 +211,13 @@ class TestAnalyzeAgorMain:
 
         assistant_response = {
             "message_id": "msg-agor-analysis",
-            "content": "我已完成對agor項目的分析。這是一個全棧AI開發者中樞...",
+            "content": "I have completed the analysis of the agor project. This is a full-stack AI developer hub...",
             "analysis_result": analysis_summary,
             "confidence": 0.95,
         }
         analysis_recorder.record("assistant_response", assistant_response, role="assistant")
 
-        # 7. 記錄 Session 狀態變化
+        # 7. Record Session state changes
         session_states = [
             {"status": "idle", "timestamp": datetime.utcnow().isoformat()},
             {"status": "processing", "timestamp": datetime.utcnow().isoformat()},
@@ -229,33 +229,33 @@ class TestAnalyzeAgorMain:
         for state in session_states:
             analysis_recorder.record("session_state_change", state, role="system")
 
-        # 8. 記錄分析完成
+        # 8. Record analysis completion
         completion_data = {
             "analysis_status": "completed",
             "total_files_analyzed": 250,
             "key_findings": [
-                "完整的OpenSpec documentation系統",
-                "模塊化的agent session架構",
-                "強大的工具執行能力",
+                "Complete OpenSpec documentation system",
+                "Modular agent session architecture",
+                "Powerful tool execution capabilities",
             ],
             "recommendations": [
-                "考慮增加更多integration tests",
-                "優化WebSocket性能",
-                "擴展工具庫",
+                "Consider adding more integration tests",
+                "Optimize WebSocket performance",
+                "Expand tool library",
             ],
         }
         analysis_recorder.record("analysis_complete", completion_data, role="system")
 
-        # 保存所有記錄
+        # Save all records
         output_dir = Path("/app/test-results/agent_session_messages")
         output_file = analysis_recorder.save(output_dir)
 
         assert len(analysis_recorder.messages) > 0
-        print(f"\n✅ 已保存 {len(analysis_recorder.messages)} 條分析消息到: {output_file}")
+        print(f"\n✅ Saved {len(analysis_recorder.messages)} analysis messages to: {output_file}")
 
     @pytest.mark.asyncio
     async def test_workspace_structure_scan(self, analysis_recorder):
-        """掃描workspace結構並記錄."""
+        """Scan workspace structure and record."""
 
         workspace_scan = {
             "scan_type": "directory_structure",
@@ -264,7 +264,7 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("workspace_scan_start", workspace_scan, role="system")
 
-        # 模擬目錄掃描結果
+        # Simulate directory scan results
         directory_structure = {
             "total_directories": 45,
             "total_files": 250,
@@ -285,16 +285,16 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("directory_structure", directory_structure, role="system")
 
-        # 保存結果
+        # Save results
         output_dir = Path("/app/test-results/agent_session_messages")
         output_file = analysis_recorder.save(output_dir)
 
         assert len(analysis_recorder.messages) > 0
-        print(f"\n✅ 已保存 {len(analysis_recorder.messages)} 條workspace掃描消息到: {output_file}")
+        print(f"\n✅ Saved {len(analysis_recorder.messages)} workspace scan messages to: {output_file}")
 
     @pytest.mark.asyncio
     async def test_technology_stack_analysis(self, analysis_recorder):
-        """分析技術棧."""
+        """Analyze technology stack."""
 
         tech_analysis = {
             "analysis_type": "technology_stack",
@@ -302,7 +302,7 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("tech_analysis_start", tech_analysis, role="system")
 
-        # 前端技術棧
+        # Frontend technology stack
         frontend_stack = {
             "layer": "frontend",
             "primary_language": "TypeScript",
@@ -315,7 +315,7 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("frontend_stack", frontend_stack, role="system")
 
-        # 後端技術棧
+        # Backend technology stack
         backend_stack = {
             "layer": "backend",
             "primary_language": "Python",
@@ -329,7 +329,7 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("backend_stack", backend_stack, role="system")
 
-        # 基礎設施
+        # Infrastructure
         infrastructure = {
             "layer": "infrastructure",
             "containerization": "Docker Compose",
@@ -340,9 +340,9 @@ class TestAnalyzeAgorMain:
         }
         analysis_recorder.record("infrastructure_stack", infrastructure, role="system")
 
-        # 保存結果
+        # Save results
         output_dir = Path("/app/test-results/agent_session_messages")
         output_file = analysis_recorder.save(output_dir)
 
         assert len(analysis_recorder.messages) > 0
-        print(f"\n✅ 已保存 {len(analysis_recorder.messages)} 條技術棧分析消息到: {output_file}")
+        print(f"\n✅ Saved {len(analysis_recorder.messages)} technology stack analysis messages to: {output_file}")

@@ -1,4 +1,4 @@
-"""CLI Instruction File Service 單元測試"""
+"""CLI Instruction File Service unit tests"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from app.modules.cli_settings.agents_md.service import (
 
 
 class TestAgentsMdToolConfig:
-    """測試工具配置正確性"""
+    """Test tool configuration correctness"""
 
     def test_gemini_config(self):
         config = get_agents_md_config(AgentsMdTool.GEMINI)
@@ -48,7 +48,7 @@ class TestAgentsMdToolConfig:
 
 
 class TestAgentsMdService:
-    """測試 AgentsMdService"""
+    """Test AgentsMdService"""
 
     @pytest.fixture(params=[
         AgentsMdTool.GEMINI,
@@ -87,7 +87,7 @@ class TestAgentsMdService:
         assert result.content == content
 
     def test_get_document_user_scope(self, service, config, workspace_id, tmp_path):
-        # 使用一個帶有自訂 user_root 的 service
+        # Use a service with custom user_root
         custom_config = AgentsMdToolConfig(
             tool=config.tool,
             file_name=config.file_name,

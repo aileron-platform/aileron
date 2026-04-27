@@ -1,4 +1,4 @@
-"""File Collection Service 單元測試"""
+"""File Collection Service unit tests"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def file_collection_service():
 
 @pytest.fixture
 def tmp_workspace(tmp_path):
-    """創建臨時 workspace 目錄結構."""
+    """Create temporary workspace directory structure."""
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
 
@@ -39,10 +39,10 @@ def tmp_workspace(tmp_path):
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    """Test service initialization."""
 
     def test_service_init(self):
-        """測試服務初始化."""
+        """Test service initialization."""
         # Arrange & Act
         with patch("app.modules.claude_code.file_collections.service.SettingsService"), \
              patch("app.modules.claude_code.file_collections.service.get_plugin_loader"):
@@ -58,33 +58,33 @@ class TestServiceInitialization:
 
 
 class TestValidateScope:
-    """測試 scope 驗證功能."""
+    """Test scope validation functionality."""
 
     def test_validate_scope_valid(self, file_collection_service):
-        """測試驗證有效的 scope."""
+        """Test validating valid scopes."""
         # Act & Assert
         assert file_collection_service.validate_scope(DocumentScope.PROJECT) is True
         assert file_collection_service.validate_scope(DocumentScope.USER) is True
         assert file_collection_service.validate_scope(DocumentScope.PLUGIN) is True
-        assert file_collection_service.validate_scope(None) is True  # None 是有效的
+        assert file_collection_service.validate_scope(None) is True  # None is valid
 
     def test_validate_scope_invalid(self, file_collection_service):
-        """測試驗證無效的 scope."""
+        """Test validating invalid scopes."""
         # Act & Assert
         assert file_collection_service.validate_scope("invalid-scope") is False
         assert file_collection_service.validate_scope(DocumentScope.LOCAL) is False
 
 
 class TestIsReadonlyScope:
-    """測試唯讀 scope 檢查."""
+    """Test readonly scope check."""
 
     def test_plugin_scope_is_readonly(self, file_collection_service):
-        """測試 plugin scope 是唯讀."""
+        """Test plugin scope is readonly."""
         # Act & Assert
         assert file_collection_service.is_readonly_scope(DocumentScope.PLUGIN) is True
 
     def test_other_scopes_are_writable(self, file_collection_service):
-        """測試其他 scope 是可寫的."""
+        """Test other scopes are writable."""
         # Act & Assert
         assert file_collection_service.is_readonly_scope(DocumentScope.PROJECT) is False
         assert file_collection_service.is_readonly_scope(DocumentScope.USER) is False
@@ -92,7 +92,7 @@ class TestIsReadonlyScope:
 
 
 class TestResolveScopePath:
-    """測試 scope 路徑解析."""
+    """Test scope path resolution."""
 
     @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
     def test_resolve_scope_path_project(self, mock_resolve, file_collection_service, tmp_path):
@@ -266,7 +266,7 @@ class TestGetPluginSkills:
         result = file_collection_service.get_plugin_skills()
 
         # Assert
-        # 空列表也是有效的結果
+        # Empty list is also a valid result
         assert result == []
 
     @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
@@ -422,26 +422,26 @@ class TestAdditionalServiceCoverage:
 
 
 class TestErrorHandling:
-    """測試錯誤處理."""
+    """Test error handling."""
 
     def test_validate_scope_invalid_local(self, file_collection_service):
-        """測試驗證 LOCAL scope 無效."""
+        """Test validating LOCAL scope fails."""
         # Act & Assert
         assert file_collection_service.validate_scope(DocumentScope.LOCAL) is False
 
     def test_is_readonly_scope_project_writable(self, file_collection_service):
-        """測試 PROJECT scope 可寫."""
+        """Test PROJECT scope is writable."""
         # Act & Assert
         assert file_collection_service.is_readonly_scope(DocumentScope.PROJECT) is False
 
     def test_is_readonly_scope_user_writable(self, file_collection_service):
-        """測試 USER scope 可寫."""
+        """Test USER scope is writable."""
         # Act & Assert
         assert file_collection_service.is_readonly_scope(DocumentScope.USER) is False
 
     @patch.object(FileCollectionService, 'resolve_scope_path')
     def test_read_file_not_found(self, mock_resolve, file_collection_service, tmp_path):
-        """測試讀取不存在的檔案."""
+        """Test reading non-existent file."""
         # Arrange
         non_existent = tmp_path / "missing.md"
         mock_resolve.return_value = non_existent

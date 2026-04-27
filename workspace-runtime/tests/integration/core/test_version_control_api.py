@@ -122,7 +122,7 @@ class StubGitService:
         page_size: int = 100,
         context_id: Optional[str] = None,
     ):
-        # 使用 ChangesResult 類別來保持一致性
+        # Use ChangesResult class for consistency
         return ChangesResult(
             staged=[
                 {
@@ -224,8 +224,8 @@ class StubGitService:
             },
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "files": self.staged_files.copy(),
-            "additions": len(self.staged_files) * 2,  # 模擬新增行數
-            "deletions": len(self.staged_files),     # 模擬刪除行數
+            "additions": len(self.staged_files) * 2,  # Simulate added line count
+            "deletions": len(self.staged_files),     # Simulate deleted line count
         }
         self.commits.append(commit)
         self.staged_files.clear()
@@ -243,18 +243,18 @@ class StubGitService:
     ) -> dict[str, Any]:
         start = (page - 1) * page_size
         end = start + page_size
-        commits = self.commits[start:end][::-1]  # 最新的在前
+        commits = self.commits[start:end][::-1]  # Newest first
 
-        # 確保每個 commit 都有必需的欄位
+        # Ensure each commit has required fields
         formatted_commits = []
         for commit in commits:
             formatted_commit = {
                 "id": commit["id"],
                 "message": commit["message"],
-                "author": f"{commit['authorName']} <{commit['authorEmail']}>",  # 字串格式
-                "timestamp": int(datetime.now(timezone.utc).timestamp()),  # 整數格式
-                "branch": self.current_branch,  # 必需欄位
-                "files": len(commit.get("files", [])),  # 整數而不是列表
+                "author": f"{commit['authorName']} <{commit['authorEmail']}>",  # String format
+                "timestamp": int(datetime.now(timezone.utc).timestamp()),  # Integer format
+                "branch": self.current_branch,  # Required field
+                "files": len(commit.get("files", [])),  # Integer not list
                 "additions": commit.get("additions", 0),
                 "deletions": commit.get("deletions", 0),
             }
@@ -270,15 +270,15 @@ class StubGitService:
     def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
         for commit in self.commits:
             if commit["id"] == commit_id:
-                # get_commit 需要不同的格式：author 是物件，timestamp 是字串
+                # get_commit needs different format: author is object, timestamp is string
                 result = {
                     "id": commit["id"],
                     "message": commit["message"],
                     "author": {
                         "name": commit["authorName"],
                         "email": commit["authorEmail"]
-                    },  # 物件格式
-                    "timestamp": commit.get("timestamp", datetime.now(timezone.utc).isoformat()),  # 字串格式
+                    },  # Object format
+                    "timestamp": commit.get("timestamp", datetime.now(timezone.utc).isoformat()),  # String format
                     "branch": self.current_branch,
                     "additions": commit.get("additions", 0),
                     "deletions": commit.get("deletions", 0),
@@ -302,7 +302,7 @@ class StubGitService:
         raise VersionControlError("COMMIT_NOT_FOUND", status_code=404)
 
     def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
-        # 找到原始 commit 資料來獲取檔案列表
+        # Find original commit data to get file list
         original_commit = None
         for commit in self.commits:
             if commit["id"] == commit_id:
@@ -313,18 +313,18 @@ class StubGitService:
             raise VersionControlError("COMMIT_NOT_FOUND", status_code=404)
 
         files = original_commit.get("files", [])
-        # 將字串列表轉換為物件列表
+        # Convert string list to object list
         file_objects = [
             {
                 "path": file_path,
                 "name": file_path.split("/")[-1] if "/" in file_path else file_path,
-                "status": "M",  # 修改狀態
-                "additions": 2,   # 新增行數
-                "deletions": 1    # 刪除行數
+                "status": "M",  # Modified status
+                "additions": 2,   # Added line count
+                "deletions": 1    # Deleted line count
             }
             for file_path in files
         ]
-        # 只返回第一個檔案作為 "added" 進行測試
+        # Only return first file as "added" for testing
         added_files = file_objects[:1] if file_objects else []
 
         return {
@@ -396,14 +396,14 @@ class StubGitService:
 
 
 def _get_git_service_stub():
-    """取得 GitService stub 的工廠函數"""
+    """Factory function to get GitService stub"""
     workspace_path = Path("/tmp/workspace")
     return StubGitService(workspace_path)
 
 
 def test_vc_001_uninitialized_repository(client):
-    """VC-001 未初始化倉庫"""
-    # 實際的 GitService 會在非 repository 時拋出例外
+    """VC-001 Uninitialized repository"""
+    # Actual GitService will throw exception when not in repository
     class NonRepoGitService(StubGitService):
         def is_repository(self) -> bool:
             return False
@@ -422,7 +422,7 @@ def test_vc_001_uninitialized_repository(client):
 
 
 def test_vc_002_initialized_with_changes(client):
-    """VC-002 已初始化且有變更"""
+    """VC-002 Initialized with changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.is_repo = True
     service.staged_files = ["file1.txt"]
@@ -434,7 +434,7 @@ def test_vc_002_initialized_with_changes(client):
 
     assert response.status_code == 200
     payload = response.json()
-    # 根據實際的 VersionControlStatus 模型檢查欄位
+    # Check fields based on actual VersionControlStatus model
     assert "branch" in payload
     assert "stagedCount" in payload
     assert "unstagedCount" in payload
@@ -445,7 +445,7 @@ def test_vc_002_initialized_with_changes(client):
 
 
 def test_vc_003_list_branches_with_remote(client):
-    """VC-003 列出本地與遠端分支"""
+    """VC-003 List local and remote branches"""
     service = StubGitService(Path("/tmp/workspace"))
     service.branches = [
         {
@@ -509,7 +509,7 @@ def test_vc_003_list_branches_with_remote(client):
 
 
 def test_vc_004_branches_search_filter(client):
-    """VC-004 使用關鍵字過濾"""
+    """VC-004 Filter using keyword"""
     service = StubGitService(Path("/tmp/workspace"))
     service.branches = [
         {
@@ -562,7 +562,7 @@ def test_vc_004_branches_search_filter(client):
 
 
 def test_vc_005_checkout_existing_branch(client):
-    """VC-005 切換現有分支"""
+    """VC-005 Switch to existing branch"""
     service = StubGitService(Path("/tmp/workspace"))
     service.branches = [
         {
@@ -596,7 +596,7 @@ def test_vc_005_checkout_existing_branch(client):
 
 
 def test_vc_006_create_and_checkout_new_branch(client):
-    """VC-006 建立新分支並切換"""
+    """VC-006 Create new branch and switch"""
     service = StubGitService(Path("/tmp/workspace"))
     service.branches = [
         {"name": "main", "isRemote": False, "isCurrent": True, "commit": "abc123"},
@@ -614,7 +614,7 @@ def test_vc_006_create_and_checkout_new_branch(client):
 
 
 def test_vc_007_get_all_changes(client):
-    """VC-007 取得全部變更"""
+    """VC-007 Get all changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt", "file2.txt"]
     service.unstaged_files = ["file3.txt"]
@@ -628,12 +628,12 @@ def test_vc_007_get_all_changes(client):
     assert len(payload["staged"]) == 2
     assert len(payload["unstaged"]) == 1
     assert len(payload["untracked"]) == 1
-    # ChangesResponse 模型只有 untrackedTotal 欄位
+    # ChangesResponse model only has untrackedTotal field
     assert payload["untrackedTotal"] == 1
 
 
 def test_vc_008_scope_filter_changes(client):
-    """VC-008 scope 過濾"""
+    """VC-008 Scope filter"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
     service.unstaged_files = ["file2.txt"]
@@ -650,7 +650,7 @@ def test_vc_008_scope_filter_changes(client):
 
 
 def test_vc_009_stage_multiple_files(client):
-    """VC-009 暫存多個檔案"""
+    """VC-009 Stage multiple files"""
     service = StubGitService(Path("/tmp/workspace"))
     service.unstaged_files = ["file1.txt", "file2.txt"]
     service.untracked_files = ["dir/"]
@@ -668,7 +668,7 @@ def test_vc_009_stage_multiple_files(client):
 
 
 def test_vc_010_unstage_files(client):
-    """VC-010 取消暫存"""
+    """VC-010 Unstage files"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt", "file2.txt"]
 
@@ -685,7 +685,7 @@ def test_vc_010_unstage_files(client):
 
 
 def test_vc_011_discard_unstaged_changes(client):
-    """VC-011 丟棄未暫存變更"""
+    """VC-011 Discard unstaged changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.unstaged_files = ["README.md"]
 
@@ -700,7 +700,7 @@ def test_vc_011_discard_unstaged_changes(client):
 
 
 def test_vc_012_discard_nonexistent_file(client):
-    """VC-012 丟棄不存在檔案"""
+    """VC-012 Discard nonexistent file"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -709,12 +709,12 @@ def test_vc_012_discard_nonexistent_file(client):
             json={"paths": ["nonexistent.txt"], "includeUntracked": False}
         )
 
-    # stub 服務總是返回 200，因為它沒有檢查檔案存在性
+    # Stub service always returns 200, as it doesn't check file existence
     assert response.status_code == 200
 
 
 def test_vc_013_create_valid_commit(client):
-    """VC-013 建立有效提交"""
+    """VC-013 Create valid commit"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
 
@@ -736,7 +736,7 @@ def test_vc_013_create_valid_commit(client):
 
 
 def test_vc_014_commit_missing_message(client):
-    """VC-014 缺少訊息被拒絕"""
+    """VC-014 Missing message rejected"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
 
@@ -754,9 +754,9 @@ def test_vc_014_commit_missing_message(client):
 
 
 def test_vc_015_paginate_commits(client):
-    """VC-015 分頁查詢提交"""
+    """VC-015 Paginate commits"""
     service = StubGitService(Path("/tmp/workspace"))
-    # 建立 5 筆 commit
+    # Create 5 commits
     for i in range(5):
         service.commits.append({
             "id": f"commit_{i+1}",
@@ -779,7 +779,7 @@ def test_vc_015_paginate_commits(client):
 
 
 def test_vc_016_get_commit_details(client):
-    """VC-016 取得單筆 commit 詳細"""
+    """VC-016 Get single commit details"""
     service = StubGitService(Path("/tmp/workspace"))
     commit = {
         "id": "commit_123",
@@ -798,17 +798,17 @@ def test_vc_016_get_commit_details(client):
     payload = response.json()
     assert payload["id"] == "commit_123"
     assert payload["message"] == "Test commit"
-    # 檢查 author 物件格式
+    # Check author object format
     assert payload["author"]["name"] == "Tester"
     assert payload["author"]["email"] == "test@example.com"
-    # 檢查其他必需欄位
+    # Check other required fields
     assert "branch" in payload
     assert isinstance(payload["timestamp"], str)
-    # files 欄位可能不存在於 API 回應中，所以不檢查
+    # files field may not exist in API response, so don't check
 
 
 def test_vc_017_commit_not_found(client):
-    """VC-017 Commit 不存在"""
+    """VC-017 Commit not found"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -818,7 +818,7 @@ def test_vc_017_commit_not_found(client):
 
 
 def test_vc_018_list_commit_files(client):
-    """VC-018 列出提交檔案差異"""
+    """VC-018 List commit file differences"""
     service = StubGitService(Path("/tmp/workspace"))
     commit = {
         "id": "commit_123",
@@ -835,7 +835,7 @@ def test_vc_018_list_commit_files(client):
 
     assert response.status_code == 200
     payload = response.json()
-    # 檢查實際回應的欄位
+    # Check actual response fields
     assert "files" in payload
     assert "commitId" in payload
     assert payload["commitId"] == "commit_123"
@@ -843,7 +843,7 @@ def test_vc_018_list_commit_files(client):
 
 
 def test_vc_019_push_success(client):
-    """VC-019 推送成功"""
+    """VC-019 Push success"""
     service = StubGitService(Path("/tmp/workspace"))
     service.current_branch = "main"
 
@@ -855,13 +855,13 @@ def test_vc_019_push_success(client):
 
     assert response.status_code == 200
     payload = response.json()
-    # 檢查 push 回應的實際欄位
+    # Check actual fields in push response
     assert payload["remote"] == "origin"
     assert payload["branch"] == "main"
 
 
 def test_vc_020_push_auth_failure(client):
-    """VC-020 推送認證失敗"""
+    """VC-020 Push authentication failure"""
 
     class FailPushGitService(StubGitService):
         def push(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
@@ -876,12 +876,12 @@ def test_vc_020_push_auth_failure(client):
             json={"remote": "origin", "branch": "main"}
         )
 
-    # VersionControlError 被轉換為 400 錯誤而不是特定的認證錯誤碼
+    # VersionControlError is converted to 400 error instead of specific authentication error code
     assert response.status_code == 400
 
 
 def test_vc_021_pull_success(client):
-    """VC-021 拉取遠端更新"""
+    """VC-021 Pull remote updates"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -898,7 +898,7 @@ def test_vc_021_pull_success(client):
 
 
 def test_vc_022_pull_conflict(client):
-    """VC-022 衝突情境"""
+    """VC-022 Conflict scenario"""
 
     class ConflictGitService(StubGitService):
         def pull(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
@@ -912,12 +912,12 @@ def test_vc_022_pull_conflict(client):
             json={"remote": "origin", "branch": "main"}
         )
 
-    # VersionControlError 被轉換為 400 錯誤而不是 409 衝突錯誤碼
+    # VersionControlError is converted to 400 error instead of 409 conflict error code
     assert response.status_code == 400
 
 
 def test_vc_023_fetch_success(client):
-    """VC-023 同步遠端引用"""
+    """VC-023 Sync remote references"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -933,7 +933,7 @@ def test_vc_023_fetch_success(client):
 
 
 def test_vc_024_fetch_remote_unreachable(client):
-    """VC-024 遠端不可達"""
+    """VC-024 Remote unreachable"""
 
     class TimeoutGitService(StubGitService):
         def fetch(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
@@ -947,12 +947,12 @@ def test_vc_024_fetch_remote_unreachable(client):
             json={"remote": "origin"}
         )
 
-    # TimeoutError 被轉換為 500 錯誤而不是 503 服務不可用錯誤碼
+    # TimeoutError is converted to 500 error instead of 503 service unavailable error code
     assert response.status_code == 500
 
 
 def test_vc_025_diff_with_metadata(client):
-    """VC-025 差異輸出與 metadata"""
+    """VC-025 Diff output with metadata"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -962,8 +962,8 @@ def test_vc_025_diff_with_metadata(client):
 
     assert response.status_code == 200
     payload = response.json()
-    assert "patch" in payload  # DiffResponse 有 patch 欄位
-    assert "metadata" in payload  # DiffResponse 有 metadata 欄位
+    assert "patch" in payload  # DiffResponse has patch field
+    assert "metadata" in payload  # DiffResponse has metadata field
     assert payload["metadata"]["file"] == "README.md"
     assert payload["path"] == "README.md"
     assert payload["base"] == "HEAD"
@@ -971,7 +971,7 @@ def test_vc_025_diff_with_metadata(client):
 
 
 def test_vc_026_read_versioned_file(client):
-    """VC-026 讀取指定版本檔案"""
+    """VC-026 Read versioned file"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -989,7 +989,7 @@ def test_vc_026_read_versioned_file(client):
 
 
 def test_vc_027_file_not_found(client):
-    """VC-027 檔案不存在"""
+    """VC-027 File not found"""
 
     class NotFoundGitService(StubGitService):
         def blob(
@@ -1008,5 +1008,5 @@ def test_vc_027_file_not_found(client):
             "/api/v1/workspaces/test_ws/version-control/blob?path=nonexistent.txt"
         )
 
-    # VersionControlError 被轉換為 400 錯誤而不是 404
+    # VersionControlError is converted to 400 error instead of 404
     assert response.status_code == 400

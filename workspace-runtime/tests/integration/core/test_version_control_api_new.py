@@ -1,4 +1,4 @@
-"""核心模組 Version Control API 測試 - 符合實際 API 實作"""
+"""Core module Version Control API tests - Matches actual API implementation"""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from .helpers import override_dependency
 
 
 class StubGitService:
-    """可控制的 GitService stub - 符合實際 API 實作"""
+    """Controllable GitService stub - Matches actual API implementation"""
 
     def __init__(self, workspace_path: Path) -> None:
         self.workspace_path = workspace_path

@@ -1,4 +1,4 @@
-"""Redis Publisher 單元測試"""
+"""Redis Publisher Unit Tests"""
 
 from __future__ import annotations
 
@@ -27,11 +27,11 @@ def mock_redis():
 
 
 class TestPublishExecutionCompleted:
-    """測試發布執行完成事件"""
+    """Test publishing execution completed events"""
 
     @pytest.mark.asyncio
     async def test_publish_execution_completed_success(self, redis_publisher, mock_redis):
-        """測試成功發布執行完成事件"""
+        """Test successful publish of execution completed event"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
@@ -75,7 +75,7 @@ class TestPublishExecutionCompleted:
 
     @pytest.mark.asyncio
     async def test_publish_execution_completed_with_error(self, redis_publisher, mock_redis):
-        """測試發布帶錯誤的執行完成事件"""
+        """Test publishing execution completed event with error"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
@@ -108,13 +108,13 @@ class TestPublishExecutionCompleted:
 
     @pytest.mark.asyncio
     async def test_publish_execution_completed_redis_failure(self, redis_publisher, mock_redis):
-        """測試 Redis 發布失敗時不拋出異常"""
+        """Test Redis publish failure does not raise exception"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_redis.publish.side_effect = Exception("Redis publish failed")
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
 
-            # Act - 不應該拋出異常
+            # Act - Should not raise exception
             await redis_publisher.publish_execution_completed(
                 execution_id="exec-123",
                 session_id="session-456",
@@ -129,13 +129,13 @@ class TestPublishExecutionCompleted:
 
     @pytest.mark.asyncio
     async def test_publish_execution_completed_setex_failure(self, redis_publisher, mock_redis):
-        """測試 setex 失敗時不拋出異常"""
+        """Test setex failure does not raise exception"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_redis.setex.side_effect = Exception("Redis setex failed")
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
 
-            # Act - 不應該拋出異常
+            # Act - Should not raise exception
             await redis_publisher.publish_execution_completed(
                 execution_id="exec-123",
                 session_id="session-456",
@@ -150,11 +150,11 @@ class TestPublishExecutionCompleted:
 
 
 class TestClose:
-    """測試關閉 Redis 連接"""
+    """Test closing Redis connection"""
 
     @pytest.mark.asyncio
     async def test_close_calls_redis_manager(self, redis_publisher):
-        """測試 close 呼叫 redis_manager.close"""
+        """Test close calls redis_manager.close"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.close = AsyncMock()
@@ -167,10 +167,10 @@ class TestClose:
 
 
 class TestGetRedisPublisher:
-    """測試取得 Redis Publisher 單例"""
+    """Test getting Redis Publisher singleton"""
 
     def test_get_redis_publisher_singleton(self):
-        """測試單例模式"""
+        """Test singleton pattern"""
         # Reset global singleton for test
         import app.core.redis_publisher as publisher_module
         publisher_module._publisher = None
@@ -184,7 +184,7 @@ class TestGetRedisPublisher:
         assert isinstance(publisher1, RedisEventPublisher)
 
     def test_get_redis_publisher_returns_instance(self):
-        """測試返回正確的實例"""
+        """Test returning correct instance"""
         # Reset global singleton for test
         import app.core.redis_publisher as publisher_module
         publisher_module._publisher = None
@@ -197,11 +197,11 @@ class TestGetRedisPublisher:
 
 
 class TestRedisEventData:
-    """測試事件數據結構"""
+    """Test event data structure"""
 
     @pytest.mark.asyncio
     async def test_event_data_structure_complete(self, redis_publisher, mock_redis):
-        """測試完整的事件數據結構"""
+        """Test complete event data structure"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
@@ -221,7 +221,7 @@ class TestRedisEventData:
             channel, message = mock_redis.publish.call_args[0]
             event_data = json.loads(message)
 
-            # 驗證所有必需字段存在
+            # Verify all required fields exist
             assert "execution_id" in event_data
             assert "session_id" in event_data
             assert "workspace_id" in event_data
@@ -230,7 +230,7 @@ class TestRedisEventData:
             assert "has_error" in event_data
             assert "error_message" in event_data
 
-            # 驗證數據類型
+            # Verify data types
             assert isinstance(event_data["execution_id"], str)
             assert isinstance(event_data["session_id"], str)
             assert isinstance(event_data["workspace_id"], str)
@@ -240,11 +240,11 @@ class TestRedisEventData:
 
 
 class TestChannelNaming:
-    """測試頻道命名"""
+    """Test channel naming"""
 
     @pytest.mark.asyncio
     async def test_channel_naming_convention(self, redis_publisher, mock_redis):
-        """測試頻道命名規則"""
+        """Test channel naming convention"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
@@ -267,7 +267,7 @@ class TestChannelNaming:
 
     @pytest.mark.asyncio
     async def test_result_key_naming_convention(self, redis_publisher, mock_redis):
-        """測試結果鍵命名規則"""
+        """Test result key naming convention"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(return_value=mock_redis)
@@ -290,16 +290,16 @@ class TestChannelNaming:
 
 
 class TestErrorHandling:
-    """測試錯誤處理"""
+    """Test error handling"""
 
     @pytest.mark.asyncio
     async def test_handles_get_redis_exception_gracefully(self, redis_publisher):
-        """測試 get_redis 異常被優雅處理"""
+        """Test get_redis exception is handled gracefully"""
         # Arrange
         with patch("app.core.redis_publisher.redis_manager") as mock_manager:
             mock_manager.get_redis = AsyncMock(side_effect=Exception("Connection error"))
 
-            # Act - 不應該拋出異常到調用者
+            # Act - Should not raise exception to caller
             await redis_publisher.publish_execution_completed(
                 execution_id="exec",
                 session_id="session",
@@ -309,5 +309,5 @@ class TestErrorHandling:
                 has_error=False,
             )
 
-            # Assert - 方法應該完成而不拋出異常
+            # Assert - Method should complete without raising exception
             mock_manager.get_redis.assert_called_once()

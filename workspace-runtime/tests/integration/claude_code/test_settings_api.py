@@ -1,4 +1,4 @@
-"""Claude Code API 測試案例 - 設定"""
+"""Claude Code API test cases - Settings"""
 
 from __future__ import annotations
 

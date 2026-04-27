@@ -1,4 +1,4 @@
-"""Claude Code API 測試案例 - Subagents"""
+"""Claude Code API test cases - Subagents"""
 
 from __future__ import annotations
 
@@ -99,7 +99,7 @@ def test_sa_001_list_scopes(client):
                         SubagentSummary(
                             fileName="qa.json",
                             name="QA Subagent",
-                            description="品質檢查子代理",
+                            description="Quality check subagent",
                             scope=DocumentScope.PROJECT,
                             size="2KB",
                         )
@@ -129,7 +129,7 @@ def test_sa_002_list_filtered_scope(client):
                         SubagentSummary(
                             fileName="reviewer.json",
                             name="Code Reviewer",
-                            description="程式碼審查子代理",
+                            description="Code review subagent",
                             scope=DocumentScope.USER,
                             size="3KB",
                         )
@@ -159,7 +159,7 @@ def test_sa_003_get_scope_success(client):
                 SubagentSummary(
                     fileName="analyzer.json",
                     name="Analyzer",
-                    description="程式碼分析子代理",
+                    description="Code analysis subagent",
                     scope=DocumentScope.PROJECT,
                     size="1KB",
                 )
@@ -195,7 +195,7 @@ def test_sa_005_get_document_success(client):
             document=SubagentDocument(
                 fileName="analyzer.json",
                 name="Analyzer",
-                description="程式碼分析子代理",
+                description="Code analysis subagent",
                 scope=DocumentScope.PROJECT,
                 size="1KB",
                 content='{"name": "Analyzer", "description": "Code analysis subagent"}',
@@ -235,7 +235,7 @@ def test_sa_007_create_success(client):
             document=SubagentDocument(
                 fileName="new-subagent.json",
                 name="New Subagent",
-                description="新建子代理",
+                description="New subagent",
                 scope=DocumentScope.PROJECT,
                 size="2KB",
                 content='{"name": "New Subagent", "description": "A new subagent"}',
@@ -247,7 +247,7 @@ def test_sa_007_create_success(client):
         "fileName": "new-subagent.json",
         "content": '{"name": "New Subagent", "description": "A new subagent"}',
         "name": "New Subagent",
-        "description": "新建子代理",
+        "description": "New subagent",
     }
 
     with override_dependency(get_subagent_service, lambda: service):
@@ -290,7 +290,7 @@ def test_sa_010_update_success(client):
             document=SubagentDocument(
                 fileName="existing.json",
                 name="Updated Subagent",
-                description="已更新子代理",
+                description="Updated subagent",
                 scope=DocumentScope.PROJECT,
                 size="3KB",
                 content='{"name": "Updated Subagent", "enabled": false}',
@@ -301,7 +301,7 @@ def test_sa_010_update_success(client):
     payload = {
         "content": '{"name": "Updated Subagent", "enabled": false}',
         "name": "Updated Subagent",
-        "description": "已更新子代理",
+        "description": "Updated subagent",
     }
 
     with override_dependency(get_subagent_service, lambda: service):

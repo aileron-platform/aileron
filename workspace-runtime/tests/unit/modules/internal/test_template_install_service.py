@@ -728,7 +728,7 @@ class TestInitCommandsExecution:
     @pytest.mark.asyncio
     async def test_execute_init_commands_success(self, service):
         """Test successful init commands execution"""
-        # 完全 mock 掉 subprocess
+        # Completely mock subprocess
         with patch("asyncio.create_subprocess_shell") as mock_subprocess:
             mock_process = AsyncMock()
             mock_process.communicate.return_value = (b"Hello World\nTest", b"")

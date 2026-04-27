@@ -1,4 +1,4 @@
-"""MCP Router 單元測試 - 補充覆蓋率"""
+"""MCP Router unit tests - supplemental coverage"""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from app.modules.claude_code.mcp.models import McpServerUpdateRequest
 
 
 class MockMcpService:
-    """Mock MCP 服務"""
+    """Mock MCP service"""
 
     def __init__(self):
         self.raise_error = None
@@ -136,10 +136,10 @@ class MockMcpService:
 
 @pytest.mark.asyncio
 class TestListServers:
-    """測試列出 MCP 伺服器"""
+    """Test listing MCP servers"""
 
     async def test_list_servers_scope_not_supported(self):
-        """測試不支援的範圍"""
+        """Test unsupported scope"""
         service = MockMcpService()
         service.raise_error = "scope_not_supported"
 
@@ -155,10 +155,10 @@ class TestListServers:
 
 @pytest.mark.asyncio
 class TestGetScope:
-    """測試獲取指定範圍的 MCP 伺服器"""
+    """Test getting MCP servers for specific scope"""
 
     async def test_get_scope_not_supported(self):
-        """測試不支援的範圍"""
+        """Test unsupported scope"""
         service = MockMcpService()
         service.raise_error = "scope_not_supported"
 
@@ -174,10 +174,10 @@ class TestGetScope:
 
 @pytest.mark.asyncio
 class TestGetServer:
-    """測試獲取單一 MCP 伺服器"""
+    """Test getting single MCP server"""
 
     async def test_get_server_not_found(self):
-        """測試伺服器不存在"""
+        """Test server not found"""
         service = MockMcpService()
         service.raise_error = "server_not_found"
 
@@ -194,10 +194,10 @@ class TestGetServer:
 
 @pytest.mark.asyncio
 class TestUpdateServer:
-    """測試更新 MCP 伺服器"""
+    """Test updating MCP server"""
 
     async def test_update_server_not_found(self):
-        """測試伺服器不存在"""
+        """Test server not found"""
         service = MockMcpService()
         service.raise_error = "server_not_found"
 
@@ -217,7 +217,7 @@ class TestUpdateServer:
         assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
 
     async def test_update_server_invalid_payload(self):
-        """測試無效的 payload"""
+        """Test invalid payload"""
         service = MockMcpService()
         service.raise_error = "invalid_payload"
 
@@ -239,10 +239,10 @@ class TestUpdateServer:
 
 @pytest.mark.asyncio
 class TestDeleteServer:
-    """測試刪除 MCP 伺服器"""
+    """Test deleting MCP server"""
 
     async def test_delete_server_not_found(self):
-        """測試伺服器不存在"""
+        """Test server not found"""
         service = MockMcpService()
         service.raise_error = "server_not_found"
 
@@ -259,10 +259,10 @@ class TestDeleteServer:
 
 @pytest.mark.asyncio
 class TestToggleServerStatus:
-    """測試切換 MCP 伺服器狀態"""
+    """Test toggling MCP server status"""
 
     async def test_toggle_status_not_found(self):
-        """測試伺服器不存在"""
+        """Test server not found"""
         service = MockMcpService()
         service.raise_error = "server_not_found"
 
@@ -280,10 +280,10 @@ class TestToggleServerStatus:
 
 @pytest.mark.asyncio
 class TestExportServer:
-    """測試匯出 MCP 伺服器"""
+    """Test exporting MCP server"""
 
     async def test_export_server_not_found(self):
-        """測試伺服器不存在"""
+        """Test server not found"""
         service = MockMcpService()
         service.raise_error = "server_not_found"
 
@@ -300,16 +300,16 @@ class TestExportServer:
 
 @pytest.mark.asyncio
 class TestImportServers:
-    """測試匯入 MCP 設定"""
+    """Test importing MCP settings"""
 
     async def test_import_servers_invalid_payload(self):
-        """測試無效的 payload"""
+        """Test invalid payload"""
         from unittest.mock import AsyncMock
 
         service = MockMcpService()
         service.raise_error = "invalid_payload"
 
-        # 建立 mock 檔案
+        # Create mock file
         mock_file = AsyncMock()
         mock_file.read = AsyncMock(return_value=b'{"invalid": "json"}')
 

@@ -228,7 +228,7 @@ async def test_queued_message_routes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.modules.agent_session.websocket.events.get_event_emitter", lambda: emitter)
 
     await router_module.delete_queued_message("session-1", "msg-1", db)
-    # commit 由 get_async_db 的 session.begin() 自動管理，無需手動 await db.commit()
+    # commit is automatically managed by session.begin() from get_async_db, no need to manually await db.commit()
     emitter.emit.assert_awaited_once()
 
     with pytest.raises(HTTPException) as exc_missing:

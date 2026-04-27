@@ -1,4 +1,4 @@
-"""Value Objects 單元測試."""
+"""Value Objects unit tests."""
 
 import pytest
 from app.modules.agent_session.domain.value_objects import (
@@ -24,17 +24,17 @@ from app.modules.agent_session.domain.enums import (
 
 
 class TestPermissionConfig:
-    """PermissionConfig 測試."""
+    """PermissionConfig tests."""
 
     def test_default_config(self):
-        """測試預設配置."""
+        """Test default configuration."""
         config = PermissionConfig()
 
         assert config.mode == PermissionMode.DEFAULT
         assert config.codex is None
 
     def test_custom_config(self):
-        """測試自訂配置."""
+        """Test custom configuration."""
         codex_config = CodexPermissionConfig(
             sandbox_mode=CodexSandboxMode.RELAXED,
             approval_policy=CodexApprovalPolicy.AUTO,
@@ -50,7 +50,7 @@ class TestPermissionConfig:
         assert config.codex.sandbox_mode == CodexSandboxMode.RELAXED
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         config = PermissionConfig(mode=PermissionMode.BYPASS_PERMISSIONS)
 
         d = config.to_dict()
@@ -58,7 +58,7 @@ class TestPermissionConfig:
         assert d["mode"] == "bypassPermissions"
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "mode": "acceptEdits",
         }
@@ -69,17 +69,17 @@ class TestPermissionConfig:
 
 
 class TestModelConfig:
-    """ModelConfig 測試."""
+    """ModelConfig tests."""
 
     def test_default_config(self):
-        """測試預設配置."""
+        """Test default configuration."""
         config = ModelConfig()
 
         assert config.mode == "alias"
         assert config.model == ""
 
     def test_custom_config(self):
-        """測試自訂配置."""
+        """Test custom configuration."""
         config = ModelConfig(
             mode="exact",
             model="claude-3-5-sonnet-20241022",
@@ -92,7 +92,7 @@ class TestModelConfig:
         assert config.thinking_mode == "auto"
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         config = ModelConfig(
             mode="alias",
             model="claude-sonnet",
@@ -106,7 +106,7 @@ class TestModelConfig:
         assert d["thinkingMode"] == "manual"
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "mode": "exact",
             "model": "gemini-pro",
@@ -121,10 +121,10 @@ class TestModelConfig:
 
 
 class TestTokenUsage:
-    """TokenUsage 測試."""
+    """TokenUsage tests."""
 
     def test_basic_usage(self):
-        """測試基本用量."""
+        """Test basic usage."""
         usage = TokenUsage(
             input_tokens=1000,
             output_tokens=500,
@@ -136,7 +136,7 @@ class TestTokenUsage:
         assert usage.total_tokens == 1500
 
     def test_with_cache(self):
-        """測試帶快取的用量."""
+        """Test usage with cache."""
         usage = TokenUsage(
             input_tokens=1000,
             output_tokens=500,
@@ -149,7 +149,7 @@ class TestTokenUsage:
         assert usage.cache_read_input_tokens == 300
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         usage = TokenUsage(
             input_tokens=100,
             output_tokens=50,
@@ -163,7 +163,7 @@ class TestTokenUsage:
         assert d["total_tokens"] == 150
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "input_tokens": 2000,
             "output_tokens": 1000,
@@ -178,10 +178,10 @@ class TestTokenUsage:
 
 
 class TestContextWindowStatus:
-    """ContextWindowStatus 測試."""
+    """ContextWindowStatus tests."""
 
     def test_basic_status(self):
-        """測試基本狀態."""
+        """Test basic status."""
         status = ContextWindowStatus(
             current_usage=50000,
             limit=200000,
@@ -195,7 +195,7 @@ class TestContextWindowStatus:
         assert status.needs_compaction is False
 
     def test_from_usage(self):
-        """測試從使用量建立."""
+        """Test creation from usage."""
         status = ContextWindowStatus.from_usage(
             current_usage=170000,
             limit=200000,
@@ -206,15 +206,15 @@ class TestContextWindowStatus:
         assert status.needs_compaction is True  # > 80%
 
     def test_needs_compaction_threshold(self):
-        """測試壓縮閾值."""
-        # 低於 80%，不需要壓縮
+        """Test compaction threshold."""
+        # Below 80%, no compaction needed
         status1 = ContextWindowStatus.from_usage(
             current_usage=140000,
             limit=200000,
         )
         assert status1.needs_compaction is False  # 70%
 
-        # 等於或超過 80%，需要壓縮
+        # At or above 80%, compaction needed
         status2 = ContextWindowStatus.from_usage(
             current_usage=160000,
             limit=200000,
@@ -223,10 +223,10 @@ class TestContextWindowStatus:
 
 
 class TestToolCapabilities:
-    """ToolCapabilities 測試."""
+    """ToolCapabilities tests."""
 
     def test_claude_code_capabilities(self):
-        """測試 Claude Code 能力."""
+        """Test Claude Code capabilities."""
         caps = get_tool_capabilities("claude-code")
 
         assert caps is not None
@@ -239,7 +239,7 @@ class TestToolCapabilities:
         assert "read_file" in caps.built_in_tools
 
     def test_gemini_capabilities(self):
-        """測試 Gemini 能力."""
+        """Test Gemini capabilities."""
         caps = get_tool_capabilities("gemini")
 
         assert caps is not None
@@ -249,7 +249,7 @@ class TestToolCapabilities:
         assert caps.thinking is False
 
     def test_codex_capabilities(self):
-        """測試 Codex 能力."""
+        """Test Codex capabilities."""
         caps = get_tool_capabilities("codex")
 
         assert caps is not None
@@ -259,7 +259,7 @@ class TestToolCapabilities:
         assert caps.multimodal is False
 
     def test_opencode_capabilities(self):
-        """測試 OpenCode 能力."""
+        """Test OpenCode capabilities."""
         caps = get_tool_capabilities("opencode")
 
         assert caps is not None
@@ -268,7 +268,7 @@ class TestToolCapabilities:
         assert caps.streaming is False
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         caps = ToolCapabilities(
             name="Test Tool",
             streaming=True,
@@ -284,10 +284,10 @@ class TestToolCapabilities:
 
 
 class TestMessageRange:
-    """MessageRange 測試."""
+    """MessageRange tests."""
 
     def test_basic_range(self):
-        """測試基本範圍."""
+        """Test basic range."""
         range_obj = MessageRange(
             start_index=0,
             end_index=10,
@@ -298,7 +298,7 @@ class TestMessageRange:
         assert range_obj.end_index == 10
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         range_obj = MessageRange(
             start_index=5,
             end_index=15,
@@ -314,7 +314,7 @@ class TestMessageRange:
         assert d["end_timestamp"] == "2024-01-01T01:00:00Z"
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "start_index": 0,
             "end_index": 5,
@@ -329,10 +329,10 @@ class TestMessageRange:
 
 
 class TestToolUse:
-    """ToolUse 測試."""
+    """ToolUse tests."""
 
     def test_basic_tool_use(self):
-        """測試基本工具使用."""
+        """Test basic tool use."""
         tool_use = ToolUse(
             id="toolu_123",
             name="read_file",
@@ -344,7 +344,7 @@ class TestToolUse:
         assert tool_use.input["path"] == "/test.txt"
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         tool_use = ToolUse(
             id="toolu_456",
             name="bash",
@@ -358,7 +358,7 @@ class TestToolUse:
         assert d["input"]["command"] == "ls"
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "id": "toolu_789",
             "name": "write_file",
@@ -372,10 +372,10 @@ class TestToolUse:
 
 
 class TestPermissionRequestContent:
-    """PermissionRequestContent 測試."""
+    """PermissionRequestContent tests."""
 
     def test_basic_request(self):
-        """測試基本請求."""
+        """Test basic request."""
         request = PermissionRequestContent(
             request_id="req-123",
             tool_name="write_file",
@@ -387,7 +387,7 @@ class TestPermissionRequestContent:
         assert request.status == PermissionStatus.PENDING
 
     def test_with_decision(self):
-        """測試帶決策的請求."""
+        """Test request with decision."""
         request = PermissionRequestContent(
             request_id="req-456",
             tool_name="bash",
@@ -401,7 +401,7 @@ class TestPermissionRequestContent:
         assert request.scope == PermissionScope.ONCE
 
     def test_to_dict(self):
-        """測試轉換為字典."""
+        """Test conversion to dictionary."""
         request = PermissionRequestContent(
             request_id="req-789",
             tool_name="read_file",
@@ -416,7 +416,7 @@ class TestPermissionRequestContent:
         assert d["status"] == "approved"
 
     def test_from_dict(self):
-        """測試從字典建立."""
+        """Test creation from dictionary."""
         data = {
             "request_id": "req-abc",
             "tool_name": "bash",

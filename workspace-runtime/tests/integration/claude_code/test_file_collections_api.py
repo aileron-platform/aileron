@@ -1,4 +1,4 @@
-"""Claude Code API 測試案例 - Scripts / Skills 文件操作"""
+"""Claude Code API test cases - Scripts / Skills file operations"""
 
 from __future__ import annotations
 
@@ -682,7 +682,7 @@ def test_fc_030_refuse_overwrite_existing_file(client):
 # ============ Skill tree metadata enrichment tests ============
 
 def test_fc_skill_tree_001_skill_md_with_metadata_serialized(client):
-    """skills/tree endpoint 應正確序列化含 skillName/skillDescription 的 SKILL.md 節點"""
+    """skills/tree endpoint should correctly serialize SKILL.md nodes with skillName/skillDescription"""
     skill_node = FileNode(
         id="/openspec-apply-change/SKILL.md",
         name="SKILL.md",
@@ -713,7 +713,7 @@ def test_fc_skill_tree_001_skill_md_with_metadata_serialized(client):
 
 
 def test_fc_skill_tree_002_non_skill_md_has_no_metadata(client):
-    """普通檔案節點的 skillName/skillDescription 應為 null"""
+    """Regular file nodes should have null skillName/skillDescription"""
     regular_node = _tree_node("README.md", scope="project")
     tree = FileTreeResponse(path="/", scope="project", nodes=[regular_node], total=1)
     service = StubFileCollectionService(tree_result=tree)
@@ -731,7 +731,7 @@ def test_fc_skill_tree_002_non_skill_md_has_no_metadata(client):
 
 
 def test_fc_skill_tree_003_enrich_skill_nodes_with_front_matter(tmp_path):
-    """FileCollectionService._enrich_skill_nodes 應從磁碟讀取 SKILL.md 並填入 skillName/skillDescription"""
+    """FileCollectionService._enrich_skill_nodes should read SKILL.md from disk and populate skillName/skillDescription"""
     import tempfile
     from unittest.mock import patch
     from app.modules.claude_code.file_collections.service import FileCollectionService
@@ -762,7 +762,7 @@ def test_fc_skill_tree_003_enrich_skill_nodes_with_front_matter(tmp_path):
 
 
 def test_fc_skill_tree_004_enrich_skill_nodes_no_front_matter(tmp_path):
-    """SKILL.md 無 front matter 時，節點不應包含 skillName/skillDescription"""
+    """When SKILL.md has no front matter, node should not include skillName/skillDescription"""
     from unittest.mock import patch
     from app.modules.claude_code.file_collections.service import FileCollectionService
     from app.modules.claude_code.file_collections.models import FileCollectionType

@@ -1,4 +1,4 @@
-"""MCP Service 增強版單元測試 - 提升覆蓋率"""
+"""MCP Service enhanced unit tests - improve coverage"""
 
 from __future__ import annotations
 
@@ -56,10 +56,10 @@ def sample_server_entry(sample_server_config):
 
 
 class TestMcpServerEntry:
-    """測試 McpServerEntry 數據類"""
+    """Test McpServerEntry data class"""
 
     def test_server_entry_creation(self, sample_server_config):
-        """測試創建 server entry"""
+        """Test creating server entry"""
         # Act
         entry = McpServerEntry(
             name="test-server",
@@ -71,7 +71,7 @@ class TestMcpServerEntry:
         assert entry.config == sample_server_config
 
     def test_to_runtime_enabled(self, sample_server_entry):
-        """測試轉換為 runtime (啟用)"""
+        """Test conversion to runtime (enabled)"""
         # Act
         runtime = sample_server_entry.to_runtime(enabled=True)
 
@@ -81,7 +81,7 @@ class TestMcpServerEntry:
         assert runtime.command == "test-command"
 
     def test_to_runtime_disabled(self, sample_server_entry):
-        """測試轉換為 runtime (停用)"""
+        """Test conversion to runtime (disabled)"""
         # Act
         runtime = sample_server_entry.to_runtime(enabled=False)
 
@@ -89,7 +89,7 @@ class TestMcpServerEntry:
         assert runtime.enabled is False
 
     def test_to_storage(self, sample_server_entry):
-        """測試轉換為儲存格式"""
+        """Test conversion to storage format"""
         # Act
         storage = sample_server_entry.to_storage()
 
@@ -97,14 +97,14 @@ class TestMcpServerEntry:
         assert isinstance(storage, dict)
         assert storage["type"] == "stdio"
         assert storage["command"] == "test-command"
-        assert "enabled" not in storage  # storage 格式不包含 enabled
+        assert "enabled" not in storage  # storage format does not include enabled
 
 
 class TestScopeNormalization:
-    """測試 scope 正規化"""
+    """Test scope normalization"""
 
     def test_normalize_scope_project(self, mcp_service):
-        """測試正規化 PROJECT scope"""
+        """Test normalizing PROJECT scope"""
         # Act
         result = mcp_service._normalize_scope(DocumentScope.PROJECT)
 
@@ -112,7 +112,7 @@ class TestScopeNormalization:
         assert result == DocumentScope.PROJECT
 
     def test_normalize_scope_user(self, mcp_service):
-        """測試正規化 USER scope"""
+        """Test normalizing USER scope"""
         # Act
         result = mcp_service._normalize_scope(DocumentScope.USER)
 
@@ -120,7 +120,7 @@ class TestScopeNormalization:
         assert result == DocumentScope.USER
 
     def test_normalize_scope_local(self, mcp_service):
-        """測試正規化 LOCAL scope"""
+        """Test normalizing LOCAL scope"""
         # Act
         result = mcp_service._normalize_scope(DocumentScope.LOCAL)
 
@@ -128,13 +128,13 @@ class TestScopeNormalization:
         assert result == DocumentScope.LOCAL
 
     def test_normalize_scope_plugin_not_supported(self, mcp_service):
-        """測試 PLUGIN scope 不支援寫入"""
+        """Test PLUGIN scope not supported for writes"""
         # Act & Assert
         with pytest.raises(McpScopeNotSupportedError):
             mcp_service._normalize_scope(DocumentScope.PLUGIN)
 
     def test_normalize_scope_for_read_plugin(self, mcp_service):
-        """測試 PLUGIN scope 支援讀取"""
+        """Test PLUGIN scope supported for reads"""
         # Act
         result = mcp_service._normalize_scope_for_read(DocumentScope.PLUGIN)
 
@@ -472,16 +472,16 @@ class TestImportServers:
     def test_import_servers_empty_payload(
         self, mock_resolve, mock_read, mcp_service, workspace_id, tmp_path, sample_server_config
     ):
-        """測試空 payload（使用有效但會被處理為空的 payload）"""
+        """Test empty payload (use valid but processed-as-empty payload)"""
         # Arrange
         mock_resolve.return_value = tmp_path
         mock_read.return_value = {"mcpServers": {}}
 
-        # 由於 McpImportRequest 要求至少 1 個項目，我們測試 _prepare_payload 的空值處理
-        # 透過直接調用內部方法來測試空 payload 的邏輯
+        # Since McpImportRequest requires at least 1 item, we test _prepare_payload's empty handling
+        # Test empty payload logic by directly calling internal method
         payload = McpImportRequest(
             scope=DocumentScope.PROJECT,
-            mcpServers={"": sample_server_config},  # 會被 _prepare_payload 過濾掉
+            mcpServers={"": sample_server_config},  # Will be filtered out by _prepare_payload
             overwrite=False,
         )
 
@@ -492,7 +492,7 @@ class TestImportServers:
 
 
 class TestImportServersFromFile:
-    """測試從文件匯入 servers"""
+    """Test importing servers from file"""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -528,7 +528,7 @@ class TestImportServersFromFile:
         assert "test-server" in result.created
 
     def test_import_from_file_invalid_json(self, mcp_service, workspace_id):
-        """測試無效 JSON"""
+        """Test invalid JSON"""
         # Arrange
         payload = McpImportUploadRequest(
             scope=DocumentScope.PROJECT,
@@ -542,7 +542,7 @@ class TestImportServersFromFile:
         assert "Invalid JSON format" in str(exc_info.value)
 
     def test_import_from_file_missing_mcp_servers_field(self, mcp_service, workspace_id):
-        """測試缺少 mcpServers 欄位"""
+        """Test missing mcpServers field"""
         # Arrange
         file_content = json.dumps({"other": "data"})
         payload = McpImportUploadRequest(
@@ -557,7 +557,7 @@ class TestImportServersFromFile:
         assert "missing 'mcpServers' field" in str(exc_info.value)
 
     def test_import_from_file_invalid_encoding(self, mcp_service, workspace_id):
-        """測試無效編碼"""
+        """Test invalid encoding"""
         # Arrange
         payload = McpImportUploadRequest(
             scope=DocumentScope.PROJECT,
@@ -571,7 +571,7 @@ class TestImportServersFromFile:
         assert "encoding error" in str(exc_info.value).lower()
 
     def test_import_from_file_mcp_servers_not_dict(self, mcp_service, workspace_id):
-        """測試 mcpServers 不是字典"""
+        """Test mcpServers is not a dictionary"""
         # Arrange
         file_content = json.dumps({"mcpServers": []})
         payload = McpImportUploadRequest(
@@ -587,11 +587,11 @@ class TestImportServersFromFile:
 
 
 class TestLoadDisabledServers:
-    """測試載入停用 servers 清單"""
+    """Test loading disabled servers list"""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_load_disabled_servers_success(self, mock_read, mcp_service, workspace_id):
-        """測試成功載入停用清單"""
+        """Test successful loading of disabled list"""
         # Arrange
         mock_read.return_value = {
             "projects": {
@@ -609,7 +609,7 @@ class TestLoadDisabledServers:
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_load_disabled_servers_empty(self, mock_read, mcp_service, workspace_id):
-        """測試空停用清單"""
+        """Test empty disabled list"""
         # Arrange
         mock_read.return_value = {
             "projects": {
@@ -625,7 +625,7 @@ class TestLoadDisabledServers:
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_load_disabled_servers_not_a_dict(self, mock_read, mcp_service, workspace_id):
-        """測試文件不是字典"""
+        """Test file is not a dictionary"""
         # Arrange
         mock_read.return_value = []
 
@@ -637,7 +637,7 @@ class TestLoadDisabledServers:
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_load_disabled_servers_projects_not_a_dict(self, mock_read, mcp_service, workspace_id):
-        """測試 projects 不是字典"""
+        """Test projects is not a dictionary"""
         # Arrange
         mock_read.return_value = {"projects": "not a dict"}
 
@@ -649,12 +649,12 @@ class TestLoadDisabledServers:
 
 
 class TestUpdateProjectBlockField:
-    """測試更新 project block 欄位"""
+    """Test updating project block fields"""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_update_project_block_field_creates_new(self, mock_read, mock_write, mcp_service, workspace_id):
-        """測試創建新的 project block"""
+        """Test creating new project block"""
         # Arrange
         mock_read.return_value = {}
 
@@ -671,7 +671,7 @@ class TestUpdateProjectBlockField:
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_update_project_block_field_preserves_other_fields(self, mock_read, mock_write, mcp_service, workspace_id):
-        """測試保留其他欄位"""
+        """Test preserving other fields"""
         # Arrange
         mock_read.return_value = {
             "projects": {
@@ -692,11 +692,11 @@ class TestUpdateProjectBlockField:
 
 
 class TestRuntimeMap:
-    """測試 runtime map"""
+    """Test runtime map"""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     def test_runtime_map_with_disabled_servers(self, mock_read, mcp_service, workspace_id, sample_server_entry):
-        """測試包含停用 servers 的 runtime map"""
+        """Test runtime map with disabled servers"""
         # Arrange
         mock_read.return_value = {
             "projects": {
@@ -720,7 +720,7 @@ class TestRuntimeMap:
 
 
 class TestMcpServiceAdditionalCoverage:
-    """補足 mcp service 的未覆蓋分支."""
+    """Supplement uncovered branches of mcp service."""
 
     def test_iter_payload_items_non_dict_returns_empty(self, mcp_service):
         assert list(mcp_service._iter_payload_items(["not", "dict"])) == []

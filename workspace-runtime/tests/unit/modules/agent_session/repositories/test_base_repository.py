@@ -1,4 +1,4 @@
-"""BaseRepository 單元測試."""
+"""BaseRepository unit tests."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from app.modules.agent_session.repositories.base import BaseRepository
 
 
 class TestBaseRepositoryLogic:
-    """BaseRepository 邏輯測試 (不需要資料庫)."""
+    """BaseRepository logic tests (no database required)."""
 
     def test_short_id_matching_logic(self):
-        """測試短 ID 匹配邏輯."""
-        # 模擬短 ID 匹配
+        """Test short ID matching logic."""
+        # Simulate short ID matching
         full_ids = [
             "abc123-full-uuid-1",
             "abc123-full-uuid-2",
@@ -25,7 +25,7 @@ class TestBaseRepositoryLogic:
         ]
         short_id = "abc123"
 
-        # 找出所有匹配的 ID
+        # Find all matching IDs
         matches = [id for id in full_ids if id.startswith(short_id)]
 
         assert len(matches) == 2
@@ -33,7 +33,7 @@ class TestBaseRepositoryLogic:
         assert "abc123-full-uuid-2" in matches
 
     def test_short_id_unique_match(self):
-        """測試短 ID 唯一匹配."""
+        """Test short ID unique match."""
         full_ids = [
             "abc123-full-uuid-1",
             "xyz789-full-uuid-2",
@@ -46,7 +46,7 @@ class TestBaseRepositoryLogic:
         assert matches[0] == "abc123-full-uuid-1"
 
     def test_short_id_no_match(self):
-        """測試短 ID 無匹配."""
+        """Test short ID no match."""
         full_ids = [
             "abc123-full-uuid-1",
             "xyz789-full-uuid-2",
@@ -59,10 +59,10 @@ class TestBaseRepositoryLogic:
 
 
 class TestRepositoryCRUDLogic:
-    """Repository CRUD 邏輯測試."""
+    """Repository CRUD logic tests."""
 
     def test_update_data_merge(self):
-        """測試更新資料合併邏輯."""
+        """Test update data merge logic."""
         existing_data = {
             "title": "Original Title",
             "message_count": 5,
@@ -74,7 +74,7 @@ class TestRepositoryCRUDLogic:
             "message_count": 10,
         }
 
-        # 合併更新
+        # Merge update
         merged = {**existing_data, **update_data}
 
         assert merged["title"] == "New Title"
@@ -82,10 +82,10 @@ class TestRepositoryCRUDLogic:
         assert merged["context_files"] == ["file1.txt"]
 
     def test_filter_building(self):
-        """測試過濾條件建構."""
+        """Test filter condition building."""
         filters = {}
 
-        # 只加入非空值
+        # Only add non-null values
         workspace_id = "ws-123"
         status = "idle"
         agentic_tool = None
@@ -103,16 +103,16 @@ class TestRepositoryCRUDLogic:
         }
 
     def test_pagination_calculation(self):
-        """測試分頁計算."""
+        """Test pagination calculation."""
         total = 100
         page_size = 20
 
-        # 計算總頁數
+        # Calculate total pages
         total_pages = (total + page_size - 1) // page_size
 
         assert total_pages == 5
 
-        # 計算 offset
+        # Calculate offset
         page = 3
         offset = (page - 1) * page_size
 
@@ -120,10 +120,10 @@ class TestRepositoryCRUDLogic:
 
 
 class TestRepositoryEntityConversion:
-    """Repository 實體轉換測試."""
+    """Repository entity conversion tests."""
 
     def test_db_row_to_entity_fields(self):
-        """測試 DB row 到實體的欄位對應."""
+        """Test DB row to entity field mapping."""
         db_row = {
             "session_id": "sess-123",
             "workspace_id": "ws-456",
@@ -141,7 +141,7 @@ class TestRepositoryEntityConversion:
             },
         }
 
-        # 模擬實體建立
+        # Simulate entity creation
         entity_data = {
             "id": db_row["session_id"],
             "workspace_id": db_row["workspace_id"],
@@ -157,7 +157,7 @@ class TestRepositoryEntityConversion:
         assert entity_data["message_count"] == 5
 
     def test_entity_to_data_blob(self):
-        """測試實體到 data blob 的轉換."""
+        """Test entity to data blob conversion."""
         entity_attrs = {
             "title": "My Session",
             "model": "claude-sonnet",
@@ -166,7 +166,7 @@ class TestRepositoryEntityConversion:
             "permission_config": None,
         }
 
-        # 只包含非空值
+        # Only include non-null values
         data_blob = {}
         if entity_attrs.get("title"):
             data_blob["title"] = entity_attrs["title"]

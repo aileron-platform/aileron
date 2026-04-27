@@ -642,12 +642,12 @@ class TestCheckSSHStatus:
         assert result["status"] == "pending"
 
     def test_check_ssh_status_incomplete(self, internal_service, tmp_paths):
-        """測試 SSH 配置不完整"""
+        """Test SSH configuration incomplete"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 只創建私鑰
+        # Only create private key
         (tmp_paths["ssh"] / "id_rsa").write_text("private key")
 
         # Act
@@ -658,13 +658,13 @@ class TestCheckSSHStatus:
 
 
 class TestCheckClaudeStatus:
-    """測試檢查 Claude Code 狀態"""
+    """Test checking Claude Code status"""
 
     def test_check_claude_status_subscription(self, tmp_path):
-        """測試 Subscription 認證狀態"""
-        # Arrange - 創建獨立的服務實例以避免狀態泄漏
+        """Test Subscription authentication status"""
+        # Arrange - Create isolated service instance to avoid state leakage
         import os
-        # 清除可能影響測試的環境變數
+        # Clear environment variables that may affect test
         env_backup = {}
         for key in ['CLAUDE_CODE_AUTH_METHOD', 'CLAUDE_CODE_SYNCED_KEYS']:
             env_backup[key] = os.environ.pop(key, None)
@@ -686,7 +686,7 @@ class TestCheckClaudeStatus:
                     credentials_file = service.claude_dir / ".credentials.json"
                     credentials_file.write_text(json.dumps(credentials))
 
-                    # 確保文件存在且可讀
+                    # Ensure file exists and is readable
                     assert credentials_file.exists()
                     assert credentials_file.is_file()
 
@@ -696,13 +696,13 @@ class TestCheckClaudeStatus:
                     # Assert
                     assert result["status"] == "success", f"Expected 'success' but got '{result['status']}'. Message: {result.get('message', 'N/A')}"
         finally:
-            # 恢復環境變數
+            # Restore environment variables
             for key, value in env_backup.items():
                 if value is not None:
                     os.environ[key] = value
 
     def test_check_claude_status_pending(self, internal_service, tmp_paths):
-        """測試未配置狀態"""
+        """Test not configured status"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -714,11 +714,11 @@ class TestCheckClaudeStatus:
 
 
 class TestCheckGitStatus:
-    """測試檢查 Git 狀態"""
+    """Test checking Git status"""
 
     @patch("subprocess.run")
     def test_check_git_status_success(self, mock_run, internal_service):
-        """測試 Git 完全配置"""
+        """Test Git fully configured"""
         # Arrange
         mock_run.return_value = MagicMock(returncode=0, stdout="Test User\n", stderr="")
 
@@ -730,7 +730,7 @@ class TestCheckGitStatus:
 
     @patch("subprocess.run")
     def test_check_git_status_pending(self, mock_run, internal_service):
-        """測試 Git 未配置"""
+        """Test Git not configured"""
         # Arrange
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
 
@@ -742,7 +742,7 @@ class TestCheckGitStatus:
 
     @patch("subprocess.run")
     def test_check_git_status_incomplete(self, mock_run, internal_service):
-        """測試 Git 配置不完整"""
+        """Test Git configuration incomplete"""
         # Arrange
         def run_side_effect(*args, **kwargs):
             cmd = args[0]
@@ -761,7 +761,7 @@ class TestCheckGitStatus:
 
 
 class TestApplyFirewallSettings:
-    """測試套用防火牆設定"""
+    """Test applying firewall settings"""
 
     @staticmethod
     def _load_firewall_template() -> str:
@@ -774,7 +774,7 @@ class TestApplyFirewallSettings:
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_success(self, internal_service):
-        """測試成功套用防火牆設定"""
+        """Test successfully applying firewall settings"""
         # Arrange
         template_content = "#!/bin/bash\necho 'Firewall configured'"
 
@@ -853,7 +853,7 @@ class TestApplyFirewallSettings:
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_script_failure(self, internal_service):
-        """測試防火牆腳本執行失敗"""
+        """Test firewall script execution failure"""
         # Arrange
         template_content = "#!/bin/bash\necho 'template'"
 
@@ -878,7 +878,7 @@ class TestApplyFirewallSettings:
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_template_not_found(self, internal_service):
-        """測試模板文件不存在"""
+        """Test template file not found"""
         # Arrange
         with patch.object(Path, "exists", return_value=False):
             request = FirewallConfigRequest(
@@ -895,7 +895,7 @@ class TestApplyFirewallSettings:
 
     @pytest.mark.asyncio
     async def test_apply_firewall_settings_timeout(self, internal_service):
-        """測試防火牆腳本超時"""
+        """Test firewall script timeout"""
         # Arrange
         template_content = "#!/bin/bash\nsleep 100"
 
@@ -920,16 +920,16 @@ class TestApplyFirewallSettings:
 
 
 class TestSetupClaudeCodeEdgeCases:
-    """測試 Claude Code 設定的邊緣情況"""
+    """Test edge cases for Claude Code setup"""
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_with_existing_malformed_claude_json(self, internal_service, tmp_paths):
-        """測試當 .claude.json 存在但格式錯誤時的處理"""
+        """Test handling when .claude.json exists but has malformed format"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
 
-        # 創建格式錯誤的 .claude.json
+        # Create malformed .claude.json
         claude_json_path = tmp_paths["home"] / ".claude.json"
         claude_json_path.write_text("{ invalid json }")
 
@@ -955,7 +955,7 @@ class TestSetupClaudeCodeEdgeCases:
         # Act
         result = await internal_service.setup_claude_code(request)
 
-        # Assert - 應該創建新的 .claude.json 而不是拋出異常
+        # Assert - Should create new .claude.json instead of raising exception
         assert result["auth_method"] == "subscription"
         assert claude_json_path.exists()
         claude_json = json.loads(claude_json_path.read_text())
@@ -963,7 +963,7 @@ class TestSetupClaudeCodeEdgeCases:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_with_empty_env_vars(self, internal_service, tmp_paths):
-        """測試空的環境變數被跳過"""
+        """Test empty environment variables are skipped"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
@@ -971,8 +971,8 @@ class TestSetupClaudeCodeEdgeCases:
 
         env_vars = [
             EnvironmentVariable(key="VALID_KEY", value="value1"),
-            EnvironmentVariable(key="", value="value2"),  # 空 key
-            EnvironmentVariable(key="EMPTY_VALUE", value=""),  # 空 value
+            EnvironmentVariable(key="", value="value2"),  # Empty key
+            EnvironmentVariable(key="EMPTY_VALUE", value=""),  # Empty value
             EnvironmentVariable(key="ANOTHER_VALID", value="value3"),
         ]
 
@@ -984,7 +984,7 @@ class TestSetupClaudeCodeEdgeCases:
         # Act
         result = await internal_service.setup_claude_code(request)
 
-        # Assert - 只有有效的環境變數被設定
+        # Assert - Only valid environment variables are set
         assert len(result["environment_variables_set"]) == 2
         assert bashrc_path.exists()
 
@@ -995,7 +995,7 @@ class TestSetupClaudeCodeEdgeCases:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_env_vars_with_special_chars(self, internal_service, tmp_paths):
-        """測試環境變數值包含特殊字元時的轉義"""
+        """Test escaping when environment variable values contain special characters"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
@@ -1020,7 +1020,7 @@ class TestSetupClaudeCodeEdgeCases:
         assert len(result["environment_variables_set"]) == 4
         bashrc_content = bashrc_path.read_text()
 
-        # 驗證特殊字元被正確轉義
+        # Verify special characters are properly escaped
         assert 'export VAR_WITH_QUOTES="value with \\"quotes\\""' in bashrc_content
         assert 'export VAR_WITH_DOLLAR="value with \\$VAR"' in bashrc_content
         assert 'export VAR_WITH_BACKTICK="value with \\`command\\`"' in bashrc_content
@@ -1028,13 +1028,13 @@ class TestSetupClaudeCodeEdgeCases:
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_env_vars_update_existing_bashrc(self, internal_service, tmp_paths):
-        """測試更新現有的 .bashrc 檔案"""
+        """Test updating existing .bashrc file"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         bashrc_path = tmp_paths["home"] / ".bashrc"
 
-        # 建立現有的 .bashrc 內容
+        # Create existing .bashrc content
         existing_content = """# User's bashrc
 export PATH=/usr/local/bin:$PATH
 # Aileron - Claude Code Environment Variables - START
@@ -1059,24 +1059,24 @@ alias ll='ls -la'
         # Assert
         bashrc_content = bashrc_path.read_text()
 
-        # 舊的環境變數應該被移除
+        # Old environment variables should be removed
         assert "OLD_VAR" not in bashrc_content
 
-        # 新的環境變數應該被加入
+        # New environment variables should be added
         assert 'export NEW_VAR="new_value"' in bashrc_content
 
-        # 原有的其他內容應該保留
+        # Original other content should be preserved
         assert "export PATH=/usr/local/bin:$PATH" in bashrc_content
         assert "alias ll='ls -la'" in bashrc_content
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_without_auth_method(self, internal_service, tmp_paths):
-        """測試無 auth_method 時不設定環境變數"""
+        """Test no environment variables set when no auth_method"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
         request = ClaudeCodeRequest(
-            # 沒有 auth_method, api_key, subscription_access_token
+            # No auth_method, api_key, subscription_access_token
             environment_variables=[],
         )
 
@@ -1086,12 +1086,12 @@ alias ll='ls -la'
 
             # Assert
             import os
-            # 應該移除舊的環境變數
+            # Should remove old environment variables
             assert os.environ.get(internal_service._auth_method_env) is None
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_general_exception(self, internal_service, tmp_paths):
-        """測試一般異常處理"""
+        """Test general exception handling"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -1100,7 +1100,7 @@ alias ll='ls -la'
             subscription_access_token="test-token",
         )
 
-        # Mock mkdir 拋出異常
+        # Mock mkdir to raise exception
         with patch.object(Path, 'mkdir', side_effect=OSError("Disk full")):
             # Act & Assert
             with pytest.raises(OSError):
@@ -1108,7 +1108,7 @@ alias ll='ls -la'
 
     @pytest.mark.asyncio
     async def test_setup_git_settings_general_exception(self, internal_service):
-        """測試 Git 設定的一般異常處理"""
+        """Test general exception handling for Git settings"""
         # Arrange
         with patch("subprocess.run", side_effect=RuntimeError("Unexpected error")):
             request = GitSettingsRequest(
@@ -1119,19 +1119,19 @@ alias ll='ls -la'
             # Act & Assert
             with pytest.raises(Exception) as exc_info:
                 await internal_service.setup_git_settings(request)
-            assert "Git 設定失敗" in str(exc_info.value) or "Unexpected error" in str(exc_info.value)
+            assert "Git setup failed" in str(exc_info.value) or "Unexpected error" in str(exc_info.value)
 
 
 class TestCheckSSHStatusEdgeCases:
-    """測試 SSH 狀態檢查的邊緣情況"""
+    """Test edge cases for SSH status check"""
 
     def test_check_ssh_status_public_key_not_in_authorized_keys(self, internal_service, tmp_paths):
-        """測試公鑰不在 authorized_keys 中"""
+        """Test public key not in authorized_keys"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 創建文件 - 使用完整的 SSH 公鑰格式
+        # Create files - use complete SSH public key format
         public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com"
         different_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ different@example.com"
 
@@ -1147,31 +1147,31 @@ class TestCheckSSHStatusEdgeCases:
         assert "does not contain current public key" in result["message"]
 
     def test_check_ssh_status_read_error(self, internal_service, tmp_paths):
-        """測試讀取 SSH 文件失敗"""
+        """Test reading SSH files failure"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 創建文件
+        # Create files
         (tmp_paths["ssh"] / "id_rsa").write_text("private key")
         (tmp_paths["ssh"] / "id_rsa.pub").write_text("public key")
         (tmp_paths["ssh"] / "authorized_keys").write_text("content")
 
-        # Mock read_text 拋出異常
+        # Mock read_text to raise exception
         with patch.object(Path, 'read_text', side_effect=PermissionError("Cannot read")):
             # Act
             result = internal_service._check_ssh_status()
 
             # Assert
-            assert result["status"] == "success"  # 應該 fallback 到基本檢查
+            assert result["status"] == "success"  # Should fallback to basic check
 
     def test_check_ssh_status_missing_authorized_keys(self, internal_service, tmp_paths):
-        """測試缺少 authorized_keys"""
+        """Test missing authorized_keys"""
         # Arrange
         internal_service.ssh_dir = tmp_paths["ssh"]
         tmp_paths["ssh"].mkdir(parents=True, exist_ok=True)
 
-        # 只創建私鑰和公鑰
+        # Only create private and public keys
         (tmp_paths["ssh"] / "id_rsa").write_text("private key")
         (tmp_paths["ssh"] / "id_rsa.pub").write_text("public key")
 
@@ -1183,7 +1183,7 @@ class TestCheckSSHStatusEdgeCases:
         assert "authorized_keys not configured" in result["message"]
 
     def test_check_ssh_status_check_exception(self, internal_service):
-        """測試檢查時發生異常"""
+        """Test exception during check"""
         # Arrange
         internal_service.ssh_dir = Path("/nonexistent/path")
 
@@ -1197,10 +1197,10 @@ class TestCheckSSHStatusEdgeCases:
 
 
 class TestClearClaudeOauthState:
-    """測試 OAuth 狀態清理 helper。"""
+    """Test OAuth state cleanup helper."""
 
     def test_clear_claude_oauth_state_with_invalid_claude_json(self, internal_service, tmp_paths):
-        """無法解析 ~/.claude.json 時，應忽略該檔但仍刪除舊 credentials。"""
+        """When ~/.claude.json cannot be parsed, should ignore that file but still delete old credentials."""
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1216,7 +1216,7 @@ class TestClearClaudeOauthState:
         assert claude_json_path.read_text() == "{invalid json"
 
     def test_clear_claude_oauth_state_with_non_dict_claude_json(self, internal_service, tmp_paths):
-        """~/.claude.json 為非 object 時，不應改寫。"""
+        """When ~/.claude.json is not an object, should not overwrite."""
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1232,7 +1232,7 @@ class TestClearClaudeOauthState:
         assert json.loads(claude_json_path.read_text()) == ["not", "an", "object"]
 
     def test_clear_claude_oauth_state_without_oauth_account(self, internal_service, tmp_paths):
-        """~/.claude.json 沒有 oauthAccount 時，不應多做改寫。"""
+        """When ~/.claude.json has no oauthAccount, should not do extra overwrite."""
         internal_service.claude_dir = tmp_paths["claude"]
         internal_service.home_dir = tmp_paths["home"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1249,10 +1249,10 @@ class TestClearClaudeOauthState:
 
 
 class TestCheckClaudeStatusEdgeCases:
-    """測試 Claude 狀態檢查的邊緣情況"""
+    """Test edge cases for Claude status check"""
 
     def test_check_claude_status_invalid_credentials_json(self, internal_service, tmp_paths):
-        """測試憑證文件格式錯誤"""
+        """Test credentials file format error"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1260,7 +1260,7 @@ class TestCheckClaudeStatusEdgeCases:
         credentials_file = tmp_paths["claude"] / ".credentials.json"
         credentials_file.write_text("{ invalid json")
 
-        # 清理可能影響結果的環境變數
+        # Clear environment variables that may affect result
         import os
         env_backup = {}
         for key in [internal_service._auth_method_env, internal_service._env_keys_env]:
@@ -1270,16 +1270,16 @@ class TestCheckClaudeStatusEdgeCases:
             # Act
             result = internal_service._check_claude_status()
 
-            # Assert - 文件格式錯誤且無環境變數，應該返回 pending
+            # Assert - File format error and no environment variables, should return pending
             assert result["status"] == "pending"
         finally:
-            # 恢復環境變數
+            # Restore environment variables
             for key, value in env_backup.items():
                 if value is not None:
                     os.environ[key] = value
 
     def test_check_claude_status_legacy_oauth_format(self, internal_service, tmp_paths):
-        """測試舊格式的 OAuth（只有 claudeAiOauth 欄位）"""
+        """Test old OAuth format (only claudeAiOauth field)"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1303,7 +1303,7 @@ class TestCheckClaudeStatusEdgeCases:
                     os.environ[key] = value
 
     def test_check_claude_status_subscription_empty_file(self, internal_service, tmp_paths):
-        """測試 subscription 模式但文件為空"""
+        """Test subscription mode but file is empty"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
@@ -1324,7 +1324,7 @@ class TestCheckClaudeStatusEdgeCases:
             os.environ.pop(internal_service._auth_method_env, None)
 
     def test_check_claude_status_missing_env_vars(self, internal_service, tmp_paths):
-        """測試 API Key 模式但缺少環境變數"""
+        """Test API Key mode but missing environment variables"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -1333,7 +1333,7 @@ class TestCheckClaudeStatusEdgeCases:
         os.environ[internal_service._env_keys_env] = "REQUIRED_VAR1,REQUIRED_VAR2"
 
         try:
-            # Act - 不設定實際的環境變數
+            # Act - Don't set actual environment variables
             result = internal_service._check_claude_status()
 
             # Assert
@@ -1344,7 +1344,7 @@ class TestCheckClaudeStatusEdgeCases:
             os.environ.pop(internal_service._env_keys_env, None)
 
     def test_check_claude_status_api_key_no_env_vars(self, internal_service, tmp_paths):
-        """測試 API Key 模式但無設定環境變數"""
+        """Test API Key mode but no environment variables configured"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -1362,7 +1362,7 @@ class TestCheckClaudeStatusEdgeCases:
             os.environ.pop(internal_service._auth_method_env, None)
 
     def test_check_claude_status_api_key_ignores_stale_oauth_credentials(self, internal_service, tmp_paths):
-        """測試 API Key 模式不會被殘留的 OAuth credentials 誤判"""
+        """Test API Key mode is not misjudged by residual OAuth credentials"""
         internal_service.claude_dir = tmp_paths["claude"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
 
@@ -1385,7 +1385,7 @@ class TestCheckClaudeStatusEdgeCases:
             os.environ.pop("ANTHROPIC_API_KEY", None)
 
     def test_check_claude_status_no_config(self, internal_service, tmp_paths):
-        """測試完全無設定"""
+        """Test completely unconfigured"""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
 
@@ -1397,7 +1397,7 @@ class TestCheckClaudeStatusEdgeCases:
         assert "not yet synced" in result["message"]
 
     def test_check_claude_status_exception(self, internal_service):
-        """測試檢查時發生異常"""
+        """Test exception during check"""
         # Arrange
         internal_service.claude_dir = Path("/nonexistent/path")
 
@@ -1411,11 +1411,11 @@ class TestCheckClaudeStatusEdgeCases:
 
 
 class TestCheckGitStatusEdgeCases:
-    """測試 Git 狀態檢查的邊緣情況"""
+    """Test edge cases for Git status check"""
 
     @patch("subprocess.run")
     def test_check_git_status_exception(self, mock_run, internal_service):
-        """測試檢查時發生異常"""
+        """Test exception during check"""
         # Arrange
         mock_run.side_effect = RuntimeError("Git not found")
 
@@ -1428,10 +1428,10 @@ class TestCheckGitStatusEdgeCases:
 
 
 class TestEnsureDirectoryExists:
-    """測試確保目錄存在"""
+    """Test ensuring directory exists"""
 
     def test_ensure_directory_exists(self, internal_service, tmp_paths):
-        """測試創建目錄"""
+        """Test creating directory"""
         # Arrange
         test_dir = tmp_paths["home"] / "test_dir"
 
@@ -1443,12 +1443,12 @@ class TestEnsureDirectoryExists:
         assert test_dir.is_dir()
 
     def test_ensure_directory_exists_already_exists(self, internal_service, tmp_paths):
-        """測試目錄已存在"""
+        """Test directory already exists"""
         # Arrange
         test_dir = tmp_paths["home"] / "test_dir"
         test_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
-        # Act - 應該不會拋出異常
+        # Act - Should not raise exception
         internal_service._ensure_directory_exists(test_dir, mode=0o755)
 
         # Assert

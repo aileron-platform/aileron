@@ -1,4 +1,4 @@
-"""Claude Code API 測試案例 - Slash Commands"""
+"""Claude Code API test cases - Slash Commands"""
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_sc_001_list_scopes(client):
                     documents=[
                         SlashCommandDocumentSummary(
                             fileName="deploy.md",
-                            description="部署指令",
+                            description="Deployment command",
                             scope=DocumentScope.PROJECT,
                             size="1KB",
                         )
@@ -127,7 +127,7 @@ def test_sc_002_list_filtered_scope(client):
                     documents=[
                         SlashCommandDocumentSummary(
                             fileName="user-cmd.md",
-                            description="用戶指令",
+                            description="User command",
                             scope=DocumentScope.USER,
                             size="2KB",
                         )
@@ -156,7 +156,7 @@ def test_sc_003_get_scope_success(client):
             documents=[
                 SlashCommandDocumentSummary(
                     fileName="build.md",
-                    description="建置指令",
+                    description="Build command",
                     scope=DocumentScope.PROJECT,
                     size="3KB",
                 )
@@ -191,7 +191,7 @@ def test_sc_005_get_document_success(client):
             scope=DocumentScope.PROJECT,
             document=SlashCommandDocumentDetail(
                 fileName="build.md",
-                description="建置指令",
+                description="Build command",
                 scope=DocumentScope.PROJECT,
                 size="1KB",
                 content="# Build Command\n\nThis is a build command.",
@@ -230,7 +230,7 @@ def test_sc_007_create_success(client):
             scope=DocumentScope.PROJECT,
             document=SlashCommandDocumentDetail(
                 fileName="new-cmd.md",
-                description="新指令",
+                description="New command",
                 scope=DocumentScope.PROJECT,
                 size="1KB",
                 content="# New Command\n\nContent here.",
@@ -241,7 +241,7 @@ def test_sc_007_create_success(client):
     payload = {
         "fileName": "new-cmd.md",
         "content": "# New Command\n\nContent here.",
-        "description": "新指令",
+        "description": "New command",
     }
 
     with override_dependency(get_slash_command_service, lambda: service):
@@ -283,7 +283,7 @@ def test_sc_010_update_success(client):
             scope=DocumentScope.PROJECT,
             document=SlashCommandDocumentDetail(
                 fileName="existing.md",
-                description="已更新指令",
+                description="Updated command",
                 scope=DocumentScope.PROJECT,
                 size="2KB",
                 content="# Updated Command\n\nNew content.",
@@ -293,7 +293,7 @@ def test_sc_010_update_success(client):
 
     payload = {
         "content": "# Updated Command\n\nNew content.",
-        "description": "已更新指令",
+        "description": "Updated command",
     }
 
     with override_dependency(get_slash_command_service, lambda: service):
