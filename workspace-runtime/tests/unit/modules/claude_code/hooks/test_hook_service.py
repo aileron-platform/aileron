@@ -1,4 +1,4 @@
-"""Hook Service 單元測試"""
+"""Hook Service unit tests"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def hook_service():
 
 @pytest.fixture
 def tmp_workspace(tmp_path):
-    """創建臨時 workspace 目錄結構."""
+    "Create temporary workspace directory structure."
     workspace_root = tmp_path / "workspace"
     workspace_root.mkdir()
 
@@ -41,7 +41,7 @@ def tmp_workspace(tmp_path):
 
 
 class TestListScopes:
-    """測試列出 hooks 功能."""
+    "Test listing hooks functionality.""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
@@ -49,7 +49,7 @@ class TestListScopes:
     def test_list_scopes_all(
         self, mock_load_plugins, mock_resolve, mock_read_json, hook_service, tmp_path
     ):
-        """測試列出所有 scope 的 hooks."""
+        "Test listing all scope hooks.""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -69,7 +69,7 @@ class TestListScopes:
     def test_list_scopes_project_only(
         self, mock_resolve, mock_read_json, hook_service, tmp_path
     ):
-        """測試只列出 project scope 的 hooks."""
+        "Test listing only project scope hooks.""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -110,12 +110,12 @@ class TestListScopes:
 
 
 class TestGetScope:
-    """測試獲取特定 scope 的 hooks."""
+    "Test getting specific scope hooks.""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_get_scope_success(self, mock_resolve, mock_read_json, hook_service, tmp_path):
-        """測試成功獲取 scope."""
+        "Test successfully getting scope.""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -154,7 +154,7 @@ class TestGetScope:
 
 
 class TestUpdateScope:
-    """測試更新 hooks."""
+    "Test updating hooks.""
 
     @patch("app.modules.claude_code.hooks.service.write_json_file")
     @patch("app.modules.claude_code.hooks.service.read_json_file")
@@ -162,7 +162,7 @@ class TestUpdateScope:
     def test_update_scope_success(
         self, mock_resolve, mock_read_json, mock_write_json, hook_service, tmp_path
     ):
-        """測試成功更新 hooks."""
+        "Test successfully updating hooks.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -200,13 +200,13 @@ class TestUpdateScope:
 
 
 class TestDeleteScope:
-    """測試刪除 scope."""
+    "Test deleting scope.""
 
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_delete_scope_success(
         self, mock_resolve, hook_service, tmp_path
     ):
-        """測試成功刪除 scope."""
+        "Test successfully deleting scope.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -229,12 +229,12 @@ class TestDeleteScope:
 
 
 class TestExportScopes:
-    """測試導出 hooks."""
+    "Test exporting hooks.""
 
     @patch("app.modules.claude_code.hooks.service.read_json_file")
     @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
     def test_export_scopes_success(self, mock_resolve, mock_read_json, hook_service, tmp_path):
-        """測試成功導出 hooks."""
+        "Test successfully exporting hooks.""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -262,7 +262,7 @@ class TestExportScopes:
 
 
 class TestImportScopes:
-    """測試導入 hooks."""
+    "Test importing hooks.""
 
     @patch("app.modules.claude_code.hooks.service.write_json_file")
     @patch("app.modules.claude_code.hooks.service.read_json_file")
@@ -270,7 +270,7 @@ class TestImportScopes:
     def test_import_scopes_success(
         self, mock_resolve, mock_read_json, mock_write_json, hook_service, tmp_path
     ):
-        """測試成功導入 hooks."""
+        "Test successfully importing hooks.""
         # Arrange
         workspace_id = "test-workspace"
         mock_resolve.return_value = tmp_path
@@ -364,10 +364,10 @@ class TestImportScopes:
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    "Test service initialization.""
 
     def test_service_init(self):
-        """測試服務初始化."""
+        "Test service initialization.""
         # Act
         service = HookService()
 

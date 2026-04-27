@@ -329,7 +329,7 @@ class StubGitService:
 
         return {
             "commitId": commit_id,
-            "files": file_objects,  # 物件列表
+            "files": file_objects,  # Object list
             "added": added_files,
             "modified": [],
             "deleted": [],
@@ -362,7 +362,7 @@ class StubGitService:
         include_metadata: bool = False,
         context_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        # 生成差異內容
+        # Generate diff content
         patch_content = f"""--- {path}
 +++ {path}
 @@ -1 +1,2 @@

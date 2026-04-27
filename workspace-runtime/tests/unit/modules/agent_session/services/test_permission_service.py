@@ -142,7 +142,7 @@ class TestPermissionService:
 
         await service.cancel_request(request_id)
 
-        # cancel_request 會設定 event 並儲存拒絕決策
+        # cancel_request will set event and store rejection decision
         assert event.is_set()
         assert request_id in service._decision_results
         assert service._decision_results[request_id].allow is False
@@ -158,7 +158,7 @@ class TestPermissionService:
         # Mock handle_timeout
         service.handle_timeout = AsyncMock()
 
-        # 使用很短的超時時間
+        # Use very short timeout
         with pytest.raises(PermissionTimeoutError):
             await service.wait_for_decision(request_id, timeout_seconds=0.01)
 

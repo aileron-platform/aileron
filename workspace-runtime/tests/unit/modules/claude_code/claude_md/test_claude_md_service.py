@@ -271,26 +271,26 @@ class TestClaudeMdService:
         """Test resolving path - unsupported scope."""
         # Use an invalid scope (simulating scope that might be added in future)
         with pytest.raises(HTTPException) as exc_info:
-            # 直接傳入字串來模擬不支持的 scope
+            # Pass string directly to simulate unsupported scope
             service._resolve_path(workspace_id, "unsupported")
 
         assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
 
     @patch("app.modules.claude_code.claude_md.service.resolve_scope_root")
     def test_get_document_empty_file(self, mock_resolve, service, workspace_id, tmp_path):
-        """測試獲取文檔 - 空文件."""
+        """Test getting document - empty file."""
         # Setup mock
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
         claude_md_file = claude_dir / "CLAUDE.md"
-        claude_md_file.write_text("", encoding="utf-8")  # 空文件
+        claude_md_file.write_text("", encoding="utf-8")  # Empty file
 
         mock_resolve.return_value = claude_dir
 
         # Execute
         result = service.get_document(workspace_id, ClaudeMdScope.PROJECT)
 
-        # Verify - 應該能夠讀取空文件
+        # Verify - should be able to read empty file
         assert result.content == ""
 
     @patch("app.modules.claude_code.claude_md.service.ensure_directory")
@@ -298,13 +298,13 @@ class TestClaudeMdService:
     def test_update_document_empty_content(
         self, mock_resolve, mock_ensure_dir, service, workspace_id, tmp_path
     ):
-        """測試更新文檔 - 空內容."""
+        """Test updating document - empty content."""
         # Setup mock
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
         mock_resolve.return_value = claude_dir
 
-        # Prepare request - 空內容
+        # Prepare request - empty content
         request = ClaudeMdUpdateRequest(scope=ClaudeMdScope.PROJECT, content="")
 
         # Execute

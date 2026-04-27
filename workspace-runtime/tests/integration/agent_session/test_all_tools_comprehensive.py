@@ -1,6 +1,6 @@
-"""全工具綜合測試 - 測試 Agent Session 中的所有可用工具.
+"""All tools comprehensive test - test all available tools in Agent Session.
 
-此測試用於系統地測試每個工具的輸入/輸出格式，並記錄完整的消息流。
+This test systematically tests input/output format of each tool and records complete message flow.
 """
 
 import pytest
@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 
-# 全局工具記錄器
+# Global tool logger
 class ComprehensiveToolRecorder:
-    """綜合工具記錄器 - 記錄每個工具的執行情況."""
+    "Comprehensive tool logger - record execution status of each tool.""
 
     _instance = None
 
@@ -32,7 +32,7 @@ class ComprehensiveToolRecorder:
         status: str = "success",
         error: str = None,
     ):
-        """記錄工具執行."""
+        "Record tool execution.""
         execution = {
             "timestamp": datetime.utcnow().isoformat(),
             "tool_name": tool_name,
@@ -49,11 +49,11 @@ class ComprehensiveToolRecorder:
         self.tool_executions.append(execution)
 
     def save_report(self, output_dir: Path):
-        """保存報告到文件."""
+        "Save report to file.""
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
 
-        # 生成分析報告
+        # Generate analysis report
         report = {
             "metadata": {
                 "test_type": "comprehensive_tool_test",
@@ -74,7 +74,7 @@ class ComprehensiveToolRecorder:
             "input_output_formats": self._extract_formats(),
         }
 
-        # 保存到文件
+        # Save to file
         output_file = output_dir / f"tool_test_report_{timestamp}.json"
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(report, f, indent=2, ensure_ascii=False)
@@ -82,7 +82,7 @@ class ComprehensiveToolRecorder:
         return output_file, report
 
     def _generate_summary(self) -> Dict[str, Any]:
-        """生成工具執行摘要."""
+        "Generate tool execution summary.""
         summary = {}
         for execution in self.tool_executions:
             tool_name = execution["tool_name"]
@@ -102,7 +102,7 @@ class ComprehensiveToolRecorder:
                 summary[tool_name]["failed"] += 1
             summary[tool_name]["total_time_ms"] += execution["execution_time_ms"]
 
-        # 計算平均時間
+        # Calculate average time
         for tool_name in summary:
             if summary[tool_name]["executions"] > 0:
                 summary[tool_name]["average_time_ms"] = (
@@ -113,7 +113,7 @@ class ComprehensiveToolRecorder:
         return summary
 
     def _extract_formats(self) -> Dict[str, Dict[str, Any]]:
-        """提取每個工具的輸入/輸出格式."""
+        "Extract input/output format of each tool.""
         formats = {}
         for execution in self.tool_executions:
             tool_name = execution["tool_name"]
@@ -125,7 +125,7 @@ class ComprehensiveToolRecorder:
                     "example_outputs": [],
                 }
 
-            # 保存示例
+            # Save examples
             if len(formats[tool_name]["example_inputs"]) < 2:
                 formats[tool_name]["example_inputs"].append(
                     execution["input_format"]["parameters"]
@@ -142,23 +142,23 @@ class ComprehensiveToolRecorder:
 
 @pytest.fixture(scope="session", autouse=True)
 def auto_save_report():
-    """自動保存報告."""
+    "Auto-save report.""
     yield
     recorder = ComprehensiveToolRecorder()
     output_dir = Path("/app/test-results/agent_session_messages")
     output_file, report = recorder.save_report(output_dir)
-    print(f"\n✅ 工具測試報告已自動生成:")
-    print(f"   位置: {output_file}")
-    print(f"   測試的工具數: {report['metadata']['total_tools_tested']}")
-    print(f"   成功執行: {report['metadata']['successful_executions']}")
-    print(f"   總耗時: {report['metadata']['total_duration_seconds']:.2f} 秒")
+    print(f"\nTool test report auto-generated:")
+    print(f"Location: {output_file}")
+    print(f"Tools tested: {report['metadata']['total_tools_tested']}")
+    print(f"Successful executions: {report['metadata']['successful_executions']}")
+    print(f"Total duration: {report['metadata']['total_duration_seconds']:.2f} seconds")
 
 
 class TestComprehensiveTools:
-    """綜合工具測試."""
+    """Comprehensive tool tests."""
 
     def test_01_glob_tool_basic(self):
-        """01. Glob 工具 - 基礎文件列表."""
+        """01. Glob tool - basic file listing."""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Glob"
         input_params = {"pattern": "**/*.py", "path": "/workspace"}
@@ -184,7 +184,7 @@ class TestComprehensiveTools:
         assert output["total_count"] == 3
 
     def test_02_glob_tool_advanced(self):
-        """02. Glob 工具 - 進階模式."""
+        "02. Glob tool - advanced mode.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Glob"
         input_params = {
@@ -213,7 +213,7 @@ class TestComprehensiveTools:
         assert len(output["by_extension"]) == 3
 
     def test_03_read_tool_basic(self):
-        """03. Read 工具 - 讀取文本文件."""
+        "03. Read tool - read text file.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Read"
         input_params = {"file_path": "/workspace/README.md"}
@@ -237,7 +237,7 @@ class TestComprehensiveTools:
         assert output["encoding"] == "utf-8"
 
     def test_04_read_tool_json(self):
-        """04. Read 工具 - 讀取 JSON 文件."""
+        "04. Read tool - read JSON file.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Read"
         input_params = {"file_path": "/workspace/package.json"}
@@ -261,7 +261,7 @@ class TestComprehensiveTools:
         assert output["is_json"] is True
 
     def test_05_grep_tool_basic(self):
-        """05. Grep 工具 - 基礎搜索."""
+        "05. Grep tool - basic search.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Grep"
         input_params = {
@@ -294,7 +294,7 @@ class TestComprehensiveTools:
         assert output["matches_found"] == 15
 
     def test_06_grep_tool_advanced(self):
-        """06. Grep 工具 - 進階搜索."""
+        "06. Grep tool - advanced search.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Grep"
         input_params = {
@@ -327,7 +327,7 @@ class TestComprehensiveTools:
         assert output["matches_found"] == 28
 
     def test_07_bash_tool_basic(self):
-        """07. Bash 工具 - 基礎命令."""
+        "07. Bash tool - basic command.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Bash"
         input_params = {
@@ -354,7 +354,7 @@ class TestComprehensiveTools:
         assert output["exit_code"] == 0
 
     def test_08_bash_tool_complex(self):
-        """08. Bash 工具 - 複雜命令."""
+        "08. Bash tool - complex command.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Bash"
         input_params = {
@@ -381,7 +381,7 @@ class TestComprehensiveTools:
         assert int(output["stdout"]) == 45
 
     def test_09_write_tool_basic(self):
-        """09. Write 工具 - 創建新文件."""
+        "09. Write tool - create new file.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Write"
         input_params = {
@@ -408,7 +408,7 @@ class TestComprehensiveTools:
         assert output["status"] == "created"
 
     def test_10_write_tool_json(self):
-        """10. Write 工具 - 寫入 JSON 文件."""
+        "10. Write tool - write JSON file.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Write"
         input_params = {
@@ -434,7 +434,7 @@ class TestComprehensiveTools:
         assert output["is_valid_json"] is True
 
     def test_11_edit_tool_basic(self):
-        """11. Edit 工具 - 編輯文件."""
+        "11. Edit tool - edit file.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Edit"
         input_params = {
@@ -462,7 +462,7 @@ class TestComprehensiveTools:
         assert output["status"] == "modified"
 
     def test_12_todo_write_tool(self):
-        """12. TodoWrite 工具 - 任務管理."""
+        "12. TodoWrite tool - task management.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "TodoWrite"
         input_params = {
@@ -506,7 +506,7 @@ class TestComprehensiveTools:
         assert output["todos_created"] == 3
 
     def test_13_task_tool_explore(self):
-        """13. Task 工具 - Explore 代理."""
+        "13. Task tool - Explore agent.""
         recorder = ComprehensiveToolRecorder()
         tool_name = "Task"
         input_params = {

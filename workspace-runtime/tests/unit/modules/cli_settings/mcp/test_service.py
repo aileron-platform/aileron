@@ -1,6 +1,6 @@
-"""CLI MCP Service 單元測試
+"""CLI MCP Service unit tests
 
-測試 Gemini、Codex、OpenCode 三工具的 MCP CRUD、import/export、toggle 功能。
+Test Gemini, Codex, OpenCode MCP CRUD, import/export, toggle functionality.
 """
 
 from __future__ import annotations
@@ -321,7 +321,7 @@ class TestCodexMcp:
         assert result.mcpServers["srv"].enabled is True
 
     def test_codex_http_server(self, tmp_path: Path, workspace_path: Path):
-        """Codex HTTP server: 依 url 有無判斷"""
+        "Codex HTTP server: determine based on url presence"""
         svc = self._make_service(tmp_path)
         svc.create_servers(
             "ws1",
@@ -351,16 +351,16 @@ class TestCodexMcp:
         result = svc.list_servers("ws1", CliMcpScope.USER)
         assert "user-srv" in result.scopes[0].mcpServers
 
-        # 驗證寫入位置
+        # Verify write location
         user_path = tmp_path / "user" / "config.toml"
         assert user_path.exists()
 
 
-# === OpenCode 測試 ========================================================
+# === OpenCode tests =========================================================
 
 
 class TestOpenCodeMcp:
-    """OpenCode MCP 測試 (JSON, mcp, supports toggle, 格式轉換)"""
+    "OpenCode MCP tests (JSON, mcp, supports toggle, format conversion)"""
 
     def _make_service(self, tmp_path: Path) -> CliMcpService:
         config = _make_json_config(
@@ -374,7 +374,7 @@ class TestOpenCodeMcp:
         """OpenCode stdio: command list <-> command + args"""
         svc = self._make_service(tmp_path)
 
-        # 從統一格式建立
+        # Create from unified format
         svc.create_servers(
             "ws1",
             CliMcpScope.PROJECT,
@@ -390,7 +390,7 @@ class TestOpenCodeMcp:
             ),
         )
 
-        # 驗證原生格式
+        # Verify native format
         json_path = workspace_path / "settings.json"
         data = _read_json(json_path)
         native = data["mcp"]["local-srv"]
@@ -398,7 +398,7 @@ class TestOpenCodeMcp:
         assert native["command"] == ["npx", "-y", "my-mcp-server"]
         assert native["environment"] == {"DEBUG": "true"}
 
-        # 讀回統一格式
+        # Read back unified format
         result = svc.get_server("ws1", CliMcpScope.PROJECT, "local-srv")
         srv = result.mcpServers["local-srv"]
         assert srv.type == CliMcpTransportType.STDIO
@@ -424,14 +424,14 @@ class TestOpenCodeMcp:
             ),
         )
 
-        # 驗證原生格式
+        # Verify native format
         json_path = workspace_path / "settings.json"
         data = _read_json(json_path)
         native = data["mcp"]["remote-srv"]
         assert native["type"] == "remote"
         assert native["url"] == "http://localhost:9090"
 
-        # 讀回統一格式
+        # Read back unified format
         result = svc.get_server("ws1", CliMcpScope.PROJECT, "remote-srv")
         srv = result.mcpServers["remote-srv"]
         assert srv.type == CliMcpTransportType.HTTP
@@ -450,7 +450,7 @@ class TestOpenCodeMcp:
         assert result.mcpServers["srv"].enabled is False
 
     def test_opencode_native_read(self, tmp_path: Path, workspace_path: Path):
-        """直接寫入 OpenCode 原生格式，確認能正確讀取"""
+        """Write OpenCode native format directly, verify it reads correctly"""
         native_data = {
             "mcp": {
                 "filesystem": {
@@ -523,7 +523,7 @@ class TestOpenCodeMcp:
         assert "srv" in result.updated
 
 
-# === Config Strategies 測試 ===============================================
+# === Config Strategies tests ==============================================
 
 
 class TestJsonConfigStrategy:
@@ -533,7 +533,7 @@ class TestJsonConfigStrategy:
         assert result == {}
 
     def test_read_jsonc_comments(self, tmp_path: Path):
-        """測試 JSONC 註解移除"""
+        "Test JSONC comment removal"""
         path = tmp_path / "test.json"
         path.write_text(
             '{\n  // comment\n  "key": "value" /* block comment */\n}',
@@ -580,14 +580,14 @@ class TestTomlConfigStrategy:
         assert path.exists()
 
 
-# === 跨工具參數化測試 =====================================================
+# === Cross-tool parameterized tests =============================================
 
 
 @pytest.fixture(params=["gemini", "codex", "opencode"])
 def tool_service(
     request, tmp_path: Path, workspace_path: Path
 ) -> tuple[str, CliMcpService]:
-    """參數化 fixture: 回傳 (tool_name, service)"""
+    "Parameterized fixture: return (tool_name, service)"""
     tool_name = request.param
     if tool_name == "gemini":
         config = _make_json_config(
@@ -603,7 +603,7 @@ def tool_service(
 
 
 class TestCrossToolCrud:
-    """跨工具的基本 CRUD 測試"""
+    "Cross-tool basic CRUD tests"""
 
     def test_create_get_delete(self, tool_service: tuple[str, CliMcpService]):
         tool_name, svc = tool_service

@@ -142,7 +142,7 @@ class TestScopeNormalization:
         assert result == DocumentScope.PLUGIN
 
     def test_normalize_optional_scope_none(self, mcp_service):
-        """測試正規化 None scope"""
+        """Test normalizing None scope"""
         # Act
         result = mcp_service._normalize_optional_scope(None)
 
@@ -151,11 +151,11 @@ class TestScopeNormalization:
 
 
 class TestPathResolution:
-    """測試路徑解析"""
+    """Test path resolution"""
 
     @patch("app.modules.claude_code.mcp.service.workspace_root")
     def test_project_file_path(self, mock_workspace_root, mcp_service, workspace_id, tmp_path):
-        """測試 project 文件路徑"""
+        """Test project file path"""
         # Arrange
         mock_workspace_root.return_value = tmp_path
 
@@ -166,7 +166,7 @@ class TestPathResolution:
         assert result == tmp_path / ".mcp.json"
 
     def test_local_file_path(self, mcp_service):
-        """測試 local 文件路徑"""
+        """Test local file path"""
         # Act
         result = mcp_service._local_file()
 
@@ -174,7 +174,7 @@ class TestPathResolution:
         assert result == Path.home() / ".claude.json"
 
     def test_user_file_path(self, mcp_service):
-        """測試 user 文件路徑"""
+        """Test user file path"""
         # Act
         result = mcp_service._user_file()
 
@@ -183,7 +183,7 @@ class TestPathResolution:
 
     @patch("app.modules.claude_code.mcp.service.workspace_root")
     def test_possible_user_project_keys(self, mock_workspace_root, mcp_service, workspace_id, tmp_path):
-        """測試可能的 user project keys"""
+        """Test possible user project keys"""
         # Arrange
         mock_workspace_root.return_value = tmp_path
 
@@ -193,11 +193,11 @@ class TestPathResolution:
         # Assert
         assert isinstance(result, list)
         assert len(result) > 0
-        assert "/workspace" in result  # 最常見的 key
+        assert "/workspace" in result  # Most common key
 
     @patch("app.modules.claude_code.mcp.service.workspace_root")
     def test_primary_user_project_key(self, mock_workspace_root, mcp_service, workspace_id, tmp_path):
-        """測試主要 user project key"""
+        """Test primary user project key"""
         # Arrange
         mock_workspace_root.return_value = tmp_path
 
@@ -209,10 +209,10 @@ class TestPathResolution:
 
 
 class TestDecodeServers:
-    """測試解碼 servers"""
+    """Test decoding servers"""
 
     def test_decode_servers_valid(self, mcp_service):
-        """測試解碼有效的 servers"""
+        """Test decoding valid servers"""
         # Arrange
         payload = {
             "server1": {
@@ -235,7 +235,7 @@ class TestDecodeServers:
         assert result["server1"].config.command == "cmd1"
 
     def test_decode_servers_invalid_config(self, mcp_service):
-        """測試解碼無效配置時跳過"""
+        """Test skipping invalid config during decode"""
         # Arrange
         payload = {
             "valid": {
@@ -243,7 +243,7 @@ class TestDecodeServers:
                 "command": "cmd",
             },
             "invalid": {
-                "type": "invalid_type",  # 無效類型
+                "type": "invalid_type",  # Invalid type
             },
         }
 
@@ -256,7 +256,7 @@ class TestDecodeServers:
         assert "invalid" not in result
 
     def test_decode_servers_empty_name(self, mcp_service):
-        """測試空名稱被跳過"""
+        """Test empty names are skipped"""
         # Arrange
         payload = {
             "": {
@@ -272,7 +272,7 @@ class TestDecodeServers:
         assert len(result) == 0
 
     def test_decode_servers_non_dict_value(self, mcp_service):
-        """測試非字典值被跳過"""
+        """Test non-dict values are skipped"""
         # Arrange
         payload = {
             "server": "not a dict",
@@ -286,10 +286,10 @@ class TestDecodeServers:
 
 
 class TestEncodeServers:
-    """測試編碼 servers"""
+    """Test encoding servers"""
 
     def test_encode_servers(self, mcp_service, sample_server_entry):
-        """測試編碼 servers"""
+        """Test encoding servers"""
         # Arrange
         entries = {
             "server1": sample_server_entry,
@@ -304,7 +304,7 @@ class TestEncodeServers:
         assert result["server1"]["type"] == "stdio"
 
     def test_encode_servers_sorted(self, mcp_service, sample_server_config):
-        """測試編碼時排序"""
+        """Test sorting during encoding"""
         # Arrange
         entries = {
             "z-server": McpServerEntry("z-server", sample_server_config),
@@ -321,10 +321,10 @@ class TestEncodeServers:
 
 
 class TestPreparePayload:
-    """測試準備 payload"""
+    """Test preparing payload"""
 
     def test_prepare_payload_valid(self, mcp_service, sample_server_config):
-        """測試準備有效 payload"""
+        """Test preparing valid payload"""
         # Arrange
         payload = {
             "server1": sample_server_config,
@@ -340,7 +340,7 @@ class TestPreparePayload:
         assert "server2" in result
 
     def test_prepare_payload_empty_name(self, mcp_service, sample_server_config):
-        """測試跳過空名稱"""
+        """Test skipping empty names"""
         # Arrange
         payload = {
             "": sample_server_config,
@@ -356,7 +356,7 @@ class TestPreparePayload:
         assert "valid" in result
 
     def test_prepare_payload_strip_whitespace(self, mcp_service, sample_server_config):
-        """測試去除名稱空白"""
+        """Test stripping name whitespace"""
         # Arrange
         payload = {
             " server1 ": sample_server_config,
@@ -370,7 +370,7 @@ class TestPreparePayload:
 
 
 class TestImportServers:
-    """測試匯入 servers"""
+    """Test importing servers"""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -378,7 +378,7 @@ class TestImportServers:
     def test_import_servers_create_new(
         self, mock_resolve, mock_read, mock_write, mcp_service, workspace_id, sample_server_config, tmp_path
     ):
-        """測試匯入新 servers"""
+        """Test importing new servers"""
         # Arrange
         mock_resolve.return_value = tmp_path
         mock_read.return_value = {"mcpServers": {}}
@@ -405,7 +405,7 @@ class TestImportServers:
     def test_import_servers_skip_existing(
         self, mock_resolve, mock_read, mock_write, mcp_service, workspace_id, sample_server_config, tmp_path
     ):
-        """測試跳過已存在的 servers"""
+        """Test skipping existing servers"""
         # Arrange
         mock_resolve.return_value = tmp_path
         mock_read.return_value = {
@@ -439,7 +439,7 @@ class TestImportServers:
     def test_import_servers_overwrite_existing(
         self, mock_resolve, mock_read, mock_write, mcp_service, workspace_id, sample_server_config, tmp_path
     ):
-        """測試覆蓋已存在的 servers"""
+        """Test overwriting existing servers"""
         # Arrange
         mock_resolve.return_value = tmp_path
         mock_read.return_value = {
@@ -500,7 +500,7 @@ class TestImportServersFromFile:
     def test_import_from_file_success(
         self, mock_resolve, mock_read, mock_write, mcp_service, workspace_id, tmp_path
     ):
-        """測試成功從文件匯入"""
+        """Test successful import from file"""
         # Arrange
         mock_resolve.return_value = tmp_path
         mock_read.return_value = {"mcpServers": {}}

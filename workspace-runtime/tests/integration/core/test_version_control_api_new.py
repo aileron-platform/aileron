@@ -57,7 +57,7 @@ class StubGitService:
         )
 
     def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
-        """取得 Git 狀態"""
+        """Get Git status"""
         return VersionControlStatus(
             branch=self.current_branch,
             ahead=self.ahead,
@@ -78,7 +78,7 @@ class StubGitService:
         context_id: Optional[str] = None,
         include_metadata: bool = True,
     ) -> dict[str, Any]:
-        """取得分支列表"""
+        """Get branch list"""
         branches = self.branches.copy()
         if search:
             branches = [b for b in branches if search.lower() in b["name"].lower()]
@@ -86,8 +86,8 @@ class StubGitService:
         return {"branches": branches}
 
     def checkout_branch(self, workspace_id: str, branch_name: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """切換分支"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Switch branch"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -96,7 +96,7 @@ class StubGitService:
         create = payload_dict.get("create", False)
 
         if create and branch_name not in [b["name"] for b in self.branches]:
-            # 建立新分支
+            Create new branch
             new_branch = BranchInfo(
                 name=branch_name,
                 displayName=branch_name,
@@ -114,12 +114,12 @@ class StubGitService:
                 "stashedChanges": None
             }
         else:
-            # 切換現有分支
+            # Switch existing branch
             existing = [b for b in self.branches if b["name"] == branch_name]
             if not existing:
                 raise VersionControlError("Branch not found")
 
-            # 更新所有分支的 isActive 狀態
+            # Update isActive status for all branches
             for branch in self.branches:
                 branch["isActive"] = branch["name"] == branch_name
             self.current_branch = branch_name
@@ -136,7 +136,7 @@ class StubGitService:
         page_size: int = 100,
         context_id: Optional[str] = None,
     ) -> ChangesResponse:
-        """取得變更列表"""
+        """Get changes list"""
         staged_changes = [FileChange(
             name=path,
             path=path,
@@ -175,8 +175,8 @@ class StubGitService:
         )
 
     def stage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """暫存檔案"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Stage file"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -201,8 +201,8 @@ class StubGitService:
         }
 
     def unstage(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """取消暫存"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Unstage file"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -223,8 +223,8 @@ class StubGitService:
         }
 
     def discard(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """丟棄變更"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Discard changes"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -244,8 +244,8 @@ class StubGitService:
         }
 
     def commit(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """建立提交"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Create commit"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -288,18 +288,18 @@ class StubGitService:
         search: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        """提交列表"""
+        """Commits list"""
         start = (page - 1) * page_size
         end = start + page_size
 
-        # 轉換 commit 資料結構以符合 API 模型
+        # Convert commit data structure to match API model
         items = []
-        for commit in self.commits[start:end][::-1]:  # 最新的在前
+        for commit in self.commits[start:end][::-1]:  # Newest first
             item = {
                 "id": commit["id"],
                 "message": commit["message"],
-                "author": f"{commit['author']['name']} <{commit['author']['email']}>",  # 字串格式
-                "timestamp": int(datetime.now(timezone.utc).timestamp()),  # 整數格式
+                "author": f"{commit['author']['name']} <{commit['author']['email']}>",  # String format
+                "timestamp": int(datetime.now(timezone.utc).timestamp()),  # Integer format
                 "branch": self.current_branch,
                 "additions": 0,
                 "deletions": 0,
@@ -315,7 +315,7 @@ class StubGitService:
         }
 
     def get_commit(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
-        """取得提交詳細"""
+        """Get commit details"""
         for commit in self.commits:
             if commit["id"] == commit_id:
                 return {
@@ -330,16 +330,16 @@ class StubGitService:
         raise VersionControlError("Commit not found")
 
     def get_commit_files(self, workspace_id: str, commit_id: str, context_id: Optional[str] = None) -> dict[str, Any]:
-        """取得提交檔案差異"""
-        # 簡化實作
+        """Get commit file diff"""
+        # Simplified implementation
         return {
             "commitId": commit_id,
             "files": []
         }
 
     def push(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """推送"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Push"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -352,8 +352,8 @@ class StubGitService:
         }
 
     def pull(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """拉取"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Pull"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -367,8 +367,8 @@ class StubGitService:
         }
 
     def fetch(self, workspace_id: str, payload, context_id: Optional[str] = None) -> dict[str, Any]:
-        """同步遠端引用"""
-        # 處理 payload 可能是 Pydantic 模型或字典
+        """Sync remote refs"""
+        # Handle payload possibly being Pydantic model or dict
         if hasattr(payload, 'model_dump'):
             payload_dict = payload.model_dump()
         else:
@@ -389,7 +389,7 @@ class StubGitService:
         include_metadata: bool = False,
         context_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        """取得差異"""
+        """Get diff"""
         return {
             "path": path,
             "base": base or "HEAD",
@@ -406,7 +406,7 @@ class StubGitService:
         revision: Optional[str] = None,
         context_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        """讀取檔案內容"""
+        """Read file content"""
         import base64
         content = base64.b64encode(b"file content").decode()
 
@@ -420,7 +420,7 @@ class StubGitService:
 
 
 def _get_git_service_stub():
-    """取得 GitService stub 的工廠函數"""
+    """Get GitService stub factory function"""
     workspace_path = Path("/tmp/workspace")
     return StubGitService(workspace_path)
 
@@ -431,7 +431,7 @@ def _get_git_service_stub():
 
 
 def test_vc_001_get_git_status_normal(client):
-    """VC-001 取得正常 Git 狀態"""
+    """VC-001 Get normal Git status"""
     service = StubGitService(Path("/tmp/workspace"))
     service.current_branch = "main"
     service.staged_files = ["file1.txt"]
@@ -451,10 +451,10 @@ def test_vc_001_get_git_status_normal(client):
 
 
 def test_vc_002_list_branches_with_remote(client):
-    """VC-002 列出本地與遠端分支"""
+    """VC-002 List local and remote branches"""
     service = StubGitService(Path("/tmp/workspace"))
 
-    # 設定分支資料
+    # Set branch data
     service.branches = [
         {
             "name": "main",
@@ -487,7 +487,7 @@ def test_vc_002_list_branches_with_remote(client):
 
 
 def test_vc_003_branches_search_filter(client):
-    """VC-003 使用關鍵字過濾分支"""
+    """VC-003 Filter branches by keyword"""
     service = StubGitService(Path("/tmp/workspace"))
 
     service.branches = [
@@ -521,7 +521,7 @@ def test_vc_003_branches_search_filter(client):
 
 
 def test_vc_004_checkout_existing_branch(client):
-    """VC-004 切換現有分支"""
+    """VC-004 Switch existing branch"""
     service = StubGitService(Path("/tmp/workspace"))
 
     service.branches = [
@@ -558,7 +558,7 @@ def test_vc_004_checkout_existing_branch(client):
 
 
 def test_vc_005_create_and_checkout_new_branch(client):
-    """VC-005 建立新分支並切換"""
+    """VC-005 Create new branch and switch"""
     service = StubGitService(Path("/tmp/workspace"))
 
     service.branches = [
@@ -586,7 +586,7 @@ def test_vc_005_create_and_checkout_new_branch(client):
 
 
 def test_vc_006_get_all_changes(client):
-    """VC-006 取得全部變更"""
+    """VC-006 Get all changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt", "file2.txt"]
     service.unstaged_files = ["file3.txt"]
@@ -604,7 +604,7 @@ def test_vc_006_get_all_changes(client):
 
 
 def test_vc_007_scope_filter_changes(client):
-    """VC-007 scope 過濾變更"""
+    """VC-007 Scope filter changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
     service.unstaged_files = ["file2.txt"]
@@ -621,7 +621,7 @@ def test_vc_007_scope_filter_changes(client):
 
 
 def test_vc_008_stage_files(client):
-    """VC-008 暫存檔案"""
+    """VC-008 Stage file"""
     service = StubGitService(Path("/tmp/workspace"))
     service.unstaged_files = ["file1.txt", "file2.txt"]
     service.untracked_files = ["dir/"]
@@ -639,7 +639,7 @@ def test_vc_008_stage_files(client):
 
 
 def test_vc_009_unstage_files(client):
-    """VC-009 取消暫存"""
+    """VC-009 Unstage"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt", "file2.txt"]
 
@@ -656,7 +656,7 @@ def test_vc_009_unstage_files(client):
 
 
 def test_vc_010_discard_changes(client):
-    """VC-010 丟棄未暫存變更"""
+    """VC-010 Discard unstaged changes"""
     service = StubGitService(Path("/tmp/workspace"))
     service.unstaged_files = ["README.md"]
 
@@ -672,7 +672,7 @@ def test_vc_010_discard_changes(client):
 
 
 def test_vc_011_create_commit(client):
-    """VC-011 建立有效提交"""
+    """VC-011 Create valid commit"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
 
@@ -693,7 +693,7 @@ def test_vc_011_create_commit(client):
 
 
 def test_vc_012_commit_missing_message(client):
-    """VC-012 缺少訊息被拒絕"""
+    """VC-012 Missing message rejected"""
     service = StubGitService(Path("/tmp/workspace"))
     service.staged_files = ["file1.txt"]
 
@@ -707,9 +707,9 @@ def test_vc_012_commit_missing_message(client):
 
 
 def test_vc_013_list_commits(client):
-    """VC-013 分頁查詢提交"""
+    """VC-013 Paginated commits query"""
     service = StubGitService(Path("/tmp/workspace"))
-    # 建立 5 筆 commit
+    # Create 5 commits
     for i in range(5):
         service.commits.append({
             "id": f"commit_{i+1}",
@@ -730,7 +730,7 @@ def test_vc_013_list_commits(client):
 
 
 def test_vc_014_get_commit_detail(client):
-    """VC-014 取得單筆 commit 詳細"""
+    """VC-014 Get single commit details"""
     service = StubGitService(Path("/tmp/workspace"))
     commit = {
         "id": "commit_123",
@@ -750,7 +750,7 @@ def test_vc_014_get_commit_detail(client):
 
 
 def test_vc_015_commit_not_found(client):
-    """VC-015 Commit 不存在"""
+    """VC-015 Commit does not exist"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -760,7 +760,7 @@ def test_vc_015_commit_not_found(client):
 
 
 def test_vc_016_push_changes(client):
-    """VC-016 推送成功"""
+    """VC-016 Push successful"""
     service = StubGitService(Path("/tmp/workspace"))
     service.current_branch = "main"
 
@@ -777,7 +777,7 @@ def test_vc_016_push_changes(client):
 
 
 def test_vc_017_pull_changes(client):
-    """VC-017 拉取遠端更新"""
+    """VC-017 Pull remote updates"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -794,7 +794,7 @@ def test_vc_017_pull_changes(client):
 
 
 def test_vc_018_fetch_changes(client):
-    """VC-018 同步遠端引用"""
+    """VC-018 Sync remote refs"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -809,7 +809,7 @@ def test_vc_018_fetch_changes(client):
 
 
 def test_vc_019_get_diff(client):
-    """VC-019 差異輸出"""
+    """VC-019 Diff output"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):
@@ -825,7 +825,7 @@ def test_vc_019_get_diff(client):
 
 
 def test_vc_020_read_blob(client):
-    """VC-020 讀取指定版本檔案"""
+    """VC-020 Read file at specific version"""
     service = StubGitService(Path("/tmp/workspace"))
 
     with override_dependency(get_git_service, lambda: service):

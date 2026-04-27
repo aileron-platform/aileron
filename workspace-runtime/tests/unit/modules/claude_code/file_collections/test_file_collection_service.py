@@ -96,7 +96,7 @@ class TestResolveScopePath:
 
     @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
     def test_resolve_scope_path_project(self, mock_resolve, file_collection_service, tmp_path):
-        """測試解析 project scope 路徑."""
+        """Test resolving project scope path."""
         # Arrange
         mock_resolve.return_value = tmp_path
 
@@ -109,7 +109,7 @@ class TestResolveScopePath:
 
     @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
     def test_resolve_scope_path_scripts(self, mock_resolve, tmp_path):
-        """測試解析 scripts collection 路徑."""
+        """Test resolving scripts collection path."""
         # Arrange
         mock_resolve.return_value = tmp_path
         with patch("app.modules.claude_code.file_collections.service.SettingsService"), \
@@ -127,7 +127,7 @@ class TestResolveScopePath:
 
     @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
     def test_resolve_scope_path_default_to_project(self, mock_resolve, file_collection_service, tmp_path):
-        """測試預設使用 project scope."""
+        """Test defaulting to project scope."""
         # Arrange
         mock_resolve.return_value = tmp_path
 
@@ -139,10 +139,10 @@ class TestResolveScopePath:
 
 
 class TestGetFileType:
-    """測試檔案類型識別."""
+    """Test file type identification."""
 
     def test_get_file_type_markdown(self, file_collection_service):
-        """測試識別 Markdown 檔案."""
+        """Test identifying Markdown file."""
         # Arrange
         file_path = Path("/test/file.md")
 
@@ -153,7 +153,7 @@ class TestGetFileType:
         assert result == FileType.MARKDOWN
 
     def test_get_file_type_python(self, file_collection_service):
-        """測試識別 Python 檔案."""
+        """Test identifying Python file."""
         # Arrange
         file_path = Path("/test/script.py")
 
@@ -164,7 +164,7 @@ class TestGetFileType:
         assert result == FileType.PYTHON
 
     def test_get_file_type_typescript(self, file_collection_service):
-        """測試識別 TypeScript 檔案."""
+        """Test identifying TypeScript file."""
         # Arrange
         file_path = Path("/test/app.ts")
 
@@ -175,7 +175,7 @@ class TestGetFileType:
         assert result == FileType.TYPESCRIPT
 
     def test_get_file_type_unknown(self, file_collection_service):
-        """測試未知檔案類型."""
+        """Test unknown file type."""
         # Arrange
         file_path = Path("/test/file.unknown")
 
@@ -187,10 +187,10 @@ class TestGetFileType:
 
 
 class TestParseFrontMatter:
-    """測試 Front Matter 解析."""
+    """Test Front Matter parsing."""
 
     def test_parse_front_matter_with_metadata(self, file_collection_service):
-        """測試解析包含 metadata 的內容."""
+        """Test parsing content with metadata."""
         # Arrange
         content = """---
 title: Test Skill
@@ -210,7 +210,7 @@ description: A test skill
         assert "# Skill Content" in body
 
     def test_parse_front_matter_without_metadata(self, file_collection_service):
-        """測試解析不含 metadata 的內容."""
+        """Test parsing content without metadata."""
         # Arrange
         content = "# Simple Content"
 
@@ -239,11 +239,11 @@ description: A test skill
 
 
 class TestGetPluginSkills:
-    """測試獲取 plugin skills."""
+    "Test getting plugin skills.""
 
     @patch("app.modules.claude_code.file_collections.service.get_plugin_loader")
     def test_get_plugin_skills_empty(self, mock_get_loader, file_collection_service):
-        """測試獲取空的 plugin skills."""
+        "Test getting empty plugin skills.""
         # Arrange
         mock_loader = MagicMock()
         mock_loader.get_all_skills.return_value = []
@@ -256,7 +256,7 @@ class TestGetPluginSkills:
         assert result == []
 
     def test_get_plugin_skills_with_data(self, file_collection_service):
-        """測試獲取包含數據的 plugin skills."""
+        "Test getting plugin skills with data.""
         # Arrange
         mock_loader = MagicMock()
         mock_loader.get_all_skills.return_value = []
@@ -304,12 +304,12 @@ class TestGetPluginSkills:
 
 
 class TestGetTreeWithMetadata:
-    """測試獲取帶元數據的檔案樹."""
+    "Test getting file tree with metadata.""
 
     @patch.object(FileCollectionService, 'get_tree')
     @patch.object(FileCollectionService, 'read_file')
     def test_get_tree_with_metadata_success(self, mock_read_file, mock_get_tree, file_collection_service):
-        """測試成功獲取帶元數據的檔案樹."""
+        "Test successfully getting file tree with metadata.""
         # Arrange
         mock_get_tree.return_value = {
             "nodes": [
@@ -336,7 +336,7 @@ class TestGetTreeWithMetadata:
 
     @patch.object(FileCollectionService, 'get_tree')
     def test_get_tree_with_metadata_no_files(self, mock_get_tree, file_collection_service):
-        """測試沒有檔案的情況."""
+        "Test no files case.""
         # Arrange
         mock_get_tree.return_value = {"nodes": []}
 
@@ -368,11 +368,11 @@ class TestGetTreeWithMetadata:
 
 
 class TestReadWriteOperations:
-    """測試讀寫操作."""
+    "Test read write operations.""
 
     @patch.object(FileCollectionService, 'resolve_scope_path')
     def test_read_file_simple(self, mock_resolve, file_collection_service, tmp_path):
-        """測試簡單讀取檔案."""
+        "Test simple file reading.""
         # Arrange
         test_file = tmp_path / "test.md"
         test_file.write_text("Test content")
@@ -387,7 +387,7 @@ class TestReadWriteOperations:
 
     @patch.object(FileCollectionService, 'resolve_scope_path')
     def test_write_file_simple(self, mock_resolve, file_collection_service, tmp_path):
-        """測試簡單寫入檔案."""
+        "Test simple file writing.""
         # Arrange
         test_file = tmp_path / "new.md"
         mock_resolve.return_value = test_file

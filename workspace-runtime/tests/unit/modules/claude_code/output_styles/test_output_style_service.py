@@ -1,4 +1,4 @@
-"""Output Style Service 單元測試"""
+"""Output Style Service unit tests"""
 
 from __future__ import annotations
 
@@ -21,11 +21,11 @@ def output_style_service():
 
 
 class TestListScopes:
-    """測試列出 output styles 功能."""
+    "Test listing output styles functionality.""
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_list_scopes_all(self, mock_repo_class, output_style_service):
-        """測試列出所有 scope 的 output styles."""
+        "Test listing all scope output styles.""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -42,7 +42,7 @@ class TestListScopes:
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_list_scopes_project_only(self, mock_repo_class, output_style_service):
-        """測試只列出 project scope 的 output styles."""
+        "Test listing only project scope output styles.""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -58,11 +58,11 @@ class TestListScopes:
 
 
 class TestGetScope:
-    """測試獲取特定 scope 的 output styles."""
+    "Test getting specific scope output styles.""
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_get_scope_success(self, mock_repo_class, output_style_service):
-        """測試成功獲取 scope."""
+        "Test successfully getting scope.""
         # Arrange
         workspace_id = "test-workspace"
         mock_repo = MagicMock()
@@ -79,12 +79,12 @@ class TestGetScope:
 
 
 class TestCreateDocument:
-    """測試創建 output style 文檔."""
+    "Test creating output style document.""
 
     @patch.object(OutputStyleService, "_ensure_default_selection")
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_create_document_success(self, mock_repo_class, mock_ensure_default_selection, output_style_service):
-        """測試成功創建文檔."""
+        "Test successfully creating document.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -119,11 +119,11 @@ class TestCreateDocument:
 
 
 class TestUpdateDocument:
-    """測試更新 output style 文檔."""
+    "Test updating output style document.""
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_update_document_success(self, mock_repo_class, output_style_service):
-        """測試成功更新文檔."""
+        "Test successfully updating document.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -154,11 +154,11 @@ class TestUpdateDocument:
 
 
 class TestDeleteDocument:
-    """測試刪除 output style 文檔."""
+    "Test deleting output style document.""
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_delete_document_success(self, mock_repo_class, output_style_service):
-        """測試成功刪除文檔."""
+        "Test successfully deleting document.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -178,14 +178,14 @@ class TestDeleteDocument:
 
 
 class TestDefaultSelectionHelpers:
-    """測試 output style 預設選擇 helper。"""
+    """Test output style default selection helper."" "
 
     @patch("app.modules.claude_code.output_styles.service.write_json_file")
     @patch("app.modules.claude_code.output_styles.service.read_json_file")
     def test_ensure_default_selection_sets_full_file_name(
         self, mock_read_json_file, mock_write_json_file, output_style_service, tmp_path
     ):
-        """當 settings 尚未設定 outputStyle 時，應寫入完整檔名。"""
+        """When outputStyle not yet set in settings, should write full filename."" "
         settings_path = tmp_path / "settings.local.json"
         mock_read_json_file.return_value = {}
 
@@ -203,7 +203,7 @@ class TestDefaultSelectionHelpers:
     def test_ensure_default_selection_keeps_existing_selection(
         self, mock_read_json_file, mock_write_json_file, output_style_service, tmp_path
     ):
-        """已有 outputStyle 時，不應覆寫。"""
+        """When outputStyle already exists, should not overwrite."" "
         settings_path = tmp_path / "settings.local.json"
         mock_read_json_file.return_value = {"outputStyle": "Existing.md"}
 
@@ -218,7 +218,7 @@ class TestDefaultSelectionHelpers:
     def test_clear_default_selection_deletes_empty_settings_file(
         self, mock_read_json_file, output_style_service, tmp_path
     ):
-        """刪除最後一個 outputStyle 時，應移除空的 settings 檔案。"""
+        """When deleting last outputStyle, should remove empty settings file."""
         settings_path = tmp_path / "settings.local.json"
         settings_path.write_text("{}")
         mock_read_json_file.return_value = {"outputStyle": "Learning.md"}
@@ -232,10 +232,10 @@ class TestDefaultSelectionHelpers:
 
 
 class TestServiceInitialization:
-    """測試服務初始化."""
+    "Test service initialization.""
 
     def test_service_init(self):
-        """測試服務初始化."""
+        "Test service initialization.""
         # Act
         service = OutputStyleService()
 
@@ -245,11 +245,11 @@ class TestServiceInitialization:
 
 
 class TestGetDocument:
-    """測試獲取文檔."""
+    "Test getting document.""
 
     @patch("app.modules.claude_code.output_styles.service.ScopedMarkdownRepository")
     def test_get_document_success(self, mock_repo_class, output_style_service):
-        """測試成功獲取文檔."""
+        "Test successfully getting document.""
         # Arrange
         workspace_id = "test-workspace"
         scope = DocumentScope.PROJECT
@@ -280,7 +280,7 @@ class TestGetDocument:
         mock_repo.get_record.assert_called_once()
 
     def test_get_document_not_found(self, output_style_service):
-        """測試獲取不存在的文檔."""
+        "Test getting non-existent document.""
         # Arrange
         from app.modules.claude_code.common import DocumentNotFoundError
         workspace_id = "test-workspace"
@@ -299,7 +299,7 @@ class TestGetDocument:
         assert exc_info.value.status_code == 404
 
     def test_get_document_ambiguous(self, output_style_service):
-        """測試獲取歧義文檔."""
+        "Test getting ambiguous document.""
         # Arrange
         from app.modules.claude_code.common import AmbiguousDocumentError
         workspace_id = "test-workspace"
@@ -319,10 +319,10 @@ class TestGetDocument:
 
 
 class TestUpdateDocumentErrors:
-    """測試更新文檔錯誤處理."""
+    "Test updating document error handling.""
 
     def test_update_document_ambiguous(self, output_style_service):
-        """測試更新歧義文檔."""
+        "Test updating ambiguous document.""
         # Arrange
         from app.modules.claude_code.common import AmbiguousDocumentError
         workspace_id = "test-workspace"
@@ -343,7 +343,7 @@ class TestUpdateDocumentErrors:
         assert exc_info.value.status_code == 409
 
     def test_update_document_not_found_error(self, output_style_service):
-        """測試更新不存在的文檔."""
+        "Test updating non-existent document.""
         # Arrange
         from app.modules.claude_code.common import DocumentNotFoundError
         workspace_id = "test-workspace"
@@ -365,10 +365,10 @@ class TestUpdateDocumentErrors:
 
 
 class TestDeleteDocumentErrors:
-    """測試刪除文檔錯誤處理."""
+    "Test deleting document error handling.""
 
     def test_delete_document_ambiguous(self, output_style_service):
-        """測試刪除歧義文檔."""
+        "Test deleting ambiguous document.""
         # Arrange
         from app.modules.claude_code.common import AmbiguousDocumentError
         workspace_id = "test-workspace"
@@ -387,7 +387,7 @@ class TestDeleteDocumentErrors:
         assert exc_info.value.status_code == 409
 
     def test_delete_document_not_found_error(self, output_style_service):
-        """測試刪除不存在的文檔."""
+        "Test deleting non-existent document.""
         # Arrange
         from app.modules.claude_code.common import DocumentNotFoundError
         workspace_id = "test-workspace"
@@ -407,10 +407,10 @@ class TestDeleteDocumentErrors:
 
 
 class TestCreateDocumentError:
-    """測試創建文檔錯誤處理."""
+    "Test creating document error handling.""
 
     def test_create_document_duplicate(self, output_style_service):
-        """測試創建重複文檔."""
+        "Test creating duplicate document.""
         # Arrange
         from app.modules.claude_code.common import DuplicateDocumentError
         workspace_id = "test-workspace"

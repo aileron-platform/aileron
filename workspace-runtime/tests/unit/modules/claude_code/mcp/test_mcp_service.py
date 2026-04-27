@@ -287,7 +287,7 @@ class TestGetServer:
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_get_server_success(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試成功獲取單一 server."""
+        """Test successfully getting single server."""
         # Arrange
         workspace_id = "test-workspace"
         server_name = "test-server"
@@ -311,7 +311,7 @@ class TestGetServer:
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_get_server_not_found(self, mock_resolve, mock_read_json, mcp_service, tmp_path):
-        """測試獲取不存在的 server."""
+        """Test getting non-existent server."""
         from app.modules.claude_code.mcp.service import McpServerNotFoundError
 
         # Arrange
@@ -325,7 +325,7 @@ class TestGetServer:
 
 
 class TestImportServers:
-    """測試匯入 MCP servers."""
+    """Test importing MCP servers."""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -333,7 +333,7 @@ class TestImportServers:
     def test_import_servers_create_new(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試匯入新的 servers."""
+        """Test importing new servers."""
         from app.modules.claude_code.mcp.models import McpImportRequest
 
         # Arrange
@@ -366,7 +366,7 @@ class TestImportServers:
     def test_import_servers_overwrite(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試匯入並覆蓋現有 servers."""
+        """Test importing and overwriting existing servers."""
         from app.modules.claude_code.mcp.models import McpImportRequest
 
         # Arrange
@@ -405,7 +405,7 @@ class TestImportServers:
     def test_import_servers_skip_existing(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試匯入時跳過現有 servers."""
+        "Test skipping existing servers during import.""
         from app.modules.claude_code.mcp.models import McpImportRequest
 
         # Arrange
@@ -441,7 +441,7 @@ class TestImportServers:
 
 
 class TestImportServersFromFile:
-    """測試從檔案匯入 MCP servers."""
+    "Test importing MCP servers from file.""
 
     @patch("app.modules.claude_code.mcp.service.write_json_file")
     @patch("app.modules.claude_code.mcp.service.read_json_file")
@@ -449,7 +449,7 @@ class TestImportServersFromFile:
     def test_import_from_file_success(
         self, mock_resolve, mock_read_json, mock_write_json, mcp_service, tmp_path
     ):
-        """測試從檔案成功匯入."""
+        "Test successful import from file.""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -480,7 +480,7 @@ class TestImportServersFromFile:
         assert "test-server" in result.created
 
     def test_import_from_file_invalid_json(self, mcp_service):
-        """測試匯入無效的 JSON 檔案."""
+        "Test importing invalid JSON file.""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -498,7 +498,7 @@ class TestImportServersFromFile:
             mcp_service.import_servers_from_file(workspace_id, payload)
 
     def test_import_from_file_missing_mcpservers(self, mcp_service):
-        """測試匯入缺少 mcpServers 欄位的檔案."""
+        "Test importing file missing mcpServers field.""
         from app.modules.claude_code.mcp.models import McpImportUploadRequest
 
         # Arrange
@@ -517,14 +517,14 @@ class TestImportServersFromFile:
 
 
 class TestErrorHandling:
-    """測試錯誤處理."""
+    "Test error handling.""
 
     @patch("app.modules.claude_code.mcp.service.read_json_file")
     @patch("app.modules.claude_code.mcp.service.resolve_scope_root")
     def test_create_duplicate_server(
         self, mock_resolve, mock_read_json, mcp_service, tmp_path
     ):
-        """測試創建重複的 server."""
+        "Test creating duplicate server.""
         from app.modules.claude_code.mcp.service import McpServerAlreadyExistsError
 
         # Arrange
@@ -556,7 +556,7 @@ class TestErrorHandling:
     def test_update_nonexistent_server(
         self, mock_resolve, mock_read_json, mcp_service, tmp_path
     ):
-        """測試更新不存在的 server."""
+        "Test updating non-existent server.""
         from app.modules.claude_code.mcp.service import McpServerNotFoundError
 
         # Arrange
@@ -576,20 +576,20 @@ class TestErrorHandling:
             )
 
     def test_create_empty_payload(self, mcp_service):
-        """測試創建空的 payload."""
+        "Test creating empty payload.""
         # Arrange
         from pydantic import ValidationError
 
-        # Act & Assert - Pydantic 會在創建對象時就驗證
+        # Act & Assert - Pydantic validates when creating object
         with pytest.raises(ValidationError):
             payload = McpServerCreateRequest(mcpServers={})
 
 
 class TestMcpServerEntry:
-    """測試 McpServerEntry 資料類別."""
+    """Test McpServerEntry data class."""
 
     def test_to_runtime(self):
-        """測試轉換為 runtime 模型."""
+        "Test converting to runtime model.""
         # Arrange
         config = McpServerConfig(
             type=McpTransportType.STDIO,
@@ -606,7 +606,7 @@ class TestMcpServerEntry:
         assert runtime.command == "test-command"
 
     def test_to_storage(self):
-        """測試轉換為儲存格式."""
+        "Test converting to storage format.""
         # Arrange
         config = McpServerConfig(
             type=McpTransportType.STDIO,
