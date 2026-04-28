@@ -1,4 +1,4 @@
-"""OAuthService UnitTest"""
+"""Unit Tests for OAuthService"""
 
 from __future__ import annotations
 
@@ -24,10 +24,10 @@ from app.services.oauth_service import (
 @pytest.mark.unit
 @pytest.mark.auth
 class TestPKCE:
-    """PKCE GeneratingTest"""
+    """PKCE Generation Tests"""
 
     def test_generate_pkce_returns_valid_params(self):
-        """Test：GeneratingValid的 PKCE Parameter"""
+        """Test: Generate Valid PKCE Parameters"""
         # Act
         pkce = OAuthService.generate_pkce()
 
@@ -38,7 +38,7 @@ class TestPKCE:
         assert pkce.verifier != pkce.challenge
 
     def test_generate_pkce_creates_unique_params(self):
-        """Test：每次GeneratingDifferent的 PKCE Parameter"""
+        """Test: Generate Different PKCE Parameters Each Time"""
         # Act
         pkce1 = OAuthService.generate_pkce()
         pkce2 = OAuthService.generate_pkce()
@@ -48,14 +48,14 @@ class TestPKCE:
         assert pkce1.challenge != pkce2.challenge
 
     def test_pkce_challenge_is_sha256_of_verifier(self):
-        """Test：challenge Yes verifier 的 SHA256 hash"""
+        """Test: challenge Is SHA256 Hash of verifier"""
         import hashlib
         import base64
 
         # Act
         pkce = OAuthService.generate_pkce()
 
-        # 手動計算 challenge
+        # Manually calculate challenge
         expected_challenge_bytes = hashlib.sha256(pkce.verifier.encode('utf-8')).digest()
         expected_challenge = base64.urlsafe_b64encode(expected_challenge_bytes).decode('utf-8').rstrip('=')
 
@@ -70,10 +70,10 @@ class TestPKCE:
 @pytest.mark.unit
 @pytest.mark.auth
 class TestAuthorizationURL:
-    """Authorizing URL ConstructingTest"""
+    """Authorization URL Construction Tests"""
 
     def test_build_authorization_url_with_correct_params(self):
-        """Test：ConstructingCorrectly的Authorizing URL"""
+        """Test: Construct Authorization URL Correctly"""
         from urllib.parse import unquote
 
         # Arrange
@@ -94,7 +94,7 @@ class TestAuthorizationURL:
         assert "state=test-verifier" in url
 
     def test_build_authorization_url_uses_verifier_as_state(self):
-        """Test：Use verifier 作為 state"""
+        """Test: Use verifier as state"""
         # Arrange
         pkce = PKCEParams(verifier="my-verifier-123", challenge="my-challenge-456")
 
@@ -112,11 +112,11 @@ class TestAuthorizationURL:
 @pytest.mark.unit
 @pytest.mark.auth
 class TestCodeExchange:
-    """AuthorizingCodeSwapTest"""
+    """Authorization Code Exchange Tests"""
 
     @pytest.mark.asyncio
     async def test_exchange_code_success(self):
-        """Test：SuccessSwapAuthorizingCodeGet token"""
+        """Test: Successfully Exchange Authorization Code for Token"""
         # Arrange
         code = "auth-code-123#verifier-123"
         verifier = "verifier-123"
@@ -148,7 +148,7 @@ class TestCodeExchange:
             assert result.refresh_token == "refresh-token-xyz"
             assert result.expires_at > 0
 
-            # Verify API 調用
+            # Verify API call
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
             assert call_args[0][0] == OAuthService.TOKEN_URL
@@ -159,7 +159,7 @@ class TestCodeExchange:
 
     @pytest.mark.asyncio
     async def test_exchange_code_with_invalid_format(self):
-        """Test：Invalid的 code FormatFailed"""
+        """Test: Invalid code Format Failure"""
         # Arrange
         invalid_code = "invalid-code-without-hash"
         verifier = "verifier-123"
@@ -170,7 +170,7 @@ class TestCodeExchange:
 
     @pytest.mark.asyncio
     async def test_exchange_code_with_state_mismatch(self):
-        """Test：state 不匹配Failed"""
+        """Test: State Mismatch Failure"""
         # Arrange
         code = "auth-code-123#wrong-state"
         verifier = "correct-verifier"
@@ -181,7 +181,7 @@ class TestCodeExchange:
 
     @pytest.mark.asyncio
     async def test_exchange_code_with_api_error(self):
-        """Test：API RequestFailed"""
+        """Test: API Request Failure"""
         # Arrange
         code = "auth-code-123#verifier-123"
         verifier = "verifier-123"
@@ -204,7 +204,7 @@ class TestCodeExchange:
 
     @pytest.mark.asyncio
     async def test_exchange_code_calculates_expires_at_correctly(self):
-        """Test：Correctly計算 expires_at Time戳"""
+        """Test: Correctly Calculate expires_at Timestamp"""
         # Arrange
         code = "auth-code-123#verifier-123"
         verifier = "verifier-123"
@@ -232,9 +232,9 @@ class TestCodeExchange:
             result = await OAuthService.exchange_code(code, verifier)
 
             # Assert
-            # expires_at ShouldAt當FrontTime + 3600 SecondLeftRight
+            # expires_at Should Be current time + 3600 seconds
             expected_expires_at = current_time_ms + (3600 * 1000)
-            assert abs(result.expires_at - expected_expires_at) < 5000  # Allowing 5 Second誤Poor
+            assert abs(result.expires_at - expected_expires_at) < 5000  # Allow 5 seconds error
 
 
 # ============================================================================
@@ -244,11 +244,11 @@ class TestCodeExchange:
 @pytest.mark.unit
 @pytest.mark.auth
 class TestTokenRefresh:
-    """Token 刷NewTest"""
+    """Token Refresh Tests"""
 
     @pytest.mark.asyncio
     async def test_refresh_access_token_success(self):
-        """Test：Success刷New access token"""
+        """Test: Successfully Refresh Access Token"""
         # Arrange
         refresh_token = "refresh-token-xyz"
 
@@ -279,7 +279,7 @@ class TestTokenRefresh:
             assert result.refresh_token == "new-refresh-token"
             assert result.expires_at > 0
 
-            # Verify API 調用
+            # Verify API call
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
             payload = call_args[1]["json"]
@@ -289,7 +289,7 @@ class TestTokenRefresh:
 
     @pytest.mark.asyncio
     async def test_refresh_access_token_with_invalid_token(self):
-        """Test：Invalid的 refresh token 刷NewFailed"""
+        """Test: Invalid Refresh Token Failure"""
         # Arrange
         refresh_token = "invalid-refresh-token"
 
@@ -317,15 +317,15 @@ class TestTokenRefresh:
 @pytest.mark.unit
 @pytest.mark.auth
 class TestGetValidAccessToken:
-    """GetValid access token Test"""
+    """Get Valid Access Token Tests"""
 
     @pytest.mark.asyncio
     async def test_get_valid_token_with_non_expired_token(self):
-        """Test：token 未過期時DirectlyReturn"""
+        """Test: Return Directly When Token Not Expired"""
         # Arrange
         access_token = "valid-access-token"
         refresh_token = "refresh-token"
-        expires_at = int(time.time() * 1000) + 3600000  # 1 Small時Back過期
+        expires_at = int(time.time() * 1000) + 3600000  # Expires in 1 hour
 
         # Act
         result = await OAuthService.get_valid_access_token(
@@ -337,11 +337,11 @@ class TestGetValidAccessToken:
 
     @pytest.mark.asyncio
     async def test_get_valid_token_with_expired_token(self):
-        """Test：token 過期時自動刷New"""
+        """Test: Automatically Refresh When Token Expired"""
         # Arrange
         access_token = "expired-access-token"
         refresh_token = "refresh-token"
-        expires_at = int(time.time() * 1000) - 1000  # 已過期
+        expires_at = int(time.time() * 1000) - 1000  # Already expired
 
         mock_response_data = {
             "access_token": "new-access-token",
@@ -371,11 +371,11 @@ class TestGetValidAccessToken:
 
     @pytest.mark.asyncio
     async def test_get_valid_token_without_refresh_token(self):
-        """Test：None refresh token 時Return None"""
+        """Test: Return None When No Refresh Token"""
         # Arrange
         access_token = "expired-access-token"
         refresh_token = None
-        expires_at = int(time.time() * 1000) - 1000  # 已過期
+        expires_at = int(time.time() * 1000) - 1000  # Already expired
 
         # Act
         result = await OAuthService.get_valid_access_token(
@@ -387,11 +387,11 @@ class TestGetValidAccessToken:
 
     @pytest.mark.asyncio
     async def test_get_valid_token_with_refresh_failure(self):
-        """Test：刷NewFailed時Return None"""
+        """Test: Return None When Refresh Fails"""
         # Arrange
         access_token = "expired-access-token"
         refresh_token = "invalid-refresh-token"
-        expires_at = int(time.time() * 1000) - 1000  # 已過期
+        expires_at = int(time.time() * 1000) - 1000  # Already expired
 
         mock_response = MagicMock()
         mock_response.is_success = False
@@ -421,11 +421,11 @@ class TestGetValidAccessToken:
 @pytest.mark.unit
 @pytest.mark.auth
 class TestAccountInfo:
-    """帳HouseholdInformationGetTest"""
+    """Account Information Retrieval Tests"""
 
     @pytest.mark.asyncio
     async def test_get_account_info_success(self):
-        """Test：SuccessGet帳HouseholdInformation"""
+        """Test: Successfully Get Account Information"""
         # Arrange
         access_token = "valid-access-token"
 
@@ -476,12 +476,12 @@ class TestAccountInfo:
             assert result.workspace_role == "owner"
             assert result.organization_name == "Test Organization"
 
-            # Verify API 調用
+            # Verify API call
             assert mock_client.get.call_count == 2
 
     @pytest.mark.asyncio
     async def test_get_account_info_profile_failure(self):
-        """Test：Get profile Failed"""
+        """Test: Profile Retrieval Failure"""
         # Arrange
         access_token = "invalid-access-token"
 
@@ -503,7 +503,7 @@ class TestAccountInfo:
 
     @pytest.mark.asyncio
     async def test_get_account_info_roles_failure(self):
-        """Test：Get roles Failed"""
+        """Test: Roles Retrieval Failure"""
         # Arrange
         access_token = "valid-access-token"
 
@@ -547,16 +547,16 @@ class TestAccountInfo:
 
 @pytest.mark.unit
 class TestOAuthModels:
-    """OAuth ModelTest"""
+    """OAuth Model Tests"""
 
     def test_pkce_params_model(self):
-        """Test：PKCEParams Model"""
+        """Test: PKCEParams Model"""
         pkce = PKCEParams(verifier="test-verifier", challenge="test-challenge")
         assert pkce.verifier == "test-verifier"
         assert pkce.challenge == "test-challenge"
 
     def test_oauth_token_response_model(self):
-        """Test：OAuthTokenResponse Model"""
+        """Test: OAuthTokenResponse Model"""
         token_data = {
             "access_token": "access-token",
             "refresh_token": "refresh-token",
@@ -570,7 +570,7 @@ class TestOAuthModels:
         assert token.token_type == "Bearer"
 
     def test_oauth_exchange_result_model(self):
-        """Test：OAuthExchangeResult Model"""
+        """Test: OAuthExchangeResult Model"""
         result = OAuthExchangeResult(
             access_token="access-token",
             refresh_token="refresh-token",
@@ -581,7 +581,7 @@ class TestOAuthModels:
         assert result.expires_at == 1234567890000
 
     def test_oauth_account_info_model(self):
-        """Test：OAuthAccountInfo Model"""
+        """Test: OAuthAccountInfo Model"""
         account_data = {
             "accountUuid": "account-123",
             "emailAddress": "test@example.com",

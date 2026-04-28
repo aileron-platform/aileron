@@ -1,4 +1,4 @@
-"""Mock Redis 服務 - 用於測試環境"""
+"""Mock Redis Service - for testing environment"""
 
 import json
 import asyncio
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class MockRedisManager:
-    """Mock Redis 管理器 - 用於測試環境"""
+    """Mock Redis Manager - for testing environment"""
 
     def __init__(self):
         self._data: Dict[str, Any] = {}
@@ -19,14 +19,14 @@ class MockRedisManager:
         self._connected = False
 
     async def get_redis(self):
-        """Mock Redis 連接"""
+        """Mock Redis connection"""
         if not self._connected:
             self._connected = True
             logger.info("Mock Redis connection established successfully")
         return self
 
     async def set(self, key: str, value: Any, expire: Optional[int] = None) -> bool:
-        """設定 key-value，支援過期時間"""
+        """Set key-value, supports expiration time"""
         try:
             if isinstance(value, (dict, list)):
                 value = json.dumps(value)
@@ -42,9 +42,9 @@ class MockRedisManager:
             return False
 
     async def get(self, key: str) -> Optional[Any]:
-        """取得 value"""
+        """Get value"""
         try:
-            # 檢查是否過期
+            # Check if expired
             if key in self._ttl and datetime.now() > self._ttl[key]:
                 await self.delete(key)
                 return None
@@ -53,7 +53,7 @@ class MockRedisManager:
             if value is None:
                 return None
 
-            # 嘗試解析 JSON
+            # Try to parse JSON
             try:
                 return json.loads(value)
             except (json.JSONDecodeError, TypeError):
@@ -63,7 +63,7 @@ class MockRedisManager:
             return None
 
     async def delete(self, key: str) -> bool:
-        """刪除 key"""
+        """Delete key"""
         try:
             deleted = key in self._data
             self._data.pop(key, None)
@@ -74,9 +74,9 @@ class MockRedisManager:
             return False
 
     async def exists(self, key: str) -> bool:
-        """檢查 key 是否存在"""
+        """Check if key exists"""
         try:
-            # 檢查是否過期
+            # Check if expired
             if key in self._ttl and datetime.now() > self._ttl[key]:
                 await self.delete(key)
                 return False
@@ -86,13 +86,13 @@ class MockRedisManager:
             return False
 
     async def keys(self, pattern: str) -> list[str]:
-        """取得符合模式的所有 key"""
+        """Get all keys matching pattern"""
         try:
             import fnmatch
             matching_keys = []
             for key in list(self._data.keys()):
                 if fnmatch.fnmatch(key, pattern):
-                    # 檢查是否過期
+                    # Check if expired
                     if key in self._ttl and datetime.now() > self._ttl[key]:
                         continue
                     matching_keys.append(key)
@@ -102,7 +102,7 @@ class MockRedisManager:
             return []
 
     async def delete_pattern(self, pattern: str) -> int:
-        """刪除符合模式的所有 key"""
+        """Delete all keys matching pattern"""
         try:
             keys = await self.keys(pattern)
             count = 0
@@ -115,7 +115,7 @@ class MockRedisManager:
             return 0
 
     async def close(self):
-        """關閉 Mock Redis 連接"""
+        """Close Mock Redis connection"""
         self._connected = False
         self._data.clear()
         self._ttl.clear()
@@ -125,12 +125,12 @@ class MockRedisManager:
         return "PONG"
 
 
-# 全域 Mock Redis 管理器實例
+# Global Mock Redis Manager instance
 mock_redis_manager = MockRedisManager()
 
 
 def get_mock_redis():
-    """取得 Mock Redis 連接（便利函數）"""
+    """Get Mock Redis connection (convenience function)"""
     return mock_redis_manager
 
 

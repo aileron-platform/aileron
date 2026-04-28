@@ -1,4 +1,4 @@
-"""UserService 單元Testing"""
+"""Unit Tests for UserService"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.services.user_service import UserService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock Data庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.query.return_value.filter.return_value.first.return_value = None
     session.query.return_value.all.return_value = []
@@ -32,7 +32,7 @@ def mock_db_session():
 
 @pytest.fixture
 def sample_db_user(user_factory):
-    """範例Data庫用Household"""
+    """Sample Database User"""
     return user_factory()
 
 
@@ -48,12 +48,12 @@ def user_service(mock_db_session):
 
 @pytest.mark.unit
 class TestUserList:
-    """用HouseholdListing表Testing"""
+    """User List Tests"""
 
     def test_list_users_success(
         self, user_service, mock_db_session, user_factory
     ):
-        """Testing：SuccessfullyListingOutAll用Household"""
+        """Test: Successfully List All Users"""
         # Arrange
         users = [user_factory(username=f"user{i}") for i in range(3)]
         mock_db_session.query.return_value.order_by.return_value.all.return_value = users
@@ -68,7 +68,7 @@ class TestUserList:
     def test_list_users_empty(
         self, user_service, mock_db_session
     ):
-        """Testing：空用HouseholdListing表"""
+        """Test: Empty User List"""
         # Arrange
         mock_db_session.query.return_value.order_by.return_value.all.return_value = []
 
@@ -86,12 +86,12 @@ class TestUserList:
 
 @pytest.mark.unit
 class TestUserGet:
-    """用Household查詢Testing"""
+    """User Query Tests"""
 
     def test_get_user_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Successfully獲Getting用Household"""
+        """Test: Successfully Get User"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -106,7 +106,7 @@ class TestUserGet:
     def test_get_user_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：用Household不存At返Back None"""
+        """Test: Return None When User Does Not Exist"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -119,7 +119,7 @@ class TestUserGet:
     def test_get_by_email_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Pass email Successfully獲Getting用Household"""
+        """Test: Successfully Get User By Email"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -133,7 +133,7 @@ class TestUserGet:
     def test_get_by_email_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：email 不存At返Back None"""
+        """Test: Return None When Email Does Not Exist"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -150,12 +150,12 @@ class TestUserGet:
 
 @pytest.mark.unit
 class TestUserCreate:
-    """用Household創建Testing"""
+    """User Creation Tests"""
 
     def test_create_user_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Successfully創建用Household"""
+        """Test: Successfully Create User"""
         # Arrange
         # First call for email check returns None, second call for refresh returns user
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
@@ -190,7 +190,7 @@ class TestUserCreate:
     def test_create_user_duplicate_email(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Repeat email 創建Unsuccessfully"""
+        """Test: Create User Unsuccessfully With Duplicate Email"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -212,12 +212,12 @@ class TestUserCreate:
 
 @pytest.mark.unit
 class TestUserUpdate:
-    """用HouseholdMoreNewTesting"""
+    """User Update Tests"""
 
     def test_update_user_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：SuccessfullyMoreNew用Household"""
+        """Test: Successfully Update User"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -236,7 +236,7 @@ class TestUserUpdate:
     def test_update_user_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：MoreNew不存At的用Household返Back None"""
+        """Test: Return None When Updating Non-Existent User"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -255,12 +255,12 @@ class TestUserUpdate:
 
 @pytest.mark.unit
 class TestUserDelete:
-    """用HouseholdDeleteTesting"""
+    """User Deletion Tests"""
 
     def test_delete_user_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：SuccessfullyDelete用Household"""
+        """Test: Successfully Delete User"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -274,7 +274,7 @@ class TestUserDelete:
     def test_delete_user_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：Delete不存At的用Household優雅Handle"""
+        """Test: Graceful Handle When Deleting Non-Existent User"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -291,12 +291,12 @@ class TestUserDelete:
 
 @pytest.mark.unit
 class TestUserLogin:
-    """用Household登錄Testing"""
+    """User Login Tests"""
 
     def test_mark_login_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：SuccessfullyMark用Household登錄"""
+        """Test: Successfully Mark User Login"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -309,7 +309,7 @@ class TestUserLogin:
     def test_mark_login_user_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：用Household不存At時優雅Handle"""
+        """Test: Graceful Handle When User Does Not Exist"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -326,12 +326,12 @@ class TestUserLogin:
 
 @pytest.mark.unit
 class TestUserProfile:
-    """用Household個PersonFileTesting"""
+    """User Profile Tests"""
 
     def test_get_profile_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Successfully獲Getting用HouseholdFile"""
+        """Test: Successfully Get User Profile"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -346,7 +346,7 @@ class TestUserProfile:
     def test_get_profile_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：用HouseholdFile不存At返Back None"""
+        """Test: Return None When User Profile Does Not Exist"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -359,7 +359,7 @@ class TestUserProfile:
     def test_update_profile_success(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：SuccessfullyMoreNew用HouseholdFile"""
+        """Test: Successfully Update User Profile"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 
@@ -379,7 +379,7 @@ class TestUserProfile:
     def test_update_profile_not_found(
         self, user_service, mock_db_session
     ):
-        """Testing：MoreNew不存At的用HouseholdFile返Back None"""
+        """Test: Return None When Updating Non-Existent User Profile"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
@@ -394,7 +394,7 @@ class TestUserProfile:
     def test_update_profile_partial_fields(
         self, user_service, mock_db_session, sample_db_user
     ):
-        """Testing：Part欄位MoreNew"""
+        """Test: Partial Field Update"""
         # Arrange
         mock_db_session.query.return_value.filter.return_value.first.return_value = sample_db_user
 

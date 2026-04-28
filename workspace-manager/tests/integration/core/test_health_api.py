@@ -1,4 +1,4 @@
-"""健康Check API 整合Testing (簡化版)"""
+"""Integration Tests for Health Check API (Simplified Version)"""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ from fastapi import status
 
 
 class TestHealthAPI:
-    """健康Check API TestingCase"""
+    """Health Check API Test Cases"""
 
     @pytest.mark.integration
     def test_hc_001_health_check_success(self, test_app):
-        """HC-001 健康CheckSuccessfully"""
+        """HC-001 Health Check Success"""
         client, _ = test_app
 
         response = client.get("/health")
@@ -22,13 +22,13 @@ class TestHealthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # VerifyingBack應Structure
+        # Verify response structure
         assert "status" in data
         assert "timestamp" in data
         assert "version" in data
         assert "service" in data
 
-        # VerifyingBasic欄位
+        # Verify basic fields
         assert data["status"] == "healthy"
         assert isinstance(data["timestamp"], str)
         assert isinstance(data["version"], str)
@@ -36,7 +36,7 @@ class TestHealthAPI:
 
     @pytest.mark.integration
     def test_hc_002_health_check_content_type(self, test_app):
-        """HC-002 Back應Within容TypeCheck"""
+        """HC-002 Response Content Type Check"""
         client, _ = test_app
 
         response = client.get("/health")
@@ -44,13 +44,13 @@ class TestHealthAPI:
         assert response.status_code == status.HTTP_200_OK
         assert response.headers["content-type"] == "application/json"
 
-        # Verifying可以Correctly解析 JSON
+        # Verify can correctly parse JSON
         data = response.json()
         assert isinstance(data, dict)
 
     @pytest.mark.integration
     def test_hc_003_health_check_response_time(self, test_app):
-        """HC-003 健康CheckBack應Time"""
+        """HC-003 Health Check Response Time"""
         client, _ = test_app
 
         import time
@@ -58,15 +58,15 @@ class TestHealthAPI:
         response = client.get("/health")
         end_time = time.time()
 
-        response_time = (end_time - start_time) * 1000  # Convert為毫Second
+        response_time = (end_time - start_time) * 1000  # Convert to milliseconds
 
         assert response.status_code == status.HTTP_200_OK
-        # 健康Check應該Fast速Back應（SmallAt 1 Second）
-        assert response_time < 1000, f"健康CheckBack應Time過Long: {response_time}ms"
+        # Health check should respond quickly (less than 1 second)
+        assert response_time < 1000, f"Health check response time too long: {response_time}ms"
 
     @pytest.mark.integration
     def test_hc_004_health_check_with_headers(self, test_app):
-        """HC-004 BringingRequest標頭的健康Check"""
+        """HC-004 Health Check With Request Headers"""
         client, _ = test_app
 
         headers = {
@@ -79,23 +79,23 @@ class TestHealthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 健康Check應NormalOperate，不受標頭Impact
+        # Health check should operate normally, not affected by headers
         assert data["status"] == "healthy"
 
     @pytest.mark.integration
     def test_hc_005_health_check_method_not_allowed(self, test_app):
-        """HC-005 IncorrectlyMethodHandle"""
+        """HC-005 Incorrect Method Handle"""
         client, _ = test_app
 
-        # TestingInvalid的RequestMethod
+        # Test invalid request method
         response = client.post("/health")
 
-        # 健康Check端Point不Supporting POST
+        # Health check endpoint does not support POST
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
     @pytest.mark.integration
     def test_hc_006_health_check_concurrent_requests(self, test_app):
-        """HC-006 併發Request健康Check"""
+        """HC-006 Concurrent Request Health Check"""
         import threading
         import time
 
@@ -110,35 +110,35 @@ class TestHealthAPI:
             except Exception as e:
                 errors.append(e)
 
-        # 創建Many個併發Request
+        # Create multiple concurrent requests
         threads = []
         for _ in range(5):
             thread = threading.Thread(target=make_request)
             threads.append(thread)
 
-        # WhileInitiatingAllLine程
+        # Start all threads
         start_time = time.time()
         for thread in threads:
             thread.start()
 
-        # WaitingAllLine程Complete
+        # Wait for all threads to complete
         for thread in threads:
             thread.join()
         end_time = time.time()
 
-        # VerifyingResult
-        assert len(errors) == 0, f"併發Request發生Incorrectly: {errors}"
-        assert len(results) == 5, "應該收To 5 個Back應"
+        # Verify results
+        assert len(errors) == 0, f"Concurrent request had errors: {errors}"
+        assert len(results) == 5, "Should receive 5 responses"
 
-        # AllBack應都應該Successfully
+        # All responses should be successful
         for response in results:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
             assert data["status"] == "healthy"
 
-        # 併發HandleTime應該合理
+        # Concurrent handle time should be reasonable
         total_time = (end_time - start_time) * 1000
-        assert total_time < 3000, f"併發HandleTime過Long: {total_time}ms"
+        assert total_time < 3000, f"Concurrent handle time too long: {total_time}ms"
 
     @pytest.mark.integration
     def test_hc_007_keycloak_health_skipped_is_localized(self, test_app):
@@ -159,7 +159,7 @@ class TestHealthAPI:
         ):
             zh_response = client.get("/health/keycloak")
             assert zh_response.status_code == status.HTTP_200_OK
-            assert zh_response.json()["message"] == "未Enabled認證"
+            assert zh_response.json()["message"] == "Authentication is not enabled"
 
     @pytest.mark.integration
     def test_hc_008_keycloak_health_http_error_uses_simple_message(self, test_app):
@@ -196,10 +196,10 @@ class TestHealthAPI:
         ):
             zh_response = client.get("/health/keycloak")
             assert zh_response.status_code == status.HTTP_200_OK
-            assert zh_response.json()["message"] == "Keycloak 連LineUnsuccessfully"
+            assert zh_response.json()["message"] == "Keycloak connection failed"
 
 
 @pytest.fixture
 def mock_responses():
-    """Mock Back應 fixture"""
-    return None  # 簡化版本不Needing mock
+    """Mock Response fixture"""
+    return None  # Simplified version does not need mock

@@ -1,4 +1,4 @@
-"""範本管理 API 整合測試"""
+"""Template management API integration tests"""
 
 from __future__ import annotations
 
@@ -24,11 +24,11 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestTemplatesAPI:
-    """範本管理 API 測試案例"""
+    """Template management API test cases"""
 
     @pytest.mark.integration
     def test_tpl_001_create_template_success(self, authenticated_client, test_data_factory):
-        """TPL-001 創建範本成功"""
+        """TPL-001 Create template successfully"""
         client, user = authenticated_client
 
         template_data = test_data_factory.create_template_data(
@@ -44,16 +44,16 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = [
             "id", "name", "description", "version", "author",
             "keywords", "cliType", "status", "isActive"
         ]
 
         for field in required_fields:
-            assert field in data, f"範本資料應包含 {field} 欄位"
+            assert field in data, f"Template data should contain {field} field"
 
-        # 驗證資料內容
+        # Verify data content
         assert data["name"] == template_data["name"]
         assert data["description"] == template_data["description"]
         assert data["version"] == template_data["version"]
@@ -63,10 +63,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_002_create_template_missing_required_fields(self, authenticated_client):
-        """TPL-002 創建範本缺少必填欄位"""
+        """TPL-002 Create template with missing required fields"""
         client, user = authenticated_client
 
-        # 缺少 name 欄位
+        # Missing name field
         invalid_data = {
             "description": "Invalid template without name",
             "author_name": user.display_name,
@@ -86,10 +86,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_004_get_template_success(self, authenticated_client, test_data_factory):
-        """TPL-004 取得範本成功"""
+        """TPL-004 Get template successfully"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template to Get",
             author_name=user.display_name,
@@ -99,28 +99,28 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 取得範本詳情
+        # Get template details
         response = client.get(f"/api/v1/templates/{template_id}")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應包含所有必要欄位
+        # Verify response contains all required fields
         required_fields = [
             "id", "name", "description", "version", "author",
             "keywords", "cliType", "status", "isActive"
         ]
 
         for field in required_fields:
-            assert field in data, f"範本資料應包含 {field} 欄位"
+            assert field in data, f"Template data should contain {field} field"
 
-        # 驗證範本資料正確
+        # Verify template data is correct
         assert data["id"] == template_id
         assert data["name"] == template_data["name"]
 
     @pytest.mark.integration
     def test_tpl_005_get_template_not_found(self, authenticated_client):
-        """TPL-005 取得不存在的範本"""
+        """TPL-005 Get nonexistent template"""
         client, user = authenticated_client
 
         fake_template_id = uuid.uuid4()
@@ -133,10 +133,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_007_update_template_success(self, authenticated_client, test_data_factory):
-        """TPL-007 更新範本成功"""
+        """TPL-007 Update template successfully"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Original Template",
             author_name=user.display_name,
@@ -146,7 +146,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 更新範本
+        # Update template
         update_data = {
             "name": "Updated Template Name",
             "description": "Updated description",
@@ -159,21 +159,21 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證更新內容
+        # Verify update content
         assert data["name"] == update_data["name"]
         assert data["description"] == update_data["description"]
         assert data["keywords"] == update_data["keywords"]
         assert data["status"] == update_data["status"]
 
-        # 驗證其他欄位保持不變
+        # Verify other fields remain unchanged
         assert data["id"] == template_id
 
     @pytest.mark.integration
     def test_tpl_008_template_delete_success(self, authenticated_client, test_data_factory):
-        """TPL-008 刪除範本成功"""
+        """TPL-008 Delete template successfully"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template to Delete",
             author_name=user.display_name,
@@ -183,27 +183,27 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 刪除範本
+        # Delete template
         response = client.delete(f"/api/v1/templates/{template_id}")
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-        # 驗證範本確實被刪除
+        # Verify template was actually deleted
         get_response = client.get(f"/api/v1/templates/{template_id}")
         assert get_response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.integration
     def test_tpl_009_template_git_branches_success(self, authenticated_client):
-        """TPL-009 範本 Git 分支列表成功"""
+        """TPL-009 Template Git branch list successful"""
         client, user = authenticated_client
 
-        # 取得 Git 分支列表
+        # Get Git branch list
         response = client.get("/api/v1/templates/git/version-control/branches")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證 Git 分支回應結構
+        # Verify Git branch response structure
         assert "branches" in data
         for branch in data["branches"]:
             assert "name" in branch
@@ -211,26 +211,26 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_010_template_git_changes_success(self, authenticated_client):
-        """TPL-010 範本 Git 變更記錄成功"""
+        """TPL-010 Template Git change history successful"""
         client, user = authenticated_client
 
-        # 取得 Git 變更記錄
+        # Get Git change history
         response = client.get("/api/v1/templates/git/version-control/changes")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證 Git 變更記錄回應結構
+        # Verify Git change history response structure
         assert "staged" in data
         assert "unstaged" in data
         assert "untracked" in data
 
     @pytest.mark.integration
     def test_tpl_012_list_templates_success(self, authenticated_client, test_data_factory):
-        """TPL-012 列出範本成功"""
+        """TPL-012 List templates successfully"""
         client, user = authenticated_client
 
-        # 創建幾個範本
+        # Create several templates
         for i in range(3):
             template_data = test_data_factory.create_template_data(
                 name=f"Test Template {i}",
@@ -244,12 +244,12 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "items" in data
         assert "total" in data
 
-        # 驗證範本列表
-        assert len(data["items"]) >= 3, "應該至少有 3 個範本"
+        # Verify template list
+        assert len(data["items"]) >= 3, "There should be at least 3 templates"
 
         for template in data["items"]:
             required_template_fields = [
@@ -257,14 +257,14 @@ class TestTemplatesAPI:
                 "keywords", "cliType", "status", "isActive"
             ]
             for field in required_template_fields:
-                assert field in template, f"範本列表項目應包含 {field} 欄位"
+                assert field in template, f"Template list item should contain {field} field"
 
     @pytest.mark.integration
     def test_tpl_015_template_update_with_put_success(self, authenticated_client, test_data_factory):
-        """TPL-015 使用 PUT 更新範本成功"""
+        """TPL-015 Update template successfully via PUT"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template to Update",
             author_name=user.display_name,
@@ -274,7 +274,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 更新範本
+        # Update template
         update_data = {
             "name": "Updated Template Name",
             "description": "Updated description",
@@ -288,7 +288,7 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證更新內容
+        # Verify update content
         assert data["name"] == update_data["name"]
         assert data["description"] == update_data["description"]
         assert data["version"] == update_data["version"]
@@ -296,7 +296,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_016_template_categories_list_success(self, authenticated_client):
-        """TPL-016 範本分類列表成功"""
+        """TPL-016 Template category list successful"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/templates/categories")
@@ -304,42 +304,42 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "items" in data
         assert isinstance(data["items"], list)
 
-        # 驗證分類結構
+        # Verify category structure
         if data["items"]:
             for category in data["items"]:
                 required_fields = [
                     "id", "name", "description", "sortOrder", "isActive"
                 ]
                 for field in required_fields:
-                    assert field in category, f"類別應包含 {field} 欄位"
+                    assert field in category, f"Category should contain {field} field"
 
-                # 驗證數值類型
+                # Verify numeric types
                 assert isinstance(category["sortOrder"], int)
                 assert isinstance(category["isActive"], bool)
 
     @pytest.mark.integration
     def test_tpl_017_template_features_list_success(self, authenticated_client):
-        """TPL-017 範本功能列表成功"""
+        """TPL-017 Template feature list successful"""
         client, user = authenticated_client
 
-        # 測試取得所有功能
+        # Test fetching all features
         response = client.get("/api/v1/templates/features")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "items" in data
         assert isinstance(data["items"], list)
         assert "skills" in data["items"]
         assert "scripts" in data["items"]
         assert "files" not in data["items"]
 
-        # 測試特定 CLI 類型的功能
+        # Test features for a specific CLI type
         response_claude = client.get("/api/v1/templates/features?cli_type=claude-code")
         assert response_claude.status_code == status.HTTP_200_OK
         data_claude = response_claude.json()
@@ -351,10 +351,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_018_template_mcp_config_success(self, authenticated_client, test_data_factory):
-        """TPL-018 範本 MCP 配置成功"""
+        """TPL-018 Template MCP configuration successful"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="MCP Configurable Template",
             author_name=user.display_name,
@@ -364,17 +364,17 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 取得 MCP 配置
+        # Get MCP configuration
         get_response = client.get(f"/api/v1/templates/{template_id}/mcp")
         assert get_response.status_code == status.HTTP_200_OK
         mcp_data = get_response.json()
 
-        # 驗證 MCP 配置結構
+        # Verify MCP configuration structure
         required_fields = ["templateId", "mcpServers"]
         for field in required_fields:
-            assert field in mcp_data, f"MCP 配置應包含 {field} 欄位"
+            assert field in mcp_data, f"MCP configuration should contain {field} field"
 
-        # 更新 MCP 配置
+        # Update MCP configuration
         update_data = {
             "mcpServers": {
                 "test-server": {
@@ -390,17 +390,17 @@ class TestTemplatesAPI:
         assert update_response.status_code == status.HTTP_200_OK
         updated_data = update_response.json()
 
-        # 驗證更新結果
+        # Verify update result
         assert len(updated_data["mcpServers"]) == 1
         assert "test-server" in updated_data["mcpServers"]
         assert updated_data["mcpServers"]["test-server"]["description"] == "Test MCP server"
 
     @pytest.mark.integration
     def test_tpl_019_template_hooks_config_success(self, authenticated_client, test_data_factory):
-        """TPL-019 範本 Hooks 配置成功"""
+        """TPL-019 Template Hooks configuration successful"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Hooks Configurable Template",
             author_name=user.display_name,
@@ -410,17 +410,17 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 取得 Hooks 配置
+        # Get Hooks configuration
         get_response = client.get(f"/api/v1/templates/{template_id}/hooks")
         assert get_response.status_code == status.HTTP_200_OK
         hooks_data = get_response.json()
 
-        # 驗證 Hooks 配置結構
+        # Verify Hooks configuration structure
         required_fields = ["templateId", "hooks"]
         for field in required_fields:
-            assert field in hooks_data, f"Hooks 配置應包含 {field} 欄位"
+            assert field in hooks_data, f"Hooks configuration should contain {field} field"
 
-        # 更新 Hooks 配置
+        # Update Hooks configuration
         update_data = {
             "hooks": {
                 "before_file_save": [
@@ -442,17 +442,17 @@ class TestTemplatesAPI:
         assert update_response.status_code == status.HTTP_200_OK
         updated_data = update_response.json()
 
-        # 驗證更新結果
+        # Verify update result
         assert "before_file_save" in updated_data["hooks"]
         assert len(updated_data["hooks"]["before_file_save"]) == 1
         assert len(updated_data["hooks"]["before_file_save"][0]["hooks"]) == 1
 
     @pytest.mark.integration
     def test_tpl_020_template_agents_md_success(self, authenticated_client, test_data_factory):
-        """TPL-020 範本 Claude.md 配置成功"""
+        """TPL-020 Template Claude.md configuration successful"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Claude.md Configurable Template",
             author_name=user.display_name,
@@ -462,15 +462,15 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 取得 Claude.md 內容
+        # Get Claude.md content
         get_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         assert get_response.status_code == status.HTTP_200_OK
         agents_md_data = get_response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "success" in agents_md_data
 
-        # 更新 Claude.md 內容
+        # Update Claude.md content
         update_data = {
             "content": "# Test Template\n\nThis is a test template with custom configuration."
         }
@@ -479,7 +479,7 @@ class TestTemplatesAPI:
         assert update_response.status_code == status.HTTP_200_OK
         updated_data = update_response.json()
 
-        # 驗證更新結果
+        # Verify update result
         assert updated_data["success"] is True
         assert "content" in updated_data["data"]
 
@@ -608,11 +608,11 @@ class TestTemplatesAPI:
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
             assert zh_response.json()["detail"] == "檔案操作失敗"
 
-    # test_tpl_021_template_featured_list_success 已移除 - /api/v1/templates/featured 端點不存在
+    # test_tpl_021_template_featured_list_success removed - /api/v1/templates/featured endpoint does not exist
 
     @pytest.mark.integration
     def test_tpl_022_template_categories_list_success(self, authenticated_client):
-        """TPL-022 範本類別列表成功"""
+        """TPL-022 Template category list successful"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/templates/categories")
@@ -620,50 +620,50 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構（與 test_tpl_016 保持一致）
+        # Verify response structure (consistent with test_tpl_016)
         assert "items" in data
         assert isinstance(data["items"], list)
 
-        # 驗證分類結構
+        # Verify category structure
         if data["items"]:
             for category in data["items"]:
                 required_fields = [
                     "id", "name", "description", "sortOrder", "isActive"
                 ]
                 for field in required_fields:
-                    assert field in category, f"類別應包含 {field} 欄位"
+                    assert field in category, f"Category should contain {field} field"
 
-                # 驗證數值類型
+                # Verify numeric types
                 assert isinstance(category["sortOrder"], int)
                 assert isinstance(category["isActive"], bool)
 
-    # test_tpl_023_template_clone_success 已移除 - /api/v1/templates/{id}/clone 端點不存在
+    # test_tpl_023_template_clone_success removed - /api/v1/templates/{id}/clone endpoint does not exist
 
-      # test_tpl_024_template_validate_success 已移除 - /api/v1/templates/{id}/validate 端點不存在
-    # test_tpl_025_template_publish_success 已移除 - /api/v1/templates/{id}/publish 端點不存在
-    # test_tpl_026_template_unpublish_success 已移除 - /api/v1/templates/{id}/unpublish 端點不存在
-    # test_tpl_027_template_import_success 已移除 - /api/v1/templates/import 端點已實作但需要檔案上傳
-    # test_tpl_028_template_export_success 已移除 - /api/v1/templates/{id}/export 端點實際存在但回應格式不同
+      # test_tpl_024_template_validate_success removed - /api/v1/templates/{id}/validate endpoint does not exist
+    # test_tpl_025_template_publish_success removed - /api/v1/templates/{id}/publish endpoint does not exist
+    # test_tpl_026_template_unpublish_success removed - /api/v1/templates/{id}/unpublish endpoint does not exist
+    # test_tpl_027_template_import_success removed - /api/v1/templates/import endpoint exists but requires file upload
+    # test_tpl_028_template_export_success removed - /api/v1/templates/{id}/export endpoint exists but response format differs
 
-    # test_tpl_029_template_search_advanced 已移除 - /api/v1/templates/search 端點不存在
-    # test_tpl_030_template_recommendations_success 已移除 - /api/v1/templates/recommendations 端點不存在
-    # test_tpl_031_template_dependencies_check_success 已移除 - /api/v1/templates/{id}/dependencies 端點不存在
-    # test_tpl_032_template_security_scan_success 已移除 - /api/v1/templates/{id}/security-scan 端點不存在
-    # test_tpl_033_template_compliance_check_success 已移除 - /api/v1/templates/{id}/compliance-check 端點不存在
-    # test_tpl_034_template_usage_analytics_success 已移除 - /api/v1/templates/{id}/analytics 端點不存在
-    # test_tpl_035_template_performance_benchmark_success 已移除 - /api/v1/templates/{id}/benchmark 端點不存在
-    # test_tpl_036_template_marketplace_sync_success 已移除 - /api/v1/templates/{id}/marketplace-sync 端點不存在
-    # test_tpl_037_template_ai_optimization_success 已移除 - /api/v1/templates/{id}/ai-optimize 端點不存在
-    # test_tpl_038_template_collaboration_workspace_success 已移除 - /api/v1/templates/{id}/workspace 端點不存在
-    # test_tpl_039_template_changelog_success 已移除 - /api/v1/templates/{id}/changelog 端點不存在
-    # test_tpl_040_template_testing_automation_success 已移除 - /api/v1/templates/{id}/test 端點不存在
+    # test_tpl_029_template_search_advanced removed - /api/v1/templates/search endpoint does not exist
+    # test_tpl_030_template_recommendations_success removed - /api/v1/templates/recommendations endpoint does not exist
+    # test_tpl_031_template_dependencies_check_success removed - /api/v1/templates/{id}/dependencies endpoint does not exist
+    # test_tpl_032_template_security_scan_success removed - /api/v1/templates/{id}/security-scan endpoint does not exist
+    # test_tpl_033_template_compliance_check_success removed - /api/v1/templates/{id}/compliance-check endpoint does not exist
+    # test_tpl_034_template_usage_analytics_success removed - /api/v1/templates/{id}/analytics endpoint does not exist
+    # test_tpl_035_template_performance_benchmark_success removed - /api/v1/templates/{id}/benchmark endpoint does not exist
+    # test_tpl_036_template_marketplace_sync_success removed - /api/v1/templates/{id}/marketplace-sync endpoint does not exist
+    # test_tpl_037_template_ai_optimization_success removed - /api/v1/templates/{id}/ai-optimize endpoint does not exist
+    # test_tpl_038_template_collaboration_workspace_success removed - /api/v1/templates/{id}/workspace endpoint does not exist
+    # test_tpl_039_template_changelog_success removed - /api/v1/templates/{id}/changelog endpoint does not exist
+    # test_tpl_040_template_testing_automation_success removed - /api/v1/templates/{id}/test endpoint does not exist
 
     @pytest.mark.integration
     def test_tpl_041_commands_crud(self, authenticated_client, test_data_factory):
-        """TPL-041 Commands CRUD 操作"""
+        """TPL-041 Commands CRUD operations"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for Commands",
             author_name=user.display_name,
@@ -672,11 +672,11 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 Commands
+        # 1. List Commands
         list_response = client.get(f"/api/v1/templates/{template_id}/commands")
         assert list_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建 Command
+        # 2. Create Command
         command_data = {
             "fileName": "test-command.md",
             "content": "# Test Command\nThis is a test command."
@@ -687,13 +687,13 @@ class TestTemplatesAPI:
         )
         assert create_cmd_response.status_code == status.HTTP_201_CREATED
 
-        # 3. 獲取 Command
+        # 3. Get Command
         get_cmd_response = client.get(
             f"/api/v1/templates/{template_id}/commands/test-command.md"
         )
         assert get_cmd_response.status_code == status.HTTP_200_OK
 
-        # 4. 更新 Command
+        # 4. Update Command
         update_data = {"content": "# Updated Command\nUpdated content."}
         update_response = client.put(
             f"/api/v1/templates/{template_id}/commands/test-command.md",
@@ -701,7 +701,7 @@ class TestTemplatesAPI:
         )
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除 Command
+        # 5. Delete Command
         delete_response = client.delete(
             f"/api/v1/templates/{template_id}/commands/test-command.md"
         )
@@ -709,10 +709,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_042_agents_crud(self, authenticated_client, test_data_factory):
-        """TPL-042 Agents CRUD 操作"""
+        """TPL-042 Agents CRUD operations"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for Agents",
             author_name=user.display_name,
@@ -721,11 +721,11 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 Agents
+        # 1. List Agents
         list_response = client.get(f"/api/v1/templates/{template_id}/agents")
         assert list_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建 Agent
+        # 2. Create Agent
         agent_data = {
             "fileName": "test-agent.md",
             "content": "# Test Agent\nThis is a test agent."
@@ -736,13 +736,13 @@ class TestTemplatesAPI:
         )
         assert create_response.status_code == status.HTTP_201_CREATED
 
-        # 3. 獲取 Agent
+        # 3. Get Agent
         get_response = client.get(
             f"/api/v1/templates/{template_id}/agents/test-agent.md"
         )
         assert get_response.status_code == status.HTTP_200_OK
 
-        # 4. 更新 Agent
+        # 4. Update Agent
         update_data = {"content": "# Updated Agent\nUpdated content."}
         update_response = client.put(
             f"/api/v1/templates/{template_id}/agents/test-agent.md",
@@ -750,7 +750,7 @@ class TestTemplatesAPI:
         )
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除 Agent
+        # 5. Delete Agent
         delete_response = client.delete(
             f"/api/v1/templates/{template_id}/agents/test-agent.md"
         )
@@ -758,10 +758,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_043_output_style_crud(self, authenticated_client, test_data_factory):
-        """TPL-043 Output Style CRUD 操作"""
+        """TPL-043 Output Style CRUD operations"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for Output Style",
             author_name=user.display_name,
@@ -770,11 +770,11 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 列出 Output Style
+        # 1. List Output Style
         list_response = client.get(f"/api/v1/templates/{template_id}/output-style")
         assert list_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建 Output Style
+        # 2. Create Output Style
         style_data = {
             "fileName": "test-style.md",
             "content": "# Test Style\nThis is a test output style."
@@ -785,13 +785,13 @@ class TestTemplatesAPI:
         )
         assert create_response.status_code == status.HTTP_201_CREATED
 
-        # 3. 獲取 Output Style
+        # 3. Get Output Style
         get_response = client.get(
             f"/api/v1/templates/{template_id}/output-style/test-style.md"
         )
         assert get_response.status_code == status.HTTP_200_OK
 
-        # 4. 更新 Output Style
+        # 4. Update Output Style
         update_data = {"content": "# Updated Style\nUpdated content."}
         update_response = client.put(
             f"/api/v1/templates/{template_id}/output-style/test-style.md",
@@ -799,7 +799,7 @@ class TestTemplatesAPI:
         )
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除 Output Style
+        # 5. Delete Output Style
         delete_response = client.delete(
             f"/api/v1/templates/{template_id}/output-style/test-style.md"
         )
@@ -807,10 +807,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_044_file_operations(self, authenticated_client, test_data_factory):
-        """TPL-044 檔案操作測試"""
+        """TPL-044 File operations test"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for File Operations",
             author_name=user.display_name,
@@ -819,33 +819,33 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 獲取檔案樹
+        # 1. Get file tree
         tree_response = client.get(f"/api/v1/templates/{template_id}/files/tree")
         if tree_response.status_code != status.HTTP_404_NOT_FOUND:
             assert tree_response.status_code == status.HTTP_200_OK
 
-        # 2. 創建檔案
+        # 2. Create file
         create_file_response = client.post(
             f"/api/v1/templates/{template_id}/files?path=/test.txt&entry_type=file"
         )
         if create_file_response.status_code != status.HTTP_404_NOT_FOUND:
             assert create_file_response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]
 
-        # 3. 寫入檔案內容
+        # 3. Write file content
         write_response = client.put(
             f"/api/v1/templates/{template_id}/files/content?path=/test.txt&content=Hello"
         )
         if write_response.status_code != status.HTTP_404_NOT_FOUND:
             assert write_response.status_code == status.HTTP_200_OK
 
-        # 4. 讀取檔案內容
+        # 4. Read file content
         read_response = client.get(
             f"/api/v1/templates/{template_id}/files/content?path=/test.txt"
         )
         if read_response.status_code != status.HTTP_404_NOT_FOUND:
             assert read_response.status_code == status.HTTP_200_OK
 
-        # 5. 刪除檔案
+        # 5. Delete file
         delete_file_response = client.delete(
             f"/api/v1/templates/{template_id}/files?path=/test.txt"
         )
@@ -854,25 +854,25 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_045_git_operations(self, authenticated_client):
-        """TPL-045 Git 操作測試"""
+        """TPL-045 Git operations test"""
         client, user = authenticated_client
 
-        # 1. 獲取 Git 狀態
+        # 1. Get Git status
         status_response = client.get("/api/v1/templates/git/version-control/status")
         if status_response.status_code != status.HTTP_404_NOT_FOUND:
             assert status_response.status_code == status.HTTP_200_OK
 
-        # 2. 獲取變更記錄
+        # 2. Get change history
         changes_response = client.get("/api/v1/templates/git/version-control/changes")
         if changes_response.status_code != status.HTTP_404_NOT_FOUND:
             assert changes_response.status_code == status.HTTP_200_OK
 
-        # 3. 獲取分支列表
+        # 3. Get branch list
         branches_response = client.get("/api/v1/templates/git/version-control/branches")
         if branches_response.status_code != status.HTTP_404_NOT_FOUND:
             assert branches_response.status_code == status.HTTP_200_OK
 
-        # 4. 獲取 Git 使用者配置
+        # 4. Get Git user configuration
         user_config_response = client.get("/api/v1/templates/git/user-config")
         if user_config_response.status_code != status.HTTP_404_NOT_FOUND:
             assert user_config_response.status_code == status.HTTP_200_OK
@@ -1014,25 +1014,25 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_047_ssh_keys_operations(self, authenticated_client):
-        """TPL-047 SSH Keys 操作測試"""
+        """TPL-047 SSH Keys operations test"""
         client, user = authenticated_client
 
-        # 1. 獲取 SSH Keys
+        # 1. Get SSH Keys
         get_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         if get_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_response.status_code == status.HTTP_200_OK
 
-        # 2. 產生 SSH Keys (謹慎測試，可能會覆蓋現有 keys)
+        # 2. Generate SSH Keys (test cautiously, may overwrite existing keys)
         # generate_response = client.post("/api/v1/templates/marketplace/ssh-keys/generate")
         # if generate_response.status_code != status.HTTP_404_NOT_FOUND:
         #     assert generate_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_tpl_048_template_install(self, authenticated_client, test_data_factory):
-        """TPL-048 模板安裝測試"""
+        """TPL-048 Template installation test"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template to Install",
             author_name=user.display_name,
@@ -1041,13 +1041,13 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 安裝模板 (需要有效的 workspace_id)
+        # Install template (requires valid workspace_id)
         install_data = {
             "templateId": template_id,
             "workspaceId": str(uuid.uuid4())
         }
         install_response = client.post("/api/v1/templates/install", json=install_data)
-        # 可能因為 workspace 不存在而失敗，這是正常的
+        # May fail because workspace does not exist; that is acceptable
         assert install_response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_201_CREATED,
@@ -1142,7 +1142,7 @@ class TestTemplatesAPI:
         with patch(
             "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
             side_effect=TemplateInstallError(
-                "底層連線錯誤內容不應外漏",
+                "Underlying connection error content should not leak",
                 code="TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR",
             ),
         ):
@@ -1154,7 +1154,7 @@ class TestTemplatesAPI:
         with patch(
             "app.routers.templates.install.TemplateInstallService.install_template_to_workspace",
             side_effect=TemplateInstallError(
-                "完全不同的底層錯誤",
+                "A completely different underlying error",
                 code="TEMPLATE_INSTALL_RUNTIME_CONNECTION_ERROR",
             ),
         ):
@@ -1280,10 +1280,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_049_file_copy_operation(self, authenticated_client, test_data_factory):
-        """TPL-049 檔案複製操作"""
+        """TPL-049 File copy operations"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for File Copy",
             author_name=user.display_name,
@@ -1292,7 +1292,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 複製檔案
+        # Copy file
         copy_response = client.post(
             f"/api/v1/templates/{template_id}/files/copy?source_path=/test.txt&dest_path=/test_copy.txt"
         )
@@ -1301,10 +1301,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_050_file_move_operation(self, authenticated_client, test_data_factory):
-        """TPL-050 檔案移動操作"""
+        """TPL-050 File move operations"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for File Move",
             author_name=user.display_name,
@@ -1313,7 +1313,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 移動檔案
+        # Move file
         move_response = client.post(
             f"/api/v1/templates/{template_id}/files/move?source_path=/test.txt&dest_path=/moved.txt"
         )
@@ -1322,10 +1322,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_051_file_batch_delete(self, authenticated_client, test_data_factory):
-        """TPL-051 批次刪除檔案"""
+        """TPL-051 Batch delete files"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for Batch Delete",
             author_name=user.display_name,
@@ -1334,7 +1334,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 批次刪除
+        # Batch delete
         batch_delete_response = client.post(
             f"/api/v1/templates/{template_id}/files/batch-delete?paths=/file1.txt&paths=/file2.txt"
         )
@@ -1343,10 +1343,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_052_file_search(self, authenticated_client, test_data_factory):
-        """TPL-052 檔案搜尋"""
+        """TPL-052 File search"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for File Search",
             author_name=user.display_name,
@@ -1355,7 +1355,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 搜尋檔案
+        # Search files
         search_data = {
             "query": "md",
             "searchContent": False,
@@ -1373,10 +1373,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_053_template_export(self, authenticated_client, test_data_factory):
-        """TPL-053 匯出模板"""
+        """TPL-053 Export template"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template to Export",
             author_name=user.display_name,
@@ -1385,14 +1385,14 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 匯出模板
+        # Export template
         export_response = client.get(f"/api/v1/templates/{template_id}/export")
         if export_response.status_code != status.HTTP_404_NOT_FOUND:
             assert export_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_tpl_054_git_file_level_commit(self, authenticated_client):
-        """TPL-054 Git 檔案層級提交"""
+        """TPL-054 Git file-level commit"""
         client, user = authenticated_client
 
         commit_data = {
@@ -1402,7 +1402,7 @@ class TestTemplatesAPI:
         commit_response = client.post("/api/v1/templates/git/version-control/commit", json=commit_data)
 
         if commit_response.status_code != status.HTTP_404_NOT_FOUND:
-            # 可能因為沒有變更而失敗，這是正常的
+            # May fail because there are no changes; that is acceptable
             assert commit_response.status_code in [
                 status.HTTP_200_OK,
                 status.HTTP_400_BAD_REQUEST,
@@ -1411,7 +1411,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_055_git_pull(self, authenticated_client):
-        """TPL-055 Git 拉取變更"""
+        """TPL-055 Git pull changes"""
         client, user = authenticated_client
 
         pull_data = {
@@ -1428,15 +1428,15 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_056_git_user_config_operations(self, authenticated_client):
-        """TPL-056 Git 使用者配置操作"""
+        """TPL-056 Git user configuration operations"""
         client, user = authenticated_client
 
-        # 1. 獲取 Git 使用者配置
+        # 1. Get Git user configuration
         get_config_response = client.get("/api/v1/templates/git/user-config")
         if get_config_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_config_response.status_code == status.HTTP_200_OK
 
-        # 2. 更新 Git 使用者配置
+        # 2. Update Git user configuration
         update_config_data = {
             "name": "Test User",
             "email": "test@example.com"
@@ -1450,7 +1450,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_057_git_remote_url(self, authenticated_client):
-        """TPL-057 設定 Git 遠端倉庫 URL"""
+        """TPL-057 Set Git remote repository URL"""
         client, user = authenticated_client
 
         remote_url_data = {
@@ -1537,15 +1537,15 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_058_git_clone_operations(self, authenticated_client):
-        """TPL-058 Git Clone 操作"""
+        """TPL-058 Git clone operations"""
         client, user = authenticated_client
 
-        # 1. 檢查 Clone 狀態
+        # 1. Check clone status
         status_response = client.get("/api/v1/templates/git/clone/status")
         if status_response.status_code != status.HTTP_404_NOT_FOUND:
             assert status_response.status_code == status.HTTP_200_OK
 
-        # 2. Clone 倉庫 (謹慎測試，可能會覆蓋現有倉庫)
+        # 2. Clone repository (test cautiously, may overwrite existing repository)
         # clone_data = {
         #     "url": "https://github.com/test/templates.git",
         #     "branch": "main"
@@ -1620,15 +1620,15 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_059_ssh_keys_full_operations(self, authenticated_client):
-        """TPL-059 SSH Keys 完整操作"""
+        """TPL-059 SSH Keys full operations"""
         client, user = authenticated_client
 
-        # 1. 獲取 SSH Keys
+        # 1. Get SSH Keys
         get_keys_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         if get_keys_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_keys_response.status_code == status.HTTP_200_OK
 
-        # 2. 更新 SSH Keys (謹慎測試)
+        # 2. Update SSH Keys (test cautiously)
         # update_keys_data = {
         #     "publicKey": "ssh-rsa AAAA...",
         #     "privateKey": "-----BEGIN RSA PRIVATE KEY-----..."
@@ -1640,10 +1640,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_060_template_rebuild(self, authenticated_client):
-        """TPL-060 重建模板資料庫"""
+        """TPL-060 Rebuild template database"""
         client, user = authenticated_client
 
-        # 重建模板資料庫 (後台任務)
+        # Rebuild template database (background task)
         rebuild_response = client.post("/api/v1/templates/rebuild")
 
         if rebuild_response.status_code != status.HTTP_404_NOT_FOUND:
@@ -1653,23 +1653,23 @@ class TestTemplatesAPI:
                 status.HTTP_202_ACCEPTED
             ]
 
-            # 如果成功，檢查是否返回 task_id
+            # If successful, check whether task_id is returned
             if rebuild_response.status_code in [status.HTTP_200_OK, status.HTTP_202_ACCEPTED]:
                 data = rebuild_response.json()
                 if "taskId" in data:
                     task_id = data["taskId"]
 
-                    # 查詢重建進度
+                    # Query rebuild progress
                     progress_response = client.get(f"/api/v1/templates/rebuild/progress/{task_id}")
                     if progress_response.status_code != status.HTTP_404_NOT_FOUND:
                         assert progress_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_tpl_061_file_upload(self, authenticated_client, test_data_factory):
-        """TPL-061 檔案上傳"""
+        """TPL-061 File upload"""
         client, user = authenticated_client
 
-        # 先創建範本
+        # Create template first
         template_data = test_data_factory.create_template_data(
             name="Template for File Upload",
             author_name=user.display_name,
@@ -1678,15 +1678,15 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 上傳檔案 (需要 multipart/form-data)
-        # 這裡只測試端點是否存在
+        # Upload file (requires multipart/form-data)
+        # Only test whether the endpoint exists
         upload_response = client.post(
             f"/api/v1/templates/{template_id}/files/upload",
             data={"target_path": "/uploads"},
-            files={}  # 空檔案列表
+            files={}  # Empty file list
         )
 
-        # 可能因為沒有檔案而失敗，這是正常的
+        # May fail because no file exists; that is acceptable
         if upload_response.status_code != status.HTTP_404_NOT_FOUND:
             assert upload_response.status_code in [
                 status.HTTP_200_OK,
@@ -1697,17 +1697,17 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_062_template_import(self, authenticated_client):
-        """TPL-062 匯入模板"""
+        """TPL-062 Import template"""
         client, user = authenticated_client
 
-        # 匯入模板 (需要 ZIP 檔案)
-        # 這裡只測試端點是否存在
+        # Import template (requires ZIP file)
+        # Only test whether the endpoint exists
         import_response = client.post(
             "/api/v1/templates/import",
-            files={}  # 空檔案
+            files={}  # Empty file
         )
 
-        # 可能因為沒有檔案而失敗，這是正常的
+        # May fail because no file exists; that is acceptable
         if import_response.status_code != status.HTTP_404_NOT_FOUND:
             assert import_response.status_code in [
                 status.HTTP_200_OK,
@@ -1762,29 +1762,29 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_063_list_templates_with_filters(self, authenticated_client, test_data_factory):
-        """TPL-063 列出模板（帶篩選條件）"""
+        """TPL-063 List templates (with filter conditions)"""
         client, user = authenticated_client
 
-        # 測試不同的篩選條件
-        # 1. 按分類篩選
+        # Test various filter conditions
+        # 1. Filter by category
         response = client.get("/api/v1/templates?category=web")
         assert response.status_code == status.HTTP_200_OK
 
-        # 2. 按標籤篩選
+        # 2. Filter by tag
         response = client.get("/api/v1/templates?tags=react&tags=typescript")
         assert response.status_code == status.HTTP_200_OK
 
-        # 3. 搜尋
+        # 3. Search
         response = client.get("/api/v1/templates?search=test")
         assert response.status_code == status.HTTP_200_OK
 
-        # 4. 分頁
+        # 4. Pagination
         response = client.get("/api/v1/templates?page=1&page_size=10")
         assert response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_tpl_064_template_features(self, authenticated_client):
-        """TPL-064 取得模板功能列表"""
+        """TPL-064 Get template feature list"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/templates/features")
@@ -1794,7 +1794,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_065_template_categories(self, authenticated_client):
-        """TPL-065 取得模板分類列表"""
+        """TPL-065 Get template category list"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/templates/categories")
@@ -1807,7 +1807,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_066_update_template_not_found(self, authenticated_client):
-        """TPL-066 更新不存在的模板（錯誤情境）"""
+        """TPL-066 Update nonexistent template (error scenario)"""
         client, user = authenticated_client
 
         fake_id = str(uuid.uuid4())
@@ -1820,7 +1820,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_067_delete_template_not_found(self, authenticated_client):
-        """TPL-067 刪除不存在的模板（錯誤情境）"""
+        """TPL-067 Delete nonexistent template (error scenario)"""
         client, user = authenticated_client
 
         fake_id = str(uuid.uuid4())
@@ -1829,7 +1829,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_068_get_mcp_config_not_found(self, authenticated_client):
-        """TPL-068 取得不存在模板的 MCP 配置（錯誤情境）"""
+        """TPL-068 Get MCP configuration of nonexistent template (error scenario)"""
         client, user = authenticated_client
 
         fake_id = str(uuid.uuid4())
@@ -1838,7 +1838,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_069_update_hooks_config_not_found(self, authenticated_client):
-        """TPL-069 更新不存在模板的 Hooks 配置（錯誤情境）"""
+        """TPL-069 Update Hooks configuration of nonexistent template (error scenario)"""
         client, user = authenticated_client
 
         fake_id = str(uuid.uuid4())
@@ -1863,10 +1863,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_070_agents_md_operations_full(self, authenticated_client, test_data_factory):
-        """TPL-070 Claude.md 完整操作流程"""
+        """TPL-070 Claude.md full operation workflow"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for Claude.md",
             author_name=user.display_name,
@@ -1875,12 +1875,12 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 讀取 Claude.md
+        # 1. Read Claude.md
         get_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         if get_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_response.status_code == status.HTTP_200_OK
 
-        # 2. 更新 Claude.md
+        # 2. Update Claude.md
         update_data = {
             "content": "# Claude Configuration\n\nThis is a test configuration."
         }
@@ -1891,7 +1891,7 @@ class TestTemplatesAPI:
         if update_response.status_code != status.HTTP_404_NOT_FOUND:
             assert update_response.status_code == status.HTTP_200_OK
 
-        # 3. 再次讀取驗證
+        # 3. Read again to verify
         verify_response = client.get(f"/api/v1/templates/{template_id}/agents-md")
         if verify_response.status_code != status.HTTP_404_NOT_FOUND:
             assert verify_response.status_code == status.HTTP_200_OK
@@ -1953,10 +1953,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_071_commands_error_scenarios(self, authenticated_client, test_data_factory):
-        """TPL-071 Slash Commands 錯誤情境測試"""
+        """TPL-071 Slash Commands error scenario tests"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for Error Tests",
             author_name=user.display_name,
@@ -1965,20 +1965,20 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 取得不存在的 Slash Command
+        # 1. Get nonexistent Slash Command
         response = client.get(f"/api/v1/templates/{template_id}/commands/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
-        # 2. 刪除不存在的 Slash Command
+        # 2. Delete nonexistent Slash Command
         response = client.delete(f"/api/v1/templates/{template_id}/commands/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_204_NO_CONTENT]
 
     @pytest.mark.integration
     def test_tpl_072_agents_error_scenarios(self, authenticated_client, test_data_factory):
-        """TPL-072 Agents 錯誤情境測試"""
+        """TPL-072 Agents error scenario tests"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for SubAgent Errors",
             author_name=user.display_name,
@@ -1987,7 +1987,7 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 更新不存在的 SubAgent
+        # 1. Update nonexistent SubAgent
         update_data = {
             "fileName": "nonexistent.md",
             "content": "# Test"
@@ -2000,10 +2000,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_073_output_style_error_scenarios(self, authenticated_client, test_data_factory):
-        """TPL-073 Output Styles 錯誤情境測試"""
+        """TPL-073 Output Styles error scenario tests"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for Output Style Errors",
             author_name=user.display_name,
@@ -2012,16 +2012,16 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 取得不存在的 Output Style
+        # 1. Get nonexistent Output Style
         response = client.get(f"/api/v1/templates/{template_id}/output-style/nonexistent.md")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
     @pytest.mark.integration
     def test_tpl_074_file_operations_error_scenarios(self, authenticated_client, test_data_factory):
-        """TPL-074 檔案操作錯誤情境測試"""
+        """TPL-074 File operations error scenario tests"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for File Errors",
             author_name=user.display_name,
@@ -2030,17 +2030,17 @@ class TestTemplatesAPI:
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 讀取不存在的檔案
+        # 1. Read nonexistent file
         response = client.get(f"/api/v1/templates/{template_id}/files/content?path=/nonexistent.txt")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK]
 
-        # 2. 刪除不存在的檔案
+        # 2. Delete nonexistent file
         response = client.delete(f"/api/v1/templates/{template_id}/files?path=/nonexistent.txt")
         assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]
 
     @pytest.mark.integration
     def test_tpl_075_git_clone_progress_not_found(self, authenticated_client):
-        """TPL-075 查詢不存在的 Clone 任務進度（錯誤情境）"""
+        """TPL-075 Query progress of nonexistent clone task (error scenario)"""
         client, user = authenticated_client
 
         fake_task_id = str(uuid.uuid4())
@@ -2049,7 +2049,7 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_076_rebuild_progress_not_found(self, authenticated_client):
-        """TPL-076 查詢不存在的重建任務進度（錯誤情境）"""
+        """TPL-076 Query progress of nonexistent rebuild task (error scenario)"""
         client, user = authenticated_client
 
         fake_task_id = str(uuid.uuid4())
@@ -2058,10 +2058,10 @@ class TestTemplatesAPI:
 
     @pytest.mark.integration
     def test_tpl_077_ssh_keys_generate(self, authenticated_client):
-        """TPL-077 產生 SSH Keys"""
+        """TPL-077 Generate SSH Keys"""
         client, user = authenticated_client
 
-        # 先備份現有的 SSH keys（如果存在）
+        # Back up existing SSH keys first (if any)
         backup_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         has_existing_keys = (
             backup_response.status_code == status.HTTP_200_OK and
@@ -2072,7 +2072,7 @@ class TestTemplatesAPI:
         if has_existing_keys:
             existing_keys = backup_response.json()["data"]
 
-        # 產生新的 SSH Keys
+        # Generate new SSH Keys
         response = client.post("/api/v1/templates/marketplace/ssh-keys/generate")
 
         if response.status_code == status.HTTP_404_NOT_FOUND:
@@ -2081,12 +2081,12 @@ class TestTemplatesAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "success" in data
         assert data["success"] is True
         assert "data" in data
 
-        # 驗證 SSH keys 格式
+        # Verify SSH keys format
         ssh_data = data["data"]
         assert "publicKey" in ssh_data
         assert "privateKey" in ssh_data
@@ -2094,29 +2094,29 @@ class TestTemplatesAPI:
         assert "BEGIN" in ssh_data["privateKey"]
         assert "PRIVATE KEY" in ssh_data["privateKey"]
 
-        # 恢復原有的 SSH keys（如果有的話）
+        # Restore original SSH keys (if any)
         if has_existing_keys:
             restore_data = {
                 "publicKey": existing_keys["publicKey"],
                 "privateKey": existing_keys["privateKey"]
             }
             restore_response = client.put("/api/v1/templates/marketplace/ssh-keys", json=restore_data)
-            # 不檢查restore結果，因為這是清理操作
+            # Restore result not checked because this is a cleanup step
 
     @pytest.mark.integration
     def test_tpl_078_ssh_keys_update(self, authenticated_client):
-        """TPL-078 更新 SSH Keys"""
+        """TPL-078 Update SSH Keys"""
         client, user = authenticated_client
 
-        # 產生測試用的 SSH key pair（使用有效的格式）
-        # 這是一個有效的測試用 SSH 公鑰（base64 編碼正確）
+        # Generate a test SSH key pair (using a valid format)
+        # This is a valid test SSH public key (base64 encoded correctly)
         test_public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7Z8K test@example.com"
         test_private_key = """-----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 1234567890Test1234567890Test1234567890Test1234567890Test1234567890
 -----END RSA PRIVATE KEY-----"""
 
-        # 先備份現有的 SSH keys
+        # Back up existing SSH keys first
         backup_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         has_existing_keys = (
             backup_response.status_code == status.HTTP_200_OK and
@@ -2127,7 +2127,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         if has_existing_keys:
             existing_keys = backup_response.json()["data"]
 
-        # 更新 SSH Keys
+        # Update SSH Keys
         update_data = {
             "publicKey": test_public_key,
             "privateKey": test_private_key
@@ -2137,29 +2137,29 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("SSH keys update endpoint not implemented")
 
-        # 由於測試用的 key 可能格式不完全正確，允許失敗
-        # 主要測試端點是否存在和基本驗證
+        # The test key may not be perfectly formatted, so failure is acceptable
+        # Mainly test that the endpoint exists with basic validation
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "success" in data
-        # 如果失敗，檢查是否是格式錯誤（這是預期的）
+        # If it fails, check whether it is a format error (which is expected)
         if not data["success"]:
             assert "error" in data
-            # 格式錯誤是可接受的，因為這是測試用的假 key
+            # Format errors are acceptable because this is a fake test key
             pytest.skip("Test SSH key format validation failed (expected for test keys)")
 
         assert "data" in data
 
-        # 恢復原有的 SSH keys（如果有的話）
+        # Restore original SSH keys (if any)
         if has_existing_keys:
             restore_data = {
                 "publicKey": existing_keys["publicKey"],
                 "privateKey": existing_keys["privateKey"]
             }
             restore_response = client.put("/api/v1/templates/marketplace/ssh-keys", json=restore_data)
-            # 不檢查restore結果，因為這是清理操作
+            # Restore result not checked because this is a cleanup step
 
     @pytest.mark.integration
     def test_tpl_078b_ssh_keys_invalid_format_is_localized(self, authenticated_client):
@@ -2196,10 +2196,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_079_ssh_keys_delete(self, authenticated_client):
-        """TPL-079 刪除 SSH Keys"""
+        """TPL-079 Delete SSH Keys"""
         client, user = authenticated_client
 
-        # 先備份現有的 SSH keys
+        # Back up existing SSH keys first
         backup_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         has_existing_keys = (
             backup_response.status_code == status.HTTP_200_OK and
@@ -2210,7 +2210,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         if has_existing_keys:
             existing_keys = backup_response.json()["data"]
 
-        # 刪除 SSH Keys
+        # Delete SSH Keys
         response = client.delete("/api/v1/templates/marketplace/ssh-keys")
 
         if response.status_code == status.HTTP_404_NOT_FOUND:
@@ -2219,33 +2219,33 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "success" in data
         assert data["success"] is True
 
-        # 驗證刪除後無法取得 SSH keys 或返回空
+        # Verify SSH keys cannot be retrieved or return empty after deletion
         verify_response = client.get("/api/v1/templates/marketplace/ssh-keys")
         if verify_response.status_code == status.HTTP_200_OK:
             verify_data = verify_response.json()
-            # SSH keys應該已被刪除或返回空
+            # SSH keys should be deleted or returned empty
             if verify_data.get("success"):
                 assert not verify_data.get("data", {}).get("publicKey")
 
-        # 恢復原有的 SSH keys（如果有的話）
+        # Restore original SSH keys (if any)
         if has_existing_keys:
             restore_data = {
                 "publicKey": existing_keys["publicKey"],
                 "privateKey": existing_keys["privateKey"]
             }
             restore_response = client.put("/api/v1/templates/marketplace/ssh-keys", json=restore_data)
-            # 不檢查restore結果，因為這是清理操作
+            # Restore result not checked because this is a cleanup step
 
     @pytest.mark.integration
     def test_tpl_080_mcp_config_full_workflow(self, authenticated_client, test_data_factory):
-        """TPL-080 MCP 配置完整工作流程"""
+        """TPL-080 MCP configuration full workflow"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for MCP Workflow",
             author_name=user.display_name,
@@ -2254,12 +2254,12 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 取得初始 MCP 配置
+        # 1. Get initial MCP configuration
         get_response = client.get(f"/api/v1/templates/{template_id}/mcp")
         if get_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_response.status_code == status.HTTP_200_OK
 
-        # 2. 更新 MCP 配置
+        # 2. Update MCP configuration
         mcp_data = {
             "mcpServers": {
                 "test-server": {
@@ -2276,10 +2276,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_081_hooks_config_full_workflow(self, authenticated_client, test_data_factory):
-        """TPL-081 Hooks 配置完整工作流程"""
+        """TPL-081 Hooks configuration full workflow"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for Hooks Workflow",
             author_name=user.display_name,
@@ -2288,12 +2288,12 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 1. 取得初始 Hooks 配置
+        # 1. Get initial Hooks configuration
         get_response = client.get(f"/api/v1/templates/{template_id}/hooks")
         if get_response.status_code != status.HTTP_404_NOT_FOUND:
             assert get_response.status_code == status.HTTP_200_OK
 
-        # 2. 更新 Hooks 配置
+        # 2. Update Hooks configuration
         hooks_data = {
             "hooks": {
                 "preCommit": [
@@ -2340,10 +2340,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_082_file_tree_with_depth(self, authenticated_client, test_data_factory):
-        """TPL-082 取得檔案樹（指定深度）"""
+        """TPL-082 Get file tree (with specified depth)"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for File Tree",
             author_name=user.display_name,
@@ -2352,7 +2352,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 測試不同深度
+        # Test different depths
         for depth in [1, 2, 3]:
             response = client.get(f"/api/v1/templates/{template_id}/files/tree?max_depth={depth}")
             if response.status_code != status.HTTP_404_NOT_FOUND:
@@ -2360,10 +2360,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_083_file_search_with_patterns(self, authenticated_client, test_data_factory):
-        """TPL-083 檔案搜尋（多種模式）"""
+        """TPL-083 File search (multiple patterns)"""
         client, user = authenticated_client
 
-        # 創建模板
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for Search Patterns",
             author_name=user.display_name,
@@ -2372,7 +2372,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 測試不同搜尋模式
+        # Test different search patterns
         file_types = [[".md"], [".json"], [".ts"], [".py"]]
         for types in file_types:
             search_data = {
@@ -2390,30 +2390,30 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_084_git_operations_workflow(self, authenticated_client):
-        """TPL-084 Git 操作完整工作流程"""
+        """TPL-084 Git operations full workflow"""
         client, user = authenticated_client
 
-        # 1. 檢查 Git 狀態
+        # 1. Check Git status
         status_response = client.get("/api/v1/templates/git/version-control/status")
         if status_response.status_code != status.HTTP_404_NOT_FOUND:
             assert status_response.status_code == status.HTTP_200_OK
 
-        # 2. 檢查變更記錄
+        # 2. Check change history
         changes_response = client.get("/api/v1/templates/git/version-control/changes")
         if changes_response.status_code != status.HTTP_404_NOT_FOUND:
             assert changes_response.status_code == status.HTTP_200_OK
 
-        # 3. 檢查分支列表
+        # 3. Check branch list
         branches_response = client.get("/api/v1/templates/git/version-control/branches")
         if branches_response.status_code != status.HTTP_404_NOT_FOUND:
             assert branches_response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_tpl_085_template_lifecycle(self, authenticated_client, test_data_factory):
-        """TPL-085 模板完整生命週期測試"""
+        """TPL-085 Template full lifecycle test"""
         client, user = authenticated_client
 
-        # 1. 創建模板
+        # 1. Create template
         template_data = test_data_factory.create_template_data(
             name="Lifecycle Test Template",
             author_name=user.display_name,
@@ -2423,11 +2423,11 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert create_response.status_code == status.HTTP_201_CREATED
         template_id = create_response.json()["id"]
 
-        # 2. 讀取模板
+        # 2. Read template
         get_response = client.get(f"/api/v1/templates/{template_id}")
         assert get_response.status_code == status.HTTP_200_OK
 
-        # 3. 更新模板
+        # 3. Update template
         update_data = {
             "name": "Updated Lifecycle Template",
             "description": "Updated description"
@@ -2435,20 +2435,20 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         update_response = client.put(f"/api/v1/templates/{template_id}", json=update_data)
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 4. 刪除模板
+        # 4. Delete template
         delete_response = client.delete(f"/api/v1/templates/{template_id}")
         assert delete_response.status_code == status.HTTP_204_NO_CONTENT
 
-        # 5. 驗證已刪除
+        # 5. Verify deletion
         verify_response = client.get(f"/api/v1/templates/{template_id}")
         assert verify_response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.integration
     def test_tpl_087_get_template_features_success(self, authenticated_client, test_data_factory):
-        """TPL-087 取得範本功能資訊成功"""
+        """TPL-087 Get template feature information successfully"""
         client, user = authenticated_client
 
-        # 創建範本並索引
+        # Create and index template
         template_data = test_data_factory.create_template_data(
             name="Template for Feature Query",
             author_name=user.display_name,
@@ -2457,31 +2457,31 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 查詢範本功能（創建時已自動索引）
+        # Query template features (auto-indexed on creation)
         features_response = client.get(f"/api/v1/templates/{template_id}/features")
         assert features_response.status_code == status.HTTP_200_OK
 
         features_data = features_response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = ["templateId", "features"]
         for field in required_fields:
-            assert field in features_data, f"功能資訊應包含 {field} 欄位"
+            assert field in features_data, f"Feature information should contain {field} field"
 
-        # 驗證資料內容
+        # Verify data content
         assert features_data["templateId"] == template_id
         assert isinstance(features_data["features"], list)
 
-        # 如果有索引時間，驗證格式
+        # If an index timestamp exists, verify its format
         if "indexedAt" in features_data and features_data["indexedAt"]:
             assert isinstance(features_data["indexedAt"], str)
 
     @pytest.mark.integration
     def test_tpl_088_get_feature_stats_success(self, authenticated_client, test_data_factory):
-        """TPL-088 取得功能統計資訊成功"""
+        """TPL-088 Get feature statistics successfully"""
         client, user = authenticated_client
 
-        # 創建幾個範本並索引
+        # Create and index several templates
         template_ids = []
         for i in range(2):
             template_data = test_data_factory.create_template_data(
@@ -2492,32 +2492,32 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
             create_response = client.post("/api/v1/templates", json=template_data)
             template_id = create_response.json()["id"]
             template_ids.append(template_id)
-            # 創建時會自動索引功能
+            # Indexing is triggered automatically on creation
 
-        # 取得功能統計
+        # Get feature statistics
         stats_response = client.get("/api/v1/templates/features/stats")
         assert stats_response.status_code == status.HTTP_200_OK
 
         stats_data = stats_response.json()
 
-        # 驗證回應結構
-        assert "stats" in stats_data, "統計資訊應包含 stats 欄位"
+        # Verify response structure
+        assert "stats" in stats_data, "Statistics should contain stats field"
         assert isinstance(stats_data["stats"], dict)
 
-        # 驗證統計資料結構
-        # 可能的功能類型：mcp, commands, hooks, agentsMd, agents, outputStyle, scripts, skills
+        # Verify statistics data structure
+        # Possible feature types: mcp, commands, hooks, agentsMd, agents, outputStyle, scripts, skills
         for feature_name, stat_item in stats_data["stats"].items():
-            assert "name" in stat_item, f"{feature_name} 統計應包含 name 欄位"
-            assert "count" in stat_item, f"{feature_name} 統計應包含 count 欄位"
+            assert "name" in stat_item, f"{feature_name} statistics should contain name field"
+            assert "count" in stat_item, f"{feature_name} statistics should contain count field"
             assert isinstance(stat_item["count"], int)
             assert stat_item["count"] >= 0
 
     @pytest.mark.integration
     def test_tpl_089_list_templates_filter_by_features(self, authenticated_client, test_data_factory):
-        """TPL-089 按功能篩選範本列表"""
+        """TPL-089 Filter template list by feature"""
         client, user = authenticated_client
 
-        # 創建範本並索引
+        # Create and index template
         template_data = test_data_factory.create_template_data(
             name="Template for Feature Filter",
             author_name=user.display_name,
@@ -2525,9 +2525,9 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
-        # 創建時會自動索引功能
+        # Indexing is triggered automatically on creation
 
-        # 測試按單一功能篩選
+        # Test filtering by a single feature
         response = client.get("/api/v1/templates?features=mcp")
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -2535,7 +2535,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert "total" in data
         assert isinstance(data["items"], list)
 
-        # 測試按多個功能篩選（AND 邏輯）
+        # Test filtering by multiple features (AND logic)
         response = client.get("/api/v1/templates?features=mcp,hooks")
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -2544,7 +2544,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_091_get_features_not_found(self, authenticated_client):
-        """TPL-091 取得不存在範本的功能（錯誤情境）"""
+        """TPL-091 Get features of nonexistent template (error scenario)"""
         client, user = authenticated_client
 
         fake_template_id = str(uuid.uuid4())
@@ -2556,10 +2556,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_092_feature_stats_with_cli_type(self, authenticated_client, test_data_factory):
-        """TPL-092 取得特定 CLI 類型的功能統計"""
+        """TPL-092 Get feature statistics for a specific CLI type"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Template for CLI Stats",
             author_name=user.display_name,
@@ -2567,9 +2567,9 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
-        # 創建時會自動索引功能
+        # Indexing is triggered automatically on creation
 
-        # 取得特定 CLI 類型的統計
+        # Get statistics for a specific CLI type
         stats_response = client.get("/api/v1/templates/features/stats?cli_type=claude-code")
         assert stats_response.status_code == status.HTTP_200_OK
 
@@ -2579,10 +2579,10 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
 
     @pytest.mark.integration
     def test_tpl_093_auto_index_on_template_create(self, authenticated_client, test_data_factory):
-        """TPL-093 創建範本時自動索引功能"""
+        """TPL-093 Auto-index features on template creation"""
         client, user = authenticated_client
 
-        # 創建範本（應自動觸發索引）
+        # Create template (should auto-trigger indexing)
         template_data = test_data_factory.create_template_data(
             name="Auto Index Test Template",
             author_name=user.display_name,
@@ -2592,23 +2592,23 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert create_response.status_code == status.HTTP_201_CREATED
         template_id = create_response.json()["id"]
 
-        # 查詢功能資訊，驗證已自動索引
+        # Query feature information and verify it was auto-indexed
         features_response = client.get(f"/api/v1/templates/{template_id}/features")
         assert features_response.status_code == status.HTTP_200_OK
 
         features_data = features_response.json()
         assert features_data["templateId"] == template_id
         assert "features" in features_data
-        # 索引時間可能為 None（如果從未索引過）或有值
-        # 但在自動索引後應該有 indexedAt 或至少執行過索引
+        # Index timestamp may be None (if never indexed) or have a value
+        # After auto-indexing, indexedAt should exist or indexing should have run at least once
         assert isinstance(features_data["features"], list)
 
     @pytest.mark.integration
     def test_tpl_094_auto_reindex_on_template_update(self, authenticated_client, test_data_factory):
-        """TPL-094 更新範本時自動重新索引功能"""
+        """TPL-094 Auto re-index features on template update"""
         client, user = authenticated_client
 
-        # 創建範本
+        # Create template
         template_data = test_data_factory.create_template_data(
             name="Reindex Test Template",
             author_name=user.display_name,
@@ -2617,11 +2617,11 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
 
-        # 取得初始功能資訊
+        # Get initial feature information
         initial_features_response = client.get(f"/api/v1/templates/{template_id}/features")
         initial_features = initial_features_response.json()
 
-        # 更新範本（應自動重新索引）
+        # Update template (should auto re-index)
         update_data = {
             "name": "Updated Reindex Template",
             "description": "Updated for reindex test"
@@ -2629,21 +2629,21 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         update_response = client.put(f"/api/v1/templates/{template_id}", json=update_data)
         assert update_response.status_code == status.HTTP_200_OK
 
-        # 查詢更新後的功能資訊
+        # Query feature information after update
         updated_features_response = client.get(f"/api/v1/templates/{template_id}/features")
         assert updated_features_response.status_code == status.HTTP_200_OK
 
         updated_features = updated_features_response.json()
         assert updated_features["templateId"] == template_id
-        # 驗證已重新索引（indexedAt 應該更新或至少執行過索引）
+        # Verify re-indexing (indexedAt should be updated, or indexing should have run at least once)
         assert "features" in updated_features
 
     @pytest.mark.integration
     def test_tpl_096_list_templates_with_indexed_features_field(self, authenticated_client, test_data_factory):
-        """TPL-096 列出範本時包含已索引功能欄位"""
+        """TPL-096 Include indexed feature fields when listing templates"""
         client, user = authenticated_client
 
-        # 創建範本並索引
+        # Create and index template
         template_data = test_data_factory.create_template_data(
             name="Template with Indexed Features",
             author_name=user.display_name,
@@ -2651,61 +2651,61 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         )
         create_response = client.post("/api/v1/templates", json=template_data)
         template_id = create_response.json()["id"]
-        # 創建時會自動索引功能
+        # Indexing is triggered automatically on creation
 
-        # 列出範本
+        # List templates
         list_response = client.get("/api/v1/templates")
         assert list_response.status_code == status.HTTP_200_OK
 
         data = list_response.json()
         assert "items" in data
 
-        # 找到剛創建的範本
+        # Find the newly created template
         created_template = None
         for template in data["items"]:
             if template["id"] == template_id:
                 created_template = template
                 break
 
-        # 驗證範本包含功能相關欄位（如果實作有返回的話）
+        # Verify the template contains feature-related fields (if returned by the implementation)
         if created_template:
-            # indexedFeatures 和 featuresIndexedAt 可能存在於回應中
-            # 這取決於 API 實作是否在列表中包含這些欄位
+            # indexedFeatures and featuresIndexedAt may be present in the response
+            # This depends on whether the API implementation includes these fields in the list
             assert "id" in created_template
             assert "name" in created_template
 
     @pytest.mark.integration
     def test_tpl_097_empty_features_filter(self, authenticated_client):
-        """TPL-097 空功能篩選條件"""
+        """TPL-097 Empty feature filter condition"""
         client, user = authenticated_client
 
-        # 測試空的 features 參數
+        # Test empty features parameter
         response = client.get("/api/v1/templates?features=")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         assert "items" in data
-        # 空篩選應該返回所有範本（不進行功能篩選）
+        # Empty filter should return all templates (no feature filtering)
 
     @pytest.mark.integration
     def test_tpl_098_invalid_feature_filter(self, authenticated_client):
-        """TPL-098 無效的功能篩選條件"""
+        """TPL-098 Invalid feature filter condition"""
         client, user = authenticated_client
 
-        # 測試無效的功能名稱
+        # Test invalid feature name
         response = client.get("/api/v1/templates?features=invalid_feature_name")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
         assert "items" in data
-        # 無效功能名稱應該返回空列表或忽略該篩選
+        # Invalid feature name should return empty list or ignore that filter
 
     @pytest.mark.integration
     def test_tpl_100_feature_stats_empty_database(self, authenticated_client):
-        """TPL-100 空資料庫時的功能統計"""
+        """TPL-100 Feature statistics on empty database"""
         client, user = authenticated_client
 
-        # 取得統計（即使沒有範本也應該正常返回）
+        # Get statistics (should return normally even if no templates exist)
         stats_response = client.get("/api/v1/templates/features/stats")
         assert stats_response.status_code == status.HTTP_200_OK
 
@@ -2713,7 +2713,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert "stats" in stats_data
         assert isinstance(stats_data["stats"], dict)
 
-        # 所有功能的計數應該是 0 或根本不存在
+        # All feature counts should be 0 or simply not present
         for feature_name, stat_item in stats_data["stats"].items():
             if "count" in stat_item:
                 assert stat_item["count"] >= 0

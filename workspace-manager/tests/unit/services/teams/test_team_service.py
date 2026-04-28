@@ -1,4 +1,4 @@
-"""TeamService 單元Testing"""
+"""Unit Tests for TeamService"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def team_service():
 
 @pytest.fixture
 def sample_team_create():
-    """範例Team創建Request"""
+    """Sample Team Creation Request"""
     return TeamCreate(
         name="Test Team",
         description="Test team description",
@@ -34,10 +34,10 @@ def sample_team_create():
 
 @pytest.mark.unit
 class TestTeamList:
-    """TeamListing表Testing"""
+    """Team List Tests"""
 
     def test_list_teams_empty(self, team_service):
-        """Testing：空TeamListing表"""
+        """Test: Empty Team List"""
         # Act
         result = team_service.list()
 
@@ -46,7 +46,7 @@ class TestTeamList:
         assert len(result.items) == 0
 
     def test_list_teams_with_data(self, team_service, sample_team_create):
-        """Testing：ListingOutTeam"""
+        """Test: List Teams"""
         # Arrange
         team_service.create(sample_team_create)
         team_service.create(TeamCreate(name="Team 2", description="Desc 2", owner_id="user-456"))
@@ -65,10 +65,10 @@ class TestTeamList:
 
 @pytest.mark.unit
 class TestTeamGet:
-    """Team查詢Testing"""
+    """Team Query Tests"""
 
     def test_get_team_success(self, team_service, sample_team_create):
-        """Testing：Successfully獲GettingTeam"""
+        """Test: Successfully Get Team"""
         # Arrange
         created_team = team_service.create(sample_team_create)
 
@@ -81,7 +81,7 @@ class TestTeamGet:
         assert result.name == "Test Team"
 
     def test_get_team_not_found(self, team_service):
-        """Testing：Team不存At返Back None"""
+        """Test: Return None When Team Does Not Exist"""
         # Act
         result = team_service.get("nonexistent-team")
 
@@ -95,10 +95,10 @@ class TestTeamGet:
 
 @pytest.mark.unit
 class TestTeamCreate:
-    """Team創建Testing"""
+    """Team Creation Tests"""
 
     def test_create_team_success(self, team_service, sample_team_create):
-        """Testing：Successfully創建Team"""
+        """Test: Successfully Create Team"""
         # Act
         result = team_service.create(sample_team_create)
 
@@ -110,7 +110,7 @@ class TestTeamCreate:
         assert result.member_count == 1
 
     def test_create_team_with_optional_fields(self, team_service):
-        """Testing：創建BringingOptional字段的Team"""
+        """Test: Create Team With Optional Fields"""
         # Arrange
         team_create = TeamCreate(
             name="Team with Avatar",
@@ -132,10 +132,10 @@ class TestTeamCreate:
 
 @pytest.mark.unit
 class TestTeamUpdate:
-    """TeamMoreNewTesting"""
+    """Team Update Tests"""
 
     def test_update_team_success(self, team_service, sample_team_create):
-        """Testing：SuccessfullyMoreNewTeam"""
+        """Test: Successfully Update Team"""
         # Arrange
         created_team = team_service.create(sample_team_create)
         team_update = TeamUpdate(
@@ -152,7 +152,7 @@ class TestTeamUpdate:
         assert result.description == "Updated description"
 
     def test_update_team_not_found(self, team_service):
-        """Testing：MoreNew不存At的Team返Back None"""
+        """Test: Return None When Updating Non-Existent Team"""
         # Arrange
         team_update = TeamUpdate(name="Updated Name")
 
@@ -163,7 +163,7 @@ class TestTeamUpdate:
         assert result is None
 
     def test_update_team_partial_fields(self, team_service, sample_team_create):
-        """Testing：Part字段MoreNew"""
+        """Test: Partial Field Update"""
         # Arrange
         created_team = team_service.create(sample_team_create)
         original_description = created_team.description
@@ -176,7 +176,7 @@ class TestTeamUpdate:
         # Assert
         assert result is not None
         assert result.name == "Only Name Updated"
-        assert result.description == original_description  # Describe不變
+        assert result.description == original_description  # Description unchanged
 
 
 # ============================================================================
@@ -185,10 +185,10 @@ class TestTeamUpdate:
 
 @pytest.mark.unit
 class TestTeamDelete:
-    """TeamDeleteTesting"""
+    """Team Deletion Tests"""
 
     def test_delete_team_success(self, team_service, sample_team_create):
-        """Testing：SuccessfullyDeleteTeam"""
+        """Test: Successfully Delete Team"""
         # Arrange
         created_team = team_service.create(sample_team_create)
 
@@ -199,6 +199,6 @@ class TestTeamDelete:
         assert team_service.get(created_team.id) is None
 
     def test_delete_team_not_found(self, team_service):
-        """Testing：Delete不存At的Team優雅Handle"""
-        # Act & Assert (不應該拋OutAbnormal)
+        """Test: Graceful Handle When Deleting Non-Existent Team"""
+        # Act & Assert (should not raise exception)
         team_service.delete("nonexistent-team")

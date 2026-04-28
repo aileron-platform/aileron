@@ -1,4 +1,4 @@
-"""UserSettings API Integration Test。"""
+"""User Settings API Integration Test."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestSettingsAPI:
-    """只保留目FrontProductActuallyUse的Settings CRUD Test。"""
+    """Only keep Settings CRUD tests currently used by the product."""
 
     @pytest.mark.integration
     def test_settings_001_get_user_settings(self, authenticated_client):
-        """ST-001 可以Get既有UserSettings"""
+        """ST-001 Can get existing user settings"""
         client, user = authenticated_client
 
-        # Get用HouseholdSettings
+        # Get user settings
         response = client.get(f"/api/v1/users/{user.id}/settings")
 
         assert response.status_code == status.HTTP_200_OK
@@ -31,10 +31,10 @@ class TestSettingsAPI:
 
     @pytest.mark.integration
     def test_settings_002_update_user_settings(self, authenticated_client):
-        """ST-002 可以Update既有UserSettings"""
+        """ST-002 Can update existing user settings"""
         client, user = authenticated_client
 
-        # Update用HouseholdSettings
+        # Update user settings
         payload = {
             "general": {
                 "theme": "dark",
@@ -81,7 +81,7 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/settings/sync")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "同步Failed"
+            assert zh_response.json()["detail"] == "Sync failed"
 
     @pytest.mark.integration
     def test_settings_004_generate_ssh_key_error_is_localized(self, authenticated_client):
@@ -102,12 +102,12 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/ssh-keys/generate")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "Producing SSH Key Failed"
+            assert zh_response.json()["detail"] == "SSH key generation failed"
 
 
 @pytest.fixture
 def test_data_factory():
-    """TestData工廠 fixture"""
+    """Test data factory fixture"""
     return TestDataFactory()
 
 

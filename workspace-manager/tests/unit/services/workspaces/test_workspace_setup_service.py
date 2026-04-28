@@ -1,4 +1,4 @@
-"""WorkspaceSetupService 單元Testing"""
+"""Unit Tests for WorkspaceSetupService"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.services.workspace_setup_service import WorkspaceSetupService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock Data庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.get = MagicMock(return_value=None)
     return session
@@ -25,7 +25,7 @@ def mock_db_session():
 
 @pytest.fixture
 def sample_workspace():
-    """範例 workspace"""
+    """Sample workspace"""
     workspace = MagicMock()
     workspace.id = "workspace-123"
     workspace.owner_id = "user-123"
@@ -42,7 +42,7 @@ def sample_workspace():
 
 @pytest.fixture
 def sample_workspace_without_runtime():
-    """None runtime 的 workspace"""
+    """Workspace without runtime"""
     workspace = MagicMock()
     workspace.id = "workspace-456"
     workspace.owner_id = "user-456"
@@ -63,13 +63,13 @@ def setup_service(mock_db_session):
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestInitialSync:
-    """初始同步Testing"""
+    """Initial Sync Tests"""
 
     @pytest.mark.asyncio
     async def test_run_initial_sync_success(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：Successfully執行初始同步"""
+        """Test: Successfully Execute Initial Sync"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -90,7 +90,7 @@ class TestInitialSync:
             assert result.completed is True
             assert len(result.tasks) == 3
 
-            # VerifyingAllTask都Successfully
+            # Verify all tasks succeeded
             for task in result.tasks:
                 assert task.status == "success"
 
@@ -98,7 +98,7 @@ class TestInitialSync:
     async def test_run_initial_sync_without_runtime(
         self, setup_service, mock_db_session, sample_workspace_without_runtime
     ):
-        """Testing：runtime 未就緒時拋OutIncorrectly"""
+        """Test: Throw Error When Runtime Not Ready"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_without_runtime
 
@@ -110,7 +110,7 @@ class TestInitialSync:
     async def test_run_initial_sync_without_user_settings(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：用HouseholdNo settings時跳過同步"""
+        """Test: Skip Sync When User Has No Settings"""
         # Arrange
         sample_workspace.owner.settings = None
         mock_db_session.get.return_value = sample_workspace
@@ -120,7 +120,7 @@ class TestInitialSync:
 
         # Assert
         assert result.completed is True
-        # AllTask應該被Mark為 skipped
+        # All tasks should be marked as skipped
         for task in result.tasks:
             assert task.status == "skipped"
 
@@ -128,13 +128,13 @@ class TestInitialSync:
     async def test_run_initial_sync_with_partial_failure(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：PartTaskUnsuccessfully時的Handle"""
+        """Test: Handle Partial Task Failures"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
         mock_sync_result = {
             "ssh": {"success": True, "message": "SSH Sync succeeded"},
-            "claude_code": {"success": False, "message": "Claude Code 同步Unsuccessfully"},
+            "claude_code": {"success": False, "message": "Claude Code sync failed"},
             "git": {"success": True, "message": "Git Sync succeeded"}
         }
 
@@ -144,9 +144,9 @@ class TestInitialSync:
             result = await setup_service.run_initial_sync("workspace-123")
 
             # Assert
-            assert result.completed is False  # 有Unsuccessfully的Task
+            assert result.completed is False  # Has failed tasks
 
-            # Verifying各Task狀態
+            # Verify each task status
             task_statuses = {task.task_key: task.status for task in result.tasks}
             assert task_statuses["ssh"] == "success"
             assert task_statuses["claudeCode"] == "failed"
@@ -156,7 +156,7 @@ class TestInitialSync:
     async def test_run_initial_sync_with_skipped_tasks(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：跳過的Task(success=False但包含跳過訊息)也算Complete"""
+        """Test: Skipped Tasks (success=False but contains skip message) Count as Complete"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -172,9 +172,9 @@ class TestInitialSync:
             result = await setup_service.run_initial_sync("workspace-123")
 
             # Assert
-            assert result.completed is True  # skipped 也算Complete
+            assert result.completed is True  # Skipped tasks count as complete
 
-            # Verifying包含跳過訊息的Task被Mark為 skipped
+            # Verify tasks with skip message are marked as skipped
             task_statuses = {task.task_key: task.status for task in result.tasks}
             assert task_statuses["ssh"] == "skipped"
             assert task_statuses["claudeCode"] == "success"
@@ -188,13 +188,13 @@ class TestInitialSync:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestFetchRuntimeStatus:
-    """獲Getting runtime 狀態Testing"""
+    """Runtime Status Retrieval Tests"""
 
     @pytest.mark.asyncio
     async def test_fetch_runtime_status_success(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：Successfully獲Getting runtime 狀態"""
+        """Test: Successfully Get Runtime Status"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -202,8 +202,8 @@ class TestFetchRuntimeStatus:
         mock_response.json.return_value = {
             "checks": {
                 "ssh": {"status": "success", "message": "SSH configured"},
-                "claudeCode": {"status": "success", "message": "Claude Code 已Configure"},
-                "git": {"status": "pending", "message": "Waiting Git Configure"}
+                "claudeCode": {"status": "success", "message": "Claude Code configured"},
+                "git": {"status": "pending", "message": "Waiting for Git configuration"}
             }
         }
 
@@ -220,9 +220,9 @@ class TestFetchRuntimeStatus:
             # Assert
             assert isinstance(result, WorkspaceSetupStatus)
             assert result.workspace_id == "workspace-123"
-            assert result.completed is False  # git 還At pending
+            assert result.completed is False  # git is still pending
 
-            # Verifying各Task狀態
+            # Verify each task status
             task_statuses = {task.task_key: task.status for task in result.tasks}
             assert task_statuses["ssh"] == "success"
             assert task_statuses["claudeCode"] == "success"
@@ -232,7 +232,7 @@ class TestFetchRuntimeStatus:
     async def test_fetch_runtime_status_without_runtime(
         self, setup_service, mock_db_session, sample_workspace_without_runtime
     ):
-        """Testing：runtime 未就緒時拋OutIncorrectly"""
+        """Test: Throw Error When Runtime Not Ready"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_without_runtime
 
@@ -244,7 +244,7 @@ class TestFetchRuntimeStatus:
     async def test_fetch_runtime_status_all_completed(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：AllTask都Complete"""
+        """Test: All Tasks Completed"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -252,8 +252,8 @@ class TestFetchRuntimeStatus:
         mock_response.json.return_value = {
             "checks": {
                 "ssh": {"status": "success", "message": "SSH configured"},
-                "claudeCode": {"status": "success", "message": "Claude Code 已Configure"},
-                "git": {"status": "success", "message": "Git 已Configure"}
+                "claudeCode": {"status": "success", "message": "Claude Code configured"},
+                "git": {"status": "success", "message": "Git configured"}
             }
         }
 
@@ -274,7 +274,7 @@ class TestFetchRuntimeStatus:
     async def test_fetch_runtime_status_with_http_error(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：HTTP IncorrectlyHandle"""
+        """Test: HTTP Error Handling"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -298,7 +298,7 @@ class TestFetchRuntimeStatus:
     async def test_fetch_runtime_status_with_missing_checks(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：Check項缺失時Use默認Value"""
+        """Test: Use Default Values When Check Items Missing"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -316,7 +316,7 @@ class TestFetchRuntimeStatus:
             result = await setup_service.fetch_runtime_status("workspace-123")
 
             # Assert
-            # AllTask應該Yes pending 狀態
+            # All tasks should be in pending status
             for task in result.tasks:
                 assert task.status == "pending"
                 assert task.message == "Waiting for synchronization result"
@@ -325,15 +325,15 @@ class TestFetchRuntimeStatus:
     async def test_fetch_runtime_status_normalizes_unknown_status(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：未知狀態會被正規化為 pending"""
+        """Test: Unknown Status Normalized to Pending"""
         mock_db_session.get.return_value = sample_workspace
 
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "checks": {
-                "ssh": {"status": "mystery", "message": "未知狀態"},
-                "claudeCode": {"status": "success", "message": "Claude Code 已Configure"},
-                "git": {"status": "failed", "message": "Git Unsuccessfully"},
+                "ssh": {"status": "mystery", "message": "Unknown status"},
+                "claudeCode": {"status": "success", "message": "Claude Code configured"},
+                "git": {"status": "failed", "message": "Git failed"},
             }
         }
 
@@ -359,12 +359,12 @@ class TestFetchRuntimeStatus:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceRetrieval:
-    """workspace 獲GettingTesting"""
+    """Workspace Retrieval Tests"""
 
     def test_get_workspace_success(
         self, setup_service, mock_db_session, sample_workspace
     ):
-        """Testing：Successfully獲Getting workspace"""
+        """Test: Successfully Retrieve Workspace"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
 
@@ -377,7 +377,7 @@ class TestWorkspaceRetrieval:
     def test_get_workspace_not_found(
         self, setup_service, mock_db_session
     ):
-        """Testing：workspace does not exist時拋OutIncorrectly"""
+        """Test: Throw Error When Workspace Does Not Exist"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -393,10 +393,10 @@ class TestWorkspaceRetrieval:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestTaskStatusCreation:
-    """Task狀態創建Testing"""
+    """Task Status Creation Tests"""
 
     def test_create_task_status(self, setup_service):
-        """Testing：創建Task狀態"""
+        """Test: Create Task Status"""
         # Act
         task = setup_service._create_task_status(
             key="ssh",
@@ -419,25 +419,25 @@ class TestTaskStatusCreation:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestMessageAnalysis:
-    """訊息AnalysisTesting"""
+    """Message Analysis Tests"""
 
     def test_is_skipped_message_with_keyword_no(self, setup_service):
-        """Testing：包含'None'Key字的訊息"""
+        """Test: Message Containing 'No' Keyword"""
         assert setup_service._is_skipped_message("No settings") is True
 
     def test_is_skipped_message_with_keyword_none(self, setup_service):
-        """Testing：包含'無'Key字的訊息"""
+        """Test: Message Containing 'None' Keyword"""
         assert setup_service._is_skipped_message("No related settings") is True
 
     def test_is_skipped_message_with_keyword_not_set(self, setup_service):
-        """Testing：包含'未Configure'Key字的訊息"""
+        """Test: Message Containing 'Not Configured' Keyword"""
         assert setup_service._is_skipped_message("SSH not configured") is True
 
     def test_is_skipped_message_without_keywords(self, setup_service):
-        """Testing：不包含跳過Key字的訊息"""
+        """Test: Message Without Skip Keywords"""
         assert setup_service._is_skipped_message("Sync succeeded") is False
 
     def test_is_skipped_message_empty(self, setup_service):
-        """Testing：空訊息"""
+        """Test: Empty Message"""
         assert setup_service._is_skipped_message("") is False
         assert setup_service._is_skipped_message(None) is False

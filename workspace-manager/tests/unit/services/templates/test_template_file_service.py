@@ -1,4 +1,4 @@
-"""TemplateFileService 單元Testing"""
+"""Unit Tests for TemplateFileService"""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from app.services.template_file_service import TemplateFileService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock Data庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.query = MagicMock()
     return session
@@ -36,7 +36,7 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_template_db():
-    """範例TemplateData庫Model"""
+    """Sample Template Database Model"""
     return TemplateDB(
         id="test-template",
         name="Test Template",
@@ -71,10 +71,10 @@ def file_service(mock_db_session, tmp_path):
 
 @pytest.mark.unit
 class TestScopeValidation:
-    """Scope VerifyingTesting"""
+    """Scope Validation Tests"""
 
     def test_validate_scope_scripts_default(self, file_service):
-        """Testing：Default scope 為 scripts"""
+        """Test: Default scope is scripts"""
         # Act
         result = file_service._validate_scope(None)
 
@@ -82,7 +82,7 @@ class TestScopeValidation:
         assert result == "scripts"
 
     def test_validate_scope_valid_skills(self, file_service):
-        """Testing：Valid scope - skills"""
+        """Test: Valid scope - skills"""
         # Act
         result = file_service._validate_scope("skills")
 
@@ -90,7 +90,7 @@ class TestScopeValidation:
         assert result == "skills"
 
     def test_validate_scope_valid_scripts(self, file_service):
-        """Testing：Valid scope - scripts"""
+        """Test: Valid scope - scripts"""
         # Act
         result = file_service._validate_scope("scripts")
 
@@ -98,7 +98,7 @@ class TestScopeValidation:
         assert result == "scripts"
 
     def test_validate_scope_invalid(self, file_service):
-        """Testing：Invalid scope 拋OutAbnormal"""
+        """Test: Invalid scope throws exception"""
         # Act & Assert
         with pytest.raises(InvalidScopeException):
             file_service._validate_scope("invalid")
@@ -110,10 +110,10 @@ class TestScopeValidation:
 
 @pytest.mark.unit
 class TestPathValidation:
-    """Road徑VerifyingTesting"""
+    """Path Validation Tests"""
 
     def test_validate_path_empty(self, file_service):
-        """Testing：空Road徑返Back空String"""
+        """Test: Empty path returns empty string"""
         # Act
         result = file_service._validate_path("")
 
@@ -121,7 +121,7 @@ class TestPathValidation:
         assert result == ""
 
     def test_validate_path_with_leading_slash(self, file_service):
-        """Testing：RemoveOn頭斜Line"""
+        """Test: Remove leading slash"""
         # Act
         result = file_service._validate_path("/path/to/file")
 
@@ -129,13 +129,13 @@ class TestPathValidation:
         assert result == "path/to/file"
 
     def test_validate_path_traversal(self, file_service):
-        """Testing：檢測Road徑穿越Attacking"""
+        """Test: Detect path traversal attack"""
         # Act & Assert
         with pytest.raises(InvalidPathException):
             file_service._validate_path("../../../etc/passwd")
 
     def test_validate_path_normal(self, file_service):
-        """Testing：NormalRoad徑VerifyingSuccessfully"""
+        """Test: Normal path validation successful"""
         # Act
         result = file_service._validate_path("path/to/file.txt")
 
@@ -149,10 +149,10 @@ class TestPathValidation:
 
 @pytest.mark.unit
 class TestPathResolution:
-    """Road徑解析Testing"""
+    """Path Resolution Tests"""
 
     def test_resolve_path_root(self, file_service, tmp_path):
-        """Testing：解析根Road徑"""
+        """Test: Resolve root path"""
         # Act
         result = file_service._resolve_path("test-template", "scripts", "/")
 
@@ -161,7 +161,7 @@ class TestPathResolution:
         assert result == expected
 
     def test_resolve_path_with_subdirectory(self, file_service, tmp_path):
-        """Testing：解析子CatalogRoad徑"""
+        """Test: Resolve subdirectory path"""
         # Act
         result = file_service._resolve_path("test-template", "scripts", "subdir/file.txt")
 
@@ -176,10 +176,10 @@ class TestPathResolution:
 
 @pytest.mark.unit
 class TestFileTree:
-    """FileTreeTesting"""
+    """File Tree Tests"""
 
     def test_get_tree_empty_directory(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Get空CatalogTree"""
+        """Test: Get empty directory tree"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -195,13 +195,13 @@ class TestFileTree:
         assert len(result.nodes) == 0
 
     def test_get_tree_with_files(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Get含File的CatalogTree"""
+        """Test: Get directory tree with files"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        # BuildingTestingFile
+        # Build test file
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("content1")
@@ -215,7 +215,7 @@ class TestFileTree:
         assert len(result.nodes) == 2
 
     def test_get_tree_template_not_found(self, file_service, mock_db_session):
-        """Testing：Template不存At拋OutAbnormal"""
+        """Test: Template not found throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -232,16 +232,16 @@ class TestFileTree:
 
 @pytest.mark.unit
 class TestFileRead:
-    """FileReadTesting"""
+    """File Read Tests"""
 
     def test_read_file_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：ReadFileSuccessfully"""
+        """Test: Read file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        # BuildingTestingFile
+        # Build test file
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_file = scripts_dir / "test.py"
@@ -258,7 +258,7 @@ class TestFileRead:
         assert result.size == len(test_content.encode("utf-8"))
 
     def test_read_file_not_found(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Read不存At的File拋OutAbnormal"""
+        """Test: Read nonexistent file throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -272,7 +272,7 @@ class TestFileRead:
             file_service.read_file("test-template", "/nonexistent.py", "scripts")
 
     def test_read_file_too_large(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Read過BigFile拋OutAbnormal"""
+        """Test: Read oversized file throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -281,7 +281,7 @@ class TestFileRead:
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         test_file = scripts_dir / "large.txt"
-        # BuildingExceedLimitation的File
+        # Build exceeding limit file
         test_file.write_bytes(b"x" * (file_service.MAX_FILE_SIZE + 1))
 
         # Act & Assert
@@ -295,10 +295,10 @@ class TestFileRead:
 
 @pytest.mark.unit
 class TestFileWrite:
-    """FileWriteTesting"""
+    """File Write Tests"""
 
     def test_write_file_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：WriteFileSuccessfully"""
+        """Test: Write file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -318,13 +318,13 @@ class TestFileWrite:
         assert "size" in result
         assert result["size"] == len(content.encode("utf-8"))
 
-        # VerifyingFileActuallyWrite
+        # Verify file actually written
         test_file = scripts_dir / "test.py"
         assert test_file.exists()
         assert test_file.read_text() == content
 
     def test_write_file_too_large(self, file_service, mock_db_session, mock_template_db):
-        """Testing：Write過BigFile拋OutAbnormal"""
+        """Test: Write oversized file throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -337,7 +337,7 @@ class TestFileWrite:
             file_service.write_file("test-template", "/large.txt", content, "scripts")
 
     def test_write_file_with_version_check(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Bringing版本CheckWriteFile"""
+        """Test: Write file with version check"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -346,12 +346,12 @@ class TestFileWrite:
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
-        # 先Write初始Within容
+        # Write initial content first
         initial_content = "initial content"
         test_file = scripts_dir / "test.py"
         test_file.write_text(initial_content, encoding="utf-8")
 
-        # 計算Correctly的版本 ID
+        # Calculate correct version ID
         content_hash = hashlib.sha256(initial_content.encode("utf-8")).hexdigest()
         version_id = content_hash[:16]
 
@@ -377,10 +377,10 @@ class TestFileWrite:
 
 @pytest.mark.unit
 class TestFileCreateDelete:
-    """FileBuildingDeleteTesting"""
+    """File Creation and Deletion Tests"""
 
     def test_create_file_entry(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：BuildingFileSuccessfully"""
+        """Test: Create file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -405,7 +405,7 @@ class TestFileCreateDelete:
         assert test_file.exists()
 
     def test_create_directory_entry(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：BuildingCatalogSuccessfully"""
+        """Test: Create directory successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -429,7 +429,7 @@ class TestFileCreateDelete:
         assert test_dir.is_dir()
 
     def test_create_entry_already_exists(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Building已存At的條目拋OutAbnormal"""
+        """Test: Create existing entry throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -449,7 +449,7 @@ class TestFileCreateDelete:
             )
 
     def test_delete_file_entry(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：DeleteFileSuccessfully"""
+        """Test: Delete file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -468,7 +468,7 @@ class TestFileCreateDelete:
         assert not test_file.exists()
 
     def test_delete_directory_not_empty(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Delete非空Catalog（不遞迴）拋OutAbnormal"""
+        """Test: Delete non-empty directory (non-recursive) throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -485,7 +485,7 @@ class TestFileCreateDelete:
             file_service.delete_entry("test-template", "/testdir", "scripts", recursive=False)
 
     def test_delete_directory_recursive(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：遞迴DeleteCatalogSuccessfully"""
+        """Test: Recursively delete directory successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -511,10 +511,10 @@ class TestFileCreateDelete:
 
 @pytest.mark.unit
 class TestFileCopyMove:
-    """FileCopy移動Testing"""
+    """File Copy and Move Tests"""
 
     def test_copy_file_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：CopyFileSuccessfully"""
+        """Test: Copy file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -538,10 +538,10 @@ class TestFileCopyMove:
         dest_file = scripts_dir / "dest.py"
         assert dest_file.exists()
         assert dest_file.read_text() == "source content"
-        assert source_file.exists()  # 原File仍存At
+        assert source_file.exists()  # Original file still exists
 
     def test_move_file_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：移動FileSuccessfully"""
+        """Test: Move file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -565,10 +565,10 @@ class TestFileCopyMove:
         dest_file = scripts_dir / "dest.py"
         assert dest_file.exists()
         assert dest_file.read_text() == "source content"
-        assert not source_file.exists()  # 原File已Remove
+        assert not source_file.exists()  # Original file removed
 
     def test_copy_file_already_exists(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：CopyTo已存At的Goal拋OutAbnormal"""
+        """Test: Copy to existing destination throws exception"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -596,10 +596,10 @@ class TestFileCopyMove:
 
 @pytest.mark.unit
 class TestBatchOperations:
-    """批次OperationTesting"""
+    """Batch Operations Tests"""
 
     def test_batch_delete_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：批次DeleteSuccessfully"""
+        """Test: Batch delete successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -624,7 +624,7 @@ class TestBatchOperations:
         assert result.succeeded == 3
 
     def test_batch_delete_partial_failure(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：批次DeletePartUnsuccessfully"""
+        """Test: Batch delete partially successful"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -633,7 +633,7 @@ class TestBatchOperations:
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
         (scripts_dir / "file1.py").write_text("content1")
-        # file2.py 不存At
+        # file2.py does not exist
 
         # Act
         result = file_service.batch_delete(
@@ -655,11 +655,11 @@ class TestBatchOperations:
 
 @pytest.mark.unit
 class TestFileUpload:
-    """FileAbove傳Testing"""
+    """File Upload Tests"""
 
     @pytest.mark.asyncio
     async def test_upload_files_success(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Above傳FileSuccessfully"""
+        """Test: Upload file successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -668,7 +668,7 @@ class TestFileUpload:
         scripts_dir = tmp_path / "templates" / "test-template" / "scripts"
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
-        # Building mock UploadFile
+        # Build mock UploadFile
         mock_file = AsyncMock()
         mock_file.filename = "test.py"
         mock_file.read = AsyncMock(return_value=b"print('test')")
@@ -688,13 +688,13 @@ class TestFileUpload:
 
     @pytest.mark.asyncio
     async def test_upload_files_too_many(self, file_service, mock_db_session, mock_template_db):
-        """Testing：Above傳過ManyFileUnsuccessfully"""
+        """Test: Upload too many files unsuccessfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
         mock_db_session.query.return_value = mock_query
 
-        # BuildingExceedLimitationQuantity的 mock File
+        # Build exceeding limit quantity mock files
         mock_files = [AsyncMock() for _ in range(file_service.MAX_UPLOAD_FILES + 1)]
 
         # Act
@@ -716,10 +716,10 @@ class TestFileUpload:
 
 @pytest.mark.unit
 class TestFileSearch:
-    """FileSearchTesting"""
+    """File Search Tests"""
 
     def test_search_files_by_name(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：按檔名Search"""
+        """Test: Search by filename"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -747,7 +747,7 @@ class TestFileSearch:
         assert "test-file.md" in file_names
 
     def test_search_files_by_content(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：按Within容Search"""
+        """Test: Search by content"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -773,7 +773,7 @@ class TestFileSearch:
         assert found
 
     def test_search_files_empty_result(self, file_service, mock_db_session, mock_template_db, tmp_path):
-        """Testing：Search無Result"""
+        """Test: Search with no results"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -802,10 +802,10 @@ class TestFileSearch:
 
 @pytest.mark.unit
 class TestValidation:
-    """VerifyingTesting"""
+    """Validation Tests"""
 
     def test_validate_filename_valid(self, file_service):
-        """Testing：Valid檔名Verifying"""
+        """Test: Valid filename validation"""
         # Arrange
         valid_names = ["test.py", "example.js", "data.json"]
 
@@ -814,7 +814,7 @@ class TestValidation:
             assert file_service._validate_filename(name) is True
 
     def test_validate_filename_invalid_path_separators(self, file_service):
-        """Testing：包含Road徑Minute隔符的檔名Invalid"""
+        """Test: Filenames containing path separators are invalid"""
         # Arrange
         invalid_names = ["path/file.py", "path\\file.py"]
 
@@ -823,12 +823,12 @@ class TestValidation:
             assert file_service._validate_filename(name) is False
 
     def test_validate_filename_hidden_files(self, file_service):
-        """Testing：HideFileInvalid"""
+        """Test: Hidden files are invalid"""
         # Act & Assert
         assert file_service._validate_filename(".hidden") is False
 
     def test_validate_filename_special_characters(self, file_service):
-        """Testing：Special字符Invalid"""
+        """Test: Special characters are invalid"""
         # Arrange
         invalid_names = ['file<>.py', 'file:name.py', 'file|name.py']
 

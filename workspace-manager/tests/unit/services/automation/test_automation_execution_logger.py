@@ -1,4 +1,4 @@
-"""AutomationExecutionLogger 單元Testing"""
+"""Unit Tests for AutomationExecutionLogger"""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from app.services.automation_execution_logger import AutomationExecutionLogger
 
 @pytest.fixture
 def execution_logger():
-    """Basic執行LogRecord器"""
+    """Basic Execution Logger"""
     return AutomationExecutionLogger(
         execution_id="exec-123",
         job_id="job-123"
@@ -25,7 +25,7 @@ def execution_logger():
 
 @pytest.fixture
 def execution_logger_with_workspace():
-    """BringingWorkingDistrict的執行LogRecord器"""
+    """Execution Logger With Workspace"""
     return AutomationExecutionLogger(
         execution_id="exec-456",
         job_id="job-456",
@@ -34,15 +34,15 @@ def execution_logger_with_workspace():
 
 
 # ============================================================================
-# 初始化Testing
+# Initialization Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestLoggerInitialization:
-    """LogRecord器初始化Testing"""
+    """Logger Initialization Tests"""
 
     def test_init_without_workspace(self):
-        """Testing：不BringingWorkingDistrict初始化"""
+        """Test: Initialize Without Workspace"""
         # Act
         logger = AutomationExecutionLogger(
             execution_id="exec-123",
@@ -56,7 +56,7 @@ class TestLoggerInitialization:
         assert logger.logs == []
 
     def test_init_with_workspace(self):
-        """Testing：BringingWorkingDistrict初始化"""
+        """Test: Initialize With Workspace"""
         # Act
         logger = AutomationExecutionLogger(
             execution_id="exec-123",
@@ -72,16 +72,16 @@ class TestLoggerInitialization:
 
 
 # ============================================================================
-# LogRecordTesting
+# Logging Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestLogging:
-    """LogRecordTesting"""
+    """Logging Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_info_level(self, mock_logger, execution_logger):
-        """Testing：Record INFO 級別Log"""
+        """Test: Record INFO Level Log"""
         # Act
         execution_logger.log("INFO", "Test info message", key1="value1")
 
@@ -98,7 +98,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_warning_level(self, mock_logger, execution_logger):
-        """Testing：Record WARNING 級別Log"""
+        """Test: Record WARNING Level Log"""
         # Act
         execution_logger.log("WARNING", "Test warning message")
 
@@ -111,7 +111,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_error_level(self, mock_logger, execution_logger):
-        """Testing：Record ERROR 級別Log"""
+        """Test: Record ERROR Level Log"""
         # Act
         execution_logger.log("ERROR", "Test error message", error_code=500)
 
@@ -125,7 +125,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_debug_level(self, mock_logger, execution_logger):
-        """Testing：Record DEBUG 級別Log"""
+        """Test: Record DEBUG Level Log"""
         # Act
         execution_logger.log("DEBUG", "Test debug message")
 
@@ -138,7 +138,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_workspace_id(self, mock_logger, execution_logger_with_workspace):
-        """Testing：RecordBringingWorkingDistrict ID 的Log"""
+        """Test: Record Log With Workspace ID"""
         # Act
         execution_logger_with_workspace.log("INFO", "Test message")
 
@@ -149,7 +149,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_multiple_context(self, mock_logger, execution_logger):
-        """Testing：RecordBringingMany個AboveBelow文的Log"""
+        """Test: Record Log With Multiple Contexts"""
         # Act
         execution_logger.log(
             "INFO",
@@ -168,7 +168,7 @@ class TestLogging:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_lowercase_level(self, mock_logger, execution_logger):
-        """Testing：Small寫Log級別會被Convert為Big寫"""
+        """Test: Lowercase Log Level Will Be Converted to Uppercase"""
         # Act
         execution_logger.log("info", "Test message")
 
@@ -177,16 +177,16 @@ class TestLogging:
 
 
 # ============================================================================
-# 便利MethodTesting
+# Convenience Method Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestConvenienceMethods:
-    """便利MethodTesting"""
+    """Convenience Method Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_info_method(self, mock_logger, execution_logger):
-        """Testing：info 便利Method"""
+        """Test: info Convenience Method"""
         # Act
         execution_logger.info("Info message", key="value")
 
@@ -198,7 +198,7 @@ class TestConvenienceMethods:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_warning_method(self, mock_logger, execution_logger):
-        """Testing：warning 便利Method"""
+        """Test: warning Convenience Method"""
         # Act
         execution_logger.warning("Warning message")
 
@@ -208,7 +208,7 @@ class TestConvenienceMethods:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_error_method(self, mock_logger, execution_logger):
-        """Testing：error 便利Method"""
+        """Test: error Convenience Method"""
         # Act
         execution_logger.error("Error message")
 
@@ -218,7 +218,7 @@ class TestConvenienceMethods:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_debug_method(self, mock_logger, execution_logger):
-        """Testing：debug 便利Method"""
+        """Test: debug Convenience Method"""
         # Act
         execution_logger.debug("Debug message")
 
@@ -228,16 +228,16 @@ class TestConvenienceMethods:
 
 
 # ============================================================================
-# Log查詢Testing
+# Log Query Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestLogRetrieval:
-    """Log查詢Testing"""
+    """Log Query Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_logs_empty(self, mock_logger, execution_logger):
-        """Testing：獲Getting空LogListing表"""
+        """Test: Get Empty Log List"""
         # Act
         logs = execution_logger.get_logs()
 
@@ -246,7 +246,7 @@ class TestLogRetrieval:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_logs_with_entries(self, mock_logger, execution_logger):
-        """Testing：獲Getting有條ObjectiveLogListing表"""
+        """Test: Get Log List With Entries"""
         # Arrange
         execution_logger.info("Message 1")
         execution_logger.warning("Message 2")
@@ -263,7 +263,7 @@ class TestLogRetrieval:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_logs_preserves_order(self, mock_logger, execution_logger):
-        """Testing：獲GettingLogKeepingOrder"""
+        """Test: Get Logs Maintain Order"""
         # Arrange
         for i in range(5):
             execution_logger.info(f"Message {i}")
@@ -278,16 +278,16 @@ class TestLogRetrieval:
 
 
 # ============================================================================
-# 元DataConvertTesting
+# Metadata Conversion Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestMetadataConversion:
-    """元DataConvertTesting"""
+    """Metadata Conversion Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_to_metadata_empty_logs(self, mock_logger, execution_logger):
-        """Testing：空LogConvert為元Data"""
+        """Test: Empty Logs Convert to Metadata"""
         # Act
         metadata = execution_logger.to_metadata()
 
@@ -300,7 +300,7 @@ class TestMetadataConversion:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_to_metadata_with_logs(self, mock_logger, execution_logger):
-        """Testing：有LogConvert為元Data"""
+        """Test: Logs With Metadata Conversion"""
         # Arrange
         execution_logger.info("Info message")
         execution_logger.warning("Warning message")
@@ -317,7 +317,7 @@ class TestMetadataConversion:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_to_metadata_only_info_logs(self, mock_logger, execution_logger):
-        """Testing：Only INFO Log的元Data"""
+        """Test: Metadata With Only INFO Logs"""
         # Arrange
         execution_logger.info("Info message 1")
         execution_logger.info("Info message 2")
@@ -333,7 +333,7 @@ class TestMetadataConversion:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_to_metadata_warnings_only(self, mock_logger, execution_logger):
-        """Testing：OnlyWarn的元Data"""
+        """Test: Metadata With Only Warnings"""
         # Arrange
         execution_logger.warning("Warning 1")
         execution_logger.warning("Warning 2")
@@ -347,16 +347,16 @@ class TestMetadataConversion:
 
 
 # ============================================================================
-# LogAbstractTesting
+# Log Summary Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestLogSummary:
-    """LogAbstractTesting"""
+    """Log Summary Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_empty(self, mock_logger, execution_logger):
-        """Testing：空Log的Abstract"""
+        """Test: Summary of Empty Logs"""
         # Act
         summary = execution_logger.get_summary()
 
@@ -365,7 +365,7 @@ class TestLogSummary:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_info_only(self, mock_logger, execution_logger):
-        """Testing：Only INFO Log的Abstract"""
+        """Test: Summary With Only INFO Logs"""
         # Arrange
         execution_logger.info("Info 1")
         execution_logger.info("Info 2")
@@ -379,7 +379,7 @@ class TestLogSummary:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_errors(self, mock_logger, execution_logger):
-        """Testing：BringingIncorrectly的Abstract"""
+        """Test: Summary With Errors"""
         # Arrange
         execution_logger.info("Info")
         execution_logger.error("Error 1")
@@ -394,7 +394,7 @@ class TestLogSummary:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_warnings(self, mock_logger, execution_logger):
-        """Testing：BringingWarn的Abstract"""
+        """Test: Summary With Warnings"""
         # Arrange
         execution_logger.info("Info")
         execution_logger.warning("Warning 1")
@@ -408,7 +408,7 @@ class TestLogSummary:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_get_summary_with_errors_and_warnings(self, mock_logger, execution_logger):
-        """Testing：BringingIncorrectly和Warn的Abstract"""
+        """Test: Summary With Errors and Warnings"""
         # Arrange
         execution_logger.info("Info")
         execution_logger.warning("Warning 1")
@@ -425,17 +425,17 @@ class TestLogSummary:
 
 
 # ============================================================================
-# Time戳Testing
+# Timestamp Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestTimestamp:
-    """Time戳Testing"""
+    """Timestamp Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     @patch('app.services.automation_execution_logger.datetime')
     def test_log_timestamp_format(self, mock_datetime, mock_logger, execution_logger):
-        """Testing：LogTime戳FormatCorrectly"""
+        """Test: Log Timestamp Format Correct"""
         # Arrange
         fixed_time = datetime(2025, 1, 1, 12, 0, 0)
         mock_datetime.utcnow.return_value = fixed_time
@@ -449,16 +449,16 @@ class TestTimestamp:
 
 
 # ============================================================================
-# Many次LogRecordTesting
+# Multiple Log Entry Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestMultipleLogEntries:
-    """Many次LogRecordTesting"""
+    """Multiple Log Entry Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_multiple_log_entries_accumulate(self, mock_logger, execution_logger):
-        """Testing：Many次LogRecord會累積"""
+        """Test: Multiple Log Entries Will Accumulate"""
         # Act
         for i in range(10):
             execution_logger.info(f"Message {i}")
@@ -469,7 +469,7 @@ class TestMultipleLogEntries:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_mixed_level_logs(self, mock_logger, execution_logger):
-        """Testing：Mixed級別的LogRecord"""
+        """Test: Mixed Level Log Entries"""
         # Act
         execution_logger.info("Info")
         execution_logger.debug("Debug")
@@ -484,16 +484,16 @@ class TestMultipleLogEntries:
 
 
 # ============================================================================
-# BoundaryCircumstanceTesting
+# Edge Case Tests
 # ============================================================================
 
 @pytest.mark.unit
 class TestEdgeCases:
-    """BoundaryCircumstanceTesting"""
+    """Edge Case Tests"""
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_empty_message(self, mock_logger, execution_logger):
-        """Testing：空消息的Log"""
+        """Test: Log With Empty Message"""
         # Act
         execution_logger.info("")
 
@@ -503,18 +503,18 @@ class TestEdgeCases:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_special_characters(self, mock_logger, execution_logger):
-        """Testing：Special字符的Log"""
+        """Test: Log With Special Characters"""
         # Act
-        execution_logger.info("Message with 中文 and émojis 🎉")
+        execution_logger.info("Message with Chinese and émojis 🎉")
 
         # Assert
         assert len(execution_logger.logs) == 1
-        assert "中文" in execution_logger.logs[0]["message"]
+        assert "Chinese" in execution_logger.logs[0]["message"]
         assert "🎉" in execution_logger.logs[0]["message"]
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_none_context_value(self, mock_logger, execution_logger):
-        """Testing：None Value的AboveBelow文"""
+        """Test: None Value Context"""
         # Act
         execution_logger.info("Message", key1=None, key2="value")
 
@@ -525,7 +525,7 @@ class TestEdgeCases:
 
     @patch('app.services.automation_execution_logger.logger')
     def test_log_with_complex_context_values(self, mock_logger, execution_logger):
-        """Testing：ComplexType的AboveBelow文Value"""
+        """Test: Complex Type Context Values"""
         # Act
         execution_logger.info(
             "Message",

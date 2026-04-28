@@ -407,7 +407,7 @@ def test_knowledge_base_api_localizes_error_message_by_request_language(test_app
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "INVALID_FILE_TYPE"
-    assert response.json()["detail"]["message"] == "不Support的File副檔名: .exe"
+    assert response.json()["detail"]["message"] == "Unsupported file extension: .exe"
 
 
 @pytest.mark.integration
@@ -439,7 +439,7 @@ def test_knowledge_base_generic_invalid_request_and_conflict_use_simple_messages
         )
         assert zh_invalid_response.status_code == 400
         assert zh_invalid_response.json()["detail"]["code"] == "KB_INVALID_REQUEST"
-        assert zh_invalid_response.json()["detail"]["message"] == "Invalid的KnowledgeRequest"
+        assert zh_invalid_response.json()["detail"]["message"] == "Invalid knowledge base request"
 
     client.headers.update({"Accept-Language": "en", "X-Language": "en"})
     with patch(
@@ -465,7 +465,7 @@ def test_knowledge_base_generic_invalid_request_and_conflict_use_simple_messages
         )
         assert zh_conflict_response.status_code == 409
         assert zh_conflict_response.json()["detail"]["code"] == "KB_CONFLICT"
-        assert zh_conflict_response.json()["detail"]["message"] == "Knowledge發生衝突"
+        assert zh_conflict_response.json()["detail"]["message"] == "Knowledge base conflict"
 
 
 @pytest.mark.integration
@@ -490,7 +490,7 @@ def test_workspace_knowledge_base_error_translation_uses_code_instead_of_excepti
     client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
     with patch(
         "app.routers.workspaces.KnowledgeBaseAttachmentService.attach",
-        side_effect=KnowledgeBaseConflictError("完全Different的衝突Message", code="KB_ALREADY_ATTACHED"),
+        side_effect=KnowledgeBaseConflictError("totally different conflict wording", code="KB_ALREADY_ATTACHED"),
     ):
         zh_response = client.post(
             f"/api/v1/workspaces/{workspace_id}/knowledge-bases",
@@ -502,7 +502,7 @@ def test_workspace_knowledge_base_error_translation_uses_code_instead_of_excepti
     assert en_response.json()["detail"]["message"] == "Knowledge base is already attached to this workspace"
     assert zh_response.status_code == 409
     assert zh_response.json()["detail"]["code"] == "KB_ALREADY_ATTACHED"
-    assert zh_response.json()["detail"]["message"] == "Knowledge已掛載到此Workspace"
+    assert zh_response.json()["detail"]["message"] == "Knowledge base is already attached to this workspace"
 
 
 @pytest.mark.integration

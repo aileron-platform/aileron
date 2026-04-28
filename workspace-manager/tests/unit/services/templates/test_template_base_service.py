@@ -1,4 +1,4 @@
-"""TemplateBaseService 單元Testing"""
+"""Unit Tests for TemplateBaseService"""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from app.services.template_base_service import TemplateBaseService
 
 @pytest.fixture
 def mock_db_session():
-    """Mock Data庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.query = MagicMock()
     return session
@@ -27,7 +27,7 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_template_db():
-    """範例TemplateData庫Model"""
+    """Sample Template Database Model"""
     return TemplateDB(
         id="test-template",
         name="Test Template",
@@ -62,10 +62,10 @@ def base_service(mock_db_session, tmp_path):
 
 @pytest.mark.unit
 class TestPathManagement:
-    """Road徑ManagingTesting"""
+    """Path Management Tests"""
 
     def test_get_template_dir(self, base_service, tmp_path):
-        """Testing：GetTemplateCatalogRoad徑"""
+        """Test: Get template directory path"""
         # Act
         result = base_service._get_template_dir("test-template")
 
@@ -74,14 +74,14 @@ class TestPathManagement:
         assert result == expected
 
     def test_get_registry_template_dir(self, base_service, tmp_path):
-        """Testing：Get canonical registry TemplateCatalogRoad徑"""
+        """Test: Get canonical registry template directory path"""
         result = base_service._get_registry_template_dir("test-template")
 
         expected = tmp_path / "templates" / "test-template"
         assert result == expected
 
     def test_resolve_template_dir_prefers_registry_template(self, base_service, tmp_path):
-        """Testing：解析TemplateCatalog時優先Use registry templates Catalog"""
+        """Test: Resolve template directory prefers registry templates directory"""
         registry_dir = tmp_path / "templates" / "test-template"
         legacy_dir = tmp_path / "plugins" / "test-template"
         registry_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +92,7 @@ class TestPathManagement:
         assert result == registry_dir
 
     def test_get_plugin_json_path(self, base_service, tmp_path):
-        """Testing：Get plugin.json Road徑"""
+        """Test: Get plugin.json path"""
         # Act
         result = base_service._get_plugin_json_path("test-template")
 
@@ -101,7 +101,7 @@ class TestPathManagement:
         assert result == expected
 
     def test_ensure_directory_creates_new(self, base_service, tmp_path):
-        """Testing：確保Catalog存At會BuildingNewCatalog"""
+        """Test: Ensure directory exists creates new directory"""
         # Act
         directory, created = base_service._ensure_directory("test-template", "commands")
 
@@ -112,7 +112,7 @@ class TestPathManagement:
         assert created is True
 
     def test_ensure_directory_existing(self, base_service, tmp_path):
-        """Testing：確保Catalog存At不會RepeatBuilding"""
+        """Test: Ensure existing directory doesn't recreate"""
         # Arrange
         existing_dir = tmp_path / "templates" / "test-template" / "commands"
         existing_dir.mkdir(parents=True, exist_ok=True)
@@ -131,10 +131,10 @@ class TestPathManagement:
 
 @pytest.mark.unit
 class TestFileValidation:
-    """FileVerifyingTesting"""
+    """File Validation Tests"""
 
     def test_validate_filename_valid(self, base_service):
-        """Testing：ValidFileNameVerifyingSuccessfully"""
+        """Test: Valid filename validation successful"""
         # Arrange
         valid_names = [
             "command.md",
@@ -149,7 +149,7 @@ class TestFileValidation:
             assert base_service._validate_filename(name) is True
 
     def test_validate_filename_invalid_characters(self, base_service):
-        """Testing：Invalid字符FileNameVerifyingUnsuccessfully"""
+        """Test: Invalid character filename validation unsuccessful"""
         # Arrange
         invalid_names = [
             "file<>.md",
@@ -164,7 +164,7 @@ class TestFileValidation:
             assert base_service._validate_filename(name) is False
 
     def test_validate_filename_invalid_extension(self, base_service):
-        """Testing：不Allowing的副檔名VerifyingUnsuccessfully"""
+        """Test: Disallowed extension validation unsuccessful"""
         # Arrange
         invalid_names = [
             "file.exe",
@@ -177,7 +177,7 @@ class TestFileValidation:
             assert base_service._validate_filename(name) is False
 
     def test_validate_filename_empty_or_dots(self, base_service):
-        """Testing：空檔名或PointNumberVerifyingUnsuccessfully"""
+        """Test: Empty filename or dots validation unsuccessful"""
         # Arrange
         invalid_names = ["", ".", ".."]
 
@@ -186,7 +186,7 @@ class TestFileValidation:
             assert base_service._validate_filename(name) is False
 
     def test_validate_file_path_valid(self, base_service):
-        """Testing：ValidFileRoad徑VerifyingSuccessfully"""
+        """Test: Valid file path validation successful"""
         # Arrange
         valid_paths = [
             "commands/test.md",
@@ -199,7 +199,7 @@ class TestFileValidation:
             assert base_service._validate_file_path(path) is True
 
     def test_validate_file_path_invalid(self, base_service):
-        """Testing：InvalidFileRoad徑VerifyingUnsuccessfully"""
+        """Test: Invalid file path validation unsuccessful"""
         # Arrange
         invalid_paths = [
             "/absolute/path",
@@ -214,7 +214,7 @@ class TestFileValidation:
             assert base_service._validate_file_path(path) is False
 
     def test_is_safe_path_within_base(self, base_service, tmp_path):
-        """Testing：SafeRoad徑Check（AtBasisRoad徑Within）"""
+        """Test: Safe path check (within base path)"""
         # Arrange
         base_path = tmp_path / "base"
         base_path.mkdir(parents=True, exist_ok=True)
@@ -229,7 +229,7 @@ class TestFileValidation:
         assert result is True
 
     def test_is_safe_path_outside_base(self, base_service, tmp_path):
-        """Testing：SafeRoad徑Check（AtBasisRoad徑Outside）"""
+        """Test: Safe path check (outside base path)"""
         # Arrange
         base_path = tmp_path / "base"
         base_path.mkdir(parents=True, exist_ok=True)
@@ -250,10 +250,10 @@ class TestFileValidation:
 
 @pytest.mark.unit
 class TestTemplateIdValidation:
-    """Template ID VerifyingTesting"""
+    """Template ID Validation Tests"""
 
     def test_validate_template_id_valid(self, base_service):
-        """Testing：ValidTemplate ID VerifyingSuccessfully"""
+        """Test: Valid template ID validation successful"""
         # Arrange
         valid_ids = [
             "test-template",
@@ -267,16 +267,16 @@ class TestTemplateIdValidation:
             assert base_service._validate_template_id(template_id) is True
 
     def test_validate_template_id_invalid(self, base_service):
-        """Testing：InvalidTemplate ID VerifyingUnsuccessfully"""
+        """Test: Invalid template ID validation unsuccessful"""
         # Arrange
         invalid_ids = [
-            "Template",  # Big寫
-            "test_template",  # 底Line
-            "123-template",  # NumberOn頭
-            "-test",  # 連字NumberOn頭
-            "test-",  # 連字Number結尾
-            "test--template",  # 連續連字Number
-            "test template",  # 空格
+            "Template",  # Uppercase
+            "test_template",  # Underscore
+            "123-template",  # Starts with number
+            "-test",  # Starts with hyphen
+            "test-",  # Ends with hyphen
+            "test--template",  # Consecutive hyphens
+            "test template",  # Space
         ]
 
         # Act & Assert
@@ -290,10 +290,10 @@ class TestTemplateIdValidation:
 
 @pytest.mark.unit
 class TestFileOperations:
-    """FileOperationTesting"""
+    """File Operations Tests"""
 
     def test_normalize_file_name_with_extension(self, base_service):
-        """Testing：Standard化已有副檔名的FileName"""
+        """Test: Normalize filename with extension"""
         # Act
         result = base_service._normalize_file_name("command.md")
 
@@ -301,7 +301,7 @@ class TestFileOperations:
         assert result == "command.md"
 
     def test_normalize_file_name_without_extension(self, base_service):
-        """Testing：Standard化無副檔名的FileName"""
+        """Test: Normalize filename without extension"""
         # Act
         result = base_service._normalize_file_name("command")
 
@@ -309,7 +309,7 @@ class TestFileOperations:
         assert result == "command.md"
 
     def test_list_markdown_files(self, base_service, tmp_path):
-        """Testing：ListingOut Markdown File"""
+        """Test: List markdown files"""
         # Arrange
         test_dir = tmp_path / "test-dir"
         test_dir.mkdir(parents=True, exist_ok=True)
@@ -318,7 +318,7 @@ class TestFileOperations:
         (test_dir / "file2.md").write_text("content2")
         (test_dir / "file3.txt").write_text("not included")
 
-        # 定義Simple的FileModelClass
+        # Define simple FileModel class
         class FileModel:
             def __init__(self, file_name, size, last_modified):
                 self.file_name = file_name
@@ -336,13 +336,13 @@ class TestFileOperations:
         assert "file3.txt" not in file_names
 
     def test_read_file_content(self, base_service, tmp_path):
-        """Testing：ReadFileWithin容"""
+        """Test: Read file content"""
         # Arrange
         test_file = tmp_path / "test.md"
         test_content = "Test content\nLine 2"
         test_file.write_text(test_content, encoding="utf-8")
 
-        # 定義Simple的Within容ModelClass
+        # Define simple ContentModel class
         class ContentModel:
             def __init__(self, file_name, content, size, last_modified):
                 self.file_name = file_name
@@ -359,12 +359,12 @@ class TestFileOperations:
         assert result.size > 0
 
     def test_write_file_with_stats_success(self, base_service, tmp_path):
-        """Testing：WriteFile並返BackStatisticsInformation"""
+        """Test: Write file and return statistics"""
         # Arrange
         test_file = tmp_path / "test.md"
         content = "Test content"
 
-        # 定義Simple的Within容ModelClass
+        # Define simple ContentModel class
         class ContentModel:
             def __init__(self, file_name, content, size, last_modified):
                 self.file_name = file_name
@@ -383,7 +383,7 @@ class TestFileOperations:
         assert test_file.read_text() == content
 
     def test_write_file_with_stats_too_large(self, base_service, tmp_path):
-        """Testing：Write過BigFileUnsuccessfully"""
+        """Test: Write oversized file unsuccessful"""
         # Arrange
         test_file = tmp_path / "test.md"
         content = "x" * (base_service.MAX_FILE_SIZE_BYTES + 1)
@@ -407,10 +407,10 @@ class TestFileOperations:
 
 @pytest.mark.unit
 class TestYAMLExtraction:
-    """YAML front matter LiftingGettingTesting"""
+    """YAML Front Matter Extraction Tests"""
 
     def test_extract_yaml_description_with_frontmatter(self, base_service):
-        """Testing：From YAML front matter LiftingGetting description"""
+        """Test: Extract description from YAML front matter"""
         # Arrange
         content = """---
 description: Test description
@@ -427,7 +427,7 @@ author: Test Author
         assert result == "Test description"
 
     def test_extract_yaml_description_with_quotes(self, base_service):
-        """Testing：FromBringing引Number的 YAML front matter LiftingGetting description"""
+        """Test: Extract description from YAML front matter with quotes"""
         # Arrange
         content = """---
 description: "Test description with quotes"
@@ -443,7 +443,7 @@ description: "Test description with quotes"
         assert result == "Test description with quotes"
 
     def test_extract_yaml_description_no_frontmatter(self, base_service):
-        """Testing：無 YAML front matter 返Back空String"""
+        """Test: No YAML front matter returns empty string"""
         # Arrange
         content = "# Just content\nNo frontmatter"
 
@@ -454,7 +454,7 @@ description: "Test description with quotes"
         assert result == ""
 
     def test_extract_yaml_description_no_description_field(self, base_service):
-        """Testing：無 description 欄位返Back空String"""
+        """Test: No description field returns empty string"""
         # Arrange
         content = """---
 author: Test Author
@@ -477,15 +477,15 @@ title: Test Title
 
 @pytest.mark.unit
 class TestPluginJsonUpdate:
-    """Plugin JSON MoreNewTesting"""
+    """Plugin JSON Update Tests"""
 
     def test_update_plugin_json_success(self, base_service, tmp_path):
-        """Testing：MoreNew plugin.json Successfully"""
+        """Test: Update plugin.json successfully"""
         # Arrange
         template_dir = tmp_path / "templates" / "test-template"
         template_dir.mkdir(parents=True, exist_ok=True)
 
-        # Building commands 和 agents Catalog
+        # Create commands and agents directories
         commands_dir = template_dir / "commands"
         commands_dir.mkdir(parents=True, exist_ok=True)
         (commands_dir / "cmd1.md").write_text("command 1")
@@ -495,7 +495,7 @@ class TestPluginJsonUpdate:
         agents_dir.mkdir(parents=True, exist_ok=True)
         (agents_dir / "agent1.md").write_text("agent 1")
 
-        # Building plugin.json
+        # Create plugin.json
         plugin_dir = template_dir / ".claude-plugin"
         plugin_dir.mkdir(parents=True, exist_ok=True)
         plugin_file = plugin_dir / "plugin.json"
@@ -519,13 +519,13 @@ class TestPluginJsonUpdate:
         assert any("agent1.md" in agent for agent in updated_data["agents"])
 
     def test_update_plugin_json_not_found(self, base_service, tmp_path):
-        """Testing：plugin.json 不存At時不會拋OutAbnormal"""
+        """Test: plugin.json not found doesn't throw exception"""
         # Act
         base_service._update_plugin_json("nonexistent-template")
 
         # Assert
-        # 應該Normal執行，不拋OutAbnormal
-        # 只會RecordWarnLog
+        # Should execute normally, no exception thrown
+        # Only logs warning
 
 
 # ============================================================================
@@ -534,10 +534,10 @@ class TestPluginJsonUpdate:
 
 @pytest.mark.unit
 class TestTemplateRetrieval:
-    """Template檢索Testing"""
+    """Template Retrieval Tests"""
 
     def test_get_template_success(self, base_service, mock_db_session, mock_template_db):
-        """Testing：GetTemplateSuccessfully"""
+        """Test: Get template successfully"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -550,7 +550,7 @@ class TestTemplateRetrieval:
         assert result == mock_template_db
 
     def test_get_template_not_found(self, base_service, mock_db_session):
-        """Testing：Get不存At的Template返Back None"""
+        """Test: Get nonexistent template returns None"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -569,10 +569,10 @@ class TestTemplateRetrieval:
 
 @pytest.mark.unit
 class TestResponseBuilder:
-    """Back應ConstructingTesting"""
+    """Response Builder Tests"""
 
     def test_response_template_not_found(self, base_service):
-        """Testing：BuildingTemplate不存At的Back應"""
+        """Test: Build template not found response"""
         # Arrange
         class MockResponse:
             def __init__(self, **kwargs):
@@ -588,7 +588,7 @@ class TestResponseBuilder:
         assert result.error == "Template not found"
 
     def test_response_template_not_found_with_list_data(self, base_service):
-        """Testing：BuildingTemplate不存At的Back應（含Listing表Data）"""
+        """Test: Build template not found response (with list data)"""
         # Arrange
         class MockResponse:
             def __init__(self, **kwargs):
@@ -605,7 +605,7 @@ class TestResponseBuilder:
         assert result.data == []
 
     def test_validate_template_and_filename_success(self, base_service, mock_db_session, mock_template_db):
-        """Testing：Template與檔名VerifyingSuccessfully"""
+        """Test: Template and filename validation successful"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -627,7 +627,7 @@ class TestResponseBuilder:
         assert error_response is None
 
     def test_validate_template_and_filename_invalid_template(self, base_service, mock_db_session):
-        """Testing：Template不存At時返BackIncorrectlyBack應"""
+        """Test: Template not found returns error response"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = None
@@ -650,7 +650,7 @@ class TestResponseBuilder:
         assert error_response.success is False
 
     def test_validate_template_and_filename_invalid_filename(self, base_service, mock_db_session, mock_template_db):
-        """Testing：Invalid檔名時返BackIncorrectlyBack應"""
+        """Test: Invalid filename returns error response"""
         # Arrange
         mock_query = MagicMock()
         mock_query.filter.return_value.first.return_value = mock_template_db
@@ -680,22 +680,22 @@ class TestResponseBuilder:
 
 @pytest.mark.unit
 class TestConstants:
-    """ConstantTesting"""
+    """Constants Tests"""
 
     def test_max_file_size_bytes(self, base_service):
-        """Testing：FileSizeLimitationConstant"""
+        """Test: File size limit constant"""
         assert base_service.MAX_FILE_SIZE_BYTES == 1024 * 1024
 
     def test_max_template_file_size_bytes(self, base_service):
-        """Testing：TemplateFileSizeLimitationConstant"""
+        """Test: Template file size limit constant"""
         assert base_service.MAX_TEMPLATE_FILE_SIZE_BYTES == 10 * 1024 * 1024
 
     def test_max_upload_files(self, base_service):
-        """Testing：MostBigAbove傳File數Constant"""
+        """Test: Maximum upload files constant"""
         assert base_service.MAX_UPLOAD_FILES == 50
 
     def test_allowed_extensions(self, base_service):
-        """Testing：Allowing的副檔名Set"""
+        """Test: Allowed extensions set"""
         assert '.md' in base_service.ALLOWED_EXTENSIONS
         assert '.txt' in base_service.ALLOWED_EXTENSIONS
         assert '.py' in base_service.ALLOWED_EXTENSIONS

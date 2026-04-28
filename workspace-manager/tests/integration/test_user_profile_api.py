@@ -1,4 +1,4 @@
-"""User Profile API 整合Testing"""
+"""User Profile API Integration Testing"""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from app.db import models as db_models
 def test_get_user_profile_returns_profile(
     internal_client, create_user
 ) -> None:
-    """Testing獲Getting用Household個PersonFile"""
+    """Test getting user profile"""
     client, _ = internal_client
     user = create_user(
         id="user-123",
         username="developer",
-        first_name="On發",
-        last_name="者",
-        display_name="On發者",
+        first_name="John",
+        last_name="Doe",
+        display_name="John Doe",
         email="developer@example.com",
         avatar_url="https://cdn.example.com/avatar.png",
     )
@@ -30,21 +30,21 @@ def test_get_user_profile_returns_profile(
     data = response.json()["data"]
     assert data["userId"] == "user-123"
     assert data["username"] == "developer"
-    assert data["firstName"] == "On發"
-    assert data["lastName"] == "者"
+    assert data["firstName"] == "John"
+    assert data["lastName"] == "Doe"
     assert data["email"] == "developer@example.com"
     assert data["avatarUrl"] == "https://cdn.example.com/avatar.png"
 
 
 @pytest.mark.integration
 def test_update_user_profile_updates_fields(internal_client, create_user) -> None:
-    """TestingMoreNew用Household個PersonFile"""
+    """Test updating user profile"""
     client, session_factory = internal_client
     user = create_user(
         id="user-234",
-        first_name="原始",
+        first_name="Original",
         last_name="Name",
-        display_name="原始Name",
+        display_name="Original Name",
         email="old@example.com",
     )
 
@@ -60,7 +60,7 @@ def test_update_user_profile_updates_fields(internal_client, create_user) -> Non
     assert data["firstName"] == "New"
     assert data["lastName"] == "Name"
 
-    # VerifyingData庫中的DataIndeed已MoreNew
+    # Verify data in database is indeed updated
     with session_factory() as session:
         refreshed = session.get(db_models.User, user.id)
         assert refreshed is not None
@@ -72,7 +72,7 @@ def test_update_user_profile_updates_fields(internal_client, create_user) -> Non
 
 @pytest.mark.integration
 def test_get_user_profile_not_found(internal_client) -> None:
-    """Testing獲Getting不存At用Household的個PersonFile時返Back 404"""
+    """Test getting profile for non-existent user returns 404"""
     client, _ = internal_client
 
     response = client.get("/api/v1/users/non-existent-user/profile")
@@ -83,7 +83,7 @@ def test_get_user_profile_not_found(internal_client) -> None:
 
 @pytest.mark.integration
 def test_update_user_profile_not_found(internal_client) -> None:
-    """TestingMoreNew不存At用Household的個PersonFile時返Back 404"""
+    """Test updating profile for non-existent user returns 404"""
     client, _ = internal_client
 
     payload = {"firstName": "NewName"}
@@ -95,27 +95,27 @@ def test_update_user_profile_not_found(internal_client) -> None:
 
 @pytest.mark.integration
 def test_update_user_profile_partial_update(internal_client, create_user) -> None:
-    """TestingPartMoreNew用Household個PersonFile"""
+    """Test partial update of user profile"""
     client, session_factory = internal_client
     user = create_user(
         id="user-345",
-        first_name="原始",
+        first_name="Original",
         last_name="Name",
-        display_name="原始Name",
+        display_name="Original Name",
         email="original@example.com",
     )
 
-    # 只MoreNew firstName
+    # Only update firstName
     payload = {"firstName": "New"}
     response = client.put(f"/api/v1/users/{user.id}/profile", json=payload)
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["firstName"] == "New"
-    assert data["lastName"] == "Name"  # Keeping原Value
-    assert data["email"] == "original@example.com"  # Keeping原Value
+    assert data["lastName"] == "Name"  # Keep original value
+    assert data["email"] == "original@example.com"  # Keep original value
 
-    # VerifyingData庫中Only指定欄位被MoreNew
+    # Verify only specified fields are updated in database
     with session_factory() as session:
         refreshed = session.get(db_models.User, user.id)
         assert refreshed is not None

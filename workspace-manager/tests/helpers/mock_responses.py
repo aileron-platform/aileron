@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Mock Responses for testing
-提供測試用的模擬回應資料
+Provides mock response data for testing
 """
 
 from typing import Dict, Any, List
@@ -9,11 +9,11 @@ from datetime import datetime
 
 
 class MockResponses:
-    """模擬回應資料生成器"""
+    """Mock response data generator"""
 
     @staticmethod
     def health_check_response() -> Dict[str, Any]:
-        """健康檢查成功回應"""
+        """Health check success response"""
         return {
             "status": "healthy",
             "timestamp": datetime.utcnow().isoformat(),
@@ -25,7 +25,7 @@ class MockResponses:
 
     @staticmethod
     def health_check_degraded_response() -> Dict[str, Any]:
-        """健康檢查降級回應"""
+        """Health check degraded response"""
         return {
             "status": "degraded",
             "timestamp": datetime.utcnow().isoformat(),
@@ -38,7 +38,7 @@ class MockResponses:
 
     @staticmethod
     def automation_job_response() -> Dict[str, Any]:
-        """自動化任務回應"""
+        """Automation job response"""
         return {
             "id": "test-job-001",
             "name": "Test Automation Job",
@@ -60,7 +60,7 @@ class MockResponses:
 
     @staticmethod
     def automation_jobs_list_response() -> List[Dict[str, Any]]:
-        """自動化任務列表回應"""
+        """Automation jobs list response"""
         return [
             {
                 "id": "test-job-001",
@@ -84,7 +84,7 @@ class MockResponses:
 
     @staticmethod
     def settings_response() -> Dict[str, Any]:
-        """設定回應"""
+        """Settings response"""
         return {
             "id": "settings-001",
             "workspace_id": "workspace-001",
@@ -100,7 +100,7 @@ class MockResponses:
 
     @staticmethod
     def settings_list_response() -> List[Dict[str, Any]]:
-        """設定列表回應"""
+        """Settings list response"""
         return [
             {
                 "id": "settings-001",
@@ -120,7 +120,7 @@ class MockResponses:
 
     @staticmethod
     def error_response(message: str = "Internal server error") -> Dict[str, Any]:
-        """錯誤回應"""
+        """Error response"""
         return {
             "error": True,
             "message": message,
@@ -130,7 +130,7 @@ class MockResponses:
 
     @staticmethod
     def not_found_response(resource: str = "Resource") -> Dict[str, Any]:
-        """404 回應"""
+        """404 response"""
         return {
             "error": True,
             "message": f"{resource} not found",
@@ -140,7 +140,7 @@ class MockResponses:
 
     @staticmethod
     def validation_error_response(errors: List[str]) -> Dict[str, Any]:
-        """驗證錯誤回應"""
+        """Validation error response"""
         return {
             "error": True,
             "message": "Validation failed",
@@ -151,7 +151,7 @@ class MockResponses:
 
     @staticmethod
     def success_response(message: str = "Operation successful") -> Dict[str, Any]:
-        """成功回應"""
+        """Success response"""
         return {
             "success": True,
             "message": message,

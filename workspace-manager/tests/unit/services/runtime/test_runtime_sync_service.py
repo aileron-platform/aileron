@@ -1,4 +1,4 @@
-"""RuntimeSyncService UnitTest"""
+"""Unit Tests for RuntimeSyncService"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def mock_db_session():
 
 @pytest.fixture
 def sample_workspace():
-    """範例Workspace"""
+    """Sample Workspace"""
     from app.db import models as db_models
 
     workspace = Mock(spec=db_models.Workspace)
@@ -45,7 +45,7 @@ def sample_workspace():
 
 @pytest.fixture
 def sample_runtimes():
-    """範例Run時List"""
+    """Sample Runtime List"""
     return [
         {
             "workspace_id": "workspace-123",
@@ -62,7 +62,7 @@ def sample_runtimes():
 
 @pytest.fixture
 def ssh_changes():
-    """SSH SettingsChange"""
+    """SSH Settings Changes"""
     return {
         "privateKey": "-----BEGIN RSA PRIVATE KEY-----\ntest-private-key\n-----END RSA PRIVATE KEY-----",
         "publicKey": "ssh-rsa test-public-key user@example.com",
@@ -71,7 +71,7 @@ def ssh_changes():
 
 @pytest.fixture
 def claude_code_changes():
-    """Claude Code SettingsChange"""
+    """Claude Code Settings Changes"""
     return {
         "authMethod": "subscription",
         "subscriptionAccessToken": "access-token-123",
@@ -87,7 +87,7 @@ def claude_code_changes():
 
 @pytest.fixture
 def git_changes():
-    """Git SettingsChange"""
+    """Git Settings Changes"""
     return {
         "userName": "Test User",
         "userEmail": "test@example.com",
@@ -96,7 +96,7 @@ def git_changes():
 
 @pytest.fixture
 def mock_async_client():
-    """CreateSupportingAsyncAboveBelow文Management器的 mock httpx client"""
+    """Create mock httpx client supporting async context manager"""
     def _create_mock_client():
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -107,7 +107,7 @@ def mock_async_client():
 
 @pytest.fixture
 def firewall_changes():
-    """防火牆SettingsChange"""
+    """Firewall Settings Changes"""
     return {
         "networkAccessEnabled": True,
         "domainAccessMode": "allowlist",
@@ -122,18 +122,18 @@ def sync_service(mock_db_session):
 
 
 # ============================================================================
-# RuntimeSyncService Tests - BasicOperation
+# RuntimeSyncService Tests - Basic Operations
 # ============================================================================
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestRuntimeSyncServiceBasic:
-    """RuntimeSyncService BasicOperationTest"""
+    """RuntimeSyncService Basic Operation Tests"""
 
     async def test_get_user_workspace_runtimes_success(
         self, sync_service, mock_db_session, sample_workspace
     ):
-        """Test：SuccessGetUserWorkspaceRun時"""
+        """Test: Successfully Get User Workspace Runtimes"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -150,7 +150,7 @@ class TestRuntimeSyncServiceBasic:
     async def test_get_user_workspace_runtimes_no_running(
         self, sync_service, mock_db_session
     ):
-        """Test：NoneRun中的Workspace"""
+        """Test: No Running Workspaces"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = []
@@ -165,7 +165,7 @@ class TestRuntimeSyncServiceBasic:
     async def test_get_user_workspace_runtimes_without_external_url(
         self, sync_service, mock_db_session, sample_workspace
     ):
-        """Test：過濾NoneOutside部 URL 的Workspace"""
+        """Test: Filter Workspaces Without External URL"""
         # Arrange
         sample_workspace.runtime_external_url = None
         mock_execute_result = MagicMock()
@@ -186,12 +186,12 @@ class TestRuntimeSyncServiceBasic:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestSSHKeysSynchronization:
-    """SSH Keys SyncTest"""
+    """SSH Keys Synchronization Tests"""
 
     async def test_sync_ssh_keys_success(
         self, sync_service, ssh_changes
     ):
-        """Test：SuccessSync SSH Keys"""
+        """Test: Successfully Sync SSH Keys"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True, "message": "SSH keys updated"}
@@ -221,7 +221,7 @@ class TestSSHKeysSynchronization:
     async def test_sync_ssh_keys_network_error(
         self, sync_service, ssh_changes
     ):
-        """Test：SSH Keys SyncNetworkError"""
+        """Test: SSH Keys sync network error"""
         # Arrange
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -240,7 +240,7 @@ class TestSSHKeysSynchronization:
     async def test_sync_ssh_keys_http_error(
         self, sync_service, ssh_changes
     ):
-        """Test：SSH Keys Sync HTTP Error"""
+        """Test: SSH Keys sync HTTP error"""
         # Arrange
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -276,7 +276,7 @@ class TestClaudeCodeSynchronization:
     async def test_sync_claude_code_success(
         self, sync_service, claude_code_changes
     ):
-        """Test：SuccessSync Claude Code Settings"""
+        """Test: successfully sync Claude Code settings"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True, "message": "Claude Code updated"}
@@ -304,7 +304,7 @@ class TestClaudeCodeSynchronization:
     async def test_sync_claude_code_with_api_key(
         self, sync_service
     ):
-        """Test：Use API Key Sync Claude Code"""
+        """Test: sync Claude Code using API Key"""
         # Arrange
         changes = {
             "authMethod": "apiKey",
@@ -330,7 +330,7 @@ class TestClaudeCodeSynchronization:
 
         # Assert
         assert result["success"] is True
-        # VerifyRequest包含Correctly的 payload
+        # Verify request contains correct payload
         call_kwargs = mock_client.post.call_args[1]
         assert call_kwargs["json"]["authMethod"] == "apiKey"
         assert call_kwargs["json"]["apiKey"] == "sk-ant-api-key-123"
@@ -338,7 +338,7 @@ class TestClaudeCodeSynchronization:
     async def test_sync_claude_code_timeout(
         self, sync_service, claude_code_changes
     ):
-        """Test：Claude Code Sync超時"""
+        """Test: Claude Code Sync Timeout"""
         # Arrange
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -362,12 +362,12 @@ class TestClaudeCodeSynchronization:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestGitSettingsSynchronization:
-    """Git SettingsSyncTest"""
+    """Git Settings Synchronization Tests"""
 
     async def test_sync_git_settings_success(
         self, sync_service, git_changes
     ):
-        """Test：SuccessSync Git Settings"""
+        """Test: Successfully Sync Git Settings"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True, "message": "Git settings updated"}
@@ -395,11 +395,11 @@ class TestGitSettingsSynchronization:
     async def test_sync_git_settings_partial_data(
         self, sync_service
     ):
-        """Test：Part Git SettingsSync"""
+        """Test: Partial Git Settings Sync"""
         # Arrange
         changes = {
             "userName": "Test User",
-            # userEmail 缺失
+            # userEmail missing
         }
 
         mock_response = MagicMock()
@@ -427,18 +427,18 @@ class TestGitSettingsSynchronization:
 
 
 # ============================================================================
-# RuntimeSyncService Tests - 防火牆SettingsSync
+# RuntimeSyncService Tests - Firewall Settings Sync
 # ============================================================================
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestFirewallSynchronization:
-    """防火牆SettingsSyncTest"""
+    """Firewall Settings Synchronization Tests"""
 
     async def test_sync_firewall_success(
         self, sync_service, firewall_changes
     ):
-        """Test：SuccessSync防火牆Settings"""
+        """Test: Successfully Sync Firewall Settings"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True, "message": "Firewall updated"}
@@ -510,7 +510,7 @@ class TestFirewallSynchronization:
     async def test_sync_firewall_to_runtime_not_running(
         self, sync_service, firewall_changes
     ):
-        """Test：Runtime 未Run時Sync防火牆"""
+        """Test: Sync Firewall When Runtime Not Running"""
         # Arrange
         with patch.object(sync_service, '_get_running_runtimes', return_value=[]):
             # Act
@@ -526,7 +526,7 @@ class TestFirewallSynchronization:
     async def test_sync_firewall_to_runtime_success(
         self, sync_service, firewall_changes, sample_runtimes
     ):
-        """Test：SuccessSync防火牆To Runtime"""
+        """Test: Successfully Sync Firewall to Runtime"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {"success": True}
@@ -552,7 +552,7 @@ class TestFirewallSynchronization:
     async def test_sync_firewall_with_disabled_network_access(
         self, sync_service
     ):
-        """Test：禁用NetworkAccess的防火牆Sync"""
+        """Test: Firewall Sync with Disabled Network Access"""
         # Arrange
         changes = {
             "networkAccessEnabled": False,
@@ -590,12 +590,12 @@ class TestFirewallSynchronization:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestBatchSettingsSynchronization:
-    """SettingsBatchSyncTest"""
+    """Batch Settings Synchronization Tests"""
 
     async def test_sync_settings_to_runtimes_success(
         self, sync_service, mock_db_session, sample_workspace, ssh_changes
     ):
-        """Test：SuccessSyncSettingsToMany個 Runtime"""
+        """Test: Successfully Sync Settings to Multiple Runtimes"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -626,7 +626,7 @@ class TestBatchSettingsSynchronization:
     async def test_sync_settings_to_runtimes_no_runtimes(
         self, sync_service, mock_db_session
     ):
-        """Test：None Runtime 時Sync"""
+        """Test: Sync When No Runtime"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = []
@@ -646,7 +646,7 @@ class TestBatchSettingsSynchronization:
         self, sync_service, mock_db_session, sample_workspace,
         ssh_changes, claude_code_changes, git_changes
     ):
-        """Test：SyncMany種Settings"""
+        """Test: Sync Multiple Types of Settings"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -674,7 +674,7 @@ class TestBatchSettingsSynchronization:
         # Assert
         assert result["success"] is True
         assert result["synced_runtimes"] == 1
-        assert result["total_tasks"] == 3  # 3 種Settings
+        assert result["total_tasks"] == 3  # 3 types of settings
         assert result["success_count"] == 3
         assert result["error_count"] == 0
 
@@ -682,7 +682,7 @@ class TestBatchSettingsSynchronization:
         self, sync_service, mock_db_session, sample_workspace,
         ssh_changes, claude_code_changes
     ):
-        """Test：PartSyncFailed"""
+        """Test: Partial Sync Failure"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -695,7 +695,7 @@ class TestBatchSettingsSynchronization:
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
-        # SSH Success，Claude Code Failed
+        # SSH Success, Claude Code Failed
         mock_client.post.side_effect = [
             mock_response_success,  # SSH Success
             httpx.HTTPStatusError("Error", request=MagicMock(), response=MagicMock(status_code=500)),  # Claude Code Failed
@@ -711,7 +711,7 @@ class TestBatchSettingsSynchronization:
             result = await sync_service.sync_settings_to_runtimes("user-123", changes)
 
         # Assert
-        assert result["success"] is False  # Because of有Failed
+        assert result["success"] is False  # Because there are failures
         assert result["total_tasks"] == 2
         assert result["success_count"] == 1
         assert result["error_count"] == 1
@@ -719,13 +719,13 @@ class TestBatchSettingsSynchronization:
     async def test_sync_settings_to_runtimes_no_changes(
         self, sync_service, mock_db_session, sample_workspace
     ):
-        """Test：NoneChange時Sync"""
+        """Test: Sync When No Changes"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
         mock_db_session.execute.return_value = mock_execute_result
 
-        changes = {}  # 空Change
+        changes = {}  # Empty changes
 
         # Act
         result = await sync_service.sync_settings_to_runtimes("user-123", changes)
@@ -733,23 +733,23 @@ class TestBatchSettingsSynchronization:
         # Assert
         assert result["success"] is True
         assert result["synced_runtimes"] == 1
-        assert result["total_tasks"] == 0  # NoneTask
+        assert result["total_tasks"] == 0  # No tasks
         assert len(result["results"]) == 0
 
 
 # ============================================================================
-# RuntimeSyncService Tests - 衝突Handle
+# RuntimeSyncService Tests - Conflict Handling
 # ============================================================================
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestConflictResolution:
-    """衝突解決Test"""
+    """Conflict Resolution Tests"""
 
     async def test_sync_with_concurrent_modifications(
         self, sync_service, mock_db_session, sample_workspace, ssh_changes
     ):
-        """Test：並發Modify時的Sync"""
+        """Test: Sync During Concurrent Modifications"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -776,12 +776,12 @@ class TestConflictResolution:
 
         # Assert
         assert result["success"] is True
-        # ShouldSuccessHandle衝突
+        # Should successfully handle conflicts
 
     async def test_sync_with_version_mismatch(
         self, sync_service, ssh_changes
     ):
-        """Test：版本不匹配時的Sync"""
+        """Test: Sync When Version Mismatch"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -811,18 +811,18 @@ class TestConflictResolution:
 
 
 # ============================================================================
-# RuntimeSyncService Tests - 增量Sync
+# RuntimeSyncService Tests - Incremental Sync
 # ============================================================================
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestIncrementalSync:
-    """增量SyncTest"""
+    """Incremental Sync Tests"""
 
     async def test_sync_only_changed_settings(
         self, sync_service, mock_db_session, sample_workspace, ssh_changes
     ):
-        """Test：只SyncChange的Settings"""
+        """Test: Only Sync Changed Settings"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -837,7 +837,7 @@ class TestIncrementalSync:
         mock_client.__aexit__.return_value = None
         mock_client.post.return_value = mock_response
 
-        # Only SSH Change
+        # Only SSH changed
         changes = {"ssh": ssh_changes}
 
         with patch("httpx.AsyncClient", return_value=mock_client):
@@ -846,18 +846,18 @@ class TestIncrementalSync:
 
         # Assert
         assert result["success"] is True
-        assert result["total_tasks"] == 1  # Only 1 個Task
-        # Should只調用 SSH Sync API
+        assert result["total_tasks"] == 1  # Only 1 task
+        # Should only call SSH Sync API
         assert mock_client.post.call_count == 1
 
     async def test_sync_efficiency_with_multiple_workspaces(
         self, sync_service, mock_db_session, ssh_changes
     ):
-        """Test：Many個Workspace的SyncEfficiency"""
+        """Test: Sync Efficiency with Multiple Workspaces"""
         # Arrange
         from app.db import models as db_models
 
-        # Create 3 個Workspace
+        # Create 3 workspaces
         workspaces = []
         for i in range(3):
             ws = Mock(spec=db_models.Workspace)
@@ -889,24 +889,24 @@ class TestIncrementalSync:
         # Assert
         assert result["success"] is True
         assert result["synced_runtimes"] == 3
-        assert result["total_tasks"] == 3  # EachWorkspace一個Task
-        # Verify並發調用
+        assert result["total_tasks"] == 3  # Each workspace has one task
+        # Verify concurrent calls
         assert mock_client.post.call_count == 3
 
 
 # ============================================================================
-# RuntimeSyncService Tests - ErrorHandle和BoundaryCircumstance
+# RuntimeSyncService Tests - Error Handling and Edge Cases
 # ============================================================================
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestErrorHandlingAndEdgeCases:
-    """ErrorHandle和BoundaryCircumstanceTest"""
+    """Error Handling and Edge Cases Tests"""
 
     async def test_sync_with_invalid_url(
         self, sync_service, ssh_changes
     ):
-        """Test：Invalid URL"""
+        """Test: Invalid URL"""
         # Arrange
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -925,7 +925,7 @@ class TestErrorHandlingAndEdgeCases:
     async def test_sync_with_timeout_retry(
         self, sync_service, ssh_changes
     ):
-        """Test：超時Heavy試"""
+        """Test: Timeout Retry"""
         # Arrange
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
@@ -944,7 +944,7 @@ class TestErrorHandlingAndEdgeCases:
     async def test_sync_with_empty_changes(
         self, sync_service, mock_db_session, sample_workspace
     ):
-        """Test：空Change"""
+        """Test: Empty Changes"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -960,7 +960,7 @@ class TestErrorHandlingAndEdgeCases:
     async def test_sync_with_malformed_response(
         self, sync_service, ssh_changes
     ):
-        """Test：FormatError的Response"""
+        """Test: Malformed Response"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.side_effect = ValueError("Invalid JSON")
@@ -983,7 +983,7 @@ class TestErrorHandlingAndEdgeCases:
     async def test_sync_with_authentication_failure(
         self, sync_service, ssh_changes
     ):
-        """Test：AuthenticationFailed"""
+        """Test: authentication failure during sync"""
         # Arrange
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -1007,7 +1007,7 @@ class TestErrorHandlingAndEdgeCases:
                 )
 
     async def test_sync_service_initialization(self, mock_db_session):
-        """Test：ServiceInitialize"""
+        """Test: service initialization"""
         # Act
         service = RuntimeSyncService(mock_db_session)
 
@@ -1019,7 +1019,7 @@ class TestErrorHandlingAndEdgeCases:
     async def test_sync_with_custom_timeout(
         self, sync_service, ssh_changes
     ):
-        """Test：自定義超時"""
+        """Test: Custom Timeout"""
         # Arrange
         sync_service.timeout = 5.0
 
@@ -1043,14 +1043,14 @@ class TestErrorHandlingAndEdgeCases:
             )
 
             # Assert
-            # Verify AsyncClient Use了Correctly的超時Value
+            # Verify AsyncClient uses correct timeout value
             mock_async_client.assert_called_with(timeout=5.0)
 
     async def test_sync_all_settings_types(
         self, sync_service, mock_db_session, sample_workspace,
         ssh_changes, claude_code_changes, git_changes
     ):
-        """Test：SyncAllType的Settings"""
+        """Test: Sync All Types of Settings"""
         # Arrange
         mock_execute_result = MagicMock()
         mock_execute_result.scalars.return_value.all.return_value = [sample_workspace]
@@ -1079,5 +1079,5 @@ class TestErrorHandlingAndEdgeCases:
         assert result["success"] is True
         assert result["total_tasks"] == 3
         assert result["success_count"] == 3
-        # Verify三Type型的 API 都被調用
+        # Verify all three types of API were called
         assert mock_client.post.call_count == 3

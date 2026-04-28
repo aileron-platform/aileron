@@ -1,4 +1,4 @@
-"""資料庫測試輔助工具"""
+"""Database Testing Helper Functions"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from testcontainers.postgres import PostgresContainer
 
 
 class DatabaseTestHelper:
-    """資料庫測試輔助工具"""
+    """Database Testing Helper Functions"""
 
     def __init__(self):
         self.postgres_container = None
@@ -22,31 +22,31 @@ class DatabaseTestHelper:
         self.session_factory = None
 
     def create_test_database(self) -> PostgresContainer:
-        """創建測試資料庫容器"""
+        """Create test database container"""
         self.postgres_container = PostgresContainer("postgres:15-alpine")
         self.postgres_container.start()
         return self.postgres_container
 
     def create_engine(self, database_url: str) -> sa.Engine:
-        """創建資料庫引擎"""
+        """Create database engine"""
         self.engine = create_engine(database_url)
         return self.engine
 
     def create_session_factory(self, engine: sa.Engine) -> sessionmaker:
-        """創建會話工廠"""
+        """Create session factory"""
         self.session_factory = sessionmaker(bind=engine)
         return self.session_factory
 
     def create_tables(self, engine: sa.Engine, metadata: Any) -> None:
-        """創建資料表"""
+        """Create database tables"""
         metadata.create_all(bind=engine)
 
     def drop_tables(self, engine: sa.Engine, metadata: Any) -> None:
-        """刪除資料表"""
+        """Drop database tables"""
         metadata.drop_all(bind=engine)
 
     def cleanup(self) -> None:
-        """清理資源"""
+        """Clean up resources"""
         if self.engine:
             self.engine.dispose()
         if self.postgres_container:
@@ -54,14 +54,14 @@ class DatabaseTestHelper:
 
     @staticmethod
     def seed_test_data(session: Session) -> None:
-        """播種測試資料"""
-        # 這裡可以根據實際的模型來添加測試資料
+        """Seed test data"""
+        # Test data can be added here based on actual models
         pass
 
     @staticmethod
     def clear_test_data(session: Session) -> None:
-        """清理測試資料"""
-        # 清理所有表格的資料
+        """Clear test data"""
+        # Clear data from all tables
         session.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE;"))
         session.execute(text("TRUNCATE TABLE teams RESTART IDENTITY CASCADE;"))
         session.execute(text("TRUNCATE TABLE workspaces RESTART IDENTITY CASCADE;"))
@@ -71,15 +71,15 @@ class DatabaseTestHelper:
 
 @pytest.fixture(scope="session")
 def test_database():
-    """測試資料庫 fixture (session 範圍)"""
+    """Test database fixture (session scope)"""
     helper = DatabaseTestHelper()
 
     try:
-        # 啟動 PostgreSQL 容器
+        # Start PostgreSQL container
         container = helper.create_test_database()
         database_url = container.get_connection_url()
 
-        # 創建引擎和會話工廠
+        # Create engine and session factory
         engine = helper.create_engine(database_url)
         session_factory = helper.create_session_factory(engine)
 
@@ -91,13 +91,13 @@ def test_database():
         }
 
     finally:
-        # 清理資源
+        # Clean up resources
         helper.cleanup()
 
 
 @pytest.fixture
 def db_session(test_database: Dict[str, Any]) -> Generator[Session, None, None]:
-    """資料庫會話 fixture"""
+    """Database session fixture"""
     session_factory = test_database["session_factory"]
     session = session_factory()
 
@@ -109,25 +109,25 @@ def db_session(test_database: Dict[str, Any]) -> Generator[Session, None, None]:
 
 @pytest.fixture
 def db_engine(test_database: Dict[str, Any]):
-    """資料庫引擎 fixture"""
+    """Database engine fixture"""
     return test_database["engine"]
 
 
 @pytest.fixture
 def database_url(test_database: Dict[str, Any]):
-    """資料庫 URL fixture"""
+    """Database URL fixture"""
     return test_database["database_url"]
 
 
 @pytest.fixture(autouse=True)
 def cleanup_db_data(db_session: Session):
-    """自動清理資料庫資料"""
+    """Automatically clean up database data"""
     yield
     DatabaseTestHelper.clear_test_data(db_session)
 
 
 class MockDatabaseRecord:
-    """Mock 資料庫記錄"""
+    """Mock database record"""
 
     def __init__(
         self,
@@ -142,7 +142,7 @@ class MockDatabaseRecord:
         self.updated_at = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
-        """轉換為字典"""
+        """Convert to dictionary"""
         result = {
             "id": str(self.id),
             "created_at": self.created_at.isoformat(),
@@ -153,7 +153,7 @@ class MockDatabaseRecord:
 
 
 def assert_record_exists(session: Session, table_name: str, **filters) -> None:
-    """斷言記錄存在"""
+    """Assert record exists"""
     query = text(f"SELECT 1 FROM {table_name} WHERE ")
     conditions = []
     params = {}
@@ -165,13 +165,13 @@ def assert_record_exists(session: Session, table_name: str, **filters) -> None:
         params[key] = value
 
     result = session.execute(query, params).fetchone()
-    assert result is not None, f"記錄不存在: {table_name} with filters {filters}"
+    assert result is not None, f"Record does not exist: {table_name} with filters {filters}"
 
 
 def assert_record_count(
     session: Session, table_name: str, expected_count: int, **filters
 ) -> None:
-    """斷言記錄數量"""
+    """Assert record count"""
     query = text(f"SELECT COUNT(*) FROM {table_name}")
     params = {}
 
@@ -184,13 +184,13 @@ def assert_record_count(
             params[key] = value
 
     result = session.execute(query, params).scalar()
-    assert result == expected_count, f"記錄數量不匹配: 期望 {expected_count}, 實際 {result}"
+    assert result == expected_count, f"Record count mismatch: expected {expected_count}, actual {result}"
 
 
 def assert_table_has_columns(
     session: Session, table_name: str, expected_columns: list[str]
 ) -> None:
-    """斷言表格包含指定欄位"""
+    """Assert table has specified columns"""
     query = text("""
         SELECT column_name
         FROM information_schema.columns
@@ -200,7 +200,7 @@ def assert_table_has_columns(
     actual_columns = [row[0] for row in result]
 
     for column in expected_columns:
-        assert column in actual_columns, f"表格 {table_name} 缺少欄位: {column}"
+        assert column in actual_columns, f"Table {table_name} missing column: {column}"
 
 
 def assert_foreign_key_exists(
@@ -210,7 +210,7 @@ def assert_foreign_key_exists(
     referenced_table: str,
     referenced_column: str,
 ) -> None:
-    """斷言外鍵約束存在"""
+    """Assert foreign key constraint exists"""
     query = text("""
         SELECT COUNT(*)
         FROM information_schema.table_constraints tc
@@ -230,16 +230,16 @@ def assert_foreign_key_exists(
         "referenced_column": referenced_column,
     }).scalar()
 
-    assert result > 0, f"外鍵約束不存在: {table_name}.{column_name} -> {referenced_table}.{referenced_column}"
+    assert result > 0, f"Foreign key constraint does not exist: {table_name}.{column_name} -> {referenced_table}.{referenced_column}"
 
 
-# 測試資料生成器
+# Test Data Generator
 class TestDataGenerator:
-    """測試資料生成器"""
+    """Test data generator"""
 
     @staticmethod
     def generate_user_data(count: int = 1) -> list[Dict[str, Any]]:
-        """生成用戶測試資料"""
+        """Generate user test data"""
         users = []
         for i in range(count):
             users.append({
@@ -254,7 +254,7 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_team_data(count: int = 1, owner_id: uuid.UUID | None = None) -> list[Dict[str, Any]]:
-        """生成團隊測試資料"""
+        """Generate team test data"""
         teams = []
         for i in range(count):
             teams.append({
@@ -269,7 +269,7 @@ class TestDataGenerator:
 
     @staticmethod
     def generate_workspace_data(count: int = 1, owner_id: uuid.UUID | None = None) -> list[Dict[str, Any]]:
-        """生成工作區測試資料"""
+        """Generate workspace test data"""
         workspaces = []
         for i in range(count):
             workspaces.append({
@@ -290,5 +290,5 @@ class TestDataGenerator:
 
 @pytest.fixture
 def test_data_generator():
-    """測試資料生成器 fixture"""
+    """Test data generator fixture"""
     return TestDataGenerator()

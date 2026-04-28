@@ -1,4 +1,4 @@
-"""UnitTest共用Settingsand Mock Fixtures"""
+"""Unit test common settings and mock fixtures"""
 
 from __future__ import annotations
 
@@ -40,12 +40,12 @@ def mock_db_session():
 
 
 # ============================================================================
-# Outside部Service Mock Fixtures
+# External Service Mock Fixtures
 # ============================================================================
 
 @pytest.fixture
 def mock_redis():
-    """Mock Redis 客Household端"""
+    """Mock Redis client"""
     redis_mock = MagicMock()
     redis_mock.get.return_value = None
     redis_mock.set.return_value = True
@@ -242,7 +242,7 @@ def template_factory():
 
 @pytest.fixture
 def automation_factory():
-    """自動化TaskFactory"""
+    """Automation task factory"""
     _counter = 0
 
     def create_automation(**kwargs) -> db_models.Automation:
@@ -291,12 +291,12 @@ def token_factory():
 
 
 # ============================================================================
-# Mock OAuth Back應
+# Mock OAuth Response
 # ============================================================================
 
 @pytest.fixture
 def mock_oauth_response():
-    """Mock OAuth Back應"""
+    """Mock OAuth response"""
     return {
         "access_token": "oauth-access-token",
         "refresh_token": "oauth-refresh-token",
@@ -326,12 +326,12 @@ def mock_oauth_user_info():
 
 
 # ============================================================================
-# CommonTest輔助
+# Common Test Helpers
 # ============================================================================
 
 @pytest.fixture
 def mock_datetime():
-    """Mock datetime 以便TestTimeRelatedFunction"""
+    """Mock datetime for testing time-related functions"""
     test_now = datetime(2025, 1, 1, 12, 0, 0)
 
     with patch("datetime.datetime") as mock_dt:
@@ -343,7 +343,7 @@ def mock_datetime():
 
 @pytest.fixture
 def mock_uuid():
-    """Mock UUID Generating以便Test"""
+    """Mock UUID generation for testing"""
     _counter = 0
 
     def mock_uuid4():
@@ -359,7 +359,7 @@ def mock_uuid():
 
 @pytest.fixture
 def request_factory():
-    """Create具備一致 state / headers Structure的 Request mock"""
+    """Create Request mock with consistent state / headers structure"""
 
     def build_request(
         path: str, headers: dict[str, str] | None = None, method: str = "GET"
@@ -376,7 +376,7 @@ def request_factory():
 
 @pytest.fixture
 def httpx_response_factory():
-    """Create可客製化的 httpx Back應 mock"""
+    """Create customizable httpx response mock"""
 
     def build_response(
         *,
@@ -401,7 +401,7 @@ def httpx_response_factory():
 
 @pytest.fixture
 def upload_file_factory():
-    """Create具備固定 filename/read 介Surface的 UploadFile mock"""
+    """Create UploadFile mock with fixed filename/read interface"""
 
     def build_upload_file(filename: str, content: bytes) -> AsyncMock:
         file = AsyncMock()

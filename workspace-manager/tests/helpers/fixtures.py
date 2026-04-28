@@ -1,4 +1,4 @@
-"""測試資料夾具"""
+"""Test Data Fixtures"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class TestDataFactory:
-    """測試資料工廠"""
+    """Test Data Factory"""
 
     @staticmethod
     def create_user_data(
@@ -22,7 +22,7 @@ class TestDataFactory:
         full_name: str | None = None,
         is_active: bool = True,
     ) -> Dict[str, Any]:
-        """創建用戶測試資料"""
+        """Create user test data"""
         return {
             "email": email or f"test_{uuid.uuid4().hex[:8]}@example.com",
             "username": username or f"test_user_{uuid.uuid4().hex[:8]}",
@@ -38,7 +38,7 @@ class TestDataFactory:
         description: str | None = None,
         owner_id: uuid.UUID | None = None,
     ) -> Dict[str, Any]:
-        """創建團隊測試資料"""
+        """Create team test data"""
         return {
             "id": str(uuid.uuid4()),
             "name": name or f"Test Team {uuid.uuid4().hex[:8]}",
@@ -63,27 +63,27 @@ class TestDataFactory:
         targetNamespace: str | None = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """創建工作區測試資料
+        """Create workspace test data
 
-        支援額外的 kwargs 來兼容舊的測試程式碼，如 team_id, config 等
+        Supports additional kwargs for compatibility with legacy test code, such as team_id, config, etc.
         """
         return {
             "name": name or f"Test Workspace {uuid.uuid4().hex[:8]}",
             "description": description or "A test workspace for testing purposes",
-            "ownerId": str(owner_id) if owner_id is not None else None,  # 使用 alias
-            "templateId": str(template_id) if template_id else None,  # 使用 alias
-            "gitUrl": git_url,  # 使用 alias
+            "ownerId": str(owner_id) if owner_id is not None else None,  # Use alias
+            "templateId": str(template_id) if template_id else None,  # Use alias
+            "gitUrl": git_url,  # Use alias
             "branch": branch or "main",
             "runtime": runtime,
             "provisioner": provisioner,
             "targetNamespace": targetNamespace,
-            "cliType": cli_type,  # 使用 alias
-            "setupScript": "#!/bin/bash\necho 'Setting up workspace...'",  # 使用 alias
-            "envVars": [],  # 使用 alias
-            "portMappings": [],  # 使用 alias
-            "preferredCli": "claude-code",  # 使用 alias
-            "fallbackEnabled": True,  # 使用 alias
-            "workspacePath": "/workspace",  # 使用 alias
+            "cliType": cli_type,  # Use alias
+            "setupScript": "#!/bin/bash\necho 'Setting up workspace...'",  # Use alias
+            "envVars": [],  # Use alias
+            "portMappings": [],  # Use alias
+            "preferredCli": "claude-code",  # Use alias
+            "fallbackEnabled": True,  # Use alias
+            "workspacePath": "/workspace",  # Use alias
         }
 
     @staticmethod
@@ -98,13 +98,13 @@ class TestDataFactory:
         status: str = "draft",
         **kwargs: Any,
     ) -> Dict[str, Any]:
-        """創建範本測試資料
+        """Create template test data
 
-        支援額外的 kwargs 來兼容舊的測試程式碼，如 is_public, category, owner_id 等
+        Supports additional kwargs for compatibility with legacy test code, such as is_public, category, owner_id, etc.
         """
         template_id = f"test-template-{uuid.uuid4().hex[:8]}"
         return {
-            "templateId": template_id,  # 使用 alias
+            "templateId": template_id,  # Use alias
             "name": name or f"Test Template {uuid.uuid4().hex[:8]}",
             "description": description or "A test template for testing purposes",
             "author": {
@@ -116,7 +116,7 @@ class TestDataFactory:
             "version": version,
             "cli_type": cli_type,
             "status": status,
-            "initCommands": "echo 'Initializing template...'",  # 使用 alias
+            "initCommands": "echo 'Initializing template...'",  # Use alias
         }
 
     @staticmethod
@@ -125,7 +125,7 @@ class TestDataFactory:
         expires_in: int = 3600,
         scopes: list[str] | None = None,
     ) -> Dict[str, Any]:
-        """創建認證 Token 測試資料"""
+        """Create authentication Token test data"""
         return {
             "access_token": f"test_token_{uuid.uuid4().hex}",
             "refresh_token": f"refresh_token_{uuid.uuid4().hex}",
@@ -139,15 +139,15 @@ class TestDataFactory:
 
 
 class MockResponses:
-    """Mock API 回應"""
+    """Mock API Responses"""
 
     @staticmethod
     def success_response(data: Any) -> Dict[str, Any]:
-        """成功回應格式"""
+        """Success response format"""
         return {
             "success": True,
             "data": data,
-            "message": "操作成功",
+            "message": "Operation successful",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -157,7 +157,7 @@ class MockResponses:
         error_code: str = "UNKNOWN_ERROR",
         status_code: int = 400,
     ) -> Dict[str, Any]:
-        """錯誤回應格式"""
+        """Error response format"""
         return {
             "success": False,
             "error": {
@@ -176,7 +176,7 @@ class MockResponses:
         page_size: int = 10,
         total: int | None = None,
     ) -> Dict[str, Any]:
-        """分頁回應格式"""
+        """Paginated response format"""
         if total is None:
             total = len(data)
 
@@ -197,17 +197,17 @@ class MockResponses:
 
 @pytest.fixture
 def test_data_factory():
-    """測試資料工廠 fixture"""
+    """Test data factory fixture"""
     return TestDataFactory()
 
 
 @pytest.fixture
 def mock_responses():
-    """Mock 回應 fixture"""
+    """Mock response fixture"""
     return MockResponses()
 
 
-# 常用的測試資料
+# Common test data
 TEST_USER = {
     "id": str(uuid.uuid4()),
     "email": "test@example.com",

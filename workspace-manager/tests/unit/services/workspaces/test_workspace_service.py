@@ -1,4 +1,4 @@
-"""WorkspaceService 單元Testing"""
+"""Unit Tests for WorkspaceService"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from app.services.workspace_service import WorkspaceService
 
 
 def _apply_workspace_defaults(obj, owner=None):
-    """補齊 WorkspaceService Convert所需的欄位DefaultValue。"""
+    """Fill in Required Field Default Values for WorkspaceService Conversion."""
     defaults = {
         "runtime_container_id": None,
         "runtime_internal_url": None,
@@ -92,7 +92,7 @@ def _apply_workspace_defaults(obj, owner=None):
 
 @pytest.fixture
 def mock_db_session():
-    """Mock Data庫 Session"""
+    """Mock Database Session"""
     session = MagicMock()
     session.get = MagicMock(return_value=None)
     session.add = MagicMock()
@@ -111,7 +111,7 @@ def workspace_service(mock_db_session):
 
 @pytest.fixture
 def sample_workspace_db(user_factory):
-    """範例WorkingDistrictData庫Model"""
+    """Sample Workspace Database Model"""
     from app.db import models as db_models
 
     owner = user_factory()
@@ -188,10 +188,10 @@ def sample_workspace_db(user_factory):
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceGet:
-    """WorkingDistrict查詢Testing"""
+    """Workspace Query Tests"""
 
     def test_get_workspace_success(self, workspace_service, mock_db_session, sample_workspace_db):
-        """Testing：Successfully獲GettingWorkingDistrict"""
+        """Test: Successfully Retrieve Workspace"""
         # Arrange
         workspace_service.settings.CILIUM_ENABLED = True
         workspace_service.settings.FIREWALL_DEFAULTS_WORKSPACE_ALLOWED_DOMAINS = [
@@ -242,7 +242,7 @@ class TestWorkspaceGet:
         mock_db_session.get.assert_called_once()
 
     def test_get_workspace_not_found(self, workspace_service, mock_db_session):
-        """Testing：WorkingDistrictdoes not exist返Back None"""
+        """Test: Return None When Workspace Does Not Exist"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -308,18 +308,18 @@ class TestWorkspaceGet:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceCreate:
-    """WorkingDistrict創建Testing"""
+    """Workspace Creation Tests"""
 
     def test_create_workspace_success(
         self, workspace_service, mock_db_session, user_factory, sample_workspace_db
     ):
-        """Testing：Successfully創建WorkingDistrict"""
+        """Test: Successfully Create Workspace"""
         # Arrange
         workspace_service.settings.CILIUM_ENABLED = True
         owner = user_factory()
         mock_db_session.get.return_value = owner
 
-        # 當 refresh 被調用時,Setting up workspace 的NecessaryProperty
+        # When refresh is called, set up necessary workspace properties
         def mock_refresh(obj):
             if hasattr(obj, 'id') and not obj.id:
                 obj.id = "workspace-123"
@@ -360,7 +360,7 @@ class TestWorkspaceCreate:
     def test_create_workspace_with_nonexistent_owner(
         self, workspace_service, mock_db_session
     ):
-        """Testing：owner does not exist時創建Unsuccessfully"""
+        """Test: Creation Fails When Owner Does Not Exist"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -380,12 +380,12 @@ class TestWorkspaceCreate:
     def test_create_workspace_with_env_vars(
         self, workspace_service, mock_db_session, user_factory
     ):
-        """Testing：創建BringingRing境變量的WorkingDistrict"""
+        """Test: Create Workspace with Environment Variables"""
         # Arrange
         owner = user_factory()
         mock_db_session.get.return_value = owner
 
-        # 當 refresh 被調用時,Setting up workspace 的NecessaryProperty
+        # When refresh is called, set up necessary workspace properties
         def mock_refresh(obj):
             _apply_workspace_defaults(obj, owner=owner)
 
@@ -418,7 +418,7 @@ class TestWorkspaceCreate:
     def test_create_workspace_sets_external_port_from_default_mapping(
         self, workspace_service, mock_db_session, user_factory
     ):
-        """Testing：BuildingWorkingDistrict時會From container port 3002 的 mapping Pushing導 external port"""
+        """Test: Creating Workspace Adds External Port Mapping from Container Port 3002"""
         owner = user_factory()
         mock_db_session.get.return_value = owner
 
@@ -668,12 +668,12 @@ class TestWorkspaceCreate:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceUpdate:
-    """WorkingDistrictMoreNewTesting"""
+    """Workspace update tests"""
 
     def test_update_workspace_success(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：SuccessfullyMoreNewWorkingDistrict"""
+        """Test: update workspace successfully"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -692,7 +692,7 @@ class TestWorkspaceUpdate:
     def test_update_workspace_not_found(
         self, workspace_service, mock_db_session
     ):
-        """Testing：MoreNewdoes not exist的WorkingDistrict返Back None"""
+        """Test: Return None When Updating Non-Existent Workspace"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -709,7 +709,7 @@ class TestWorkspaceUpdate:
     def test_update_workspace_env_vars(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：MoreNewWorkingDistrictRing境變量"""
+        """Test: Update Workspace Environment Variables"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -866,12 +866,12 @@ class TestWorkspaceUpdate:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceList:
-    """WorkingDistrictListing表Testing"""
+    """Workspace List Tests"""
 
     def test_list_workspaces_success(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：SuccessfullyListingOutWorkingDistrict"""
+        """Test: Successfully List Workspaces"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_workspace_db]
@@ -891,7 +891,7 @@ class TestWorkspaceList:
     def test_list_workspaces_with_owner_filter(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：按 owner 過濾WorkingDistrictListing表"""
+        """Test: Filter Workspace List by Owner"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_workspace_db]
@@ -912,7 +912,7 @@ class TestWorkspaceList:
     def test_list_workspaces_with_status_filter(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：按狀態過濾WorkingDistrictListing表"""
+        """Test: Filter Workspace List by Status"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_workspace_db]
@@ -933,7 +933,7 @@ class TestWorkspaceList:
     def test_list_workspaces_with_search(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：搜索WorkingDistrict"""
+        """Test: Search Workspaces"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [sample_workspace_db]
@@ -954,7 +954,7 @@ class TestWorkspaceList:
     def test_list_workspaces_empty(
         self, workspace_service, mock_db_session
     ):
-        """Testing：空WorkingDistrictListing表"""
+        """Test: Empty Workspace List"""
         # Arrange
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
@@ -1016,12 +1016,12 @@ class TestWorkspaceList:
 @pytest.mark.unit
 @pytest.mark.workspace
 class TestWorkspaceLifecycle:
-    """WorkingDistrict生命CycleTesting"""
+    """Workspace Lifecycle Tests"""
 
     def test_mark_workspace_deleting_success(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：SuccessfullyMarkWorkingDistrict為Delete中"""
+        """Test: Successfully Mark Workspace as Deleting"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -1036,7 +1036,7 @@ class TestWorkspaceLifecycle:
     def test_mark_workspace_deleting_not_found(
         self, workspace_service, mock_db_session
     ):
-        """Testing：WorkingDistrictdoes not exist時MarkUnsuccessfully"""
+        """Test: Mark Fails When Workspace Does Not Exist"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -1049,7 +1049,7 @@ class TestWorkspaceLifecycle:
     def test_mark_workspace_rebuilding_success(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：SuccessfullyMarkWorkingDistrict為Heavy啟中"""
+        """Test: Successfully Mark Workspace as Restarting"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -1064,7 +1064,7 @@ class TestWorkspaceLifecycle:
     def test_mark_workspace_rebuilding_not_found(
         self, workspace_service, mock_db_session
     ):
-        """Testing：WorkingDistrictdoes not exist時MarkUnsuccessfully"""
+        """Test: Mark Fails When Workspace Does Not Exist"""
         # Arrange
         mock_db_session.get.return_value = None
 
@@ -1077,7 +1077,7 @@ class TestWorkspaceLifecycle:
     def test_mark_browser_restarting_success(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：SuccessfullyMark browser 為Heavy啟中"""
+        """Test: Successfully Mark Browser as Restarting"""
         mock_db_session.get.return_value = sample_workspace_db
 
         result = workspace_service.mark_browser_restarting("workspace-123")
@@ -1089,7 +1089,7 @@ class TestWorkspaceLifecycle:
     def test_mark_browser_restarting_not_found(
         self, workspace_service, mock_db_session
     ):
-        """Testing：找不ToWorkingDistrict時 browser Heavy啟MarkUnsuccessfully"""
+        """Test: Browser Restart Mark Fails When Workspace Not Found"""
         mock_db_session.get.return_value = None
 
         result = workspace_service.mark_browser_restarting("missing-workspace")
@@ -1099,7 +1099,7 @@ class TestWorkspaceLifecycle:
     def test_update_workspace_with_port_mappings(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：MoreNewWorkingDistrict port mappings"""
+        """Test: Update Workspace Port Mappings"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -1124,7 +1124,7 @@ class TestWorkspaceLifecycle:
     def test_update_workspace_with_runtime_status(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：MoreNewWorkingDistrict runtime status"""
+        """Test: Update Workspace Runtime Status"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -1156,7 +1156,7 @@ class TestWorkspaceLifecycle:
     def test_update_workspace_with_firewall_config(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：MoreNewWorkingDistrict firewall Setup"""
+        """Test: update workspace with firewall configuration"""
         # Arrange
         workspace_service.settings.CILIUM_ENABLED = True
         mock_db_session.get.return_value = sample_workspace_db
@@ -1192,7 +1192,7 @@ class TestWorkspaceLifecycle:
     def test_update_workspace_with_empty_firewall_allowlist(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：MoreNew firewall 時會保留空 allowlist 與 network access 狀態"""
+        """Test: When Updating Firewall, Preserve Empty Allowlist and Network Access State"""
         workspace_service.settings.CILIUM_ENABLED = True
         mock_db_session.get.return_value = sample_workspace_db
 
@@ -1320,7 +1320,7 @@ class TestWorkspaceLifecycle:
     def test_to_detail_with_runtime_job(
         self, workspace_service, mock_db_session, sample_workspace_db
     ):
-        """Testing：_to_detail 包含 runtime job"""
+        """Test: _to_detail Includes Runtime Job"""
         # Arrange
         runtime_job = db_models.WorkspaceRuntimeJob(
             id="job-123",

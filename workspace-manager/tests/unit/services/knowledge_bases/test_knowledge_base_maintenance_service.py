@@ -1,4 +1,4 @@
-"""Knowledge base maintenance service UnitTest。"""
+"""Knowledge base maintenance service unit tests."""
 
 from __future__ import annotations
 

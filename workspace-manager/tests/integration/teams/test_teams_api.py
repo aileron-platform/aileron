@@ -1,4 +1,4 @@
-"""團隊管理 API 基本整合測試 (帶認證檢查)"""
+"""Team Management API Basic Integration Tests (With Authentication Check)"""
 
 from __future__ import annotations
 
@@ -14,17 +14,17 @@ from tests.helpers.api_helper import skip_if_api_not_exists
 
 
 class TestTeamsAPIBasic:
-    """團隊管理 API 基本測試案例 (認證檢查版)"""
+    """Team Management API Basic Test Cases (Authentication Check Version)"""
 
     @pytest.mark.integration
     def test_team_001_create_team_success(self, authenticated_client, test_data_factory):
-        """TM-001 創建團隊成功"""
+        """TM-001 Create team successfully"""
         client, user = authenticated_client
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         skip_if_api_not_exists(client, "/api/v1/teams", "POST")
 
-        # 創建團隊資料
+        # Create team data
         team_data = test_data_factory.create_team_data(
             name="Test Development Team",
             description="A team for development projects",
@@ -33,14 +33,14 @@ class TestTeamsAPIBasic:
 
         response = client.post("/api/v1/teams", json=team_data)
 
-        # 檢查認證問題
+        # Check authentication issues
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "id" in data
         assert "name" in data
         assert "description" in data
@@ -49,7 +49,7 @@ class TestTeamsAPIBasic:
         assert "created_at" in data
         assert "updated_at" in data
 
-        # 驗證資料內容
+        # Verify data content
         assert data["name"] == team_data["name"]
         assert data["description"] == team_data["description"]
         assert data["owner_id"] == team_data["owner_id"]
@@ -57,22 +57,22 @@ class TestTeamsAPIBasic:
 
     @pytest.mark.integration
     def test_team_002_list_teams_success(self, authenticated_client):
-        """TM-002 列出團隊成功"""
+        """TM-002 List teams successfully"""
         client, user = authenticated_client
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         skip_if_api_not_exists(client, "/api/v1/teams", "GET")
 
         response = client.get("/api/v1/teams")
 
-        # 檢查認證問題
+        # Check authentication issues
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "items" in data
         assert "total" in data
         assert isinstance(data["items"], list)
@@ -80,13 +80,13 @@ class TestTeamsAPIBasic:
 
     @pytest.mark.integration
     def test_team_003_get_team_success(self, authenticated_client, test_data_factory):
-        """TM-003 取得團隊成功"""
+        """TM-003 Get team successfully"""
         client, user = authenticated_client
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         skip_if_api_not_exists(client, "/api/v1/teams", "POST")
 
-        # 先創建團隊
+        # Create team first
         team_data = test_data_factory.create_team_data(
             name="Team to Get",
             description="A team for testing get functionality",
@@ -95,24 +95,24 @@ class TestTeamsAPIBasic:
 
         create_response = client.post("/api/v1/teams", json=team_data)
 
-        # 檢查認證問題
+        # Check authentication issues
         if create_response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
         assert create_response.status_code == status.HTTP_201_CREATED
         team = create_response.json()
         team_id = team["id"]
 
-        # 取得團隊詳情
+        # Get team details
         response = client.get(f"/api/v1/teams/{team_id}")
 
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "id" in data
         assert "name" in data
         assert "description" in data
@@ -121,7 +121,7 @@ class TestTeamsAPIBasic:
         assert "created_at" in data
         assert "updated_at" in data
 
-        # 驗證資料正確
+        # Verify data is correct
         assert data["id"] == team_id
         assert data["name"] == team_data["name"]
         assert data["description"] == team_data["description"]
@@ -129,17 +129,17 @@ class TestTeamsAPIBasic:
 
     @pytest.mark.integration
     def test_team_004_get_team_not_found(self, authenticated_client):
-        """TM-004 取得不存在的團隊"""
+        """TM-004 Get nonexistent team"""
         client, user = authenticated_client
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         skip_if_api_not_exists(client, "/api/v1/teams", "GET")
 
         fake_team_id = uuid.uuid4()
         response = client.get(f"/api/v1/teams/{fake_team_id}")
 
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
@@ -148,13 +148,13 @@ class TestTeamsAPIBasic:
 
     @pytest.mark.integration
     def test_team_005_create_team_missing_required_fields(self, authenticated_client):
-        """TM-005 創建團隊缺少必填欄位"""
+        """TM-005 Create team missing required fields"""
         client, user = authenticated_client
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         skip_if_api_not_exists(client, "/api/v1/teams", "POST")
 
-        # 缺少 name 欄位
+        # Missing name field
         invalid_data = {
             "description": "Invalid team without name",
             "owner_id": user.id
@@ -163,9 +163,9 @@ class TestTeamsAPIBasic:
         response = client.post("/api/v1/teams", json=invalid_data)
 
         if response.status_code == status.HTTP_401_UNAUTHORIZED:
-            pytest.skip("團隊 API 認證失敗，可能需要特定權限")
+            pytest.skip("Team API authentication failed, specific permissions may be required")
 
-        # 應該返回驗證錯誤
+        # Should return validation error
         assert response.status_code in [
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             status.HTTP_400_BAD_REQUEST
@@ -175,10 +175,10 @@ class TestTeamsAPIBasic:
 
     @pytest.mark.integration
     def test_team_006_team_health_check(self, authenticated_client):
-        """TM-006 團隊 API 健康檢查"""
+        """TM-006 Team API health check"""
         client, user = authenticated_client
 
-        # 檢查健康檢查端點是否存在
+        # Check if health check endpoint exists
         skip_if_api_not_exists(client, "/health", "GET")
 
         response = client.get("/health")
@@ -186,7 +186,7 @@ class TestTeamsAPIBasic:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證健康檢查回應
+        # Verify health check response
         assert "status" in data
         assert "service" in data
         assert data["status"] == "healthy"

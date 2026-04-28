@@ -1,4 +1,4 @@
-"""Automation任務 API Integration Test。"""
+"""Integration Tests for Automation Task API."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ def _build_job_payload(user_id: str, **overrides):
 
 
 class TestAutomationAPI:
-    """僅保留不DependentExternal broker 的Automation API Test。"""
+    """Automation API Tests that Do Not Depend on External Broker."""
 
     @pytest.mark.integration
     def test_automation_001_create_task(self, authenticated_client):
@@ -120,7 +120,7 @@ class TestAutomationAPI:
             json={
                 "status": "success",
                 "trigger": "manual",
-                "summary": "手動ExecuteSuccess",
+                "summary": "Manual execution success",
                 "duration": 120,
                 "sessionId": str(uuid.uuid4()),
                 "errorMessage": None,
@@ -195,7 +195,7 @@ class TestAutomationAPI:
             json={
                 "name": "Updated Task Name",
                 "description": "Updated description",
-                "prompt": "Update後的提示",
+                "prompt": "Updated prompt",
                 "schedule": "0 9 * * *",
                 "tags": ["test", "updated"],
             },
@@ -265,7 +265,7 @@ class TestAutomationAPI:
         with patch(
             "app.routers.automation.AutomationService.execute_task_now",
             side_effect=JobNotRunnableError(
-                f"Automation任務 {job_id} 目前Status為 archived，不可Execute",
+                f"Automation task {job_id} is currently in archived status and cannot be executed",
                 code="AUTOMATION_JOB_NOT_RUNNABLE",
                 params={"jobId": job_id, "status": "archived"},
             ),
@@ -277,11 +277,11 @@ class TestAutomationAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         with patch(
             "app.routers.automation.AutomationService.execute_task_now",
-            side_effect=JobDispatchError("無法派送Automation任務至 Celery", code="AUTOMATION_DISPATCH_FAILED"),
+            side_effect=JobDispatchError("Failed to dispatch automation task to Celery", code="AUTOMATION_DISPATCH_FAILED"),
         ):
             zh_response = client.post(f"/api/v1/automation/jobs/{job_id}/execute")
             assert zh_response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-            assert zh_response.json()["detail"] == "無法將Automation任務派送到 Celery"
+            assert zh_response.json()["detail"] == "Failed to dispatch automation task to Celery"
 
     @pytest.mark.integration
     def test_automation_014_queue_and_cancel_generic_errors_are_localized(self, authenticated_client):
@@ -302,4 +302,4 @@ class TestAutomationAPI:
         ):
             zh_response = client.post(f"/api/v1/automation/executions/{uuid.uuid4()}/cancel")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "取消排隊任務Failed"
+            assert zh_response.json()["detail"] == "Failed to cancel queued task"

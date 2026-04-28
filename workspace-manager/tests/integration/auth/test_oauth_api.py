@@ -1,4 +1,4 @@
-"""OAuth API 整合測試 (完整版)"""
+"""OAuth API Integration Tests (Complete Version)"""
 
 from __future__ import annotations
 
@@ -15,13 +15,13 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestOAuthAPI:
-    """OAuth API 測試案例 - 完整版，測試實際的 OAuth 路由端點"""
+    """OAuth API Test Cases - Complete Version, Tests Actual OAuth Route Endpoints"""
 
-    # ============ 測試實際的 OAuth 路由端點 ============
+    # ============ Test Actual OAuth Route Endpoints ============
 
     @pytest.mark.integration
     def test_oauth_new_001_get_oauth_info_success(self, test_app):
-        """OAuth-NEW-001 取得 OAuth 設定資訊成功"""
+        """OAuth-NEW-001 Get OAuth configuration info successfully"""
         client, _ = test_app
 
         response = client.get("/api/v1/oauth/info")
@@ -32,12 +32,12 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = ["client_id", "authorization_url", "redirect_uri", "scope"]
         for field in required_fields:
-            assert field in data, f"OAuth 資訊應包含 {field} 欄位"
+            assert field in data, f"OAuth info should contain {field} field"
 
-        # 驗證資料格式
+        # Verify data format
         assert isinstance(data["client_id"], str)
         assert isinstance(data["authorization_url"], str)
         assert isinstance(data["redirect_uri"], str)
@@ -47,10 +47,10 @@ class TestOAuthAPI:
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.exchange_code')
     def test_oauth_new_002_exchange_code_success(self, mock_exchange: AsyncMock, test_app):
-        """OAuth-NEW-002 交換 OAuth 認證碼成功"""
+        """OAuth-NEW-002 Exchange OAuth authorization code successfully"""
         client, _ = test_app
 
-        # Mock OAuth exchange 回應
+        # Mock OAuth exchange response
         from app.services.oauth_service import OAuthExchangeResult
         mock_exchange.return_value = OAuthExchangeResult(
             access_token="mock_access_token_123",
@@ -71,22 +71,22 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = ["accessToken", "refreshToken", "expiresAt"]
         for field in required_fields:
-            assert field in data, f"OAuth exchange 回應應包含 {field} 欄位"
+            assert field in data, f"OAuth exchange response should contain {field} field"
 
-        # 驗證 token 不為空
+        # Verify tokens are not empty
         assert len(data["accessToken"]) > 0
         assert len(data["refreshToken"]) > 0
         assert isinstance(data["expiresAt"], int)
 
     @pytest.mark.integration
     def test_oauth_new_003_exchange_code_missing_fields(self, test_app):
-        """OAuth-NEW-003 交換認證碼缺少必填欄位"""
+        """OAuth-NEW-003 Exchange authorization code missing required fields"""
         client, _ = test_app
 
-        # 缺少 verifier
+        # Missing verifier
         exchange_data = {
             "authCode": "test_auth_code_123"
         }
@@ -108,10 +108,10 @@ class TestOAuthAPI:
         authenticated_client,
         test_data_factory
     ):
-        """OAuth-NEW-004 OAuth 認證並儲存成功"""
+        """OAuth-NEW-004 OAuth authentication and save successfully"""
         client, user = authenticated_client
 
-        # Mock OAuth exchange 回應
+        # Mock OAuth exchange response
         from app.services.oauth_service import OAuthExchangeResult, OAuthAccountInfo
         mock_exchange.return_value = OAuthExchangeResult(
             access_token="mock_access_token_123",
@@ -119,7 +119,7 @@ class TestOAuthAPI:
             expires_at=1234567890000
         )
 
-        # Mock 帳戶資訊回應
+        # Mock account info response
         mock_account_info.return_value = OAuthAccountInfo(
             account_uuid="test_account_uuid",
             email_address="test@example.com",
@@ -146,7 +146,7 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "success" in data
         assert data["success"] is True
         assert "accessToken" in data
@@ -154,7 +154,7 @@ class TestOAuthAPI:
         assert "expiresAt" in data
         assert "oauthAccount" in data
 
-        # 驗證帳戶資訊
+        # Verify account info
         account = data["oauthAccount"]
         assert account["emailAddress"] == "test@example.com"
         assert account["displayName"] == "Test User"
@@ -162,10 +162,10 @@ class TestOAuthAPI:
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.refresh_access_token')
     def test_oauth_new_005_refresh_token_success(self, mock_refresh: AsyncMock, test_app):
-        """OAuth-NEW-005 更新 Access Token 成功"""
+        """OAuth-NEW-005 Refresh access token successfully"""
         client, _ = test_app
 
-        # Mock refresh token 回應
+        # Mock refresh token response
         from app.services.oauth_service import OAuthExchangeResult
         mock_refresh.return_value = OAuthExchangeResult(
             access_token="new_access_token_789",
@@ -185,18 +185,18 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = ["accessToken", "refreshToken", "expiresAt"]
         for field in required_fields:
-            assert field in data, f"OAuth refresh 回應應包含 {field} 欄位"
+            assert field in data, f"OAuth refresh response should contain {field} field"
 
-        # 驗證 token 不為空
+        # Verify tokens are not empty
         assert len(data["accessToken"]) > 0
         assert len(data["refreshToken"]) > 0
 
     @pytest.mark.integration
     def test_oauth_new_006_refresh_token_missing_token(self, test_app):
-        """OAuth-NEW-006 更新 Token 缺少 refresh token"""
+        """OAuth-NEW-006 Refresh token missing refresh token"""
         client, _ = test_app
 
         response = client.post("/api/v1/oauth/refresh", json={})
@@ -208,7 +208,7 @@ class TestOAuthAPI:
 
     @pytest.mark.integration
     def test_oauth_new_007_health_check_success(self, test_app):
-        """OAuth-NEW-007 OAuth 健康檢查成功"""
+        """OAuth-NEW-007 OAuth health check successful"""
         client, _ = test_app
 
         response = client.get("/api/v1/oauth/health")
@@ -219,7 +219,7 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證健康檢查回應
+        # Verify health check response
         assert "status" in data
         assert data["status"] == "healthy"
         assert "service" in data
@@ -229,7 +229,7 @@ class TestOAuthAPI:
 
     @pytest.mark.integration
     def test_oauth_new_008_health_check_localizes_description(self, test_app):
-        """OAuth-NEW-008 OAuth 健康檢查會依語系切換描述"""
+        """OAuth-NEW-008 OAuth health check switches description based on locale"""
         client, _ = test_app
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
 
@@ -241,11 +241,12 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["description"] == "OAuth 認證服務，提供 code exchange 和 token refresh 功能"
+        assert data["description"] == "OAuth authentication service providing code exchange and token refresh"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.exchange_code')
     def test_oauth_new_009_exchange_provider_error_is_localized(self, mock_exchange: AsyncMock, test_app):
+        """OAuth-NEW-009 OAuth exchange provider error is localized"""
         client, _ = test_app
 
         request = httpx.Request("POST", "https://example.com/oauth")
@@ -264,11 +265,12 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
         assert zh_response.status_code == status.HTTP_502_BAD_GATEWAY
-        assert zh_response.json()["detail"] == "OAuth provider 錯誤"
+        assert zh_response.json()["detail"] == "OAuth provider error"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.exchange_code')
     def test_oauth_new_010_exchange_internal_error_is_localized(self, mock_exchange: AsyncMock, test_app):
+        """OAuth-NEW-010 OAuth exchange internal error is localized"""
         client, _ = test_app
         mock_exchange.side_effect = RuntimeError("unexpected boom")
 
@@ -284,11 +286,12 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
         assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert zh_response.json()["detail"] == "交換 OAuth 認證碼失敗"
+        assert zh_response.json()["detail"] == "Failed to exchange OAuth authorization code"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.refresh_access_token')
     def test_oauth_new_011_refresh_internal_error_is_localized(self, mock_refresh: AsyncMock, test_app):
+        """OAuth-NEW-011 OAuth refresh internal error is localized"""
         client, _ = test_app
         mock_refresh.side_effect = RuntimeError("refresh boom")
 
@@ -303,13 +306,13 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/refresh", json=refresh_data)
         assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert zh_response.json()["detail"] == "更新 OAuth Token 失敗"
+        assert zh_response.json()["detail"] == "Failed to refresh OAuth token"
 
-    # ============ 原有的測試案例（保留用於測試其他 OAuth 流程）============
+    # ============ Original Test Cases (Retained for Testing Other OAuth Flows)============
 
     @pytest.mark.integration
     def test_oauth_001_google_oauth_initiate_success(self, test_app):
-        """OAuth-001 Google OAuth 啟動成功"""
+        """OAuth-001 Google OAuth initiate successful"""
         client, _ = test_app
 
         oauth_data = {
@@ -317,7 +320,7 @@ class TestOAuthAPI:
             "redirect_uri": "http://localhost:3000/auth/callback",
         }
 
-        # 嘗試多種可能的端點路徑
+        # Try multiple possible endpoint paths
         endpoints = [
             "/api/v1/auth/oauth/initiate",
             "/api/v1/auth/oauth/google/initiate",
@@ -330,16 +333,16 @@ class TestOAuthAPI:
                 success = True
                 break
             elif response.status_code != 404:
-                # 如果不是404，可能是其他問題，記錄下來
+                # If not 404, may be other issues, record them
                 pass
 
         if not success:
-            # 如果所有端點都失敗，這是正常的，OAuth可能還未實現
+            # If all endpoints fail, this is normal, OAuth may not be implemented yet
             assert True
 
     @pytest.mark.integration
     def test_oauth_002_github_oauth_initiate_success(self, test_app):
-        """OAuth-002 GitHub OAuth 啟動成功"""
+        """OAuth-002 GitHub OAuth initiate successful"""
         client, _ = test_app
 
         oauth_data = {
@@ -347,7 +350,7 @@ class TestOAuthAPI:
             "redirect_uri": "http://localhost:3000/auth/callback",
         }
 
-        # 嘗試多種可能的端點路徑
+        # Try multiple possible endpoint paths
         endpoints = [
             "/api/v1/auth/oauth/initiate",
             "/api/v1/auth/oauth/github/initiate",
@@ -356,19 +359,19 @@ class TestOAuthAPI:
         for endpoint in endpoints:
             response = client.post(endpoint, json=oauth_data)
             if response.status_code == 200:
-                break  # 成功即可
+                break  # Success is sufficient
             elif response.status_code == 404:
-                continue  # 嘗試下一個端點
+                continue  # Try next endpoint
             else:
-                # 其他錯誤也是可接受的
+                # Other errors are also acceptable
                 break
 
-        # 無論結果如何都是正常的，OAuth可能還未實現
+        # Any result is normal, OAuth may not be implemented yet
         assert True
 
     @pytest.mark.integration
     def test_oauth_003_oauth_initiate_missing_redirect_uri(self, test_app):
-        """OAuth-003 OAuth 啟動缺少重定向 URI"""
+        """OAuth-003 OAuth initiate missing redirect URI"""
         client, _ = test_app
 
         oauth_data = {
@@ -377,12 +380,12 @@ class TestOAuthAPI:
 
         response = client.post("/api/v1/auth/oauth/initiate", json=oauth_data)
 
-        # 接受多種可能的回應
+        # Accept multiple possible responses
         assert response.status_code in [400, 401, 422, 404]
 
     @pytest.mark.integration
     def test_oauth_004_oauth_initiate_invalid_provider(self, test_app):
-        """OAuth-004 OAuth 啟動無效提供商"""
+        """OAuth-004 OAuth initiate invalid provider"""
         client, _ = test_app
 
         oauth_data = {
@@ -392,21 +395,21 @@ class TestOAuthAPI:
 
         response = client.post("/api/v1/auth/oauth/initiate", json=oauth_data)
 
-        # 接受多種可能的回應
+        # Accept multiple possible responses
         assert response.status_code in [400, 401, 404, 422]
 
     @pytest.mark.integration
     def test_oauth_005_oauth_callback_success(self, test_app):
-        """OAuth-005 OAuth 回調成功"""
+        """OAuth-005 OAuth callback successful"""
         client, _ = test_app
 
-        # 模擬 OAuth 回調
+        # Simulate OAuth callback
         callback_params = {
             "code": "mock_oauth_code",
             "state": "mock_state",
         }
 
-        # 嘗試多種可能的回調端點
+        # Try multiple possible callback endpoints
         callback_endpoints = [
             "/api/v1/auth/oauth/callback",
             "/api/v1/auth/oauth/google/callback",
@@ -415,19 +418,19 @@ class TestOAuthAPI:
         for endpoint in callback_endpoints:
             response = client.get(endpoint, params=callback_params)
             if response.status_code == 200:
-                break  # 成功即可
+                break  # Success is sufficient
             elif response.status_code == 404:
-                continue  # 嘗試下一個端點
+                continue  # Try next endpoint
             else:
-                # 其他錯誤也是可接受的
+                # Other errors are also acceptable
                 break
 
-        # 無論結果如何都是正常的
+        # Any result is normal
         assert True
 
     @pytest.mark.integration
     def test_oauth_006_oauth_callback_invalid_state(self, test_app):
-        """OAuth-006 OAuth 回調無效狀態"""
+        """OAuth-006 OAuth callback invalid state"""
         client, _ = test_app
 
         callback_params = {
@@ -437,12 +440,12 @@ class TestOAuthAPI:
 
         response = client.get("/api/v1/auth/oauth/callback", params=callback_params)
 
-        # 接受多種可能的回應
+        # Accept multiple possible responses
         assert response.status_code in [400, 401, 403, 404]
 
     @pytest.mark.integration
     def test_oauth_007_oauth_callback_missing_code(self, test_app):
-        """OAuth-007 OAuth 回調缺少授權碼"""
+        """OAuth-007 OAuth callback missing authorization code"""
         client, _ = test_app
 
         callback_params = {
@@ -451,18 +454,18 @@ class TestOAuthAPI:
 
         response = client.get("/api/v1/auth/oauth/callback", params=callback_params)
 
-        # 接受多種可能的回應
+        # Accept multiple possible responses
         assert response.status_code in [400, 401, 403, 404]
 
     @pytest.mark.integration
     def test_oauth_008_oauth_token_operations(self, internal_client):
-        """OAuth-008 OAuth Token 操作"""
+        """OAuth-008 OAuth Token Operations"""
         client, session_factory = internal_client
 
-        # 使用內部API token測試OAuth相關端點
+        # Use internal API token to test OAuth related endpoints
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試OAuth端點是否可用
+        # Test if OAuth endpoints are available
         oauth_endpoints = [
             "/api/v1/auth/oauth/providers",
             "/api/v1/auth/oauth/status",
@@ -471,17 +474,17 @@ class TestOAuthAPI:
 
         for endpoint in oauth_endpoints:
             response = client.get(endpoint, headers=headers)
-            # 接受多種可能的回應
+            # Accept multiple possible responses
             assert response.status_code in [200, 404, 405]
 
     @pytest.mark.integration
     def test_oauth_009_oauth_security_headers(self, test_app):
-        """OAuth-009 OAuth 安全標頭"""
+        """OAuth-009 OAuth Security Headers"""
         client, _ = test_app
 
         response = client.options("/api/v1/auth/oauth/initiate")
 
-        # 檢查是否有安全標頭（如果端點存在）
+        # Check for security headers (if endpoint exists)
         if response.status_code != 404:
             security_headers = [
                 "X-Content-Type-Options",
@@ -489,15 +492,15 @@ class TestOAuthAPI:
                 "X-XSS-Protection",
             ]
 
-            # 無論是否有安全標頭都是正常的
+            # Whether there are security headers or not is normal
             assert True
         else:
-            # 端點不存在也是正常的
+            # Endpoint not existing is also normal
             assert True
 
     @pytest.mark.integration
     def test_oauth_010_oauth_rate_limiting(self, test_app):
-        """OAuth-010 OAuth 速率限制"""
+        """OAuth-010 OAuth Rate Limiting"""
         client, _ = test_app
 
         oauth_data = {
@@ -505,27 +508,27 @@ class TestOAuthAPI:
             "redirect_uri": "http://localhost:3000/auth/callback",
         }
 
-        # 快速連續請求
+        # Rapid consecutive requests
         responses = []
         for _ in range(5):
             response = client.post("/api/v1/auth/oauth/initiate", json=oauth_data)
             responses.append(response)
 
-        # 檢查是否有速率限制
+        # Check for rate limiting
         rate_limited = any(r.status_code == 429 for r in responses)
 
-        # 無論是否被速率限制都是正常的
+        # Whether rate limited or not is normal
         assert True
 
     @pytest.mark.integration
     def test_oauth_011_oauth_state_management(self, internal_client):
-        """OAuth-011 OAuth 狀態管理"""
+        """OAuth-011 OAuth State Management"""
         client, session_factory = internal_client
 
-        # 使用內部API token
+        # Use internal API token
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試OAuth狀態管理相關端點
+        # Test OAuth state management related endpoints
         state_endpoints = [
             "/api/v1/auth/oauth/state",
             "/api/v1/auth/oauth/validate",
@@ -533,18 +536,18 @@ class TestOAuthAPI:
 
         for endpoint in state_endpoints:
             response = client.post(endpoint, json={"state": "test_state"}, headers=headers)
-            # 接受多種可能的回應
+            # Accept multiple possible responses
             assert response.status_code in [200, 404, 405]
 
     @pytest.mark.integration
     def test_oauth_012_oauth_provider_discovery(self, test_app):
-        """OAuth-012 OAuth 提供商發現"""
+        """OAuth-012 OAuth Provider Discovery"""
         client, _ = test_app
 
         response = client.get("/api/v1/auth/oauth/providers")
 
         if response.status_code == 404:
-            assert True  # API 端點不存在
+            assert True  # API endpoint does not exist
         elif response.status_code == 200:
             data = response.json()
             assert isinstance(data, (list, dict))
@@ -553,13 +556,13 @@ class TestOAuthAPI:
 
     @pytest.mark.integration
     def test_oauth_013_oauth_token_revocation(self, internal_client):
-        """OAuth-013 OAuth Token 撤銷"""
+        """OAuth-013 OAuth Token Revocation"""
         client, session_factory = internal_client
 
-        # 使用內部API token
+        # Use internal API token
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試token撤銷端點
+        # Test token revocation endpoints
         revoke_endpoints = [
             "/api/v1/auth/oauth/revoke",
             "/api/v1/auth/oauth/logout",
@@ -567,18 +570,18 @@ class TestOAuthAPI:
 
         for endpoint in revoke_endpoints:
             response = client.post(endpoint, json={"token": "test_token"}, headers=headers)
-            # 接受多種可能的回應
+            # Accept multiple possible responses
             assert response.status_code in [200, 404, 405]
 
     @pytest.mark.integration
     def test_oauth_014_oauth_session_management(self, internal_client):
-        """OAuth-014 OAuth 會話管理"""
+        """OAuth-014 OAuth Session Management"""
         client, session_factory = internal_client
 
-        # 使用內部API token
+        # Use internal API token
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試會話管理端點
+        # Test session management endpoints
         session_endpoints = [
             "/api/v1/auth/oauth/session",
             "/api/v1/auth/oauth/sessions",
@@ -586,15 +589,15 @@ class TestOAuthAPI:
 
         for endpoint in session_endpoints:
             response = client.get(endpoint, headers=headers)
-            # 接受多種可能的回應
+            # Accept multiple possible responses
             assert response.status_code in [200, 404, 405]
 
     @pytest.mark.integration
     def test_oauth_015_oauth_error_handling(self, test_app):
-        """OAuth-015 OAuth 錯誤處理"""
+        """OAuth-015 OAuth Error Handling"""
         client, _ = test_app
 
-        # 測試各種錯誤情況
+        # Test various error scenarios
         error_scenarios = [
             {"provider": "", "redirect_uri": "http://localhost:3000/auth/callback"},
             {"provider": "google", "redirect_uri": ""},
@@ -605,20 +608,20 @@ class TestOAuthAPI:
             response = client.post("/api/v1/auth/oauth/initiate", json=error_data)
 
             if response.status_code == 404:
-                assert True  # API 端點不存在
+                assert True  # API endpoint does not exist
             else:
-                # 應該返回錯誤狀態碼
+                # Should return error status code
                 assert response.status_code in [400, 401, 422]
 
     @pytest.mark.integration
     def test_oauth_016_oauth_scope_validation(self, internal_client):
-        """OAuth-016 OAuth 範圍驗證"""
+        """OAuth-016 OAuth Scope Validation"""
         client, session_factory = internal_client
 
-        # 使用內部API token
+        # Use internal API token
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試範圍驗證端點
+        # Test scope validation endpoints
         scope_endpoints = [
             "/api/v1/auth/oauth/scopes",
             "/api/v1/auth/oauth/validate",
@@ -626,18 +629,18 @@ class TestOAuthAPI:
 
         for endpoint in scope_endpoints:
             response = client.post(endpoint, json={"scopes": ["read", "oauth"]}, headers=headers)
-            # 接受多種可能的回應
+            # Accept multiple possible responses
             assert response.status_code in [200, 404, 405]
 
     @pytest.mark.integration
     def test_oauth_017_oauth_provider_status_check(self, test_app):
-        """OAuth-017 OAuth 提供商狀態檢查"""
+        """OAuth-017 OAuth Provider Status Check"""
         client, _ = test_app
 
         response = client.get("/api/v1/auth/oauth/status")
 
         if response.status_code == 404:
-            assert True  # API 端點不存在
+            assert True  # API endpoint does not exist
         elif response.status_code == 200:
             data = response.json()
             assert isinstance(data, (dict, list))
@@ -646,13 +649,13 @@ class TestOAuthAPI:
 
     @pytest.mark.integration
     def test_oauth_018_oauth_concurrent_operations(self, internal_client):
-        """OAuth-018 OAuth 併發操作"""
+        """OAuth-018 OAuth Concurrent Operations"""
         client, session_factory = internal_client
 
-        # 使用內部API token
+        # Use internal API token
         headers = {"X-Internal-Token": "test-internal-token"}
 
-        # 測試併發OAuth操作
+        # Test concurrent OAuth operations
         import threading
         import time
 
@@ -666,7 +669,7 @@ class TestOAuthAPI:
             except Exception as e:
                 errors.append(e)
 
-        # 創建多個併發請求
+        # Create multiple concurrent requests
         threads = []
         for _ in range(3):
             thread = threading.Thread(target=test_oauth_endpoint)
@@ -680,32 +683,32 @@ class TestOAuthAPI:
             thread.join()
         end_time = time.time()
 
-        # 驗證結果
-        assert len(errors) == 0, f"併發 OAuth 操作發生錯誤: {errors}"
-        assert len(results) == 3, "應該收到 3 個回應"
+        # Verify results
+        assert len(errors) == 0, f"Concurrent OAuth operation errors: {errors}"
+        assert len(results) == 3, "Should receive 3 responses"
 
-        # 所有回應都應該是可接受的
+        # All responses should be acceptable
         for status_code in results:
             assert status_code in [200, 404, 405]
 
-        # 併發處理時間應該合理
+        # Concurrent processing time should be reasonable
         total_time = (end_time - start_time) * 1000
-        assert total_time < 5000, f"併發 OAuth 處理時間過長: {total_time}ms"
+        assert total_time < 5000, f"Concurrent OAuth processing time too long: {total_time}ms"
 
 
 @pytest.fixture
 def test_data_factory():
-    """測試資料工廠 fixture"""
+    """Test data factory fixture"""
     return TestDataFactory()
 
 
 @pytest.fixture
 def mock_responses():
-    """Mock 回應 fixture"""
+    """Mock response fixture"""
     return MockResponses()
 
 
 @pytest.fixture
 def auth_helper():
-    """認證測試輔助工具 fixture (修正版)"""
+    """Authentication test helper fixture (corrected version)"""
     return AuthTestHelper()

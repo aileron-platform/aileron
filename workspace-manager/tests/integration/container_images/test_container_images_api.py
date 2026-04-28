@@ -1,9 +1,9 @@
-"""Container Images API 整合測試
+"""Container Images API Integration Tests
 
-測試 container_images_router 的所有端點：
-1. GET /api/v1/container-images - 列出所有容器映像
-2. GET /api/v1/container-images/{image_id} - 獲取特定映像詳情
-3. POST /api/v1/container-images/reload - 重新載入映像配置
+Test all endpoints of container_images_router:
+1. GET /api/v1/container-images - List all container images
+2. GET /api/v1/container-images/{image_id} - Get specific image details
+3. POST /api/v1/container-images/reload - Reload image configuration
 """
 
 from __future__ import annotations
@@ -20,31 +20,31 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestContainerImagesAPI:
-    """Container Images API 測試案例"""
+    """Container Images API Test Cases"""
 
     @pytest.mark.integration
     def test_ci_001_list_images_unauthorized(self, test_app):
-        """CI-001 未認證用戶可以列出容器映像（公開 API）"""
+        """CI-001 Unauthorized users can list container images (public API)"""
         client, _ = test_app
 
         response = client.get("/api/v1/container-images")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         else:
-            # 容器映像檔 API 是公開的，應該返回 200
+            # Container images API is public, should return 200
             assert response.status_code == status.HTTP_200_OK
 
     @pytest.mark.integration
     def test_ci_002_get_image_unauthorized(self, test_app):
-        """CI-002 未認證用戶可以獲取映像詳情（公開 API）"""
+        """CI-002 Unauthorized users can get image details (public API)"""
         client, _ = test_app
-        image_id = "universal"  # 使用實際存在的映像 ID
+        image_id = "universal"  # Use actual existing image ID
 
         response = client.get(f"/api/v1/container-images/{image_id}")
 
-        # 容器映像檔 API 是公開的，應該返回 200
+        # Container images API is public, should return 200
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
@@ -55,25 +55,25 @@ class TestContainerImagesAPI:
 
     @pytest.mark.integration
     def test_ci_003_reload_config_unauthorized(self, test_app):
-        """CI-003 重新載入配置需要管理員權限"""
+        """CI-003 Reload configuration requires admin privileges"""
         client, _ = test_app
 
         response = client.post("/api/v1/container-images/reload")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
-            # 可能需要認證，這是正常的
+            # May require authentication, this is normal
             assert True
         elif response.status_code == status.HTTP_403_FORBIDDEN:
-            # 可能需要管理員權限，這也是正常的
+            # May require admin privileges, this is also normal
             assert True
         elif response.status_code == status.HTTP_204_NO_CONTENT:
-            # 允許公開重新載入配置
+            # Allow public reload configuration
             assert True
         else:
-            # 其他狀態碼可能表示問題
+            # Other status codes may indicate problems
             assert response.status_code in [
                 status.HTTP_401_UNAUTHORIZED,
                 status.HTTP_403_FORBIDDEN,
@@ -82,12 +82,12 @@ class TestContainerImagesAPI:
 
     @pytest.mark.integration
     def test_ci_004_list_images_success(self, authenticated_client):
-        """CI-004 成功列出所有容器映像"""
+        """CI-004 Successfully list all container images"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -96,12 +96,12 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 驗證回應結構
-            assert "defaultImageId" in data, "回應應包含 defaultImageId 欄位"
-            assert "images" in data, "回應應包含 images 欄位"
-            assert isinstance(data["images"], list), "images 應為列表"
+            # Verify response structure
+            assert "defaultImageId" in data, "Response should contain defaultImageId field"
+            assert "images" in data, "Response should contain images field"
+            assert isinstance(data["images"], list), "images should be a list"
 
-            # 驗證至少有一個映像
+            # Verify at least one image exists
             if len(data["images"]) > 0:
                 image = data["images"][0]
                 required_fields = [
@@ -109,16 +109,16 @@ class TestContainerImagesAPI:
                     "tags", "features", "recommended", "active"
                 ]
                 for field in required_fields:
-                    assert field in image, f"映像資料應包含 {field} 欄位"
+                    assert field in image, f"Image data should contain {field} field"
 
     @pytest.mark.integration
     def test_ci_005_list_images_active_only(self, authenticated_client):
-        """CI-005 只列出啟用的容器映像"""
+        """CI-005 List only enabled container images"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images", params={"active_only": True})
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -127,18 +127,18 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 驗證所有映像都是啟用狀態
+            # Verify all images are in enabled status
             for image in data["images"]:
-                assert image["active"] is True, "所有映像都應該是啟用狀態"
+                assert image["active"] is True, "All images should be in enabled status"
 
     @pytest.mark.integration
     def test_ci_006_list_images_include_inactive(self, authenticated_client):
-        """CI-006 列出包含未啟用的容器映像"""
+        """CI-006 List container images including disabled ones"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images", params={"active_only": False})
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -147,16 +147,16 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 驗證回應包含映像列表
+            # Verify response contains image list
             assert "images" in data
             assert isinstance(data["images"], list)
 
     @pytest.mark.integration
     def test_ci_007_get_image_success(self, authenticated_client):
-        """CI-007 成功獲取特定映像詳情"""
+        """CI-007 Successfully get specific image details"""
         client, user = authenticated_client
 
-        # 先獲取映像列表
+        # Get image list first
         list_response = client.get("/api/v1/container-images")
         
         if list_response.status_code != status.HTTP_200_OK:
@@ -166,13 +166,13 @@ class TestContainerImagesAPI:
         if len(images) == 0:
             pytest.skip("No images available for testing")
         
-        # 使用第一個映像的 ID
+        # Use the first image's ID
         image_id = images[0]["id"]
 
-        # 獲取映像詳情
+        # Get image details
         response = client.get(f"/api/v1/container-images/{image_id}")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -181,61 +181,61 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 驗證回應結構
+            # Verify response structure
             required_fields = [
                 "id", "name", "description", "icon", "image",
                 "tags", "features", "recommended", "active"
             ]
             for field in required_fields:
-                assert field in data, f"映像資料應包含 {field} 欄位"
+                assert field in data, f"Image data should contain {field} field"
 
-            # 驗證 ID 匹配
+            # Verify ID matches
             assert data["id"] == image_id
 
     @pytest.mark.integration
     def test_ci_008_get_image_not_found(self, authenticated_client):
-        """CI-008 獲取不存在的映像"""
+        """CI-008 Get nonexistent image"""
         client, user = authenticated_client
         non_existent_id = "non-existent-image-id"
 
         response = client.get(f"/api/v1/container-images/{non_existent_id}")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             data = response.json()
-            # 確認是映像不存在，而非端點不存在
-            if "detail" in data and ("不存在" in str(data["detail"]) or "not" in str(data["detail"]).lower()):
+            # Confirm image doesn't exist, not endpoint doesn't exist
+            if "detail" in data and ("does not exist" in str(data["detail"]) or "not" in str(data["detail"]).lower()):
                 assert True
             else:
                 pytest.skip("Container Images API endpoint not implemented")
         else:
-            # 如果不是 404，可能是其他錯誤
+            # If not 404, may be other error
             assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_401_UNAUTHORIZED]
 
     @pytest.mark.integration
     def test_ci_009_reload_config_success(self, authenticated_client):
-        """CI-009 成功重新載入映像配置"""
+        """CI-009 Successfully reload image configuration"""
         client, user = authenticated_client
 
         response = client.post("/api/v1/container-images/reload")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
             pytest.skip("Authentication not working for container images endpoint")
         else:
-            # 應該返回 204 No Content
+            # Should return 204 No Content
             assert response.status_code == status.HTTP_204_NO_CONTENT
 
     @pytest.mark.integration
     def test_ci_010_default_image_exists(self, authenticated_client):
-        """CI-010 驗證預設映像存在且有效"""
+        """CI-010 Verify default image exists and is valid"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -244,29 +244,29 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 驗證預設映像 ID 存在
+            # Verify default image ID exists
             assert "defaultImageId" in data
             default_image_id = data["defaultImageId"]
             assert default_image_id is not None
             assert default_image_id != ""
 
-            # 驗證預設映像在映像列表中
+            # Verify default image is in image list
             image_ids = [img["id"] for img in data["images"]]
-            assert default_image_id in image_ids, "預設映像應該在映像列表中"
+            assert default_image_id in image_ids, "Default image should be in image list"
 
-            # 驗證預設映像是啟用狀態
+            # Verify default image is in enabled status
             default_image = next((img for img in data["images"] if img["id"] == default_image_id), None)
             assert default_image is not None
-            assert default_image["active"] is True, "預設映像應該是啟用狀態"
+            assert default_image["active"] is True, "Default image should be in enabled status"
 
     @pytest.mark.integration
     def test_ci_011_image_fields_validation(self, authenticated_client):
-        """CI-011 驗證映像欄位的資料類型和格式"""
+        """CI-011 Verify image field data types and formats"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -278,31 +278,31 @@ class TestContainerImagesAPI:
             if len(data["images"]) > 0:
                 image = data["images"][0]
 
-                # 驗證欄位類型
-                assert isinstance(image["id"], str), "id 應為字串"
-                assert isinstance(image["name"], str), "name 應為字串"
-                assert isinstance(image["description"], str), "description 應為字串"
-                assert isinstance(image["icon"], str), "icon 應為字串"
-                assert isinstance(image["image"], str), "image 應為字串"
-                assert isinstance(image["tags"], list), "tags 應為列表"
-                assert isinstance(image["features"], list), "features 應為列表"
-                assert isinstance(image["recommended"], bool), "recommended 應為布林值"
-                assert isinstance(image["active"], bool), "active 應為布林值"
+                # Verify field types
+                assert isinstance(image["id"], str), "id should be a string"
+                assert isinstance(image["name"], str), "name should be a string"
+                assert isinstance(image["description"], str), "description should be a string"
+                assert isinstance(image["icon"], str), "icon should be a string"
+                assert isinstance(image["image"], str), "image should be a string"
+                assert isinstance(image["tags"], list), "tags should be a list"
+                assert isinstance(image["features"], list), "features should be a list"
+                assert isinstance(image["recommended"], bool), "recommended should be a boolean"
+                assert isinstance(image["active"], bool), "active should be a boolean"
 
-                # 驗證 tags 和 features 的元素都是字串
+                # Verify tags and features elements are strings
                 for tag in image["tags"]:
-                    assert isinstance(tag, str), "tag 應為字串"
+                    assert isinstance(tag, str), "tag should be a string"
                 for feature in image["features"]:
-                    assert isinstance(feature, str), "feature 應為字串"
+                    assert isinstance(feature, str), "feature should be a string"
 
     @pytest.mark.integration
     def test_ci_012_recommended_images_exist(self, authenticated_client):
-        """CI-012 驗證至少有一個推薦映像"""
+        """CI-012 Verify at least one recommended image exists"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/container-images")
 
-        # 檢查 API 端點是否存在
+        # Check if API endpoint exists
         if response.status_code == status.HTTP_404_NOT_FOUND:
             pytest.skip("Container Images API endpoint not implemented")
         elif response.status_code == status.HTTP_401_UNAUTHORIZED:
@@ -311,10 +311,10 @@ class TestContainerImagesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
 
-            # 檢查是否有推薦映像
+            # Check if there are recommended images
             recommended_images = [img for img in data["images"] if img["recommended"]]
             
-            # 如果有映像，至少應該有一個推薦映像
+            # If there are images, at least one should be recommended
             if len(data["images"]) > 0:
-                assert len(recommended_images) > 0, "應該至少有一個推薦映像"
+                assert len(recommended_images) > 0, "Should have at least one recommended image"
 

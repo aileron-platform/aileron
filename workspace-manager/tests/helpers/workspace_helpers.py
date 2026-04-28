@@ -1,4 +1,4 @@
-"""工作區測試輔助工具"""
+"""Workspace Testing Helper Functions"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 
 class WorkspaceTestHelper:
-    """工作區測試輔助工具"""
+    """Workspace Testing Helper Functions"""
 
     @staticmethod
     def create_workspace_config(
@@ -23,7 +23,7 @@ class WorkspaceTestHelper:
         ports: list[str] | None = None,
         volumes: list[str] | None = None,
     ) -> Dict[str, Any]:
-        """創建工作區配置"""
+        """Create workspace configuration"""
         return {
             "cpu_limit": cpu_limit,
             "memory_limit": memory_limit,
@@ -48,7 +48,7 @@ class WorkspaceTestHelper:
         template_id: uuid.UUID | None = None,
         config: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """創建工作區創建 payload"""
+        """Create workspace creation payload"""
         return {
             "name": name,
             "description": description,
@@ -63,7 +63,7 @@ class WorkspaceTestHelper:
         description: str | None = None,
         config: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """創建工作區更新 payload"""
+        """Create workspace update payload"""
         payload: Dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
@@ -79,7 +79,7 @@ class WorkspaceTestHelper:
         message: str = "",
         details: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
-        """創建工作區狀態 payload"""
+        """Create workspace status payload"""
         return {
             "status": status,
             "message": message,
@@ -89,41 +89,41 @@ class WorkspaceTestHelper:
 
     @staticmethod
     def simulate_workspace_lifecycle() -> Dict[str, Any]:
-        """模擬工作區生命週期"""
+        """Simulate workspace lifecycle"""
         return {
             "created": {
                 "status": "created",
-                "message": "工作區已創建",
+                "message": "Workspace created",
                 "container_id": None,
                 "ports": [],
             },
             "starting": {
                 "status": "starting",
-                "message": "工作區啟動中",
+                "message": "Workspace starting",
                 "container_id": "container_123",
                 "ports": [],
             },
             "running": {
                 "status": "running",
-                "message": "工作區運行中",
+                "message": "Workspace running",
                 "container_id": "container_123",
                 "ports": ["3000:3000", "8080:8080"],
             },
             "stopping": {
                 "status": "stopping",
-                "message": "工作區停止中",
+                "message": "Workspace stopping",
                 "container_id": "container_123",
                 "ports": ["3000:3000", "8080:8080"],
             },
             "stopped": {
                 "status": "stopped",
-                "message": "工作區已停止",
+                "message": "Workspace stopped",
                 "container_id": None,
                 "ports": [],
             },
             "error": {
                 "status": "error",
-                "message": "工作區發生錯誤",
+                "message": "Workspace error occurred",
                 "container_id": None,
                 "ports": [],
                 "error": "Container failed to start",
@@ -132,7 +132,7 @@ class WorkspaceTestHelper:
 
     @staticmethod
     def create_workspace_metrics() -> Dict[str, Any]:
-        """創建工作區指標"""
+        """Create workspace metrics"""
         return {
             "cpu_usage": 25.5,
             "memory_usage": 1024,
@@ -148,7 +148,7 @@ class WorkspaceTestHelper:
 
 
 class MockWorkspace:
-    """Mock 工作區物件"""
+    """Mock workspace object"""
 
     def __init__(
         self,
@@ -174,7 +174,7 @@ class MockWorkspace:
         self.ports = []
 
     def to_dict(self) -> Dict[str, Any]:
-        """轉換為字典"""
+        """Convert to dictionary"""
         return {
             "id": str(self.id),
             "name": self.name,
@@ -191,40 +191,40 @@ class MockWorkspace:
         }
 
     def start(self) -> None:
-        """啟動工作區"""
+        """Start workspace"""
         self.status = "running"
         self.container_id = f"container_{uuid.uuid4().hex[:8]}"
         self.ports = ["3000:3000"]
         self.updated_at = datetime.now(timezone.utc)
 
     def stop(self) -> None:
-        """停止工作區"""
+        """Stop workspace"""
         self.status = "stopped"
         self.container_id = None
         self.ports = []
         self.updated_at = datetime.now(timezone.utc)
 
     def update_config(self, config: Dict[str, Any]) -> None:
-        """更新配置"""
+        """Update configuration"""
         self.config.update(config)
         self.updated_at = datetime.now(timezone.utc)
 
 
 @pytest.fixture
 def workspace_helper():
-    """工作區測試輔助工具 fixture"""
+    """Workspace testing helper fixture"""
     return WorkspaceTestHelper()
 
 
 @pytest.fixture
 def mock_workspace():
-    """Mock 工作區 fixture"""
+    """Mock workspace fixture"""
     return MockWorkspace()
 
 
 @pytest.fixture
 def running_workspace():
-    """運行中的工作區 fixture"""
+    """Running workspace fixture"""
     workspace = MockWorkspace()
     workspace.start()
     return workspace
@@ -232,7 +232,7 @@ def running_workspace():
 
 @pytest.fixture
 def workspace_payload(workspace_helper: WorkspaceTestHelper):
-    """工作區創建 payload fixture"""
+    """Workspace creation payload fixture"""
     return workspace_helper.create_workspace_payload(
         name="Test Workspace",
         description="A test workspace for testing",
@@ -241,38 +241,38 @@ def workspace_payload(workspace_helper: WorkspaceTestHelper):
 
 @pytest.fixture
 def workspace_lifecycle(workspace_helper: WorkspaceTestHelper):
-    """工作區生命週期 fixture"""
+    """Workspace lifecycle fixture"""
     return workspace_helper.simulate_workspace_lifecycle()
 
 
 @pytest.fixture
 def workspace_metrics(workspace_helper: WorkspaceTestHelper):
-    """工作區指標 fixture"""
+    """Workspace metrics fixture"""
     return workspace_helper.create_workspace_metrics()
 
 
 def assert_workspace_status(
     workspace_data: Dict[str, Any], expected_status: str
 ) -> None:
-    """斷言工作區狀態"""
-    assert "status" in workspace_data, "工作區資料缺少 status 欄位"
-    assert workspace_data["status"] == expected_status, f"工作區狀態不匹配: 期望 {expected_status}, 實際 {workspace_data['status']}"
+    """Assert workspace status"""
+    assert "status" in workspace_data, "Workspace data missing status field"
+    assert workspace_data["status"] == expected_status, f"Workspace status mismatch: expected {expected_status}, actual {workspace_data['status']}"
 
 
 def assert_workspace_config(
     workspace_data: Dict[str, Any], expected_config: Dict[str, Any]
 ) -> None:
-    """斷言工作區配置"""
-    assert "config" in workspace_data, "工作區資料缺少 config 欄位"
+    """Assert workspace configuration"""
+    assert "config" in workspace_data, "Workspace data missing config field"
     config = workspace_data["config"]
 
     for key, value in expected_config.items():
-        assert key in config, f"工作區配置缺少 {key} 欄位"
-        assert config[key] == value, f"工作區配置 {key} 不匹配: 期望 {value}, 實際 {config[key]}"
+        assert key in config, f"Workspace config missing {key} field"
+        assert config[key] == value, f"Workspace config {key} mismatch: expected {value}, actual {config[key]}"
 
 
 def assert_workspace_metrics(metrics: Dict[str, Any]) -> None:
-    """斷言工作區指標格式"""
+    """Assert workspace metrics format"""
     required_fields = [
         "cpu_usage",
         "memory_usage",
@@ -287,10 +287,10 @@ def assert_workspace_metrics(metrics: Dict[str, Any]) -> None:
     ]
 
     for field in required_fields:
-        assert field in metrics, f"工作區指標缺少 {field} 欄位"
+        assert field in metrics, f"Workspace metrics missing {field} field"
 
-    # 檢查數值範圍
-    assert 0 <= metrics["cpu_usage"] <= 100, "CPU 使用率應在 0-100 之間"
-    assert metrics["memory_usage"] >= 0, "記憶體使用量應為非負數"
-    assert metrics["storage_usage"] >= 0, "儲存使用量應為非負數"
-    assert metrics["uptime"] >= 0, "運行時間應為非負數"
+    # Check value ranges
+    assert 0 <= metrics["cpu_usage"] <= 100, "CPU usage should be between 0-100"
+    assert metrics["memory_usage"] >= 0, "Memory usage should be non-negative"
+    assert metrics["storage_usage"] >= 0, "Storage usage should be non-negative"
+    assert metrics["uptime"] >= 0, "Uptime should be non-negative"

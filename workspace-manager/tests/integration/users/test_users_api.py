@@ -1,14 +1,14 @@
-"""用戶管理 API 整合測試 - 僅包含實際存在的端點
+"""User Management API Integration Tests - Only Contains Existing Endpoints
 
-根據實際 API 端點 (app/routers/users.py) 進行測試：
-1. GET /users/ - 列出用戶
-2. POST /users/ - 建立用戶
-3. GET /users/{user_id} - 取得用戶
-4. PUT /users/{user_id} - 更新用戶
-5. PATCH /users/{user_id} - 部分更新用戶
-6. DELETE /users/{user_id} - 刪除用戶
-7. GET /users/{user_id}/profile - 取得用戶個人檔案
-8. PUT /users/{user_id}/profile - 更新用戶個人檔案
+Test based on actual API endpoints (app/routers/users.py):
+1. GET /users/ - List users
+2. POST /users/ - Create user
+3. GET /users/{user_id} - Get user
+4. PUT /users/{user_id} - Update user
+5. PATCH /users/{user_id} - Partially update user
+6. DELETE /users/{user_id} - Delete user
+7. GET /users/{user_id}/profile - Get user profile
+8. PUT /users/{user_id}/profile - Update user profile
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ from tests.helpers.fixtures import TestDataFactory, MockResponses
 
 
 class TestUsersAPI:
-    """用戶管理 API 測試案例 - 僅測試實際存在的端點"""
+    """User Management API Test Cases - Only Test Existing Endpoints"""
 
     @pytest.mark.integration
     def test_user_001_get_user_success(self, authenticated_client):
-        """US-001 取得用戶資料成功"""
+        """US-001 Get user data successfully"""
         client, user = authenticated_client
 
         response = client.get(f"/api/v1/users/{user.id}")
@@ -36,27 +36,27 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = [
             "id", "email", "username", "display_name", "avatar_url",
             "is_active", "created_at", "updated_at"
         ]
 
         for field in required_fields:
-            assert field in data, f"用戶資料應包含 {field} 欄位"
+            assert field in data, f"User data should contain {field} field"
 
-        # 驗證資料內容
+        # Verify data content
         assert data["id"] == str(user.id)
         assert data["email"] == user.email
         assert data["username"] == user.username
 
-        # 確保敏感資訊沒有被回傳
+        # Ensure sensitive information is not returned
         assert "password" not in data
         assert "password_hash" not in data
 
     @pytest.mark.integration
     def test_user_002_get_user_not_found(self, authenticated_client):
-        """US-002 取得不存在的用戶資料"""
+        """US-002 Get nonexistent user data"""
         client, user = authenticated_client
 
         fake_user_id = uuid.uuid4()
@@ -65,12 +65,12 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
         assert "detail" in data
-        # 測試現在使用英文語系
+        # Test currently using English locale
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.integration
     def test_user_004_update_user_success(self, authenticated_client, test_data_factory):
-        """US-004 更新用戶資料成功"""
+        """US-004 Update user data successfully"""
         client, user = authenticated_client
 
         update_data = {
@@ -85,21 +85,21 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證更新內容
+        # Verify updated content
         for key, value in update_data.items():
             assert data[key] == value
 
-        # 驗證其他欄位保持不變
+        # Verify other fields remain unchanged
         assert data["email"] == user.email
         assert data["username"] == user.username
         assert data["id"] == str(user.id)
 
     @pytest.mark.integration
     def test_user_005_patch_user_success(self, authenticated_client):
-        """US-005 部分更新用戶資料"""
+        """US-005 Partially update user data"""
         client, user = authenticated_client
 
-        # 只更新部分欄位
+        # Only update partial fields
         update_data = {
             "display_name": "Partially Updated Name",
         }
@@ -109,16 +109,16 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證指定欄位被更新
+        # Verify specified fields are updated
         assert data["display_name"] == update_data["display_name"]
 
-        # 驗證其他欄位保持不變
+        # Verify other fields remain unchanged
         assert data["email"] == user.email
         assert data["username"] == user.username
 
     @pytest.mark.integration
     def test_user_006_update_user_not_found(self, authenticated_client):
-        """US-006 更新不存在的用戶"""
+        """US-006 Update nonexistent user"""
         client, user = authenticated_client
 
         fake_user_id = uuid.uuid4()
@@ -135,7 +135,7 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_007_patch_user_not_found(self, authenticated_client):
-        """US-007 部分更新不存在的用戶"""
+        """US-007 Partially update nonexistent user"""
         client, user = authenticated_client
 
         fake_user_id = uuid.uuid4()
@@ -152,7 +152,7 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_008_get_user_profile_success(self, authenticated_client):
-        """US-008 取得用戶個人檔案成功"""
+        """US-008 Get user profile successfully"""
         client, user = authenticated_client
 
         response = client.get(f"/api/v1/users/{user.id}/profile")
@@ -160,16 +160,16 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構 - 個人檔案被包裝在 data 欄位中
+        # Verify response structure - profile wrapped in data field
         assert "data" in data
         profile = data["data"]
 
-        # 簡化驗證，只確認個人檔案包含基本資訊
-        assert isinstance(profile, dict), "個人檔案應為字典格式"
+        # Simplified verification, only confirm profile contains basic information
+        assert isinstance(profile, dict), "Profile should be in dictionary format"
 
     @pytest.mark.integration
     def test_user_009_update_user_profile_success(self, authenticated_client, test_data_factory):
-        """US-009 更新用戶個人檔案成功"""
+        """US-009 Update user profile successfully"""
         client, user = authenticated_client
 
         update_data = {
@@ -183,18 +183,18 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "data" in data
         profile = data["data"]
 
-        # 驗證更新內容
-        assert profile["firstName"] == update_data["firstName"], "名字應被更新"
-        assert profile["lastName"] == update_data["lastName"], "姓氏應被更新"
-        assert profile["avatarUrl"] == update_data["avatarUrl"], "頭像應被更新"
+        # Verify updated content
+        assert profile["firstName"] == update_data["firstName"], "First name should be updated"
+        assert profile["lastName"] == update_data["lastName"], "Last name should be updated"
+        assert profile["avatarUrl"] == update_data["avatarUrl"], "Avatar should be updated"
 
     @pytest.mark.integration
     def test_user_010_get_user_profile_not_found(self, authenticated_client):
-        """US-010 取得不存在的用戶個人檔案"""
+        """US-010 Get nonexistent user profile"""
         client, user = authenticated_client
 
         fake_user_id = uuid.uuid4()
@@ -207,7 +207,7 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_011_update_user_profile_not_found(self, authenticated_client):
-        """US-011 更新不存在的用戶個人檔案"""
+        """US-011 Update nonexistent user profile"""
         client, user = authenticated_client
 
         fake_user_id = uuid.uuid4()
@@ -224,24 +224,24 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_012_delete_user_success(self, admin_client, create_user):
-        """US-012 刪除用戶成功"""
+        """US-012 Delete user successfully"""
         client, admin = admin_client
 
-        # 創建要刪除的用戶
+        # Create user to delete
         target_user = create_user(username="delete_me")
 
-        # 刪除用戶
+        # Delete user
         response = client.delete(f"/api/v1/users/{target_user.id}")
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-        # 驗證用戶已被刪除
+        # Verify user is deleted
         get_response = client.get(f"/api/v1/users/{target_user.id}")
         assert get_response.status_code == status.HTTP_404_NOT_FOUND
 
     @pytest.mark.integration
     def test_user_013_delete_user_not_found(self, admin_client):
-        """US-013 刪除不存在的用戶"""
+        """US-013 Delete nonexistent user"""
         client, admin = admin_client
 
         fake_user_id = uuid.uuid4()
@@ -254,27 +254,27 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_014_delete_user_unauthorized(self, authenticated_client, create_user):
-        """US-014 未授權刪除用戶"""
+        """US-014 Unauthorized delete user"""
         client, user = authenticated_client
 
-        # 創建另一個用戶
+        # Create another user
         other_user = create_user(username="other_user")
 
-        # 嘗試刪除其他用戶
+        # Try deleting other user
         response = client.delete(f"/api/v1/users/{other_user.id}")
 
-        # 根據實際實作，目前 API 允許任何已認證用戶刪除其他用戶
-        # 這是一個安全問題，但測試應反映實際行為
+        # Based on actual implementation, API currently allows any authenticated user to delete other users
+        # This is a security issue, but tests should reflect actual behavior
         assert response.status_code in [
-            status.HTTP_204_NO_CONTENT,  # 當前實際行為
-            status.HTTP_403_FORBIDDEN,   # 理想行為（需要授權檢查）
+            status.HTTP_204_NO_CONTENT,  # Current actual behavior
+            status.HTTP_403_FORBIDDEN,   # Ideal behavior (requires authorization check)
             status.HTTP_404_NOT_FOUND,
             status.HTTP_401_UNAUTHORIZED
         ]
 
     @pytest.mark.integration
     def test_user_015_list_users_success(self, admin_client):
-        """US-015 列出用戶成功"""
+        """US-015 List users successfully"""
         client, admin = admin_client
 
         response = client.get("/api/v1/users")
@@ -282,12 +282,12 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         assert "items" in data
         assert "total" in data
         assert isinstance(data["items"], list)
 
-        # 驗證用戶列表結構
+        # Verify user list structure
         if data["items"]:
             for user in data["items"]:
                 required_user_fields = [
@@ -295,25 +295,25 @@ class TestUsersAPI:
                     "is_active", "created_at"
                 ]
                 for field in required_user_fields:
-                    assert field in user, f"用戶列表項目應包含 {field} 欄位"
+                    assert field in user, f"User list item should contain {field} field"
 
     @pytest.mark.integration
     def test_user_016_list_users_unauthorized(self, authenticated_client):
-        """US-016 未授權列出用戶"""
+        """US-016 Unauthorized list users"""
         client, user = authenticated_client
 
         response = client.get("/api/v1/users")
 
-        # 根據實際實作，可能需要管理員權限
+        # Based on actual implementation, may require admin privileges
         assert response.status_code in [
             status.HTTP_403_FORBIDDEN,
             status.HTTP_401_UNAUTHORIZED,
-            status.HTTP_200_OK  # 如果允許普通用戶查看列表
+            status.HTTP_200_OK  # If allow regular users to view list
         ]
 
     @pytest.mark.integration
     def test_user_016a_list_users_supports_query_filter(self, admin_client, create_user):
-        """US-016a 列出用戶支援 query 搜尋"""
+        """US-016a List users supports query search"""
         client, admin = admin_client
 
         create_user(username="search_alpha", email="alpha-search@example.com", display_name="Alpha Search")
@@ -333,7 +333,7 @@ class TestUsersAPI:
 
     @pytest.mark.integration
     def test_user_017_create_user_success(self, admin_client, test_data_factory):
-        """US-017 建立用戶成功"""
+        """US-017 Create user successfully"""
         client, admin = admin_client
 
         user_data = test_data_factory.create_user_data(
@@ -347,27 +347,27 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_201_CREATED
         data = response.json()
 
-        # 驗證回應結構
+        # Verify response structure
         required_fields = [
             "id", "email", "username", "display_name",
             "is_active", "created_at"
         ]
 
         for field in required_fields:
-            assert field in data, f"新建用戶應包含 {field} 欄位"
+            assert field in data, f"New user should contain {field} field"
 
-        # 驗證資料內容
+        # Verify data content
         assert data["email"] == user_data["email"]
         assert data["username"] == user_data["username"]
         assert data["display_name"] == user_data["display_name"]
 
-        # 確保敏感資訊沒有被回傳
+        # Ensure sensitive information is not returned
         assert "password" not in data
         assert "password_hash" not in data
 
     @pytest.mark.integration
     def test_user_018_create_user_duplicate_email(self, admin_client, create_user):
-        """US-018 建立重複 Email 用戶失敗"""
+        """US-018 Create user with duplicate email fails"""
         client, admin = admin_client
 
         existing_user = create_user(username="existing")
@@ -384,20 +384,20 @@ class TestUsersAPI:
         data = response.json()
         assert "detail" in data
 
-    # 以下為移除的測試案例，因為對應的 API 端點不存在：
-    # - 統計 API (/users/statistics)
-    # - 活動日誌 API (/users/{id}/activity)
-    # - 偏好設定 API (/users/{id}/preferences)
-    # - 角色管理 API (/users/{id}/roles)
-    # - 密碼變更 API (/users/{id}/change-password)
-    # - 兩步驟證 API (/users/{id}/2fa/*)
-    # - 會話管理 API (/users/{id}/sessions/*)
-    # - API 密鑰 API (/users/{id}/api-keys/*)
-    # - 通知偏好設定 API (/users/{id}/notification-preferences)
-    # - 安全設定 API (/users/{id}/security-settings)
-    # - 帳戶停用 API (/users/{id}/deactivate-account)
-    # - 進階搜尋 API (/users/search)
-    # - 批量操作 API (/users/bulk)
-    # - 資料匯出 API (/users/{id}/export)
-    # - 頭像上傳 API (/users/{id}/avatar)
-    # - 帳戶重新啟用 API (/auth/reactivate-account)
+    # The following test cases have been removed because corresponding API endpoints do not exist:
+    # - Statistics API (/users/statistics)
+    # - Activity log API (/users/{id}/activity)
+    # - Preferences API (/users/{id}/preferences)
+    # - Role management API (/users/{id}/roles)
+    # - Password change API (/users/{id}/change-password)
+    # - Two-factor authentication API (/users/{id}/2fa/*)
+    # - Session management API (/users/{id}/sessions/*)
+    # - API key API (/users/{id}/api-keys/*)
+    # - Notification preferences API (/users/{id}/notification-preferences)
+    # - Security settings API (/users/{id}/security-settings)
+    # - Account deactivation API (/users/{id}/deactivate-account)
+    # - Advanced search API (/users/search)
+    # - Bulk operations API (/users/bulk)
+    # - Data export API (/users/{id}/export)
+    # - Avatar upload API (/users/{id}/avatar)
+    # - Account reactivation API (/auth/reactivate-account)

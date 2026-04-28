@@ -179,7 +179,7 @@ class TestClaudeMdService:
     def test_update_document_creates_directory(
         self, mock_resolve, mock_ensure_dir, service, workspace_id, tmp_path
     ):
-        """Test updating document - auto-create directory。"""
+        """Test updating document - auto-create directory."""
         # Setup mock - directory doesn't exist
         claude_dir = tmp_path / ".claude"
         mock_resolve.return_value = claude_dir

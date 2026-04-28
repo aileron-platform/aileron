@@ -317,8 +317,8 @@ def test_runtime_logs_do_not_expose_raw_detail_and_are_localized(
 
     assert zh_response.status_code == 200
     zh_messages = [item["message"] for item in zh_response.json()]
-    assert "Browser 容器啟動Failed" in zh_messages
-    assert "Runtime 日誌已Update" in zh_messages
+    assert "Browser container startup failed" in zh_messages
+    assert "Runtime log updated" in zh_messages
     assert all("connection refused" not in message for message in zh_messages)
     assert all("Unexpected internal stack trace marker" not in message for message in zh_messages)
 
@@ -425,7 +425,7 @@ def test_workspace_share_translation_uses_error_code_instead_of_exception_messag
     client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
     with patch(
         "app.routers.workspaces.WorkspaceService.create_share",
-        side_effect=WorkspaceError("完全Different的Sharing衝突Message", code="WORKSPACE_SHARE_CONFLICT"),
+        side_effect=WorkspaceError("totally different share conflict wording", code="WORKSPACE_SHARE_CONFLICT"),
     ):
         zh_response = client.post(
             f"/api/v1/workspaces/{workspace_id}/shares",
@@ -437,4 +437,4 @@ def test_workspace_share_translation_uses_error_code_instead_of_exception_messag
     assert en_response.json()["detail"]["message"] == "Workspace share already exists"
     assert zh_response.status_code == 409
     assert zh_response.json()["detail"]["code"] == "WORKSPACE_SHARE_CONFLICT"
-    assert zh_response.json()["detail"]["message"] == "WorkspaceSharing已Exist"
+    assert zh_response.json()["detail"]["message"] == "Workspace share already exists"

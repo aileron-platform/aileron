@@ -1,5 +1,5 @@
 """
-JWT VerifyUtility類的UnitTest
+Unit Tests for JWT Verification Utility Class
 """
 
 import pytest
@@ -18,7 +18,7 @@ from app.modules.auth.jwt_utils import (
 
 
 class TestJWTUtils:
-    """JWTUtils 類的UnitTest"""
+    """Unit Tests for JWTUtils Class"""
 
     @pytest.fixture
     def jwt_utils(self):
@@ -29,7 +29,7 @@ class TestJWTUtils:
 
     @pytest.fixture
     def mock_jwks_response(self):
-        """模擬 JWKS Response"""
+        """Mock JWKS Response"""
         return {
             "keys": [
                 {
@@ -44,7 +44,7 @@ class TestJWTUtils:
 
     @pytest.fixture
     def valid_token_payload(self):
-        """Valid的 token payload"""
+        """Valid token payload"""
         exp_time = (datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()
         return {
             "sub": "test-user-id",
@@ -57,13 +57,13 @@ class TestJWTUtils:
         }
 
     def test_get_jwt_utils_singleton(self, jwt_utils):
-        """Test get_jwt_utils SingletonPattern"""
+        """Test get_jwt_utils Singleton Pattern"""
         instance1 = get_jwt_utils()
         instance2 = get_jwt_utils()
         assert instance1 is instance2
 
     def test_initialization(self, jwt_utils):
-        """Test JWTUtils Initialize"""
+        """Test JWTUtils Initialization"""
         assert jwt_utils.jwks_cache is None
         assert jwt_utils.jwks_cache_time is None
 
@@ -71,7 +71,7 @@ class TestJWTUtils:
     async def test_fetch_jwks_success(
         self, jwt_utils, mock_jwks_response
     ):
-        """TestSuccessGet JWKS"""
+        """Test Successful JWKS Fetch"""
         with patch("httpx.AsyncClient.get") as mock_get:
             mock_response = Mock()
             mock_response.json.return_value = mock_jwks_response
@@ -86,8 +86,8 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_cache_hit(self, jwt_utils, mock_jwks_response):
-        """Test JWKS Cache命中"""
-        # 首次Get
+        """Test JWKS Cache Hit"""
+        # First fetch
         with patch("httpx.AsyncClient.get") as mock_get:
             mock_response = Mock()
             mock_response.json.return_value = mock_jwks_response
@@ -97,37 +97,37 @@ class TestJWTUtils:
             jwks1 = await jwt_utils.fetch_jwks()
             cache_time = jwt_utils.jwks_cache_time
 
-            # 第二次GetShouldUseCache
+            # Second fetch should use cache
             jwks2 = await jwt_utils.fetch_jwks()
 
             assert jwks1 == jwks2
             assert jwt_utils.jwks_cache_time == cache_time
-            mock_get.assert_called_once()  # 只調用一次
+            mock_get.assert_called_once()  # Only called once
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_cache_expiry(self, jwt_utils, mock_jwks_response):
-        """Test JWKS Cache過期"""
+        """Test JWKS Cache Expiration"""
         with patch("httpx.AsyncClient.get") as mock_get:
             mock_response = Mock()
             mock_response.json.return_value = mock_jwks_response
             mock_response.raise_for_status = Mock()
             mock_get.return_value = mock_response
 
-            # 首次Get
+            # First fetch
             await jwt_utils.fetch_jwks()
 
-            # 模擬Cache過期
+            # Simulate cache expiration
             old_cache_time = jwt_utils.jwks_cache_time
             jwt_utils.jwks_cache_time = datetime.now(timezone.utc) - timedelta(seconds=10000)
 
-            # AgainGetShouldRetryRequest
+            # Fetch again should retry request
             await jwt_utils.fetch_jwks()
 
-            assert mock_get.call_count == 2  # 調用兩次
+            assert mock_get.call_count == 2  # Called twice
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_auth_disabled(self, jwt_utils):
-        """TestAuthentication未Enabled時的 JWKS Get"""
+        """Test JWKS Fetch When Authentication is Not Enabled"""
         with patch("app.modules.auth.jwt_utils.get_keycloak_config") as mock_config:
             mock_config.return_value = Mock(enabled=False)
             jwt_utils.config = mock_config.return_value
@@ -137,7 +137,7 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_http_error(self, jwt_utils):
-        """Test JWKS GetFailed（HTTP Error）"""
+        """Test JWKS Fetch Failure (HTTP Error)"""
         with patch("httpx.AsyncClient.get") as mock_get:
             mock_get.side_effect = Exception("Network error")
 
@@ -146,7 +146,7 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_missing_url(self, jwt_utils):
-        """Test JWKS URL 未Settings時會Failed"""
+        """Test JWKS URL Not Configured Failure"""
         jwt_utils.config.jwks_url = None
 
         with pytest.raises(JWKSFetchError, match="JWKS URL not configured"):
@@ -154,26 +154,26 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_fetch_jwks_httpx_error_wrapped(self, jwt_utils):
-        """Test httpx Exception會被包裝為 JWKSFetchError"""
+        """Test httpx Exception Wrapped as JWKSFetchError"""
         jwt_utils.config.jwks_url = "https://example.com/jwks"
         with patch("httpx.AsyncClient.get", side_effect=__import__("httpx").ConnectError("boom")):
             with pytest.raises(JWKSFetchError, match="Failed to fetch JWKS"):
                 await jwt_utils.fetch_jwks()
 
     def test_clear_jwks_cache(self, jwt_utils, mock_jwks_response):
-        """TestClear JWKS Cache"""
-        # SetupCache
+        """Test Clear JWKS Cache"""
+        # Setup cache
         jwt_utils.jwks_cache = mock_jwks_response
         jwt_utils.jwks_cache_time = datetime.now(timezone.utc)
 
-        # ClearCache
+        # Clear cache
         jwt_utils.clear_jwks_cache()
 
         assert jwt_utils.jwks_cache is None
         assert jwt_utils.jwks_cache_time is None
 
     def test_get_public_key_from_cached_jwks(self, jwt_utils, mock_jwks_response):
-        """TestFromCache的 JWKS Get public key"""
+        """Test Get Public Key from Cached JWKS"""
         jwt_utils.jwks_cache = mock_jwks_response
 
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_headers", return_value={"kid": "test-key-id"}):
@@ -182,19 +182,19 @@ class TestJWTUtils:
         assert key["kid"] == "test-key-id"
 
     def test_get_public_key_missing_kid(self, jwt_utils):
-        """Test token header 缺Less kid"""
+        """Test Missing kid in Token Header"""
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_headers", return_value={}):
             with pytest.raises(JWTValidationError, match="missing 'kid'"):
                 jwt_utils.get_public_key("token")
 
     def test_get_public_key_invalid_header(self, jwt_utils):
-        """TestInvalid token header"""
+        """Test Invalid Token Header"""
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_headers", side_effect=JWTError("bad header")):
             with pytest.raises(JWTValidationError, match="Invalid token header"):
                 jwt_utils.get_public_key("token")
 
     def test_get_public_key_fetches_jwks_when_cache_missing(self, jwt_utils, mock_jwks_response):
-        """Test cache 缺失時會SyncGet JWKS"""
+        """Test Sync JWKS Fetch When Cache Missing"""
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_headers", return_value={"kid": "test-key-id"}), \
              patch.object(jwt_utils, "fetch_jwks", new=AsyncMock(return_value=mock_jwks_response)):
             key = jwt_utils.get_public_key("token")
@@ -202,7 +202,7 @@ class TestJWTUtils:
         assert key["kid"] == "test-key-id"
 
     def test_get_public_key_raises_when_kid_not_found(self, jwt_utils, mock_jwks_response):
-        """Test找不ToRight應 kid 時ThrowError"""
+        """Test Error When Corresponding kid Not Found"""
         jwt_utils.jwks_cache = {"keys": []}
 
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_headers", return_value={"kid": "missing"}):
@@ -210,32 +210,32 @@ class TestJWTUtils:
                 jwt_utils.get_public_key("token")
 
     def test_validate_token_expiry_valid(self, jwt_utils):
-        """TestVerifyValid的 token 過期Time"""
+        """Test Verify Valid Token Expiration Time"""
         exp_time = (datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()
         payload = {"exp": exp_time}
 
         assert jwt_utils.validate_token_expiry(payload) is True
 
     def test_validate_token_expiry_expired(self, jwt_utils):
-        """TestVerify過期的 token"""
+        """Test Verify Expired Token"""
         exp_time = (datetime.now(timezone.utc) - timedelta(hours=1)).timestamp()
         payload = {"exp": exp_time}
 
         assert jwt_utils.validate_token_expiry(payload) is False
 
     def test_validate_token_expiry_no_exp(self, jwt_utils):
-        """TestNone exp 字段的 token"""
+        """Test Token Without exp Field"""
         payload = {"sub": "test-user"}
 
         assert jwt_utils.validate_token_expiry(payload) is False
 
     def test_validate_token_expiry_returns_true_when_auth_disabled(self, jwt_utils):
-        """TestAuthenticationDisabled時 validate_token_expiry DirectlyReturn True"""
+        """Test validate_token_expiry Returns True When Authentication Disabled"""
         jwt_utils.config.enabled = False
         assert jwt_utils.validate_token_expiry({}) is True
 
     def test_decode_token_success(self, jwt_utils):
-        """TestSuccess解Code token"""
+        """Test Successful Token Decode"""
         payload = {"sub": "user-1", "azp": jwt_utils.config.client_id}
         jwt_utils.config.enabled = True
 
@@ -249,7 +249,7 @@ class TestJWTUtils:
             assert jwt_utils.decode_token("token") == payload
 
     def test_decode_token_azp_mismatch(self, jwt_utils):
-        """Test azp 不符時會Failed"""
+        """Test Failure When azp Mismatch"""
         with patch.object(jwt_utils, "get_public_key", return_value={"kid": "kid"}), \
              patch("app.modules.auth.jwt_utils.jwk.construct") as mock_construct, \
              patch("app.modules.auth.jwt_utils.jwt.decode", return_value={"sub": "user-1", "azp": "other-client"}):
@@ -269,7 +269,7 @@ class TestJWTUtils:
         ],
     )
     def test_decode_token_wraps_jose_errors(self, jwt_utils, side_effect, message):
-        """Test jose Exception會被轉成 JWTValidationError"""
+        """Test Jose Exception Converted to JWTValidationError"""
         with patch.object(jwt_utils, "get_public_key", return_value={"kid": "kid"}), \
              patch("app.modules.auth.jwt_utils.jwk.construct") as mock_construct, \
              patch("app.modules.auth.jwt_utils.jwt.decode", side_effect=side_effect):
@@ -282,7 +282,7 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_decode_token_async_fetches_jwks_when_needed(self, jwt_utils):
-        """TestAsync解Code會先抓 JWKS 再委派Sync解Code"""
+        """Test Async Decode Fetches JWKS Then Delegates to Sync Decode"""
         with patch.object(jwt_utils, "fetch_jwks", new=AsyncMock(return_value={"keys": []})) as mock_fetch, \
              patch.object(jwt_utils, "decode_token", return_value={"sub": "user-1"}) as mock_decode:
             payload = await jwt_utils.decode_token_async("token")
@@ -293,7 +293,7 @@ class TestJWTUtils:
 
     @pytest.mark.asyncio
     async def test_decode_token_async_wraps_unexpected_errors(self, jwt_utils):
-        """TestAsync解Code的未知Exception會被包裝"""
+        """Test Async Decode Unknown Exception Wrapped"""
         with patch.object(jwt_utils, "decode_token", side_effect=RuntimeError("unexpected")):
             jwt_utils.jwks_cache = {"keys": []}
 
@@ -301,27 +301,27 @@ class TestJWTUtils:
                 await jwt_utils.decode_token_async("token")
 
     def test_get_token_claims_wraps_errors(self, jwt_utils):
-        """Test get_token_claims 會包裝 JWTError"""
+        """Test get_token_claims Wraps JWTError"""
         with patch("app.modules.auth.jwt_utils.jwt.get_unverified_claims", side_effect=JWTError("broken")):
             with pytest.raises(JWTValidationError, match="Failed to get token claims"):
                 jwt_utils.get_token_claims("token")
 
     def test_get_cache_stats(self, jwt_utils, mock_jwks_response):
-        """TestGetCacheStatisticsInfo"""
-        # 模擬Cache命中
+        """Test Get Cache Statistics Info"""
+        # Simulate cache hit
         jwt_utils.jwks_cache = mock_jwks_response
         jwt_utils.jwks_cache_time = datetime.now(timezone.utc)
 
         stats = jwt_utils.get_cache_stats() if hasattr(jwt_utils, "get_stats") else None
 
-        # 如果有實現 get_stats Method，Test它
+        # If get_stats method is implemented, test it
         if stats is not None:
             assert "is_cached" in stats
             assert stats["is_cached"] is True
 
 
 class TestJWTUtilsIntegration:
-    """JWTUtils 集成Test（UseTrue實的 JWT Operation）"""
+    """JWTUtils Integration Tests (Using Real JWT Operations)"""
 
     @pytest.fixture
     def jwt_utils(self):
@@ -329,23 +329,23 @@ class TestJWTUtilsIntegration:
         return JWTUtils()
 
     def test_get_unverified_claims(self, jwt_utils):
-        """TestGet未Verify的 token claims"""
-        # 這Needing一個True實的 token Format，但不NeedingValid的簽名
-        # 由AtWe還NoneActual的 Keycloak token，跳過此Test
+        """Test Get Unverified Token Claims"""
+        # This requires a real token format, but doesn't need a valid signature
+        # Since we don't have an actual Keycloak token yet, skip this test
         pytest.skip("Requires actual Keycloak token")
 
     def test_decode_token_disabled_auth(self, jwt_utils):
-        """TestAuthentication未Enabled時的 token 解Code"""
+        """Test Token Decode When Authentication Not Enabled"""
         with patch("app.modules.auth.jwt_utils.get_keycloak_config") as mock_config:
             mock_config.return_value = Mock(enabled=False)
             jwt_utils.config = mock_config.return_value
 
-            # ShouldReturn空Dictionary而不YesThrowAbnormal
+            # Should return empty dictionary instead of throwing exception
             result = jwt_utils.decode_token("dummy-token")
             assert result == {}
 
     def test_clear_jwt_utils_cache_clears_singleton(self):
-        """TestClearGlobal JWTUtils singleton"""
+        """Test Clear Global JWTUtils Singleton"""
         instance = get_jwt_utils()
         instance.jwks_cache = {"keys": []}
 

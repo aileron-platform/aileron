@@ -1,5 +1,5 @@
 """
-UserSyncService的UnitTest
+Unit Tests for UserSyncService
 """
 
 import pytest
@@ -25,7 +25,7 @@ from app.modules.auth.auth_decorators import (
 
 
 class TestUserSyncService:
-    """UserSyncService 類的UnitTest"""
+    """Unit Tests for UserSyncService Class"""
 
     @pytest.fixture
     def sync_service(self):
@@ -36,25 +36,25 @@ class TestUserSyncService:
         return service
 
     def test_get_user_sync_service_singleton(self, sync_service):
-        """Test get_user_sync_service SingletonPattern"""
+        """Test get_user_sync_service Singleton Pattern"""
         instance1 = get_user_sync_service()
         instance2 = get_user_sync_service()
         assert instance1 is instance2
 
     def test_initialization(self, sync_service):
-        """Test UserSyncService Initialize"""
+        """Test UserSyncService Initialization"""
         assert sync_service.config is not None
 
     @pytest.mark.asyncio
     async def test_extract_roles_empty(self, sync_service):
-        """TestFrom空UserInfoExtractRole"""
+        """Test Extract Role from Empty UserInfo"""
         user_info = {}
         roles = sync_service._extract_roles(user_info)
         assert roles == []
 
     @pytest.mark.asyncio
     async def test_extract_roles_from_realm_access(self, sync_service):
-        """TestFrom realm_access ExtractRole"""
+        """Test Extract Role from realm_access"""
         user_info = {
             "realm_access": {
                 "admin": True,
@@ -71,7 +71,7 @@ class TestUserSyncService:
 
     @pytest.mark.asyncio
     async def test_extract_roles_from_resource_access(self, sync_service):
-        """TestFrom resource_access ExtractRole"""
+        """Test Extract Role from resource_access"""
         user_info = {
             "realm_access": {},
             "resource_access": {
@@ -88,7 +88,7 @@ class TestUserSyncService:
 
     @pytest.mark.asyncio
     async def test_extract_roles_deduplication(self, sync_service):
-        """TestRoleGoingHeavy"""
+        """Test Role Deduplication"""
         user_info = {
             "realm_access": {
                 "admin": True,
@@ -103,7 +103,7 @@ class TestUserSyncService:
 
         roles = sync_service._extract_roles(user_info)
 
-        # CheckGoingHeavy
+        # Check deduplication
         assert roles.count("admin") == 1
         assert roles.count("user") == 1
 
@@ -345,88 +345,88 @@ class TestUserSyncService:
 
 
 class TestRoleMapping:
-    """RoleMappingTest"""
+    """Role Mapping Tests"""
 
     def test_load_role_mapping(self):
-        """TestLoadRoleMappingConfiguration"""
+        """Test Load Role Mapping Configuration"""
         role_mapping = get_user_permissions([])
 
-        # 如果ConfigurationDocument不存At，ShouldReturn空List
+        # If configuration file doesn't exist, should return empty list
         assert isinstance(role_mapping, list)
 
     def test_get_user_permissions_with_roles(self):
-        """TestAccording toRoleGetPermission"""
+        """Test Get Permission by Role"""
         roles = ["admin", "user"]
         permissions = get_user_permissions(roles)
 
-        # admin RoleShould有Big量Permission
+        # admin role should have many permissions
         assert isinstance(permissions, list)
         assert len(permissions) > 0
 
     def test_get_user_permissions_empty(self):
-        """TestNoneRole時的Permission"""
+        """Test Permissions When No Role"""
         permissions = get_user_permissions([])
 
-        # NoneRole時，ShouldReturn默認RolePermission
+        # When no role, should return default role permissions
         assert isinstance(permissions, list)
 
 
 class TestPermissionChecks:
-    """PermissionCheckTest"""
+    """Permission Check Tests"""
 
     def test_has_permission_true(self):
-        """Test擁有Permission"""
+        """Test Has Permission"""
         user_permissions = ["workspace:read", "workspace:create"]
         assert has_permission("workspace:read", user_permissions) is True
 
     def test_has_permission_false(self):
-        """Test不擁有Permission"""
+        """Test Does Not Have Permission"""
         user_permissions = ["workspace:read"]
         assert has_permission("workspace:create", user_permissions) is False
 
     def test_has_role_true(self):
-        """Test擁有Role"""
+        """Test Has Role"""
         user_roles = ["admin", "user"]
         assert has_role("admin", user_roles) is True
 
     def test_has_role_false(self):
-        """Test不擁有Role"""
+        """Test Does Not Have Role"""
         user_roles = ["user"]
         assert has_role("admin", user_roles) is False
 
     def test_has_any_role_true(self):
-        """Test擁有任一Role（Passed）"""
+        """Test Has Any Role (Passed)"""
         user_roles = ["user"]
         assert has_any_role(["admin", "user"], user_roles) is True
 
     def test_has_any_role_false(self):
-        """Test擁有任一Role（Failed）"""
+        """Test Has Any Role (Failed)"""
         user_roles = ["viewer"]
         assert has_any_role(["admin", "developer"], user_roles) is False
 
     def test_has_all_permissions_true(self):
-        """Test擁有AllPermission（Passed）"""
+        """Test Has All Permissions (Passed)"""
         user_permissions = ["workspace:read", "workspace:create", "workspace:delete"]
         assert has_all_permissions(["workspace:read", "workspace:create"], user_permissions) is True
 
     def test_has_all_permissions_false(self):
-        """Test擁有AllPermission（Failed）"""
+        """Test Has All Permissions (Failed)"""
         user_permissions = ["workspace:read"]
         assert has_all_permissions(["workspace:read", "workspace:create"], user_permissions) is False
 
     def test_has_any_permission_true(self):
-        """Test擁有任一Permission（Passed）"""
+        """Test Has Any Permission (Passed)"""
         user_permissions = ["workspace:read"]
         assert has_any_permission(["workspace:create", "workspace:read"], user_permissions) is True
 
     def test_has_any_permission_false(self):
-        """Test擁有任一Permission（Failed）"""
+        """Test Has Any Permission (Failed)"""
         user_permissions = ["workspace:delete"]
         assert has_any_permission(["workspace:create", "workspace:read"], user_permissions) is False
 
 
 class TestAuthDecorators:
-    """AuthenticationDecoratorTest"""
+    """Authentication Decorator Tests"""
 
     def test_require_role_decorator(self):
         """Test require_role Decorator"""
@@ -436,12 +436,12 @@ class TestAuthDecorators:
         async def admin_endpoint(current_user):
             return {"message": "Admin access"}
 
-        # Test有Permission的User
+        # Test user with permission
         user_with_role = {"sub": "user-123", "roles": ["admin"]}
 
         import asyncio
 
-        # 模擬調用
+        # Simulate call
         try:
             result = asyncio.run(
                 admin_endpoint(current_user=user_with_role)
@@ -451,19 +451,19 @@ class TestAuthDecorators:
             pytest.fail(f"Unexpected exception: {e}")
 
     def test_require_role_decorator_no_role(self):
-        """Test require_role Decorator（NoneRole）"""
+        """Test require_role Decorator (No Role)"""
         from app.modules.auth.auth_decorators import require_role
 
         @require_role("admin")
         async def admin_endpoint(current_user):
             return {"message": "Admin access"}
 
-        # TestNonePermission的User
+        # Test user without permission
         user_without_role = {"sub": "user-123", "roles": ["user"]}
 
         import asyncio
 
-        # ShouldThrow PermissionDeniedError
+        # Should throw PermissionDeniedError
         with pytest.raises(PermissionDeniedError):
             asyncio.run(
                 admin_endpoint(current_user=user_without_role)
@@ -477,8 +477,8 @@ class TestAuthDecorators:
         async def create_workspace_endpoint(current_user):
             return {"message": "Workspace created"}
 
-        # 模擬有Permission的User
-        # admin RoleShould有 workspace:create Permission
+        # Simulate user with permission
+        # admin role should have workspace:create permission
         user_with_permission = {
             "sub": "user-123",
             "roles": ["admin"]
@@ -495,14 +495,14 @@ class TestAuthDecorators:
             pytest.fail(f"Unexpected exception: {e}")
 
     def test_require_permission_decorator_no_permission(self):
-        """Test require_permission Decorator（NonePermission）"""
+        """Test require_permission Decorator (No Permission)"""
         from app.modules.auth.auth_decorators import require_permission
 
         @require_permission("workspace:create")
         async def create_workspace_endpoint(current_user):
             return {"message": "Workspace created"}
 
-        # 模擬NonePermission的User
+        # Simulate user without permission
         user_without_permission = {
             "sub": "user-123",
             "roles": ["viewer"]
@@ -510,7 +510,7 @@ class TestAuthDecorators:
 
         import asyncio
 
-        # ShouldThrow PermissionDeniedError
+        # Should throw PermissionDeniedError
         with pytest.raises(PermissionDeniedError):
             asyncio.run(
                 create_workspace_endpoint(current_user=user_without_permission)
@@ -524,7 +524,7 @@ class TestAuthDecorators:
         async def moderator_endpoint(current_user):
             return {"message": "Moderator access"}
 
-        # Test有其中一個Role的User
+        # Test user with one of the roles
         user_with_one_role = {"sub": "user-123", "roles": ["developer"]}
 
         import asyncio
@@ -545,10 +545,10 @@ class TestAuthDecorators:
         async def workspace_access_endpoint(current_user):
             return {"message": "Workspace access"}
 
-        # Test有其中一個Permission的User
+        # Test user with one of the permissions
         user_with_one_permission = {
             "sub": "user-123",
-            "roles": ["user"]  # user Role有 workspace:read
+            "roles": ["user"]  # user role has workspace:read
         }
 
         import asyncio
@@ -569,7 +569,7 @@ class TestAuthDecorators:
         async def create_workspace_endpoint(current_user):
             return {"message": "Workspace created"}
 
-        # Test有AllPermission的User
+        # Test user with all permissions
         user_with_all_permissions = {
             "sub": "user-123",
             "roles": ["admin"]
@@ -587,11 +587,11 @@ class TestAuthDecorators:
 
 
 class TestUserSyncIntegration:
-    """UserSync集成Test"""
+    """UserSync Integration Tests"""
 
     @pytest.mark.asyncio
     async def test_sync_disabled_auth(self):
-        """TestAuthentication未Enabled時的Sync"""
+        """Test Sync When Authentication Not Enabled"""
         sync_service = UserSyncService()
 
         with patch("app.modules.auth.user_sync.get_keycloak_config") as mock_config:

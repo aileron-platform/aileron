@@ -1,7 +1,7 @@
 """
-Test受Protect的 API Endpoint
+Test Protected API Endpoints
 
-演示如何Use Keycloak token Access受Protect的 API
+Demonstrates how to use Keycloak tokens to access protected APIs
 """
 
 import sys
@@ -9,14 +9,14 @@ import requests
 import json
 from pathlib import Path
 
-# 添加Project根CatalogTo Python Road徑
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 
 def test_without_token():
-    """TestNone token 的Request（ShouldFailed）"""
-    print("\n🔓 Test 1: Access受ProtectEndpoint（無 token）")
+    """Test request without token (should fail)"""
+    print("\n🔓 Test 1: Access protected endpoint (no token)")
     print("-" * 60)
 
     url = "http://localhost:3001/api/v1/workspaces"
@@ -27,11 +27,11 @@ def test_without_token():
 
         if response.status_code == 401:
             data = response.json()
-            print(f"   ✅ CorrectlyReturn 401 未Authorizing")
+            print(f"   ✅ Correctly returned 401 Unauthorized")
             print(f"   ErrorMessage: {data.get('detail', 'N/A')}")
             return True
         else:
-            print(f"   ⚠️  意Outside的StatusCode: {response.status_code}")
+            print(f"   ⚠️  Unexpected status code: {response.status_code}")
             return False
 
     except Exception as e:
@@ -40,8 +40,8 @@ def test_without_token():
 
 
 def test_with_invalid_token():
-    """TestUseInvalid token 的Request（ShouldFailed）"""
-    print("\n🔑 Test 2: Access受ProtectEndpoint（Invalid token）")
+    """Test request with invalid token (should fail)"""
+    print("\n🔑 Test 2: Access protected endpoint (invalid token)")
     print("-" * 60)
 
     url = "http://localhost:3001/api/v1/workspaces"
@@ -53,11 +53,11 @@ def test_with_invalid_token():
 
         if response.status_code in [401, 403]:
             data = response.json()
-            print(f"   ✅ CorrectlyRejectInvalid token")
+            print(f"   ✅ Correctly rejected invalid token")
             print(f"   ErrorMessage: {data.get('detail', 'N/A')}")
             return True
         else:
-            print(f"   ⚠️  意Outside的StatusCode: {response.status_code}")
+            print(f"   ⚠️  Unexpected status code: {response.status_code}")
             return False
 
     except Exception as e:
@@ -66,8 +66,8 @@ def test_with_invalid_token():
 
 
 def test_health_endpoint():
-    """TestPublicEndpoint（ShouldSuccess）"""
-    print("\n✅ Test 3: AccessPublicEndpoint（健康Check）")
+    """Test public endpoint (should succeed)"""
+    print("\n✅ Test 3: Access public endpoint (health check)")
     print("-" * 60)
 
     url = "http://localhost:3001/health"
@@ -77,10 +77,10 @@ def test_health_endpoint():
         print(f"   StatusCode: {response.status_code}")
 
         if response.status_code == 200:
-            print(f"   ✅ 健康CheckEndpointNormalAccess")
+            print(f"   ✅ Health check endpoint accessible")
             return True
         else:
-            print(f"   ⚠️  意Outside的StatusCode: {response.status_code}")
+            print(f"   ⚠️  Unexpected status code: {response.status_code}")
             return False
 
     except Exception as e:
@@ -89,8 +89,8 @@ def test_health_endpoint():
 
 
 def test_oauth_config_endpoint():
-    """Test OAuth ConfigurationEndpoint（ShouldSuccess）"""
-    print("\n🔧 Test 4: OAuth ConfigurationEndpoint")
+    """Test OAuth configuration endpoint (should succeed)"""
+    print("\n🔧 Test 4: OAuth configuration endpoint")
     print("-" * 60)
 
     url = "http://localhost:3001/api/v1/oauth2/config"
@@ -101,14 +101,14 @@ def test_oauth_config_endpoint():
 
         if response.status_code == 200:
             config = response.json()
-            print(f"   ✅ OAuth ConfigurationEndpointNormalAccess")
+            print(f"   ✅ OAuth configuration endpoint accessible")
             print(f"   ConfigurationInfo:")
             print(f"   - AuthenticationEnabled: {config.get('enabled', 'N/A')}")
             print(f"   - Keycloak URL: {config.get('keycloak_server_url', 'N/A')}")
             print(f"   - Realm: {config.get('realm', 'N/A')}")
             return True
         else:
-            print(f"   ⚠️  意Outside的StatusCode: {response.status_code}")
+            print(f"   ⚠️  Unexpected status code: {response.status_code}")
             return False
 
     except Exception as e:
@@ -117,43 +117,43 @@ def test_oauth_config_endpoint():
 
 
 def demonstrate_oauth_flow():
-    """演示完整的 OAuth2 Flow"""
-    print("\n🔐 演示：完整 OAuth2 Flow")
+    """Demonstrate complete OAuth2 flow"""
+    print("\n🔐 Demo: Complete OAuth2 Flow")
     print("-" * 60)
 
-    print("\nStep 1：Generating登入 URL")
+    print("\nStep 1: Generate login URL")
     print("-" * 60)
 
     login_url = "http://localhost:3001/api/v1/oauth2/login?redirect_uri=http://localhost:3001/callback"
-    print(f"   登入 URL: {login_url}")
-    print(f"   📋 Copy此 URL To瀏覽器中Proceed登入")
+    print(f"   Login URL: {login_url}")
+    print(f"   📋 Copy this URL to browser to proceed with login")
 
-    print("\nStep 2：At瀏覽器中登入")
+    print("\nStep 2: Login in browser")
     print("-" * 60)
-    print("   1. AccessAbove述登入 URL")
-    print("   2. 輸入Test帳Number：")
+    print("   1. Access the login URL above")
+    print("   2. Enter test account credentials:")
     print("      - Admin: admin / admin123")
     print("      - User: testuser / test123")
-    print("   3. AuthorizingApplicationAccess")
+    print("   3. Authorize application access")
     print("   4. Get access token")
 
-    print("\nStep 3：Use Token Access API")
+    print("\nStep 3: Use token to access API")
     print("-" * 60)
-    print("   UseGet的 token Access受Protect API：")
+    print("   Use the obtained token to access protected API:")
     print(f"   curl -H \"Authorization: Bearer <your-token>\" http://localhost:3001/api/v1/workspaces")
 
-    print("\n⚠️  Noticing：")
-    print("   - From瀏覽器Access Keycloak Possibly會有 HTTPS Warning")
-    print("   - 這YesNormal的On發Environment行為")
-    print("   - AcceptingWarning即可Continue")
+    print("\n⚠️  Note:")
+    print("   - Accessing Keycloak from browser may show HTTPS warning")
+    print("   - This is normal behavior in development environment")
+    print("   - Accept the warning to continue")
 
 
 def main():
-    """ExecuteAllTest"""
+    """Execute all tests"""
     print("=" * 60)
-    print("🧪 受Protect API EndpointTest")
+    print("🧪 Protected API Endpoint Test")
     print("=" * 60)
-    print("\nTest API Endpoint的AuthenticationFunction")
+    print("\nTest authentication functionality of API endpoints")
 
     # ExecuteTest
     test_health_endpoint()
@@ -161,7 +161,7 @@ def main():
     test_without_token()
     test_with_invalid_token()
 
-    # 演示 OAuth Flow
+    # Demonstrate OAuth Flow
     demonstrate_oauth_flow()
 
     # Summary
@@ -169,23 +169,23 @@ def main():
     print("📊 TestSummary")
     print("=" * 60)
 
-    print("\n✅ AuthenticationSystemNormalWorking！")
-    print("\n🎯 MainDiscover：")
-    print("   1. Middleware正AtCheck Authorization header")
-    print("   2. 未AuthenticationRequest被CorrectlyReject（401）")
-    print("   3. PublicEndpoint（/health, /oauth2/config）NormalAccess")
-    print("   4. 受ProtectEndpointNeedingValid的 Bearer token")
+    print("\n✅ Authentication system is working properly!")
+    print("\n🎯 Key findings:")
+    print("   1. Middleware is correctly checking Authorization header")
+    print("   2. Unauthenticated requests are properly rejected (401)")
+    print("   3. Public endpoints (/health, /oauth2/config) are accessible")
+    print("   4. Protected endpoints require valid Bearer token")
 
-    print("\n📝 Below一步：")
-    print("   1. At瀏覽器中Test OAuth2 登入Flow")
+    print("\n📝 Next steps:")
+    print("   1. Test OAuth2 login flow in browser")
     print("   2. Get access token")
-    print("   3. Use token Access受Protect的 API")
-    print("   4. Verify完整的Authentication和AuthorizingFlow")
+    print("   3. Use token to access protected API")
+    print("   4. Verify complete authentication and authorization flow")
 
-    print("\n🔗 有用的Chain接：")
-    print("   - 登入 URL: http://localhost:3001/api/v1/oauth2/login")
+    print("\n🔗 Useful links:")
+    print("   - Login URL: http://localhost:3001/api/v1/oauth2/login")
     print("   - Keycloak Admin: http://localhost:8080/admin")
-    print("   - API 文檔: http://localhost:3001/docs")
+    print("   - API documentation: http://localhost:3001/docs")
 
 
 if __name__ == "__main__":

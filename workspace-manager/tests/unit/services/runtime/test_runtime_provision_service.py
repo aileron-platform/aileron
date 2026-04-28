@@ -370,7 +370,7 @@ class TestRuntimeProvisionService:
         assert ranges == ((50000, 50010),)
 
     def test_handle_failure(self, provision_service, mock_db_session, sample_workspace):
-        """Test：HandleFailed"""
+        """Test: handle failure"""
         # Arrange
         job = Mock(spec=db_models.WorkspaceRuntimeJob)
         error = Exception("Test Error")
@@ -384,7 +384,7 @@ class TestRuntimeProvisionService:
         assert sample_workspace.runtime_status == "error"
 
     def test_update_workspace_runtime(self, provision_service, sample_workspace, mock_db_session):
-        """Test：UpdateWorkspaceInfo"""
+        """Test: update workspace runtime info"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
         sample_workspace.knowledge_base_attachments = [

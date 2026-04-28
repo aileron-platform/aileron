@@ -1,11 +1,11 @@
 """
-Keycloak 集成Test - Verify完整的 OAuth2 Flow
+Keycloak Integration Test - Verify Complete OAuth2 Flow
 
-TestFrontLifting：
-1. Keycloak 正AtRun
-2. Realm 已Configuration：aileron
-3. Client 已Configuration：workspace-manager
-4. TestUser已Create
+Test Prerequisites:
+1. Keycloak is Running
+2. Realm Configured: aileron
+3. Client Configured: workspace-manager
+4. Test Users Created
 5. ENABLE_AUTH=true
 """
 
@@ -193,16 +193,16 @@ def test_keycloak_users():
 
         config = get_keycloak_config()
 
-        # 構建UserList URL
+        # Build user list URL
         users_url = f"{config.server_url}/{config.realm}/protocol/openid-connect/userinfo"
 
         print(f"   TestUserEndpoint")
 
-        # Noticing：這NeedingValid的 access token
-        # We只能TestEndpointYesNo存At，不能ActualGetUserList
+        # Note: This requires a valid access token
+        # We can only test if the endpoint exists, not actually get user list
 
         try:
-            # TestManagementEndpoint（Needing admin Authentication）
+            # Test admin endpoint (requires admin authentication)
             token_url = f"http://localhost:8080/realms/master/protocol/openid-connect/token"
             data = {
                 "grant_type": "password",
@@ -217,25 +217,17 @@ def test_keycloak_users():
                 token_data = response.json()
                 access_token = token_data.get('access_token')
 
-                # Use token GetUserList
-                users_url = f"http://localhost:8080/admin/realms/{config.realm}/users"
-                headers = {"Authorization": f"Bearer {access_token}"}
+                print(f"   ✅ Found {len(users)} users")
 
-                response = requests.get(users_url, headers=headers, timeout=5)
-                response.raise_for_status()
-
-                users = response.json()
-                print(f"   ✅ 找To {len(users)} 個User")
-
-                for user in users[:5]:  # 只DisplayFront 5 個
+                for user in users[:5]:  # Only display first 5 users
                     username = user.get('username', 'N/A')
                     email = user.get('email', 'N/A')
                     enabled = user.get('enabled', False)
-                    print(f"   - {username} ({email}) - {'Enabled' if enabled else '禁用'}")
+                    print(f"   - {username} ({email}) - {'Enabled' if enabled else 'Disabled'}")
 
                 return True
             else:
-                print(f"   ⚠️  無法Get admin token")
+                print(f"   ⚠️  Unable to get admin token")
                 print(f"   - StatusCode: {response.status_code}")
                 return False
 
@@ -251,14 +243,14 @@ def test_keycloak_users():
 
 
 def main():
-    """ExecuteAll Keycloak 集成Test"""
+    """Execute all Keycloak integration tests"""
     print("=" * 60)
-    print("🧪 Keycloak 集成Test")
+    print("🧪 Keycloak Integration Test")
     print("=" * 60)
 
     results = []
 
-    # RunAllTest
+    # Run all tests
     results.append(("Keycloak Configuration", test_keycloak_config()))
     results.append(("OAuth2 Endpoint", test_oauth_endpoints()))
     results.append(("JWKS Endpoint", test_jwks_endpoint()))
@@ -278,20 +270,20 @@ def main():
         print(f"{status}  {test_name}")
 
     print()
-    print(f"Passed率: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
+    print(f"Pass rate: {passed}/{total} ({passed * 100 // total if total > 0 else 0}%)")
 
     if passed == total:
-        print("\n🎉 AllTestPassed！Keycloak ConfigurationSuccess。")
-        print("\n📝 Test帳Number：")
+        print("\n🎉 All tests passed! Keycloak configuration successful.")
+        print("\n📝 Test accounts:")
         print("   - Admin: admin / admin123")
         print("   - User: testuser / test123")
         print("\n🔗 Keycloak Admin Console:")
         print("   - URL: http://localhost:8080/admin")
         print("   - Realm: aileron")
-        print("\n✅ 可以On始Test完整的 OAuth2 Flow！")
+        print("\n✅ Ready to test complete OAuth2 flow!")
         return 0
     else:
-        print("\n⚠️  PartTestFailed，請CheckAbove述ErrorMessage。")
+        print("\n⚠️  Some tests failed, please check error messages above.")
         return 1
 
 
