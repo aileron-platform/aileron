@@ -58,6 +58,52 @@ const canvas = {
         errorTitle: 'Canvas reset failed',
       },
     },
+    review: {
+      toolbar: {
+        toggle: 'Select Canvas elements to add edit instructions',
+      },
+      bridgeWaiting: 'Preparing selection mode...',
+      form: {
+        title: 'Selected target edit instruction',
+        placeholder: 'Describe what should change in this element or area.',
+        create: 'Add edit instruction',
+        cancel: 'Cancel',
+        close: 'Close edit instruction form',
+      },
+      target: {
+        area: 'Selected area',
+        multi: '{{count}} selected elements',
+      },
+      status: {
+        open: 'Open',
+        seen: 'Sent',
+        applied: 'Applied',
+        dismissed: 'Dismissed',
+      },
+      notes: {
+        title: 'Canvas edit instructions',
+        sendToAi: 'Send to AI',
+        apply: 'Mark applied',
+        dismiss: 'Dismiss instruction',
+        delete: 'Delete instruction',
+        expand: 'Expand Canvas edit instructions',
+        collapse: 'Collapse Canvas edit instructions',
+      },
+      toast: {
+        createdTitle: 'Edit instruction added',
+        createdDescription: 'The selected Canvas target and edit instruction were saved.',
+      },
+      errors: {
+        bridge: 'Canvas selection mode could not read this preview.',
+        missingTarget: 'Select an element or area first.',
+        emptyInstruction: 'Enter an instruction before adding it.',
+        createFailed: 'Could not add the edit instruction.',
+      },
+      prompt: {
+        title: 'Canvas edit instruction',
+        workflow: 'Use the Canvas review workflow: edit source files in /workspace, preserve i18n requirements, do not mutate iframe DOM as persistent state, then tell the user to use the existing Canvas Sync or Reload toolbar action if they need to verify the preview.',
+      },
+    },
   },
   browser: {
     title: 'Chrome Browser',

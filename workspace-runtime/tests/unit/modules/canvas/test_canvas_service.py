@@ -9,6 +9,12 @@ import httpx
 import pytest
 
 from app.modules.canvas.service import CanvasService
+from app.modules.canvas.models import (
+    CanvasReviewAreaTarget,
+    CanvasReviewNoteCreate,
+    CanvasReviewRect,
+    CanvasReviewReplyCreate,
+)
 
 
 @pytest.fixture
@@ -172,3 +178,47 @@ class TestActionsAndHealth:
         assert result.logs == ["management"]
         assert result.renderer_logs == ["renderer"]
         assert result.total == 2
+
+
+class TestCanvasReviewNotes:
+    def test_review_note_lifecycle_is_workspace_scoped(
+        self,
+        canvas_service: CanvasService,
+        tmp_path: Path,
+    ) -> None:
+        canvas_service._review_store_path = tmp_path / "notes.json"
+        target = CanvasReviewAreaTarget(
+            rect=CanvasReviewRect(x=1, y=2, width=100, height=80, coordinateSpace="viewport")
+        )
+
+        note = canvas_service.create_review_note(
+            "ws-1",
+            CanvasReviewNoteCreate(
+                routePath="/",
+                canvasUrl="http://canvas.local/",
+                target=target,
+                instruction="Move this area higher",
+            ),
+        )
+
+        assert note.workspace_id == "ws-1"
+        assert note.status == "open"
+        assert canvas_service.list_review_notes("ws-2").total == 0
+        assert canvas_service.list_review_notes("ws-1").total == 1
+
+        seen = canvas_service.update_review_note_status("ws-1", note.id, "seen")
+        assert seen.status == "seen"
+
+        replied = canvas_service.append_review_note_reply(
+            "ws-1",
+            note.id,
+            CanvasReviewReplyCreate(role="agent", content="Applied in source."),
+        )
+        assert replied.replies[0].role == "agent"
+
+        applied = canvas_service.update_review_note_status("ws-1", note.id, "applied")
+        assert applied.status == "applied"
+        assert applied.resolved_at is not None
+
+        canvas_service.delete_review_note("ws-1", note.id)
+        assert canvas_service.list_review_notes("ws-1").total == 0

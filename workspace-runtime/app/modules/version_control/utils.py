@@ -95,7 +95,12 @@ class GitUtils:
     def list_contexts(self, workspace_id: str) -> GitContextListResponse:
         """List Git contexts for the primary checkout and managed worktrees."""
         workspace_root = self.workspace_path(workspace_id).resolve()
-        repo = self.get_repo(workspace_id)
+        try:
+            repo = self.get_repo(workspace_id)
+        except VersionControlError as exc:
+            if exc.error_code == "VC_REPOSITORY_NOT_INITIALIZED":
+                return GitContextListResponse(activeContextId="primary", contexts=[])
+            raise
         contexts: list[GitContext] = []
         active_context_id = "primary"
         current_primary_branch, primary_detached = self.current_branch(repo)

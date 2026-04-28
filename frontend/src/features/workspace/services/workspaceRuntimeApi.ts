@@ -611,6 +611,85 @@ export interface CanvasLogsResponse {
   total: number;
 }
 
+export type CanvasReviewStatus = 'open' | 'seen' | 'applied' | 'dismissed';
+export type CanvasReviewCoordinateSpace = 'viewport' | 'document';
+export type CanvasReviewSelectorKind = 'data-canvas-id' | 'id' | 'css' | 'xpath';
+
+export interface CanvasReviewRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  coordinateSpace: CanvasReviewCoordinateSpace;
+}
+
+export interface CanvasReviewElementTarget {
+  type: 'element';
+  selector: string;
+  selectorKind: CanvasReviewSelectorKind;
+  tagName: string;
+  textPreview: string;
+  htmlPreview: string;
+  parentHtmlPreview: string;
+  rect: CanvasReviewRect;
+  documentRect?: CanvasReviewRect | null;
+}
+
+export interface CanvasReviewMultiElementTarget {
+  type: 'multi-element';
+  elements: CanvasReviewElementTarget[];
+  rect: CanvasReviewRect;
+  documentRect?: CanvasReviewRect | null;
+}
+
+export interface CanvasReviewAreaTarget {
+  type: 'area';
+  rect: CanvasReviewRect;
+  documentRect?: CanvasReviewRect | null;
+}
+
+export type CanvasReviewTarget =
+  | CanvasReviewElementTarget
+  | CanvasReviewMultiElementTarget
+  | CanvasReviewAreaTarget;
+
+export interface CanvasReviewReply {
+  id: string;
+  role: 'user' | 'agent';
+  content: string;
+  createdAt: string;
+}
+
+export interface CanvasReviewNote {
+  id: string;
+  workspaceId: string;
+  sessionId?: string | null;
+  routePath: string;
+  canvasUrl: string;
+  target: CanvasReviewTarget;
+  instruction: string;
+  status: CanvasReviewStatus;
+  replies: CanvasReviewReply[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string | null;
+}
+
+export interface CanvasReviewNotesResponse {
+  workspaceId: string;
+  notes: CanvasReviewNote[];
+  total: number;
+}
+
+export interface CanvasReviewNoteCreateRequest {
+  sessionId?: string | null;
+  routePath: string;
+  canvasUrl: string;
+  target: CanvasReviewTarget;
+  instruction: string;
+  status?: CanvasReviewStatus;
+}
+
 export const fetchCanvasDetect = async (
   runtimeBaseUrl: string,
   workspaceId: string
@@ -657,4 +736,59 @@ export const checkCanvasHealth = async (
 ): Promise<CanvasHealthResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
   return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/health`);
+};
+
+export const fetchCanvasReviewNotes = async (
+  runtimeBaseUrl: string,
+  workspaceId: string,
+  filters?: { status?: CanvasReviewStatus; routePath?: string }
+): Promise<CanvasReviewNotesResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  const params = new URLSearchParams();
+  if (filters?.status) params.set('status', filters.status);
+  if (filters?.routePath) params.set('routePath', filters.routePath);
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return await client.get(`/api/v1/workspaces/${workspaceId}/canvas/review-notes${suffix}`);
+};
+
+export const createCanvasReviewNote = async (
+  runtimeBaseUrl: string,
+  workspaceId: string,
+  request: CanvasReviewNoteCreateRequest
+): Promise<CanvasReviewNote> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/review-notes`, request);
+};
+
+export const updateCanvasReviewNoteStatus = async (
+  runtimeBaseUrl: string,
+  workspaceId: string,
+  noteId: string,
+  status: CanvasReviewStatus
+): Promise<CanvasReviewNote> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.patch(`/api/v1/workspaces/${workspaceId}/canvas/review-notes/${noteId}/status`, { status });
+};
+
+export const appendCanvasReviewNoteReply = async (
+  runtimeBaseUrl: string,
+  workspaceId: string,
+  noteId: string,
+  role: 'user' | 'agent',
+  content: string
+): Promise<CanvasReviewNote> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.post(`/api/v1/workspaces/${workspaceId}/canvas/review-notes/${noteId}/replies`, {
+    role,
+    content,
+  });
+};
+
+export const deleteCanvasReviewNote = async (
+  runtimeBaseUrl: string,
+  workspaceId: string,
+  noteId: string
+): Promise<void> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  await client.delete(`/api/v1/workspaces/${workspaceId}/canvas/review-notes/${noteId}`);
 };

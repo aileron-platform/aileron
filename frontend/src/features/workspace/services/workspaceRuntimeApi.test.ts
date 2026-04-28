@@ -8,8 +8,10 @@ const { postMock } = vi.hoisted(() => ({
   postMock: vi.fn(),
 }));
 
-const { clientGetMock } = vi.hoisted(() => ({
+const { clientGetMock, patchMock, deleteMock } = vi.hoisted(() => ({
   clientGetMock: vi.fn(),
+  patchMock: vi.fn(),
+  deleteMock: vi.fn(),
 }));
 
 vi.mock('@/shared/api/apiClient', () => ({
@@ -19,6 +21,8 @@ vi.mock('@/shared/api/apiClient', () => ({
   ApiClient: class {
     post = postMock;
     get = clientGetMock;
+    patch = patchMock;
+    delete = deleteMock;
   },
 }));
 
@@ -27,8 +31,12 @@ import {
   fetchFileTree,
   fetchNodeChildren,
   fetchExtractArchiveStatus,
+  createCanvasReviewNote,
+  deleteCanvasReviewNote,
+  fetchCanvasReviewNotes,
   resolveRuntimeBaseUrl,
   startExtractArchive,
+  updateCanvasReviewNoteStatus,
   uploadFiles,
 } from './workspaceRuntimeApi';
 
@@ -37,6 +45,8 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     getMock.mockReset();
     postMock.mockReset();
     clientGetMock.mockReset();
+    patchMock.mockReset();
+    deleteMock.mockReset();
   });
 
   it('在 Kubernetes public routing 下優先使用 externalUrl', async () => {
@@ -182,5 +192,38 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     expect(clientGetMock).toHaveBeenCalledWith('/api/v1/files/extract/extract-123');
     expect(result.status).toBe('completed');
     expect(result.result?.extractedPaths).toEqual(['/uploads/demo/app.ts']);
+  });
+
+  it('會呼叫 Canvas review note API', async () => {
+    clientGetMock.mockResolvedValue({ workspaceId: 'ws-1', notes: [], total: 0 });
+    postMock.mockResolvedValue({ id: 'note-1', status: 'open' });
+    patchMock.mockResolvedValue({ id: 'note-1', status: 'seen' });
+    deleteMock.mockResolvedValue(undefined);
+
+    await fetchCanvasReviewNotes('http://runtime.local', 'ws-1', {
+      status: 'open',
+      routePath: '/',
+    });
+    await createCanvasReviewNote('http://runtime.local', 'ws-1', {
+      routePath: '/',
+      canvasUrl: 'http://canvas.local/',
+      instruction: 'Move it',
+      target: {
+        type: 'area',
+        rect: { x: 0, y: 0, width: 100, height: 80, coordinateSpace: 'viewport' },
+      },
+    });
+    await updateCanvasReviewNoteStatus('http://runtime.local', 'ws-1', 'note-1', 'seen');
+    await deleteCanvasReviewNote('http://runtime.local', 'ws-1', 'note-1');
+
+    expect(clientGetMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/ws-1/canvas/review-notes?status=open&routePath=%2F',
+    );
+    expect(postMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/canvas/review-notes', expect.any(Object));
+    expect(patchMock).toHaveBeenCalledWith(
+      '/api/v1/workspaces/ws-1/canvas/review-notes/note-1/status',
+      { status: 'seen' },
+    );
+    expect(deleteMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/canvas/review-notes/note-1');
   });
 });

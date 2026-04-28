@@ -19,6 +19,9 @@ import { QueuedMessagesPanel } from './QueuedMessagesPanel';
 import { useChatPanelStateContext } from './chatPanelStateContext';
 import {
   WORKSPACE_CHAT_ADD_REFERENCE_EVENT,
+  WORKSPACE_CHAT_INSERT_DRAFT_EVENT,
+  WORKSPACE_CHAT_SEND_DRAFT_EVENT,
+  type ChatDraftEventDetail,
   type ChatCodeReferenceEventDetail,
 } from './chatEvents';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
@@ -603,6 +606,35 @@ export const ChatPanel: React.FC = () => {
       window.removeEventListener(WORKSPACE_CHAT_ADD_REFERENCE_EVENT, handleAddReference);
     };
   }, [addCodeReference, dispatch, workspaceState.rightChatCollapsed]);
+
+  React.useEffect(() => {
+    const openPanel = () => {
+      if (workspaceState.rightChatCollapsed) {
+        dispatch({ type: 'SET_RIGHT_CHAT_COLLAPSED', payload: false });
+      }
+    };
+    const applyDraft = (detail?: ChatDraftEventDetail) => {
+      if (!detail?.content) return;
+      uiActions.setDraftMessage(
+        detail.mode === 'append' && uiState.draftMessage
+          ? `${uiState.draftMessage}\n\n${detail.content}`
+          : detail.content
+      );
+      openPanel();
+    };
+    const handleInsertDraft = (event: Event) => {
+      applyDraft((event as CustomEvent<ChatDraftEventDetail>).detail);
+    };
+    const handleSendDraft = (event: Event) => {
+      applyDraft((event as CustomEvent<ChatDraftEventDetail>).detail);
+    };
+    window.addEventListener(WORKSPACE_CHAT_INSERT_DRAFT_EVENT, handleInsertDraft);
+    window.addEventListener(WORKSPACE_CHAT_SEND_DRAFT_EVENT, handleSendDraft);
+    return () => {
+      window.removeEventListener(WORKSPACE_CHAT_INSERT_DRAFT_EVENT, handleInsertDraft);
+      window.removeEventListener(WORKSPACE_CHAT_SEND_DRAFT_EVENT, handleSendDraft);
+    };
+  }, [dispatch, uiActions, uiState.draftMessage, workspaceState.rightChatCollapsed]);
 
   const hasActiveConversation = agentState.messages.length > 0 || !!agentState.activeTask;
 

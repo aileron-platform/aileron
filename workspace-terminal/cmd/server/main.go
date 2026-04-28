@@ -45,6 +45,7 @@ func main() {
 	router.GET("/ws/terminal", wsHandler.HandleTerminalWS)
 
 	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
 		Handler: router,
 	}
 

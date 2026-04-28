@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const express = require("express");
 const { execSync, spawn } = require("child_process");
 const fs = require("fs");
+const http = require("http");
 const net = require("net");
 const path = require("path");
 
@@ -19,6 +20,7 @@ app.use(express.json());
 
 const API_PORT = parseInt(process.env.API_PORT || "3013", 10);
 const CANVAS_PORT = parseInt(process.env.PORT || "3003", 10);
+const NEXT_INTERNAL_PORT = parseInt(process.env.NEXT_INTERNAL_PORT || String(CANVAS_PORT + 1), 10);
 const WORKSPACE_DIR = process.env.WORKSPACE_DIR || "/workspace";
 const WEB_CANVAS_DIR = "/web-canvas";
 const DEFAULT_CANVAS_DIR = "/default-canvas";
@@ -40,6 +42,273 @@ let lastResetAt = null;
 let lastPackageSignature = null;
 let currentDependencyStrategy = "none";
 const logs = [];
+
+const REVIEW_BRIDGE_MARKER = "data-aileron-web-canvas-review-bridge";
+const REVIEW_BRIDGE_SOURCE = "aileron-web-canvas-review";
+const REVIEW_BRIDGE_VERSION = 1;
+const ENABLE_REVIEW_BRIDGE = process.env.ENABLE_CANVAS_REVIEW_BRIDGE !== "false";
+
+function canvasReviewBridgeScript() {
+  return `<script ${REVIEW_BRIDGE_MARKER}="true">
+(() => {
+  const SOURCE = "${REVIEW_BRIDGE_SOURCE}";
+  const VERSION = ${REVIEW_BRIDGE_VERSION};
+  const MAX_ELEMENTS = 20;
+  const MAX_PREVIEW = 2000;
+  if (window.__aileronWebCanvasReviewBridgeInstalled) return;
+  window.__aileronWebCanvasReviewBridgeInstalled = true;
+
+  let mode = "default";
+  let interactionPaused = false;
+  let selected = [];
+  let watched = [];
+  let dragStart = null;
+  let hoverBox = null;
+  let selectionBox = null;
+  let dragBox = null;
+
+  const post = (type, payload = {}) => {
+    window.parent?.postMessage({ source: SOURCE, version: VERSION, type, payload }, "*");
+  };
+  const clampText = (value) => String(value || "").replace(/\\s+/g, " ").trim().slice(0, MAX_PREVIEW);
+  const rectPayload = (rect, coordinateSpace = "viewport") => ({
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+    coordinateSpace,
+  });
+  const documentRect = (rect) => rectPayload({
+    x: rect.x + window.scrollX,
+    y: rect.y + window.scrollY,
+    width: rect.width,
+    height: rect.height,
+  }, "document");
+  const cssEscape = (value) => {
+    if (window.CSS?.escape) return window.CSS.escape(value);
+    return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
+  };
+  const isBridgeElement = (element) => element?.closest?.("[data-aileron-review-ui]");
+  const selectorFor = (element) => {
+    const canvasId = element.getAttribute("data-canvas-id");
+    if (canvasId) return { selector: \`[data-canvas-id="\${cssEscape(canvasId)}"]\`, selectorKind: "data-canvas-id" };
+    if (element.id) return { selector: \`#\${cssEscape(element.id)}\`, selectorKind: "id" };
+    const parts = [];
+    let node = element;
+    while (node && node.nodeType === 1 && node !== document.documentElement) {
+      const tag = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (!parent) break;
+      const siblings = Array.from(parent.children).filter((child) => child.tagName === node.tagName);
+      const nth = siblings.length > 1 ? \`:nth-of-type(\${siblings.indexOf(node) + 1})\` : "";
+      parts.unshift(\`\${tag}\${nth}\`);
+      const selector = parts.join(" > ");
+      try {
+        if (document.querySelectorAll(selector).length === 1) return { selector, selectorKind: "css" };
+      } catch {}
+      node = parent;
+    }
+    return { selector: xpathFor(element), selectorKind: "xpath" };
+  };
+  const xpathFor = (element) => {
+    const parts = [];
+    let node = element;
+    while (node && node.nodeType === 1) {
+      const tag = node.tagName.toLowerCase();
+      const siblings = node.parentElement ? Array.from(node.parentElement.children).filter((child) => child.tagName === node.tagName) : [];
+      const index = siblings.length > 1 ? \`[\${siblings.indexOf(node) + 1}]\` : "";
+      parts.unshift(\`\${tag}\${index}\`);
+      node = node.parentElement;
+    }
+    return \`/\${parts.join("/")}\`;
+  };
+  const elementTarget = (element) => {
+    const rect = element.getBoundingClientRect();
+    const selector = selectorFor(element);
+    return {
+      type: "element",
+      ...selector,
+      tagName: element.tagName.toLowerCase(),
+      textPreview: clampText(element.innerText || element.textContent || ""),
+      htmlPreview: clampText(element.outerHTML || ""),
+      parentHtmlPreview: clampText(element.parentElement?.outerHTML || ""),
+      rect: rectPayload(rect),
+      documentRect: documentRect(rect),
+    };
+  };
+  const ensureBox = (kind) => {
+    let box = kind === "hover" ? hoverBox : kind === "drag" ? dragBox : selectionBox;
+    if (box) return box;
+    box = document.createElement("div");
+    box.dataset.aileronReviewUi = kind;
+    box.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #2563eb;background:rgba(37,99,235,.08);box-shadow:0 0 0 1px rgba(255,255,255,.8);display:none;";
+    if (kind === "hover") box.style.borderStyle = "dashed";
+    if (kind === "drag") box.style.background = "rgba(14,165,233,.12)";
+    document.documentElement.appendChild(box);
+    if (kind === "hover") hoverBox = box;
+    else if (kind === "drag") dragBox = box;
+    else selectionBox = box;
+    return box;
+  };
+  const paintBox = (box, rect) => {
+    box.style.display = rect && rect.width >= 0 && rect.height >= 0 ? "block" : "none";
+    if (!rect) return;
+    box.style.left = \`\${rect.x}px\`;
+    box.style.top = \`\${rect.y}px\`;
+    box.style.width = \`\${rect.width}px\`;
+    box.style.height = \`\${rect.height}px\`;
+  };
+  const boundingRect = (targets) => {
+    const rects = targets.map((target) => target.rect).filter(Boolean);
+    const left = Math.min(...rects.map((rect) => rect.x));
+    const top = Math.min(...rects.map((rect) => rect.y));
+    const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+    const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+    return { x: left, y: top, width: right - left, height: bottom - top, coordinateSpace: "viewport" };
+  };
+  const emitSelection = (target) => {
+    post("TARGET_SELECTED", { routePath: location.pathname || "/", target });
+  };
+  const selectElement = (element, event) => {
+    const target = elementTarget(element);
+    const multi = event.shiftKey || event.metaKey || event.ctrlKey;
+    if (!multi) {
+      selected = [target];
+      paintBox(ensureBox("selection"), target.rect);
+      emitSelection(target);
+      return;
+    }
+    const existing = selected.findIndex((item) => item.selector === target.selector);
+    if (existing >= 0) selected.splice(existing, 1);
+    else if (selected.length < MAX_ELEMENTS) selected.push(target);
+    if (selected.length === 0) {
+      paintBox(ensureBox("selection"), null);
+      post("TARGET_SELECTED", { routePath: location.pathname || "/", target: null });
+      return;
+    }
+    const rect = boundingRect(selected);
+    paintBox(ensureBox("selection"), rect);
+    emitSelection(selected.length === 1 ? selected[0] : { type: "multi-element", elements: selected, rect });
+  };
+  const clear = () => {
+    selected = [];
+    dragStart = null;
+    paintBox(ensureBox("hover"), null);
+    paintBox(ensureBox("selection"), null);
+    paintBox(ensureBox("drag"), null);
+  };
+  const elementFromEvent = (event) => {
+    const element = document.elementFromPoint(event.clientX, event.clientY);
+    if (!element || element === document.documentElement || element === document.body || isBridgeElement(element)) return null;
+    return element;
+  };
+  document.addEventListener("pointermove", (event) => {
+    if (mode !== "select" || interactionPaused) return;
+    if (dragStart) {
+      const rect = {
+        x: Math.min(dragStart.x, event.clientX),
+        y: Math.min(dragStart.y, event.clientY),
+        width: Math.abs(event.clientX - dragStart.x),
+        height: Math.abs(event.clientY - dragStart.y),
+      };
+      paintBox(ensureBox("drag"), rect);
+      return;
+    }
+    const element = elementFromEvent(event);
+    paintBox(ensureBox("hover"), element ? element.getBoundingClientRect() : null);
+  }, true);
+  document.addEventListener("pointerdown", (event) => {
+    if (mode !== "select" || interactionPaused || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragStart = { x: event.clientX, y: event.clientY };
+  }, true);
+  document.addEventListener("pointerup", (event) => {
+    if (mode !== "select" || interactionPaused || !dragStart) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const dx = Math.abs(event.clientX - dragStart.x);
+    const dy = Math.abs(event.clientY - dragStart.y);
+    const start = dragStart;
+    dragStart = null;
+    paintBox(ensureBox("drag"), null);
+    if (dx > 6 || dy > 6) {
+      const rect = {
+        x: Math.min(start.x, event.clientX),
+        y: Math.min(start.y, event.clientY),
+        width: dx,
+        height: dy,
+        coordinateSpace: "viewport",
+      };
+      selected = [];
+      paintBox(ensureBox("selection"), rect);
+      emitSelection({ type: "area", rect, documentRect: { ...rect, x: rect.x + window.scrollX, y: rect.y + window.scrollY, coordinateSpace: "document" } });
+      return;
+    }
+    const element = elementFromEvent(event);
+    if (element) selectElement(element, event);
+  }, true);
+  document.addEventListener("keydown", (event) => {
+    if (mode === "select" && event.key === "Escape") clear();
+  }, true);
+  const measureWatched = () => {
+    if (mode !== "select" || watched.length === 0) return;
+    const rects = watched.slice(0, MAX_ELEMENTS).map((item) => {
+      try {
+        const element = document.querySelector(item.selector);
+        if (!element) return { id: item.id, selector: item.selector, resolved: false };
+        const rect = element.getBoundingClientRect();
+        return { id: item.id, selector: item.selector, resolved: true, rect: rectPayload(rect), documentRect: documentRect(rect) };
+      } catch {
+        return { id: item.id, selector: item.selector, resolved: false };
+      }
+    });
+    post("TARGET_RECTS", { routePath: location.pathname || "/", rects });
+  };
+  window.addEventListener("scroll", measureWatched, true);
+  window.addEventListener("resize", measureWatched);
+  window.addEventListener("message", (event) => {
+    const message = event.data;
+    if (!message || message.source !== SOURCE || message.version !== VERSION || !message.type) return;
+    if (message.type === "SET_MODE") {
+      mode = message.payload?.mode === "select" ? "select" : "default";
+      if (mode !== "select") clear();
+      document.documentElement.style.cursor = mode === "select" && !interactionPaused ? "crosshair" : "";
+    } else if (message.type === "SET_INTERACTION_PAUSED") {
+      interactionPaused = message.payload?.paused === true;
+      dragStart = null;
+      paintBox(ensureBox("hover"), null);
+      paintBox(ensureBox("drag"), null);
+      document.documentElement.style.cursor = mode === "select" && !interactionPaused ? "crosshair" : "";
+    } else if (message.type === "CLEAR_SELECTION") {
+      clear();
+    } else if (message.type === "WATCH_TARGETS") {
+      watched = Array.isArray(message.payload?.targets) ? message.payload.targets : [];
+      measureWatched();
+    }
+  });
+  post("BRIDGE_READY", { routePath: location.pathname || "/" });
+})();
+</script>`;
+}
+
+function injectReviewBridge(html) {
+  if (!ENABLE_REVIEW_BRIDGE) return html;
+  if (typeof html !== "string" || html.includes(REVIEW_BRIDGE_MARKER)) return html;
+  const script = canvasReviewBridgeScript();
+  if (html.includes("</body>")) return html.replace("</body>", `${script}</body>`);
+  return `${html}${script}`;
+}
+
+function sendInjectedHtmlFile(res, filePath) {
+  fs.readFile(filePath, "utf8", (err, html) => {
+    if (err) {
+      res.status(404).send("Canvas HTML route not found");
+      return;
+    }
+    res.type("html").send(injectReviewBridge(html));
+  });
+}
 
 function pushLog(scope, message) {
   const entry = {
@@ -464,7 +733,16 @@ async function startHtmlRenderer(detection) {
     const cleanPath = normalizeRoutePath(req.path);
     const mappedFile = routeMap.get(cleanPath);
     if (mappedFile) {
-      res.sendFile(path.join(WEB_CANVAS_DIR, mappedFile));
+      sendInjectedHtmlFile(res, path.join(WEB_CANVAS_DIR, mappedFile));
+      return;
+    }
+    next();
+  });
+  staticApp.get("*.html", (req, res, next) => {
+    const relativePath = req.path.replace(/^\/+/, "");
+    const requested = path.resolve(WEB_CANVAS_DIR, relativePath);
+    if (fs.existsSync(requested) && requested.startsWith(`${WEB_CANVAS_DIR}${path.sep}`)) {
+      sendInjectedHtmlFile(res, requested);
       return;
     }
     next();
@@ -473,7 +751,7 @@ async function startHtmlRenderer(detection) {
   staticApp.get("*", (_req, res) => {
     const indexPath = path.join(WEB_CANVAS_DIR, "index.html");
     if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
+      sendInjectedHtmlFile(res, indexPath);
       return;
     }
     res.status(404).send("Canvas HTML route not found");
@@ -528,17 +806,100 @@ function ensureDependencies(execDir) {
   lastPackageSignature = signature;
 }
 
+function startNextProxy(targetPort) {
+  const server = http.createServer((req, res) => {
+    const upstreamHeaders = {
+      ...req.headers,
+      host: `127.0.0.1:${targetPort}`,
+      connection: "close",
+    };
+    delete upstreamHeaders["accept-encoding"];
+
+    const proxyReq = http.request(
+      {
+        hostname: "127.0.0.1",
+        port: targetPort,
+        path: req.url,
+        method: req.method,
+        headers: upstreamHeaders,
+      },
+      (proxyRes) => {
+        const contentType = String(proxyRes.headers["content-type"] || "");
+        const responseHeaders = {
+          ...proxyRes.headers,
+          connection: "close",
+        };
+        delete responseHeaders["transfer-encoding"];
+
+        if (req.method === "HEAD" || !contentType.includes("text/html")) {
+          res.writeHead(proxyRes.statusCode || 200, responseHeaders);
+          if (req.method === "HEAD") {
+            proxyRes.resume();
+            res.end();
+            return;
+          }
+          proxyRes.pipe(res);
+          return;
+        }
+
+        const chunks = [];
+        proxyRes.on("data", (chunk) => chunks.push(chunk));
+        proxyRes.on("end", () => {
+          const body = Buffer.concat(chunks);
+          const html = injectReviewBridge(body.toString("utf8"));
+          delete responseHeaders["content-length"];
+          res.writeHead(proxyRes.statusCode || 200, {
+            ...responseHeaders,
+            "content-type": contentType,
+            "content-length": Buffer.byteLength(html),
+          });
+          res.end(html);
+        });
+      }
+    );
+    proxyReq.on("error", (err) => {
+      res.statusCode = 502;
+      res.end(`Canvas proxy error: ${err.message}`);
+    });
+    proxyReq.setTimeout(15000, () => {
+      proxyReq.destroy(new Error("Canvas proxy upstream timeout"));
+    });
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method || "")) {
+      proxyReq.end();
+    } else {
+      req.pipe(proxyReq);
+    }
+  });
+
+  server.on("upgrade", (req, socket, head) => {
+    const upstream = net.connect(targetPort, "127.0.0.1", () => {
+      upstream.write(
+        `${req.method} ${req.url} HTTP/${req.httpVersion}\r\n` +
+        Object.entries({ ...req.headers, host: `127.0.0.1:${targetPort}` })
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("\r\n") +
+        "\r\n\r\n"
+      );
+      if (head.length) upstream.write(head);
+      socket.pipe(upstream).pipe(socket);
+    });
+    upstream.on("error", () => socket.destroy());
+  });
+
+  staticServer = server.listen(CANVAS_PORT, "0.0.0.0");
+}
+
 async function startNextjsRenderer(execDir) {
   ensureDependencies(execDir);
   statusMessage = "Starting Canvas Next.js renderer...";
-  rendererProcess = spawn("npx", ["next", "dev", "-p", String(CANVAS_PORT)], {
+  rendererProcess = spawn("npx", ["next", "dev", "-p", String(NEXT_INTERNAL_PORT)], {
     cwd: execDir,
     uid: 1000,
     gid: 1000,
     detached: true,
     env: {
       ...process.env,
-      PORT: String(CANVAS_PORT),
+      PORT: String(NEXT_INTERNAL_PORT),
       HOME: "/home/developer",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -547,7 +908,7 @@ async function startNextjsRenderer(execDir) {
   rendererProcess.stdout.on("data", (data) => {
     const line = data.toString().trim();
     if (line) pushLog("renderer", line);
-    if (line.includes("Ready") || line.includes("ready") || line.includes(`localhost:${CANVAS_PORT}`)) {
+    if (line.includes("Ready") || line.includes("ready") || line.includes(`localhost:${NEXT_INTERNAL_PORT}`)) {
       serviceStatus = "running";
       statusMessage = "Canvas Next.js renderer is running";
     }
@@ -568,7 +929,8 @@ async function startNextjsRenderer(execDir) {
   currentRenderer = "nextjs-dev";
   const startTime = Date.now();
   while (Date.now() - startTime < 60000) {
-    if (await checkPort(CANVAS_PORT)) {
+    if (await checkPort(NEXT_INTERNAL_PORT)) {
+      startNextProxy(NEXT_INTERNAL_PORT);
       serviceStatus = "running";
       statusMessage = "Canvas Next.js renderer is running";
       return;
@@ -744,25 +1106,36 @@ app.post("/restart", async (_req, res) => {
   }
 });
 
-app.listen(API_PORT, "0.0.0.0", () => {
-  pushLog("management", `Canvas management API listening on port ${API_PORT}`);
-  pushLog("management", `Architecture: /workspace -> ${WEB_CANVAS_DIR}`);
-});
+if (require.main === module) {
+  app.listen(API_PORT, "0.0.0.0", () => {
+    pushLog("management", `Canvas management API listening on port ${API_PORT}`);
+    pushLog("management", `Architecture: /workspace -> ${WEB_CANVAS_DIR}`);
+  });
 
-syncAndStart().catch((err) => {
-  serviceStatus = "error";
-  statusMessage = err.message;
-  pushLog("error", `Auto-start failed: ${err.stack || err.message}`);
-});
+  syncAndStart().catch((err) => {
+    serviceStatus = "error";
+    statusMessage = err.message;
+    pushLog("error", `Auto-start failed: ${err.stack || err.message}`);
+  });
 
-process.on("SIGTERM", async () => {
-  pushLog("management", "Received SIGTERM, shutting down...");
-  await stopRenderer();
-  process.exit(0);
-});
+  process.on("SIGTERM", async () => {
+    pushLog("management", "Received SIGTERM, shutting down...");
+    await stopRenderer();
+    process.exit(0);
+  });
 
-process.on("SIGINT", async () => {
-  pushLog("management", "Received SIGINT, shutting down...");
-  await stopRenderer();
-  process.exit(0);
-});
+  process.on("SIGINT", async () => {
+    pushLog("management", "Received SIGINT, shutting down...");
+    await stopRenderer();
+    process.exit(0);
+  });
+}
+
+module.exports = {
+  REVIEW_BRIDGE_MARKER,
+  REVIEW_BRIDGE_SOURCE,
+  REVIEW_BRIDGE_VERSION,
+  ENABLE_REVIEW_BRIDGE,
+  canvasReviewBridgeScript,
+  injectReviewBridge,
+};

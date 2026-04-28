@@ -10,12 +10,20 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
 
 from .models import (
     CanvasActionResponse,
     CanvasDetectResponse,
     CanvasHealthResponse,
     CanvasLogsResponse,
+    CanvasReviewNote,
+    CanvasReviewNoteCreate,
+    CanvasReviewNoteRecord,
+    CanvasReviewNotesResponse,
+    CanvasReviewReply,
+    CanvasReviewReplyCreate,
+    CanvasReviewStatus,
     CanvasRoute,
     CanvasRoutesResponse,
 )
@@ -31,6 +39,7 @@ class CanvasService:
 
     def __init__(self) -> None:
         self._workspace_base = Path("/workspace")
+        self._review_store_path = self._workspace_base / ".aileron" / "canvas-review-notes.json"
         self._canvas_api_url = CANVAS_API_URL.rstrip("/")
         self._canvas_url = CANVAS_INTERNAL_URL.rstrip("/")
 
@@ -106,6 +115,89 @@ class CanvasService:
             rendererLogs=renderer_logs,
             total=len(logs) + len(renderer_logs),
         )
+
+    def list_review_notes(
+        self,
+        workspace_id: str,
+        *,
+        status: CanvasReviewStatus | None = None,
+        route_path: str | None = None,
+    ) -> CanvasReviewNotesResponse:
+        notes = [
+            note.to_response()
+            for note in self._read_review_notes()
+            if note.workspace_id == workspace_id
+        ]
+        if status:
+            notes = [note for note in notes if note.status == status]
+        if route_path:
+            notes = [note for note in notes if note.route_path == route_path]
+        notes.sort(key=lambda note: note.created_at)
+        return CanvasReviewNotesResponse(
+            workspaceId=workspace_id,
+            notes=notes,
+            total=len(notes),
+        )
+
+    def create_review_note(
+        self,
+        workspace_id: str,
+        payload: CanvasReviewNoteCreate,
+    ) -> CanvasReviewNote:
+        now = datetime.now(timezone.utc)
+        record = CanvasReviewNoteRecord(
+            workspaceId=workspace_id,
+            sessionId=payload.session_id,
+            routePath=payload.route_path,
+            canvasUrl=payload.canvas_url,
+            target=payload.target,
+            instruction=payload.instruction,
+            status=payload.status,
+            createdAt=now,
+            updatedAt=now,
+        )
+        notes = self._read_review_notes()
+        notes.append(record)
+        self._write_review_notes(notes)
+        return record.to_response()
+
+    def update_review_note_status(
+        self,
+        workspace_id: str,
+        note_id: str,
+        status: CanvasReviewStatus,
+    ) -> CanvasReviewNote:
+        notes = self._read_review_notes()
+        record = self._find_review_note(notes, workspace_id, note_id)
+        record.status = status
+        record.updated_at = datetime.now(timezone.utc)
+        record.resolved_at = record.updated_at if status in {"applied", "dismissed"} else None
+        self._write_review_notes(notes)
+        return record.to_response()
+
+    def append_review_note_reply(
+        self,
+        workspace_id: str,
+        note_id: str,
+        payload: CanvasReviewReplyCreate,
+    ) -> CanvasReviewNote:
+        notes = self._read_review_notes()
+        record = self._find_review_note(notes, workspace_id, note_id)
+        record.replies.append(CanvasReviewReply(role=payload.role, content=payload.content))
+        record.updated_at = datetime.now(timezone.utc)
+        self._write_review_notes(notes)
+        return record.to_response()
+
+    def delete_review_note(self, workspace_id: str, note_id: str) -> None:
+        notes = self._read_review_notes()
+        next_notes = [
+            note
+            for note in notes
+            if not (note.workspace_id == workspace_id and note.id == note_id)
+        ]
+        if len(next_notes) == len(notes):
+            raise self._not_found()
+        self._write_review_notes(next_notes)
 
     def _action(self, workspace_id: str, path: str) -> CanvasActionResponse:
         data = self._post_json(path, timeout=60.0)
@@ -212,3 +304,46 @@ class CanvasService:
         if not isinstance(value, list):
             return []
         return [str(item) for item in value]
+
+    def _read_review_notes(self) -> list[CanvasReviewNoteRecord]:
+        if not self._review_store_path.exists():
+            return []
+        try:
+            raw = json.loads(self._review_store_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            logger.warning("Failed to read Canvas review notes: %s", exc)
+            return []
+        if not isinstance(raw, list):
+            return []
+        records = []
+        for item in raw:
+            try:
+                records.append(CanvasReviewNoteRecord.model_validate(item))
+            except Exception as exc:
+                logger.warning("Skipping invalid Canvas review note record: %s", exc)
+        return records
+
+    def _write_review_notes(self, notes: list[CanvasReviewNoteRecord]) -> None:
+        self._review_store_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = [note.model_dump(mode="json", by_alias=True) for note in notes]
+        self._review_store_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _find_review_note(
+        self,
+        notes: list[CanvasReviewNoteRecord],
+        workspace_id: str,
+        note_id: str,
+    ) -> CanvasReviewNoteRecord:
+        for note in notes:
+            if note.workspace_id == workspace_id and note.id == note_id:
+                return note
+        raise self._not_found()
+
+    def _not_found(self) -> HTTPException:
+        return HTTPException(
+            status_code=404,
+            detail={"errorCode": "CANVAS_REVIEW_NOTE_NOT_FOUND"},
+        )
