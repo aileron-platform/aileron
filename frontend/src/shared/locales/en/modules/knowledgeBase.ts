@@ -112,6 +112,18 @@ const knowledgeBase = {
     moveFailed: 'Move failed',
     operationFailedTitle: 'File operation failed',
     dropOverlay: 'Drop to upload into the knowledge base root',
+    actions: {
+      createFile: 'New text file',
+      createFolder: 'Create folder',
+      upload: 'Upload files',
+      refresh: 'Refresh',
+      hidden: {
+        showLabel: 'Show hidden',
+        hideLabel: 'Hide hidden',
+        showTooltip: 'Show hidden files and folders',
+        hideTooltip: 'Hide hidden files and folders',
+      },
+    },
   },
   schedules: {
     title: 'Wiki index schedules',

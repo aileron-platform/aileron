@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ChevronLeft, Database, FolderTree, Lock } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, FolderTree, Lock, RefreshCw, Upload } from 'lucide-react';
 import {
   API_ENDPOINTS,
   BatchDeleteDialog,
@@ -9,7 +9,6 @@ import {
   FileRenameDialog,
   FileTreeContextMenu,
   FileTreePanel,
-  FileTreeToolbar,
   StandardFileTreeLayout,
   useFileOperationsWithDialog,
   useFileTreeContextMenu,
@@ -84,6 +83,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [treeWidth, setTreeWidth] = React.useState(320);
   const [treeCollapsed, setTreeCollapsed] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [showHiddenEntries, setShowHiddenEntries] = React.useState(false);
   const [clipboardItem, setClipboardItem] = React.useState<{ path: string; type: 'file' | 'directory' } | null>(null);
   const dragDepthRef = React.useRef(0);
   const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
@@ -92,7 +92,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     apiConfig: {
       type: 'knowledge-base',
       knowledgeBaseId,
-      includeHidden: false,
+      includeHidden: showHiddenEntries,
     },
     stateOptions: {
       enableMultiSelect: !readOnly,
@@ -365,6 +365,39 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       .filter((node): node is FileTreeNode => Boolean(node))
   ), [manager.state.flatNodes, manager.state.selectedIds]);
 
+  const getDirectoryNodeForPath = React.useCallback((path: string): FileTreeNode | undefined => (
+    manager.state.flatNodes.find((node) => node.path === path && node.type === 'directory')
+  ), [manager.state.flatNodes]);
+
+  const getPrimaryTargetDirectoryNode = React.useCallback((): FileTreeNode | undefined => {
+    if (selectedNodes.length !== 1) {
+      return undefined;
+    }
+
+    const [selectedNode] = selectedNodes;
+    if (selectedNode.type === 'directory') {
+      return selectedNode;
+    }
+
+    return getDirectoryNodeForPath(getParentPath(selectedNode.path));
+  }, [getDirectoryNodeForPath, selectedNodes]);
+
+  const handleToolbarCreateFile = React.useCallback(() => {
+    fileOps.openCreateFileDialog(getPrimaryTargetDirectoryNode());
+  }, [fileOps, getPrimaryTargetDirectoryNode]);
+
+  const handleToolbarCreateFolder = React.useCallback(() => {
+    fileOps.openCreateFolderDialog(getPrimaryTargetDirectoryNode());
+  }, [fileOps, getPrimaryTargetDirectoryNode]);
+
+  const handleToolbarUpload = React.useCallback(() => {
+    handleUpload(getPrimaryTargetDirectoryNode()?.path ?? ROOT_PATH);
+  }, [getPrimaryTargetDirectoryNode, handleUpload]);
+
+  const handleToggleHiddenEntries = React.useCallback(() => {
+    setShowHiddenEntries((current) => !current);
+  }, []);
+
   const contextMenuItems = useFileTreeContextMenu({
     node: manager.state.contextMenu?.node ?? null,
     readOnly,
@@ -523,19 +556,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
           onSearchChange={manager.state.setSearchQuery}
           onSearchClear={manager.state.clearSearch}
           showSearch={!treeCollapsed}
-          toolbarContent={(
-            <FileTreeToolbar
-              leftContent={null}
-              onCreateFile={() => fileOps.openCreateFileDialog()}
-              onCreateFolder={() => fileOps.openCreateFolderDialog()}
-              onUpload={() => handleUpload(ROOT_PATH)}
-              onRefresh={() => { void manager.loadTree(); }}
-              isLoading={manager.state.isLoading}
-              isReadOnly={readOnly}
-              className="border-b border-sidebar-border bg-sidebar-accent/20 p-2"
-            />
-          )}
-          showToolbar={!treeCollapsed}
+          showToolbar={false}
           contentClassName={treeCollapsed ? 'items-center justify-start overflow-hidden py-3' : undefined}
         >
           {treeCollapsed ? (
@@ -560,11 +581,84 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
               onRefresh={() => { void manager.loadTree(); }}
               onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
               enableSearch={false}
-              enableToolbar={false}
+              enableToolbar
               enableMultiSelectBar={!readOnly}
               enableDragDrop={!readOnly}
               draggingPath={draggingPath}
               dragOverPath={dragOverPath}
+              renderToolbar={() => (
+                <div className="flex w-full items-center justify-between gap-2">
+                  <div className="flex items-center gap-1">
+                    {!readOnly && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={handleToolbarCreateFile}
+                          disabled={manager.state.isLoading}
+                          title={t('knowledgeBase.files.actions.createFile')}
+                          aria-label={t('knowledgeBase.files.actions.createFile')}
+                        >
+                          <FilePlus className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={handleToolbarCreateFolder}
+                          disabled={manager.state.isLoading}
+                          title={t('knowledgeBase.files.actions.createFolder')}
+                          aria-label={t('knowledgeBase.files.actions.createFolder')}
+                        >
+                          <FolderPlus className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0"
+                          onClick={handleToolbarUpload}
+                          disabled={manager.state.isLoading}
+                          title={t('knowledgeBase.files.actions.upload')}
+                          aria-label={t('knowledgeBase.files.actions.upload')}
+                        >
+                          <Upload className="h-3.5 w-3.5" />
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      onClick={handleToggleHiddenEntries}
+                      disabled={manager.state.isLoading}
+                      title={t(
+                        showHiddenEntries
+                          ? 'knowledgeBase.files.actions.hidden.hideTooltip'
+                          : 'knowledgeBase.files.actions.hidden.showTooltip'
+                      )}
+                      aria-label={t(
+                        showHiddenEntries
+                          ? 'knowledgeBase.files.actions.hidden.hideLabel'
+                          : 'knowledgeBase.files.actions.hidden.showLabel'
+                      )}
+                    >
+                      {showHiddenEntries ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                    onClick={() => { void manager.loadTree(); }}
+                    disabled={manager.state.isLoading}
+                    title={t('knowledgeBase.files.actions.refresh')}
+                    aria-label={t('knowledgeBase.files.actions.refresh')}
+                  >
+                    <RefreshCw className={cn('h-3.5 w-3.5', manager.state.isLoading && 'animate-spin')} />
+                  </Button>
+                </div>
+              )}
               className="flex-1"
             />
           )}

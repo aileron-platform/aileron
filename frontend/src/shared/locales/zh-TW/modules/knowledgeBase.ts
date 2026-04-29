@@ -112,6 +112,18 @@ const knowledgeBase = {
     moveFailed: '移動失敗',
     operationFailedTitle: '檔案操作失敗',
     dropOverlay: '放開以上傳到知識庫根目錄',
+    actions: {
+      createFile: '新增文字檔',
+      createFolder: '建立資料夾',
+      upload: '上傳檔案',
+      refresh: '重新整理',
+      hidden: {
+        showLabel: '顯示隱藏檔',
+        hideLabel: '隱藏隱藏檔',
+        showTooltip: '顯示隱藏檔案與資料夾',
+        hideTooltip: '隱藏隱藏檔案與資料夾',
+      },
+    },
   },
   schedules: {
     title: 'Wiki Index 排程',
