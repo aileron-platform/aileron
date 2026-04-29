@@ -5,6 +5,29 @@ import { toWebSocketUrl } from '../../services/workspacePublicUrl';
 
 const logger = createLogger('useWebSocketClient');
 
+// Define allowed message types.
+const ALLOWED_MESSAGE_TYPES = new Set([
+    'pong', 'subscribed', 'unsubscribed', 'message', 'task',
+    'task_created', 'task_patched', 'task_stopped', 'task_completed',
+    // Error messages
+    'error',
+    // CRUD events
+    'sessions created', 'session:init', 'sessions patched', 'sessions updated', 'sessions removed',
+    'tasks created', 'tasks patched', 'tasks updated', 'tasks removed',
+    'messages created', 'messages patched', 'messages updated', 'messages removed', 'messages queued',
+    'message:dequeued', 'queue:processing_failed',
+    // Streaming events
+    'streaming:start', 'streaming:chunk', 'streaming:end', 'streaming:error',
+    // Thinking events
+    'thinking:start', 'thinking:chunk', 'thinking:end',
+    // Task lifecycle events
+    'task:started', 'task:completed', 'task:failed', 'task:stop_ack', 'task:stopping', 'task:stopped',
+    // Tool events
+    'tool:start', 'tool:complete', 'tool:error',
+    // Tool Decision events
+    'tool-decision:request', 'tool-decision:approved', 'tool-decision:denied', 'tool-decision:timeout',
+]);
+
 export interface UseWebSocketClientOptions {
     runtimeBaseUrl: string | null;
     workspaceId: string | null;
@@ -99,35 +122,12 @@ export function useWebSocketClient({
         }, 30000);
     }, []);
 
-    // 定義允許的訊息類型
-    const ALLOWED_MESSAGE_TYPES = new Set([
-        'pong', 'subscribed', 'unsubscribed', 'message', 'task',
-        'task_created', 'task_patched', 'task_stopped', 'task_completed',
-        // 錯誤訊息
-        'error',
-        // CRUD 事件
-        'sessions created', 'session:init', 'sessions patched', 'sessions updated', 'sessions removed',
-        'tasks created', 'tasks patched', 'tasks updated', 'tasks removed',
-        'messages created', 'messages patched', 'messages updated', 'messages removed', 'messages queued',
-        'message:dequeued',
-        // Streaming 事件
-        'streaming:start', 'streaming:chunk', 'streaming:end', 'streaming:error',
-        // Thinking 事件
-        'thinking:start', 'thinking:chunk', 'thinking:end',
-        // Task 生命週期事件
-        'task:started', 'task:completed', 'task:failed', 'task:stop_ack', 'task:stopping', 'task:stopped',
-        // Tool 事件
-        'tool:start', 'tool:complete', 'tool:error',
-        // Tool Decision 事件
-        'tool-decision:request', 'tool-decision:approved', 'tool-decision:denied', 'tool-decision:timeout',
-    ]);
-
     const handleMessage = useCallback((event: MessageEvent) => {
         try {
             const data = JSON.parse(event.data);
             if (data.type === 'pong') return;
 
-            // 驗證訊息結構
+            // Validate message structure.
             if (!data.type || typeof data.type !== 'string') {
                 logger.error('Invalid WebSocket message structure', {
                     hasType: !!data.type,
@@ -137,7 +137,7 @@ export function useWebSocketClient({
                 return;
             }
 
-            // 驗證訊息類型
+            // Validate message type.
             if (!ALLOWED_MESSAGE_TYPES.has(data.type)) {
                 logger.warn('Unknown WebSocket message type', {
                     type: data.type,
@@ -146,7 +146,7 @@ export function useWebSocketClient({
                 return;
             }
 
-            // 處理錯誤訊息
+            // Handle error messages.
             if (data.type === 'error') {
                 logger.error('WebSocket error from server', {
                     message: data.message,
@@ -156,8 +156,8 @@ export function useWebSocketClient({
                 return;
             }
 
-            // 訊息處理由上層呼叫者負責
-            // 這裡只做基本的驗證
+            // Message handling is owned by the caller.
+            // This hook only performs basic validation.
 
         } catch (e) {
             logger.error('Failed to parse WebSocket message', {
@@ -166,7 +166,7 @@ export function useWebSocketClient({
                 rawData: typeof event.data === 'string' ? event.data.substring(0, 200) : '[non-string data]'
             });
 
-            // 嘗試從原始數據提取錯誤訊息
+            // Try to extract an error message from the raw payload.
             if (typeof event.data === 'string') {
                 const text = event.data.trim();
                 if (text.startsWith('error:') || text.startsWith('Error:') || text.startsWith('ERROR:')) {
@@ -175,7 +175,7 @@ export function useWebSocketClient({
                 }
             }
         }
-    }, [ALLOWED_MESSAGE_TYPES]);
+    }, []);
 
     const handleClose = useCallback((event: CloseEvent, reconnectFn: () => void) => {
         logger.debug('Disconnected', { code: event.code, reason: event.reason });

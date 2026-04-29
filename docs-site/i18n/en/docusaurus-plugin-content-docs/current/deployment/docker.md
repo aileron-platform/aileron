@@ -249,17 +249,17 @@ For single-machine evaluation and basic workflow validation, plan for at least `
 ## Common Commands
 
 ```bash
-# Start
+# Start (reuse local images; Compose pulls only if missing)
 python scripts/dev/docker/ops.py up
 
-# Rebuild images and start
+# Pull the latest dev images first, then start
+python scripts/dev/docker/ops.py up --pull
+
+# Build images locally, then start (mutually exclusive with --pull)
 python scripts/dev/docker/ops.py up --build
 
-# Start after choosing the startup mode interactively
-python scripts/dev/docker/ops.py up
-
-# Start directly from Docker Hub dev tags
-python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+# Pin the image arch when running cross-arch (e.g. amd64 emulation on arm64 host)
+python scripts/dev/docker/ops.py up --pull --image-arch amd64
 
 # Stop (preserves volumes)
 python scripts/dev/docker/ops.py down
@@ -293,7 +293,7 @@ make build-workspace-runtime RUNTIME_BASE=universal
 
 For routine host-side operations, prefer `python scripts/dev/docker/ops.py ...`. Keep raw `docker compose` commands for logs, single-service rebuilds, or lower-level debugging.
 
-`ops.py up` now prompts for whether to use a local build or Docker Hub `dev` tags, and then overrides the Compose image tags automatically. For non-interactive usage, pass `--startup-mode`, `--image-arch`, and `--runtime-base` explicitly.
+`ops.py up` overrides the Compose image tags automatically based on the host arch. By default it skips `docker compose pull` and reuses local images; pass `--pull` to refresh from Docker Hub or `--build` to build locally (the two are mutually exclusive). When stdin is a TTY it prompts for the image arch; pass `--no-prompt` plus `--image-arch` / `--runtime-base` for non-interactive use.
 
 ## Cleanup
 

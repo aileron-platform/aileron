@@ -1,30 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Check,
   Crosshair,
+  GripHorizontal,
   Maximize2,
   MessageSquare,
-  MoreHorizontal,
   Minimize2,
   Monitor,
   RefreshCw,
-  RotateCw,
-  SendToBack,
   Trash2,
   X,
 } from 'lucide-react';
 
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Button } from '@/shared/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/shared/components/ui/dropdown-menu';
 import { Input } from '@/shared/components/ui/input';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -40,7 +31,6 @@ import {
   checkCanvasHealth,
   fetchCanvasRoutes,
   fetchWorkspaceDetail,
-  resetCanvas,
   syncCanvas,
   updateCanvasReviewNoteStatus,
   type CanvasRoute,
@@ -58,8 +48,9 @@ type BridgeMode = 'default' | 'select';
 
 type BridgeMessage =
   | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'BRIDGE_READY'; payload?: { routePath?: string } }
+  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'ROUTE_CHANGED'; payload?: { routePath?: string } }
   | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'TARGET_SELECTED'; payload?: { routePath?: string; target?: CanvasReviewTarget | null } }
-  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'TARGET_RECTS'; payload?: { rects?: BridgeRectUpdate[] } }
+  | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'TARGET_RECTS'; payload?: { routePath?: string; rects?: BridgeRectUpdate[] } }
   | { source: typeof REVIEW_BRIDGE_SOURCE; version: typeof REVIEW_BRIDGE_VERSION; type: 'BRIDGE_ERROR'; payload?: { errorCode?: string } };
 
 type BridgeRectUpdate = {
@@ -81,6 +72,26 @@ const isBridgeMessage = (value: unknown): value is BridgeMessage => {
 };
 
 const getTargetRect = (target: CanvasReviewTarget | null | undefined) => target?.rect ?? null;
+
+type ReviewPanelPosition = {
+  x: number;
+  y: number;
+};
+
+type ReviewPanelDragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  panelX: number;
+  panelY: number;
+};
+
+const normalizeBridgeRoutePath = (routePath: unknown): string | null => {
+  if (typeof routePath !== 'string') return null;
+  const trimmed = routePath.trim();
+  if (!trimmed || trimmed.length > 512) return null;
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+};
 
 export const WebCanvasFeature: React.FC = () => {
   const { t, state } = useI18n();
@@ -108,18 +119,24 @@ export const WebCanvasFeature: React.FC = () => {
   const [reviewNotesExpanded, setReviewNotesExpanded] = useState(true);
   const [reviewErrorKey, setReviewErrorKey] = useState<string | null>(null);
   const [isReviewSaving, setIsReviewSaving] = useState(false);
+  const [reviewPanelPosition, setReviewPanelPosition] = useState<ReviewPanelPosition | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const reviewPanelRef = useRef<HTMLDivElement>(null);
+  const reviewPanelDragRef = useRef<ReviewPanelDragState | null>(null);
+  const pendingReviewNotes = useMemo(
+    () => reviewNotes.filter((note) => note.status === 'open'),
+    [reviewNotes]
+  );
   const watchedReviewTargets = useMemo(
-    () => reviewNotes
+    () => pendingReviewNotes
       .filter((note) => note.target.type === 'element')
       .map((note) => ({
         id: note.id,
         selector: note.target.type === 'element' ? note.target.selector : '',
       }))
       .filter((item) => item.selector),
-    [reviewNotes]
+    [pendingReviewNotes]
   );
   const postBridgeCommand = (type: string, payload: Record<string, unknown> = {}) => {
     iframeRef.current?.contentWindow?.postMessage({
@@ -138,29 +155,123 @@ export const WebCanvasFeature: React.FC = () => {
     setReviewErrorKey(null);
   };
 
+  const clampReviewPanelPosition = (x: number, y: number): ReviewPanelPosition => {
+    const panel = reviewPanelRef.current;
+    const container = panel?.parentElement;
+    if (!panel || !container) {
+      return { x, y };
+    }
+    const containerRect = container.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(x, containerRect.width - panelRect.width)),
+      y: Math.max(0, Math.min(y, containerRect.height - panelRect.height)),
+    };
+  };
+
+  const handleReviewPanelDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button > 0) return;
+    const panel = reviewPanelRef.current;
+    const container = panel?.parentElement;
+    if (!panel || !container) return;
+    const panelRect = panel.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const panelPosition = {
+      x: panelRect.left - containerRect.left,
+      y: panelRect.top - containerRect.top,
+    };
+    reviewPanelDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      panelX: panelPosition.x,
+      panelY: panelPosition.y,
+    };
+    setReviewPanelPosition(clampReviewPanelPosition(panelPosition.x, panelPosition.y));
+    setBridgeInteractionPaused(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  };
+
+  const handleReviewPanelDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = reviewPanelDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    setReviewPanelPosition(clampReviewPanelPosition(
+      dragState.panelX + event.clientX - dragState.startX,
+      dragState.panelY + event.clientY - dragState.startY
+    ));
+  };
+
+  const handleReviewPanelDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const dragState = reviewPanelDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    reviewPanelDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleReviewPanelDragKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 24 : 8;
+    const movement: Record<string, ReviewPanelPosition> = {
+      ArrowDown: { x: 0, y: step },
+      ArrowLeft: { x: -step, y: 0 },
+      ArrowRight: { x: step, y: 0 },
+      ArrowUp: { x: 0, y: -step },
+    };
+    const delta = movement[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    const panel = reviewPanelRef.current;
+    const container = panel?.parentElement;
+    if (!panel || !container) return;
+    const panelRect = panel.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const current = reviewPanelPosition ?? {
+      x: panelRect.left - containerRect.left,
+      y: panelRect.top - containerRect.top,
+    };
+    setReviewPanelPosition(clampReviewPanelPosition(current.x + delta.x, current.y + delta.y));
+  };
+
+  const syncRouteFromBridge = useCallback((routePath: unknown, options: { resetReviewState?: boolean } = {}) => {
+    const normalized = normalizeBridgeRoutePath(routePath);
+    if (!normalized) return;
+    const routeChanged = selectedPath !== normalized;
+    setSelectedPath((current) => (current === normalized ? current : normalized));
+    setFilteredRoutes(routes.filter((route) => route.path.toLowerCase().includes(normalized.toLowerCase())));
+    setShowDropdown(false);
+    if (routeChanged && options.resetReviewState !== false) {
+      setSelectedTarget(null);
+      setBridgeInteractionPaused(false);
+      setReviewInstruction('');
+    }
+    setReviewErrorKey(null);
+  }, [routes, selectedPath]);
+
   const buildCanvasUrl = (path: string, urlBase = baseUrl) => {
     const nextUrl = new URL(path || '/', `${urlBase}/`);
     nextUrl.searchParams.set('lang', state.currentLanguage);
     return nextUrl.toString();
   };
 
-  const reloadIframe = () => {
-    if (!iframeRef.current || !iframeSrc) {
+  const reloadIframe = (src = iframeSrc) => {
+    if (!iframeRef.current || !src) {
       return;
     }
     clearTransientReviewState();
     iframeRef.current.src = 'about:blank';
     window.setTimeout(() => {
       if (iframeRef.current) {
-        iframeRef.current.src = iframeSrc;
+        iframeRef.current.src = src;
       }
     }, 100);
   };
 
-  const loadCanvasData = async () => {
+  const loadCanvasData = async (preferredPath?: string) => {
     if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
       setIsLoading(false);
-      return;
+      return undefined;
     }
 
     setIsLoading(true);
@@ -181,10 +292,17 @@ export const WebCanvasFeature: React.FC = () => {
       setCanvasType(routesData.type);
       setManifestStatus(routesData.manifestStatus);
 
+      const availablePaths = new Set(routesData.routes.map((route) => route.path));
       const defaultPath = routesData.defaultPath || routesData.routes[0]?.path || '/';
-      setSelectedPath(defaultPath);
+      const nextPath = preferredPath && (availablePaths.size === 0 || availablePaths.has(preferredPath))
+        ? preferredPath
+        : defaultPath;
+      setSelectedPath(nextPath);
+      setFilteredRoutes(routesData.routes.filter((route) => route.path.toLowerCase().includes(nextPath.toLowerCase())));
+      let nextIframeSrc: string | undefined;
       if (canvasUrl) {
-        setIframeSrc(buildCanvasUrl(defaultPath, canvasUrl));
+        nextIframeSrc = buildCanvasUrl(nextPath, canvasUrl);
+        setIframeSrc(nextIframeSrc);
       }
 
       const health = await checkCanvasHealth(
@@ -199,7 +317,8 @@ export const WebCanvasFeature: React.FC = () => {
       if (health.manifestStatus) {
         setManifestStatus(health.manifestStatus);
       }
-      await loadReviewNotes(routesData.defaultPath || routesData.routes[0]?.path || '/');
+      await loadReviewNotes(nextPath);
+      return nextIframeSrc;
     } catch (error) {
       logger.error('Failed to load Web Canvas data', { error });
       setHealthStatus('unhealthy');
@@ -207,6 +326,7 @@ export const WebCanvasFeature: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+    return undefined;
   };
 
   useEffect(() => {
@@ -241,18 +361,26 @@ export const WebCanvasFeature: React.FC = () => {
         return;
       }
       if (event.data.type === 'BRIDGE_READY') {
+        syncRouteFromBridge(event.data.payload?.routePath);
         setBridgeReady(true);
         postBridgeCommand('SET_MODE', { mode: reviewMode });
         postBridgeCommand('SET_INTERACTION_PAUSED', { paused: bridgeInteractionPaused });
         return;
       }
+      if (event.data.type === 'ROUTE_CHANGED') {
+        syncRouteFromBridge(event.data.payload?.routePath);
+        return;
+      }
       if (event.data.type === 'TARGET_SELECTED') {
+        syncRouteFromBridge(event.data.payload?.routePath);
         const target = event.data.payload?.target;
         setSelectedTarget(target ?? null);
+        setReviewInstruction('');
         setReviewErrorKey(null);
         return;
       }
       if (event.data.type === 'TARGET_RECTS') {
+        syncRouteFromBridge(event.data.payload?.routePath, { resetReviewState: false });
         const updates = event.data.payload?.rects ?? [];
         setReviewNotes((prev) => {
           let changed = false;
@@ -284,7 +412,7 @@ export const WebCanvasFeature: React.FC = () => {
     };
     window.addEventListener('message', handleBridgeMessage);
     return () => window.removeEventListener('message', handleBridgeMessage);
-  }, [bridgeInteractionPaused, reviewMode]);
+  }, [bridgeInteractionPaused, reviewMode, syncRouteFromBridge]);
 
   useEffect(() => {
     if (!bridgeReady) return;
@@ -331,7 +459,7 @@ export const WebCanvasFeature: React.FC = () => {
     setShowDropdown(false);
   };
 
-  const handleAction = async (action: 'sync' | 'reset') => {
+  const handleSyncCanvas = async () => {
     if (!workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) {
       toast({
         title: t('workspace.canvas.webCanvas.actions.errorTitle'),
@@ -344,22 +472,32 @@ export const WebCanvasFeature: React.FC = () => {
     setIsWorking(true);
     try {
       clearTransientReviewState();
-      if (action === 'sync') {
-        await syncCanvas(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId);
+      const syncResult = await syncCanvas(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId);
+      const currentPath = selectedPath;
+      const nextSrc = buildCanvasUrl(currentPath);
+      if (syncResult.rendererAction === 'reused') {
+        const loadedSrc = await loadCanvasData(currentPath);
+        if (syncResult.type) {
+          setCanvasType(syncResult.type);
+        }
+        if (syncResult.manifestStatus) {
+          setManifestStatus(syncResult.manifestStatus);
+        }
+        setHealthStatus('healthy');
+        setHealthMessage(syncResult.message || '');
+        reloadIframe(loadedSrc || nextSrc);
       } else {
-        await resetCanvas(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId);
+        const loadedSrc = await loadCanvasData(currentPath);
+        reloadIframe(loadedSrc || nextSrc);
       }
-
-      await loadCanvasData();
-      reloadIframe();
       toast({
-        title: t(`workspace.canvas.webCanvas.actions.${action}.successTitle`),
-        description: t(`workspace.canvas.webCanvas.actions.${action}.successDescription`),
+        title: t('workspace.canvas.webCanvas.actions.sync.successTitle'),
+        description: t('workspace.canvas.webCanvas.actions.sync.successDescription'),
         variant: 'success',
       });
     } catch (error) {
       toast({
-        title: t(`workspace.canvas.webCanvas.actions.${action}.errorTitle`),
+        title: t('workspace.canvas.webCanvas.actions.sync.errorTitle'),
         description: error instanceof Error ? error.message : t('workspace.canvas.webCanvas.actions.unknownError'),
         variant: 'destructive',
       });
@@ -396,7 +534,7 @@ export const WebCanvasFeature: React.FC = () => {
         workspaceRuntime.workspaceId,
         {
           routePath: selectedPath,
-          canvasUrl: iframeSrc,
+          canvasUrl: buildCanvasUrl(selectedPath),
           target: selectedTarget,
           instruction: reviewInstruction.trim(),
         }
@@ -429,30 +567,38 @@ export const WebCanvasFeature: React.FC = () => {
     return t('workspace.canvas.webCanvas.review.target.area');
   };
 
-  const composeReviewPrompt = (note: CanvasReviewNote) => {
+  const composeReviewNotePayload = (note: CanvasReviewNote) => {
     const lines = [
-      t('workspace.canvas.webCanvas.review.prompt.title'),
-      '',
       `noteId: ${note.id}`,
       `routePath: ${note.routePath}`,
       `targetType: ${note.target.type}`,
       `instruction: ${note.instruction}`,
-      '',
-      t('workspace.canvas.webCanvas.review.prompt.workflow'),
     ];
     if (note.target.type === 'element') {
-      lines.splice(5, 0, `selector: ${note.target.selector}`, `tagName: ${note.target.tagName}`, `textPreview: ${note.target.textPreview}`);
+      lines.splice(3, 0, `selector: ${note.target.selector}`, `tagName: ${note.target.tagName}`, `textPreview: ${note.target.textPreview}`);
     } else if (note.target.type === 'multi-element') {
-      lines.splice(5, 0, `elements: ${note.target.elements.map((item) => item.selector).join(', ')}`);
+      lines.splice(3, 0, `elements: ${note.target.elements.map((item) => item.selector).join(', ')}`);
     } else {
-      lines.splice(5, 0, `area: ${JSON.stringify(note.target.rect)}`);
+      lines.splice(3, 0, `area: ${JSON.stringify(note.target.rect)}`);
     }
     return lines.join('\n');
   };
 
+  const composeReviewBatchPrompt = (notes: CanvasReviewNote[]) => {
+    return [
+      '/canvas-review',
+      '',
+      ...notes.flatMap((note, index) => [
+        `#${index + 1}`,
+        composeReviewNotePayload(note),
+        '',
+      ]),
+    ].join('\n').trim();
+  };
+
   const handoffReviewNote = async (note: CanvasReviewNote) => {
     dispatchInsertDraftEvent({
-      content: composeReviewPrompt(note),
+      content: composeReviewBatchPrompt([note]),
       mode: 'replace',
     });
     if (!workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) return;
@@ -469,15 +615,27 @@ export const WebCanvasFeature: React.FC = () => {
     }
   };
 
-  const updateReviewStatus = async (note: CanvasReviewNote, status: 'applied' | 'dismissed') => {
+  const handoffPendingReviewNotes = async () => {
+    if (pendingReviewNotes.length === 0) return;
+    dispatchInsertDraftEvent({
+      content: composeReviewBatchPrompt(pendingReviewNotes),
+      mode: 'replace',
+    });
     if (!workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) return;
-    const updated = await updateCanvasReviewNoteStatus(
-      workspaceRuntime.runtimeBaseUrl,
-      workspaceRuntime.workspaceId,
-      note.id,
-      status
-    );
-    setReviewNotes((prev) => prev.map((item) => (item.id === note.id ? updated : item)));
+    try {
+      const updatedNotes = await Promise.all(
+        pendingReviewNotes.map((note) => updateCanvasReviewNoteStatus(
+          workspaceRuntime.runtimeBaseUrl,
+          workspaceRuntime.workspaceId,
+          note.id,
+          'seen'
+        ))
+      );
+      const updatedById = new Map(updatedNotes.map((note) => [note.id, note]));
+      setReviewNotes((prev) => prev.map((item) => updatedById.get(item.id) ?? item));
+    } catch (error) {
+      logger.warn('Failed to mark Canvas review notes as seen', { error });
+    }
   };
 
   const removeReviewNote = async (note: CanvasReviewNote) => {
@@ -564,12 +722,16 @@ export const WebCanvasFeature: React.FC = () => {
             )}
             <Button
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={reloadIframe}
-              title={t('workspace.canvas.header.actions.refresh')}
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => {
+                void handleSyncCanvas();
+              }}
+              disabled={isWorking}
+              title={t('workspace.canvas.webCanvas.actions.sync.label')}
             >
-              <RotateCw className="h-3.5 w-3.5" />
+              <RefreshCw className={cn('h-3.5 w-3.5', isWorking && 'animate-spin')} />
+              {t('workspace.canvas.webCanvas.actions.sync.label')}
             </Button>
             <Button
               variant="ghost"
@@ -584,39 +746,6 @@ export const WebCanvasFeature: React.FC = () => {
             >
               {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  title={t('workspace.canvas.header.actions.menu')}
-                  aria-label={t('workspace.canvas.header.actions.menu')}
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled={isWorking}
-                  onSelect={() => {
-                    void handleAction('sync');
-                  }}
-                >
-                  <RefreshCw className={cn('mr-2 h-3.5 w-3.5', isWorking && 'animate-spin')} />
-                  {t('workspace.canvas.webCanvas.actions.sync.label')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={isWorking}
-                  onSelect={() => {
-                    void handleAction('reset');
-                  }}
-                >
-                  <SendToBack className="mr-2 h-3.5 w-3.5" />
-                  {t('workspace.canvas.webCanvas.actions.reset.label')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         }
       />
@@ -703,7 +832,10 @@ export const WebCanvasFeature: React.FC = () => {
             {selectedTarget && (
               <div
                 ref={reviewPanelRef}
-                className="pointer-events-auto absolute right-4 top-4 w-[min(360px,calc(100%-2rem))] rounded-md border bg-background p-3 shadow-lg"
+                className="pointer-events-auto absolute w-[min(360px,calc(100%-2rem))] rounded-md border bg-background p-3 shadow-lg"
+                style={reviewPanelPosition
+                  ? { left: reviewPanelPosition.x, top: reviewPanelPosition.y }
+                  : { right: 16, top: 16 }}
                 onPointerEnter={() => setBridgeInteractionPaused(true)}
                 onPointerLeave={() => {
                   if (!reviewPanelRef.current?.contains(document.activeElement)) {
@@ -718,9 +850,22 @@ export const WebCanvasFeature: React.FC = () => {
                 }}
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{t('workspace.canvas.webCanvas.review.form.title')}</div>
-                    <div className="truncate text-xs text-muted-foreground">{targetLabel(selectedTarget)}</div>
+                  <div
+                    className="flex min-w-0 flex-1 cursor-move touch-none items-start gap-2"
+                    onPointerDown={handleReviewPanelDragStart}
+                    onPointerMove={handleReviewPanelDragMove}
+                    onPointerUp={handleReviewPanelDragEnd}
+                    onPointerCancel={handleReviewPanelDragEnd}
+                    onKeyDown={handleReviewPanelDragKeyDown}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={t('workspace.canvas.webCanvas.review.form.dragHandle')}
+                  >
+                    <GripHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">{t('workspace.canvas.webCanvas.review.form.title')}</div>
+                      <div className="truncate text-xs text-muted-foreground">{targetLabel(selectedTarget)}</div>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"
@@ -767,7 +912,7 @@ export const WebCanvasFeature: React.FC = () => {
               </div>
             )}
 
-            {reviewNotes.filter((note) => note.status === 'open' || note.status === 'seen').map((note) => {
+            {pendingReviewNotes.map((note) => {
               const rect = getTargetRect(note.target);
               if (!rect) return null;
               return (
@@ -786,7 +931,7 @@ export const WebCanvasFeature: React.FC = () => {
           </div>
         )}
 
-        {CANVAS_REVIEW_ENABLED && reviewNotes.length > 0 && (
+        {CANVAS_REVIEW_ENABLED && pendingReviewNotes.length > 0 && (
           <div
             className={cn(
               'absolute bottom-4 right-4 z-[7] w-[min(380px,calc(100%-2rem))] rounded-md border bg-background/95 p-3 shadow-lg backdrop-blur',
@@ -794,53 +939,59 @@ export const WebCanvasFeature: React.FC = () => {
             )}
           >
             <div className={cn('flex items-center justify-between gap-2', reviewNotesExpanded && 'mb-2')}>
-              <div className="min-w-0 text-sm font-medium">
-                {t('workspace.canvas.webCanvas.review.notes.title')}
-                <span className="ml-1 text-xs font-normal text-muted-foreground">({reviewNotes.length})</span>
+              <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 truncate">
+                  {t('workspace.canvas.webCanvas.review.notes.title')}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">({pendingReviewNotes.length})</span>
+                </span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={() => setReviewNotesExpanded((prev) => !prev)}
-                aria-expanded={reviewNotesExpanded}
-                aria-label={t(
-                  reviewNotesExpanded
-                    ? 'workspace.canvas.webCanvas.review.notes.collapse'
-                    : 'workspace.canvas.webCanvas.review.notes.expand'
-                )}
-                title={t(
-                  reviewNotesExpanded
-                    ? 'workspace.canvas.webCanvas.review.notes.collapse'
-                    : 'workspace.canvas.webCanvas.review.notes.expand'
-                )}
-              >
-                {reviewNotesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => void handoffPendingReviewNotes()}
+                  aria-label={t('workspace.canvas.webCanvas.review.notes.sendAllToAi')}
+                >
+                  <MessageSquare className="mr-1 h-3 w-3" />
+                  {t('workspace.canvas.webCanvas.review.notes.sendAllToAi')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setReviewNotesExpanded((prev) => !prev)}
+                  aria-expanded={reviewNotesExpanded}
+                  aria-label={t(
+                    reviewNotesExpanded
+                      ? 'workspace.canvas.webCanvas.review.notes.collapse'
+                      : 'workspace.canvas.webCanvas.review.notes.expand'
+                  )}
+                  title={t(
+                    reviewNotesExpanded
+                      ? 'workspace.canvas.webCanvas.review.notes.collapse'
+                      : 'workspace.canvas.webCanvas.review.notes.expand'
+                  )}
+                >
+                  {reviewNotesExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
             </div>
             {reviewNotesExpanded && (
               <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                {reviewNotes.map((note) => (
+                {pendingReviewNotes.map((note) => (
                   <div key={note.id} className="rounded-md border p-2 text-xs">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="font-medium">{targetLabel(note.target)}</div>
                         <div className="mt-1 line-clamp-2 text-muted-foreground">{note.instruction}</div>
                       </div>
-                      <div className="shrink-0 text-muted-foreground">
-                        {t(`workspace.canvas.webCanvas.review.status.${note.status}`)}
-                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <div className="mt-2 flex flex-wrap justify-end gap-1">
                       <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => void handoffReviewNote(note)}>
                         <MessageSquare className="mr-1 h-3 w-3" />
                         {t('workspace.canvas.webCanvas.review.notes.sendToAi')}
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => void updateReviewStatus(note, 'applied')} aria-label={t('workspace.canvas.webCanvas.review.notes.apply')}>
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => void updateReviewStatus(note, 'dismissed')} aria-label={t('workspace.canvas.webCanvas.review.notes.dismiss')}>
-                        <X className="h-3 w-3" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void removeReviewNote(note)} aria-label={t('workspace.canvas.webCanvas.review.notes.delete')}>
                         <Trash2 className="h-3 w-3" />

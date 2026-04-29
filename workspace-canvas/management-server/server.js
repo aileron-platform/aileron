@@ -41,6 +41,7 @@ let lastSyncAt = null;
 let lastResetAt = null;
 let lastPackageSignature = null;
 let currentDependencyStrategy = "none";
+let syncInProgress = false;
 const logs = [];
 
 const REVIEW_BRIDGE_MARKER = "data-aileron-web-canvas-review-bridge";
@@ -66,9 +67,24 @@ function canvasReviewBridgeScript() {
   let hoverBox = null;
   let selectionBox = null;
   let dragBox = null;
+  let lastRoutePath = location.pathname || "/";
 
   const post = (type, payload = {}) => {
     window.parent?.postMessage({ source: SOURCE, version: VERSION, type, payload }, "*");
+  };
+  const emitRouteChanged = () => {
+    const routePath = location.pathname || "/";
+    if (routePath === lastRoutePath) return;
+    lastRoutePath = routePath;
+    clear();
+    post("ROUTE_CHANGED", { routePath });
+    measureWatched();
+  };
+  const announceRoutePath = (routePath) => {
+    if (!routePath || routePath === lastRoutePath) return;
+    lastRoutePath = routePath;
+    clear();
+    post("ROUTE_CHANGED", { routePath });
   };
   const clampText = (value) => String(value || "").replace(/\\s+/g, " ").trim().slice(0, MAX_PREVIEW);
   const rectPayload = (rect, coordinateSpace = "viewport") => ({
@@ -251,6 +267,19 @@ function canvasReviewBridgeScript() {
   document.addEventListener("keydown", (event) => {
     if (mode === "select" && event.key === "Escape") clear();
   }, true);
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = event.target?.closest?.("a[href]");
+    if (!link || link.target || link.hasAttribute("download")) return;
+    let url;
+    try {
+      url = new URL(link.getAttribute("href"), location.href);
+    } catch {
+      return;
+    }
+    if (url.origin !== location.origin) return;
+    announceRoutePath(url.pathname || "/");
+  }, true);
   const measureWatched = () => {
     if (mode !== "select" || watched.length === 0) return;
     const rects = watched.slice(0, MAX_ELEMENTS).map((item) => {
@@ -267,6 +296,19 @@ function canvasReviewBridgeScript() {
   };
   window.addEventListener("scroll", measureWatched, true);
   window.addEventListener("resize", measureWatched);
+  const wrapHistoryMethod = (methodName) => {
+    const original = history[methodName];
+    if (typeof original !== "function") return;
+    history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = original.apply(this, args);
+      window.setTimeout(emitRouteChanged, 0);
+      return result;
+    };
+  };
+  wrapHistoryMethod("pushState");
+  wrapHistoryMethod("replaceState");
+  window.addEventListener("popstate", () => window.setTimeout(emitRouteChanged, 0));
+  window.addEventListener("hashchange", () => window.setTimeout(emitRouteChanged, 0));
   window.addEventListener("message", (event) => {
     const message = event.data;
     if (!message || message.source !== SOURCE || message.version !== VERSION || !message.type) return;
@@ -287,7 +329,7 @@ function canvasReviewBridgeScript() {
       measureWatched();
     }
   });
-  post("BRIDGE_READY", { routePath: location.pathname || "/" });
+  post("BRIDGE_READY", { routePath: lastRoutePath });
 })();
 </script>`;
 }
@@ -526,6 +568,57 @@ function syncToCanvas(sourceDir) {
     stdio: "pipe",
   });
   lastSyncAt = new Date().toISOString();
+}
+
+function dependencySnapshot(dir) {
+  const classification = classifyDependencyStrategy(dir);
+  return {
+    strategy: classification.strategy,
+    signature: dependencySignature(dir, classification.strategy),
+  };
+}
+
+function hasDependencyChanged(before, after) {
+  return before.strategy !== after.strategy || before.signature !== after.signature;
+}
+
+function rendererState() {
+  return {
+    type: currentType,
+    renderer: currentRenderer,
+    source: currentSource,
+    serviceStatus,
+    manifestStatus,
+    hasRendererProcess: rendererProcess !== null && !rendererProcess.killed,
+  };
+}
+
+function selectSyncRendererAction({ reset, beforeState, beforeDetection, afterDetection, beforeDependencies, afterDependencies }) {
+  if (reset) {
+    return { action: "restarted", reason: "reset" };
+  }
+  if (!afterDetection.manifestValid) {
+    return { action: "restarted", reason: "manifest-invalid" };
+  }
+  if (beforeState.type !== afterDetection.type) {
+    return { action: "restarted", reason: "canvas-type-changed" };
+  }
+  if (beforeDetection.manifestStatus !== afterDetection.manifestStatus) {
+    return { action: "restarted", reason: "manifest-status-changed" };
+  }
+  if (hasDependencyChanged(beforeDependencies, afterDependencies)) {
+    return { action: "restarted", reason: "dependencies-changed" };
+  }
+  if (afterDetection.type !== "nextjs") {
+    return { action: "restarted", reason: `${afterDetection.type}-renderer-refresh` };
+  }
+  if (beforeState.renderer !== "nextjs-dev" || beforeState.source !== WEB_CANVAS_DIR) {
+    return { action: "restarted", reason: "renderer-source-mismatch" };
+  }
+  if (!beforeState.hasRendererProcess || beforeState.serviceStatus !== "running") {
+    return { action: "restarted", reason: "renderer-unavailable" };
+  }
+  return { action: "reused", reason: "nextjs-source-only" };
 }
 
 function dependencySignature(dir, strategy) {
@@ -967,9 +1060,14 @@ async function startRendererFromSnapshot() {
 }
 
 async function syncAndStart({ reset = false } = {}) {
-  await stopRenderer();
+  const beforeState = rendererState();
+  const beforeDetection = detectCanvas(WEB_CANVAS_DIR);
+  const beforeDependencies = dependencySnapshot(WEB_CANVAS_DIR);
+
   serviceStatus = "starting";
   if (reset) {
+    await stopRenderer();
+    serviceStatus = "starting";
     pushLog("management", "Resetting Canvas snapshot and caches");
     execSync(`rm -rf "${WEB_CANVAS_DIR}"/* "${WEB_CANVAS_DIR}"/.[!.]* "${WEB_CANVAS_DIR}"/..?*`, {
       stdio: "pipe",
@@ -979,7 +1077,32 @@ async function syncAndStart({ reset = false } = {}) {
     lastResetAt = new Date().toISOString();
   }
   syncToCanvas(WORKSPACE_DIR);
-  return startRendererFromSnapshot();
+  const detection = detectCanvas(WEB_CANVAS_DIR);
+  const afterDependencies = dependencySnapshot(WEB_CANVAS_DIR);
+  const rendererAction = selectSyncRendererAction({
+    reset,
+    beforeState,
+    beforeDetection,
+    afterDetection: detection,
+    beforeDependencies,
+    afterDependencies,
+  });
+
+  if (rendererAction.action === "reused") {
+    currentType = detection.type;
+    currentSource = WEB_CANVAS_DIR;
+    manifestStatus = detection.manifestStatus;
+    serviceStatus = "running";
+    statusMessage = "Canvas Next.js renderer reused";
+    pushLog("management", `Reused Canvas renderer after sync (${rendererAction.reason})`);
+    return { detection, rendererAction };
+  }
+
+  pushLog("management", `Restarting Canvas renderer after sync (${rendererAction.reason})`);
+  await stopRenderer();
+  serviceStatus = "starting";
+  const startedDetection = await startRendererFromSnapshot();
+  return { detection: startedDetection, rendererAction };
 }
 
 app.get("/detect", (_req, res) => {
@@ -1051,8 +1174,13 @@ app.get("/logs", (_req, res) => {
 });
 
 app.post("/sync", async (_req, res) => {
+  if (syncInProgress) {
+    res.status(409).json({ status: "busy", error: "CANVAS_SYNC_IN_PROGRESS" });
+    return;
+  }
+  syncInProgress = true;
   try {
-    const detection = await syncAndStart();
+    const { detection, rendererAction } = await syncAndStart();
     res.json({
       status: "completed",
       type: currentType,
@@ -1060,18 +1188,27 @@ app.post("/sync", async (_req, res) => {
       detection,
       message: statusMessage,
       syncedAt: lastSyncAt,
+      rendererAction: rendererAction.action,
+      rendererActionReason: rendererAction.reason,
     });
   } catch (err) {
     serviceStatus = "error";
     statusMessage = err.message;
     pushLog("error", err.stack || err.message);
     res.status(500).json({ status: "failed", error: err.message });
+  } finally {
+    syncInProgress = false;
   }
 });
 
 app.post("/reset", async (_req, res) => {
+  if (syncInProgress) {
+    res.status(409).json({ status: "busy", error: "CANVAS_SYNC_IN_PROGRESS" });
+    return;
+  }
+  syncInProgress = true;
   try {
-    const detection = await syncAndStart({ reset: true });
+    const { detection, rendererAction } = await syncAndStart({ reset: true });
     res.json({
       status: "completed",
       type: currentType,
@@ -1079,12 +1216,16 @@ app.post("/reset", async (_req, res) => {
       detection,
       message: statusMessage,
       resetAt: lastResetAt,
+      rendererAction: rendererAction.action,
+      rendererActionReason: rendererAction.reason,
     });
   } catch (err) {
     serviceStatus = "error";
     statusMessage = err.message;
     pushLog("error", err.stack || err.message);
     res.status(500).json({ status: "failed", error: err.message });
+  } finally {
+    syncInProgress = false;
   }
 });
 
@@ -1137,5 +1278,6 @@ module.exports = {
   REVIEW_BRIDGE_VERSION,
   ENABLE_REVIEW_BRIDGE,
   canvasReviewBridgeScript,
+  selectSyncRendererAction,
   injectReviewBridge,
 };

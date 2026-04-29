@@ -83,6 +83,10 @@ class CanvasActionResponse(BaseModel):
     type: CanvasType | None = None
     manifest_status: CanvasManifestStatus | None = Field(default=None, alias="manifestStatus")
     message: str = ""
+    synced_at: str | None = Field(default=None, alias="syncedAt")
+    reset_at: str | None = Field(default=None, alias="resetAt")
+    renderer_action: str | None = Field(default=None, alias="rendererAction")
+    renderer_action_reason: str | None = Field(default=None, alias="rendererActionReason")
     details: dict[str, Any] = Field(default_factory=dict)
 
     model_config = {"populate_by_name": True}

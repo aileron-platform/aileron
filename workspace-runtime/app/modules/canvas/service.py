@@ -214,6 +214,10 @@ class CanvasService:
             type=data.get("type"),
             manifestStatus=data.get("manifestStatus", data.get("manifest_status")),
             message=data.get("message", ""),
+            syncedAt=data.get("syncedAt", data.get("synced_at")),
+            resetAt=data.get("resetAt", data.get("reset_at")),
+            rendererAction=data.get("rendererAction", data.get("renderer_action")),
+            rendererActionReason=data.get("rendererActionReason", data.get("renderer_action_reason")),
             details=data,
         )
 

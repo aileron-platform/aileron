@@ -1,5 +1,5 @@
 /**
- * QueuedMessagesPanel - 顯示等待執行的訊息佇列
+ * QueuedMessagesPanel - displays prompts waiting for execution.
  */
 
 import React, { useState } from 'react';
@@ -49,7 +49,7 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
         </div>
       </div>
 
-      {/* Messages List */}
+      {/* Messages list */}
       {!isCollapsed && (
         <div className="space-y-1.5">
           {messages.map((msg, index) => (
@@ -57,7 +57,7 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
               key={msg.message_id}
               className="flex items-center justify-between bg-background rounded-md px-3 py-2 border border-border/50"
             >
-              {/* Position & Content Preview */}
+              {/* Position and content preview */}
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <span className="text-xs font-mono text-muted-foreground shrink-0">
                   #{index + 1}
@@ -67,7 +67,7 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
                 </span>
                 {msg.status === 'dispatching' && (
                   <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground shrink-0">
-                    dispatching
+                    {t('workspace.chat.queue.dispatching')}
                   </span>
                 )}
               </div>
@@ -91,7 +91,9 @@ export const QueuedMessagesPanel: React.FC<QueuedMessagesPanelProps> = ({
                   }}
                   disabled={msg.status === 'dispatching'}
                   className="p-1.5 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive transition-colors"
-                  title={msg.status === 'dispatching' ? 'Processing' : t('workspace.chat.queue.delete')}
+                  title={msg.status === 'dispatching'
+                    ? t('workspace.chat.queue.processingTitle')
+                    : t('workspace.chat.queue.delete')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>

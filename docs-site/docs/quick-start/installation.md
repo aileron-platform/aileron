@@ -23,15 +23,16 @@ python scripts/dev/docker/ops.py --help
 python scripts/dev/docker/ops.py test --help
 ```
 
-`python scripts/dev/docker/ops.py up` 現在會先詢問使用者要用哪一種啟動方式，再自動切換對應 image tag。可選模式包含：
+`python scripts/dev/docker/ops.py up` 會依主機架構自動切換對應 image tag。預設會直接 `docker compose up`，沿用本地既有 image。三種模式：
 
-- 使用目前 repo 內容本地 build 後啟動
-- 使用 Docker Hub 的 `dev` tag 啟動
+- （預設）沿用本地 image 啟動（若本地缺對應 tag，Compose 會自行 pull）
+- `--pull`：先 `docker compose pull` 抓最新 dev image 再啟動
+- `--build`：本地 build 後啟動（與 `--pull` 互斥）
 
-若不想進入互動式選單，也可直接用參數指定：
+若不想進入互動式選單，加上 `--no-prompt` 並指定架構：
 
 ```bash
-python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+python scripts/dev/docker/ops.py up --pull --no-prompt --image-arch amd64
 ```
 
 ## 第一次啟動
@@ -94,9 +95,9 @@ python scripts/dev/docker/ops.py down
 
 | 操作 | 指令 |
 |------|------|
-| 啟動所有服務 | `python scripts/dev/docker/ops.py up` |
-| 使用 Docker Hub dev tag 啟動 | `python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite` |
-| 重建映像後啟動 | `python scripts/dev/docker/ops.py up --build` |
+| 啟動所有服務（沿用本地 image） | `python scripts/dev/docker/ops.py up` |
+| 拉取最新 dev image 後啟動 | `python scripts/dev/docker/ops.py up --pull` |
+| 本地 build 後啟動 | `python scripts/dev/docker/ops.py up --build` |
 | 停止所有服務 | `python scripts/dev/docker/ops.py down` |
 | 清理工作區資源 | `python scripts/dev/docker/ops.py cleanup-workspaces` |
 | 完整清理 | `python scripts/dev/docker/ops.py cleanup` |

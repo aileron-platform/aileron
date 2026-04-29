@@ -6,8 +6,6 @@ const canvas = {
         enter: 'Enter full screen canvas',
         exit: 'Exit full screen canvas',
       },
-      refresh: 'Refresh',
-      menu: 'Menu',
     },
     loading: 'Loading Canvas...',
   },
@@ -51,12 +49,6 @@ const canvas = {
         successDescription: 'The Canvas snapshot has been updated.',
         errorTitle: 'Canvas sync failed',
       },
-      reset: {
-        label: 'Reset Canvas',
-        successTitle: 'Canvas reset',
-        successDescription: 'The Canvas snapshot has been rebuilt.',
-        errorTitle: 'Canvas reset failed',
-      },
     },
     review: {
       toolbar: {
@@ -69,6 +61,7 @@ const canvas = {
         create: 'Add edit instruction',
         cancel: 'Cancel',
         close: 'Close edit instruction form',
+        dragHandle: 'Move edit instruction form',
       },
       target: {
         area: 'Selected area',
@@ -83,8 +76,7 @@ const canvas = {
       notes: {
         title: 'Canvas edit instructions',
         sendToAi: 'Send to AI',
-        apply: 'Mark applied',
-        dismiss: 'Dismiss instruction',
+        sendAllToAi: 'Send all to AI',
         delete: 'Delete instruction',
         expand: 'Expand Canvas edit instructions',
         collapse: 'Collapse Canvas edit instructions',
@@ -98,10 +90,6 @@ const canvas = {
         missingTarget: 'Select an element or area first.',
         emptyInstruction: 'Enter an instruction before adding it.',
         createFailed: 'Could not add the edit instruction.',
-      },
-      prompt: {
-        title: 'Canvas edit instruction',
-        workflow: 'Use the Canvas review workflow: edit source files in /workspace, preserve i18n requirements, do not mutate iframe DOM as persistent state, then tell the user to use the existing Canvas Sync or Reload toolbar action if they need to verify the preview.',
       },
     },
   },

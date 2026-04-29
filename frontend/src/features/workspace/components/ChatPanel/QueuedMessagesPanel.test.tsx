@@ -24,7 +24,7 @@ describe('QueuedMessagesPanel', () => {
       />,
     );
 
-    const deleteButton = screen.getByTitle('Processing');
+    const deleteButton = screen.getByTitle('workspace.chat.queue.processingTitle');
     expect(deleteButton).toBeDisabled();
     fireEvent.click(deleteButton);
     expect(onDelete).not.toHaveBeenCalled();

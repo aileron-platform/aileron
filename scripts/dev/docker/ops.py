@@ -28,12 +28,13 @@ WORKSPACE_CONTAINER_PREFIXES = (
     "workspace-browser-",
     "workspace-canvas-",
 )
-PROJECT_IMAGE_REFS = (
-    "ailerondocker/workspace-manager:dev",
-    "ailerondocker/workspace-runtime:dev",
-    "ailerondocker/workspace-chrome:dev",
-    "ailerondocker/workspace-canvas:dev",
-    "ailerondocker/workspace-ui:dev",
+PROJECT_IMAGE_REPOS = (
+    "ailerondocker/workspace-manager",
+    "ailerondocker/workspace-runtime",
+    "ailerondocker/workspace-chrome",
+    "ailerondocker/workspace-canvas",
+    "ailerondocker/workspace-ui",
+    "ailerondocker/workspace-runtime-base-lite",
 )
 DATA_DIRS = (
     "data/postgres",
@@ -77,7 +78,6 @@ class TestServiceConfig:
 
 @dataclass(frozen=True)
 class StartupProfile:
-    startup_mode: str
     image_arch: str
     runtime_base: str
     service_tag: str
@@ -232,26 +232,11 @@ def prompt_choice(message: str, options: list[tuple[str, str]], *, default: str)
 
 def resolve_startup_profile(
     *,
-    startup_mode: str | None,
     image_arch: str | None,
     runtime_base: str | None,
     no_prompt: bool,
 ) -> StartupProfile:
     interactive = sys.stdin.isatty() and not no_prompt
-
-    selected_startup_mode = startup_mode
-    if not selected_startup_mode:
-        if interactive:
-            selected_startup_mode = prompt_choice(
-                "選擇啟動來源",
-                [
-                    ("local-build", "使用目前 repo 本地 build 後啟動"),
-                    ("dockerhub-dev", "使用 Docker Hub 的 dev tag 啟動"),
-                ],
-                default="local-build",
-            )
-        else:
-            selected_startup_mode = "local-build"
 
     selected_image_arch = image_arch
     if not selected_image_arch:
@@ -269,19 +254,7 @@ def resolve_startup_profile(
         else:
             selected_image_arch = "auto"
 
-    selected_runtime_base = runtime_base
-    if not selected_runtime_base:
-        if interactive:
-            selected_runtime_base = prompt_choice(
-                "選擇 workspace-runtime flavor",
-                [
-                    ("lite", "lite：使用 workspace-runtime-base-lite"),
-                    ("universal", "universal：使用 codex-universal"),
-                ],
-                default="lite",
-            )
-        else:
-            selected_runtime_base = "lite"
+    selected_runtime_base = runtime_base or "lite"
 
     resolved_arch = detect_host_arch() if selected_image_arch == "auto" else selected_image_arch
     channel = "dev"
@@ -294,7 +267,6 @@ def resolve_startup_profile(
         runtime_base_image = f"ailerondocker/codex-universal:latest-{resolved_arch}"
 
     return StartupProfile(
-        startup_mode=selected_startup_mode,
         image_arch=resolved_arch,
         runtime_base=selected_runtime_base,
         service_tag=service_tag,
@@ -347,15 +319,14 @@ def ensure_host_storage_directories(repo_root: Path, env: dict[str, str]) -> Non
             )
 
 
-def print_startup_profile(profile: StartupProfile, *, build: bool) -> None:
+def print_startup_profile(profile: StartupProfile, *, action: str) -> None:
     print_info("啟動設定：")
-    print(f"  - 啟動來源: {profile.startup_mode}")
+    print(f"  - 動作: {action}")
     print(f"  - image 架構: {profile.image_arch}")
     print(f"  - runtime flavor: {profile.runtime_base}")
     print(f"  - service tag: {profile.service_tag}")
     print(f"  - runtime tag: {profile.runtime_tag}")
     print(f"  - runtime base image: {profile.runtime_base_image}")
-    print(f"  - 是否 build: {'是' if build else '否'}")
 
 
 def list_all_containers(repo_root: Path) -> list[DockerContainer]:
@@ -619,9 +590,9 @@ def remove_named_resources(label: str, names: list[str], remove_args: list[str],
 
 def list_project_image_ids(repo_root: Path) -> list[str]:
     image_ids: list[str] = []
-    for ref in PROJECT_IMAGE_REFS:
+    for repo in PROJECT_IMAGE_REPOS:
         result = run_command(
-            ["docker", "images", "--format", "{{.ID}}", ref],
+            ["docker", "images", "--format", "{{.ID}}", repo],
             cwd=repo_root,
             check=False,
         )
@@ -794,7 +765,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Aileron host-side Docker operations CLI",
         epilog=(
             "常用範例:\n"
-            "  python scripts/dev/docker/ops.py up --build\n"
+            "  python scripts/dev/docker/ops.py up                 # 直接起，沿用本地 image\n"
+            "  python scripts/dev/docker/ops.py up --pull          # 先拉最新 dev image 再起\n"
+            "  python scripts/dev/docker/ops.py up --build         # 本地 build 再起\n"
             "  python scripts/dev/docker/ops.py down\n"
             "  python scripts/dev/docker/ops.py cleanup-workspaces\n"
             "  python scripts/dev/docker/ops.py cleanup --yes --keep-images --no-prune\n"
@@ -814,13 +787,21 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser = subparsers.add_parser(
         "up",
         help="Start docker compose stack",
-        description="啟動 Aileron Docker Compose stack。",
+        description=(
+            "啟動 Aileron Docker Compose stack。\n"
+            "預設直接 up（沿用本地既有 image）；--pull 先拉取最新 dev image；--build 改為本地 build。"
+        ),
     )
-    up_parser.add_argument("--build", action="store_true", help="Build images before starting")
-    up_parser.add_argument(
-        "--startup-mode",
-        choices=("local-build", "dockerhub-dev"),
-        help="啟動來源：本地 build 或 Docker Hub dev tag",
+    up_source_group = up_parser.add_mutually_exclusive_group()
+    up_source_group.add_argument(
+        "--pull",
+        action="store_true",
+        help="啟動前先 docker compose pull 最新 dev image",
+    )
+    up_source_group.add_argument(
+        "--build",
+        action="store_true",
+        help="啟動時本地 build image（與 --pull 互斥）",
     )
     up_parser.add_argument(
         "--image-arch",
@@ -830,7 +811,7 @@ def build_parser() -> argparse.ArgumentParser:
     up_parser.add_argument(
         "--runtime-base",
         choices=("lite", "universal"),
-        help="workspace-runtime 的 base flavor",
+        help="workspace-runtime 的 base flavor（預設 lite）",
     )
     up_parser.add_argument(
         "--no-prompt",
@@ -910,19 +891,23 @@ def main() -> int:
         if args.command == "up":
             ensure_docker_available()
             profile = resolve_startup_profile(
-                startup_mode=args.startup_mode,
                 image_arch=args.image_arch,
                 runtime_base=args.runtime_base,
                 no_prompt=args.no_prompt,
             )
             env = build_compose_env(profile)
-            effective_build = args.build
-            print_startup_profile(profile, build=effective_build)
-            if profile.startup_mode != "local-build":
+            if args.build:
+                action = "build + up"
+            elif args.pull:
+                action = "pull + up"
+            else:
+                action = "up"
+            print_startup_profile(profile, action=action)
+            if args.pull:
                 compose_pull(repo_root, env=env)
             compose_up(
                 repo_root,
-                build=effective_build,
+                build=args.build,
                 detach=not args.foreground,
                 env=env,
             )

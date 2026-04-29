@@ -16,7 +16,7 @@ Use this workflow when the user sends a Canvas review request from Web Canvas.
 - Use the review note id in your final response so the user can connect the work back to the Canvas note.
 - Prefer stable source changes that explain the rendered selector context instead of patching generated build artifacts.
 - If the selected target cannot be mapped to source confidently, inspect the route and ask for a narrower instruction only when necessary.
-- After source edits, tell the user to use the existing Web Canvas Sync or Reload toolbar action if they need to verify the preview before marking the note applied.
+- Follow the Canvas edit instruction flow: edit `/workspace` source files, preserve i18n requirements, never treat iframe DOM changes as persistent state, and after finishing tell the user they can use the existing Canvas toolbar Sync action to verify the preview.
 
 ## Steps
 
@@ -26,4 +26,4 @@ Use this workflow when the user sends a Canvas review request from Web Canvas.
 4. Add or update i18n keys for any user-facing text changes.
 5. Run the relevant project checks when available in the container.
 6. Summarize changed files and mention the review note id.
-7. Mention that the existing Web Canvas Sync or Reload toolbar action can be used for preview verification, then ask whether the note should be marked applied.
+7. Mention that the existing Web Canvas Sync toolbar action can be used for preview verification, then ask whether the note should be marked applied.

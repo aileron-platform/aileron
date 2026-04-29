@@ -602,6 +602,10 @@ export interface CanvasActionResponse {
   type?: CanvasType | null;
   manifestStatus?: CanvasManifestStatus | null;
   message: string;
+  syncedAt?: string | null;
+  resetAt?: string | null;
+  rendererAction?: 'reused' | 'restarted' | string | null;
+  rendererActionReason?: string | null;
 }
 
 export interface CanvasLogsResponse {

@@ -600,6 +600,7 @@ export type WebSocketEventType =
   | 'messages removed'
   | 'messages queued'
   | 'message:dequeued'
+  | 'queue:processing_failed'
   // Streaming events
   | 'streaming:start'
   | 'streaming:chunk'

@@ -49,6 +49,9 @@ class StubCanvasService:
             type="html",
             manifestStatus="valid",
             message="synced",
+            syncedAt="2026-04-29T00:00:00Z",
+            rendererAction="reused",
+            rendererActionReason="nextjs-source-only",
         )
 
     def reset(self, workspace_id: str) -> CanvasActionResponse:
@@ -111,6 +114,7 @@ def test_canvas_sync_reset_health_and_logs(client) -> None:
 
     assert sync_response.status_code == 202
     assert sync_response.json()["message"] == "synced"
+    assert sync_response.json()["rendererAction"] == "reused"
     assert reset_response.status_code == 202
     assert reset_response.json()["message"] == "reset"
     assert health_response.status_code == 200

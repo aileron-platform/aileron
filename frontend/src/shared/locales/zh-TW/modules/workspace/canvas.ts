@@ -6,8 +6,6 @@ const canvas = {
         enter: '進入全螢幕畫布',
         exit: '退出全螢幕畫布',
       },
-      refresh: '重新整理',
-      menu: '選單',
     },
     loading: '畫布載入中...',
   },
@@ -51,12 +49,6 @@ const canvas = {
         successDescription: '畫布快照已更新。',
         errorTitle: '畫布同步失敗',
       },
-      reset: {
-        label: '重置畫布',
-        successTitle: '畫布已重置',
-        successDescription: '畫布快照已重新建立。',
-        errorTitle: '畫布重置失敗',
-      },
     },
     review: {
       toolbar: {
@@ -69,6 +61,7 @@ const canvas = {
         create: '新增修改指示',
         cancel: '取消',
         close: '關閉修改指示表單',
+        dragHandle: '移動修改指示表單',
       },
       target: {
         area: '選取區域',
@@ -83,8 +76,7 @@ const canvas = {
       notes: {
         title: '畫布修改指示',
         sendToAi: '送給 AI',
-        apply: '標記已套用',
-        dismiss: '略過指示',
+        sendAllToAi: '全部送給 AI',
         delete: '刪除指示',
         expand: '展開畫布修改指示',
         collapse: '縮小畫布修改指示',
@@ -98,10 +90,6 @@ const canvas = {
         missingTarget: '請先選取元素或區域。',
         emptyInstruction: '新增修改指示前請先輸入內容。',
         createFailed: '無法新增修改指示。',
-      },
-      prompt: {
-        title: '畫布修改指示',
-        workflow: '請使用畫布修改指示流程：修改 /workspace 來源檔案、遵守 i18n 要求、不要把 iframe DOM 變更當成持久狀態，完成後請告知使用者可用既有畫布工具列的同步或重新整理來驗收預覽。',
       },
     },
   },

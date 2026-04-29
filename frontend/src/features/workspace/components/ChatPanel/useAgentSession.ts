@@ -695,7 +695,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     allowSeqRollbackRef.current = true;
   }, [state.currentSessionId]);
 
-  // Queue events handling - 處理訊息佇列相關事件
+  // Queue events handling.
   useEffect(() => {
     const dispatcher = getEventDispatcher();
 
@@ -1516,7 +1516,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     [runtimeBaseUrl, state.currentSessionId, store, workspaceId]
   );
 
-  // Queue 操作
+  // Queue operations.
   const loadQueuedMessages = useCallback(async () => {
     if (!state.currentSessionId) return;
     try {
@@ -1534,9 +1534,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         errorType: error instanceof TypeError ? 'network' :
                    error instanceof SyntaxError ? 'parse' : 'unknown'
       });
-      // queued messages 是後台操作，失敗不會影響主要功能
-      // 但記錄完整錯誤資訊以便診斷
-      // TODO: 考慮在 UI 上顯示非侵入式的錯誤提示
+      // Queue loading is a background operation and should not block chat.
+      // Log the full error context for diagnostics.
+      // TODO: Consider a non-intrusive UI notification for repeated failures.
     }
   }, [runtimeBaseUrl, state.currentSessionId, store]);
 
@@ -1563,7 +1563,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     [runtimeBaseUrl, state.currentSessionId]
   );
 
-  // 切換 session 時載入 queue
+  // Load queue state when switching sessions.
   useEffect(() => {
     if (state.currentSessionId && connected) {
       loadQueuedMessages();
@@ -1583,7 +1583,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     stopTask,
     handleToolDecision,
     selectTool,
-    // Queue 操作
+    // Queue operations.
     loadQueuedMessages,
     deleteQueuedMessage,
   };

@@ -113,6 +113,9 @@ class TestActionsAndHealth:
                     "type": "html",
                     "manifestStatus": "valid",
                     "message": "synced",
+                    "syncedAt": "2026-04-29T00:00:00Z",
+                    "rendererAction": "reused",
+                    "rendererActionReason": "nextjs-source-only",
                 }
             )
             mock_client_class.return_value.__enter__.return_value = mock_client
@@ -122,7 +125,30 @@ class TestActionsAndHealth:
         assert response.workspace_id == "ws-1"
         assert response.status == "ok"
         assert response.type == "html"
+        assert response.synced_at == "2026-04-29T00:00:00Z"
+        assert response.renderer_action == "reused"
+        assert response.renderer_action_reason == "nextjs-source-only"
+        assert response.details["rendererAction"] == "reused"
         mock_client.post.assert_called_once_with("http://localhost:3013/sync")
+
+    def test_sync_preserves_backward_compatible_missing_metadata(self, canvas_service: CanvasService) -> None:
+        with patch("app.modules.canvas.service.httpx.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.post.return_value = _mock_response(
+                {
+                    "status": "ok",
+                    "type": "html",
+                    "manifestStatus": "valid",
+                    "message": "synced",
+                }
+            )
+            mock_client_class.return_value.__enter__.return_value = mock_client
+
+            response = canvas_service.sync("ws-1")
+
+        assert response.status == "ok"
+        assert response.renderer_action is None
+        assert response.renderer_action_reason is None
 
     def test_reset_reports_management_unavailable(self, canvas_service: CanvasService) -> None:
         with patch("app.modules.canvas.service.httpx.Client", side_effect=RuntimeError("down")):

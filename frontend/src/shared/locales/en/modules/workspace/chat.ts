@@ -305,11 +305,17 @@ const chat = {
     emptyMessage: '(empty message)',
     copy: 'Copy content',
     delete: 'Delete message',
+    dispatching: 'Dispatching',
+    processingTitle: 'Processing',
     copied: 'Copied',
     copiedDescription: 'Message content copied to clipboard.',
     deleted: 'Deleted',
     deletedDescription: 'Queued message has been removed.',
     deleteError: 'Delete failed',
+    alreadyProcessing: 'This message has already started processing and can no longer be removed from the queue.',
+    unknownDeleteError: 'The queued message could not be deleted.',
+    processingFailed: 'Queued message failed',
+    processingFailedDescription: 'A queued message could not be processed and was returned to the queue.',
   },
   widgets: {
     labels: {

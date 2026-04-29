@@ -64,6 +64,9 @@ class FakeCanvasService:
             type="html",
             manifestStatus="valid",
             message="synced",
+            syncedAt="2026-04-29T00:00:00Z",
+            rendererAction="reused",
+            rendererActionReason="nextjs-source-only",
         )
 
     def reset(self, workspace_id: str) -> CanvasActionResponse:
@@ -109,6 +112,7 @@ def test_canvas_router_happy_paths() -> None:
     response = client.post("/workspaces/ws-1/canvas/sync")
     assert response.status_code == 202
     assert response.json()["message"] == "synced"
+    assert response.json()["rendererAction"] == "reused"
 
     response = client.post("/workspaces/ws-1/canvas/reset")
     assert response.status_code == 202

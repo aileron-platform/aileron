@@ -44,6 +44,7 @@ import { slashCommandApi } from './slashCommandApi';
 import { normalizeAgentType, getAgentToolConfig } from '../../features/agent-settings/utils';
 import { useOpenSpecWorkspace } from '../../features/openspec/OpenSpecWorkspaceContext';
 import { buildSessionResultPreviewPayload } from './previewPayload';
+import { getEventDispatcher } from './agentSessionEvents';
 
 // ============================================================================
 // ChatPanel Component
@@ -74,7 +75,7 @@ export const ChatPanel: React.FC = () => {
     gitContextId: workspaceState.versionControl.selectedGitContextId,
   });
 
-  // 取得 store 用於直接操作 streaming 狀態
+  // Access the store for direct streaming state updates.
   const { store } = useAgentSessionStore();
 
   const addCodeReference = uiActions.addCodeReference;
@@ -465,7 +466,6 @@ export const ChatPanel: React.FC = () => {
     uiActions.setDraftMessage(nextValue);
   }, [uiActions, uiState.draftMessage]);
 
-  // Queue handlers
   const handleDeleteQueuedMessage = useCallback(async (messageId: string) => {
     try {
       await deleteQueuedMessage(messageId);
@@ -480,8 +480,8 @@ export const ChatPanel: React.FC = () => {
       toast({
         title: t('workspace.chat.queue.deleteError'),
         description: status === 409
-          ? '訊息已開始處理，無法再從佇列刪除。'
-          : error instanceof Error ? error.message : 'Unknown error',
+          ? t('workspace.chat.queue.alreadyProcessing')
+          : error instanceof Error ? error.message : t('workspace.chat.queue.unknownDeleteError'),
         variant: 'destructive',
       });
     }
@@ -498,6 +498,24 @@ export const ChatPanel: React.FC = () => {
     });
   }, [toast, t]);
 
+  useEffect(() => {
+    const dispatcher = getEventDispatcher();
+    const unsubscribe = dispatcher.subscribe({
+      onQueueProcessingFailed: (sessionId, payload) => {
+        if (sessionId !== agentState.currentSessionId) return;
+        toast({
+          title: t('workspace.chat.queue.processingFailed'),
+          description: payload.error_message || t('workspace.chat.queue.processingFailedDescription'),
+          variant: 'destructive',
+        });
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [agentState.currentSessionId, toast, t]);
+
   const handleUploadConfirm = useCallback(async () => {
     if (uiState.pendingUploads.length === 0) {
       uiActions.closeUploadDialog();
@@ -509,7 +527,7 @@ export const ChatPanel: React.FC = () => {
       files: currentUploads.map(item => item.file),
       targetPath: '/tmp',
       useSystemTmp: true,
-      // ChatPanel 仍維持附件暫存語意，不在這裡啟用 ZIP 自動解壓。
+      // ChatPanel keeps attachment staging semantics and does not auto-extract ZIP files here.
       archiveAction: 'store',
       keepArchive: false,
       conflictStrategy: 'rename',
@@ -647,7 +665,7 @@ export const ChatPanel: React.FC = () => {
   // Session is active when streaming/thinking, has queued messages, sending message, or task is actively running
   const hasQueuedMessages = agentState.messages.some(m => m.queued === true);
 
-  // 依當前 session 的全部 tasks 判斷是否仍有活躍任務（支援一個 session 多 task）。
+  // Check all tasks for the current session so multi-task sessions stay active correctly.
   const isTaskActive = agentState.tasks.some(task =>
     task.session_id === agentState.currentSessionId &&
     ['created', 'running', 'stopping', 'awaiting_permission'].includes(task.status)

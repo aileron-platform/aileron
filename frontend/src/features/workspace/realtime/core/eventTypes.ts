@@ -8,7 +8,7 @@ export type AgentSessionEvent =
     | QueueEvent
     | TaskEvent;
 
-// CRUD 事件
+// CRUD events
 export type CrudEvent =
     | { type: 'sessions created'; data: any }
     | { type: 'session:init'; data: any }
@@ -24,38 +24,39 @@ export type CrudEvent =
     | { type: 'messages updated'; data: any }
     | { type: 'messages removed'; data: any };
 
-// Streaming 事件
+// Streaming events
 export type StreamingEvent =
     | { type: 'streaming:start'; session_id: string; task_id?: string; data: { message_id?: string } }
     | { type: 'streaming:chunk'; session_id: string; task_id?: string; data: { message_id?: string; content: string; is_partial: boolean } }
     | { type: 'streaming:end'; session_id: string; task_id?: string; data: { message_id?: string } }
     | { type: 'streaming:error'; session_id: string; task_id?: string; data: { message_id?: string; error: string; code?: string } };
 
-// Thinking 事件
+// Thinking events
 export type ThinkingEvent =
     | { type: 'thinking:start'; session_id: string; task_id?: string; data: { message_id?: string } }
     | { type: 'thinking:chunk'; session_id: string; task_id?: string; data: { message_id?: string; content: string; is_partial: boolean } }
     | { type: 'thinking:end'; session_id: string; task_id?: string; data: { message_id?: string } };
 
-// Tool Decision 事件
+// Tool Decision events
 export type ToolDecisionEvent =
     | { type: 'tool-decision:request'; session_id: string; task_id?: string; data: any }
     | { type: 'tool-decision:approved'; session_id: string; task_id?: string; data: any }
     | { type: 'tool-decision:denied'; session_id: string; task_id?: string; data: any }
     | { type: 'tool-decision:timeout'; session_id: string; task_id?: string; data: any };
 
-// Tool 事件
+// Tool events
 export type ToolEvent =
     | { type: 'tool:start'; session_id: string; task_id: string; data: { tool_use_id: string; tool_name: string; tool_input?: Record<string, unknown> } }
     | { type: 'tool:complete'; session_id: string; task_id: string; data: { tool_use_id: string; tool_name: string; result: unknown; is_error?: boolean } }
     | { type: 'tool:error'; session_id: string; task_id: string; data: { tool_use_id: string; tool_name: string; error_message: string; error_code?: string } };
 
-// Queue 事件
+// Queue events
 export type QueueEvent =
     | { type: 'messages queued'; session_id: string; data: { message_id: string; queue_position: number; content_canvas?: string } }
-    | { type: 'message:dequeued'; session_id: string; data: { message_id: string; queue_position: number; reason: string } };
+    | { type: 'message:dequeued'; session_id: string; data: { message_id: string; queue_position: number; reason: string } }
+    | { type: 'queue:processing_failed'; session_id: string; data: { message_id: string; queue_position: number; error_message?: string; error_type?: string; content_preview?: string | null } };
 
-// Task 一般事件
+// General task events
 export type TaskEvent =
     | { type: 'task:started'; session_id: string; task_id: string; data: any }
     | { type: 'task:completed'; session_id: string; task_id: string; data: any }

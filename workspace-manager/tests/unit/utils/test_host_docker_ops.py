@@ -91,7 +91,6 @@ def test_compose_up_builds_detached_command(monkeypatch: pytest.MonkeyPatch, tmp
 @pytest.mark.unit
 def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     profile = ops.StartupProfile(
-        startup_mode="dockerhub-dev",
         image_arch="arm64",
         runtime_base="lite",
         service_tag="dev-arm64",
@@ -144,28 +143,43 @@ def test_compose_up_requires_compose_file(tmp_path: Path) -> None:
         ops.compose_up(tmp_path, build=False, detach=True, env={})
 
 
-@pytest.mark.unit
-def test_main_routes_up_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    calls: list[tuple[Path, bool, bool, dict[str, str]]] = []
-    profile = ops.StartupProfile(
-        startup_mode="dockerhub-dev",
+def _stub_up_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    profile: "ops.StartupProfile",
+    compose_env: dict[str, str],
+) -> tuple[list[tuple[Path, bool, bool, dict[str, str]]], list[tuple[Path, dict[str, str]]]]:
+    compose_calls: list[tuple[Path, bool, bool, dict[str, str]]] = []
+    pull_calls: list[tuple[Path, dict[str, str]]] = []
+
+    monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
+    monkeypatch.setattr(ops, "resolve_startup_profile", lambda **kwargs: profile)
+    monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
+    monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, action: None)
+    monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: pull_calls.append((repo_root, env)))
+    monkeypatch.setattr(
+        ops,
+        "compose_up",
+        lambda repo_root, *, build, detach, env: compose_calls.append((repo_root, build, detach, env)),
+    )
+    return compose_calls, pull_calls
+
+
+def _make_profile() -> "ops.StartupProfile":
+    return ops.StartupProfile(
         image_arch="amd64",
         runtime_base="lite",
         service_tag="dev-amd64",
         runtime_tag="dev-lite-amd64",
         runtime_base_image="ailerondocker/workspace-runtime-base-lite:dev-amd64",
     )
-    compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
 
-    monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
-    monkeypatch.setattr(ops, "resolve_startup_profile", lambda **kwargs: profile)
-    monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
-    monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, build: None)
-    monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: None)
-    monkeypatch.setattr(
-        ops,
-        "compose_up",
-        lambda repo_root, *, build, detach, env: calls.append((repo_root, build, detach, env)),
+
+@pytest.mark.unit
+def test_main_up_with_build_skips_pull(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
+    compose_calls, pull_calls = _stub_up_dependencies(
+        monkeypatch, profile=_make_profile(), compose_env=compose_env
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -182,34 +196,15 @@ def test_main_routes_up_command(monkeypatch: pytest.MonkeyPatch, tmp_path: Path)
     exit_code = ops.main()
 
     assert exit_code == 0
-    assert calls == [(tmp_path.resolve(), True, False, compose_env)]
+    assert pull_calls == []
+    assert compose_calls == [(tmp_path.resolve(), True, False, compose_env)]
 
 
 @pytest.mark.unit
-def test_main_routes_dockerhub_dev_without_implicit_build(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    compose_calls: list[tuple[Path, bool, bool, dict[str, str]]] = []
-    pull_calls: list[tuple[Path, dict[str, str]]] = []
-    profile = ops.StartupProfile(
-        startup_mode="dockerhub-dev",
-        image_arch="amd64",
-        runtime_base="lite",
-        service_tag="dev-amd64",
-        runtime_tag="dev-lite-amd64",
-        runtime_base_image="ailerondocker/workspace-runtime-base-lite:dev-amd64",
-    )
+def test_main_up_default_skips_pull_and_build(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
-
-    monkeypatch.setattr(ops, "ensure_docker_available", lambda: None)
-    monkeypatch.setattr(ops, "resolve_startup_profile", lambda **kwargs: profile)
-    monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
-    monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, build: None)
-    monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: pull_calls.append((repo_root, env)))
-    monkeypatch.setattr(
-        ops,
-        "compose_up",
-        lambda repo_root, *, build, detach, env: compose_calls.append((repo_root, build, detach, env)),
+    compose_calls, pull_calls = _stub_up_dependencies(
+        monkeypatch, profile=_make_profile(), compose_env=compose_env
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -219,8 +214,31 @@ def test_main_routes_dockerhub_dev_without_implicit_build(
             str(tmp_path),
             "up",
             "--no-prompt",
-            "--startup-mode",
-            "dockerhub-dev",
+        ],
+    )
+
+    exit_code = ops.main()
+
+    assert exit_code == 0
+    assert pull_calls == []
+    assert compose_calls == [(tmp_path.resolve(), False, True, compose_env)]
+
+
+@pytest.mark.unit
+def test_main_up_with_pull_runs_compose_pull(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    compose_env = {"WORKSPACE_MANAGER_IMAGE": "ailerondocker/workspace-manager:dev-amd64"}
+    compose_calls, pull_calls = _stub_up_dependencies(
+        monkeypatch, profile=_make_profile(), compose_env=compose_env
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ops.py",
+            "--repo-root",
+            str(tmp_path),
+            "up",
+            "--no-prompt",
+            "--pull",
         ],
     )
 
@@ -229,6 +247,28 @@ def test_main_routes_dockerhub_dev_without_implicit_build(
     assert exit_code == 0
     assert pull_calls == [(tmp_path.resolve(), compose_env)]
     assert compose_calls == [(tmp_path.resolve(), False, True, compose_env)]
+
+
+@pytest.mark.unit
+def test_main_up_pull_and_build_are_mutually_exclusive(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ops.py",
+            "--repo-root",
+            str(tmp_path),
+            "up",
+            "--pull",
+            "--build",
+        ],
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        ops.main()
+
+    assert exc_info.value.code != 0
 
 
 @pytest.mark.unit

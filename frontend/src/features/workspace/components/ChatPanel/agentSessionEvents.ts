@@ -1,7 +1,7 @@
 /**
- * Agent Session WebSocket 事件處理器
+ * Agent Session WebSocket event handler.
  *
- * 處理來自 WebSocket 的各種事件，更新本地狀態
+ * Dispatches WebSocket events to local state handlers.
  */
 
 import { createLogger } from '@/shared/services/logger';
@@ -21,16 +21,16 @@ import type {
 } from './agentSessionTypes';
 
 // ============================================================================
-// Event Handlers 類型
+// Event handler types
 // ============================================================================
 
 export interface EventHandlers {
-  // Session 事件
+  // Session events
   onSessionCreated?: (session: AgentSession) => void;
   onSessionPatched?: (session: Partial<AgentSession> & { session_id: string }) => void;
   onSessionRemoved?: (sessionId: string) => void;
 
-  // Task 事件
+  // Task events
   onTaskCreated?: (task: AgentTask) => void;
   onTaskPatched?: (task: Partial<AgentTask> & { task_id: string }) => void;
   onTaskRemoved?: (taskId: string) => void;
@@ -40,25 +40,35 @@ export interface EventHandlers {
   onTaskStopAck?: (sessionId: string, taskId: string) => void;
   onTaskStopped?: (sessionId: string, taskId: string) => void;
 
-  // Message 事件
+  // Message events
   onMessageCreated?: (message: AgentMessage) => void;
   onMessagePatched?: (message: Partial<AgentMessage> & { message_id: string }) => void;
   onMessageRemoved?: (messageId: string) => void;
   onMessageQueued?: (sessionId: string, message: QueuedMessage) => void;
   onMessageDequeued?: (sessionId: string, messageId: string, queuePosition: number, reason: string) => void;
+  onQueueProcessingFailed?: (
+    sessionId: string,
+    payload: {
+      message_id: string;
+      queue_position: number;
+      error_message?: string;
+      error_type?: string;
+      content_preview?: string | null;
+    }
+  ) => void;
 
-  // Streaming 事件
+  // Streaming events
   onStreamingStart?: (sessionId: string, taskId: string, messageId?: string) => void;
   onStreamingChunk?: (sessionId: string, taskId: string, content: string, isPartial: boolean, messageId?: string) => void;
   onStreamingEnd?: (sessionId: string, taskId: string, data?: Record<string, unknown>, messageId?: string) => void;
   onStreamingError?: (sessionId: string, taskId: string, error: string, code?: string, messageId?: string) => void;
 
-  // Thinking 事件
+  // Thinking events
   onThinkingStart?: (sessionId: string, taskId: string, messageId?: string) => void;
   onThinkingChunk?: (sessionId: string, taskId: string, content: string, isPartial: boolean, messageId?: string) => void;
   onThinkingEnd?: (sessionId: string, taskId: string, messageId?: string) => void;
 
-  // Tool Decision 事件
+  // Tool Decision events
   onToolDecisionRequest?: (
     sessionId: string,
     taskId: string,
@@ -71,7 +81,7 @@ export interface EventHandlers {
     payload: Record<string, unknown>
   ) => void;
 
-  // Tool 事件
+  // Tool events
   onToolStart?: (
     sessionId: string,
     taskId: string,
@@ -94,37 +104,37 @@ export interface EventHandlers {
 // ============================================================================
 
 /**
- * 事件分發器
+ * Event dispatcher.
  *
- * 將 WebSocket 事件分發到對應的處理器
+ * Dispatches WebSocket events to matching handlers.
  */
 export class AgentSessionEventDispatcher {
   private legacyHandlers: EventHandlers = {};
   private subscribers: Set<Partial<EventHandlers>> = new Set();
 
   /**
-   * 設定事件處理器 (Legacy, overwrites all)
+   * Set event handlers (legacy, overwrites all).
    */
   setHandlers(handlers: EventHandlers): void {
     this.legacyHandlers = handlers;
   }
 
   /**
-   * 更新部分處理器 (Legacy, merges)
+   * Update partial handlers (legacy, merges).
    */
   updateHandlers(handlers: Partial<EventHandlers>): void {
     this.legacyHandlers = { ...this.legacyHandlers, ...handlers };
   }
 
   /**
-   * 清除所有處理器 (Legacy)
+   * Clear all handlers (legacy).
    */
   clearHandlers(): void {
     this.legacyHandlers = {};
   }
 
   /**
-   * 訂閱事件 (New, supports multiple listeners)
+   * Subscribe to events (supports multiple listeners).
    */
   subscribe(handlers: Partial<EventHandlers>): () => void {
     this.subscribers.add(handlers);
@@ -153,7 +163,7 @@ export class AgentSessionEventDispatcher {
   }
 
   /**
-   * 分發事件
+   * Dispatch an event.
    */
   dispatch(event: WebSocketEvent): void {
     const { type, data, session_id, task_id } = event;
@@ -172,7 +182,7 @@ export class AgentSessionEventDispatcher {
     };
 
     switch (type) {
-      // Session 事件
+      // Session events
       case 'sessions created':
         {
           const normalized = normalizeSession(data as Partial<AgentSession> & { session_id?: string });
@@ -182,7 +192,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
       case 'session:init':
-        // 初始化事件 - 更新現有 session 狀態，不觸發 onSessionCreated（避免無限迴圈）
+        // Init event updates existing session state without firing onSessionCreated.
         {
           const normalized = normalizeSession(data as Partial<AgentSession> & { session_id?: string });
           if (normalized) {
@@ -203,7 +213,7 @@ export class AgentSessionEventDispatcher {
         this.emit('onSessionRemoved', (data as { session_id: string }).session_id);
         break;
 
-      // Task 事件
+      // Task events
       case 'tasks created':
         this.emit('onTaskCreated', data as unknown as AgentTask);
         break;
@@ -215,9 +225,9 @@ export class AgentSessionEventDispatcher {
         this.emit('onTaskRemoved', (data as { task_id: string }).task_id);
         break;
 
-      // Task 生命週期事件
+      // Task lifecycle events
       case 'task:started':
-        // Task started event - 可以用來更新 UI 狀態
+        // Task started event can update UI state.
         logger.debug('Task started', { session_id, task_id, data });
         this.emit('onTaskPatched', data as unknown as Partial<AgentTask> & { task_id: string });
         if (session_id && task_id) {
@@ -240,7 +250,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
       case 'task:stop_ack':
-        // Task stop acknowledged - 後端已收到停止請求，前端應立即停止處理新訊息
+        // The backend acknowledged stop; the UI should stop processing new chunks immediately.
         logger.debug('Task stop acknowledged', { session_id, task_id, data });
         if (session_id && task_id) {
           this.emit('onTaskStopAck', session_id, task_id);
@@ -253,7 +263,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
       case 'task:stopped':
-        // Task fully stopped - 任務已完全停止
+        // Task fully stopped.
         logger.debug('Task stopped', { session_id, task_id, data });
         this.emit('onTaskPatched', data as unknown as Partial<AgentTask> & { task_id: string });
         if (session_id && task_id) {
@@ -261,7 +271,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
 
-      // Message 事件
+      // Message events
       case 'messages created':
         logger.debug('Message created', { data });
         this.emit('onMessageCreated', data as unknown as AgentMessage);
@@ -295,8 +305,24 @@ export class AgentSessionEventDispatcher {
           }
         }
         break;
+      case 'queue:processing_failed':
+        {
+          const failedData = data as {
+            session_id?: string;
+            message_id: string;
+            queue_position: number;
+            error_message?: string;
+            error_type?: string;
+            content_preview?: string | null;
+          };
+          const failedSessionId = session_id ?? failedData.session_id;
+          if (failedSessionId) {
+            this.emit('onQueueProcessingFailed', failedSessionId, failedData);
+          }
+        }
+        break;
 
-      // Streaming 事件
+      // Streaming events
       case 'streaming:start':
         if (session_id && task_id) {
           const msgId = (data as { message_id?: string }).message_id;
@@ -334,7 +360,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
 
-      // Thinking 事件
+      // Thinking events
       case 'thinking:start':
         if (session_id && task_id) {
           const msgId = (data as { message_id?: string }).message_id;
@@ -360,7 +386,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
 
-      // Tool Decision 事件
+      // Tool Decision events
       case 'tool-decision:request':
         if (session_id && task_id) {
           const decisionEvent = event as ToolDecisionRequestEvent;
@@ -376,7 +402,7 @@ export class AgentSessionEventDispatcher {
         }
         break;
 
-      // Tool 事件
+      // Tool events
       case 'tool:start':
         if (session_id && task_id) {
           const d = data as { tool_use_id: string; tool_name: string; tool_input?: Record<string, unknown>; kind?: string; content?: unknown[]; locations?: unknown[] };
@@ -414,13 +440,13 @@ export class AgentSessionEventDispatcher {
         break;
 
       case 'error':
-        // 處理 WebSocket 錯誤訊息
+        // Handle WebSocket error messages.
         logger.error('WebSocket error from server', {
           message: (data as { message?: string }).message || 'Unknown error',
           code: (data as { code?: string }).code,
           session_id,
         });
-        // 可以在這裡觸發錯誤處理回調或更新狀態
+        // Error callbacks or state updates can be triggered here.
         break;
 
       default:
@@ -434,7 +460,7 @@ export class AgentSessionEventDispatcher {
 // ============================================================================
 
 /**
- * 篩選特定 session 的事件
+ * Filter events for a specific session.
  */
 export function filterBySession(
   event: WebSocketEvent,
@@ -444,7 +470,7 @@ export function filterBySession(
 }
 
 /**
- * 篩選特定 task 的事件
+ * Filter events for a specific task.
  */
 export function filterByTask(
   event: WebSocketEvent,
@@ -454,28 +480,28 @@ export function filterByTask(
 }
 
 /**
- * 篩選串流相關事件
+ * Filter streaming events.
  */
 export function isStreamingEvent(event: WebSocketEvent): boolean {
   return event.type.startsWith('streaming:');
 }
 
 /**
- * 篩選思考相關事件
+ * Filter thinking events.
  */
 export function isThinkingEvent(event: WebSocketEvent): boolean {
   return event.type.startsWith('thinking:');
 }
 
 /**
- * 篩選權限相關事件
+ * Filter tool decision events.
  */
 export function isToolDecisionEvent(event: WebSocketEvent): boolean {
   return event.type.startsWith('tool-decision:');
 }
 
 /**
- * 篩選 CRUD 事件
+ * Filter CRUD events.
  */
 export function isCrudEvent(event: WebSocketEvent): boolean {
   const crudTypes: WebSocketEventType[] = [
@@ -494,12 +520,13 @@ export function isCrudEvent(event: WebSocketEvent): boolean {
     'messages removed',
     'messages queued',
     'message:dequeued',
+    'queue:processing_failed',
   ];
   return crudTypes.includes(event.type);
 }
 
 // ============================================================================
-// 建立單例
+// Singleton instance.
 // ============================================================================
 
 let dispatcherInstance: AgentSessionEventDispatcher | null = null;

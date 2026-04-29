@@ -23,15 +23,16 @@ python scripts/dev/docker/ops.py --help
 python scripts/dev/docker/ops.py test --help
 ```
 
-`python scripts/dev/docker/ops.py up` now asks which startup path to use and then switches the image tags automatically. Available modes include:
+`python scripts/dev/docker/ops.py up` switches the Compose image tags automatically based on the host arch. By default it reuses local images and skips `docker compose pull`. Three modes:
 
-- Build from the current repo locally and start
-- Start from Docker Hub `dev` tags
+- (default) Reuse local images (Compose still pulls if a tag is missing)
+- `--pull` to refresh from Docker Hub `dev` tags before starting
+- `--build` to build from the current repo locally before starting (mutually exclusive with `--pull`)
 
-If you want a non-interactive launch, pass the mode explicitly:
+For non-interactive use, add `--no-prompt` and pin the arch:
 
 ```bash
-python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite
+python scripts/dev/docker/ops.py up --pull --no-prompt --image-arch amd64
 ```
 
 ## First Launch
@@ -94,9 +95,9 @@ This stops the stack while preserving volumes and persisted platform data.
 
 | Operation | Command |
 |-----------|---------|
-| Start all services | `python scripts/dev/docker/ops.py up` |
-| Start from Docker Hub dev tags | `python scripts/dev/docker/ops.py up --startup-mode dockerhub-dev --image-arch amd64 --runtime-base lite` |
-| Rebuild images and start | `python scripts/dev/docker/ops.py up --build` |
+| Start all services (reuse local images) | `python scripts/dev/docker/ops.py up` |
+| Pull latest dev images, then start | `python scripts/dev/docker/ops.py up --pull` |
+| Rebuild images locally and start | `python scripts/dev/docker/ops.py up --build` |
 | Stop all services | `python scripts/dev/docker/ops.py down` |
 | Cleanup workspace resources | `python scripts/dev/docker/ops.py cleanup-workspaces` |
 | Full cleanup | `python scripts/dev/docker/ops.py cleanup` |

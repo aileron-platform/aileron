@@ -305,11 +305,17 @@ const chat = {
     emptyMessage: '(空白訊息)',
     copy: '複製內容',
     delete: '刪除訊息',
+    dispatching: '處理中',
+    processingTitle: '正在處理',
     copied: '已複製',
     copiedDescription: '訊息內容已複製到剪貼簿。',
     deleted: '已刪除',
     deletedDescription: '排隊訊息已從佇列中移除。',
     deleteError: '刪除失敗',
+    alreadyProcessing: '訊息已開始處理，無法再從佇列刪除。',
+    unknownDeleteError: '無法刪除這則排隊訊息。',
+    processingFailed: '排隊訊息處理失敗',
+    processingFailedDescription: '有一則排隊訊息無法處理，已重新放回佇列。',
   },
   widgets: {
     labels: {
