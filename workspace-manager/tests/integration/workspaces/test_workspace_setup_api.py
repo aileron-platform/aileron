@@ -32,7 +32,7 @@ class TestWorkspaceSetupAPI:
         ):
             zh_response = client.post(f"/api/v1/workspaces/{workspace_id}/setup/sync")
             assert zh_response.status_code == status.HTTP_409_CONFLICT
-            assert zh_response.json()["detail"] == "Workspace runtime is not ready. Unable to start sync."
+            assert zh_response.json()["detail"] == "Workspace runtime 尚未就緒，無法啟動同步。"
 
     @pytest.mark.integration
     def test_workspace_setup_git_branches_error_is_localized(self, authenticated_client):
@@ -73,4 +73,4 @@ class TestWorkspaceSetupAPI:
                 params={"git_url": "git@github.com:test/repo.git"},
             )
             assert zh_response.status_code == status.HTTP_400_BAD_REQUEST
-            assert zh_response.json()["detail"] == "Branch list retrieval timeout. Please try again later."
+            assert zh_response.json()["detail"] == "取得分支列表逾時，請稍後再試。"

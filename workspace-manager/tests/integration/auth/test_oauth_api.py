@@ -241,7 +241,7 @@ class TestOAuthAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert data["status"] == "healthy"
-        assert data["description"] == "OAuth authentication service providing code exchange and token refresh"
+        assert data["description"] == "OAuth 認證服務，提供 code exchange 和 token refresh 功能"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.exchange_code')
@@ -265,7 +265,7 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
         assert zh_response.status_code == status.HTTP_502_BAD_GATEWAY
-        assert zh_response.json()["detail"] == "OAuth provider error"
+        assert zh_response.json()["detail"] == "OAuth provider 錯誤"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.exchange_code')
@@ -286,7 +286,7 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/exchange", json=exchange_data)
         assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert zh_response.json()["detail"] == "Failed to exchange OAuth authorization code"
+        assert zh_response.json()["detail"] == "交換 OAuth 認證碼失敗"
 
     @pytest.mark.integration
     @patch('app.services.oauth_service.OAuthService.refresh_access_token')
@@ -306,7 +306,7 @@ class TestOAuthAPI:
         client.headers.update({"Accept-Language": "zh-TW", "X-Language": "zh-TW"})
         zh_response = client.post("/api/v1/oauth/refresh", json=refresh_data)
         assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        assert zh_response.json()["detail"] == "Failed to refresh OAuth token"
+        assert zh_response.json()["detail"] == "更新 OAuth Token 失敗"
 
     # ============ Original Test Cases (Retained for Testing Other OAuth Flows)============
 

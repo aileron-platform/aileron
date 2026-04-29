@@ -317,8 +317,8 @@ def test_runtime_logs_do_not_expose_raw_detail_and_are_localized(
 
     assert zh_response.status_code == 200
     zh_messages = [item["message"] for item in zh_response.json()]
-    assert "Browser container startup failed" in zh_messages
-    assert "Runtime log updated" in zh_messages
+    assert "Browser 容器啟動失敗" in zh_messages
+    assert "Runtime 日誌已更新" in zh_messages
     assert all("connection refused" not in message for message in zh_messages)
     assert all("Unexpected internal stack trace marker" not in message for message in zh_messages)
 
@@ -437,4 +437,4 @@ def test_workspace_share_translation_uses_error_code_instead_of_exception_messag
     assert en_response.json()["detail"]["message"] == "Workspace share already exists"
     assert zh_response.status_code == 409
     assert zh_response.json()["detail"]["code"] == "WORKSPACE_SHARE_CONFLICT"
-    assert zh_response.json()["detail"]["message"] == "Workspace share already exists"
+    assert zh_response.json()["detail"]["message"] == "工作區分享已存在"

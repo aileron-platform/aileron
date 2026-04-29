@@ -81,7 +81,7 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/settings/sync")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "Sync failed"
+            assert zh_response.json()["detail"] == "同步失敗"
 
     @pytest.mark.integration
     def test_settings_004_generate_ssh_key_error_is_localized(self, authenticated_client):
@@ -102,7 +102,7 @@ class TestSettingsAPI:
         ):
             zh_response = client.post(f"/api/v1/users/{user.id}/ssh-keys/generate")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "SSH key generation failed"
+            assert zh_response.json()["detail"] == "產生 SSH Key 失敗"
 
 
 @pytest.fixture

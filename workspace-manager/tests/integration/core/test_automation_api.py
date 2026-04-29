@@ -281,7 +281,7 @@ class TestAutomationAPI:
         ):
             zh_response = client.post(f"/api/v1/automation/jobs/{job_id}/execute")
             assert zh_response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-            assert zh_response.json()["detail"] == "Failed to dispatch automation task to Celery"
+            assert zh_response.json()["detail"] == "無法將自動化任務派送到 Celery"
 
     @pytest.mark.integration
     def test_automation_014_queue_and_cancel_generic_errors_are_localized(self, authenticated_client):
@@ -302,4 +302,4 @@ class TestAutomationAPI:
         ):
             zh_response = client.post(f"/api/v1/automation/executions/{uuid.uuid4()}/cancel")
             assert zh_response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-            assert zh_response.json()["detail"] == "Failed to cancel queued task"
+            assert zh_response.json()["detail"] == "取消排隊任務失敗"

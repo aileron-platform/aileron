@@ -159,7 +159,7 @@ class TestHealthAPI:
         ):
             zh_response = client.get("/health/keycloak")
             assert zh_response.status_code == status.HTTP_200_OK
-            assert zh_response.json()["message"] == "Authentication is not enabled"
+            assert zh_response.json()["message"] == "未啟用認證"
 
     @pytest.mark.integration
     def test_hc_008_keycloak_health_http_error_uses_simple_message(self, test_app):
@@ -196,7 +196,7 @@ class TestHealthAPI:
         ):
             zh_response = client.get("/health/keycloak")
             assert zh_response.status_code == status.HTTP_200_OK
-            assert zh_response.json()["message"] == "Keycloak connection failed"
+            assert zh_response.json()["message"] == "Keycloak 連線失敗"
 
 
 @pytest.fixture
