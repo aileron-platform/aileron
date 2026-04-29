@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, Files, Link2, Settings, Share2, Trash2 } from 'lucide-react';
+import { CalendarClock, Database, FolderTree, GitBranch, Link2, Network, Settings, Share2, Trash2 } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -11,8 +11,12 @@ import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { TopTabsBar, TopTabsCountBadge, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 import { KnowledgeBaseAttachmentsTab } from '../components/KnowledgeBaseAttachmentsTab';
 import { KnowledgeBaseFilesTab } from '../components/KnowledgeBaseFilesTab';
+import { KnowledgeBaseSchedulesTab } from '../components/KnowledgeBaseSchedulesTab';
 import { KnowledgeBaseSharingTab } from '../components/KnowledgeBaseSharingTab';
 import { useKnowledgeBase } from '../providers/KnowledgeBaseProvider';
+
+const KnowledgeBaseGraphTab = React.lazy(() => import('../components/KnowledgeBaseGraphTab'));
+const KnowledgeBaseVersionControlTab = React.lazy(() => import('../components/KnowledgeBaseVersionControlTab'));
 
 export const KnowledgeBaseDetailRoute: React.FC = () => {
   const { t } = useI18n();
@@ -28,11 +32,23 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
   } = useKnowledgeBase();
 
   const activeTab = React.useMemo(() => {
+    if (location.pathname.endsWith('/files')) {
+      return 'files';
+    }
     if (location.pathname.endsWith('/sharing')) {
       return 'sharing';
     }
     if (location.pathname.endsWith('/workspaces')) {
       return 'workspaces';
+    }
+    if (location.pathname.endsWith('/graph')) {
+      return 'graph';
+    }
+    if (location.pathname.endsWith('/version-control')) {
+      return 'version-control';
+    }
+    if (location.pathname.endsWith('/schedules')) {
+      return 'schedules';
     }
     return 'files';
   }, [location.pathname]);
@@ -71,7 +87,6 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
         info={(
           <div className="flex min-w-0 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
             <Badge variant={roleVariant}>{detail?.accessRole ?? 'viewer'}</Badge>
-            <Badge variant="outline">{detail?.slug ?? knowledgeBaseId}</Badge>
             <span className="truncate">
               {t('knowledgeBase.detail.cards.storageTitle')}: {storageInfo}
             </span>
@@ -98,12 +113,29 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
 
       <Tabs value={activeTab} className="flex w-full flex-shrink-0 flex-col">
         <TopTabsBar>
-          <TopTabsList className="max-w-xl">
+          <TopTabsList className="max-w-2xl">
             <TopTabsTrigger value="files" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_FILES(knowledgeBaseId)} className="gap-2">
-                <Files className="h-4 w-4" />
+                <FolderTree className="h-4 w-4" />
                 {t('knowledgeBase.detail.tabs.files')}
-                <TopTabsCountBadge count={attachments.length} />
+              </Link>
+            </TopTabsTrigger>
+            <TopTabsTrigger value="graph" asChild>
+              <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_GRAPH(knowledgeBaseId)} className="gap-2">
+                <Network className="h-4 w-4" />
+                {t('knowledgeBase.detail.tabs.graph')}
+              </Link>
+            </TopTabsTrigger>
+            <TopTabsTrigger value="version-control" asChild>
+              <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_VERSION_CONTROL(knowledgeBaseId)} className="gap-2">
+                <GitBranch className="h-4 w-4" />
+                {t('knowledgeBase.detail.tabs.versionControl')}
+              </Link>
+            </TopTabsTrigger>
+            <TopTabsTrigger value="schedules" asChild>
+              <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_SCHEDULES(knowledgeBaseId)} className="gap-2">
+                <CalendarClock className="h-4 w-4" />
+                {t('knowledgeBase.detail.tabs.schedules')}
               </Link>
             </TopTabsTrigger>
             <TopTabsTrigger value="sharing" asChild>
@@ -132,7 +164,44 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
           />
           <Route
             path="files"
-            element={<KnowledgeBaseFilesTab knowledgeBaseId={knowledgeBaseId} readOnly={detail?.accessRole === 'viewer'} />}
+            element={(
+              <KnowledgeBaseFilesTab
+                knowledgeBaseId={knowledgeBaseId}
+                readOnly={detail?.accessRole === 'viewer'}
+              />
+            )}
+          />
+          <Route
+            path="graph"
+            element={(
+              <React.Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t('knowledgeBase.graph.loading')}</div>}>
+                <KnowledgeBaseGraphTab knowledgeBaseId={knowledgeBaseId} />
+              </React.Suspense>
+            )}
+          />
+          <Route
+            path="version-control"
+            element={(
+              <React.Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t('knowledgeBase.versionControl.loading')}</div>}>
+                <KnowledgeBaseVersionControlTab
+                  knowledgeBaseId={knowledgeBaseId}
+                  accessRole={detail?.accessRole ?? 'viewer'}
+                  versionControlEnabled={detail?.versionControlEnabled}
+                  gitLfsEnabled={detail?.gitLfsEnabled}
+                />
+              </React.Suspense>
+            )}
+          />
+          <Route
+            path="schedules"
+            element={(
+              <KnowledgeBaseSchedulesTab
+                knowledgeBaseId={knowledgeBaseId}
+                knowledgeBaseName={detail?.name ?? knowledgeBaseId}
+                accessRole={detail?.accessRole ?? 'viewer'}
+                attachments={attachments}
+              />
+            )}
           />
           <Route
             path="sharing"

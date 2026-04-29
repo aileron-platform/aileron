@@ -71,8 +71,8 @@ const tMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) =
     'template.center.settings.versionControl.status.hasConflicts': 'Has conflicts',
     'template.center.settings.versionControl.status.noConflicts': 'No conflicts',
     'template.center.settings.versionControl.mode.title': 'Version Control',
-    'template.center.settings.versionControl.mode.fileChanges': 'File Changes',
-    'template.center.settings.versionControl.mode.commitHistory': 'Commit History',
+    'shared.versionControl.mode.fileChanges': 'File Changes',
+    'shared.versionControl.mode.commitHistory': 'History',
     'template.center.settings.versionControl.actions.rebuild': 'Rebuild',
     'template.center.settings.versionControl.setupRequired.title': 'Git repository setup required',
     'template.center.settings.versionControl.setupRequired.description': 'Set up repository first',
@@ -84,6 +84,7 @@ const tMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) =
     'shared.versionControl.actions.fetch.label': 'Fetch',
     'shared.versionControl.actions.pull.label': 'Pull',
     'shared.versionControl.actions.push.label': 'Push',
+    'shared.versionControl.actions.remoteSettings.label': 'Remote settings',
     'shared.versionControl.main.selectFile': 'Select a file to view changes',
     'shared.versionControl.main.selectCommitFile': 'Select a commit file to view changes',
     'shared.versionControl.fileChanges.stagedTitle': 'Staged',
@@ -182,7 +183,7 @@ describe('TemplateRegistryVersionControlTab', () => {
     expect(screen.getByTestId('version-control-sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('version-control-main')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /File Changes/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Commit History/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /History/ })).toBeInTheDocument();
     expect(screen.getAllByText('main').length).toBeGreaterThan(0);
 
     await user.click(screen.getByText('README.md'));
@@ -200,7 +201,7 @@ describe('TemplateRegistryVersionControlTab', () => {
     await user.click(screen.getByRole('button', { name: 'Commit' }));
     await waitFor(() => expect(templateVersionControlApiMock.commit).toHaveBeenCalledWith('Update registry'));
 
-    await user.click(screen.getByRole('button', { name: /Commit History/ }));
+    await user.click(screen.getByRole('button', { name: /History/ }));
     expect(screen.getByText('Initial registry')).toBeInTheDocument();
     await user.click(screen.getByText('Initial registry'));
     await waitFor(() => expect(templateVersionControlApiMock.getCommitFiles).toHaveBeenCalledWith('abcdef1234567890'));
@@ -253,5 +254,6 @@ describe('TemplateRegistryVersionControlTab', () => {
     expect(screen.getByRole('button', { name: 'Fetch' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Pull' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Push' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Remote settings' })).toBeEnabled();
   });
 });

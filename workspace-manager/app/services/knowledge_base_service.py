@@ -14,6 +14,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import models as db_models
+from app.services.knowledge_base_wiki_service import KnowledgeBaseWikiService
 
 _SLUG_SANITIZER = re.compile(r"[^a-z0-9]+")
 _VALID_KB_ROLES = ("owner", "manager", "editor", "viewer")
@@ -106,6 +107,7 @@ class KnowledgeBaseService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.wiki_service = KnowledgeBaseWikiService(db)
 
     def create_kb(
         self,
@@ -131,10 +133,14 @@ class KnowledgeBaseService:
             description=description,
             current_size_bytes=0,
             quota_bytes=quota_bytes,
+            version_control_enabled=False,
+            git_lfs_enabled=False,
+            git_default_branch="main",
         )
         self.db.add(knowledge_base)
         self.db.commit()
         self.db.refresh(knowledge_base)
+        self.wiki_service.initialize(knowledge_base)
         return knowledge_base
 
     def rename_kb(

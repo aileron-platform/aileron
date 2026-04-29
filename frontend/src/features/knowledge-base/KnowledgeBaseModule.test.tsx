@@ -11,6 +11,9 @@ const { translateMock } = vi.hoisted(() => ({
       'knowledgeBase.detail.settingsAction': '設定',
       'knowledgeBase.detail.deleteAction': '刪除',
       'knowledgeBase.detail.tabs.files': '檔案',
+      'knowledgeBase.detail.tabs.graph': '關聯圖',
+      'knowledgeBase.detail.tabs.versionControl': '版本控制',
+      'knowledgeBase.detail.tabs.schedules': '排程',
       'knowledgeBase.detail.tabs.sharing': '分享',
       'knowledgeBase.detail.tabs.workspaces': '工作區',
       'knowledgeBase.detail.cards.storageTitle': 'Storage',
@@ -81,6 +84,43 @@ vi.mock('@/shared/services/knowledgeBaseApi', () => ({
       createdAt: '2026-04-21T00:00:00Z',
     },
   ]),
+  getKnowledgeBaseGraph: vi.fn(async () => ({
+    kbId: 'kb-1',
+    generatedAt: '2026-04-29T00:00:00Z',
+    nodes: [],
+    edges: [],
+  })),
+  getKnowledgeBaseGitRepositoryStatus: vi.fn(async () => ({
+    isGitRepo: false,
+    currentBranch: null,
+    remoteUrl: null,
+    hasOrigin: false,
+    hasLocalContent: true,
+    canCloneSafely: false,
+    canInitSafely: true,
+    cloneBlockedReason: null,
+  })),
+  getKnowledgeBaseVersionControlStatus: vi.fn(async () => ({
+    branch: 'main',
+    ahead: 0,
+    behind: 0,
+    detached: false,
+    hasConflicts: false,
+    stagedCount: 0,
+    unstagedCount: 0,
+    untrackedCount: 0,
+  })),
+  enableKnowledgeBaseGitRepository: vi.fn(async () => ({
+    isGitRepo: true,
+    currentBranch: 'main',
+    remoteUrl: null,
+    hasOrigin: false,
+    hasLocalContent: true,
+    canCloneSafely: false,
+    canInitSafely: false,
+    cloneBlockedReason: null,
+  })),
+  enableKnowledgeBaseGitLfs: vi.fn(async () => ({ success: true, message: 'ok' })),
   createKnowledgeBase: vi.fn(async () => ({
     id: 'kb-2',
     slug: 'new-kb',
@@ -175,7 +215,12 @@ describe('KnowledgeBaseModule', () => {
     expect(screen.getByText('設定')).toBeInTheDocument();
     expect(screen.getByText('刪除')).toBeInTheDocument();
     expect(screen.getByText('Storage: 2 KB / 4 KB')).toBeInTheDocument();
+    expect(screen.queryByText('Team Wiki')).not.toBeInTheDocument();
+    expect(screen.queryByText('product-docs')).not.toBeInTheDocument();
     expect(screen.getByText('檔案')).toBeInTheDocument();
+    expect(screen.getByText('關聯圖')).toBeInTheDocument();
+    expect(screen.getByText('版本控制')).toBeInTheDocument();
+    expect(screen.getByText('排程')).toBeInTheDocument();
     expect(screen.getByText('分享')).toBeInTheDocument();
     expect(screen.getByText('工作區')).toBeInTheDocument();
     expect(await screen.findByText('管理誰可以查看、編輯或管理這個知識庫。')).toBeInTheDocument();

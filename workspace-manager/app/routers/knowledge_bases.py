@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+import tempfile
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from git import GitCommandError
 
 from app.core.file_management import FileContentResponse, FileManagementException, FileTreeResponse, FileUploadResponse
 from app.core.openapi import build_responses
@@ -16,13 +20,54 @@ from app.models import (
     KnowledgeBaseErrorResponse,
     KnowledgeBaseFileMutationRequest,
     KnowledgeBaseFilePatchRequest,
+    KnowledgeBaseGitEnableRequest,
+    KnowledgeBaseGitLfsEnableRequest,
+    KnowledgeBaseGitRevertRequest,
+    KnowledgeBaseGitRollbackRequest,
+    KnowledgeBaseGraphResponse,
+    KnowledgeBaseIngestJobListResponse,
+    KnowledgeBaseIngestJobRequest,
+    KnowledgeBaseIngestJobResponse,
     KnowledgeBaseListResponse,
+    KnowledgeBaseLintReportListResponse,
+    KnowledgeBaseLintReportResponse,
+    KnowledgeBaseQueryRequest,
+    KnowledgeBaseQueryResponse,
+    KnowledgeBaseQuerySaveRequest,
+    KnowledgeBaseQuerySaveResponse,
+    KnowledgeBaseSourceNormalizeRequest,
+    KnowledgeBaseSourceNormalizeResponse,
+    KnowledgeBaseSourceUploadResponse,
+    KnowledgeBaseWebClipImportRequest,
+    KnowledgeBaseWebClipImportResponse,
     KnowledgeBaseShareCreateRequest,
     KnowledgeBaseShareListResponse,
     KnowledgeBaseShareSummary,
     KnowledgeBaseShareUpdateRequest,
     KnowledgeBaseSummary,
     KnowledgeBaseUpdateRequest,
+    GitCommitRequest,
+    GitOperationResponse,
+    GitRemoteUrlRequest,
+    GitRepositoryStatus,
+    TemplateBlobResponse,
+    TemplateChangesResponse,
+    TemplateCheckoutRequest,
+    TemplateCheckoutResponse,
+    TemplateCommitFilesResponse,
+    TemplateCommitListResponse,
+    TemplateCommitResponse,
+    TemplateDiffResponse,
+    TemplateDiscardRequest,
+    TemplateDiscardResponse,
+    TemplateRemoteRequest,
+    TemplateRemoteResponse,
+    TemplateStageRequest,
+    TemplateStageResponse,
+    TemplateUnstageRequest,
+    TemplateUnstageResponse,
+    TemplateVersionControlBranchListResponse,
+    TemplateVersionControlStatus,
 )
 from app.modules.auth import get_current_user_id
 from app.services import (
@@ -31,8 +76,14 @@ from app.services import (
     KnowledgeBaseNotFoundError,
     get_knowledge_base_attachment_service,
     get_knowledge_base_file_service,
+    get_knowledge_base_git_service,
+    get_knowledge_base_graph_service,
+    get_knowledge_base_ingest_service,
+    get_knowledge_base_lint_service,
+    get_knowledge_base_query_service,
     get_knowledge_base_service,
     get_knowledge_base_sharing_service,
+    get_knowledge_base_source_service,
 )
 from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
 from app.services.knowledge_base_file_service import KnowledgeBaseFileService
@@ -64,6 +115,12 @@ from app.services.knowledge_base_file_service import (
     KB_PATH_TRAVERSAL_REASON,
     KB_QUOTA_EXCEEDED_MESSAGE,
 )
+from app.services.knowledge_base_git_service import KnowledgeBaseGitService
+from app.services.knowledge_base_graph_service import KnowledgeBaseGraphService
+from app.services.knowledge_base_ingest_service import KnowledgeBaseIngestService
+from app.services.knowledge_base_lint_service import KnowledgeBaseLintService
+from app.services.knowledge_base_query_service import KnowledgeBaseQueryService
+from app.services.knowledge_base_source_service import KnowledgeBaseSourceService
 
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-bases"])
 
@@ -188,6 +245,14 @@ def _to_summary(kb, access_role: str) -> KnowledgeBaseSummary:
         owner_id=kb.owner_id,
         current_size_bytes=kb.current_size_bytes,
         quota_bytes=kb.quota_bytes,
+        version_control_enabled=getattr(kb, "version_control_enabled", False),
+        git_lfs_enabled=getattr(kb, "git_lfs_enabled", False),
+        git_default_branch=getattr(kb, "git_default_branch", "main"),
+        git_last_commit_sha=getattr(kb, "git_last_commit_sha", None),
+        wiki_initialized_at=getattr(kb, "wiki_initialized_at", None),
+        last_indexed_at=getattr(kb, "last_indexed_at", None),
+        last_index_status=getattr(kb, "last_index_status", None),
+        last_index_error=getattr(kb, "last_index_error", None),
         access_role=access_role,
         created_at=kb.created_at,
         updated_at=kb.updated_at,
@@ -225,6 +290,8 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.attachment_not_found")
     if code == "KB_SHARE_NOT_FOUND":
         return translate("knowledge_base.share.not_found")
+    if code == "KB_INGEST_JOB_NOT_FOUND":
+        return translate("knowledge_base.ingest.job_not_found")
     if code == "KB_ACCESS_DENIED":
         return translate("knowledge_base.access_denied")
     if code == "KB_PERMISSION_DENIED":
@@ -271,6 +338,20 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.file.kb_quota_exceeded")
     if code == "USER_KB_QUOTA_EXCEEDED":
         return translate("knowledge_base.file.owner_quota_exceeded")
+    if code == "KB_VERSION_CONTROL_DISABLED":
+        return translate("knowledge_base.git.version_control_disabled")
+    if code == "GIT_REPO_NOT_FOUND":
+        return translate("knowledge_base.git.repo_not_found")
+    if code == "GIT_NO_CHANGES":
+        return translate("knowledge_base.git.no_changes_to_commit")
+    if code == "GIT_PATH_OUTSIDE_REPOSITORY":
+        return translate("knowledge_base.git.path_outside_repository")
+    if code == "GIT_REPOSITORY_ALREADY_INITIALIZED":
+        return translate("knowledge_base.git.repository_already_initialized")
+    if code == "KB_GIT_ROLLBACK_CONFIRMATION_REQUIRED":
+        return translate("knowledge_base.git.rollback_confirmation_required")
+    if code == "KB_GIT_OPERATION_FAILED":
+        return translate("knowledge_base.git.operation_failed")
     return translate("knowledge_base.unexpected_error")
 
 
@@ -288,6 +369,17 @@ def _raise_kb_error(request: Request, exc: Exception) -> None:
     translate = request.state.translate
     if isinstance(exc, KnowledgeBaseNotFoundError):
         code = getattr(exc, "code", "KB_NOT_FOUND")
+        details = _not_found_details(code)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_build_error_detail(
+                code=code,
+                message=_translate_kb_message(translate, code=code, fallback_message="", details=details),
+                details=details,
+            ),
+        ) from exc
+    if isinstance(exc, LookupError):
+        code = "KB_INGEST_JOB_NOT_FOUND"
         details = _not_found_details(code)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -332,13 +424,32 @@ def _raise_kb_error(request: Request, exc: Exception) -> None:
         )
         raise HTTPException(status_code=exc.status_code, detail=_build_error_detail(**localized)) from exc
     if isinstance(exc, ValueError):
-        code = getattr(exc, "code", "KB_INVALID_REQUEST")
+        message = str(exc)
+        known_codes = {
+            "KB_VERSION_CONTROL_DISABLED",
+            "GIT_REPO_NOT_FOUND",
+            "GIT_NO_CHANGES",
+            "GIT_PATH_OUTSIDE_REPOSITORY",
+            "GIT_REPOSITORY_ALREADY_INITIALIZED",
+            "KB_GIT_ROLLBACK_CONFIRMATION_REQUIRED",
+        }
+        code = message if message in known_codes else getattr(exc, "code", "KB_INVALID_REQUEST")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_build_error_detail(
                 code=code,
                 message=_translate_kb_message(translate, code=code, fallback_message="", details={}),
                 details=getattr(exc, "params", {}),
+            ),
+        ) from exc
+    if isinstance(exc, GitCommandError):
+        code = "KB_GIT_OPERATION_FAILED"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=_build_error_detail(
+                code=code,
+                message=_translate_kb_message(translate, code=code, fallback_message="", details={}),
+                details={},
             ),
         ) from exc
     raise exc
@@ -366,6 +477,7 @@ def _not_found_details(code: str) -> dict:
         "KB_NOT_FOUND": "knowledge_base",
         "KB_ATTACHMENT_NOT_FOUND": "knowledge_base_attachment",
         "KB_SHARE_NOT_FOUND": "knowledge_base_share",
+        "KB_INGEST_JOB_NOT_FOUND": "knowledge_base_ingest_job",
         "WORKSPACE_NOT_FOUND": "workspace",
     }
     return {"resource": resource_mapping.get(code, "knowledge_base")}
@@ -669,6 +781,742 @@ def delete_knowledge_base_files(
             path=path,
             recursive=recursive,
         )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/sources",
+    response_model=KnowledgeBaseSourceUploadResponse,
+    summary="Upload a knowledge base source file",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+async def upload_knowledge_base_source(
+    kb_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    target_subdir: str = Form("uploads", alias="targetSubdir"),
+    target_name: str | None = Form(None, alias="targetName"),
+    overwrite: bool = Form(False),
+    normalize: bool = Form(True),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseSourceService = Depends(get_knowledge_base_source_service),
+) -> KnowledgeBaseSourceUploadResponse:
+    temp_path: Path | None = None
+    try:
+        if not file.filename:
+            raise ValueError("KB_INVALID_REQUEST")
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            temp_path = Path(temp_file.name)
+            while chunk := await file.read(1024 * 1024):
+                temp_file.write(chunk)
+
+        source = service.import_file(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            source_file=temp_path,
+            target_subdir=target_subdir,
+            target_name=target_name or file.filename,
+            overwrite=overwrite,
+        )
+        normalization = None
+        if normalize and Path(source.path).suffix.lower() != ".pdf":
+            normalization = service.normalize_source(
+                user_id=current_user_id,
+                kb_id=kb_id,
+                source_path=source.path,
+                force=overwrite,
+            )
+        return KnowledgeBaseSourceUploadResponse(source=source, normalization=normalization)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
+
+
+@router.post(
+    "/{kb_id}/sources/web-clip",
+    response_model=KnowledgeBaseWebClipImportResponse,
+    summary="Import a knowledge base web clip source",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+def import_knowledge_base_web_clip(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseWebClipImportRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseSourceService = Depends(get_knowledge_base_source_service),
+) -> KnowledgeBaseWebClipImportResponse:
+    try:
+        assets = {name: content.encode("utf-8") for name, content in (payload.assets or {}).items()}
+        return service.import_web_clip(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            title=payload.title,
+            markdown=payload.markdown,
+            assets=assets,
+            clip_slug=payload.clip_slug,
+            overwrite=payload.overwrite,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/sources/normalize",
+    response_model=KnowledgeBaseSourceNormalizeResponse,
+    summary="Normalize a knowledge base source file",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+def normalize_knowledge_base_source(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseSourceNormalizeRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseSourceService = Depends(get_knowledge_base_source_service),
+) -> KnowledgeBaseSourceNormalizeResponse:
+    try:
+        return service.normalize_source(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            source_path=payload.source_path,
+            force=payload.force,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/ingest",
+    response_model=KnowledgeBaseIngestJobResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a knowledge base ingest job",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+def create_knowledge_base_ingest_job(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseIngestJobRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseIngestService = Depends(get_knowledge_base_ingest_service),
+) -> KnowledgeBaseIngestJobResponse:
+    try:
+        return service.create_job(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            source_paths=payload.source_paths,
+            force=payload.force,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/jobs",
+    response_model=KnowledgeBaseIngestJobListResponse,
+    summary="List knowledge base ingest jobs",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def list_knowledge_base_ingest_jobs(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseIngestService = Depends(get_knowledge_base_ingest_service),
+) -> KnowledgeBaseIngestJobListResponse:
+    try:
+        return KnowledgeBaseIngestJobListResponse(items=service.list_jobs(user_id=current_user_id, kb_id=kb_id))
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/jobs/{job_id}",
+    response_model=KnowledgeBaseIngestJobResponse,
+    summary="Get knowledge base ingest job",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def get_knowledge_base_ingest_job(
+    kb_id: str,
+    job_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseIngestService = Depends(get_knowledge_base_ingest_service),
+) -> KnowledgeBaseIngestJobResponse:
+    try:
+        return service.get_job(user_id=current_user_id, kb_id=kb_id, job_id=job_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/jobs/{job_id}/retry",
+    response_model=KnowledgeBaseIngestJobResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Retry a knowledge base ingest job",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+)
+def retry_knowledge_base_ingest_job(
+    kb_id: str,
+    job_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseIngestService = Depends(get_knowledge_base_ingest_service),
+) -> KnowledgeBaseIngestJobResponse:
+    try:
+        return service.retry_job(user_id=current_user_id, kb_id=kb_id, job_id=job_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/jobs/{job_id}/cancel",
+    response_model=KnowledgeBaseIngestJobResponse,
+    summary="Cancel a knowledge base ingest job",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def cancel_knowledge_base_ingest_job(
+    kb_id: str,
+    job_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseIngestService = Depends(get_knowledge_base_ingest_service),
+) -> KnowledgeBaseIngestJobResponse:
+    try:
+        return service.cancel_job(user_id=current_user_id, kb_id=kb_id, job_id=job_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/query",
+    response_model=KnowledgeBaseQueryResponse,
+    summary="Query knowledge base wiki context",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def query_knowledge_base(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseQueryRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseQueryService = Depends(get_knowledge_base_query_service),
+) -> KnowledgeBaseQueryResponse:
+    try:
+        return service.query(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            query=payload.query,
+            limit=payload.limit,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/query/save",
+    response_model=KnowledgeBaseQuerySaveResponse,
+    summary="Save a knowledge base query answer to wiki",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
+)
+def save_knowledge_base_query_answer(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseQuerySaveRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseQueryService = Depends(get_knowledge_base_query_service),
+) -> KnowledgeBaseQuerySaveResponse:
+    try:
+        return service.save_answer_to_wiki(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            query=payload.query,
+            answer=payload.answer,
+            citations=payload.citations,
+            title=payload.title,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/lint",
+    response_model=KnowledgeBaseLintReportResponse,
+    summary="Run knowledge base structural lint",
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
+)
+def run_knowledge_base_lint(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseLintService = Depends(get_knowledge_base_lint_service),
+) -> KnowledgeBaseLintReportResponse:
+    try:
+        return service.run_structural_lint(user_id=current_user_id, kb_id=kb_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/lint/reports",
+    response_model=KnowledgeBaseLintReportListResponse,
+    summary="List knowledge base lint reports",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def list_knowledge_base_lint_reports(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseLintService = Depends(get_knowledge_base_lint_service),
+) -> KnowledgeBaseLintReportListResponse:
+    try:
+        return KnowledgeBaseLintReportListResponse(items=service.list_reports(user_id=current_user_id, kb_id=kb_id))
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/lint/reports/content",
+    response_model=KnowledgeBaseLintReportResponse,
+    summary="Read knowledge base lint report",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_lint_report(
+    kb_id: str,
+    request: Request,
+    path: str = Query(...),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseLintService = Depends(get_knowledge_base_lint_service),
+) -> KnowledgeBaseLintReportResponse:
+    try:
+        return service.get_report(user_id=current_user_id, kb_id=kb_id, report_path=path)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/graph",
+    response_model=KnowledgeBaseGraphResponse,
+    summary="Get knowledge base wiki graph",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def get_knowledge_base_graph(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGraphService = Depends(get_knowledge_base_graph_service),
+) -> KnowledgeBaseGraphResponse:
+    try:
+        return service.build_graph(user_id=current_user_id, kb_id=kb_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/repository/status",
+    response_model=GitRepositoryStatus,
+    summary="Get knowledge base Git repository status",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def get_knowledge_base_git_repository_status(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitRepositoryStatus:
+    try:
+        return service.repository_status(user_id=current_user_id, kb_id=kb_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/repository/enable",
+    response_model=GitRepositoryStatus,
+    summary="Enable knowledge base Git version control",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def enable_knowledge_base_git_repository(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseGitEnableRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitRepositoryStatus:
+    try:
+        return service.enable(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            default_branch=payload.default_branch,
+            initial_message=payload.initial_message,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/lfs/enable",
+    response_model=GitOperationResponse,
+    summary="Enable knowledge base Git LFS tracking",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def enable_knowledge_base_git_lfs(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseGitLfsEnableRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitOperationResponse:
+    try:
+        service.enable_lfs(user_id=current_user_id, kb_id=kb_id, patterns=payload.patterns)
+        return GitOperationResponse(success=True, message=request.state.translate("knowledge_base.git.lfs_enabled"))
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/remote-url",
+    response_model=GitOperationResponse,
+    summary="Set knowledge base Git origin URL",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def set_knowledge_base_git_remote_url(
+    kb_id: str,
+    request: Request,
+    payload: GitRemoteUrlRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitOperationResponse:
+    try:
+        service.set_remote_url(user_id=current_user_id, kb_id=kb_id, url=payload.url)
+        return GitOperationResponse(success=True, message=request.state.translate("knowledge_base.git.remote_url_set"))
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/status",
+    response_model=TemplateVersionControlStatus,
+    summary="Get knowledge base Git file status",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_version_control_status(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateVersionControlStatus:
+    try:
+        return service.get_version_control_status(user_id=current_user_id, kb_id=kb_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/changes",
+    response_model=TemplateChangesResponse,
+    summary="Get knowledge base Git file changes",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_version_control_changes(
+    kb_id: str,
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=500, alias="pageSize"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateChangesResponse:
+    try:
+        return service.get_file_changes(user_id=current_user_id, kb_id=kb_id, page=page, page_size=page_size)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/stage",
+    response_model=TemplateStageResponse,
+    summary="Stage knowledge base Git files",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def stage_knowledge_base_version_control_changes(
+    kb_id: str,
+    request: Request,
+    payload: TemplateStageRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateStageResponse:
+    try:
+        return service.stage(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/unstage",
+    response_model=TemplateUnstageResponse,
+    summary="Unstage knowledge base Git files",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def unstage_knowledge_base_version_control_changes(
+    kb_id: str,
+    request: Request,
+    payload: TemplateUnstageRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateUnstageResponse:
+    try:
+        return service.unstage(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/discard",
+    response_model=TemplateDiscardResponse,
+    summary="Discard knowledge base Git file changes",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def discard_knowledge_base_version_control_changes(
+    kb_id: str,
+    request: Request,
+    payload: TemplateDiscardRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateDiscardResponse:
+    try:
+        return service.discard(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/commit",
+    response_model=TemplateCommitResponse,
+    summary="Commit knowledge base Git changes",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def commit_knowledge_base_version_control_changes(
+    kb_id: str,
+    request: Request,
+    payload: GitCommitRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateCommitResponse:
+    try:
+        return service.commit(user_id=current_user_id, kb_id=kb_id, message=payload.message, paths=payload.paths)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/commits",
+    response_model=TemplateCommitListResponse,
+    summary="List knowledge base Git commits",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def list_knowledge_base_version_control_commits(
+    kb_id: str,
+    request: Request,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateCommitListResponse:
+    try:
+        return service.list_commits(user_id=current_user_id, kb_id=kb_id, page=page, page_size=page_size)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/commits/{commit_id}/files",
+    response_model=TemplateCommitFilesResponse,
+    summary="Get knowledge base Git commit files",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_version_control_commit_files(
+    kb_id: str,
+    commit_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateCommitFilesResponse:
+    try:
+        return service.get_commit_files(user_id=current_user_id, kb_id=kb_id, commit_id=commit_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/diff",
+    response_model=TemplateDiffResponse,
+    summary="Get knowledge base Git file diff",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_version_control_diff(
+    kb_id: str,
+    request: Request,
+    path: str = Query(...),
+    head: str = Query("WORKTREE"),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateDiffResponse:
+    try:
+        return service.diff(user_id=current_user_id, kb_id=kb_id, path=path, head=head)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/blob",
+    response_model=TemplateBlobResponse,
+    summary="Read knowledge base Git file blob",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def get_knowledge_base_version_control_blob(
+    kb_id: str,
+    request: Request,
+    path: str = Query(...),
+    revision: str | None = Query(None),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateBlobResponse:
+    try:
+        return service.blob(user_id=current_user_id, kb_id=kb_id, path=path, revision=revision)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.get(
+    "/{kb_id}/git/version-control/branches",
+    response_model=TemplateVersionControlBranchListResponse,
+    summary="List knowledge base Git branches",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def list_knowledge_base_version_control_branches(
+    kb_id: str,
+    request: Request,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateVersionControlBranchListResponse:
+    try:
+        return service.list_branches(user_id=current_user_id, kb_id=kb_id)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/branches/{branch_name:path}/checkout",
+    response_model=TemplateCheckoutResponse,
+    summary="Switch to or create a knowledge base Git branch",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def checkout_knowledge_base_version_control_branch(
+    kb_id: str,
+    branch_name: str,
+    request: Request,
+    payload: TemplateCheckoutRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateCheckoutResponse:
+    try:
+        return service.checkout_branch(user_id=current_user_id, kb_id=kb_id, branch_name=branch_name, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/fetch",
+    response_model=TemplateRemoteResponse,
+    summary="Fetch knowledge base Git remote references",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def fetch_knowledge_base_version_control(
+    kb_id: str,
+    request: Request,
+    payload: TemplateRemoteRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateRemoteResponse:
+    try:
+        return service.fetch(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/pull",
+    response_model=TemplateRemoteResponse,
+    summary="Pull knowledge base Git remote changes",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def pull_knowledge_base_version_control(
+    kb_id: str,
+    request: Request,
+    payload: TemplateRemoteRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateRemoteResponse:
+    try:
+        return service.pull(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/push",
+    response_model=TemplateRemoteResponse,
+    summary="Push knowledge base Git changes",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def push_knowledge_base_version_control(
+    kb_id: str,
+    request: Request,
+    payload: TemplateRemoteRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> TemplateRemoteResponse:
+    try:
+        return service.push(user_id=current_user_id, kb_id=kb_id, payload=payload)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/revert",
+    response_model=GitOperationResponse,
+    summary="Revert a knowledge base Git commit",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def revert_knowledge_base_version_control_commit(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseGitRevertRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitOperationResponse:
+    try:
+        service.revert_commit(user_id=current_user_id, kb_id=kb_id, commit_id=payload.commit_id)
+        return GitOperationResponse(success=True, message=request.state.translate("knowledge_base.git.revert_success"))
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/git/version-control/rollback",
+    response_model=GitOperationResponse,
+    summary="Reset knowledge base Git repository to a revision",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def rollback_knowledge_base_version_control(
+    kb_id: str,
+    request: Request,
+    payload: KnowledgeBaseGitRollbackRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
+) -> GitOperationResponse:
+    try:
+        service.rollback(user_id=current_user_id, kb_id=kb_id, revision=payload.revision, confirm=payload.confirm)
+        return GitOperationResponse(success=True, message=request.state.translate("knowledge_base.git.rollback_success"))
     except Exception as exc:
         _raise_kb_error(request, exc)
 

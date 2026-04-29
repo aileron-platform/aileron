@@ -82,6 +82,35 @@ def test_reconcile_kb_quota_skips_commit_when_no_changes(
 
 
 @pytest.mark.unit
+def test_reconcile_kb_quota_includes_git_and_lfs_objects(
+    maintenance_service,
+    mock_db_session,
+):
+    kb = db_models.KnowledgeBase(
+        id="kb-1",
+        owner_id="owner-1",
+        slug="docs",
+        name="Docs",
+        current_size_bytes=0,
+        quota_bytes=None,
+    )
+    kb_dir = maintenance_service.storage_root / kb.id
+    lfs_dir = kb_dir / ".git" / "lfs" / "objects" / "aa" / "bb"
+    lfs_dir.mkdir(parents=True, exist_ok=True)
+    (kb_dir / "wiki.md").write_text("wiki", encoding="utf-8")
+    (kb_dir / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    (lfs_dir / "large-object").write_text("large", encoding="utf-8")
+
+    mock_db_session.scalars.return_value.all.return_value = [kb]
+
+    result = maintenance_service.reconcile_kb_quota()
+
+    assert result == {"processed": 1, "updated": 1, "drifted": 1}
+    assert kb.current_size_bytes == 30
+    mock_db_session.commit.assert_called_once()
+
+
+@pytest.mark.unit
 def test_cleanup_tombstoned_knowledge_bases_removes_dirs_attachments_and_records(
     maintenance_service,
     mock_db_session,

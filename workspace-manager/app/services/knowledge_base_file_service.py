@@ -28,6 +28,7 @@ from app.core.file_management import (
 from app.db import models as db_models
 from app.models import FileUploadResponse, UploadedFileInfo
 from app.services.knowledge_base_service import KnowledgeBaseAccessDeniedError, KnowledgeBaseService
+from app.services.knowledge_base_wiki_service import KnowledgeBaseWikiService
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class KnowledgeBaseFileService:
         self.kb_service = KnowledgeBaseService(db)
         self.storage_root = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
         self.storage_root.mkdir(parents=True, exist_ok=True)
+        self.wiki_service = KnowledgeBaseWikiService(db)
 
     def get_tree(
         self,
@@ -75,6 +77,8 @@ class KnowledgeBaseFileService:
         max_depth: int = 1,
     ) -> FileTreeResponse:
         kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
+        self.wiki_service.storage_root = self.storage_root
+        self.wiki_service.initialize(kb)
         fs_path = self._resolve_path(kb.id, path)
         if not fs_path.exists():
             fs_path.mkdir(parents=True, exist_ok=True)

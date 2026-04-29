@@ -9,7 +9,6 @@ const tMock = vi.hoisted(() => (key: string) => {
     'template.center.settingsDialog.description': 'Settings description',
     'template.center.settingsDialog.actions.back': 'Back',
     'template.center.settings.tabs.versionControl': 'Version Control',
-    'template.center.settings.tabs.remote': 'Remote',
     'template.center.settings.tabs.gitUser': 'Git User',
     'template.center.settings.tabs.sshKeys': 'SSH Keys',
   };
@@ -24,6 +23,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 
 vi.mock('@/shared/services/templateGitApi', () => ({
   checkCloneStatus: vi.fn(async () => ({ success: true, data: { remote_url: 'git@example.com:repo.git' } })),
+  getCloneProgress: vi.fn(),
   getRepositoryStatus: vi.fn(async () => ({
     isGitRepo: true,
     currentBranch: 'main',
@@ -41,7 +41,11 @@ vi.mock('@/shared/services/templateGitApi', () => ({
 }));
 
 vi.mock('./components/TemplateRegistryVersionControlTab', () => ({
-  TemplateRegistryVersionControlTab: () => <div data-testid="template-version-control-tab" />,
+  TemplateRegistryVersionControlTab: ({ onOpenRemoteSettings }: { onOpenRemoteSettings: () => void }) => (
+    <div data-testid="template-version-control-tab">
+      <button type="button" onClick={onOpenRemoteSettings}>Open remote settings</button>
+    </div>
+  ),
 }));
 
 vi.mock('./components/GitUserConfigTab', () => ({
@@ -62,10 +66,11 @@ describe('TemplateCenterSettingsView', () => {
 
     expect(screen.queryByRole('tab', { name: 'General' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Version Control' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Remote' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Remote' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Git User' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'SSH Keys' })).toBeInTheDocument();
     expect(screen.getByTestId('template-version-control-tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open remote settings' })).toBeInTheDocument();
     expect(screen.queryByText('Registry metadata')).not.toBeInTheDocument();
     expect(screen.queryByText('Owner')).not.toBeInTheDocument();
   });

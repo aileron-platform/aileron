@@ -1,11 +1,24 @@
 import { apiClient } from '@/shared/api/apiClient';
 import type {
+  VersionControlBranch,
+  VersionControlBlobResponse,
+  VersionControlChangesResponse,
+  VersionControlCommitFilesResponse,
+  VersionControlCommitListResponse,
+  VersionControlDiffResponse,
+  VersionControlStatus,
+} from '@/shared/types/versionControl';
+import type {
   KnowledgeBaseAttachmentListResponse,
   KnowledgeBaseAttachmentCreatePayload,
   KnowledgeBaseAttachmentSummary,
   KnowledgeBaseAttachmentUpdatePayload,
   KnowledgeBaseCreatePayload,
   KnowledgeBaseDetail,
+  KnowledgeBaseGitEnablePayload,
+  KnowledgeBaseGitLfsEnablePayload,
+  KnowledgeBaseGitRepositoryStatus,
+  KnowledgeBaseGraphResponse,
   KnowledgeBaseListResponse,
   KnowledgeBaseShareCreatePayload,
   KnowledgeBaseShareListResponse,
@@ -13,7 +26,9 @@ import type {
   KnowledgeBaseShareSummary,
   KnowledgeBaseShareUpdatePayload,
   KnowledgeBaseUpdatePayload,
+  KnowledgeBaseVersionControlStatus,
 } from '@/shared/types/knowledgeBase';
+import type { TemplateCheckoutRequest, TemplateRemoteRequest } from '@/shared/services/templateGitApi';
 
 export async function listKnowledgeBases(): Promise<KnowledgeBaseSummary[]> {
   const response = await apiClient.get<KnowledgeBaseListResponse>('/knowledge-bases');
@@ -39,6 +54,121 @@ export async function deleteKnowledgeBase(kbId: string, force = false): Promise<
   const query = force ? '?force=true' : '';
   return apiClient.delete<KnowledgeBaseDetail>(`/knowledge-bases/${kbId}${query}`);
 }
+
+export async function getKnowledgeBaseGraph(kbId: string): Promise<KnowledgeBaseGraphResponse> {
+  return apiClient.get<KnowledgeBaseGraphResponse>(`/knowledge-bases/${kbId}/graph`);
+}
+
+export async function getKnowledgeBaseGitRepositoryStatus(kbId: string): Promise<KnowledgeBaseGitRepositoryStatus> {
+  return apiClient.get<KnowledgeBaseGitRepositoryStatus>(`/knowledge-bases/${kbId}/git/repository/status`);
+}
+
+export async function enableKnowledgeBaseGitRepository(
+  kbId: string,
+  payload: KnowledgeBaseGitEnablePayload = {},
+): Promise<KnowledgeBaseGitRepositoryStatus> {
+  return apiClient.post<KnowledgeBaseGitRepositoryStatus>(`/knowledge-bases/${kbId}/git/repository/enable`, payload);
+}
+
+export async function enableKnowledgeBaseGitLfs(
+  kbId: string,
+  payload: KnowledgeBaseGitLfsEnablePayload = {},
+): Promise<{ success: boolean; message: string }> {
+  return apiClient.post<{ success: boolean; message: string }>(`/knowledge-bases/${kbId}/git/lfs/enable`, payload);
+}
+
+export async function getKnowledgeBaseVersionControlStatus(kbId: string): Promise<KnowledgeBaseVersionControlStatus> {
+  return apiClient.get<KnowledgeBaseVersionControlStatus>(`/knowledge-bases/${kbId}/git/version-control/status`);
+}
+
+const knowledgeBaseVersionControlBase = (kbId: string) => `/knowledge-bases/${kbId}/git/version-control`;
+
+export const knowledgeBaseVersionControlApi = {
+  getStatus: (kbId: string) =>
+    apiClient.get<VersionControlStatus>(`${knowledgeBaseVersionControlBase(kbId)}/status`),
+  getChanges: (kbId: string, page = 1, pageSize = 100) =>
+    apiClient.get<VersionControlChangesResponse>(
+      `${knowledgeBaseVersionControlBase(kbId)}/changes?page=${page}&pageSize=${pageSize}`,
+    ),
+  getBranches: async (kbId: string) => {
+    const response = await apiClient.get<{ branches: VersionControlBranch[] }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/branches`,
+    );
+    return response.branches ?? [];
+  },
+  checkoutBranch: (kbId: string, branch: string, payload: TemplateCheckoutRequest) =>
+    apiClient.post<{ branch: string; created: boolean; stashedChanges?: string | null }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/branches/${encodeURIComponent(branch)}/checkout`,
+      payload,
+    ),
+  stage: (kbId: string, paths: string[]) =>
+    apiClient.post<{ staged: string[]; unstaged: string[] }>(`${knowledgeBaseVersionControlBase(kbId)}/stage`, {
+      paths,
+      includeUntracked: true,
+    }),
+  unstage: (kbId: string, paths: string[]) =>
+    apiClient.post<{ unstaged: string[]; remainingStaged: number }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/unstage`,
+      { paths },
+    ),
+  discard: (kbId: string, paths: string[]) =>
+    apiClient.post<{ discarded: string[]; warnings: string[] }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/discard`,
+      { paths },
+    ),
+  commit: (kbId: string, message: string, paths?: string[]) =>
+    apiClient.post<{ commit: unknown }>(`${knowledgeBaseVersionControlBase(kbId)}/commit`, { message, paths }),
+  getCommits: (kbId: string, page = 1, pageSize = 20, branch?: string) => {
+    const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('pageSize', String(pageSize));
+    if (branch) params.set('branch', branch);
+    return apiClient.get<VersionControlCommitListResponse>(`${knowledgeBaseVersionControlBase(kbId)}/commits?${params}`);
+  },
+  getCommitFiles: (kbId: string, commitId: string) =>
+    apiClient.get<VersionControlCommitFilesResponse>(
+      `${knowledgeBaseVersionControlBase(kbId)}/commits/${encodeURIComponent(commitId)}/files`,
+    ),
+  getDiff: (kbId: string, path: string, head: 'INDEX' | 'WORKTREE' = 'WORKTREE') =>
+    apiClient.get<VersionControlDiffResponse>(
+      `${knowledgeBaseVersionControlBase(kbId)}/diff?path=${encodeURIComponent(path)}&head=${encodeURIComponent(head)}`,
+    ),
+  getBlob: (kbId: string, path: string, revision?: string | null) => {
+    const params = new URLSearchParams();
+    params.set('path', path);
+    if (revision) {
+      params.set('revision', revision);
+    }
+    return apiClient.get<VersionControlBlobResponse>(`${knowledgeBaseVersionControlBase(kbId)}/blob?${params}`);
+  },
+  fetch: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/fetch`,
+      payload,
+    ),
+  pull: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/pull`,
+      payload,
+    ),
+  push: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+    apiClient.post<{ remote: string; branch?: string | null; message: string }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/push`,
+      payload,
+    ),
+  setRemoteUrl: (kbId: string, remoteUrl: string) =>
+    apiClient.post<{ success: boolean; message: string }>(`/knowledge-bases/${kbId}/git/remote-url`, { remoteUrl }),
+  revert: (kbId: string, commitId: string) =>
+    apiClient.post<{ success: boolean; message: string }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/revert`,
+      { commitId },
+    ),
+  rollback: (kbId: string, revision: string, confirm: string) =>
+    apiClient.post<{ success: boolean; message: string }>(
+      `${knowledgeBaseVersionControlBase(kbId)}/rollback`,
+      { revision, confirm },
+    ),
+};
 
 export async function listKnowledgeBaseShares(kbId: string) {
   const response = await apiClient.get<KnowledgeBaseShareListResponse>(`/knowledge-bases/${kbId}/shares`);

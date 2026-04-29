@@ -56,18 +56,6 @@ const versionControl = {
       worktree: 'Worktree · {{name}}',
     },
   },
-  branchDialog: {
-    title: 'Create branch',
-    description: 'Create a branch in the selected worktree and check it out.',
-    nameLabel: 'Branch name',
-    namePlaceholder: 'Branch name',
-    startPointLabel: 'Start point',
-    startPointPlaceholder: 'Start point (optional)',
-    stashChanges: 'Stash local changes before checkout',
-    cancel: 'Cancel',
-    create: 'Create branch',
-    creating: 'Creating...',
-  },
   fileChanges: {
     loading: 'Loading...',
     stagedTitle: 'Staged changes',

@@ -28,6 +28,7 @@ title: 生產環境部署
 - [ ] 容器映像使用固定版本 tag（非 `latest` 或 `dev`）
 - [ ] Resource limits/requests 已設定
 - [ ] 持久化儲存已配置（PVC + 適當的 StorageClass）
+- [ ] 若 Team Wiki Knowledge Base 會啟用 Git LFS，`workspace-manager` image 已安裝 `git-lfs`
 - [ ] 監控與告警已就緒
 - [ ] 備份策略已建立
 - [ ] Log 收集已配置

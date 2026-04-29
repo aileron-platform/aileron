@@ -16,6 +16,7 @@ title: Docker 模式
 
 - [Docker](https://docs.docker.com/get-docker/)（建議 24.0+）
 - [Docker Compose](https://docs.docker.com/compose/install/)（V2，通常已內建於 Docker Desktop）
+- [Git LFS](https://git-lfs.com/)（選用；知識庫啟用 Git LFS 並管理大型 `raw/` 檔案時需要）
 - 至少 4 vCPU
 - 至少 8GB 可用記憶體
 - 建議 12GB 到 16GB 可用記憶體，以支援較穩定的瀏覽器與 agent 工作流程
@@ -67,6 +68,10 @@ Docker 模式下，`docker compose` 管理以下服務：
 | **workspace-nextjs** | 本地建置 | Next.js 預覽服務，用於即時預覽前端變更 |
 | **frontend** | 本地建置 | React + Vite 開發伺服器 |
 | **drawio** | `jgraph/drawio` | 內嵌圖表編輯工具 |
+
+:::info Git LFS 與知識庫
+Team Wiki Knowledge Base 的 Git 版本控制是每個知識庫的選項；只有在知識庫啟用 Git LFS 時，manager 執行環境才需要可用的 `git lfs` 指令。Docker 映像若要支援大型 PDF、圖片、壓縮檔或其他 `raw/` 來源檔案的 LFS tracking，請確認 `workspace-manager` image 內已安裝 Git LFS。
+:::
 
 ## 啟動
 

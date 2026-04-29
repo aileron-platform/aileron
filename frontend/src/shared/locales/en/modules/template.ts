@@ -79,7 +79,6 @@ const template = {
     settings: {
       tabs: {
         versionControl: 'Version Control',
-        remote: 'Remote',
         gitUser: 'Git User',
         sshKeys: 'SSH Keys',
       },
@@ -89,7 +88,7 @@ const template = {
         mode: {
           title: 'Version Control',
           fileChanges: 'File Changes',
-          commitHistory: 'Commit History',
+          commitHistory: 'History',
         },
         registryStale: {
           description: 'Registry content may have changed. Rebuild the template index to sync the latest state.',

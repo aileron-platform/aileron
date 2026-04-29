@@ -79,13 +79,13 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
     subItems: [
       {
         id: 'changes',
-        labelKey: 'workspace.navigation.sub.versionControl.changes',
+        labelKey: 'shared.versionControl.mode.fileChanges',
         icon: FileText,
         parentId: 'version-control',
       },
       {
         id: 'history',
-        labelKey: 'workspace.navigation.sub.versionControl.history',
+        labelKey: 'shared.versionControl.mode.commitHistory',
         icon: Clock,
         parentId: 'version-control',
       },

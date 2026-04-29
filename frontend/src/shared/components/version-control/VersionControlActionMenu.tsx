@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowUp, MoreHorizontal, RefreshCw, Settings } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 
-type VersionControlActionId = 'refresh' | 'fetch' | 'pull' | 'push';
+type VersionControlActionId = 'refresh' | 'fetch' | 'pull' | 'push' | 'remoteSettings';
 
 export interface VersionControlActionMenuItem {
   id: VersionControlActionId;
@@ -22,6 +22,7 @@ const actionIcons: Record<VersionControlActionId, React.ReactNode> = {
   fetch: <RefreshCw className="h-3 w-3" />,
   pull: <ArrowDown className="h-3 w-3" />,
   push: <ArrowUp className="h-3 w-3" />,
+  remoteSettings: <Settings className="h-3 w-3" />,
 };
 
 export const VersionControlActionMenu: React.FC<VersionControlActionMenuProps> = ({
@@ -62,7 +63,7 @@ export const VersionControlActionMenu: React.FC<VersionControlActionMenuProps> =
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-32 rounded-md border border-border bg-background shadow-lg">
+        <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-border bg-background shadow-lg">
           <div className="py-1">
             {actions.map((action) => (
               <button

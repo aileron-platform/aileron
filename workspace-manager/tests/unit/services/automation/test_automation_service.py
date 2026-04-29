@@ -19,6 +19,7 @@ from app.models.automation import (
     JobUpdateRequest,
 )
 from app.services.automation_service import (
+    AutomationJobError,
     AutomationService,
     JobDispatchError,
     JobNotFoundError,
@@ -221,6 +222,190 @@ class TestAutomationJobCRUD:
         db_session.add.assert_called_once()
         db_session.commit.assert_called_once()
 
+    def test_create_wiki_index_job_validates_attachment_and_permissions(
+        self,
+        automation_service,
+        db_session,
+        sample_job_create_request,
+        sample_workspace_record,
+    ):
+        """Test: wiki index job metadata validates workspace, KB, and rw attachment."""
+        # Arrange
+        sample_job_create_request.metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        db_session.scalar.return_value = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-123",
+            workspace_id="ws-123",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="rw",
+            attached_by_id="user-123",
+        )
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        def mock_refresh(obj):
+            if isinstance(obj, db_models.AutomationJob):
+                obj.success_count = obj.success_count or 0
+                obj.failure_count = obj.failure_count or 0
+                obj.total_duration = obj.total_duration or 0
+
+        db_session.refresh.side_effect = mock_refresh
+
+        # Act
+        result = automation_service.create_job(sample_job_create_request)
+
+        # Assert
+        assert result.metadata["jobType"] == "knowledge_base.wiki_index"
+        automation_service.workspace_service._require_workspace_access.assert_called_once_with(
+            sample_workspace_record,
+            current_user_id="user-123",
+            minimum_role="editor",
+        )
+        automation_service.kb_service.get_kb.assert_called_once_with(
+            user_id="user-123",
+            kb_id="kb-123",
+            minimum_role="editor",
+        )
+
+    def test_create_wiki_index_job_rejects_missing_knowledge_base_id(
+        self,
+        automation_service,
+        sample_job_create_request,
+    ):
+        """Test: wiki index metadata requires knowledgeBaseId."""
+        # Arrange
+        sample_job_create_request.metadata = {"jobType": "knowledge_base.wiki_index"}
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.create_job(sample_job_create_request)
+        assert exc_info.value.code == "KB_WIKI_INDEX_METADATA_INVALID"
+
+    def test_create_wiki_index_job_requires_workspace_attachment(
+        self,
+        automation_service,
+        db_session,
+        sample_job_create_request,
+        sample_workspace_record,
+    ):
+        """Test: wiki index job requires KB attached to the workspace."""
+        # Arrange
+        sample_job_create_request.metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        db_session.scalar.return_value = None
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.create_job(sample_job_create_request)
+        assert exc_info.value.code == "KB_WORKSPACE_ATTACHMENT_REQUIRED"
+
+    def test_create_wiki_index_job_requires_writable_attachment(
+        self,
+        automation_service,
+        db_session,
+        sample_job_create_request,
+        sample_workspace_record,
+    ):
+        """Test: wiki index job rejects read-only KB attachment."""
+        # Arrange
+        sample_job_create_request.metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        db_session.scalar.return_value = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-123",
+            workspace_id="ws-123",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="ro",
+            attached_by_id="user-123",
+        )
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.create_job(sample_job_create_request)
+        assert exc_info.value.code == "KB_ATTACHMENT_READ_ONLY"
+
+    def test_validate_wiki_index_execution_rechecks_attachment(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+        sample_workspace_record,
+    ):
+        """Test: execution-time wiki index validation rechecks attachment state."""
+        # Arrange
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        attachment = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-123",
+            workspace_id="ws-123",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="rw",
+            attached_by_id="user-123",
+        )
+        db_session.scalar.return_value = attachment
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        # Act
+        result = automation_service.validate_knowledge_base_wiki_index_execution(sample_job_record)
+
+        # Assert
+        assert result is attachment
+        automation_service.kb_service.get_kb.assert_called_once_with(
+            user_id="user-123",
+            kb_id="kb-123",
+            minimum_role="editor",
+        )
+
+    def test_validate_wiki_index_execution_fails_when_attachment_removed(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+        sample_workspace_record,
+    ):
+        """Test: execution-time wiki index validation fails if attachment is removed."""
+        # Arrange
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        db_session.scalar.return_value = None
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.validate_knowledge_base_wiki_index_execution(sample_job_record)
+        assert exc_info.value.code == "KB_WORKSPACE_ATTACHMENT_REQUIRED"
+
+    def test_build_wiki_index_prompt_targets_mounted_kb(self, automation_service):
+        """Test: fixed wiki index prompt targets the mounted KB path."""
+        prompt = automation_service.build_knowledge_base_wiki_index_prompt(mount_alias="docs")
+
+        assert "/knowledge/docs" in prompt
+        assert "AGENTS.md" in prompt
+        assert "wiki/index.md" in prompt
+
     def test_update_job_success(self, automation_service, db_session, sample_job_record):
         """Test: update task successfully"""
         # Arrange
@@ -355,8 +540,9 @@ class TestAutomationJobExecution:
         db_session.get.return_value = None
 
         # Act & Assert
-        with pytest.raises(JobNotFoundError, match="不存在"):
+        with pytest.raises(JobNotFoundError) as exc_info:
             automation_service.execute_task_now("nonexistent-job")
+        assert exc_info.value.code == "AUTOMATION_JOB_NOT_FOUND"
 
     def test_execute_task_now_invalid_status(self, automation_service, db_session, sample_job_record):
         """Test: execute draft-status task raises exception"""
@@ -365,8 +551,9 @@ class TestAutomationJobExecution:
         db_session.get.return_value = sample_job_record
 
         # Act & Assert
-        with pytest.raises(JobNotRunnableError, match="不可執行"):
+        with pytest.raises(JobNotRunnableError) as exc_info:
             automation_service.execute_task_now("job-123")
+        assert exc_info.value.code == "AUTOMATION_JOB_NOT_RUNNABLE"
 
     @patch('app.tasks.run_automation_job')
     def test_execute_task_now_dispatch_failure(self, mock_task, automation_service, db_session, sample_job_record, sample_execution_record):
@@ -377,8 +564,9 @@ class TestAutomationJobExecution:
         mock_task.apply_async.side_effect = CeleryError("Connection failed")
 
         # Act & Assert
-        with pytest.raises(JobDispatchError, match="無法派送"):
+        with pytest.raises(JobDispatchError) as exc_info:
             automation_service.execute_task_now("job-123")
+        assert exc_info.value.code == "AUTOMATION_DISPATCH_FAILED"
 
 
 # ============================================================================
@@ -655,7 +843,7 @@ class TestJobExecutionManagement:
 
         # Assert
         assert result["cancelled"] is False
-        assert "只能取消 waiting 狀態" in result["message"]
+        assert result["status"] == "running"
 
 
 # ============================================================================
@@ -964,8 +1152,9 @@ class TestErrorHandling:
         # Mock enqueue_execution to return None
         with patch.object(automation_service, 'enqueue_execution', return_value=None):
             # Act & Assert
-            with pytest.raises(JobDispatchError, match="無法建立任務執行紀錄"):
+            with pytest.raises(JobDispatchError) as exc_info:
                 automation_service.execute_task_now("job-123")
+            assert exc_info.value.code == "AUTOMATION_EXECUTION_CREATE_FAILED"
 
     def test_create_execution_running_status(self, automation_service, db_session, sample_job_record):
         """Test: create_execution creates running-status execution record"""
@@ -1262,4 +1451,4 @@ class TestErrorHandling:
         # Assert
         assert result["status"] == "not_found"
         assert result["cancelled"] is False
-        assert "不存在" in result["message"]
+        assert "does not exist" in result["message"]

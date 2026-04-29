@@ -21,6 +21,12 @@ UPGRADE_SQL = (
 DOWNGRADE_SQL = (
     WORKSPACE_MANAGER_ROOT / "scripts" / "migrations" / "20260421_add_knowledge_bases_rollback.sql"
 ).read_text(encoding="utf-8")
+TEAM_WIKI_UPGRADE_SQL = (
+    WORKSPACE_MANAGER_ROOT / "scripts" / "migrations" / "20260429_extend_knowledge_bases_for_team_wiki.sql"
+).read_text(encoding="utf-8")
+TEAM_WIKI_DOWNGRADE_SQL = (
+    WORKSPACE_MANAGER_ROOT / "scripts" / "migrations" / "20260429_extend_knowledge_bases_for_team_wiki_rollback.sql"
+).read_text(encoding="utf-8")
 
 
 def _build_schema_engine(schema_name: str) -> sa.Engine:
@@ -95,6 +101,7 @@ def test_knowledge_base_sql_migration_supports_upgrade_and_downgrade() -> None:
             )
 
             connection.exec_driver_sql(UPGRADE_SQL)
+            connection.exec_driver_sql(TEAM_WIKI_UPGRADE_SQL)
 
             assert _table_exists(connection, "knowledge_bases", schema_name)
             assert _table_exists(connection, "knowledge_base_shares", schema_name)
@@ -105,7 +112,30 @@ def test_knowledge_base_sql_migration_supports_upgrade_and_downgrade() -> None:
                 "runtime_mounted_kb_signature",
                 schema_name,
             )
+            for column_name in [
+                "version_control_enabled",
+                "git_lfs_enabled",
+                "git_default_branch",
+                "git_last_commit_sha",
+                "wiki_initialized_at",
+                "last_indexed_at",
+                "last_index_status",
+                "last_index_error",
+            ]:
+                assert _column_exists(connection, "knowledge_bases", column_name, schema_name)
 
+            connection.exec_driver_sql(TEAM_WIKI_DOWNGRADE_SQL)
+            for column_name in [
+                "version_control_enabled",
+                "git_lfs_enabled",
+                "git_default_branch",
+                "git_last_commit_sha",
+                "wiki_initialized_at",
+                "last_indexed_at",
+                "last_index_status",
+                "last_index_error",
+            ]:
+                assert not _column_exists(connection, "knowledge_bases", column_name, schema_name)
             connection.exec_driver_sql(DOWNGRADE_SQL)
 
             assert not _table_exists(connection, "knowledge_bases", schema_name)

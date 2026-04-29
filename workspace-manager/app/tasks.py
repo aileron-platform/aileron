@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import timedelta
-from typing import Iterator, Optional
+from typing import Any, Iterator, Optional
 
 import httpx
 from celery import current_app
@@ -17,7 +17,7 @@ from app.db import models as db_models
 from app.db.database import SessionLocal
 from app.services.automation_execution_logger import AutomationExecutionLogger
 from app.services.knowledge_base_maintenance_service import KnowledgeBaseMaintenanceService
-from app.services.automation_service import AutomationService
+from app.services.automation_service import AutomationJobError, AutomationService
 from app.utils.datetime_utils import calculate_duration, utcnow
 
 logger = get_celery_logger()
@@ -51,6 +51,64 @@ def knowledge_base_maintenance_service() -> Iterator[KnowledgeBaseMaintenanceSer
         raise
     finally:
         db.close()
+
+
+def _knowledge_base_wiki_index_version_metadata(
+    db: Session,
+    *,
+    user_id: str,
+    knowledge_base_id: str | None,
+) -> dict[str, Any]:
+    if not isinstance(knowledge_base_id, str):
+        return {
+            "knowledgeBaseId": knowledge_base_id,
+            "versionControlEnabled": False,
+            "filesChanged": [],
+            "commitId": None,
+        }
+
+    kb = db.get(db_models.KnowledgeBase, knowledge_base_id)
+    version_control_enabled = bool(getattr(kb, "version_control_enabled", False))
+    metadata: dict[str, Any] = {
+        "knowledgeBaseId": knowledge_base_id,
+        "versionControlEnabled": version_control_enabled,
+        "filesChanged": [],
+        "commitId": None,
+    }
+    if not version_control_enabled:
+        return metadata
+
+    from app.services.knowledge_base_git_service import KnowledgeBaseGitService
+
+    git_service = KnowledgeBaseGitService(db)
+    changes = git_service.get_file_changes(user_id=user_id, kb_id=knowledge_base_id)
+    files_changed = _version_control_changed_paths(changes)
+    metadata["filesChanged"] = files_changed
+    if not files_changed:
+        return metadata
+
+    try:
+        response = git_service.commit_all(
+            user_id=user_id,
+            kb_id=knowledge_base_id,
+            message="Update knowledge base wiki index",
+        )
+    except ValueError as exc:
+        if str(exc) != "GIT_NO_CHANGES":
+            raise
+        return metadata
+    metadata["commitId"] = response.commit.id
+    return metadata
+
+
+def _version_control_changed_paths(changes: Any) -> list[str]:
+    paths: dict[str, None] = {}
+    for group_name in ("staged", "unstaged", "untracked"):
+        for item in getattr(changes, group_name, []) or []:
+            path = getattr(item, "path", None)
+            if isinstance(path, str) and path:
+                paths[path] = None
+    return list(paths)
 
 
 @current_app.task(name="automation.dispatch_due_jobs")
@@ -224,96 +282,70 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                     return {"status": "queued", "session_id": None, "queue_position": position}
 
                 exec_logger.info("Successfully acquired workspace lock, starting task execution")
-                execution = service.mark_execution_running(
-                    execution_id, summary="Scheduled task executing"
-                )
-                if not execution:
-                    exec_logger.error("Execution record not found")
-                    logger.error(
-                        "Execution record not found - job_id=%s, execution_id=%s",
-                        job_id, execution_id
-                    )
-                    return {"status": "missing_execution", "session_id": None}
-
-                start_time = execution.started_at or utcnow()
-                session_id = None
-
-                try:
-                    exec_logger.info("Starting task execution")
-                    session_id, summary, metadata = _execute_automation_job(service, job, exec_logger, execution_id)
-
-                    duration = calculate_duration(start_time)
-                    exec_logger.info("Task execution successful", session_id=session_id, duration=duration)
-
-                    final_metadata = {**metadata, **exec_logger.to_metadata()}
-
-                    service.complete_execution(
-                        execution_id,
-                        status="success",
-                        summary=summary,
-                        duration=duration,
-                        session_id=session_id,
-                        metadata=final_metadata,
-                    )
-
-                    logger.info(
-                        "Automation task execution successful - job_id=%s, execution_id=%s, session_id=%s, duration=%ds",
-                        job_id, execution_id, session_id, duration
-                    )
-                    return {"status": "success", "session_id": session_id}
-
-                except Exception as exc:
-                    duration = calculate_duration(start_time)
-                    error_type = type(exc).__name__
-                    error_message = str(exc)
-
-                    if hasattr(exc, 'session_id'):
-                        session_id = exc.session_id  # type: ignore
-
-                    exec_logger.error("TaskExecutionFailed", error_type=error_type, error_message=error_message)
-                    logger.error(
-                        "Automation taskExecutionFailed - job_id=%s, execution_id=%s, session_id=%s, "
-                        "error_type=%s, error=%s, duration=%ds",
-                        job_id, execution_id, session_id or "N/A",
-                        error_type, error_message, duration,
-                        exc_info=True
-                    )
-
+                kb_attachment = None
+                if service.is_knowledge_base_wiki_index_job(job):
                     try:
-                        final_metadata = {
-                            **exec_logger.to_metadata(),
-                            "error_type": error_type,
-                            "error_message": error_message,
-                            "execution_duration": duration,
-                            "failed_at": utcnow().isoformat(),
-                            "has_session": session_id is not None,
-                        }
-
+                        kb_attachment = service.validate_knowledge_base_wiki_index_execution(job)
+                    except AutomationJobError as exc:
+                        exec_logger.error(
+                            "Knowledge base wiki index validation failed",
+                            reason_code=exc.code,
+                            params=exc.params,
+                        )
                         service.complete_execution(
                             execution_id,
                             status="failed",
-                            summary=f"Scheduled task execution failed ({error_type}): {error_message}",
-                            duration=duration,
-                            session_id=session_id,
-                            error_message=error_message,
-                            metadata=final_metadata
+                            summary=f"Knowledge base wiki index validation failed: {exc.code}",
+                            duration=0,
+                            error_message=exc.code,
+                            metadata={
+                                **exec_logger.to_metadata(),
+                                "reasonCode": exc.code,
+                                "knowledgeBaseId": (job.task_metadata or {}).get("knowledgeBaseId"),
+                                "workspaceId": job.workspace_id,
+                            },
                         )
-                        logger.info(
-                            "Execution status updated to failed - execution_id=%s",
-                            execution_id
-                        )
-                    except Exception as update_exc:
-                        logger.critical(
-                            "Failed to update execution status! - execution_id=%s, error=%s",
-                            execution_id, str(update_exc),
-                            exc_info=True
+                        return {"status": "failed", "session_id": None, "error_type": exc.code}
+
+                    from app.utils.redis_lock import knowledge_base_wiki_index_lock
+
+                    with knowledge_base_wiki_index_lock(kb_attachment.kb_id, timeout=3600, blocking=False) as kb_acquired:
+                        if not kb_acquired:
+                            reason_code = "KB_WIKI_INDEX_LOCK_BUSY"
+                            exec_logger.warning(
+                                "Knowledge base wiki index lock is busy",
+                                knowledge_base_id=kb_attachment.kb_id,
+                            )
+                            service.complete_execution(
+                                execution_id,
+                                status="failed",
+                                summary="Knowledge base wiki index is already running",
+                                duration=0,
+                                error_message=reason_code,
+                                metadata={
+                                    **exec_logger.to_metadata(),
+                                    "reasonCode": reason_code,
+                                    "knowledgeBaseId": kb_attachment.kb_id,
+                                    "workspaceId": job.workspace_id,
+                                },
+                            )
+                            return {"status": "failed", "session_id": None, "error_type": reason_code}
+
+                        return _run_automation_job_with_acquired_locks(
+                            service=service,
+                            job=job,
+                            exec_logger=exec_logger,
+                            execution_id=execution_id,
+                            kb_mount_alias=kb_attachment.mount_alias,
                         )
 
-                    return {
-                        "status": "failed",
-                        "session_id": session_id,
-                        "error_type": error_type
-                    }
+                return _run_automation_job_with_acquired_locks(
+                    service=service,
+                    job=job,
+                    exec_logger=exec_logger,
+                    execution_id=execution_id,
+                    kb_mount_alias=None,
+                )
 
     except Exception as outer_exc:
         logger.critical(
@@ -334,6 +366,113 @@ def run_automation_job(self, job_id: str, execution_id: str) -> dict[str, Option
                 job_id, str(trigger_exc),
                 exc_info=True
             )
+
+
+def _run_automation_job_with_acquired_locks(
+    *,
+    service: AutomationService,
+    job: db_models.AutomationJob,
+    exec_logger: AutomationExecutionLogger,
+    execution_id: str,
+    kb_mount_alias: Optional[str],
+) -> dict[str, Optional[str]]:
+    """Run an automation job after workspace and optional KB locks are acquired."""
+    execution = service.mark_execution_running(
+        execution_id, summary="Scheduled task executing"
+    )
+    if not execution:
+        exec_logger.error("Execution record not found")
+        logger.error(
+            "Execution record not found - job_id=%s, execution_id=%s",
+            job.id, execution_id
+        )
+        return {"status": "missing_execution", "session_id": None}
+
+    start_time = execution.started_at or utcnow()
+    session_id = None
+
+    try:
+        exec_logger.info("Starting task execution")
+        session_id, summary, metadata = _execute_automation_job(
+            service,
+            job,
+            exec_logger,
+            execution_id,
+            kb_mount_alias=kb_mount_alias,
+        )
+
+        duration = calculate_duration(start_time)
+        exec_logger.info("Task execution successful", session_id=session_id, duration=duration)
+
+        final_metadata = {**metadata, **exec_logger.to_metadata()}
+
+        service.complete_execution(
+            execution_id,
+            status="success",
+            summary=summary,
+            duration=duration,
+            session_id=session_id,
+            metadata=final_metadata,
+        )
+
+        logger.info(
+            "Automation task execution successful - job_id=%s, execution_id=%s, session_id=%s, duration=%ds",
+            job.id, execution_id, session_id, duration
+        )
+        return {"status": "success", "session_id": session_id}
+
+    except Exception as exc:
+        duration = calculate_duration(start_time)
+        error_type = type(exc).__name__
+        error_message = str(exc)
+
+        if hasattr(exc, 'session_id'):
+            session_id = exc.session_id  # type: ignore
+
+        exec_logger.error("TaskExecutionFailed", error_type=error_type, error_message=error_message)
+        logger.error(
+            "Automation taskExecutionFailed - job_id=%s, execution_id=%s, session_id=%s, "
+            "error_type=%s, error=%s, duration=%ds",
+            job.id, execution_id, session_id or "N/A",
+            error_type, error_message, duration,
+            exc_info=True
+        )
+
+        try:
+            final_metadata = {
+                **exec_logger.to_metadata(),
+                "error_type": error_type,
+                "error_message": error_message,
+                "execution_duration": duration,
+                "failed_at": utcnow().isoformat(),
+                "has_session": session_id is not None,
+            }
+
+            service.complete_execution(
+                execution_id,
+                status="failed",
+                summary=f"Scheduled task execution failed ({error_type}): {error_message}",
+                duration=duration,
+                session_id=session_id,
+                error_message=error_message,
+                metadata=final_metadata
+            )
+            logger.info(
+                "Execution status updated to failed - execution_id=%s",
+                execution_id
+            )
+        except Exception as update_exc:
+            logger.critical(
+                "Failed to update execution status! - execution_id=%s, error=%s",
+                execution_id, str(update_exc),
+                exc_info=True
+            )
+
+        return {
+            "status": "failed",
+            "session_id": session_id,
+            "error_type": error_type
+        }
 
 
 def _trigger_next_queued_task(workspace_id: str) -> None:
@@ -388,8 +527,10 @@ def _execute_automation_job(
     service: AutomationService,
     job: db_models.AutomationJob,
     exec_logger: AutomationExecutionLogger,
-    execution_id: str
-) -> tuple[str, str, dict[str, Optional[str]]]:
+    execution_id: str,
+    *,
+    kb_mount_alias: Optional[str] = None,
+) -> tuple[str, str, dict[str, Any]]:
     """Call workspace runtime to create and execute session
 
     Args:
@@ -460,8 +601,14 @@ def _execute_automation_job(
         "source": "automation",
     }
 
+    effective_prompt = (
+        service.build_knowledge_base_wiki_index_prompt(mount_alias=kb_mount_alias)
+        if kb_mount_alias
+        else job.prompt
+    )
+
     prompt_payload = {
-        "prompt": job.prompt,
+        "prompt": effective_prompt,
         "images": images,
         "stream": True,  # Streaming is handled by the pub/sub wait
         "automation_execution_id": execution_id,  # For completion notification
@@ -615,6 +762,16 @@ def _execute_automation_job(
             "hasErrorMessage": has_error,
             "isError": False,
         }
+        if kb_mount_alias:
+            metadata = job.task_metadata or {}
+            knowledge_base_id = metadata.get("knowledgeBaseId") if isinstance(metadata, dict) else None
+            metadata_out.update(
+                _knowledge_base_wiki_index_version_metadata(
+                    db,
+                    user_id=job.creator_user_id,
+                    knowledge_base_id=knowledge_base_id,
+                )
+            )
 
         return session_id, summary, metadata_out
 

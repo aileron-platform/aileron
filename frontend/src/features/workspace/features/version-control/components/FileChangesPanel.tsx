@@ -21,13 +21,14 @@ import {
   GitBranch,
   Loader2,
 } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
-import { Checkbox } from '@/shared/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
-import { Input } from '@/shared/components/ui/input';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { GitContextSelector } from './GitContextSelector';
-import { VersionControlChangesSidebar, type VersionControlActionMenuItem } from '@/shared/components/version-control';
+import {
+  VersionControlChangesSidebar,
+  VersionControlCreateBranchDialog,
+  type VersionControlActionMenuItem,
+  type VersionControlCreateBranchPayload,
+} from '@/shared/components/version-control';
 import type { VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -75,9 +76,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const [untrackedPage, setUntrackedPage] = useState(1);
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
-  const [newBranchName, setNewBranchName] = useState('');
-  const [newBranchStartPoint, setNewBranchStartPoint] = useState('');
-  const [stashBeforeCheckout, setStashBeforeCheckout] = useState(false);
 
   // ==================== Refs ====================
 
@@ -294,22 +292,22 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     }
   }, [currentBranch, fetchMutation, pullMutation, pushMutation, resetPagination, t, toast]);
 
-  const handleCreateBranch = useCallback(async () => {
-    const branch = newBranchName.trim();
+  const handleCreateBranch = useCallback(async ({
+    branch,
+    startPoint,
+    stashChanges,
+  }: VersionControlCreateBranchPayload) => {
     if (!branch) return;
 
     try {
       const result = await checkoutMutation.mutateAsync({
         branch,
         create: true,
-        startPoint: newBranchStartPoint.trim() || null,
-        stashChanges: stashBeforeCheckout,
+        startPoint: startPoint ?? null,
+        stashChanges: stashChanges ?? false,
       });
       resetPagination();
       setCreateBranchOpen(false);
-      setNewBranchName('');
-      setNewBranchStartPoint('');
-      setStashBeforeCheckout(false);
       toast({
         title: t('workspace.versionControl.toasts.createBranchSuccess.title'),
         description: result.stashedChanges
@@ -325,7 +323,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [checkoutMutation, newBranchName, newBranchStartPoint, resetPagination, stashBeforeCheckout, t, toast]);
+  }, [checkoutMutation, resetPagination, t, toast]);
 
   // 處理檔案選擇（支援多選）
   const handleFileSelect = useCallback((
@@ -558,7 +556,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-sm text-destructive">
-          {error?.message || t('workspace.versionControl.errors.loadFailed')}
+          {getErrorDescription(error) || t('workspace.versionControl.errors.loadFailed')}
         </div>
       </div>
     );
@@ -609,45 +607,14 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
           </>
         )}
       />
-      <Dialog open={createBranchOpen} onOpenChange={setCreateBranchOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('workspace.versionControl.branchDialog.title')}</DialogTitle>
-            <DialogDescription>{t('workspace.versionControl.branchDialog.description')}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              value={newBranchName}
-              onChange={(event) => setNewBranchName(event.target.value)}
-              placeholder={t('workspace.versionControl.branchDialog.namePlaceholder')}
-              aria-label={t('workspace.versionControl.branchDialog.nameLabel')}
-            />
-            <Input
-              value={newBranchStartPoint}
-              onChange={(event) => setNewBranchStartPoint(event.target.value)}
-              placeholder={t('workspace.versionControl.branchDialog.startPointPlaceholder')}
-              aria-label={t('workspace.versionControl.branchDialog.startPointLabel')}
-            />
-            <label className="flex items-center gap-2 text-sm text-foreground">
-              <Checkbox
-                checked={stashBeforeCheckout}
-                onCheckedChange={(checked) => setStashBeforeCheckout(Boolean(checked))}
-              />
-              {t('workspace.versionControl.branchDialog.stashChanges')}
-            </label>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCreateBranchOpen(false)}>
-              {t('workspace.versionControl.branchDialog.cancel')}
-            </Button>
-            <Button type="button" onClick={() => void handleCreateBranch()} disabled={!newBranchName.trim() || checkoutMutation.isPending}>
-              {checkoutMutation.isPending
-                ? t('workspace.versionControl.branchDialog.creating')
-                : t('workspace.versionControl.branchDialog.create')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <VersionControlCreateBranchDialog
+        open={createBranchOpen}
+        onOpenChange={setCreateBranchOpen}
+        onCreate={handleCreateBranch}
+        isCreating={checkoutMutation.isPending}
+        supportsStartPoint
+        supportsStashBeforeCheckout
+      />
     </>
   );
 };

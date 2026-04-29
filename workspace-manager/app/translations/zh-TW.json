@@ -242,6 +242,7 @@
   "knowledge_base.not_found": "知識庫不存在",
   "knowledge_base.attachment_not_found": "知識庫掛載不存在",
   "knowledge_base.share.not_found": "知識庫分享不存在",
+  "knowledge_base.ingest.job_not_found": "知識庫索引任務不存在",
   "knowledge_base.access_denied": "沒有知識庫存取權限",
   "knowledge_base.permission_denied": "知識庫權限不足",
   "knowledge_base.in_use": "知識庫仍被工作區掛載",
@@ -270,5 +271,16 @@
   "knowledge_base.file.owner_quota_exceeded": "使用者知識庫總容量配額不足",
   "knowledge_base.file.write_denied": "知識庫無寫入權限: {path}",
   "knowledge_base.upload.too_many_files": "上傳檔案數量超過限制（最多 {max_files} 個）",
-  "knowledge_base.upload.success": "檔案上傳完成（{succeeded}/{total}）"
+  "knowledge_base.upload.success": "檔案上傳完成（{succeeded}/{total}）",
+  "knowledge_base.git.version_control_disabled": "知識庫尚未啟用版本控制",
+  "knowledge_base.git.repo_not_found": "找不到知識庫 Git 倉庫",
+  "knowledge_base.git.no_changes_to_commit": "沒有需要提交的變更",
+  "knowledge_base.git.path_outside_repository": "檔案路徑超出知識庫 Git 倉庫範圍",
+  "knowledge_base.git.repository_already_initialized": "知識庫 Git 倉庫已初始化",
+  "knowledge_base.git.rollback_confirmation_required": "需要 rollback 確認字串",
+  "knowledge_base.git.operation_failed": "知識庫 Git 操作失敗",
+  "knowledge_base.git.lfs_enabled": "知識庫 Git LFS 追蹤已啟用",
+  "knowledge_base.git.remote_url_set": "知識庫 Git 遠端 URL 已設定",
+  "knowledge_base.git.revert_success": "知識庫 Git commit 已 revert",
+  "knowledge_base.git.rollback_success": "知識庫 Git 倉庫已重設"
 }

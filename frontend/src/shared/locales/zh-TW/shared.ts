@@ -20,10 +20,68 @@ const shared = {
       push: {
         label: '推送',
       },
+      remoteSettings: {
+        label: '遠端設定',
+      },
+    },
+    branchDialog: {
+      title: '建立分支',
+      description: '從目前儲存庫狀態或指定起點建立分支。',
+      nameLabel: '分支名稱',
+      namePlaceholder: '分支名稱',
+      startPointLabel: '起點',
+      startPointPlaceholder: '起點',
+      stashChanges: '切換前暫存本機變更',
+      cancel: '取消',
+      create: '建立分支',
+      creating: '建立中...',
+    },
+    remoteDialog: {
+      title: '遠端設定',
+      description: '設定此儲存庫的遠端與初始化流程。',
+      initialized: {
+        title: 'Git 儲存庫已初始化',
+        branch: '分支：{{branch}}',
+        noBranch: '無分支',
+      },
+      setup: {
+        localContentWarning: '本機已有內容。只有在可安全完成時才能 clone。',
+        actions: {
+          init: '初始化儲存庫',
+          initializing: '初始化中...',
+        },
+      },
+      remote: {
+        missingOrigin: '尚未設定 origin 遠端。儲存遠端 URL 前無法使用遠端同步操作。',
+        urlLabel: '遠端 URL',
+        urlPlaceholder: 'git@example.com:team/repo.git',
+        helper: '此 URL 會儲存為 origin 遠端，供 fetch、pull、push 使用。',
+        actions: {
+          save: '儲存遠端',
+          saving: '儲存中...',
+        },
+      },
+      clone: {
+        urlLabel: '儲存庫 URL',
+        branchLabel: '分支',
+        branchPlaceholder: 'main',
+        branchHelper: '留空會使用遠端預設分支。',
+        helper: '將遠端儲存庫 clone 到此儲存位置。',
+        disabledHelper: '此位置已有內容，因此無法 clone。',
+        actions: {
+          clone: 'Clone 儲存庫',
+          cloning: 'Clone 中...',
+        },
+        progressTitle: 'Clone 進度',
+      },
     },
     main: {
       selectFile: '選擇檔案以檢視變更',
       selectCommitFile: '選擇檔案以檢視變更',
+    },
+    mode: {
+      fileChanges: '檔案變更',
+      commitHistory: '變更記錄',
     },
     fileChanges: {
       loading: '載入中...',
@@ -41,7 +99,7 @@ const shared = {
     },
     commitHistory: {
       title: '變更記錄',
-      empty: '沒有提交歷史',
+      empty: '沒有變更記錄',
       selectPrompt: '請先選擇一個 commit',
       commitCount_other: '{{count}} commits',
       filters: {

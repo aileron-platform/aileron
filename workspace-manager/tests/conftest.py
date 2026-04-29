@@ -48,6 +48,8 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
     # Set up temporary template storage path
     template_storage_path = tmp_path / "template-storage"
     template_storage_path.mkdir(parents=True, exist_ok=True)
+    knowledge_bases_path = tmp_path / "knowledge-bases"
+    knowledge_bases_path.mkdir(parents=True, exist_ok=True)
 
     # Create plugins directory (required by template service)
     plugins_dir = template_storage_path / "plugins"
@@ -55,9 +57,13 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
 
     # Preserve original environment variables
     original_template_path = os.environ.get("TEMPLATE_STORAGE_PATH")
+    original_manager_kb_path = os.environ.get("MANAGER_KNOWLEDGE_BASES_DIR")
+    original_host_kb_path = os.environ.get("HOST_KNOWLEDGE_BASES_DIR")
 
     # Set up test environment variables
     os.environ["TEMPLATE_STORAGE_PATH"] = str(template_storage_path)
+    os.environ["MANAGER_KNOWLEDGE_BASES_DIR"] = str(knowledge_bases_path)
+    os.environ["HOST_KNOWLEDGE_BASES_DIR"] = str(knowledge_bases_path)
 
     # Clear settings cache to apply new environment variables
     get_settings.cache_clear()
@@ -102,6 +108,14 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
             os.environ["TEMPLATE_STORAGE_PATH"] = original_template_path
         else:
             os.environ.pop("TEMPLATE_STORAGE_PATH", None)
+        if original_manager_kb_path is not None:
+            os.environ["MANAGER_KNOWLEDGE_BASES_DIR"] = original_manager_kb_path
+        else:
+            os.environ.pop("MANAGER_KNOWLEDGE_BASES_DIR", None)
+        if original_host_kb_path is not None:
+            os.environ["HOST_KNOWLEDGE_BASES_DIR"] = original_host_kb_path
+        else:
+            os.environ.pop("HOST_KNOWLEDGE_BASES_DIR", None)
 
         # Clear cache again
         get_settings.cache_clear()

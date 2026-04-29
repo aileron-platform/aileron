@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock, patch
-from app.utils.redis_lock import RedisLock, workspace_lock, get_workspace_lock_info
+from app.utils.redis_lock import RedisLock, knowledge_base_wiki_index_lock, workspace_lock, get_workspace_lock_info
 
 
 @pytest.fixture
@@ -185,6 +185,25 @@ class TestWorkspaceLock:
 
         # Lock should be released even if exception occurs
         mock_redis.eval.assert_called_once()
+        mock_redis.close.assert_called_once()
+
+
+class TestKnowledgeBaseWikiIndexLock:
+    """Test cases for knowledge_base_wiki_index_lock context manager"""
+
+    @patch('app.utils.redis_lock._get_redis_client')
+    def test_kb_wiki_index_lock_uses_kb_specific_key(self, mock_get_redis):
+        """Test KB wiki index lock uses the expected lock key."""
+        mock_redis = Mock()
+        mock_redis.set.return_value = True
+        mock_redis.eval.return_value = 1
+        mock_redis.close = Mock()
+        mock_get_redis.return_value = mock_redis
+
+        with knowledge_base_wiki_index_lock("kb-123") as acquired:
+            assert acquired is True
+
+        assert mock_redis.set.call_args.args[0] == "automation:lock:kb:kb-123:wiki-index"
         mock_redis.close.assert_called_once()
 
 

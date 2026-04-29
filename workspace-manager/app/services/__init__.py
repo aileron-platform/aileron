@@ -24,7 +24,13 @@ from .knowledge_base_service import (
 )
 from .knowledge_base_attachment_service import KnowledgeBaseAttachmentService
 from .knowledge_base_file_service import KnowledgeBaseFileService
+from .knowledge_base_git_service import KnowledgeBaseGitService
+from .knowledge_base_graph_service import KnowledgeBaseGraphService
+from .knowledge_base_ingest_service import KnowledgeBaseIngestService
+from .knowledge_base_lint_service import KnowledgeBaseLintService
 from .knowledge_base_maintenance_service import KnowledgeBaseMaintenanceService
+from .knowledge_base_query_service import KnowledgeBaseQueryService
+from .knowledge_base_source_service import KnowledgeBaseSourceService
 from .workspace_service import WorkspaceService
 from .workspace_setup_service import WorkspaceSetupService
 from .workspace_lifecycle_service import WorkspaceLifecycleService
@@ -75,6 +81,48 @@ def get_knowledge_base_file_service(
 ) -> KnowledgeBaseFileService:
     """Get knowledge base file Service"""
     return KnowledgeBaseFileService(db)
+
+
+def get_knowledge_base_source_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseSourceService:
+    """Get knowledge base source service"""
+    return KnowledgeBaseSourceService(db)
+
+
+def get_knowledge_base_ingest_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseIngestService:
+    """Get knowledge base ingest service"""
+    return KnowledgeBaseIngestService(db)
+
+
+def get_knowledge_base_git_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseGitService:
+    """Get knowledge base Git service"""
+    return KnowledgeBaseGitService(db)
+
+
+def get_knowledge_base_graph_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseGraphService:
+    """Get knowledge base graph service"""
+    return KnowledgeBaseGraphService(db)
+
+
+def get_knowledge_base_query_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseQueryService:
+    """Get knowledge base query service"""
+    return KnowledgeBaseQueryService(db)
+
+
+def get_knowledge_base_lint_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseLintService:
+    """Get knowledge base lint service"""
+    return KnowledgeBaseLintService(db)
 
 
 def get_knowledge_base_maintenance_service(
@@ -131,6 +179,12 @@ __all__ = [
     "get_knowledge_base_sharing_service",
     "get_knowledge_base_attachment_service",
     "get_knowledge_base_file_service",
+    "get_knowledge_base_git_service",
+    "get_knowledge_base_graph_service",
+    "get_knowledge_base_ingest_service",
+    "get_knowledge_base_lint_service",
+    "get_knowledge_base_query_service",
+    "get_knowledge_base_source_service",
     "get_knowledge_base_maintenance_service",
     "get_workspace_service",
     "get_workspace_setup_service",

@@ -79,7 +79,6 @@ const template = {
     settings: {
       tabs: {
         versionControl: '版本控制',
-        remote: '遠端',
         gitUser: 'Git 使用者',
         sshKeys: 'SSH Keys',
       },
@@ -89,7 +88,7 @@ const template = {
         mode: {
           title: '版本控制',
           fileChanges: '檔案變更',
-          commitHistory: '提交歷史',
+          commitHistory: '變更記錄',
         },
         registryStale: {
           description: 'Registry 內容可能已變更，建議重建模板索引以同步最新狀態。',

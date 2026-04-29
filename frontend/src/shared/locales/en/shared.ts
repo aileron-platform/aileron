@@ -20,10 +20,68 @@ const shared = {
       push: {
         label: 'Push',
       },
+      remoteSettings: {
+        label: 'Remote settings',
+      },
+    },
+    branchDialog: {
+      title: 'Create branch',
+      description: 'Create a branch from the current repository state or an optional start point.',
+      nameLabel: 'Branch name',
+      namePlaceholder: 'Branch name',
+      startPointLabel: 'Start point',
+      startPointPlaceholder: 'Start point',
+      stashChanges: 'Stash local changes before checkout',
+      cancel: 'Cancel',
+      create: 'Create branch',
+      creating: 'Creating...',
+    },
+    remoteDialog: {
+      title: 'Remote settings',
+      description: 'Configure this repository remote and setup workflow.',
+      initialized: {
+        title: 'Git repository is initialized',
+        branch: 'Branch: {{branch}}',
+        noBranch: 'No branch',
+      },
+      setup: {
+        localContentWarning: 'Local content already exists. Clone is available only when it can be completed safely.',
+        actions: {
+          init: 'Initialize repository',
+          initializing: 'Initializing...',
+        },
+      },
+      remote: {
+        missingOrigin: 'No origin remote is configured. Remote sync actions are disabled until a remote URL is saved.',
+        urlLabel: 'Remote URL',
+        urlPlaceholder: 'git@example.com:team/repo.git',
+        helper: 'This URL is saved as the origin remote for fetch, pull, and push.',
+        actions: {
+          save: 'Save remote',
+          saving: 'Saving...',
+        },
+      },
+      clone: {
+        urlLabel: 'Repository URL',
+        branchLabel: 'Branch',
+        branchPlaceholder: 'main',
+        branchHelper: 'Leave blank to use the remote default branch.',
+        helper: 'Clone a remote repository into this storage location.',
+        disabledHelper: 'Clone is disabled because this location already contains content.',
+        actions: {
+          clone: 'Clone repository',
+          cloning: 'Cloning...',
+        },
+        progressTitle: 'Clone progress',
+      },
     },
     main: {
       selectFile: 'Select a file to view changes',
       selectCommitFile: 'Select a file to view changes',
+    },
+    mode: {
+      fileChanges: 'File Changes',
+      commitHistory: 'History',
     },
     fileChanges: {
       loading: 'Loading...',

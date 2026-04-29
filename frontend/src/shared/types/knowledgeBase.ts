@@ -9,6 +9,14 @@ export interface KnowledgeBaseSummary {
   ownerId: string;
   currentSizeBytes: number;
   quotaBytes?: number | null;
+  versionControlEnabled?: boolean;
+  gitLfsEnabled?: boolean;
+  gitDefaultBranch?: string;
+  gitLastCommitSha?: string | null;
+  wikiInitializedAt?: string | null;
+  lastIndexedAt?: string | null;
+  lastIndexStatus?: string | null;
+  lastIndexError?: string | null;
   accessRole: KnowledgeBaseRole;
   createdAt: string;
   updatedAt: string;
@@ -91,4 +99,69 @@ export interface KnowledgeBaseCreatePayload {
 export interface KnowledgeBaseUpdatePayload {
   name?: string;
   description?: string;
+}
+
+export interface KnowledgeBaseGitRepositoryStatus {
+  isGitRepo: boolean;
+  currentBranch?: string | null;
+  remoteUrl?: string | null;
+  hasOrigin: boolean;
+  hasLocalContent: boolean;
+  canCloneSafely: boolean;
+  canInitSafely: boolean;
+  cloneBlockedReason?: string | null;
+}
+
+export interface KnowledgeBaseGitEnablePayload {
+  defaultBranch?: string;
+  initialMessage?: string;
+}
+
+export interface KnowledgeBaseGitLfsEnablePayload {
+  patterns?: string[];
+}
+
+export interface KnowledgeBaseVersionControlStatus {
+  branch: string;
+  ahead: number;
+  behind: number;
+  detached: boolean;
+  hasConflicts: boolean;
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  lastFetchedAt?: string | null;
+}
+
+export interface KnowledgeBaseGraphNode {
+  id: string;
+  label: string;
+  type: string;
+  path: string;
+  sources: string[];
+  outboundCount: number;
+  inboundCount: number;
+  degree: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface KnowledgeBaseGraphEdgeReason {
+  type: 'direct_wikilink' | 'source_overlap' | 'common_neighbor' | 'type_affinity' | string;
+  weight: number;
+  details?: Record<string, unknown>;
+}
+
+export interface KnowledgeBaseGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  weight: number;
+  reasons: KnowledgeBaseGraphEdgeReason[];
+}
+
+export interface KnowledgeBaseGraphResponse {
+  kbId: string;
+  generatedAt: string;
+  nodes: KnowledgeBaseGraphNode[];
+  edges: KnowledgeBaseGraphEdge[];
 }

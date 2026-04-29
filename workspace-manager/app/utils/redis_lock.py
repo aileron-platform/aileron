@@ -161,6 +161,22 @@ def workspace_lock(workspace_id: str, timeout: int = 3600, blocking: bool = Fals
         redis_client.close()
 
 
+@contextmanager
+def knowledge_base_wiki_index_lock(kb_id: str, timeout: int = 3600, blocking: bool = False):
+    """Knowledge base wiki index lock context manager."""
+    redis_client = _get_redis_client()
+    lock_key = f"automation:lock:kb:{kb_id}:wiki-index"
+    lock = RedisLock(redis_client, lock_key, timeout)
+
+    acquired = lock.acquire(blocking=blocking)
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            lock.release()
+        redis_client.close()
+
+
 def get_workspace_lock_info(workspace_id: str) -> Optional[dict]:
     """Get workspace lock information
 
@@ -188,4 +204,3 @@ def get_workspace_lock_info(workspace_id: str) -> Optional[dict]:
         }
     finally:
         redis_client.close()
-

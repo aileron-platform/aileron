@@ -81,6 +81,9 @@ const knowledgeBase = {
     },
     tabs: {
       files: '檔案',
+      graph: '關聯圖',
+      versionControl: '版本控制',
+      schedules: '排程',
       sharing: '分享',
       workspaces: '已掛載工作區',
     },
@@ -109,6 +112,162 @@ const knowledgeBase = {
     moveFailed: '移動失敗',
     operationFailedTitle: '檔案操作失敗',
     dropOverlay: '放開以上傳到知識庫根目錄',
+  },
+  schedules: {
+    title: 'Wiki Index 排程',
+    description: '只可選擇已掛載此知識庫且模式為可讀寫的工作區。',
+    defaultName: '{{name}} Wiki Index',
+    defaultDescription: '定期維護 {{name}} 的 Team Wiki index。',
+    defaultOwner: '目前使用者',
+    defaultPrompt: 'Run knowledge base wiki index.',
+    create: {
+      title: '新增排程',
+      workspace: '工作區',
+      cron: 'Cron schedule',
+    },
+    actions: {
+      create: '建立排程',
+    },
+    list: {
+      title: '既有排程',
+      empty: '尚未建立 Wiki Index 排程。',
+    },
+    status: {
+      active: '啟用',
+      paused: '暫停',
+      failed: '失敗',
+      draft: '草稿',
+    },
+    toasts: {
+      createSuccess: { title: '排程已建立' },
+      createFailed: {
+        title: '建立排程失敗',
+        description: '請稍後再試。',
+      },
+      loadFailed: {
+        title: '載入排程失敗',
+        description: '請稍後再試。',
+      },
+    },
+  },
+  graph: {
+    title: '知識關聯圖',
+    loading: '正在建立關聯圖...',
+    loadFailed: '無法載入關聯圖',
+    emptyTitle: '尚未建立 Wiki 頁面',
+    emptyDescription: '執行 Wiki index 後會產生頁面與關聯。',
+    searchLabel: '搜尋關聯圖節點',
+    searchPlaceholder: '搜尋頁面、路徑或類型...',
+    previewLoadFailed: '無法載入 Wiki 頁面預覽。',
+    actions: {
+      zoomIn: '放大',
+      zoomOut: '縮小',
+      fit: '符合畫面',
+      clearSearch: '清除搜尋',
+      closePreview: '關閉預覽',
+    },
+    stats: {
+      pages: '{{count}} 個頁面',
+      relationships: '{{count}} 個關聯',
+      degree: '{{count}} 個關聯',
+      sources: '{{count}} 個來源',
+    },
+    legend: {
+      title: '節點類型',
+    },
+    preview: {
+      emptyTitle: '頁面預覽',
+      emptyDescription: '尚未選擇頁面',
+      selectHint: '選取關聯圖節點後，可預覽 Wiki 頁面與關聯原因。',
+      loading: '正在載入頁面預覽...',
+      relationships: '相關頁面',
+    },
+    types: {
+      overview: '總覽',
+      entity: '實體',
+      concept: '概念',
+      source: '來源',
+      synthesis: '綜合',
+      comparison: '比較',
+      decision: '決策',
+      project: '專案',
+      query: '查詢',
+      page: '頁面',
+    },
+    reasons: {
+      direct_wikilink: 'Wiki 連結',
+      source_overlap: '共用來源',
+      common_neighbor: '共同鄰居',
+      type_affinity: '類型關聯',
+    },
+  },
+  versionControl: {
+    title: '版本控制',
+    description: '用 Git 追蹤 Wiki 變更、復原舊版本，並支援後續協作流程。',
+    loading: '正在載入版本控制...',
+    loadFailed: '無法載入版本控制狀態',
+    errorTitle: '版本控制錯誤',
+    confirmDiscard: '要捨棄 {{path}} 的本機變更嗎？',
+    setup: {
+      title: '為這個知識庫啟用 Git',
+      description: 'Git 是選用功能。當這份 Wiki 需要變更記錄、復原舊版本、遠端同步或大型檔案追蹤時再啟用。',
+      defaultBranch: '預設分支',
+      defaultBranchPlaceholder: 'main',
+      enableLfs: '為大型原始來源啟用 Git LFS',
+      enableLfsDescription: '若這個知識庫會存放 PDF、圖片、壓縮檔或其他 raw/ 下的大型檔案，建議啟用。',
+      permissionTitle: '需要管理者權限',
+      permissionDescription: '只有擁有者與管理者可以為知識庫啟用 Git。',
+      enableAction: '啟用 Git',
+      enabling: '正在啟用...',
+      initialCommitMessage: 'Initialize knowledge base version control',
+    },
+    mode: {
+      title: '版本控制',
+      fileChanges: '檔案變更',
+      commitHistory: '變更記錄',
+    },
+    toasts: {
+      loadFailed: {
+        title: '載入版本控制失敗',
+        description: '請稍後再試。',
+      },
+      operationFailed: {
+        title: 'Git 操作失敗',
+        description: '請稍後再試。',
+      },
+      enableSuccess: {
+        title: 'Git 已啟用',
+        description: '這個知識庫現在已由 Git 追蹤。',
+      },
+      enableFailed: {
+        title: '啟用 Git 失敗',
+        description: '請稍後再試。',
+      },
+      commitSuccess: {
+        title: 'Commit 已建立',
+      },
+      fetchSuccess: {
+        title: 'Fetch 已完成',
+      },
+      pullSuccess: {
+        title: 'Pull 已完成',
+      },
+      pushSuccess: {
+        title: 'Push 已完成',
+      },
+      checkoutSuccess: {
+        title: '已切換分支',
+      },
+      remoteUrlSuccess: {
+        title: '遠端 URL 已儲存',
+      },
+      revertSuccess: {
+        title: 'Commit 已還原',
+      },
+      rollbackSuccess: {
+        title: '版本回復已完成',
+      },
+    },
   },
   sharing: {
     title: '分享',

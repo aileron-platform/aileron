@@ -242,6 +242,7 @@
   "knowledge_base.not_found": "Knowledge base not found",
   "knowledge_base.attachment_not_found": "Knowledge base attachment not found",
   "knowledge_base.share.not_found": "Knowledge base share not found",
+  "knowledge_base.ingest.job_not_found": "Knowledge base ingest job not found",
   "knowledge_base.access_denied": "No access to this knowledge base",
   "knowledge_base.permission_denied": "Insufficient knowledge base permissions",
   "knowledge_base.in_use": "Knowledge base is still attached to a workspace",
@@ -270,5 +271,16 @@
   "knowledge_base.file.owner_quota_exceeded": "User knowledge base quota exceeded",
   "knowledge_base.file.write_denied": "No write permission for knowledge base path: {path}",
   "knowledge_base.upload.too_many_files": "Too many uploaded files (max {max_files})",
-  "knowledge_base.upload.success": "Uploaded files successfully ({succeeded}/{total})"
+  "knowledge_base.upload.success": "Uploaded files successfully ({succeeded}/{total})",
+  "knowledge_base.git.version_control_disabled": "Knowledge base version control is disabled",
+  "knowledge_base.git.repo_not_found": "Knowledge base Git repository not found",
+  "knowledge_base.git.no_changes_to_commit": "No changes to commit",
+  "knowledge_base.git.path_outside_repository": "File path is outside the knowledge base Git repository",
+  "knowledge_base.git.repository_already_initialized": "Knowledge base Git repository is already initialized",
+  "knowledge_base.git.rollback_confirmation_required": "Rollback confirmation is required",
+  "knowledge_base.git.operation_failed": "Knowledge base Git operation failed",
+  "knowledge_base.git.lfs_enabled": "Knowledge base Git LFS tracking enabled",
+  "knowledge_base.git.remote_url_set": "Knowledge base Git remote URL set",
+  "knowledge_base.git.revert_success": "Knowledge base Git commit reverted",
+  "knowledge_base.git.rollback_success": "Knowledge base Git repository reset"
 }

@@ -81,6 +81,9 @@ const knowledgeBase = {
     },
     tabs: {
       files: 'Files',
+      graph: 'Graph',
+      versionControl: 'Version Control',
+      schedules: 'Schedules',
       sharing: 'Sharing',
       workspaces: 'Attached workspaces',
     },
@@ -109,6 +112,162 @@ const knowledgeBase = {
     moveFailed: 'Move failed',
     operationFailedTitle: 'File operation failed',
     dropOverlay: 'Drop to upload into the knowledge base root',
+  },
+  schedules: {
+    title: 'Wiki index schedules',
+    description: 'Only workspaces with this knowledge base attached in read/write mode can be selected.',
+    defaultName: '{{name}} Wiki Index',
+    defaultDescription: 'Regularly maintain the Team Wiki index for {{name}}.',
+    defaultOwner: 'Current user',
+    defaultPrompt: 'Run knowledge base wiki index.',
+    create: {
+      title: 'Create schedule',
+      workspace: 'Workspace',
+      cron: 'Cron schedule',
+    },
+    actions: {
+      create: 'Create schedule',
+    },
+    list: {
+      title: 'Existing schedules',
+      empty: 'No Wiki Index schedules yet.',
+    },
+    status: {
+      active: 'Active',
+      paused: 'Paused',
+      failed: 'Failed',
+      draft: 'Draft',
+    },
+    toasts: {
+      createSuccess: { title: 'Schedule created' },
+      createFailed: {
+        title: 'Failed to create schedule',
+        description: 'Please try again later.',
+      },
+      loadFailed: {
+        title: 'Failed to load schedules',
+        description: 'Please try again later.',
+      },
+    },
+  },
+  graph: {
+    title: 'Knowledge graph',
+    loading: 'Building graph...',
+    loadFailed: 'Failed to load graph',
+    emptyTitle: 'No wiki pages yet',
+    emptyDescription: 'Run wiki indexing to create pages and relationships.',
+    searchLabel: 'Search graph nodes',
+    searchPlaceholder: 'Search pages, paths, or types...',
+    previewLoadFailed: 'Failed to load wiki page preview.',
+    actions: {
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      fit: 'Fit to screen',
+      clearSearch: 'Clear search',
+      closePreview: 'Close preview',
+    },
+    stats: {
+      pages: '{{count}} pages',
+      relationships: '{{count}} relationships',
+      degree: '{{count}} relationships',
+      sources: '{{count}} sources',
+    },
+    legend: {
+      title: 'Node types',
+    },
+    preview: {
+      emptyTitle: 'Page preview',
+      emptyDescription: 'No page selected',
+      selectHint: 'Select a graph node to preview its wiki page and relationship reasons.',
+      loading: 'Loading page preview...',
+      relationships: 'Related pages',
+    },
+    types: {
+      overview: 'Overview',
+      entity: 'Entity',
+      concept: 'Concept',
+      source: 'Source',
+      synthesis: 'Synthesis',
+      comparison: 'Comparison',
+      decision: 'Decision',
+      project: 'Project',
+      query: 'Query',
+      page: 'Page',
+    },
+    reasons: {
+      direct_wikilink: 'Wikilink',
+      source_overlap: 'Shared source',
+      common_neighbor: 'Common neighbor',
+      type_affinity: 'Type affinity',
+    },
+  },
+  versionControl: {
+    title: 'Version Control',
+    description: 'Track wiki changes, recover previous revisions, and prepare collaboration through Git.',
+    loading: 'Loading version control...',
+    loadFailed: 'Failed to load version control status',
+    errorTitle: 'Version control error',
+    confirmDiscard: 'Discard local changes to {{path}}?',
+    setup: {
+      title: 'Enable Git for this knowledge base',
+      description: 'Git is optional. Enable it when this wiki needs commit history, rollback, remote sync, or large-file tracking.',
+      defaultBranch: 'Default branch',
+      defaultBranchPlaceholder: 'main',
+      enableLfs: 'Enable Git LFS for large raw sources',
+      enableLfsDescription: 'Recommended when this KB stores PDFs, images, archives, or other large files under raw/.',
+      permissionTitle: 'Manager permission required',
+      permissionDescription: 'Only owners and managers can enable Git for a knowledge base.',
+      enableAction: 'Enable Git',
+      enabling: 'Enabling...',
+      initialCommitMessage: 'Initialize knowledge base version control',
+    },
+    mode: {
+      title: 'Version Control',
+      fileChanges: 'File Changes',
+      commitHistory: 'History',
+    },
+    toasts: {
+      loadFailed: {
+        title: 'Failed to load version control',
+        description: 'Please try again later.',
+      },
+      operationFailed: {
+        title: 'Git operation failed',
+        description: 'Please try again later.',
+      },
+      enableSuccess: {
+        title: 'Git enabled',
+        description: 'This knowledge base is now tracked by Git.',
+      },
+      enableFailed: {
+        title: 'Failed to enable Git',
+        description: 'Please try again later.',
+      },
+      commitSuccess: {
+        title: 'Commit created',
+      },
+      fetchSuccess: {
+        title: 'Fetch completed',
+      },
+      pullSuccess: {
+        title: 'Pull completed',
+      },
+      pushSuccess: {
+        title: 'Push completed',
+      },
+      checkoutSuccess: {
+        title: 'Branch checked out',
+      },
+      remoteUrlSuccess: {
+        title: 'Remote URL saved',
+      },
+      revertSuccess: {
+        title: 'Commit reverted',
+      },
+      rollbackSuccess: {
+        title: 'Rollback completed',
+      },
+    },
   },
   sharing: {
     title: 'Sharing',

@@ -134,6 +134,23 @@ def test_create_and_read_file_updates_cached_size(file_service, kb):
 
 
 @pytest.mark.unit
+def test_get_tree_lazily_initializes_team_wiki_layout(file_service, kb):
+    tree = file_service.get_tree(
+        user_id="owner-1",
+        kb_id="kb-1",
+        path="/",
+        max_depth=2,
+    )
+
+    root = file_service.storage_root / kb.id
+    assert (root / "AGENTS.md").is_file()
+    assert (root / "wiki/index.md").is_file()
+    assert (root / "raw/sources").is_dir()
+    assert kb.wiki_initialized_at is not None
+    assert {node.name for node in tree.nodes} >= {"raw", "normalized", "wiki", "reports", "AGENTS.md"}
+
+
+@pytest.mark.unit
 def test_delete_entry_reduces_cached_size(file_service, kb):
     kb_root = file_service.storage_root / kb.id
     kb_root.mkdir(parents=True, exist_ok=True)

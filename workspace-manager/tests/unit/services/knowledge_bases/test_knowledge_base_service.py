@@ -35,7 +35,9 @@ def mock_db_session():
 
 @pytest.fixture
 def knowledge_base_service(mock_db_session):
-    return KnowledgeBaseService(mock_db_session)
+    service = KnowledgeBaseService(mock_db_session)
+    service.wiki_service = MagicMock()
+    return service
 
 
 @pytest.fixture
@@ -72,6 +74,7 @@ def test_create_kb_persists_normalized_slug(
     mock_db_session.add.assert_called_once()
     mock_db_session.commit.assert_called_once()
     mock_db_session.refresh.assert_called_once_with(kb)
+    knowledge_base_service.wiki_service.initialize.assert_called_once_with(kb)
 
 
 @pytest.mark.unit

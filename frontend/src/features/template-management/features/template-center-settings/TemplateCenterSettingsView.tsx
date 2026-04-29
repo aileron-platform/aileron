@@ -1,12 +1,15 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings, ArrowLeft, GitBranch, Cloud, KeyRound, UserRound } from 'lucide-react';
+import { Settings, ArrowLeft, GitBranch, KeyRound, UserRound } from 'lucide-react';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Button } from '@/shared/components/ui/button';
 import { Tabs, TabsContent } from '@/shared/components/ui/tabs';
 import { TopTabsBar, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { useTaskProgress } from '@/shared/hooks/useTaskProgress';
+import { TaskProgressCard } from '@/shared/components/task-progress/TaskProgressCard';
+import { VersionControlRemoteSettingsDialog } from '@/shared/components/version-control';
 import { ROUTES } from '@/shared/constants/routes';
 import { createLogger } from '@/shared/services/logger';
 
@@ -18,6 +21,7 @@ import type { SSHKeys } from '@/shared/services/templateSshApi';
 import {
   getRepositoryStatus,
   getGitUserConfig,
+  getCloneProgress,
   initRepository,
   setGitRemoteUrl,
   type GitRepositoryStatus,
@@ -41,6 +45,7 @@ export const TemplateCenterSettingsView: React.FC = () => {
   const [isCloningRepository, setIsCloningRepository] = useState(false);
   const [isInitializingRepository, setIsInitializingRepository] = useState(false);
   const [isSavingRemoteUrl, setIsSavingRemoteUrl] = useState(false);
+  const [remoteSettingsOpen, setRemoteSettingsOpen] = useState(false);
 
   const refreshRepositoryStatus = useCallback(async () => {
     const nextStatus = await getRepositoryStatus();
@@ -48,6 +53,17 @@ export const TemplateCenterSettingsView: React.FC = () => {
     setGitRepoUrl(nextStatus.remoteUrl || '');
     return nextStatus;
   }, []);
+
+  const {
+    progress: cloneProgress,
+    isPolling: isClonePolling,
+    startPolling: startClonePolling,
+    resetProgress: resetCloneProgress,
+  } = useTaskProgress(null, getCloneProgress, {
+    onComplete: () => {
+      void refreshRepositoryStatus();
+    },
+  });
 
   // 載入 Git 設定
   useEffect(() => {
@@ -242,6 +258,7 @@ export const TemplateCenterSettingsView: React.FC = () => {
           });
 
           // 返回任務 ID 給子組件
+          startClonePolling(response.task_id);
           return { task_id: response.task_id };
         } else {
           // 舊的同步 API 響應
@@ -312,10 +329,6 @@ export const TemplateCenterSettingsView: React.FC = () => {
                 <GitBranch className="h-4 w-4" />
                 {t('template.center.settings.tabs.versionControl')}
               </TopTabsTrigger>
-              <TopTabsTrigger value="remote">
-                <Cloud className="h-4 w-4" />
-                {t('template.center.settings.tabs.remote')}
-              </TopTabsTrigger>
               <TopTabsTrigger value="gitUser">
                 <UserRound className="h-4 w-4" />
                 {t('template.center.settings.tabs.gitUser')}
@@ -330,28 +343,8 @@ export const TemplateCenterSettingsView: React.FC = () => {
           <TabsContent value="versionControl" className="flex-1 overflow-hidden !m-0 !p-0">
             <TemplateRegistryVersionControlTab
               repositoryStatus={repositoryStatus}
-              onOpenRemoteSettings={() => setActiveTab('remote')}
+              onOpenRemoteSettings={() => setRemoteSettingsOpen(true)}
             />
-          </TabsContent>
-
-          <TabsContent value="remote" className="flex-1 overflow-auto !m-0 !p-0">
-            <div className="mx-auto w-full max-w-7xl p-6">
-              <GitUserConfigTab
-                value={gitUserConfig}
-                remoteUrl={gitRepoUrl}
-                repositoryStatus={repositoryStatus}
-                onSave={handleSaveGitUserConfig}
-                onSaveRemoteUrl={handleSaveRemoteUrl}
-                onCloneRepository={handleCloneRepository}
-                onInitRepository={handleInitRepository}
-                onRepositoryStatusRefresh={refreshRepositoryStatus}
-                isSaving={isSavingGitUserConfig}
-                isSavingRemoteUrl={isSavingRemoteUrl}
-                isCloningRepository={isCloningRepository}
-                isInitializingRepository={isInitializingRepository}
-                showUserConfig={false}
-              />
-            </div>
           </TabsContent>
 
           <TabsContent value="gitUser" className="flex-1 overflow-auto !m-0 !p-0">
@@ -381,6 +374,44 @@ export const TemplateCenterSettingsView: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      <VersionControlRemoteSettingsDialog
+        open={remoteSettingsOpen}
+        onOpenChange={(open) => {
+          setRemoteSettingsOpen(open);
+          if (!open) {
+            resetCloneProgress();
+          }
+        }}
+        repository={{
+          isRepositoryInitialized: Boolean(repositoryStatus?.isGitRepo),
+          currentBranch: repositoryStatus?.currentBranch ?? null,
+          remoteUrl: gitRepoUrl,
+          hasOrigin: repositoryStatus?.hasOrigin ?? false,
+          hasLocalContent: repositoryStatus?.hasLocalContent ?? false,
+          canCloneSafely: repositoryStatus?.canCloneSafely ?? false,
+          canInitSafely: repositoryStatus?.canInitSafely ?? false,
+        }}
+        capabilities={{
+          canConfigureRemote: true,
+          supportsRemoteInit: true,
+          supportsRemoteClone: true,
+        }}
+        onSaveRemoteUrl={handleSaveRemoteUrl}
+        onCloneRepository={(url, branch) => void handleCloneRepository(url, branch)}
+        onInitRepository={handleInitRepository}
+        isSavingRemoteUrl={isSavingRemoteUrl}
+        isCloningRepository={isCloningRepository}
+        isInitializingRepository={isInitializingRepository}
+        isCloneProgressActive={isClonePolling}
+        progressSlot={cloneProgress ? (
+          <TaskProgressCard
+            progress={cloneProgress}
+            title={t('shared.versionControl.remoteDialog.clone.progressTitle')}
+            onDismiss={resetCloneProgress}
+          />
+        ) : null}
+      />
     </div>
   );
 };

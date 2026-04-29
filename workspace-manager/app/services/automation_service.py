@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo
 
 from app.db import models as db_models
+from app.services.knowledge_base_service import KnowledgeBaseService
+from app.services.workspace_service import WorkspaceService
 from app.utils.datetime_utils import calculate_duration, ensure_utc, utcnow
 from app.models.automation import (
     AutomationJob,
@@ -37,6 +39,8 @@ from app.models.automation import (
 )
 
 logger = logging.getLogger(__name__)
+
+KB_WIKI_INDEX_JOB_TYPE = "knowledge_base.wiki_index"
 
 
 def get_system_timezone() -> str:
@@ -79,6 +83,8 @@ class AutomationService:
 
     def __init__(self, db: Session) -> None:
         self.db = db
+        self.kb_service = KnowledgeBaseService(db)
+        self.workspace_service = WorkspaceService(db)
 
     # ------------------------------------------------------------------
     # Task CRUD
@@ -113,6 +119,12 @@ class AutomationService:
         task_id = payload.model_dump().get("id") or str(uuid4())
         now = utcnow()
         system_tz = get_system_timezone()
+        task_metadata = dict(payload.metadata or {})
+        self._validate_job_metadata(
+            metadata=task_metadata,
+            workspace_id=payload.workspace_id,
+            user_id=payload.user_id,
+        )
         next_run_at = self._estimate_next_run(
             payload.trigger, payload.schedule, system_tz, reference=now
         )
@@ -130,7 +142,7 @@ class AutomationService:
             schedule=payload.schedule,
             tags=list(payload.tags),
             notifications=payload.notifications.model_dump(),
-            task_metadata=dict(payload.metadata or {}),
+            task_metadata=task_metadata,
             webhook_api_key=payload.webhook_api_key,
             next_run_at=next_run_at,
             created_at=now,
@@ -150,6 +162,16 @@ class AutomationService:
             return None
 
         data = payload.model_dump(exclude_none=True)
+        next_metadata = dict(record.task_metadata or {})
+        if payload.metadata is not None:
+            next_metadata = dict(payload.metadata or {})
+        next_workspace_id = payload.workspace_id or record.workspace_id
+        next_user_id = payload.user_id or record.creator_user_id
+        self._validate_job_metadata(
+            metadata=next_metadata,
+            workspace_id=next_workspace_id,
+            user_id=next_user_id,
+        )
 
         for field, value in data.items():
             if field == "notifications" and value is not None:
@@ -158,7 +180,7 @@ class AutomationService:
             elif field == "tags" and value is not None:
                 setattr(record, field, list(value))
             elif field == "metadata" and value is not None:
-                setattr(record, field, dict(value))
+                setattr(record, "task_metadata", dict(value))
             elif field == "workspace_id":
                 setattr(record, "workspace_id", value)
             elif field == "user_id":
@@ -182,6 +204,114 @@ class AutomationService:
         self.db.commit()
         self.db.refresh(record)
         return self._to_job_model(record)
+
+    def _validate_job_metadata(self, *, metadata: dict, workspace_id: str, user_id: str) -> None:
+        job_type = metadata.get("jobType")
+        if not job_type:
+            return
+        if job_type != KB_WIKI_INDEX_JOB_TYPE:
+            return
+        self._validate_knowledge_base_wiki_index_metadata(
+            metadata=metadata,
+            workspace_id=workspace_id,
+            user_id=user_id,
+        )
+
+    def is_knowledge_base_wiki_index_job(self, job: db_models.AutomationJob) -> bool:
+        """Return whether the automation job is a KB wiki index job."""
+        metadata = job.task_metadata or {}
+        return isinstance(metadata, dict) and metadata.get("jobType") == KB_WIKI_INDEX_JOB_TYPE
+
+    def validate_knowledge_base_wiki_index_execution(
+        self,
+        job: db_models.AutomationJob,
+    ) -> db_models.WorkspaceKnowledgeBaseAttachment:
+        """Validate KB wiki index job preconditions immediately before execution."""
+        metadata = job.task_metadata or {}
+        if not isinstance(metadata, dict):
+            raise AutomationJobError(
+                "Knowledge base wiki index job metadata is invalid",
+                code="KB_WIKI_INDEX_METADATA_INVALID",
+            )
+        return self._validate_knowledge_base_wiki_index_metadata(
+            metadata=metadata,
+            workspace_id=job.workspace_id,
+            user_id=job.creator_user_id,
+        )
+
+    def build_knowledge_base_wiki_index_prompt(self, *, mount_alias: str) -> str:
+        """Build the fixed runtime prompt for KB wiki index automation."""
+        kb_path = f"/knowledge/{mount_alias}"
+        return (
+            "You are indexing a Team Wiki knowledge base.\n\n"
+            f"Working directory: `{kb_path}`\n\n"
+            "Requirements:\n"
+            "- Work only inside the knowledge base directory above.\n"
+            "- Read and follow `AGENTS.md`, `purpose.md`, and `schema.md` before editing.\n"
+            "- Review raw sources under `raw/` and normalized content under `normalized/`.\n"
+            "- For PDFs and other binary sources, extract useful text and page/source citations using runtime tools when available.\n"
+            "- Update wiki pages under `wiki/`, including source summaries under `wiki/sources/`.\n"
+            "- Keep `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` current.\n"
+            "- Add frontmatter with source citations to every wiki Markdown page you create or update.\n"
+            "- Do not delete raw source files.\n"
+        )
+
+    def _validate_knowledge_base_wiki_index_metadata(
+        self,
+        *,
+        metadata: dict,
+        workspace_id: str,
+        user_id: str,
+    ) -> db_models.WorkspaceKnowledgeBaseAttachment:
+        knowledge_base_id = metadata.get("knowledgeBaseId")
+        if not isinstance(knowledge_base_id, str) or not knowledge_base_id.strip():
+            raise AutomationJobError(
+                "Knowledge base wiki index job metadata requires knowledgeBaseId",
+                code="KB_WIKI_INDEX_METADATA_INVALID",
+                params={"field": "knowledgeBaseId"},
+            )
+
+        workspace = self.db.get(db_models.Workspace, workspace_id)
+        if workspace is None:
+            raise AutomationJobError(
+                "Workspace does not exist",
+                code="WORKSPACE_NOT_FOUND",
+                params={"workspaceId": workspace_id},
+            )
+        self.workspace_service._require_workspace_access(
+            workspace,
+            current_user_id=user_id,
+            minimum_role="editor",
+        )
+        self.kb_service.get_kb(
+            user_id=user_id,
+            kb_id=knowledge_base_id,
+            minimum_role="editor",
+        )
+
+        attachment = self.db.scalar(
+            select(db_models.WorkspaceKnowledgeBaseAttachment).where(
+                db_models.WorkspaceKnowledgeBaseAttachment.workspace_id == workspace_id,
+                db_models.WorkspaceKnowledgeBaseAttachment.kb_id == knowledge_base_id,
+            )
+        )
+        if attachment is None:
+            raise AutomationJobError(
+                "Knowledge base must be attached to the workspace before scheduling wiki index",
+                code="KB_WORKSPACE_ATTACHMENT_REQUIRED",
+                params={"workspaceId": workspace_id, "knowledgeBaseId": knowledge_base_id},
+            )
+        if attachment.mode != "rw":
+            raise AutomationJobError(
+                "Knowledge base workspace attachment must be writable for wiki index",
+                code="KB_ATTACHMENT_READ_ONLY",
+                params={
+                    "workspaceId": workspace_id,
+                    "knowledgeBaseId": knowledge_base_id,
+                    "attachmentId": attachment.id,
+                },
+            )
+        return attachment
 
     def delete_job(self, job_id: str) -> None:
         record = self.db.get(db_models.AutomationJob, job_id)

@@ -1,8 +1,8 @@
 const versionControl = {
   sidebar: {
     title: {
-      changes: '檔案變更清單',
-      history: '變更記錄清單',
+      changes: '檔案變更',
+      history: '變更記錄',
     },
     loadingTitle: '版本控制面板載入中...',
     loadingDescription: '版本控制面板載入中...',
@@ -56,18 +56,6 @@ const versionControl = {
       worktree: '工作樹 · {{name}}',
     },
   },
-  branchDialog: {
-    title: '建立分支',
-    description: '在目前選取的工作樹建立分支並切換過去。',
-    nameLabel: '分支名稱',
-    namePlaceholder: '分支名稱',
-    startPointLabel: '起始點',
-    startPointPlaceholder: '起始點（選填）',
-    stashChanges: '切換前先 stash 本地變更',
-    cancel: '取消',
-    create: '建立分支',
-    creating: '建立中...',
-  },
   fileChanges: {
     loading: '載入中...',
     stagedTitle: '已暫存的變更',
@@ -83,9 +71,9 @@ const versionControl = {
     submitting: '提交中...',
   },
   commitHistory: {
-    loading: '載入提交歷史...',
+    loading: '載入變更記錄...',
     title: '變更記錄',
-    empty: '沒有提交歷史',
+    empty: '沒有變更記錄',
     filesTitle: '檔案變更',
     filesDescription: '選擇 commit 以檢視變更檔案',
     selectPrompt: '請先選擇一個 commit',

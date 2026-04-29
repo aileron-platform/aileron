@@ -79,6 +79,12 @@ export interface VersionControlDiffResponse {
   binary?: boolean;
 }
 
+export interface VersionControlBlobResponse {
+  path: string;
+  revision?: string | null;
+  content: string;
+}
+
 export interface VersionControlFetchResponse {
   remote: string;
   fetchedRefs: string[];

@@ -14,7 +14,7 @@ const navigation = {
     },
     sub: {
     versionControl: {
-      changes: 'Changes',
+      changes: 'File Changes',
       history: 'History',
     },
     openspec: {

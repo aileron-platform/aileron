@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
         'features/openspec',
         'features/claude-integration',
         'features/automation',
+        'features/team-wiki-knowledge-base',
       ],
     },
     {

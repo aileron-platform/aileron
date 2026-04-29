@@ -315,6 +315,7 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
 
   const actionItems: VersionControlActionMenuItem[] = [
     { id: 'refresh', onClick: () => void loadData() },
+    { id: 'remoteSettings', onClick: onOpenRemoteSettings },
     {
       id: 'fetch',
       onClick: () => handleRemoteAction('fetch'),
@@ -372,13 +373,13 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
       items={[
         {
           id: 'changes',
-          label: t('template.center.settings.versionControl.mode.fileChanges'),
+          label: t('shared.versionControl.mode.fileChanges'),
           icon: FileDiff,
           count: changeCount,
         },
         {
           id: 'history',
-          label: t('template.center.settings.versionControl.mode.commitHistory'),
+          label: t('shared.versionControl.mode.commitHistory'),
           icon: History,
           count: commits.length,
         },

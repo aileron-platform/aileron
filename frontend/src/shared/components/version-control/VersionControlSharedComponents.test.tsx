@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import {
   VersionControlCommitForm,
+  VersionControlCreateBranchDialog,
   VersionControlDiffContent,
   VersionControlFileChangeItem,
   VersionControlLayout,
+  VersionControlRemoteSettingsDialog,
   VersionControlResizablePanels,
 } from './index';
 
@@ -16,6 +18,38 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'shared.versionControl.commitForm.placeholder': 'Commit message',
         'shared.versionControl.commitForm.submit': 'Commit',
         'shared.versionControl.commitForm.submitting': 'Committing...',
+        'shared.versionControl.branchDialog.title': 'Create branch',
+        'shared.versionControl.branchDialog.description': 'Create a branch.',
+        'shared.versionControl.branchDialog.namePlaceholder': 'Branch name',
+        'shared.versionControl.branchDialog.nameLabel': 'Branch name',
+        'shared.versionControl.branchDialog.startPointPlaceholder': 'Start point',
+        'shared.versionControl.branchDialog.startPointLabel': 'Start point',
+        'shared.versionControl.branchDialog.stashChanges': 'Stash local changes',
+        'shared.versionControl.branchDialog.cancel': 'Cancel',
+        'shared.versionControl.branchDialog.create': 'Create branch',
+        'shared.versionControl.branchDialog.creating': 'Creating...',
+        'shared.versionControl.remoteDialog.title': 'Remote settings',
+        'shared.versionControl.remoteDialog.description': 'Configure remote settings.',
+        'shared.versionControl.remoteDialog.initialized.title': 'Repository initialized',
+        'shared.versionControl.remoteDialog.initialized.branch': `Branch: ${params?.branch ?? ''}`,
+        'shared.versionControl.remoteDialog.initialized.noBranch': 'No branch',
+        'shared.versionControl.remoteDialog.remote.missingOrigin': 'No origin remote',
+        'shared.versionControl.remoteDialog.remote.urlLabel': 'Remote URL',
+        'shared.versionControl.remoteDialog.remote.urlPlaceholder': 'git@example.com:repo.git',
+        'shared.versionControl.remoteDialog.remote.helper': 'Saved as origin.',
+        'shared.versionControl.remoteDialog.remote.actions.save': 'Save remote',
+        'shared.versionControl.remoteDialog.remote.actions.saving': 'Saving...',
+        'shared.versionControl.remoteDialog.setup.localContentWarning': 'Local content exists.',
+        'shared.versionControl.remoteDialog.setup.actions.init': 'Initialize repository',
+        'shared.versionControl.remoteDialog.setup.actions.initializing': 'Initializing...',
+        'shared.versionControl.remoteDialog.clone.urlLabel': 'Repository URL',
+        'shared.versionControl.remoteDialog.clone.branchLabel': 'Branch',
+        'shared.versionControl.remoteDialog.clone.branchPlaceholder': 'main',
+        'shared.versionControl.remoteDialog.clone.branchHelper': 'Leave blank.',
+        'shared.versionControl.remoteDialog.clone.helper': 'Clone repository.',
+        'shared.versionControl.remoteDialog.clone.disabledHelper': 'Clone disabled.',
+        'shared.versionControl.remoteDialog.clone.actions.clone': 'Clone repository',
+        'shared.versionControl.remoteDialog.clone.actions.cloning': 'Cloning...',
         'shared.versionControl.commitFiles.status.modified': 'Modified',
         'shared.versionControl.fileItem.stageTooltip': 'Stage file',
         'shared.versionControl.fileItem.unstageTooltip': 'Unstage file',
@@ -65,6 +99,88 @@ describe('shared version-control components', () => {
 
     expect(screen.getByText('README.md')).toBeInTheDocument();
     expect(onStageToggle).toHaveBeenCalled();
+  });
+
+  it('submits branch creation payloads through the shared dialog', async () => {
+    const user = userEvent.setup();
+    const onCreate = vi.fn();
+
+    render(
+      <VersionControlCreateBranchDialog
+        open
+        onOpenChange={vi.fn()}
+        onCreate={onCreate}
+        supportsStartPoint
+        supportsStashBeforeCheckout
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Branch name'), 'feature/shared');
+    await user.type(screen.getByLabelText('Start point'), 'origin/main');
+    await user.click(screen.getByText('Stash local changes'));
+    await user.click(screen.getByRole('button', { name: 'Create branch' }));
+
+    expect(onCreate).toHaveBeenCalledWith({
+      branch: 'feature/shared',
+      startPoint: 'origin/main',
+      stashChanges: true,
+    });
+  });
+
+  it('submits remote settings through capability-driven controls', async () => {
+    const user = userEvent.setup();
+    const onSaveRemoteUrl = vi.fn();
+
+    render(
+      <VersionControlRemoteSettingsDialog
+        open
+        onOpenChange={vi.fn()}
+        repository={{
+          isRepositoryInitialized: true,
+          currentBranch: 'main',
+          remoteUrl: '',
+          hasOrigin: false,
+        }}
+        capabilities={{ canConfigureRemote: true }}
+        onSaveRemoteUrl={onSaveRemoteUrl}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Remote URL'), 'git@example.com:repo.git');
+    await user.click(screen.getByRole('button', { name: 'Save remote' }));
+
+    expect(onSaveRemoteUrl).toHaveBeenCalledWith('git@example.com:repo.git');
+  });
+
+  it('submits clone setup only when clone capability is enabled', async () => {
+    const user = userEvent.setup();
+    const onCloneRepository = vi.fn();
+    const onInitRepository = vi.fn();
+
+    render(
+      <VersionControlRemoteSettingsDialog
+        open
+        onOpenChange={vi.fn()}
+        repository={{
+          isRepositoryInitialized: false,
+          hasLocalContent: false,
+          canCloneSafely: true,
+          canInitSafely: true,
+        }}
+        capabilities={{ supportsRemoteClone: true, supportsRemoteInit: true }}
+        onCloneRepository={onCloneRepository}
+        onInitRepository={onInitRepository}
+      />,
+    );
+
+    await user.type(screen.getByLabelText('Repository URL'), 'git@example.com:repo.git');
+    await user.type(screen.getByLabelText('Branch'), 'main');
+    await user.click(screen.getByRole('button', { name: 'Clone repository' }));
+
+    expect(onCloneRepository).toHaveBeenCalledWith('git@example.com:repo.git', 'main');
+
+    await user.click(screen.getByRole('button', { name: 'Initialize repository' }));
+    expect(onInitRepository).toHaveBeenCalled();
   });
 
   it('renders parsed diff content', () => {
