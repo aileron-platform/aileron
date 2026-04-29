@@ -75,7 +75,7 @@ openspec/
 AGENTS.md
 GEMINI.md
 CLAUDE.md
-docs/
+/docs/
 
 # Runtime and Temporary Files
 .services.pid
