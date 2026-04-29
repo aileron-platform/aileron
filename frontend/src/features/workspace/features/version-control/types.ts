@@ -4,7 +4,12 @@ export type {
   VersionControlCommitFilesResponse,
   VersionControlCommitListResponse,
   VersionControlCommitSummary,
+  VersionControlCheckoutRequest,
+  VersionControlCheckoutResponse,
   VersionControlFileChange,
+  VersionControlFetchResponse,
+  VersionControlPullResponse,
+  VersionControlPushResponse,
   VersionControlStatus,
 } from '@/shared/types/versionControl';
 

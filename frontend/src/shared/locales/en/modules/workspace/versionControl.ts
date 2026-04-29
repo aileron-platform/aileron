@@ -56,6 +56,18 @@ const versionControl = {
       worktree: 'Worktree · {{name}}',
     },
   },
+  branchDialog: {
+    title: 'Create branch',
+    description: 'Create a branch in the selected worktree and check it out.',
+    nameLabel: 'Branch name',
+    namePlaceholder: 'Branch name',
+    startPointLabel: 'Start point',
+    startPointPlaceholder: 'Start point (optional)',
+    stashChanges: 'Stash local changes before checkout',
+    cancel: 'Cancel',
+    create: 'Create branch',
+    creating: 'Creating...',
+  },
   fileChanges: {
     loading: 'Loading...',
     stagedTitle: 'Staged changes',
@@ -130,6 +142,73 @@ const versionControl = {
     notInitialized: {
       title: 'This workspace is not yet a Git repository',
       description: 'Run `git init` in the workspace terminal, or clone an existing Git repository before using version control features.',
+    },
+  },
+  toasts: {
+    refreshSuccess: {
+      title: 'Version control refreshed',
+    },
+    refreshFailed: {
+      title: 'Refresh failed',
+      description: 'Unable to refresh version control data.',
+    },
+    fetchSuccess: {
+      title: 'Fetch completed',
+    },
+    fetchFailed: {
+      title: 'Fetch failed',
+      description: 'Unable to fetch remote references.',
+    },
+    pullSuccess: {
+      title: 'Pull completed',
+    },
+    pullFailed: {
+      title: 'Pull failed',
+      description: 'Unable to pull remote changes.',
+    },
+    pushSuccess: {
+      title: 'Push completed',
+    },
+    pushFailed: {
+      title: 'Push failed',
+      description: 'Unable to push local changes.',
+    },
+    checkoutSuccess: {
+      title: 'Branch checked out',
+      description: 'Checked out {{branch}}.',
+      stashedDescription: 'Checked out branch and stashed local changes as {{stash}}.',
+    },
+    checkoutFailed: {
+      title: 'Checkout failed',
+      description: 'Unable to check out the selected branch.',
+    },
+    createBranchSuccess: {
+      title: 'Branch created',
+      description: 'Created and checked out {{branch}}.',
+      stashedDescription: 'Created and checked out {{branch}}, and stashed local changes as {{stash}}.',
+    },
+    createBranchFailed: {
+      title: 'Create branch failed',
+      description: 'Unable to create the branch.',
+    },
+    commitSuccess: {
+      title: 'Commit created',
+    },
+    commitFailed: {
+      title: 'Commit failed',
+      description: 'Unable to create the commit.',
+    },
+    stageFailed: {
+      title: 'Stage failed',
+      description: 'Unable to stage the selected files.',
+    },
+    unstageFailed: {
+      title: 'Unstage failed',
+      description: 'Unable to unstage the selected files.',
+    },
+    discardFailed: {
+      title: 'Discard failed',
+      description: 'Unable to discard the selected changes.',
     },
   },
 };

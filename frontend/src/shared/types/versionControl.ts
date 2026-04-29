@@ -78,3 +78,41 @@ export interface VersionControlDiffResponse {
   diff?: string;
   binary?: boolean;
 }
+
+export interface VersionControlFetchResponse {
+  remote: string;
+  fetchedRefs: string[];
+}
+
+export interface VersionControlPullResponse {
+  remote: string;
+  branch: string;
+  fastForward: boolean;
+  commits: Array<{
+    id: string;
+    message: string;
+    author: string;
+  }>;
+}
+
+export interface VersionControlPushResponse {
+  remote: string;
+  branch: string;
+  updates: Array<{
+    ref: string;
+    status: string;
+  }>;
+}
+
+export interface VersionControlCheckoutRequest {
+  branch: string;
+  create?: boolean;
+  startPoint?: string | null;
+  stashChanges?: boolean;
+}
+
+export interface VersionControlCheckoutResponse {
+  branch: string;
+  created: boolean;
+  stashedChanges?: string | null;
+}

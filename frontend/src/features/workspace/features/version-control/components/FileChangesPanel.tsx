@@ -21,7 +21,11 @@ import {
   GitBranch,
   Loader2,
 } from 'lucide-react';
-import { ApiClient } from '@/shared/api/apiClient';
+import { Button } from '@/shared/components/ui/button';
+import { Checkbox } from '@/shared/components/ui/checkbox';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
+import { Input } from '@/shared/components/ui/input';
+import { useToast } from '@/shared/components/ui/use-toast';
 import { GitContextSelector } from './GitContextSelector';
 import { VersionControlChangesSidebar, type VersionControlActionMenuItem } from '@/shared/components/version-control';
 import type { VersionControlFileChange } from '../types';
@@ -35,6 +39,10 @@ import {
   useUnstageMutation,
   useCommitMutation,
   useDiscardMutation,
+  useCheckoutMutation,
+  useFetchMutation,
+  usePullMutation,
+  usePushMutation,
 } from '../hooks/useVersionControlQueries';
 import { refreshVersionControlQueries } from '../lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -45,6 +53,9 @@ interface FileChangesPanelProps {
 }
 
 const DEFAULT_BRANCH = 'main';
+const getErrorDescription = (error: unknown) => (
+  error instanceof Error ? error.message : undefined
+);
 
 /**
  * FileChangesPanel 組件
@@ -63,6 +74,10 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // 分頁狀態
   const [untrackedPage, setUntrackedPage] = useState(1);
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
+  const [createBranchOpen, setCreateBranchOpen] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchStartPoint, setNewBranchStartPoint] = useState('');
+  const [stashBeforeCheckout, setStashBeforeCheckout] = useState(false);
 
   // ==================== Refs ====================
 
@@ -75,6 +90,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // ==================== Hooks ====================
 
   const { t } = useI18n();
+  const { toast } = useToast();
   const { workspaceRuntime, state } = useWorkspace();
   const queryClient = useQueryClient();
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl ?? '';
@@ -96,6 +112,10 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const unstageMutation = useUnstageMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
   const commitMutation = useCommitMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
   const discardMutation = useDiscardMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const checkoutMutation = useCheckoutMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const fetchMutation = useFetchMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const pullMutation = usePullMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const pushMutation = usePushMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
 
   // ==================== Computed Data ====================
 
@@ -144,6 +164,15 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     () => [...unstagedFiles, ...untrackedFiles],
     [unstagedFiles, untrackedFiles]
   );
+
+  const isMutating = commitMutation.isPending
+    || stageMutation.isPending
+    || unstageMutation.isPending
+    || discardMutation.isPending
+    || checkoutMutation.isPending
+    || fetchMutation.isPending
+    || pullMutation.isPending
+    || pushMutation.isPending;
 
   // ==================== Effects ====================
 
@@ -205,45 +234,98 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     if (branch === currentBranch) return;
 
     try {
-      // 使用 ApiClient 來確保請求攜帶 Authorization header
-      const client = new ApiClient({ baseUrl: runtimeBaseUrl });
-      const suffix = selectedGitContextId ? `?contextId=${encodeURIComponent(selectedGitContextId)}` : '';
-      const path = `/api/v1/workspaces/${workspaceId}/version-control/branches/${encodeURIComponent(branch)}/checkout${suffix}`;
-
-      await client.post(path, { create: false, stashChanges: false });
+      const result = await checkoutMutation.mutateAsync({ branch, create: false, stashChanges: false });
       resetPagination();
-      await refreshVersionControlQueries(queryClient, workspaceId, {
-        includeBranches: true,
-        includeContexts: true,
-        contextId: selectedGitContextId,
+      toast({
+        title: t('workspace.versionControl.toasts.checkoutSuccess.title'),
+        description: result.stashedChanges
+          ? t('workspace.versionControl.toasts.checkoutSuccess.stashedDescription', { stash: result.stashedChanges })
+          : t('workspace.versionControl.toasts.checkoutSuccess.description', { branch: result.branch }),
+        variant: 'success',
       });
     } catch (err) {
       logger.error('Branch change error', { error: err });
+      toast({
+        title: t('workspace.versionControl.toasts.checkoutFailed.title'),
+        description: getErrorDescription(err) ?? t('workspace.versionControl.toasts.checkoutFailed.description'),
+        variant: 'destructive',
+      });
     }
-  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, selectedGitContextId, workspaceId]);
+  }, [checkoutMutation, currentBranch, resetPagination, t, toast]);
 
-  // Git 操作（Pull/Push）
-  const handleGitAction = useCallback(async (action: 'pull' | 'push') => {
+  const handleRefresh = useCallback(async () => {
     try {
-      const client = new ApiClient({ baseUrl: runtimeBaseUrl });
-      const suffix = selectedGitContextId ? `?contextId=${encodeURIComponent(selectedGitContextId)}` : '';
-      const path = `/api/v1/workspaces/${workspaceId}/version-control/${action}${suffix}`;
-      const body = action === 'pull'
-        ? { remote: 'origin', branch: currentBranch, rebase: true, autostash: true }
-        : { remote: 'origin', branch: currentBranch, force: false };
-
-      await client.post(path, body);
-      resetPagination();
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: true,
         includeCommits: true,
         includeContexts: true,
         contextId: selectedGitContextId,
       });
+      toast({ title: t('workspace.versionControl.toasts.refreshSuccess.title'), variant: 'success' });
+    } catch (err) {
+      logger.error('Git refresh error', { error: err });
+      toast({
+        title: t('workspace.versionControl.toasts.refreshFailed.title'),
+        description: getErrorDescription(err) ?? t('workspace.versionControl.toasts.refreshFailed.description'),
+        variant: 'destructive',
+      });
+    }
+  }, [queryClient, selectedGitContextId, t, toast, workspaceId]);
+
+  // Git 操作（Fetch/Pull/Push）
+  const handleGitAction = useCallback(async (action: 'fetch' | 'pull' | 'push') => {
+    try {
+      if (action === 'fetch') {
+        await fetchMutation.mutateAsync({ remote: 'origin' });
+      } else if (action === 'pull') {
+        await pullMutation.mutateAsync({ remote: 'origin', branch: currentBranch, rebase: true, autostash: true });
+      } else {
+        await pushMutation.mutateAsync({ remote: 'origin', branch: currentBranch, force: false });
+      }
+      resetPagination();
+      toast({ title: t(`workspace.versionControl.toasts.${action}Success.title`), variant: 'success' });
     } catch (err) {
       logger.error(`Git ${action} error`, { error: err });
+      toast({
+        title: t(`workspace.versionControl.toasts.${action}Failed.title`),
+        description: getErrorDescription(err) ?? t(`workspace.versionControl.toasts.${action}Failed.description`),
+        variant: 'destructive',
+      });
     }
-  }, [currentBranch, queryClient, resetPagination, runtimeBaseUrl, selectedGitContextId, workspaceId]);
+  }, [currentBranch, fetchMutation, pullMutation, pushMutation, resetPagination, t, toast]);
+
+  const handleCreateBranch = useCallback(async () => {
+    const branch = newBranchName.trim();
+    if (!branch) return;
+
+    try {
+      const result = await checkoutMutation.mutateAsync({
+        branch,
+        create: true,
+        startPoint: newBranchStartPoint.trim() || null,
+        stashChanges: stashBeforeCheckout,
+      });
+      resetPagination();
+      setCreateBranchOpen(false);
+      setNewBranchName('');
+      setNewBranchStartPoint('');
+      setStashBeforeCheckout(false);
+      toast({
+        title: t('workspace.versionControl.toasts.createBranchSuccess.title'),
+        description: result.stashedChanges
+          ? t('workspace.versionControl.toasts.createBranchSuccess.stashedDescription', { branch: result.branch, stash: result.stashedChanges })
+          : t('workspace.versionControl.toasts.createBranchSuccess.description', { branch: result.branch }),
+        variant: 'success',
+      });
+    } catch (err) {
+      logger.error('Create branch error', { error: err });
+      toast({
+        title: t('workspace.versionControl.toasts.createBranchFailed.title'),
+        description: getErrorDescription(err) ?? t('workspace.versionControl.toasts.createBranchFailed.description'),
+        variant: 'destructive',
+      });
+    }
+  }, [checkoutMutation, newBranchName, newBranchStartPoint, resetPagination, stashBeforeCheckout, t, toast]);
 
   // 處理檔案選擇（支援多選）
   const handleFileSelect = useCallback((
@@ -343,8 +425,17 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       resetPagination();
     } catch (error) {
       logger.error('Stage/unstage failed', { error });
+      toast({
+        title: t(type === 'staged'
+          ? 'workspace.versionControl.toasts.unstageFailed.title'
+          : 'workspace.versionControl.toasts.stageFailed.title'),
+        description: getErrorDescription(error) ?? t(type === 'staged'
+          ? 'workspace.versionControl.toasts.unstageFailed.description'
+          : 'workspace.versionControl.toasts.stageFailed.description'),
+        variant: 'destructive',
+      });
     }
-  }, [selectedStagedPaths, selectedUnstagedPaths, stageMutation, unstageMutation, resetPagination]);
+  }, [selectedStagedPaths, selectedUnstagedPaths, stageMutation, unstageMutation, resetPagination, t, toast]);
 
   // 暫存所有
   const handleStageAll = useCallback(async () => {
@@ -360,8 +451,13 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       resetPagination();
     } catch (error) {
       logger.error('Stage all failed', { error });
+      toast({
+        title: t('workspace.versionControl.toasts.stageFailed.title'),
+        description: getErrorDescription(error) ?? t('workspace.versionControl.toasts.stageFailed.description'),
+        variant: 'destructive',
+      });
     }
-  }, [stageMutation, resetPagination]);
+  }, [stageMutation, resetPagination, t, toast]);
 
   // 取消暫存所有
   const handleUnstageAll = useCallback(async () => {
@@ -377,8 +473,13 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       resetPagination();
     } catch (error) {
       logger.error('Unstage all failed', { error });
+      toast({
+        title: t('workspace.versionControl.toasts.unstageFailed.title'),
+        description: getErrorDescription(error) ?? t('workspace.versionControl.toasts.unstageFailed.description'),
+        variant: 'destructive',
+      });
     }
-  }, [unstageMutation, resetPagination]);
+  }, [unstageMutation, resetPagination, t, toast]);
 
   // 捨棄變更
   const handleDiscard = useCallback(async (file: VersionControlFileChange) => {
@@ -386,22 +487,41 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       ? Array.from(selectedUnstagedPaths)
       : [file.path];
 
-    await discardMutation.mutateAsync(pathsToDiscard);
-    setSelectedUnstagedPaths(new Set());
-    if (pathsToDiscard.includes(selectedUnstagedPath ?? '')) {
-      onFileSelect?.(null);
-      setSelectedUnstagedPath(null);
+    try {
+      await discardMutation.mutateAsync(pathsToDiscard);
+      setSelectedUnstagedPaths(new Set());
+      if (pathsToDiscard.includes(selectedUnstagedPath ?? '')) {
+        onFileSelect?.(null);
+        setSelectedUnstagedPath(null);
+      }
+      resetPagination();
+    } catch (error) {
+      logger.error('Discard failed', { error });
+      toast({
+        title: t('workspace.versionControl.toasts.discardFailed.title'),
+        description: getErrorDescription(error) ?? t('workspace.versionControl.toasts.discardFailed.description'),
+        variant: 'destructive',
+      });
     }
-    resetPagination();
-  }, [selectedUnstagedPaths, selectedUnstagedPath, discardMutation, onFileSelect, resetPagination]);
+  }, [selectedUnstagedPaths, selectedUnstagedPath, discardMutation, onFileSelect, resetPagination, t, toast]);
 
   // 提交變更
   const handleCommit = useCallback(async (data: { message: string }) => {
-    await commitMutation.mutateAsync(data.message);
-    setSelectedStagedPath(null);
-    onFileSelect?.(null);
-    resetPagination();
-  }, [commitMutation, onFileSelect, resetPagination]);
+    try {
+      await commitMutation.mutateAsync(data.message);
+      setSelectedStagedPath(null);
+      onFileSelect?.(null);
+      resetPagination();
+      toast({ title: t('workspace.versionControl.toasts.commitSuccess.title'), variant: 'success' });
+    } catch (error) {
+      logger.error('Commit failed', { error });
+      toast({
+        title: t('workspace.versionControl.toasts.commitFailed.title'),
+        description: getErrorDescription(error) ?? t('workspace.versionControl.toasts.commitFailed.description'),
+        variant: 'destructive',
+      });
+    }
+  }, [commitMutation, onFileSelect, resetPagination, t, toast]);
 
   // ==================== Early Returns ====================
 
@@ -447,43 +567,87 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // ==================== Main Render ====================
 
   const actionItems: VersionControlActionMenuItem[] = [
+    { id: 'refresh', onClick: () => void handleRefresh() },
+    { id: 'fetch', onClick: () => void handleGitAction('fetch') },
     { id: 'pull', onClick: () => void handleGitAction('pull') },
     { id: 'push', onClick: () => void handleGitAction('push') },
   ];
 
   return (
-    <VersionControlChangesSidebar
-      contextSlot={<GitContextSelector />}
-      branches={branches}
-      currentBranch={currentBranch}
-      actions={actionItems}
-      stagedFiles={stagedFiles}
-      unstagedFiles={allUnstagedFiles}
-      selectedStagedPath={selectedStagedPath}
-      selectedUnstagedPath={selectedUnstagedPath}
-      selectedStagedPaths={selectedStagedPaths}
-      selectedUnstagedPaths={selectedUnstagedPaths}
-      isMutating={commitMutation.isPending || stageMutation.isPending || unstageMutation.isPending || discardMutation.isPending}
-      onBranchChange={handleBranchChange}
-      onCommit={handleCommit}
-      onFileSelect={handleFileSelect}
-      onStageToggle={handleStageToggle}
-      onDiscard={handleDiscard}
-      onStageAll={handleStageAll}
-      onUnstageAll={handleUnstageAll}
-      unstagedFooter={(
-        <>
-          {changesQuery.data?.untrackedHasMore && (
-            <div ref={unstagedLoadMoreRef} className="h-1" />
-          )}
-          {changesQuery.isFetching && (
-            <div className="text-center py-2 text-muted-foreground text-sm">
-              <Loader2 className="inline-block w-4 h-4 animate-spin mr-2" />
-              {t('shared.versionControl.fileChanges.loadingMore')}
-            </div>
-          )}
-        </>
-      )}
+    <>
+      <VersionControlChangesSidebar
+        contextSlot={<GitContextSelector />}
+        branches={branches}
+        currentBranch={currentBranch}
+        actions={actionItems}
+        stagedFiles={stagedFiles}
+        unstagedFiles={allUnstagedFiles}
+        selectedStagedPath={selectedStagedPath}
+        selectedUnstagedPath={selectedUnstagedPath}
+        selectedStagedPaths={selectedStagedPaths}
+        selectedUnstagedPaths={selectedUnstagedPaths}
+        isMutating={isMutating}
+        onBranchChange={handleBranchChange}
+        onCreateBranch={() => setCreateBranchOpen(true)}
+        onCommit={handleCommit}
+        onFileSelect={handleFileSelect}
+        onStageToggle={handleStageToggle}
+        onDiscard={handleDiscard}
+        onStageAll={handleStageAll}
+        onUnstageAll={handleUnstageAll}
+        unstagedFooter={(
+          <>
+            {changesQuery.data?.untrackedHasMore && (
+              <div ref={unstagedLoadMoreRef} className="h-1" />
+            )}
+            {changesQuery.isFetching && (
+              <div className="text-center py-2 text-muted-foreground text-sm">
+                <Loader2 className="inline-block w-4 h-4 animate-spin mr-2" />
+                {t('shared.versionControl.fileChanges.loadingMore')}
+              </div>
+            )}
+          </>
+        )}
       />
+      <Dialog open={createBranchOpen} onOpenChange={setCreateBranchOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workspace.versionControl.branchDialog.title')}</DialogTitle>
+            <DialogDescription>{t('workspace.versionControl.branchDialog.description')}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={newBranchName}
+              onChange={(event) => setNewBranchName(event.target.value)}
+              placeholder={t('workspace.versionControl.branchDialog.namePlaceholder')}
+              aria-label={t('workspace.versionControl.branchDialog.nameLabel')}
+            />
+            <Input
+              value={newBranchStartPoint}
+              onChange={(event) => setNewBranchStartPoint(event.target.value)}
+              placeholder={t('workspace.versionControl.branchDialog.startPointPlaceholder')}
+              aria-label={t('workspace.versionControl.branchDialog.startPointLabel')}
+            />
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <Checkbox
+                checked={stashBeforeCheckout}
+                onCheckedChange={(checked) => setStashBeforeCheckout(Boolean(checked))}
+              />
+              {t('workspace.versionControl.branchDialog.stashChanges')}
+            </label>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCreateBranchOpen(false)}>
+              {t('workspace.versionControl.branchDialog.cancel')}
+            </Button>
+            <Button type="button" onClick={() => void handleCreateBranch()} disabled={!newBranchName.trim() || checkoutMutation.isPending}>
+              {checkoutMutation.isPending
+                ? t('workspace.versionControl.branchDialog.creating')
+                : t('workspace.versionControl.branchDialog.create')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

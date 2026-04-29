@@ -1,10 +1,12 @@
 import React, { useCallback } from 'react';
-import { Clock, FileText, GitCommit, Loader2, User } from 'lucide-react';
+import { Clock, FileText, GitCommit, Loader2, Search, User } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { VersionControlCommitSummary, VersionControlFileChange } from '@/shared/types/versionControl';
+import type { VersionControlBranch, VersionControlCommitSummary, VersionControlFileChange } from '@/shared/types/versionControl';
+import { Input } from '@/shared/components/ui/input';
 import { VersionControlFileChangeItem } from './VersionControlFileChangeItem';
 import { VersionControlResizablePanels } from './VersionControlResizablePanels';
+import { VersionControlBranchSelector } from './VersionControlBranchSelector';
 
 interface VersionControlHistorySidebarProps {
   contextSlot?: React.ReactNode;
@@ -19,6 +21,11 @@ interface VersionControlHistorySidebarProps {
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
   hasMore?: boolean;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  branchFilter?: string | null;
+  branches?: VersionControlBranch[];
+  onBranchFilterChange?: (branch: string | null) => void;
 }
 
 const COMMIT_ITEM_HEIGHT = 100;
@@ -36,6 +43,11 @@ export const VersionControlHistorySidebar: React.FC<VersionControlHistorySidebar
   onLoadMore,
   isLoadingMore = false,
   hasMore = false,
+  searchValue,
+  onSearchChange,
+  branchFilter,
+  branches = [],
+  onBranchFilterChange,
 }) => {
   const { t } = useI18n();
   const commitListRef = React.useRef<HTMLDivElement>(null);
@@ -90,13 +102,44 @@ export const VersionControlHistorySidebar: React.FC<VersionControlHistorySidebar
 
   const renderCommitList = (
     <div className="h-full flex flex-col">
-      <div className="flex h-10 flex-shrink-0 items-center border-b border-border bg-muted/30 px-3">
-        <h4 className="truncate text-sm font-medium text-foreground">
-          {t('shared.versionControl.commitHistory.title')}
-          <span className="ml-2 text-xs text-muted-foreground">
-            ({t('shared.versionControl.commitHistory.commitCount', { count: commits.length })})
-          </span>
-        </h4>
+      <div className="flex flex-shrink-0 flex-col gap-2 border-b border-border bg-muted/30 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="truncate text-sm font-medium text-foreground">
+            {t('shared.versionControl.commitHistory.title')}
+            <span className="ml-2 text-xs text-muted-foreground">
+              ({t('shared.versionControl.commitHistory.commitCount', { count: commits.length })})
+            </span>
+          </h4>
+        </div>
+        {(onSearchChange || onBranchFilterChange) && (
+          <div className="grid gap-2">
+            {onSearchChange && (
+              <div className="relative min-w-0">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchValue ?? ''}
+                  onChange={(event) => onSearchChange(event.target.value)}
+                  placeholder={t('shared.versionControl.commitHistory.filters.searchPlaceholder')}
+                  className="h-8 min-w-0 pl-7"
+                  aria-label={t('shared.versionControl.commitHistory.filters.searchAriaLabel')}
+                />
+              </div>
+            )}
+          {onBranchFilterChange && (
+            <VersionControlBranchSelector
+              branches={[
+                { name: '', displayName: t('shared.versionControl.commitHistory.filters.allBranches') },
+                ...branches,
+              ]}
+              currentBranch={branchFilter ?? ''}
+              onBranchChange={(branch) => onBranchFilterChange(branch || null)}
+              hideLabel
+              className="w-full"
+              buttonClassName="h-8 w-full justify-between px-2"
+            />
+          )}
+          </div>
+        )}
       </div>
       {commits.length === 0 ? (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">

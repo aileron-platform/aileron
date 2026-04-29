@@ -24,6 +24,7 @@ interface VersionControlChangesSidebarProps {
   selectedUnstagedPaths?: Set<string>;
   isMutating?: boolean;
   onBranchChange: (branch: string) => void;
+  onCreateBranch?: () => void;
   onCommit: (data: { message: string }) => void;
   onFileSelect: (file: VersionControlFileChange, group: FileGroup, event?: React.MouseEvent) => void;
   onStageToggle: (file: VersionControlFileChange, group: FileGroup) => void;
@@ -46,6 +47,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
   selectedUnstagedPaths = new Set(),
   isMutating = false,
   onBranchChange,
+  onCreateBranch,
   onCommit,
   onFileSelect,
   onStageToggle,
@@ -112,6 +114,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
         branches={branches}
         currentBranch={currentBranch}
         onBranchChange={onBranchChange}
+        onCreateBranch={onCreateBranch}
         actions={actions}
         disabled={isMutating}
       />

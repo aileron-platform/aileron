@@ -7,6 +7,7 @@ interface VersionControlBranchActionHeaderProps {
   branches: VersionControlBranch[];
   currentBranch: string;
   onBranchChange: (branch: string) => void;
+  onCreateBranch?: () => void;
   actions: VersionControlActionMenuItem[];
   disabled?: boolean;
 }
@@ -15,6 +16,7 @@ export const VersionControlBranchActionHeader: React.FC<VersionControlBranchActi
   branches,
   currentBranch,
   onBranchChange,
+  onCreateBranch,
   actions,
   disabled = false,
 }) => (
@@ -23,6 +25,7 @@ export const VersionControlBranchActionHeader: React.FC<VersionControlBranchActi
       branches={branches}
       currentBranch={currentBranch}
       onBranchChange={onBranchChange}
+      onCreateBranch={onCreateBranch}
       disabled={disabled}
     />
     <VersionControlActionMenu actions={actions} disabled={disabled} />

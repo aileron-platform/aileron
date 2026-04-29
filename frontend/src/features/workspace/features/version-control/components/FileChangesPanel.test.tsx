@@ -11,6 +11,11 @@ const {
   branchesQueryMock,
   statusQueryMock,
   useBranchesQueryMock,
+  fetchMutationMock,
+  pullMutationMock,
+  pushMutationMock,
+  checkoutMutationMock,
+  toastMock,
 } = vi.hoisted(() => ({
   onFileSelectMock: vi.fn(),
   changesQueryMock: {
@@ -33,16 +38,24 @@ const {
     data: { branch: 'main' },
   },
   useBranchesQueryMock: vi.fn(),
+  fetchMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  pullMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  pushMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  checkoutMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  toastMock: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) =>
+    t: (key: string, params?: Record<string, string>) =>
       ({
         'workspace.versionControl.actions.refresh.label': 'Refresh',
         'workspace.versionControl.actions.refresh.tooltip': 'Refresh version control status',
         'shared.versionControl.actions.menu.label': 'More actions',
         'shared.versionControl.actions.branch.label': 'Branch',
+        'shared.versionControl.actions.branch.create': 'Create branch',
+        'shared.versionControl.actions.refresh.label': 'Refresh',
+        'shared.versionControl.actions.fetch.label': 'Fetch',
         'shared.versionControl.actions.pull.label': 'Pull',
         'shared.versionControl.actions.push.label': 'Push',
         'shared.versionControl.fileChanges.stagedTitle': 'Staged changes',
@@ -58,8 +71,27 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'shared.versionControl.commitFiles.status.unknown': 'Unknown',
         'shared.versionControl.fileItem.stageTooltip': 'Stage file',
         'shared.versionControl.fileItem.unstageTooltip': 'Unstage file',
+        'workspace.versionControl.branchDialog.title': 'Create branch',
+        'workspace.versionControl.branchDialog.description': 'Create a branch.',
+        'workspace.versionControl.branchDialog.namePlaceholder': 'Branch name',
+        'workspace.versionControl.branchDialog.nameLabel': 'Branch name',
+        'workspace.versionControl.branchDialog.startPointPlaceholder': 'Start point',
+        'workspace.versionControl.branchDialog.startPointLabel': 'Start point',
+        'workspace.versionControl.branchDialog.stashChanges': 'Stash local changes',
+        'workspace.versionControl.branchDialog.cancel': 'Cancel',
+        'workspace.versionControl.branchDialog.create': 'Create branch',
+        'workspace.versionControl.branchDialog.creating': 'Creating...',
+        'workspace.versionControl.toasts.fetchSuccess.title': 'Fetch completed',
+        'workspace.versionControl.toasts.pullSuccess.title': 'Pull completed',
+        'workspace.versionControl.toasts.pushSuccess.title': 'Push completed',
+        'workspace.versionControl.toasts.createBranchSuccess.title': 'Branch created',
+        'workspace.versionControl.toasts.createBranchSuccess.description': `Created ${params?.branch}.`,
       }[key] ?? key),
   }),
+}));
+
+vi.mock('@/shared/components/ui/use-toast', () => ({
+  useToast: () => ({ toast: toastMock }),
 }));
 
 vi.mock('../../../providers/WorkspaceProvider', () => ({
@@ -92,6 +124,10 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
   useUnstageMutation: () => ({ mutateAsync: vi.fn() }),
   useCommitMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useDiscardMutation: () => ({ mutateAsync: vi.fn() }),
+  useFetchMutation: () => fetchMutationMock,
+  usePullMutation: () => pullMutationMock,
+  usePushMutation: () => pushMutationMock,
+  useCheckoutMutation: () => checkoutMutationMock,
 }));
 
 describe('FileChangesPanel', () => {
@@ -101,6 +137,11 @@ describe('FileChangesPanel', () => {
     branchesQueryMock.error = null;
     useBranchesQueryMock.mockReset();
     useBranchesQueryMock.mockReturnValue(branchesQueryMock);
+    fetchMutationMock.mutateAsync.mockResolvedValue({});
+    pullMutationMock.mutateAsync.mockResolvedValue({});
+    pushMutationMock.mutateAsync.mockResolvedValue({});
+    checkoutMutationMock.mutateAsync.mockResolvedValue({ branch: 'feature/new', created: true });
+    toastMock.mockClear();
   });
 
   it('renders branch and action controls in the changes header', () => {
@@ -134,6 +175,63 @@ describe('FileChangesPanel', () => {
 
     expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0);
     expect(screen.getAllByText('draft.txt').length).toBeGreaterThan(0);
+  });
+
+  it('wires refresh, fetch, pull, and push actions', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByText('Fetch'));
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByText('Pull'));
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByText('Push'));
+
+    expect(fetchMutationMock.mutateAsync).toHaveBeenCalledWith({ remote: 'origin' });
+    expect(pullMutationMock.mutateAsync).toHaveBeenCalledWith({
+      remote: 'origin',
+      branch: 'main',
+      rebase: true,
+      autostash: true,
+    });
+    expect(pushMutationMock.mutateAsync).toHaveBeenCalledWith({
+      remote: 'origin',
+      branch: 'main',
+      force: false,
+    });
+  });
+
+  it('creates a branch with start point and stash option', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'main' }));
+    await user.click(screen.getByText('Create branch'));
+    await user.type(screen.getByLabelText('Branch name'), 'feature/new');
+    await user.type(screen.getByLabelText('Start point'), 'origin/main');
+    await user.click(screen.getByText('Stash local changes'));
+    await user.click(screen.getByRole('button', { name: 'Create branch' }));
+
+    expect(checkoutMutationMock.mutateAsync).toHaveBeenCalledWith({
+      branch: 'feature/new',
+      create: true,
+      startPoint: 'origin/main',
+      stashChanges: true,
+    });
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Branch created' }));
   });
 
   it('clears selected file state when the branch changes', async () => {

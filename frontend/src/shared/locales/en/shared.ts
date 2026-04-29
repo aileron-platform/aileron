@@ -6,6 +6,7 @@ const shared = {
       },
       branch: {
         label: 'Branches',
+        create: 'Create branch',
       },
       refresh: {
         label: 'Refresh',
@@ -44,6 +45,11 @@ const shared = {
       selectPrompt: 'Select a commit first',
       commitCount_one: '{{count}} commit',
       commitCount_other: '{{count}} commits',
+      filters: {
+        allBranches: 'All branches',
+        searchPlaceholder: 'Search commits',
+        searchAriaLabel: 'Search commits',
+      },
       time: {
         daysAgo_one: '{{count}} day ago',
         daysAgo_other: '{{count}} days ago',

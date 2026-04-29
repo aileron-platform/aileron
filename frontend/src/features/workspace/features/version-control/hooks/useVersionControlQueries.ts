@@ -11,11 +11,16 @@ import type {
   GitContextListResponse,
   VersionControlChangesResponse,
   VersionControlBranch,
+  VersionControlCheckoutRequest,
+  VersionControlCheckoutResponse,
   VersionControlStatus,
   VersionControlCommitListResponse,
   VersionControlCommitSummary,
   VersionControlFileChange,
   VersionControlCommitFilesResponse,
+  VersionControlFetchResponse,
+  VersionControlPullResponse,
+  VersionControlPushResponse,
 } from '../types';
 
 interface UseVersionControlOptions {
@@ -264,6 +269,115 @@ export function useCommitMutation({ workspaceId, runtimeBaseUrl, contextId }: Us
       await new Promise(resolve => setTimeout(resolve, 100));
       await refreshVersionControlQueries(queryClient, workspaceId, {
         includeCommits: true,
+        contextId,
+      });
+    },
+  });
+}
+
+export function useFetchMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const queryClient = useQueryClient();
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useMutation({
+    mutationFn: async (payload: { remote?: string; prune?: boolean } = {}) => {
+      return fetchVersionControl<VersionControlFetchResponse>('fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remote: payload.remote ?? 'origin',
+          prune: payload.prune ?? false,
+        }),
+      });
+    },
+    onSuccess: () => {
+      return refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
+        includeCommits: true,
+        includeContexts: true,
+        contextId,
+      });
+    },
+  });
+}
+
+export function usePullMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const queryClient = useQueryClient();
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useMutation({
+    mutationFn: async (payload: { remote?: string; branch?: string; rebase?: boolean; autostash?: boolean }) => {
+      return fetchVersionControl<VersionControlPullResponse>('pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remote: payload.remote ?? 'origin',
+          branch: payload.branch,
+          rebase: payload.rebase ?? true,
+          autostash: payload.autostash ?? true,
+        }),
+      });
+    },
+    onSuccess: () => {
+      return refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
+        includeCommits: true,
+        includeContexts: true,
+        contextId,
+      });
+    },
+  });
+}
+
+export function usePushMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const queryClient = useQueryClient();
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useMutation({
+    mutationFn: async (payload: { remote?: string; branch?: string; force?: boolean }) => {
+      return fetchVersionControl<VersionControlPushResponse>('push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          remote: payload.remote ?? 'origin',
+          branch: payload.branch,
+          force: payload.force ?? false,
+        }),
+      });
+    },
+    onSuccess: () => {
+      return refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
+        includeCommits: true,
+        includeContexts: true,
+        contextId,
+      });
+    },
+  });
+}
+
+export function useCheckoutMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const queryClient = useQueryClient();
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useMutation({
+    mutationFn: async (payload: VersionControlCheckoutRequest) => {
+      const { branch, ...body } = payload;
+      return fetchVersionControl<VersionControlCheckoutResponse>(`branches/${encodeURIComponent(branch)}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          create: body.create ?? false,
+          startPoint: body.startPoint || undefined,
+          stashChanges: body.stashChanges ?? false,
+        }),
+      });
+    },
+    onSuccess: () => {
+      return refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
+        includeCommits: true,
+        includeContexts: true,
         contextId,
       });
     },

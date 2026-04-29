@@ -56,6 +56,18 @@ const versionControl = {
       worktree: '工作樹 · {{name}}',
     },
   },
+  branchDialog: {
+    title: '建立分支',
+    description: '在目前選取的工作樹建立分支並切換過去。',
+    nameLabel: '分支名稱',
+    namePlaceholder: '分支名稱',
+    startPointLabel: '起始點',
+    startPointPlaceholder: '起始點（選填）',
+    stashChanges: '切換前先 stash 本地變更',
+    cancel: '取消',
+    create: '建立分支',
+    creating: '建立中...',
+  },
   fileChanges: {
     loading: '載入中...',
     stagedTitle: '已暫存的變更',
@@ -121,6 +133,73 @@ const versionControl = {
     notInitialized: {
       title: '此工作區尚未初始化為 Git 儲存庫',
       description: '請先在工作區終端機執行 `git init`，或從現有 Git 倉庫複製檔案後再使用版本控制功能。',
+    },
+  },
+  toasts: {
+    refreshSuccess: {
+      title: '版本控制已重整',
+    },
+    refreshFailed: {
+      title: '重整失敗',
+      description: '無法重整版本控制資料。',
+    },
+    fetchSuccess: {
+      title: 'Fetch 已完成',
+    },
+    fetchFailed: {
+      title: 'Fetch 失敗',
+      description: '無法 fetch 遠端參照。',
+    },
+    pullSuccess: {
+      title: '拉取已完成',
+    },
+    pullFailed: {
+      title: '拉取失敗',
+      description: '無法拉取遠端變更。',
+    },
+    pushSuccess: {
+      title: '推送已完成',
+    },
+    pushFailed: {
+      title: '推送失敗',
+      description: '無法推送本地變更。',
+    },
+    checkoutSuccess: {
+      title: '已切換分支',
+      description: '已切換到 {{branch}}。',
+      stashedDescription: '已切換分支，並將本地變更 stash 為 {{stash}}。',
+    },
+    checkoutFailed: {
+      title: '切換分支失敗',
+      description: '無法切換到選取的分支。',
+    },
+    createBranchSuccess: {
+      title: '已建立分支',
+      description: '已建立並切換到 {{branch}}。',
+      stashedDescription: '已建立並切換到 {{branch}}，且將本地變更 stash 為 {{stash}}。',
+    },
+    createBranchFailed: {
+      title: '建立分支失敗',
+      description: '無法建立分支。',
+    },
+    commitSuccess: {
+      title: '已建立 commit',
+    },
+    commitFailed: {
+      title: 'Commit 失敗',
+      description: '無法建立 commit。',
+    },
+    stageFailed: {
+      title: '暫存失敗',
+      description: '無法暫存選取的檔案。',
+    },
+    unstageFailed: {
+      title: '取消暫存失敗',
+      description: '無法取消暫存選取的檔案。',
+    },
+    discardFailed: {
+      title: '捨棄變更失敗',
+      description: '無法捨棄選取的變更。',
     },
   },
 };

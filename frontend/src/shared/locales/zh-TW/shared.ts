@@ -6,6 +6,7 @@ const shared = {
       },
       branch: {
         label: '分支',
+        create: '建立分支',
       },
       refresh: {
         label: '重整',
@@ -43,6 +44,11 @@ const shared = {
       empty: '沒有提交歷史',
       selectPrompt: '請先選擇一個 commit',
       commitCount_other: '{{count}} commits',
+      filters: {
+        allBranches: '所有分支',
+        searchPlaceholder: '搜尋 commit',
+        searchAriaLabel: '搜尋 commit',
+      },
       time: {
         daysAgo_other: '{{count}} 天前',
         hoursAgo_other: '{{count}} 小時前',

@@ -13,7 +13,7 @@ import { GitCommit, Loader2 } from 'lucide-react';
 import { GitContextSelector } from './GitContextSelector';
 import type { VersionControlCommitSummary, VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
-import { useCommitsInfiniteQuery, useCommitFilesQuery } from '../hooks/useVersionControlQueries';
+import { useBranchesQuery, useCommitsInfiniteQuery, useCommitFilesQuery, useStatusQuery } from '../hooks/useVersionControlQueries';
 import { isVersionControlNotInitializedError } from '../utils';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { VersionControlHistorySidebar } from '@/shared/components/version-control';
@@ -34,6 +34,8 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
 }) => {
   const [internalSelectedCommitId, setInternalSelectedCommitId] = useState(externalSelectedCommitId || '');
   const [selectedFile, setSelectedFile] = useState<VersionControlFileChange | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [branchFilter, setBranchFilter] = useState<string | null>(null);
 
   const { t } = useI18n();
   const { workspaceRuntime, state } = useWorkspace();
@@ -41,10 +43,20 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
   const workspaceId = workspaceRuntime.workspaceId ?? '';
   const selectedGitContextId = state.versionControl.selectedGitContextId;
 
+  const branchesQuery = useBranchesQuery(
+    { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
+    true,
+    undefined,
+    false,
+  );
+  const statusQuery = useStatusQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+
   // React Query Infinite Query
   const commitsQuery = useCommitsInfiniteQuery(
     { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
-    20 // pageSize
+    20, // pageSize
+    branchFilter ?? undefined,
+    searchText.trim() || undefined,
   );
 
   // Commit Files Query
@@ -58,12 +70,33 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
     return commitsQuery.data?.pages.flatMap(page => page.items ?? []) ?? [];
   }, [commitsQuery.data]);
 
+  const branchFilterOptions = useMemo(() => {
+    const branches = branchesQuery.data ?? [];
+    const knownBranchNames = new Set(branches.map((branch) => branch.name));
+    const currentBranch = statusQuery.data?.branch;
+
+    if (currentBranch && !knownBranchNames.has(currentBranch)) {
+      return [
+        { name: currentBranch, displayName: currentBranch, isActive: true },
+        ...branches,
+      ];
+    }
+
+    return branches;
+  }, [branchesQuery.data, statusQuery.data?.branch]);
+
   // 同步外部選中的 commit
   React.useEffect(() => {
     if (externalSelectedCommitId) {
       setInternalSelectedCommitId(externalSelectedCommitId);
     }
   }, [externalSelectedCommitId]);
+
+  React.useEffect(() => {
+    setInternalSelectedCommitId('');
+    setSelectedFile(null);
+    onFileSelect?.(null);
+  }, [branchFilter, onFileSelect, searchText]);
 
   // 當選中的 commit 改變時，通知父組件
   React.useEffect(() => {
@@ -134,6 +167,11 @@ export const CommitHistoryPanel: React.FC<CommitHistoryPanelProps> = ({
       hasMore={commitsQuery.hasNextPage}
       isLoadingMore={commitsQuery.isFetchingNextPage}
       onLoadMore={() => void commitsQuery.fetchNextPage()}
+      searchValue={searchText}
+      onSearchChange={setSearchText}
+      branchFilter={branchFilter}
+      branches={branchFilterOptions}
+      onBranchFilterChange={setBranchFilter}
     />
   );
 };
