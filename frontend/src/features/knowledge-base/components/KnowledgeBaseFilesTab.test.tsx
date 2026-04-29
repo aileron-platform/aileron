@@ -108,18 +108,6 @@ vi.mock('@/shared/components/file-tree-manager', () => ({
       {children}
     </div>
   ),
-  FileTreeToolbar: ({
-    leftContent,
-    isReadOnly,
-  }: {
-    leftContent?: ReactNode;
-    isReadOnly?: boolean;
-  }) => (
-    <div>
-      {leftContent}
-      <span>{isReadOnly ? 'toolbar-readonly' : 'toolbar-editable'}</span>
-    </div>
-  ),
   FileTreePanel: ({
     enableDragDrop,
     enableMultiSelectBar,
@@ -160,7 +148,6 @@ describe('KnowledgeBaseFilesTab', () => {
 
     expect(screen.getByText('知識庫檔案')).toBeInTheDocument();
     expect(screen.getByText('檔案與資料夾')).toBeInTheDocument();
-    expect(screen.getByText('toolbar-editable')).toBeInTheDocument();
     expect(screen.getByText('tree-panel:drag:multi')).toBeInTheDocument();
     expect(screen.getByText('editable-editor')).toBeInTheDocument();
   });
@@ -171,7 +158,6 @@ describe('KnowledgeBaseFilesTab', () => {
     expect(screen.getByText('唯讀')).toBeInTheDocument();
     expect(screen.getByText('檢視者')).toBeInTheDocument();
     expect(screen.getByText('檢視者僅可讀取')).toBeInTheDocument();
-    expect(screen.getByText('toolbar-readonly')).toBeInTheDocument();
     expect(screen.getByDisplayValue('kb content')).toBeInTheDocument();
     expect(screen.getByText('tree-panel:static:single')).toBeInTheDocument();
   });
