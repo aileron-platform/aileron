@@ -166,6 +166,27 @@ kubectl delete crd workspaces.platform.aileron.io
 
 Workspace Runtime image 較大時，每個 node 上第一個 workspace pod 會先等待 image pull。Helm chart 預設建立 `workspace-runtime-prepuller` DaemonSet，讓每個 node 先快取 `workspaceOperator.runtimeImage` 指定的 runtime image，後續 workspace pod 使用 `IfNotPresent` 時可直接啟動。
 
+### Runtime Image Tag 選擇
+
+Kubernetes 模式必須使用正式用途的 `latest-*` runtime image，不應使用 `dev-*` runtime image。
+
+| Tag 類型 | Dockerfile target | 是否內含 `/workspace-runtime/app` | Kubernetes 適用性 |
+|----------|-------------------|-----------------------------------|-------------------|
+| `dev-*` | `development` | 不保證，預期由本地 volume mount 提供 | 不適用 |
+| `latest-*` | `production` | 是，程式碼已打包進 image | 適用 |
+
+例如 amd64 + lite runtime 應設定：
+
+```yaml
+kubernetes:
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
+
+workspaceOperator:
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
+```
+
+`dev-lite-amd64` 這類 image 是給 Docker Compose 開發模式使用。它依賴 `./workspace-runtime:/workspace-runtime` 這類 volume mount 提供程式碼；若直接拿到 Kubernetes 使用，runtime FastAPI 可能因找不到 `app.main` 而無法啟動。
+
 DaemonSet 透過 initContainer 拉取 runtime image，完成後由 `registry.k8s.io/pause:3.10` container 保持 pod 存活。runtime image 升版時，Helm upgrade 會讓 DaemonSet rollout，觸發各 node 拉取新 image。
 
 驗證 pre-puller 狀態：

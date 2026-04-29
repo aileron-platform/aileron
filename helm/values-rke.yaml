@@ -1,3 +1,6 @@
+global:
+  storageClass: local-path
+
 publicRouting:
   scheme: http
   baseDomain: apps.rke.soez.tw
@@ -27,22 +30,23 @@ kubernetes:
   nodeAddress: 192.168.50.241
   pvcName: workspace-runtime-pvc
   knowledgeBases:
-    # Production profile: use a real RWX shared storage class.
+    # RKE 測試叢集目前未提供 RWX StorageClass，先以 local-path/RWO 驗證核心服務部署。
+    # 正式環境請改回 NFS / CephFS / Longhorn RWX 等共享儲存。
     pvcName: knowledge-bases-pvc
     size: 20Gi
     accessModes:
-      - ReadWriteMany
-    storageClassName: nfs
-  runtimeImage: ailerondocker/workspace-runtime:latest
-  browserImage: ailerondocker/workspace-chrome:latest
-  canvasImage: ailerondocker/workspace-canvas:latest
+      - ReadWriteOnce
+    storageClassName: local-path
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
+  browserImage: ailerondocker/workspace-chrome:latest-amd64
+  canvasImage: ailerondocker/workspace-canvas:dev-amd64
 
 frontend:
   enabled: true
   replicaCount: 1
   image:
     repository: ailerondocker/workspace-ui
-    tag: latest
+    tag: latest-amd64
     pullPolicy: Always
   env:
     TZ: Asia/Taipei
@@ -59,7 +63,7 @@ workspaceManager:
   replicaCount: 1
   image:
     repository: ailerondocker/workspace-manager
-    tag: latest
+    tag: dev-amd64
     pullPolicy: Always
   env:
     TZ: Asia/Taipei
@@ -83,9 +87,10 @@ workspaceManager:
 workspaceOperator:
   enabled: true
   replicaCount: 1
+  runtimeImage: ailerondocker/workspace-runtime:latest-lite-amd64
   image:
     repository: ailerondocker/workspace-operator
-    tag: latest
+    tag: dev-amd64
     pullPolicy: Always
 
 keycloak:
@@ -98,8 +103,7 @@ keycloak:
 
 coturn:
   enabled: true
-  nodeSelector:
-    role: turn
+  nodeSelector: {}
   host: "192.168.50.241"
   frontendHost: "192.168.50.241"
   externalIp: "192.168.50.241"

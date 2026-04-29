@@ -186,6 +186,19 @@ HOST_PROJECT_ROOT=/Users/yourname/aileron
 | `./frontend` | `/app` | Frontend 程式碼熱重載 |
 | `/var/run/docker.sock` | `/var/run/docker.sock` | Docker Socket（容器管理用） |
 
+### 開發 Image 與正式 Image 的差異
+
+Aileron 的 Docker tag 有明確語意：
+
+| Tag 類型 | 用途 | 程式碼來源 | 適用部署 |
+|----------|------|------------|----------|
+| `dev-*` | 本地開發與除錯 | 透過 volume mount 掛入主機程式碼 | Docker Compose 開發模式 |
+| `latest-*` | 正式或類正式環境 | 已打包在 image 內 | Kubernetes、Helm、正式部署 |
+
+以 `workspace-runtime` 為例，`dev-lite-amd64` 會使用 Dockerfile 的 development target。這類 image 預期由 `docker compose` 將 `./workspace-runtime` 掛載到容器內，因此 image 本身不一定包含完整的 `/workspace-runtime/app` 程式碼。
+
+正式環境請使用 `latest-lite-amd64` 或同系列 `latest-*` tag。這類 image 使用 production target，會把 runtime 程式碼打包進 image，容器啟動時不依賴主機 volume mount。
+
 :::caution Docker Socket 掛載
 `workspace-manager` 與 `workspace-runtime` 都掛載了 Docker Socket，使其能動態建立和管理 workspace 容器。此設計僅適合開發環境，生產環境請使用 Kubernetes 模式。
 :::
