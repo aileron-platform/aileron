@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
       'knowledgeBase.schedules.editor.workspaceOption': `${params?.mountAlias ?? ''} (${params?.mode ?? ''})`,
       'knowledgeBase.schedules.editor.workspaceEmpty': '尚未掛載至任何工作區',
       'knowledgeBase.schedules.editor.cron': 'Cron schedule',
+      'knowledgeBase.schedules.editor.schedule': '排程',
       'knowledgeBase.schedules.editor.mountNotice':
         '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
       'knowledgeBase.schedules.editor.moveNotice':
@@ -42,6 +43,44 @@ const mocks = vi.hoisted(() => ({
       'knowledgeBase.schedules.toasts.updateFailed.description': '請稍後再試。',
       'knowledgeBase.schedules.toasts.loadFailed.title': '載入排程失敗',
       'knowledgeBase.schedules.toasts.loadFailed.description': '請稍後再試。',
+      'automation.form.scheduleBuilder.fields.mode': '頻率',
+      'automation.form.scheduleBuilder.fields.minute': '分鐘',
+      'automation.form.scheduleBuilder.fields.hour': '小時',
+      'automation.form.scheduleBuilder.fields.time': '時間',
+      'automation.form.scheduleBuilder.fields.weekdays': '星期',
+      'automation.form.scheduleBuilder.fields.dayOfMonth': '每月日期',
+      'automation.form.scheduleBuilder.fields.advancedCron': 'Cron 表達式',
+      'automation.form.scheduleBuilder.modes.hourly': '每小時',
+      'automation.form.scheduleBuilder.modes.daily': '每天',
+      'automation.form.scheduleBuilder.modes.weekly': '每週',
+      'automation.form.scheduleBuilder.modes.monthly': '每月',
+      'automation.form.scheduleBuilder.modes.advanced': '進階 Cron',
+      'automation.form.scheduleBuilder.weekdays.0': '星期日',
+      'automation.form.scheduleBuilder.weekdays.1': '星期一',
+      'automation.form.scheduleBuilder.weekdays.2': '星期二',
+      'automation.form.scheduleBuilder.weekdays.3': '星期三',
+      'automation.form.scheduleBuilder.weekdays.4': '星期四',
+      'automation.form.scheduleBuilder.weekdays.5': '星期五',
+      'automation.form.scheduleBuilder.weekdays.6': '星期六',
+      'automation.form.scheduleBuilder.weekdays.short.0': '日',
+      'automation.form.scheduleBuilder.weekdays.short.1': '一',
+      'automation.form.scheduleBuilder.weekdays.short.2': '二',
+      'automation.form.scheduleBuilder.weekdays.short.3': '三',
+      'automation.form.scheduleBuilder.weekdays.short.4': '四',
+      'automation.form.scheduleBuilder.weekdays.short.5': '五',
+      'automation.form.scheduleBuilder.weekdays.short.6': '六',
+      'automation.form.scheduleBuilder.weekdaySeparator': '、',
+      'automation.form.scheduleBuilder.dayOfMonthOption': `${params?.day ?? ''} 日`,
+      'automation.form.scheduleBuilder.advancedPlaceholder': '0 9 * * *',
+      'automation.form.scheduleBuilder.advancedHelper': '只有在結構化控制無法表示排程時，才需要使用進階 Cron。',
+      'automation.form.scheduleBuilder.summaryLabel': '摘要',
+      'automation.form.scheduleBuilder.summary.hourly': `每小時第 ${params?.minute ?? ''} 分執行。`,
+      'automation.form.scheduleBuilder.summary.daily': `每天 ${params?.time ?? ''} 執行。`,
+      'automation.form.scheduleBuilder.summary.weekly': `每週${params?.weekdays ?? ''} ${params?.time ?? ''} 執行。`,
+      'automation.form.scheduleBuilder.summary.monthly': `每月 ${params?.day ?? ''} 日 ${params?.time ?? ''} 執行。`,
+      'automation.form.scheduleBuilder.summary.advanced': `使用 Cron 表達式 ${params?.cron ?? ''} 執行。`,
+      'automation.form.scheduleBuilder.validation.weekdayRequired': '請至少選擇一個星期。',
+      'automation.form.scheduleBuilder.validation.invalidCron': '請輸入有效的五欄位 Cron 表達式。',
     };
     return translations[key] ?? key;
   }),
@@ -157,6 +196,8 @@ describe('KnowledgeBaseSchedulesTab', () => {
     expect(screen.getByText(
       '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
     )).toBeInTheDocument();
+    expect(screen.getByText('每天 09:00 執行。')).toBeInTheDocument();
+    expect(screen.getByText('0 9 * * *')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '建立排程' }));
 
@@ -270,7 +311,9 @@ describe('KnowledgeBaseSchedulesTab', () => {
     expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.createTitle');
     expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.createHelper');
     expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.workspace');
-    expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.cron');
+    expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.schedule');
+    expect(mocks.t).toHaveBeenCalledWith('automation.form.scheduleBuilder.fields.mode');
+    expect(mocks.t).toHaveBeenCalledWith('automation.form.scheduleBuilder.summaryLabel');
     expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.editor.noEligibleWorkspace');
     expect(mocks.t).toHaveBeenCalledWith('knowledgeBase.schedules.actions.create');
   });

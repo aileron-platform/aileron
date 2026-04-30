@@ -7,6 +7,8 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { automationApi } from '@/features/automation/services/automationApi';
 import type { AutomationJob } from '@/features/automation/types';
+import { ScheduleBuilder } from '@/features/automation/components/ScheduleBuilder';
+import type { ScheduleBuilderValidation } from '@/features/automation/components/scheduleBuilderUtils';
 import type { KnowledgeBaseAttachmentSummary } from '@/shared/types/knowledgeBase';
 
 interface KnowledgeBaseSchedulesTabProps {
@@ -30,6 +32,7 @@ export const KnowledgeBaseSchedulesTab: React.FC<KnowledgeBaseSchedulesTabProps>
   const [existingJob, setExistingJob] = React.useState<AutomationJob | null>(null);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState('');
   const [schedule, setSchedule] = React.useState(DEFAULT_SCHEDULE);
+  const [scheduleValidation, setScheduleValidation] = React.useState<ScheduleBuilderValidation>({ isValid: true });
   const [isBusy, setIsBusy] = React.useState(false);
   const canWrite = ['owner', 'manager', 'editor'].includes(accessRole);
   const writableAttachments = React.useMemo(
@@ -158,7 +161,8 @@ export const KnowledgeBaseSchedulesTab: React.FC<KnowledgeBaseSchedulesTabProps>
     : t('knowledgeBase.schedules.actions.create');
 
   const isDisabled = !canWrite || isBusy || !hasEligibleWorkspace
-    || !selectedAttachment || selectedAttachment.mode !== 'rw';
+    || !selectedAttachment || selectedAttachment.mode !== 'rw'
+    || !schedule.trim() || !scheduleValidation.isValid;
 
   return (
     <div className="h-full overflow-auto p-6">
@@ -219,15 +223,17 @@ export const KnowledgeBaseSchedulesTab: React.FC<KnowledgeBaseSchedulesTabProps>
               </p>
             )}
 
-            <label className="block text-xs font-medium text-muted-foreground">
-              {t('knowledgeBase.schedules.editor.cron')}
-              <input
-                className="mt-1 h-9 w-full rounded-md border bg-background px-2 font-mono text-sm"
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">
+                {t('knowledgeBase.schedules.editor.schedule')}
+              </div>
+              <ScheduleBuilder
                 value={schedule}
+                onChange={setSchedule}
                 disabled={!canWrite || isBusy || !hasEligibleWorkspace}
-                onChange={(event) => setSchedule(event.target.value)}
+                onValidationChange={setScheduleValidation}
               />
-            </label>
+            </div>
 
             <Button
               className="h-8 gap-2"

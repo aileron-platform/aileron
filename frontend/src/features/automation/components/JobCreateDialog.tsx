@@ -34,6 +34,8 @@ import { STATUS_OPTIONS, TRIGGER_OPTIONS } from './jobFormOptions';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useApp } from '@/app/providers/AppProvider';
 import { workspaceApi, type WorkspaceSummary } from '../services/workspaceApi';
+import { ScheduleBuilder } from './ScheduleBuilder';
+import type { ScheduleBuilderValidation } from './scheduleBuilderUtils';
 
 const FALLBACK_USER_ID = 'f57c7e4d-4f51-45a2-b6a6-4d2fe79a4d21';
 
@@ -91,11 +93,13 @@ export const JobCreateDialog: React.FC = () => {
   const [commands, setCommands] = useState<SlashCommandItem[]>([]);
   const [commandsLoading, setCommandsLoading] = useState(false);
   const [commandsError, setCommandsError] = useState<string | null>(null);
+  const [scheduleValidation, setScheduleValidation] = useState<ScheduleBuilderValidation>({ isValid: true });
 
   useEffect(() => {
     if (state.isCreateDialogOpen) {
       setForm(defaultForm);
       setTagInput('');
+      setScheduleValidation({ isValid: true });
     }
   }, [defaultForm, state.isCreateDialogOpen]);
 
@@ -187,6 +191,18 @@ export const JobCreateDialog: React.FC = () => {
     };
   }, [form.workspaceId, state.isCreateDialogOpen]);
 
+  useEffect(() => {
+    if (!state.isCreateDialogOpen || workspaces.length === 0) {
+      return;
+    }
+    setForm(prev => {
+      if (prev.workspaceId && workspaces.some(item => item.id === prev.workspaceId)) {
+        return prev;
+      }
+      return { ...prev, workspaceId: workspaces[0].id };
+    });
+  }, [state.isCreateDialogOpen, workspaces]);
+
   const handleAddTag = () => {
     const value = tagInput.trim();
     if (!value) return;
@@ -204,10 +220,9 @@ export const JobCreateDialog: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    // 驗證必填欄位
     if (!form.workspaceId || !form.name.trim() || !form.prompt.trim()) return;
-    // cron 觸發需要 schedule
     if (form.trigger === 'cron' && !form.schedule.trim()) return;
+    if (form.trigger === 'cron' && !scheduleValidation.isValid) return;
     try {
       await createTask(form);
     } catch (error) {
@@ -220,7 +235,7 @@ export const JobCreateDialog: React.FC = () => {
     !form.workspaceId ||
     !form.name.trim() ||
     !form.prompt.trim() ||
-    (form.trigger === 'cron' && !form.schedule.trim());
+    (form.trigger === 'cron' && (!form.schedule.trim() || !scheduleValidation.isValid));
 
   const tagSuggestions = useMemo(() => {
     const tags = new Set<string>();
@@ -295,7 +310,9 @@ export const JobCreateDialog: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span>{option.name}</span>
                               <Badge variant="secondary" className="text-[10px] uppercase">
-                                {option.accessSource === 'shared' ? 'Shared' : 'Owned'}
+                                {option.accessSource === 'shared'
+                                  ? t('automation.form.fields.workspace.accessSource.shared')
+                                  : t('automation.form.fields.workspace.accessSource.owned')}
                               </Badge>
                             </div>
                           </SelectItem>
@@ -395,15 +412,15 @@ export const JobCreateDialog: React.FC = () => {
                       const newTrigger = value as JobCreateInput['trigger'];
                       setForm(prev => {
                         const updated = { ...prev, trigger: newTrigger };
-                        // 當切換到 webhook 時，自動生成 API Key
+                        // Generate the API key when switching to webhook.
                         if (newTrigger === 'webhook' && !prev.webhookApiKey) {
                           updated.webhookApiKey = generateWebhookApiKey();
                         }
-                        // 當切換到 manual 時，清空 schedule
+                        // Manual triggers do not need a schedule.
                         if (newTrigger === 'manual') {
                           updated.schedule = '';
                         }
-                        // 當切換到 cron 時，設定預設 schedule
+                        // Restore a default schedule when switching back to cron.
                         if (newTrigger === 'cron' && !prev.schedule) {
                           updated.schedule = '0 9 * * *';
                         }
@@ -449,15 +466,11 @@ export const JobCreateDialog: React.FC = () => {
                     {t('automation.form.fields.schedule.label')}
                     <span className="ml-1 text-destructive">*</span>
                   </Label>
-                  <Input
+                  <ScheduleBuilder
                     value={form.schedule}
-                    onChange={(event) => setForm(prev => ({ ...prev, schedule: event.target.value }))}
-                    placeholder={t('automation.form.fields.schedule.placeholder')}
-                    required
+                    onChange={(schedule) => setForm(prev => ({ ...prev, schedule }))}
+                    onValidationChange={setScheduleValidation}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    {t('automation.form.fields.schedule.helper')}
-                  </p>
                   <p className="text-xs text-muted-foreground">
                     {t('automation.form.fields.schedule.timezoneHelper')}
                   </p>

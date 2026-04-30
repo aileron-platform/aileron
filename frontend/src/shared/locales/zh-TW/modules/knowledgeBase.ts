@@ -183,6 +183,7 @@ const knowledgeBase = {
       workspaceEmpty: '尚未掛載至任何工作區',
       workspaceOption: '{{workspaceName}} · {{mountAlias}} ({{mode}})',
       cron: 'Cron schedule',
+      schedule: '排程',
       mountNotice: '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
       moveNotice: '若選擇不同的工作區並儲存，會將現有的 Wiki Index 排程移動到該工作區；每個知識庫只能保有一個排程。',
       noEligibleWorkspace: '目前沒有可讀寫的工作區掛載。請先把此知識庫以可讀寫模式掛載到目標工作區，再設定 Wiki Index 排程。',

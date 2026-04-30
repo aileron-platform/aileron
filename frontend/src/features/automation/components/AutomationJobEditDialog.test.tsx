@@ -7,7 +7,7 @@ import type { AutomationJob, AutomationJobUpdateInput } from '@/features/automat
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
 
 const { tMock } = vi.hoisted(() => ({
-  tMock: (key: string) =>
+  tMock: (key: string, params?: Record<string, string | number>) =>
     ({
       'automation.edit.title': 'Edit scheduled task definition',
       'automation.edit.subtitle': 'Update dispatch configuration',
@@ -29,6 +29,44 @@ const { tMock } = vi.hoisted(() => ({
       'automation.form.fields.schedule.label': 'Job configuration',
       'automation.form.fields.schedule.placeholder': 'Cron expression',
       'automation.form.fields.schedule.timezoneHelper': 'Uses system timezone.',
+      'automation.form.scheduleBuilder.fields.mode': 'Frequency',
+      'automation.form.scheduleBuilder.fields.minute': 'Minute',
+      'automation.form.scheduleBuilder.fields.hour': 'Hour',
+      'automation.form.scheduleBuilder.fields.time': 'Time',
+      'automation.form.scheduleBuilder.fields.weekdays': 'Weekdays',
+      'automation.form.scheduleBuilder.fields.dayOfMonth': 'Day of month',
+      'automation.form.scheduleBuilder.fields.advancedCron': 'Cron expression',
+      'automation.form.scheduleBuilder.modes.hourly': 'Hourly',
+      'automation.form.scheduleBuilder.modes.daily': 'Daily',
+      'automation.form.scheduleBuilder.modes.weekly': 'Weekly',
+      'automation.form.scheduleBuilder.modes.monthly': 'Monthly',
+      'automation.form.scheduleBuilder.modes.advanced': 'Advanced cron',
+      'automation.form.scheduleBuilder.weekdays.0': 'Sunday',
+      'automation.form.scheduleBuilder.weekdays.1': 'Monday',
+      'automation.form.scheduleBuilder.weekdays.2': 'Tuesday',
+      'automation.form.scheduleBuilder.weekdays.3': 'Wednesday',
+      'automation.form.scheduleBuilder.weekdays.4': 'Thursday',
+      'automation.form.scheduleBuilder.weekdays.5': 'Friday',
+      'automation.form.scheduleBuilder.weekdays.6': 'Saturday',
+      'automation.form.scheduleBuilder.weekdays.short.0': 'Sun',
+      'automation.form.scheduleBuilder.weekdays.short.1': 'Mon',
+      'automation.form.scheduleBuilder.weekdays.short.2': 'Tue',
+      'automation.form.scheduleBuilder.weekdays.short.3': 'Wed',
+      'automation.form.scheduleBuilder.weekdays.short.4': 'Thu',
+      'automation.form.scheduleBuilder.weekdays.short.5': 'Fri',
+      'automation.form.scheduleBuilder.weekdays.short.6': 'Sat',
+      'automation.form.scheduleBuilder.weekdaySeparator': ', ',
+      'automation.form.scheduleBuilder.dayOfMonthOption': `Day ${params?.day ?? ''}`,
+      'automation.form.scheduleBuilder.advancedPlaceholder': '0 9 * * *',
+      'automation.form.scheduleBuilder.advancedHelper': 'Use advanced cron only when needed.',
+      'automation.form.scheduleBuilder.summaryLabel': 'Summary',
+      'automation.form.scheduleBuilder.summary.hourly': `Runs every hour at minute ${params?.minute ?? ''}.`,
+      'automation.form.scheduleBuilder.summary.daily': `Runs every day at ${params?.time ?? ''}.`,
+      'automation.form.scheduleBuilder.summary.weekly': `Runs every ${params?.weekdays ?? ''} at ${params?.time ?? ''}.`,
+      'automation.form.scheduleBuilder.summary.monthly': `Runs on day ${params?.day ?? ''} of every month at ${params?.time ?? ''}.`,
+      'automation.form.scheduleBuilder.summary.advanced': `Runs using cron expression ${params?.cron ?? ''}.`,
+      'automation.form.scheduleBuilder.validation.weekdayRequired': 'Select at least one weekday.',
+      'automation.form.scheduleBuilder.validation.invalidCron': 'Enter a valid five-field cron expression.',
       'automation.form.fields.tags.label': 'Tags',
       'automation.form.fields.tags.placeholder': 'Add tag',
       'automation.form.fields.tags.suggestions': 'Suggestions',
@@ -138,7 +176,8 @@ describe('AutomationJobEditDialog', () => {
     expect(screen.getByDisplayValue('Nightly backup')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Back up workspace')).toBeInTheDocument();
     expect(screen.getByDisplayValue('/backup')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('0 2 * * *')).toBeInTheDocument();
+    expect(screen.getByText('Runs every day at 02:00.')).toBeInTheDocument();
+    expect(screen.getByText('0 2 * * *')).toBeInTheDocument();
     expect(screen.getByText('Owned')).toBeInTheDocument();
   });
 
@@ -159,6 +198,7 @@ describe('AutomationJobEditDialog', () => {
         id: 'job-1',
         name: 'Daily deploy',
         prompt: '/ops/deploy',
+        schedule: '0 2 * * *',
       }));
     });
   });

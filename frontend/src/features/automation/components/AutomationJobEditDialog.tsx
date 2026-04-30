@@ -25,6 +25,8 @@ import { SlashCommandPickerDialog } from '@/shared/components/slash-command-pick
 import { Clock, Plus, Slash, Tag as TagIcon, X } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';
+import { ScheduleBuilder } from './ScheduleBuilder';
+import type { ScheduleBuilderValidation } from './scheduleBuilderUtils';
 
 const logger = createLogger('AutomationJobEditDialog');
 
@@ -93,16 +95,19 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
   const [form, setForm] = useState<AutomationJobUpdateInput | null>(null);
   const [tagInput, setTagInput] = useState('');
   const [slashDialogOpen, setSlashDialogOpen] = useState(false);
+  const [scheduleValidation, setScheduleValidation] = useState<ScheduleBuilderValidation>({ isValid: true });
   const { t } = useI18n();
 
   useEffect(() => {
     if (isOpen && task) {
       setForm(mapTaskToForm(task));
       setTagInput('');
+      setScheduleValidation({ isValid: true });
     }
     if (!isOpen) {
       setForm(null);
       setTagInput('');
+      setScheduleValidation({ isValid: true });
     }
   }, [isOpen, task]);
 
@@ -126,6 +131,7 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
     event.preventDefault();
     if (!form) return;
     if (!form.workspaceId || !form.name.trim() || !form.schedule.trim() || !form.prompt.trim()) return;
+    if (form.trigger === 'cron' && !scheduleValidation.isValid) return;
     try {
       await onSave(form);
     } catch (error) {
@@ -138,7 +144,7 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
     saving ||
     !form.workspaceId ||
     !form.name.trim() ||
-    !form.schedule.trim() ||
+    (form.trigger === 'cron' && (!form.schedule.trim() || !scheduleValidation.isValid)) ||
     !form.prompt.trim();
 
   const tagSuggestions = useMemo(() => {
@@ -284,11 +290,10 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
                     {t('automation.form.fields.schedule.label')}
                     <span className="ml-1 text-destructive">*</span>
                   </Label>
-                  <Input
+                  <ScheduleBuilder
                     value={form.schedule}
-                    onChange={(event) => setForm(prev => prev ? { ...prev, schedule: event.target.value } : prev)}
-                    placeholder={t('automation.form.fields.schedule.placeholder')}
-                    required
+                    onChange={(schedule) => setForm(prev => prev ? { ...prev, schedule } : prev)}
+                    onValidationChange={setScheduleValidation}
                   />
                   <p className="text-xs text-muted-foreground">
                     {t('automation.form.fields.schedule.timezoneHelper')}
