@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Link2, Plus, Unplug, Workflow } from 'lucide-react';
+import { Box, Check, Clock, FolderTree, Link2, Plus, Unplug, Workflow } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -90,11 +90,6 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
   }, [attachmentsById, knowledgeBaseId, loadKnowledgeBaseAttachments]);
 
   React.useEffect(() => {
-    if (!isAttachDialogOpen) {
-      setWorkspaceCandidates([]);
-      return;
-    }
-
     let active = true;
     const timer = window.setTimeout(async () => {
       try {
@@ -115,7 +110,7 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
       active = false;
       window.clearTimeout(timer);
     };
-  }, [isAttachDialogOpen, t]);
+  }, [t]);
 
   React.useEffect(() => {
     if (!canEditMode) {
@@ -178,24 +173,6 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
       setError(err instanceof Error ? err.message : t('knowledgeBase.attachments.attachFailed'));
     }
   }, [canEditMode, createKnowledgeBaseAttachment, knowledgeBaseId, mode, mountAlias, resetDraft, selectedWorkspaceId, t, toast, workspaceMap]);
-
-  const handleAliasUpdate = React.useCallback(async (attachmentId: string, nextAlias: string) => {
-    setBusyAttachmentId(attachmentId);
-    setError(null);
-    try {
-      await updateKnowledgeBaseAttachment(knowledgeBaseId, attachmentId, {
-        mountAlias: nextAlias.trim() || undefined,
-      });
-      toast({
-        title: t('knowledgeBase.attachments.aliasUpdatedTitle'),
-        description: nextAlias || t('knowledgeBase.attachments.aliasUpdatedFallback', { id: attachmentId }),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t('knowledgeBase.attachments.aliasUpdateFailed'));
-    } finally {
-      setBusyAttachmentId(null);
-    }
-  }, [knowledgeBaseId, t, toast, updateKnowledgeBaseAttachment]);
 
   const handleModeUpdate = React.useCallback(async (
     attachmentId: string,
@@ -269,31 +246,18 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
               {t('knowledgeBase.attachments.empty')}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
               {attachments.map((attachment) => {
                 const workspace = workspaceMap[attachment.workspaceId];
                 return (
-                  <div
-                    key={attachment.id}
-                    className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/60 p-4"
-                  >
+                  <div key={attachment.id} className="space-y-3 px-4 py-4 sm:px-6">
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate font-medium text-foreground">
-                            {workspace?.name || attachment.workspaceId}
-                          </span>
-                          <Badge variant="outline">{attachment.workspaceId}</Badge>
-                          <Badge variant={attachment.mode === 'rw' ? 'secondary' : 'outline'}>
-                            {attachment.mode.toUpperCase()}
-                          </Badge>
-                        </div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {t('knowledgeBase.attachments.attachedMeta', {
-                            userId: attachment.attachedById,
-                            date: new Date(attachment.createdAt).toLocaleString('zh-TW'),
-                          })}
-                        </div>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <Box className="h-4 w-4 shrink-0 text-sky-600" />
+                        <span className="truncate font-medium text-foreground">
+                          {workspace?.name || attachment.workspaceId}
+                        </span>
+                        <Badge variant="outline">{attachment.workspaceId}</Badge>
                       </div>
                       <Button
                         size="sm"
@@ -311,22 +275,16 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
                     <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
                       <div className="space-y-2">
                         <Label htmlFor={`alias-${attachment.id}`}>{t('knowledgeBase.attachments.labels.mountAlias')}</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id={`alias-${attachment.id}`}
-                            defaultValue={attachment.mountAlias}
-                            disabled={isMutating || busyAttachmentId === attachment.id}
-                            onBlur={(event) => {
-                              const nextAlias = event.target.value.trim();
-                              if (nextAlias && nextAlias !== attachment.mountAlias) {
-                                void handleAliasUpdate(attachment.id, nextAlias);
-                              }
-                            }}
-                          />
-                          <Badge variant="outline" className="shrink-0 self-center">
-                            /knowledge/{attachment.mountAlias}
-                          </Badge>
-                        </div>
+                        <Input
+                          id={`alias-${attachment.id}`}
+                          value={attachment.mountAlias}
+                          readOnly
+                          disabled
+                        />
+                        <p className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                          <FolderTree className="h-3.5 w-3.5" />
+                          /knowledge/{attachment.mountAlias}
+                        </p>
                       </div>
 
                       <div className="space-y-2">
@@ -353,6 +311,16 @@ export const KnowledgeBaseAttachmentsTab: React.FC<KnowledgeBaseAttachmentsTabPr
                             {t('knowledgeBase.attachments.modeLocked')}
                           </p>
                         ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <div className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        {t('knowledgeBase.attachments.attachedMeta', {
+                          userId: attachment.attachedById,
+                          date: new Date(attachment.createdAt).toLocaleString('zh-TW'),
+                        })}
                       </div>
                     </div>
                   </div>

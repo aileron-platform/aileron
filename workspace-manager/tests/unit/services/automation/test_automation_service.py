@@ -338,6 +338,145 @@ class TestAutomationJobCRUD:
             automation_service.create_job(sample_job_create_request)
         assert exc_info.value.code == "KB_ATTACHMENT_READ_ONLY"
 
+    def test_create_wiki_index_job_rejects_duplicate_for_same_kb(
+        self,
+        automation_service,
+        db_session,
+        sample_job_create_request,
+        sample_workspace_record,
+    ):
+        """Test: creating a second wiki index job for same KB is rejected."""
+        # Arrange
+        sample_job_create_request.metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        db_session.get.return_value = sample_workspace_record
+        db_session.scalar.return_value = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-123",
+            workspace_id="ws-123",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="rw",
+            attached_by_id="user-123",
+        )
+        existing_job = db_models.AutomationJob(
+            id="existing-job-1",
+            name="Existing",
+            description="",
+            owner="o",
+            creator_user_id="user-123",
+            workspace_id="ws-other",
+            prompt="",
+            status="active",
+            trigger="cron",
+            schedule="0 9 * * *",
+            tags=[],
+            notifications={},
+            task_metadata={
+                "jobType": "knowledge_base.wiki_index",
+                "knowledgeBaseId": "kb-123",
+            },
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = [existing_job]
+        db_session.execute.return_value = mock_result
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.create_job(sample_job_create_request)
+        assert exc_info.value.code == "KB_WIKI_INDEX_DUPLICATE"
+        assert exc_info.value.params["existingJobId"] == "existing-job-1"
+
+    def test_update_wiki_index_job_excludes_self_from_duplicate_check(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+        sample_workspace_record,
+    ):
+        """Test: updating an existing wiki index job does not raise duplicate error."""
+        # Arrange
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+
+        def get_side_effect(model_class, _id):
+            if model_class == db_models.AutomationJob:
+                return sample_job_record
+            if model_class == db_models.Workspace:
+                return sample_workspace_record
+            return None
+
+        db_session.get.side_effect = get_side_effect
+        db_session.scalar.return_value = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-456",
+            workspace_id="ws-new",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="rw",
+            attached_by_id="user-123",
+        )
+        # Only the existing record is in the DB and it must be excluded by id.
+        mock_result = MagicMock()
+        mock_result.scalars.return_value = []
+        db_session.execute.return_value = mock_result
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        update_request = JobUpdateRequest(workspace_id="ws-new")
+
+        # Act
+        result = automation_service.update_job(sample_job_record.id, update_request)
+
+        # Assert
+        assert result is not None
+        assert sample_job_record.workspace_id == "ws-new"
+
+    def test_update_wiki_index_job_revalidates_new_workspace_attachment(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+        sample_workspace_record,
+    ):
+        """Test: changing workspace forces read/write attachment revalidation."""
+        # Arrange
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+
+        def get_side_effect(model_class, _id):
+            if model_class == db_models.AutomationJob:
+                return sample_job_record
+            if model_class == db_models.Workspace:
+                return sample_workspace_record
+            return None
+
+        db_session.get.side_effect = get_side_effect
+        # New workspace attachment exists but is read-only
+        db_session.scalar.return_value = db_models.WorkspaceKnowledgeBaseAttachment(
+            id="attachment-456",
+            workspace_id="ws-new",
+            kb_id="kb-123",
+            mount_alias="docs",
+            mode="ro",
+            attached_by_id="user-123",
+        )
+        automation_service.workspace_service._require_workspace_access = MagicMock()
+        automation_service.kb_service.get_kb = MagicMock()
+
+        update_request = JobUpdateRequest(workspace_id="ws-new")
+
+        # Act / Assert
+        with pytest.raises(AutomationJobError) as exc_info:
+            automation_service.update_job(sample_job_record.id, update_request)
+        assert exc_info.value.code == "KB_ATTACHMENT_READ_ONLY"
+
     def test_validate_wiki_index_execution_rechecks_attachment(
         self,
         automation_service,

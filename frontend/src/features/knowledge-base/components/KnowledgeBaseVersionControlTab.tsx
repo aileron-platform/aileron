@@ -557,58 +557,62 @@ const GitEnableCard: React.FC<{
   const manager = canManageGit(accessRole);
 
   return (
-    <div className="flex h-full min-h-0 items-center justify-center p-6">
-      <Card className="w-full max-w-2xl">
-        <CardHeader className="text-center">
-          <GitBranch className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
-          <CardTitle>{t('knowledgeBase.versionControl.setup.title')}</CardTitle>
-          <CardDescription>{t('knowledgeBase.versionControl.setup.description')}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>{t('knowledgeBase.versionControl.errorTitle')}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <div className="grid gap-2">
-            <Label htmlFor="kb-git-default-branch">{t('knowledgeBase.versionControl.setup.defaultBranch')}</Label>
-            <Input
-              id="kb-git-default-branch"
-              value={defaultBranch}
-              disabled={!manager || isMutating}
-              onChange={(event) => onDefaultBranchChange(event.target.value)}
-              placeholder={t('knowledgeBase.versionControl.setup.defaultBranchPlaceholder')}
-            />
-          </div>
-          <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
-            <Checkbox
-              checked={enableLfs}
-              disabled={!manager || isMutating}
-              onCheckedChange={(checked) => onEnableLfsChange(checked === true)}
-            />
-            <span className="space-y-1">
-              <span className="block font-medium">{t('knowledgeBase.versionControl.setup.enableLfs')}</span>
-              <span className="block text-muted-foreground">{t('knowledgeBase.versionControl.setup.enableLfsDescription')}</span>
-            </span>
-          </label>
-          {!manager && (
-            <Alert>
-              <ShieldCheck className="h-4 w-4" />
-              <AlertTitle>{t('knowledgeBase.versionControl.setup.permissionTitle')}</AlertTitle>
-              <AlertDescription>{t('knowledgeBase.versionControl.setup.permissionDescription')}</AlertDescription>
-            </Alert>
-          )}
-          <div className="flex justify-center">
+    <div className="h-full overflow-auto p-6">
+      <div className="space-y-6">
+        <Card>
+          <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <GitBranch className="h-4 w-4 text-sky-600" />
+                {t('knowledgeBase.versionControl.setup.title')}
+              </CardTitle>
+              <CardDescription>{t('knowledgeBase.versionControl.setup.description')}</CardDescription>
+            </div>
             <Button type="button" disabled={!manager || isMutating} onClick={onEnable}>
               {isMutating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <GitBranch className="mr-2 h-4 w-4" />}
               {isMutating
                 ? t('knowledgeBase.versionControl.setup.enabling')
                 : t('knowledgeBase.versionControl.setup.enableAction')}
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>{t('knowledgeBase.versionControl.errorTitle')}</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="kb-git-default-branch">{t('knowledgeBase.versionControl.setup.defaultBranch')}</Label>
+              <Input
+                id="kb-git-default-branch"
+                value={defaultBranch}
+                disabled={!manager || isMutating}
+                onChange={(event) => onDefaultBranchChange(event.target.value)}
+                placeholder={t('knowledgeBase.versionControl.setup.defaultBranchPlaceholder')}
+              />
+            </div>
+            <label className="flex items-start gap-3 rounded-md border p-3 text-sm">
+              <Checkbox
+                checked={enableLfs}
+                disabled={!manager || isMutating}
+                onCheckedChange={(checked) => onEnableLfsChange(checked === true)}
+              />
+              <span className="space-y-1">
+                <span className="block font-medium">{t('knowledgeBase.versionControl.setup.enableLfs')}</span>
+                <span className="block text-muted-foreground">{t('knowledgeBase.versionControl.setup.enableLfsDescription')}</span>
+              </span>
+            </label>
+            {!manager && (
+              <Alert>
+                <ShieldCheck className="h-4 w-4" />
+                <AlertTitle>{t('knowledgeBase.versionControl.setup.permissionTitle')}</AlertTitle>
+                <AlertDescription>{t('knowledgeBase.versionControl.setup.permissionDescription')}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

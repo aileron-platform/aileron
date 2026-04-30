@@ -30,16 +30,16 @@ const {
         'No knowledge base attachments are configured for this workspace yet.',
       'workspace.workspaceSettings.knowledgeBases.mounted.title': 'Mounted knowledge bases',
       'workspace.workspaceSettings.knowledgeBases.mounted.description':
-        'Shows the knowledge base mounts currently applied in the runtime.',
+        'Shows the knowledge base mounts currently applied in the workspace.',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingBadge': 'Pending',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingHint':
         'The mounted state does not match the desired attachments yet.',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingTitle':
         'Mount changes are waiting to be applied',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingDescription':
-        'Restart the runtime to apply the latest knowledge base attachments.',
+        'Restart the workspace to apply the latest knowledge base attachments.',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.label':
-        'Restart runtime to apply',
+        'Restart workspace to apply',
       'workspace.workspaceSettings.knowledgeBases.mounted.signatureLabel': 'Mounted signature',
       'workspace.workspaceSettings.knowledgeBases.mounted.signatureMissing': 'No mounted signature yet',
       'workspace.workspaceSettings.knowledgeBases.readOnlyNotice':
@@ -146,7 +146,7 @@ describe('WorkspaceKnowledgeBasesSettings', () => {
     expect(await screen.findByText('Product Docs')).toBeInTheDocument();
     expect(screen.getByText('Desired attachments')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
-    expect(screen.getByText('Restart runtime to apply')).toBeInTheDocument();
+    expect(screen.getByText('Restart workspace to apply')).toBeInTheDocument();
   });
 
   it('attach dialog 會在選到 viewer KB 時把 mode 鎖成 ro', async () => {

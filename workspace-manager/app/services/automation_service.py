@@ -125,6 +125,7 @@ class AutomationService:
             workspace_id=payload.workspace_id,
             user_id=payload.user_id,
         )
+        self._reject_duplicate_wiki_index_job(metadata=task_metadata)
         next_run_at = self._estimate_next_run(
             payload.trigger, payload.schedule, system_tz, reference=now
         )
@@ -172,6 +173,7 @@ class AutomationService:
             workspace_id=next_workspace_id,
             user_id=next_user_id,
         )
+        self._reject_duplicate_wiki_index_job(metadata=next_metadata, exclude_job_id=record.id)
 
         for field, value in data.items():
             if field == "notifications" and value is not None:
@@ -216,6 +218,40 @@ class AutomationService:
             workspace_id=workspace_id,
             user_id=user_id,
         )
+
+    def _reject_duplicate_wiki_index_job(
+        self,
+        *,
+        metadata: dict,
+        exclude_job_id: Optional[str] = None,
+    ) -> None:
+        """Ensure each knowledge base has at most one Wiki Index automation job."""
+        if metadata.get("jobType") != KB_WIKI_INDEX_JOB_TYPE:
+            return
+        knowledge_base_id = metadata.get("knowledgeBaseId")
+        if not isinstance(knowledge_base_id, str) or not knowledge_base_id.strip():
+            return
+
+        query: Select[tuple[db_models.AutomationJob]] = select(db_models.AutomationJob)
+        if exclude_job_id is not None:
+            query = query.where(db_models.AutomationJob.id != exclude_job_id)
+
+        for candidate in self.db.execute(query).scalars():
+            candidate_metadata = candidate.task_metadata or {}
+            if not isinstance(candidate_metadata, dict):
+                continue
+            if candidate_metadata.get("jobType") != KB_WIKI_INDEX_JOB_TYPE:
+                continue
+            if candidate_metadata.get("knowledgeBaseId") != knowledge_base_id:
+                continue
+            raise AutomationJobError(
+                "Knowledge base already has a Wiki Index schedule; update the existing schedule instead",
+                code="KB_WIKI_INDEX_DUPLICATE",
+                params={
+                    "knowledgeBaseId": knowledge_base_id,
+                    "existingJobId": candidate.id,
+                },
+            )
 
     def is_knowledge_base_wiki_index_job(self, job: db_models.AutomationJob) -> bool:
         """Return whether the automation job is a KB wiki index job."""

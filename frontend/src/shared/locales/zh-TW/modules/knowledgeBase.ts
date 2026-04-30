@@ -163,23 +163,25 @@ const knowledgeBase = {
     },
   },
   schedules: {
-    title: 'Wiki Index 排程',
-    description: '只可選擇已掛載此知識庫且模式為可讀寫的工作區。',
     defaultName: '{{name}} Wiki Index',
     defaultDescription: '定期維護 {{name}} 的 Team Wiki index。',
     defaultOwner: '目前使用者',
     defaultPrompt: 'Run knowledge base wiki index.',
-    create: {
-      title: '新增排程',
+    editor: {
+      createTitle: '建立 Wiki Index 排程',
+      updateTitle: 'Wiki Index 排程',
+      createHelper: '選擇要負責執行此知識庫 Wiki Index 排程的工作區。',
+      updateHelper: '可以調整 cron 排程，或改選其他符合條件的工作區。若選擇不同工作區並儲存，將會把現有排程移動到該工作區。',
       workspace: '工作區',
+      workspaceEmpty: '尚未掛載至任何工作區',
       cron: 'Cron schedule',
+      mountNotice: '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
+      moveNotice: '若選擇不同的工作區並儲存，會將現有的 Wiki Index 排程移動到該工作區；每個知識庫只能保有一個排程。',
+      noEligibleWorkspace: '目前沒有可讀寫的工作區掛載。請先把此知識庫以可讀寫模式掛載到目標工作區，再設定 Wiki Index 排程。',
     },
     actions: {
       create: '建立排程',
-    },
-    list: {
-      title: '既有排程',
-      empty: '尚未建立 Wiki Index 排程。',
+      update: '儲存排程',
     },
     status: {
       active: '啟用',
@@ -191,6 +193,11 @@ const knowledgeBase = {
       createSuccess: { title: '排程已建立' },
       createFailed: {
         title: '建立排程失敗',
+        description: '請稍後再試。',
+      },
+      updateSuccess: { title: '排程已更新' },
+      updateFailed: {
+        title: '更新排程失敗',
         description: '請稍後再試。',
       },
       loadFailed: {
@@ -373,9 +380,6 @@ const knowledgeBase = {
     loadWorkspacesFailed: '無法載入工作區列表',
     attachSuccessTitle: '已掛載到工作區',
     attachFailed: '建立掛載失敗',
-    aliasUpdatedTitle: '掛載別名已更新',
-    aliasUpdatedFallback: '掛載 {{id}}',
-    aliasUpdateFailed: '更新掛載別名失敗',
     modeUpdatedTitle: '掛載模式已更新',
     modeUpdateFailed: '更新掛載模式失敗',
     detachSuccessTitle: '已解除掛載',

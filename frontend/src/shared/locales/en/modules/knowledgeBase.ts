@@ -163,23 +163,25 @@ const knowledgeBase = {
     },
   },
   schedules: {
-    title: 'Wiki index schedules',
-    description: 'Only workspaces with this knowledge base attached in read/write mode can be selected.',
     defaultName: '{{name}} Wiki Index',
     defaultDescription: 'Regularly maintain the Team Wiki index for {{name}}.',
     defaultOwner: 'Current user',
     defaultPrompt: 'Run knowledge base wiki index.',
-    create: {
-      title: 'Create schedule',
+    editor: {
+      createTitle: 'Create Wiki Index schedule',
+      updateTitle: 'Wiki Index schedule',
+      createHelper: 'Pick the workspace that should own this knowledge base\'s Wiki Index schedule.',
+      updateHelper: 'Update the cron expression or pick a different eligible workspace. Saving a different workspace moves the existing schedule.',
       workspace: 'Workspace',
+      workspaceEmpty: 'No workspaces attached',
       cron: 'Cron schedule',
+      mountNotice: 'To configure a Wiki Index schedule for a workspace, attach this knowledge base to that workspace first and make sure the attachment is read/write.',
+      moveNotice: 'Saving a different workspace moves the existing Wiki Index schedule to that workspace; only one schedule is allowed per knowledge base.',
+      noEligibleWorkspace: 'No read/write workspace attachments are available. Attach this knowledge base to a workspace in read/write mode before scheduling Wiki Index.',
     },
     actions: {
       create: 'Create schedule',
-    },
-    list: {
-      title: 'Existing schedules',
-      empty: 'No Wiki Index schedules yet.',
+      update: 'Save schedule',
     },
     status: {
       active: 'Active',
@@ -193,8 +195,13 @@ const knowledgeBase = {
         title: 'Failed to create schedule',
         description: 'Please try again later.',
       },
+      updateSuccess: { title: 'Schedule updated' },
+      updateFailed: {
+        title: 'Failed to update schedule',
+        description: 'Please try again later.',
+      },
       loadFailed: {
-        title: 'Failed to load schedules',
+        title: 'Failed to load schedule',
         description: 'Please try again later.',
       },
     },
@@ -373,9 +380,6 @@ const knowledgeBase = {
     loadWorkspacesFailed: 'Failed to load workspace list',
     attachSuccessTitle: 'Workspace attached',
     attachFailed: 'Failed to create attachment',
-    aliasUpdatedTitle: 'Mount alias updated',
-    aliasUpdatedFallback: 'Attachment {{id}}',
-    aliasUpdateFailed: 'Failed to update mount alias',
     modeUpdatedTitle: 'Mount mode updated',
     modeUpdateFailed: 'Failed to update mount mode',
     detachSuccessTitle: 'Attachment removed',

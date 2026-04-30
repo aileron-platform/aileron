@@ -11,7 +11,7 @@ const { restartRuntimeMock, toastMock, reloadMock, translateMock } = vi.hoisted(
     const translations: Record<string, string> = {
       'workspace.workspaceSettings.knowledgeBases.mounted.title': 'Mounted knowledge bases',
       'workspace.workspaceSettings.knowledgeBases.mounted.description':
-        'Shows the knowledge base mounts currently applied in the runtime.',
+        'Shows the knowledge base mounts currently applied in the workspace.',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingBadge': 'Pending',
       'workspace.workspaceSettings.knowledgeBases.mounted.signatureLabel': 'Mounted signature',
       'workspace.workspaceSettings.knowledgeBases.mounted.signatureMissing': 'No mounted signature yet',
@@ -22,23 +22,23 @@ const { restartRuntimeMock, toastMock, reloadMock, translateMock } = vi.hoisted(
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingTitle':
         'Mount changes are waiting to be applied',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingDescription':
-        'Restart the runtime to apply the latest knowledge base attachments.',
+        'Restart the workspace to apply the latest knowledge base attachments.',
       'workspace.workspaceSettings.knowledgeBases.mounted.pendingEmpty':
-        'The API cannot reconstruct the previous mounted list directly; restart the runtime to apply the latest configuration.',
+        'The API cannot reconstruct the previous mounted list directly; restart the workspace to apply the latest configuration.',
       'workspace.workspaceSettings.knowledgeBases.mounted.empty':
-        'The runtime currently has no mounted knowledge bases.',
+        'The workspace currently has no mounted knowledge bases.',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.label':
-        'Restart runtime to apply',
+        'Restart workspace to apply',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.loading':
-        'Restarting runtime...',
+        'Restarting workspace...',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.successTitle':
-        'Runtime restart started',
+        'Workspace restart started',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.successDescription':
-        'Knowledge base mount changes will apply after the runtime restarts.',
+        'Knowledge base mount changes will apply after the workspace restarts.',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.errorTitle':
-        'Runtime restart failed',
+        'Workspace restart failed',
       'workspace.workspaceSettings.knowledgeBases.mounted.restart.errorDescription':
-        'Failed to restart the runtime to apply knowledge base changes.',
+        'Failed to restart the workspace to apply knowledge base changes.',
     };
     return translations[key] ?? key;
   }),
@@ -106,7 +106,7 @@ describe('MountedKnowledgeBasesPanel', () => {
     expect(screen.queryByText('Pending')).not.toBeInTheDocument();
   });
 
-  it('pending 狀態會顯示 badge 並可重啟 runtime', async () => {
+  it('pending 狀態會顯示 badge 並可重啟工作區', async () => {
     const user = userEvent.setup();
     const onRefresh = vi.fn();
     restartRuntimeMock.mockResolvedValue({ status: 'accepted' });
@@ -139,7 +139,7 @@ describe('MountedKnowledgeBasesPanel', () => {
     expect(screen.getByText('Mount changes are waiting to be applied')).toBeInTheDocument();
     expect(screen.queryByText('Product Docs')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Restart runtime to apply' }));
+    await user.click(screen.getByRole('button', { name: 'Restart workspace to apply' }));
 
     await waitFor(() => {
       expect(restartRuntimeMock).toHaveBeenCalledWith('ws-1');
