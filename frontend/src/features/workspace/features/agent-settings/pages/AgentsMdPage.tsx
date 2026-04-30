@@ -16,6 +16,7 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
+import { ApiError } from '@/shared/api/apiClient';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentToolConfig } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
@@ -70,6 +71,9 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
   }, [runtimeError, runtimeBaseUrl, workspaceId, t, i18nNs, fileNameInterp]);
 
   const is404Error = useCallback((err: unknown): boolean => {
+    if (err instanceof ApiError) {
+      return err.status === 404;
+    }
     if (err instanceof Error) {
       return err.message.includes('404');
     }
