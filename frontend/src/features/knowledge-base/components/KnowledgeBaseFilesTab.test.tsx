@@ -117,7 +117,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/file-tree-manager', () => ({
+vi.mock('@/shared/components/file-workbench', () => ({
   API_ENDPOINTS: {
     knowledgeBase: {
       copy: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/copy`,
@@ -152,12 +152,42 @@ vi.mock('@/shared/components/file-tree-manager', () => ({
   FileRenameDialog: () => null,
   FileDeleteDialog: () => null,
   BatchDeleteDialog: () => null,
-  useFileTreeManager: () => mockManager,
-  useFileOperationsWithDialog: () => mockFileOps,
-  useFileTreeContextMenu: () => [],
-}));
-
-vi.mock('@/shared/components/file-viewer-workbench', () => ({
+  createKnowledgeBaseFileWorkbenchAdapter: ({
+    knowledgeBaseId,
+    readFile,
+    saveFile,
+    copyPath,
+    revealInTree,
+  }: {
+    knowledgeBaseId: string;
+    readFile: (path: string) => Promise<string>;
+    saveFile?: (path: string, content: string) => Promise<void>;
+    copyPath?: (path: string) => Promise<void>;
+    revealInTree?: (path: string) => void;
+  }) => ({
+    readFile,
+    readBlob: (path: string) => apiGetBlobMock(
+      `/knowledge-bases/${knowledgeBaseId}/files/content?path=${encodeURIComponent(path)}&raw=true`,
+    ),
+    saveFile,
+    copyPath,
+    revealInTree,
+  }),
+  toFileWorkbenchTab: (tab: {
+    id?: string;
+    path: string;
+    name: string;
+    content: string;
+    originalContent: string;
+    isModified: boolean;
+  }) => ({
+    id: tab.id ?? tab.path,
+    path: tab.path,
+    name: tab.name,
+    content: tab.content,
+    originalContent: tab.originalContent,
+    isModified: tab.isModified,
+  }),
   FileViewerWorkbench: (props: {
     readOnly?: boolean;
     tabs: Array<{ name: string; content: string }>;
@@ -174,6 +204,9 @@ vi.mock('@/shared/components/file-viewer-workbench', () => ({
       </div>
     );
   },
+  useFileTreeManager: () => mockManager,
+  useFileOperationsWithDialog: () => mockFileOps,
+  useFileTreeContextMenu: () => [],
 }));
 
 describe('KnowledgeBaseFilesTab', () => {

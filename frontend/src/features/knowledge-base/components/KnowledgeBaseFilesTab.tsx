@@ -3,6 +3,7 @@ import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, 
 import {
   API_ENDPOINTS,
   BatchDeleteDialog,
+  createKnowledgeBaseFileWorkbenchAdapter,
   FileCreateDialog,
   FileDeleteDialog,
   FileRenameDialog,
@@ -14,12 +15,12 @@ import {
   useFileTreeManager,
   type FileTreeNode,
   type SelectionModifier,
-} from '@/shared/components/file-tree-manager';
+} from '@/shared/components/file-workbench';
 import {
   FileViewerWorkbench,
-  type FileViewerWorkbenchAdapter,
+  toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-viewer-workbench';
+} from '@/shared/components/file-workbench';
 import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
@@ -74,21 +75,6 @@ const getApiErrorCode = (error: unknown): string | undefined => {
 
   return undefined;
 };
-
-const toWorkbenchTab = (tab: {
-  path: string;
-  name: string;
-  content: string;
-  originalContent: string;
-  isModified: boolean;
-}): FileViewerWorkbenchTab => ({
-  id: tab.path,
-  path: tab.path,
-  name: tab.name,
-  content: tab.content,
-  originalContent: tab.originalContent,
-  isModified: tab.isModified,
-});
 
 export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   knowledgeBaseId,
@@ -256,15 +242,13 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   }, [showErrorToast, t, toast]);
 
   const workbenchTabs = React.useMemo(
-    () => manager.editor.tabs.map(toWorkbenchTab),
+    () => manager.editor.tabs.map((tab): FileViewerWorkbenchTab => toFileWorkbenchTab(tab)),
     [manager.editor.tabs],
   );
 
-  const workbenchAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
+  const workbenchAdapter = React.useMemo(() => createKnowledgeBaseFileWorkbenchAdapter({
+    knowledgeBaseId,
     readFile: (path) => manager.operations.readFile(path),
-    readBlob: (path) => apiClient.getBlob(
-      `${API_ENDPOINTS.knowledgeBase.getContent(knowledgeBaseId)}?path=${encodeURIComponent(path)}&raw=true`,
-    ),
     saveFile: handleSave,
     copyPath: handleCopyPath,
     revealInTree: (path) => {

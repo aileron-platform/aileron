@@ -11,7 +11,9 @@ import {
   Plus,
   RefreshCw,
   ShieldCheck,
+  Search,
   Wrench,
+  X,
 } from 'lucide-react';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useOpenSpecWorkspace } from '../OpenSpecWorkspaceContext';
@@ -25,7 +27,6 @@ import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { useToast } from '@/shared/components/ui/use-toast';
-import { FileTreeSearchBar } from '@/shared/components/file-tree/FileTreeSearchBar';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { openSpecApi } from '../../../components/ChatPanel/openSpecApi';
 
@@ -205,14 +206,28 @@ const OpenSpecCustomizationSidebar: React.FC = () => {
         />
       ) : (
         <>
-          <FileTreeSearchBar
-            value={query}
-            onChange={setQuery}
-            onClear={() => setQuery('')}
-            placeholder={t('workspace.openspec.customization.searchPlaceholder')}
-            showClearButton={Boolean(query)}
-            containerClassName="border-b border-border"
-          />
+          <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                placeholder={t('workspace.openspec.customization.searchPlaceholder')}
+                onChange={event => setQuery(event.target.value)}
+                className="h-7 pl-8 text-xs"
+              />
+              {query ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setQuery('')}
+                  className="absolute right-1.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground hover:bg-muted/60"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
 
           <div className="flex h-10 items-center border-b border-border bg-card px-3">
             <div className="flex items-center gap-1">

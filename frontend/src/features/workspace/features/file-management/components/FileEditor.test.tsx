@@ -29,7 +29,7 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/file-viewer-workbench/CodeTextEditor', () => ({
+vi.mock('@/shared/components/file-workbench/viewer/CodeTextEditor', () => ({
   CodeTextEditor: ({ content, onContentChange }: { content: string; onContentChange: (content: string) => void }) => (
     <textarea
       aria-label="code-editor"
@@ -39,7 +39,7 @@ vi.mock('@/shared/components/file-viewer-workbench/CodeTextEditor', () => ({
   ),
 }));
 
-vi.mock('@/shared/components/file-viewer-workbench/SharedMarkdownViewer', () => ({
+vi.mock('@/shared/components/file-workbench/viewer/SharedMarkdownViewer', () => ({
   SharedMarkdownViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
     <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="markdown-viewer" />
   ),

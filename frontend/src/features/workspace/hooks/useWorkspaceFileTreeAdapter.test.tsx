@@ -41,7 +41,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/file-tree-manager/hooks/useFileTreeManager', () => ({
+vi.mock('@/shared/components/file-workbench', () => ({
   useFileTreeManager: ({ apiConfig }: { apiConfig: Record<string, unknown> }) => {
     managerApiConfigSnapshots.push(apiConfig);
     return {

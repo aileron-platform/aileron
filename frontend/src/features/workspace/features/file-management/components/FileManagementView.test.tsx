@@ -41,22 +41,13 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/file-tree-manager/hooks/useFileTreeManager', () => ({
+vi.mock('@/shared/components/file-workbench', () => ({
   useFileTreeManager: (config: unknown) => useFileTreeManagerMock(config),
-}));
-
-vi.mock('@/shared/components/file-tree-manager/hooks/useFileOperationsWithDialog', () => ({
   useFileOperationsWithDialog: (config: unknown) => useFileOperationsWithDialogMock(config),
-}));
-
-vi.mock('@/shared/components/file-tree-manager', () => ({
   FileTreePanel: () => <div data-testid="file-tree-panel" />,
   StandardFileTreeLayout: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   FileTreeContextMenu: () => null,
   useFileTreeContextMenu: () => [],
-}));
-
-vi.mock('@/shared/components/file-tree-manager/components', () => ({
   FileCreateDialog: () => null,
   FileRenameDialog: () => null,
   FileDeleteDialog: () => null,

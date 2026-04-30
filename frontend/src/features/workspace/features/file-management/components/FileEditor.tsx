@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
-import { ApiClient } from '@/shared/api/apiClient';
 import {
+  createWorkspaceFileWorkbenchAdapter,
   FileViewerWorkbench,
-  type FileViewerWorkbenchAdapter,
+  toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-viewer-workbench';
+} from '@/shared/components/file-workbench';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { getFileIcon } from '@/shared/utils/fileIconUtils';
@@ -36,7 +36,7 @@ export const FileEditor: React.FC = () => {
   const isFocusMode = layout.fileManagementFocusMode ?? layout.fileManagementEditorExpanded;
 
   const workbenchTabs = useMemo(
-    () => workspace.openTabs.map((tab): FileViewerWorkbenchTab => ({
+    () => workspace.openTabs.map((tab): FileViewerWorkbenchTab => toFileWorkbenchTab({
       id: tab.id,
       path: tab.path,
       name: tab.name,
@@ -58,35 +58,14 @@ export const FileEditor: React.FC = () => {
     fileEditor.setTabModified(path, false);
   }, [actions, fileEditor, t]);
 
-  const workbenchAdapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
+  const workbenchAdapter = useMemo(() => createWorkspaceFileWorkbenchAdapter({
+    runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
     readFile: async (path) => {
       const result = await actions.readFileContent(path);
       return result.content;
     },
-    readBlob: async (path) => {
-      if (!workspaceRuntime.runtimeBaseUrl) {
-        throw new Error('Workspace runtime URL is unavailable');
-      }
-      const client = new ApiClient({ baseUrl: workspaceRuntime.runtimeBaseUrl });
-      return client.getBlob(`/api/v1/files/content?path=${encodeURIComponent(path)}&raw=true`);
-    },
     saveFile: saveWorkspaceFile,
-    getDrawioViewerUrl: async (path, mode) => {
-      if (!workspaceRuntime.runtimeBaseUrl) {
-        throw new Error('Workspace runtime URL is unavailable');
-      }
-      const client = new ApiClient({ baseUrl: workspaceRuntime.runtimeBaseUrl });
-      const data = await client.get<{ url: string }>(
-        `/api/v1/drawio/viewer?file_path=${encodeURIComponent(path)}&mode=${mode}`,
-      );
-      return data.url;
-    },
     saveDrawio: async (path, content) => {
-      if (!workspaceRuntime.runtimeBaseUrl) {
-        throw new Error('Workspace runtime URL is unavailable');
-      }
-      const client = new ApiClient({ baseUrl: workspaceRuntime.runtimeBaseUrl });
-      await client.post(`/api/v1/drawio/save?file_path=${encodeURIComponent(path)}`, { content });
       fileEditor.updateTabContent(path, content);
       fileEditor.setOriginalContent(path, content);
       fileEditor.setTabModified(path, false);

@@ -1,9 +1,3 @@
-/**
- * 模板檔案管理組件
- *
- * 使用統一的 sidebar shell + 檔案樹組件，讓模板中心不同區塊的左側欄節奏一致
- */
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createLogger } from '@/shared/services/logger';
 import { FolderPlus, Plus, RefreshCw, Upload } from 'lucide-react';
@@ -17,8 +11,8 @@ import {
 import SectionSidebarShell from '@/shared/components/template/SectionSidebarShell';
 
 const logger = createLogger('TemplateFileManager');
-import { useFileTreeManager } from '@/shared/components/file-tree-manager/hooks/useFileTreeManager';
-import { useFileOperationsWithDialog } from '@/shared/components/file-tree-manager/hooks/useFileOperationsWithDialog';
+import { useFileTreeManager } from '@/shared/components/file-workbench';
+import { useFileOperationsWithDialog } from '@/shared/components/file-workbench';
 import {
   FileTreePanel,
   FileTreeContextMenu,
@@ -26,15 +20,15 @@ import {
   type FileTreeApiConfig,
   type FileTreeNode as FileTreeNodeType,
   type SelectionModifier,
-} from '@/shared/components/file-tree-manager';
+} from '@/shared/components/file-workbench';
 import {
   FileCreateDialog,
   FileRenameDialog,
   FileDeleteDialog,
   BatchDeleteDialog,
-} from '@/shared/components/file-tree-manager/components';
+} from '@/shared/components/file-workbench';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { FileEditor } from '@/shared/components/file-editors';
+import { FileEditor } from '@/shared/components/file-workbench';
 import { apiClient } from '@/shared/api/apiClient';
 
 export interface FileNode {
@@ -84,23 +78,20 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [clipboardItem, setClipboardItem] = useState<{ path: string; type: 'file' | 'directory' } | null>(null);
 
-  // 構建 API 配置
   const apiConfig: FileTreeApiConfig = useMemo(() => ({
     type: 'template',
     templateId,
     scope: basePath,
   }), [templateId, basePath]);
 
-  // 使用 FileTreeManager Hook
   const manager = useFileTreeManager({
     apiConfig,
     stateOptions: {
       enableMultiSelect: true,
     },
-    autoLoad: false,  // 關閉自動載入，改用 useEffect 控制
+    autoLoad: false,
   });
 
-  // 使用 useEffect 控制載入時機，只在 apiConfig 變更時載入
   useEffect(() => {
     if (templateId && basePath) {
       manager.loadTree();
@@ -108,14 +99,12 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiConfig]);
 
-  // 使用 useCallback 穩定 onContentChange 回調
   const handleContentChange = useCallback((content: string) => {
     if (manager.editor.activeTab) {
       manager.editor.updateContent(manager.editor.activeTab.path, content);
     }
   }, []);
 
-  // 使用 Dialog Hook 管理檔案操作
   const fileOps = useFileOperationsWithDialog({
     onCreateFile: async (name, parentPath = '/') => {
       const fullPath = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
@@ -131,7 +120,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
       await manager.loadTree();
     },
     onDelete: async (path: string, node) => {
-      // 資料夾需要使用 recursive=true
       const isDirectory = node?.type === 'directory';
       await manager.operations.deleteFile(path, isDirectory);
       await manager.loadTree();
@@ -142,30 +130,24 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     },
   });
 
-  // 處理節點點擊
   const handleNodeClick = useCallback((node: FileTreeNodeType, modifier: SelectionModifier) => {
     manager.state.selectNodeWithModifier(node.path, modifier);
 
-    // 如果是檔案且無修飾鍵，開啟檔案
     if (node.type === 'file' && modifier === 'none') {
       manager.handleFileSelect(node);
     }
   }, [manager]);
 
-  // 處理節點雙擊
   const handleNodeDoubleClick = useCallback((node: FileTreeNodeType) => {
     manager.handleFileDoubleClick(node);
   }, [manager]);
 
-  // 處理右鍵選單
   const handleContextMenu = useCallback((node: FileTreeNodeType, event: React.MouseEvent) => {
     manager.state.openContextMenu(event.clientX, event.clientY, node);
   }, [manager]);
 
-  // 處理上傳
   const handleUpload = useCallback(() => {
-    // 獲取當前選中的資料夾路徑（如果有右鍵選單，使用右鍵選單的節點）
-    // 注意：使用空字串 '' 而不是 '/' 來表示根目錄，避免 Path 處理問題
+    // Use an empty path for the root because the template API normalizes it differently from slash.
     let targetPath = '';
     if (manager.state.contextMenu?.node?.type === 'directory') {
       targetPath = manager.state.contextMenu.node.path;
@@ -185,17 +167,15 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
         });
         await manager.loadTree();
       } catch (error) {
-        logger.error('上傳檔案失敗', { error });
+        logger.error('Failed to upload template files', { error });
       }
     };
     input.click();
   }, [manager]);
 
-  // 處理檔案貼上（從剪貼簿）
   const handleFilePaste = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
 
-    // 獲取目標路徑（如果有選中的資料夾，使用該資料夾；否則使用根目錄）
     let targetPath = '';
     if (manager.state.selectedId) {
       const selectedNode = manager.state.flatNodes.find(n => n.path === manager.state.selectedId);
@@ -211,16 +191,14 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
       });
       await manager.loadTree();
     } catch (error) {
-      logger.error('貼上檔案失敗', { error });
+      logger.error('Failed to paste uploaded template files', { error });
     }
   }, [manager]);
 
-  // 處理重新整理
   const handleRefresh = useCallback(() => {
     manager.loadTree();
   }, [manager]);
 
-  // 處理儲存
   const handleSaveFile = useCallback(async (content: string) => {
     if (!manager.editor.activeTab) return;
 
@@ -229,7 +207,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     manager.editor.saveTab(manager.editor.activeTab.path);
   }, [manager]);
 
-  // 拖曳處理
   const handleDragStart = useCallback((node: FileTreeNodeType) => {
     setDraggingPath(node.path);
   }, []);
@@ -259,21 +236,19 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     }
 
     try {
-      // 構建完整的目標路徑：目標資料夾路徑 + 檔案名稱
       const fileName = draggingPath.split('/').pop() || draggingPath;
       const targetPath = `${targetNode.path}/${fileName}`;
 
       await manager.operations.moveFile(draggingPath, targetPath);
       await manager.loadTree();
     } catch (error) {
-      logger.error('移動檔案失敗', { error });
+      logger.error('Failed to move template file', { error });
     } finally {
       setDragOverPath(null);
       setDraggingPath(null);
     }
   }, [draggingPath, manager]);
 
-  // 複製處理
   const handleCopy = useCallback(() => {
     if (!manager.state.contextMenu) return;
 
@@ -285,7 +260,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     manager.state.closeContextMenu();
   }, [manager]);
 
-  // 貼上處理
   const handlePaste = useCallback(async () => {
     if (!clipboardItem || !manager.state.contextMenu || !templateId) return;
 
@@ -295,31 +269,25 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     manager.state.closeContextMenu();
 
     try {
-      // 調用 Template API 的複製端點
       await apiClient.post(`/templates/${templateId}/files/copy?scope=${basePath}&source_path=${encodeURIComponent(clipboardItem.path)}&dest_path=${encodeURIComponent(targetPath)}`);
 
-      // 重新載入檔案樹
       await manager.loadTree();
     } catch (error) {
-      logger.error('貼上失敗', { error });
+      logger.error('Failed to paste template file', { error });
       alert(t('template.editor.fileManagement.toasts.paste.error.description'));
     }
   }, [clipboardItem, manager, templateId, basePath]);
 
-  // 判斷是否可以貼上
   const isPasteDisabled = useMemo(() => {
     if (!clipboardItem || !manager.state.contextMenu) return true;
 
     const targetNode = manager.state.contextMenu.node;
     const isDirectoryTarget = targetNode.type === 'directory';
 
-    // 只能貼到資料夾
     if (!isDirectoryTarget) return true;
 
-    // 不能貼到自己
     if (clipboardItem.path === targetNode.path) return true;
 
-    // 不能貼到自己的子目錄
     if (clipboardItem.type === 'directory' && targetNode.path.startsWith(clipboardItem.path + '/')) {
       return true;
     }
@@ -327,7 +295,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
     return false;
   }, [clipboardItem, manager.state.contextMenu]);
 
-  // 使用統一的右鍵選單 Hook
   const contextMenuItems = useFileTreeContextMenu({
     node: manager.state.contextMenu?.node || null,
     hasClipboard: !isPasteDisabled,
@@ -359,9 +326,9 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
       onCopy: handleCopy,
       onCopyPath: (path) => {
         navigator.clipboard.writeText(path).then(() => {
-          logger.debug('路徑已複製', { path });
+          logger.debug('Template file path copied', { path });
         }).catch((error) => {
-          logger.error('複製路徑失敗', { error });
+          logger.error('Failed to copy template file path', { error });
         });
       },
       onPaste: handlePaste,
@@ -424,7 +391,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
 
   return (
     <div className="flex h-full border-x border-b overflow-hidden bg-background">
-      {/* 左側檔案樹面板 */}
       <div className="w-80">
         <SectionSidebarShell
           title={title || t('template.editor.fileManagement.header.title')}
@@ -457,7 +423,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
             onPaste={handleFilePaste}
             onRefresh={handleRefresh}
             onBatchDelete={async (paths) => {
-              // 簡化：直接使用 paths 創建臨時節點
               const nodes: FileTreeNodeType[] = paths.map(path => ({
                 id: path,
                 name: path.split('/').pop() || path,
@@ -477,7 +442,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
           )}
         />
 
-        {/* 右鍵選單 */}
         <FileTreeContextMenu
           contextMenu={manager.state.contextMenu}
           items={contextMenuItems}
@@ -485,7 +449,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
         />
       </div>
 
-      {/* 右側編輯器面板 */}
       <div className="flex-1 overflow-hidden">
         {!manager.editor.activeTab ? (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -504,7 +467,6 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
         )}
       </div>
 
-      {/* Dialog 組件 */}
       <FileCreateDialog
         open={fileOps.dialogState.type === 'create-file'}
         type="file"

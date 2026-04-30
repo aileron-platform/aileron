@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileTreeSearchBar } from '@/shared/components/file-tree';
+import { FileTreeSearchBar } from '@/shared/components/file-workbench/primitives';
 import { cn } from '@/shared/utils/cn';
 
 export interface SectionSidebarShellProps {

@@ -10,12 +10,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useWorkspaceFileTreeAdapter');
-import { useFileTreeManager } from '@/shared/components/file-tree-manager/hooks/useFileTreeManager';
+import { useFileTreeManager } from '@/shared/components/file-workbench';
 import type {
   FileTreeNode as ManagerFileTreeNode,
   FileTreeApiConfig,
-} from '@/shared/components/file-tree-manager/types';
-import { findNodeByPath as findManagerNode } from '@/shared/components/file-tree-manager/utils/fileTreeUtils';
+} from '@/shared/components/file-workbench';
+import { findNodeByPath as findManagerNode } from '@/shared/components/file-workbench';
 import type {
   FileTreeState,
   FileTreeActions,

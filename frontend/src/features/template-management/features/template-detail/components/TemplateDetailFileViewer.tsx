@@ -8,14 +8,14 @@ import {
   useFileTreeManager,
   type FileTreeNode,
   type SelectionModifier,
-} from '@/shared/components/file-tree-manager';
-import { findNodeByPath, getAllFileNodes } from '@/shared/components/file-tree-manager/utils/fileTreeUtils';
+} from '@/shared/components/file-workbench';
+import { findNodeByPath, getAllFileNodes } from '@/shared/components/file-workbench';
 import {
+  createTemplateFileWorkbenchAdapter,
   FileViewerWorkbench,
-  type FileViewerWorkbenchAdapter,
+  toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-viewer-workbench';
-import { apiClient } from '@/shared/api/apiClient';
+} from '@/shared/components/file-workbench';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -31,24 +31,6 @@ interface TemplateDetailFileViewerProps {
   title: string;
   onTreeUpdate?: (nodes: FileTreeNode[], flattenedCount: number) => void;
 }
-
-const getTemplateFileContentUrl = (templateId: string, scope: string, path: string) =>
-  `/api/v1/templates/${templateId}/files/content?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`;
-
-const toWorkbenchTab = (tab: {
-  path: string;
-  name: string;
-  content: string;
-  originalContent: string;
-  isModified: boolean;
-}): FileViewerWorkbenchTab => ({
-  id: tab.path,
-  path: tab.path,
-  name: tab.name,
-  content: tab.content,
-  originalContent: tab.originalContent,
-  isModified: tab.isModified,
-});
 
 export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> = ({
   templateId,
@@ -122,13 +104,14 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
   }, []);
 
   const workbenchTabs = useMemo(
-    () => editor.tabs.map(toWorkbenchTab),
+    () => editor.tabs.map((tab): FileViewerWorkbenchTab => toFileWorkbenchTab(tab)),
     [editor.tabs],
   );
 
-  const workbenchAdapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
+  const workbenchAdapter = useMemo(() => createTemplateFileWorkbenchAdapter({
+    templateId,
+    scope: basePath,
     readFile: manager.operations.readFile,
-    readBlob: (path) => apiClient.getBlob(getTemplateFileContentUrl(templateId, basePath, path)),
     copyPath: async (path) => {
       handleCopyPath(path);
     },

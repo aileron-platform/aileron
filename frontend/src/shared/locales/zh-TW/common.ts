@@ -67,6 +67,11 @@ const common = {
   fileTree: {
     toolbar: {
       title: '檔案',
+      moreActions: '更多操作',
+    },
+    sidebar: {
+      expand: '展開側欄',
+      collapse: '收折側欄',
     },
     search: {
       placeholder: '搜尋檔案或資料夾',
@@ -122,6 +127,7 @@ const common = {
       selectAll: '全選',
       unselectAll: '取消全選',
       selectedCount: '已選擇 {{count}} 個項目',
+      clearSelection: '清除選擇',
     },
     empty: {
       title: '沒有檔案',

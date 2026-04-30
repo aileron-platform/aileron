@@ -9,7 +9,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('ClaudeCodeFileManager');
-import { useFileTreeManager } from '@/shared/components/file-tree-manager/hooks/useFileTreeManager';
+import { useFileTreeManager } from '@/shared/components/file-workbench';
 import {
   FileTreePanel,
   StandardFileTreeLayout,
@@ -18,14 +18,14 @@ import {
   FileTreeContextMenu,
   useFileTreeContextMenu,
   type ScopeOption,
-} from '@/shared/components/file-tree-manager';
+} from '@/shared/components/file-workbench';
 import {
   FileCreateDialog,
   FileRenameDialog,
   FileDeleteDialog,
   BatchDeleteDialog,
-} from '@/shared/components/file-tree-manager/components';
-import type { FileTreeApiConfig, FileTreeNode as FileTreeNodeType, SelectionModifier } from '@/shared/components/file-tree-manager';
+} from '@/shared/components/file-workbench';
+import type { FileTreeApiConfig, FileTreeNode as FileTreeNodeType, SelectionModifier } from '@/shared/components/file-workbench';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { FolderGit, User, Puzzle } from 'lucide-react';

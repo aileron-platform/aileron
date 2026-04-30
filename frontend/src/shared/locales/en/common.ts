@@ -67,6 +67,11 @@ const common = {
   fileTree: {
     toolbar: {
       title: 'Files',
+      moreActions: 'More actions',
+    },
+    sidebar: {
+      expand: 'Expand sidebar',
+      collapse: 'Collapse sidebar',
     },
     search: {
       placeholder: 'Search files or folders',
@@ -122,6 +127,7 @@ const common = {
       selectAll: 'Select All',
       unselectAll: 'Unselect All',
       selectedCount: '{{count}} items selected',
+      clearSelection: 'Clear selection',
     },
     empty: {
       title: 'No files',

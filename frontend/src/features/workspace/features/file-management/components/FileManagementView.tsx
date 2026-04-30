@@ -20,15 +20,15 @@ import {
   type FileTreeApiConfig,
   type FileTreeNode,
   type SelectionModifier,
-} from '@/shared/components/file-tree-manager';
+} from '@/shared/components/file-workbench';
 import {
   FileCreateDialog,
   FileRenameDialog,
   FileDeleteDialog,
   BatchDeleteDialog,
-} from '@/shared/components/file-tree-manager/components';
-import { useFileTreeManager } from '@/shared/components/file-tree-manager/hooks/useFileTreeManager';
-import { useFileOperationsWithDialog } from '@/shared/components/file-tree-manager/hooks/useFileOperationsWithDialog';
+} from '@/shared/components/file-workbench';
+import { useFileTreeManager } from '@/shared/components/file-workbench';
+import { useFileOperationsWithDialog } from '@/shared/components/file-workbench';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
