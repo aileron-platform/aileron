@@ -189,6 +189,66 @@ describe('FileViewerWorkbench', () => {
     expect(adapter.revealInTree).toHaveBeenCalledWith('/docs/a.md');
   });
 
+  it('shows prominent tab scroll controls when opened files overflow the tab strip', async () => {
+    const scrollBy = vi.fn();
+    const scrollWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth');
+    const clientWidthDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    const scrollLeftDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollLeft');
+    const scrollByDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollBy');
+
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', {
+      configurable: true,
+      get: () => 360,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 120,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollLeft', {
+      configurable: true,
+      get: () => 0,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollBy', {
+      configurable: true,
+      value: scrollBy,
+    });
+
+    try {
+      renderWorkbench();
+
+      const scrollRight = await screen.findByLabelText('shared.fileViewer.tabs.scrollRight');
+      expect(scrollRight).toHaveClass('right-0', 'w-7', 'bg-card/95', 'text-foreground');
+
+      fireEvent.click(scrollRight);
+
+      expect(scrollBy).toHaveBeenCalledWith({
+        left: 200,
+        behavior: 'smooth',
+      });
+    } finally {
+      if (scrollWidthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).scrollWidth;
+      }
+      if (clientWidthDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidthDescriptor);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth;
+      }
+      if (scrollLeftDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollLeft', scrollLeftDescriptor);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).scrollLeft;
+      }
+      if (scrollByDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollBy', scrollByDescriptor);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).scrollBy;
+      }
+    }
+  });
+
   it('uses controlled focus expansion with the injected workspace focus toolbar', () => {
     const onExpandedChange = vi.fn();
 

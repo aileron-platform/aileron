@@ -443,72 +443,75 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     >
       {tabs.length > 0 && !hideChrome && (
         <div className="relative flex h-10 shrink-0 border-b border-border bg-card" style={{ overflowY: 'visible' }}>
-          {showLeftScroll && (
-            <button
-              type="button"
-              className="absolute left-0 top-0 z-20 flex h-full items-center justify-center bg-gradient-to-r from-muted/80 to-transparent px-1 transition-colors hover:from-muted"
-              onClick={() => scrollTabs('left')}
-              aria-label={t('shared.fileViewer.tabs.scrollLeft')}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          <div
-            ref={tabScrollRef}
-            className="flex min-w-0 flex-1 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20"
-            style={{ scrollbarWidth: 'thin' }}
-            onScroll={checkScroll}
-          >
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                onClick={() => onActiveTabChange(tab.id)}
-                onContextMenu={(event) => handleTabContextMenu(event, tab.id)}
-                className={cn(
-                  'flex h-full min-w-0 flex-shrink-0 cursor-pointer items-center border-r border-border transition-colors hover:bg-muted/50',
-                  activeTabId === tab.id
-                    ? 'border-b-2 border-b-primary bg-background text-foreground'
-                    : 'text-muted-foreground',
-                )}
+          <div className="relative flex min-w-0 flex-1">
+            {showLeftScroll && (
+              <button
+                type="button"
+                className="absolute left-0 top-0 z-20 flex h-full w-7 items-center justify-center border-r border-border bg-card/95 text-foreground shadow-sm transition-colors hover:bg-muted"
+                onClick={() => scrollTabs('left')}
+                aria-label={t('shared.fileViewer.tabs.scrollLeft')}
               >
-                <div className="flex h-full min-w-0 items-center px-2.5">
-                  <span className="mr-1.5 shrink-0">{getFileIcon(tab.name)}</span>
-                  <span className="max-w-28 truncate text-sm" title={tab.path}>{tab.name}</span>
-                  {tab.isModified && (
-                    <span
-                      className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
-                      title={t('shared.fileViewer.status.modified')}
-                    />
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+            )}
+
+            <div
+              ref={tabScrollRef}
+              className="flex min-w-0 flex-1 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted-foreground/20"
+              style={{ scrollbarWidth: 'thin' }}
+              onScroll={checkScroll}
+            >
+              {tabs.map((tab) => (
+                <div
+                  key={tab.id}
+                  onClick={() => onActiveTabChange(tab.id)}
+                  onContextMenu={(event) => handleTabContextMenu(event, tab.id)}
+                  className={cn(
+                    'flex h-full min-w-0 flex-shrink-0 cursor-pointer items-center border-r border-border transition-colors hover:bg-muted/50',
+                    activeTabId === tab.id
+                      ? 'border-b-2 border-b-primary bg-background text-foreground'
+                      : 'text-muted-foreground',
+                  )}
+                >
+                  <div className="flex h-full min-w-0 items-center px-2.5">
+                    <span className="mr-1.5 shrink-0">{getFileIcon(tab.name)}</span>
+                    <span className="max-w-28 truncate text-sm" title={tab.path}>{tab.name}</span>
+                    {tab.isModified && (
+                      <span
+                        className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                        title={t('shared.fileViewer.status.modified')}
+                      />
+                    )}
+                  </div>
+                  {canCloseTabs && (
+                    <button
+                      type="button"
+                      className="h-full px-1.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      title={t('shared.fileViewer.tabs.close')}
+                      aria-label={t('shared.fileViewer.tabs.close')}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        closeTab(tab.id);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   )}
                 </div>
-                {canCloseTabs && (
-                  <button
-                    type="button"
-                    className="h-full px-1.5 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                    title={t('shared.fileViewer.tabs.close')}
-                    aria-label={t('shared.fileViewer.tabs.close')}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      closeTab(tab.id);
-                    }}
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
+
+            {showRightScroll && (
+              <button
+                type="button"
+                className="absolute right-0 top-0 z-20 flex h-full w-7 items-center justify-center border-l border-border bg-card/95 text-foreground shadow-sm transition-colors hover:bg-muted"
+                onClick={() => scrollTabs('right')}
+                aria-label={t('shared.fileViewer.tabs.scrollRight')}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
-          {showRightScroll && (
-            <button
-              type="button"
-              className="absolute right-36 top-0 z-20 flex h-full items-center justify-center bg-gradient-to-l from-muted/80 to-transparent px-1 transition-colors hover:from-muted"
-              onClick={() => scrollTabs('right')}
-              aria-label={t('shared.fileViewer.tabs.scrollRight')}
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          )}
           {renderWorkbenchToolbar()}
         </div>
       )}

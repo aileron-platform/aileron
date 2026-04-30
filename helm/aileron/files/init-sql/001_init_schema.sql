@@ -154,6 +154,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
     fallback_enabled boolean DEFAULT true,
     workspace_path text DEFAULT '/workspace',
+    runtime_mounted_kb_signature text,
 
     -- Browser container fields
     browser_container_id text,
@@ -185,47 +186,7 @@ ALTER TABLE workspaces
     ADD COLUMN IF NOT EXISTS template_id varchar(64),
     ADD COLUMN IF NOT EXISTS runtime_created_at timestamp with time zone,
     ADD COLUMN IF NOT EXISTS runtime_resources jsonb,
-    ADD COLUMN IF NOT EXISTS acp_cli_args jsonb DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS canvas_container_id text,
-    ADD COLUMN IF NOT EXISTS canvas_status text DEFAULT 'stopped',
-    ADD COLUMN IF NOT EXISTS canvas_created_at timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS canvas_last_seen timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS canvas_internal_url text,
-    ADD COLUMN IF NOT EXISTS canvas_external_url text,
-    ADD COLUMN IF NOT EXISTS canvas_internal_port integer DEFAULT 3003,
-    ADD COLUMN IF NOT EXISTS canvas_external_port integer,
-    ADD COLUMN IF NOT EXISTS canvas_api_internal_port integer DEFAULT 3013,
-    ADD COLUMN IF NOT EXISTS canvas_api_external_port integer,
-    ADD COLUMN IF NOT EXISTS canvas_type text DEFAULT 'default',
-    ADD COLUMN IF NOT EXISTS canvas_manifest_status text DEFAULT 'missing',
-    ADD COLUMN IF NOT EXISTS canvas_last_sync_at timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS canvas_last_reset_at timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS terminal_external_port integer,
-    ADD COLUMN IF NOT EXISTS terminal_external_url text,
-    ADD COLUMN IF NOT EXISTS provisioner text DEFAULT 'docker',
-    ADD COLUMN IF NOT EXISTS target_namespace text,
-    ADD COLUMN IF NOT EXISTS workspace_firewall_network_access_enabled boolean DEFAULT true,
-    ADD COLUMN IF NOT EXISTS workspace_firewall_domain_access_mode text DEFAULT 'all',
-    ADD COLUMN IF NOT EXISTS workspace_firewall_allowed_domains jsonb DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS browser_firewall_network_access_enabled boolean DEFAULT true,
-    ADD COLUMN IF NOT EXISTS browser_firewall_domain_access_mode text DEFAULT 'all',
-    ADD COLUMN IF NOT EXISTS browser_firewall_allowed_domains jsonb DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS port_mappings jsonb DEFAULT '[]'::jsonb,
-    ADD COLUMN IF NOT EXISTS active_claude_session_id varchar(128),
-    ADD COLUMN IF NOT EXISTS preferred_cli varchar(32) DEFAULT 'claude-code',
-    ADD COLUMN IF NOT EXISTS cli_type varchar(32) DEFAULT 'claude-code',
-    ADD COLUMN IF NOT EXISTS fallback_enabled boolean DEFAULT true,
-    ADD COLUMN IF NOT EXISTS workspace_path text DEFAULT '/workspace',
-    ADD COLUMN IF NOT EXISTS browser_container_id text,
-    ADD COLUMN IF NOT EXISTS browser_status text DEFAULT 'stopped',
-    ADD COLUMN IF NOT EXISTS browser_created_at timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS browser_last_seen timestamp with time zone,
-    ADD COLUMN IF NOT EXISTS browser_webrtc_internal_url text,
-    ADD COLUMN IF NOT EXISTS browser_webrtc_external_url text,
-    ADD COLUMN IF NOT EXISTS browser_webrtc_internal_port integer DEFAULT 6080,
-    ADD COLUMN IF NOT EXISTS browser_webrtc_external_port integer,
-    ADD COLUMN IF NOT EXISTS browser_cdp_internal_port integer DEFAULT 9223,
-    ADD COLUMN IF NOT EXISTS browser_cdp_external_port integer,
+    ADD COLUMN IF NOT EXISTS runtime_mounted_kb_signature text,
     ADD COLUMN IF NOT EXISTS language varchar(10) DEFAULT 'zh-TW',
     ADD COLUMN IF NOT EXISTS timezone varchar(64) DEFAULT 'Asia/Taipei',
     ADD COLUMN IF NOT EXISTS default_shell varchar(32) DEFAULT 'bash',
@@ -281,6 +242,7 @@ COMMENT ON COLUMN workspaces.preferred_cli IS '偏好的命令行介面';
 COMMENT ON COLUMN workspaces.cli_type IS '工作區的 CLI 類型（claude-code / codex / gemini）';
 COMMENT ON COLUMN workspaces.fallback_enabled IS '是否啟用 AI 模型備援機制';
 COMMENT ON COLUMN workspaces.workspace_path IS '工作區在容器中的路徑';
+COMMENT ON COLUMN workspaces.runtime_mounted_kb_signature IS 'Runtime mounted knowledge base signature';
 COMMENT ON COLUMN workspaces.browser_container_id IS 'Browser 容器 ID';
 COMMENT ON COLUMN workspaces.browser_status IS 'Browser 容器運行狀態';
 COMMENT ON COLUMN workspaces.browser_created_at IS 'Browser 容器建立時間';
@@ -311,6 +273,92 @@ COMMENT ON COLUMN workspace_shares.role IS '工作區分享角色（viewer / edi
 COMMENT ON COLUMN workspace_shares.granted_by_user_id IS '授權分享的使用者 ID';
 COMMENT ON COLUMN workspace_shares.created_at IS '分享建立時間';
 COMMENT ON COLUMN workspace_shares.updated_at IS '分享最後更新時間';
+
+-- Table: knowledge_bases
+CREATE TABLE IF NOT EXISTS knowledge_bases (
+    id varchar(64) PRIMARY KEY,
+    slug varchar(255) NOT NULL,
+    name varchar(255) NOT NULL,
+    description text,
+    owner_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    current_size_bytes integer NOT NULL DEFAULT 0,
+    quota_bytes integer,
+    version_control_enabled boolean DEFAULT false NOT NULL,
+    git_lfs_enabled boolean DEFAULT false NOT NULL,
+    git_default_branch varchar(255) DEFAULT 'main' NOT NULL,
+    git_last_commit_sha varchar(64),
+    wiki_initialized_at timestamp with time zone,
+    last_indexed_at timestamp with time zone,
+    last_index_status varchar(32),
+    last_index_error text,
+    tombstoned_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT knowledge_bases_owner_slug_unique UNIQUE (owner_id, slug)
+);
+
+COMMENT ON TABLE knowledge_bases IS 'Knowledge base metadata table';
+COMMENT ON COLUMN knowledge_bases.id IS 'Knowledge base unique ID';
+COMMENT ON COLUMN knowledge_bases.slug IS 'Knowledge base slug';
+COMMENT ON COLUMN knowledge_bases.name IS 'Knowledge base name';
+COMMENT ON COLUMN knowledge_bases.description IS 'Knowledge base description';
+COMMENT ON COLUMN knowledge_bases.owner_id IS 'Knowledge base owner user ID';
+COMMENT ON COLUMN knowledge_bases.current_size_bytes IS 'Current storage usage in bytes';
+COMMENT ON COLUMN knowledge_bases.quota_bytes IS 'Optional storage quota in bytes';
+COMMENT ON COLUMN knowledge_bases.version_control_enabled IS 'Whether Git version control is enabled';
+COMMENT ON COLUMN knowledge_bases.git_lfs_enabled IS 'Whether Git LFS is enabled';
+COMMENT ON COLUMN knowledge_bases.git_default_branch IS 'Default Git branch';
+COMMENT ON COLUMN knowledge_bases.git_last_commit_sha IS 'Last indexed Git commit SHA';
+COMMENT ON COLUMN knowledge_bases.wiki_initialized_at IS 'Team Wiki initialization timestamp';
+COMMENT ON COLUMN knowledge_bases.last_indexed_at IS 'Last indexing timestamp';
+COMMENT ON COLUMN knowledge_bases.last_index_status IS 'Last indexing status';
+COMMENT ON COLUMN knowledge_bases.last_index_error IS 'Last indexing error message';
+COMMENT ON COLUMN knowledge_bases.tombstoned_at IS 'Tombstone timestamp for delayed cleanup';
+COMMENT ON COLUMN knowledge_bases.created_at IS 'Creation time';
+COMMENT ON COLUMN knowledge_bases.updated_at IS 'Last update time';
+
+-- Table: knowledge_base_shares
+CREATE TABLE IF NOT EXISTS knowledge_base_shares (
+    id varchar(64) PRIMARY KEY,
+    kb_id varchar(64) NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+    user_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role varchar(32) NOT NULL CHECK (role IN ('viewer', 'editor', 'manager')),
+    granted_by_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT knowledge_base_shares_kb_user_unique UNIQUE (kb_id, user_id)
+);
+
+COMMENT ON TABLE knowledge_base_shares IS 'Knowledge base sharing authorization table';
+COMMENT ON COLUMN knowledge_base_shares.id IS 'Share authorization unique ID';
+COMMENT ON COLUMN knowledge_base_shares.kb_id IS 'Knowledge base ID';
+COMMENT ON COLUMN knowledge_base_shares.user_id IS 'Shared user ID';
+COMMENT ON COLUMN knowledge_base_shares.role IS 'Knowledge base share role';
+COMMENT ON COLUMN knowledge_base_shares.granted_by_id IS 'Granting user ID';
+COMMENT ON COLUMN knowledge_base_shares.created_at IS 'Share creation time';
+
+-- Table: workspace_knowledge_base_attachments
+CREATE TABLE IF NOT EXISTS workspace_knowledge_base_attachments (
+    id varchar(64) PRIMARY KEY,
+    workspace_id varchar(64) NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    kb_id varchar(64) NOT NULL REFERENCES knowledge_bases(id) ON DELETE RESTRICT,
+    mount_alias varchar(255) NOT NULL,
+    mode varchar(16) NOT NULL CHECK (mode IN ('rw', 'ro')),
+    attached_by_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT workspace_kb_attachments_workspace_kb_unique UNIQUE (workspace_id, kb_id),
+    CONSTRAINT workspace_kb_attachments_workspace_alias_unique UNIQUE (workspace_id, mount_alias)
+);
+
+COMMENT ON TABLE workspace_knowledge_base_attachments IS 'Workspace and knowledge base attachment table';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.id IS 'Attachment unique ID';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.workspace_id IS 'Workspace ID';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.kb_id IS 'Knowledge base ID';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.mount_alias IS 'Runtime mount alias';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.mode IS 'Mount mode';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.attached_by_id IS 'User ID that attached the knowledge base';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.created_at IS 'Attachment creation time';
+COMMENT ON COLUMN workspace_knowledge_base_attachments.updated_at IS 'Attachment last update time';
 
 -- Table: template_features
 CREATE TABLE IF NOT EXISTS template_features (
@@ -825,7 +873,7 @@ ON CONFLICT DO NOTHING;
 -- Default Template Categories
 INSERT INTO template_categories (id, name, description, icon, sort_order, is_active, created_at, updated_at)
 VALUES
-    ('automation', '自動化', '自動化部署與 CI/CD 流程模板', 'server', 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('documentation', '文件撰寫', '技術文件與寫作相關模板', 'book-open', 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('collaboration', '協作管理', '多代理協作與工作區管理模板', 'users', 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ('automation', 'Automation', 'Automation deployment and CI/CD workflow templates', 'server', 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('documentation', 'Documentation', 'Technical documentation and writing templates', 'book-open', 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('collaboration', 'Collaboration', 'Multi-agent collaboration and workspace management templates', 'users', 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;
