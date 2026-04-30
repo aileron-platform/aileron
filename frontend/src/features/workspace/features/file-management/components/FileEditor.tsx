@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import {
-  createWorkspaceFileWorkbenchAdapter,
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench';
+import { createWorkspaceFileWorkbenchAdapter } from '../adapters/workspaceFileWorkbenchAdapter';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { getFileIcon } from '@/shared/utils/fileIconUtils';

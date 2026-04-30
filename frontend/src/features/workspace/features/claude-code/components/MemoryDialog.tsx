@@ -9,7 +9,7 @@ import {
 } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
-import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
+import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { ClaudeDocument } from '../types';
 import type { DocumentDialogProps } from '../../agent-settings/components/DocumentPage';

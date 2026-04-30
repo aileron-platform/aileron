@@ -24,7 +24,7 @@ import {
   enableKnowledgeBaseGitRepository,
   getKnowledgeBaseGitRepositoryStatus,
   knowledgeBaseVersionControlApi,
-} from '@/shared/services/knowledgeBaseApi';
+} from '@/features/knowledge-base/api/knowledgeBaseApi';
 import type {
   KnowledgeBaseGitRepositoryStatus,
   KnowledgeBaseRole,

@@ -34,9 +34,11 @@ const navigation = {
     },
   },
   userMenu: {
+    defaultUser: 'User',
     profile: 'Profile',
     settings: 'System settings',
     logout: 'Log out',
+    login: 'Log in',
   },
   fullscreen: {
     enter: 'Enter fullscreen',

@@ -1,7 +1,7 @@
 import React from 'react';
 import { type TemplateCommand } from '@/shared/types/templates';
-import { CommandViewer } from '@/shared/components/template/CommandViewer';
-import { adaptTemplateCommands } from '@/shared/components/template/adapters';
+import { CommandViewer } from '@/features/template-management/components/metadata-viewers/CommandViewer';
+import { adaptTemplateCommands } from '@/features/template-management/components/metadata-viewers/adapters';
 
 interface CommandsTabContentProps {
   commands?: TemplateCommand[];

@@ -138,7 +138,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/services/templateGitApi', () => ({
+vi.mock('@/features/template-management/api/templateGitApi', () => ({
   templateVersionControlApi: templateVersionControlApiMock,
   getRebuildProgress: vi.fn(),
   rebuildTemplates: vi.fn(async () => ({ success: true, task_id: 'task-1' })),

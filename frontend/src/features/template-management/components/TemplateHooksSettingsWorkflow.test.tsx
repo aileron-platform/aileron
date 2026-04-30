@@ -62,8 +62,8 @@ vi.mock('@/features/template-management/components/HookCard', () => ({
   ),
 }));
 
-vi.mock('@/shared/components/dialogs', () => ({
-  HookDialog: ({
+vi.mock('./TemplateHookDialog', () => ({
+  TemplateHookDialog: ({
     open,
     onSave,
   }: {

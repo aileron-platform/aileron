@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Separator } from '@/shared/components/ui/separator';
 import { useToast } from '@/shared/components/ui/use-toast';
-import GlobalNavigation from '@/shared/components/navigation/GlobalNavigation';
+import GlobalNavigation from '@/app/components/navigation/GlobalNavigation';
 import {
   Palette,
   Globe,

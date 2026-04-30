@@ -6,7 +6,7 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { Edit, Save, X, Copy, Download, Loader2 } from 'lucide-react';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
-import MarkdownEditor from '@/shared/components/composite/MarkdownEditor';
+import MarkdownEditor from '@/shared/components/markdown/MarkdownEditor';
 import Editor, { type OnChange, type OnMount } from '@monaco-editor/react';
 import { useApp } from '@/app/providers/AppProvider';
 import { getLanguageFromFileName } from '@/shared/utils/languageUtils';

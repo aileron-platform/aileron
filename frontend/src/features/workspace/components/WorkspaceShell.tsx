@@ -12,7 +12,7 @@ import { ClaudeCodeProvider } from '../features/claude-code/components';
 import { OpenSpecWorkspaceProvider } from '../features/openspec/OpenSpecWorkspaceContext';
 import ChatPanel from './ChatPanel/ChatPanel';
 import { ChatPanelStateProvider } from './ChatPanel/chatPanelStateContext';
-import { GlobalNavigation } from '@/shared/components/navigation/GlobalNavigation';
+import { GlobalNavigation } from '@/app/components/navigation/GlobalNavigation';
 import { RuntimeErrorPage } from '@/shared/components/errors/RuntimeErrorPage';
 import { getNavigationItems } from './navigation-constants';
 import { normalizeAgentType, getAgentToolConfig } from '../features/agent-settings/utils';

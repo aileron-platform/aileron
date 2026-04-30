@@ -96,3 +96,5 @@ export type { UseFileEditorOptions, UseFileEditorReturn } from './hooks/useFileE
 
 export { useFileTreeContextMenu } from './hooks/useFileTreeContextMenu';
 export type { FileTreeContextMenuConfig } from './hooks/useFileTreeContextMenu';
+
+export { FileTreeSearchBar } from './primitives/FileTreeSearchBar';

@@ -31,6 +31,10 @@ const automation = {
         loading: '載入工作區中…',
         empty: '目前沒有可用的工作區',
         error: '無法載入工作區',
+        accessSource: {
+          owned: '擁有',
+          shared: '共享',
+        },
       },
       description: {
         label: '描述',

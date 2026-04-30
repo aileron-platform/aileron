@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 import { useI18n } from '@/shared/hooks/useI18n';
-import * as knowledgeBaseApi from '@/shared/services/knowledgeBaseApi';
+import * as knowledgeBaseApi from '@/features/knowledge-base/api/knowledgeBaseApi';
 import type {
   KnowledgeBaseAttachmentCreatePayload,
   KnowledgeBaseAttachmentSummary,

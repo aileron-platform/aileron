@@ -17,7 +17,7 @@ import type {
   TemplateWorkspaceTarget,
 } from '@/shared/types/templates';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { getTemplateCompilePreview, type TemplateCompilePreview } from '@/shared/services/templateApi';
+import { getTemplateCompilePreview, type TemplateCompilePreview } from '@/features/template-management/api/templateApi';
 import { Download } from 'lucide-react';
 
 export interface TemplateInstallDialogProps {

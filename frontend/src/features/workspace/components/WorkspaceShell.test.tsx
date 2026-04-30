@@ -81,7 +81,7 @@ vi.mock('../realtime', () => ({
   WorkspaceRealtimeProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/shared/components/navigation/GlobalNavigation', () => ({
+vi.mock('@/app/components/navigation/GlobalNavigation', () => ({
   GlobalNavigation: () => <div data-testid="global-navigation">global-navigation</div>,
 }));
 

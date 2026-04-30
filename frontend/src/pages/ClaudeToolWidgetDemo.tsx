@@ -1,5 +1,5 @@
 import React from 'react';
-import ClaudeToolWidget, { ClaudeToolType, ToolResultBlock, PermissionScope } from '@/shared/components/ui/ClaudeToolWidget';
+import ClaudeToolWidget, { ClaudeToolType, ToolResultBlock, PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
 import { Card } from '@/shared/components/ui/card';
 
 /**

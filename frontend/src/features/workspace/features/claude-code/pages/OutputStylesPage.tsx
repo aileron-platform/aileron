@@ -1,12 +1,11 @@
 import React, { useContext } from 'react';
 import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
-import { OutputStyleDialog } from '@/shared/components/dialogs';
+import { WorkspaceOutputStyleDialog } from '../components/dialogs/WorkspaceOutputStyleDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 
 const OutputStylesPage: React.FC = () => {
   const { t } = useI18n();
-  // 安全地檢查 context 是否可用
   const context = useContext(ClaudeCodeContext);
 
   if (!context) {
@@ -35,7 +34,7 @@ const OutputStylesPageContent: React.FC = () => {
       isLoading={outputStyles.loading}
       error={outputStyles.error}
       onRefresh={outputStyles.refresh}
-      dialogComponent={OutputStyleDialog}
+      dialogComponent={WorkspaceOutputStyleDialog}
       config={{
         metaKey: 'output-styles',
         createButtonLabel: t('workspace.claudeCode.outputStyles.actions.create'),

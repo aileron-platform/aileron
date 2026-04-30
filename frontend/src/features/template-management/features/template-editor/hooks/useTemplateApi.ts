@@ -9,7 +9,7 @@ import { createLogger } from '@/shared/services/logger';
 const logger = createLogger('useTemplateApi');
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
-import * as templateApi from '@/shared/services/templateApi';
+import * as templateApi from '@/features/template-management/api/templateApi';
 import type { TemplateFormValues, McpServerFormValue, HookFormValue, CommandFormValue, AgentFormValue, OutputStyleFormValue } from '../formTypes';
 import { parseArgsText, parseEnvText, parseHeadersText } from '../formTypes';
 

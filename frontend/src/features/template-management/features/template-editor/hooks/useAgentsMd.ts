@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { getAgentsMd, updateAgentsMd, type AgentsMdResponse } from '@/shared/services/templateApi';
+import { getAgentsMd, updateAgentsMd, type AgentsMdResponse } from '@/features/template-management/api/templateApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';

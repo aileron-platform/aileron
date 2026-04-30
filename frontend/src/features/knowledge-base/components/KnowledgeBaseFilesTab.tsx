@@ -3,7 +3,6 @@ import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, 
 import {
   API_ENDPOINTS,
   BatchDeleteDialog,
-  createKnowledgeBaseFileWorkbenchAdapter,
   FileCreateDialog,
   FileDeleteDialog,
   FileRenameDialog,
@@ -16,6 +15,7 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
+import { createKnowledgeBaseFileWorkbenchAdapter } from './file-workbench/knowledgeBaseFileWorkbenchAdapter';
 import {
   FileViewerWorkbench,
   toFileWorkbenchTab,

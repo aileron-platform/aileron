@@ -1,6 +1,6 @@
 import React, { useContext, useMemo } from 'react';
 import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
-import { CommandDialog } from '@/shared/components/dialogs';
+import { WorkspaceCommandDialog } from '../components/dialogs/WorkspaceCommandDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 import type { ClaudeDocument } from '../types';
@@ -17,7 +17,7 @@ const SlashCommandsPage: React.FC = () => {
       onClose: () => void;
       onSubmit: (document: ClaudeDocument) => Promise<void> | void;
     }> = (props) => (
-      <CommandDialog
+      <WorkspaceCommandDialog
         {...props}
         availableScopes={['project', 'user']}
         format="markdown"

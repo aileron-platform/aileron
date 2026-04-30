@@ -21,8 +21,8 @@ import {
 import type { ClaudeMcpServer, ClaudeScope } from '../../claude-code/data';
 
 const ALL_SCOPES: ClaudeScope[] = ['project', 'user', 'local', 'plugin'];
-import { MCPServerDialog } from '@/shared/components/dialogs';
 import MCPImportDialog from './dialogs/MCPImportDialog';
+import { WorkspaceMCPServerDialog } from './dialogs/WorkspaceMCPServerDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
@@ -66,12 +66,10 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const filteredServers = useMemo(() => {
     let filtered = servers;
 
-    // 按 scope 篩選
     if (selectedScope !== 'all') {
       filtered = filtered.filter((server) => server.scope === selectedScope);
     }
 
-    // 按搜尋關鍵字篩選
     if (search) {
       const keyword = search.toLowerCase();
       filtered = filtered.filter((server) => {
@@ -122,7 +120,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     onRefresh: fetchServers,
   });
 
-  // 權限檢查函數
   const canEdit = (server: ClaudeMcpServer): boolean => {
     return server.scope !== 'plugin';
   };
@@ -452,7 +449,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                             {t(`${i18nNamespace}.mcp.server.scope.${server.scope}`)}
                           </Badge>
 
-                          {/* Plugin 來源標記 */}
                           {server.scope === 'plugin' && server.pluginName && (
                             <Badge variant="outline" className="flex items-center gap-1 text-xs">
                               <Puzzle className="h-3 w-3" />
@@ -478,7 +474,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                           </div>
                         )}
 
-                        {/* 非 plugin scope：顯示編輯和刪除按鈕 */}
                         {canEdit(server) && (
                           <>
                             <button
@@ -500,7 +495,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                           </>
                         )}
 
-                        {/* Plugin scope：顯示提示訊息 */}
                         {server.scope === 'plugin' && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -625,7 +619,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           </div>
         </SettingsWorkflowShell>
 
-        <MCPServerDialog
+        <WorkspaceMCPServerDialog
           open={dialogOpen}
           mode={dialogMode}
           server={activeServer}

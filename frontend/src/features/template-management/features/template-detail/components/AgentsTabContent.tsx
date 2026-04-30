@@ -1,7 +1,7 @@
 import React from 'react';
 import { type TemplateAgent } from '@/shared/types/templates';
-import { AgentViewer } from '@/shared/components/template/AgentViewer';
-import { adaptTemplateAgents } from '@/shared/components/template/adapters';
+import { AgentViewer } from '@/features/template-management/components/metadata-viewers/AgentViewer';
+import { adaptTemplateAgents } from '@/features/template-management/components/metadata-viewers/adapters';
 
 interface AgentsTabContentProps {
   agents: TemplateAgent[];

@@ -1,12 +1,11 @@
 import React, { useContext } from 'react';
 import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
-import { AgentDialog } from '@/shared/components/dialogs';
+import { WorkspaceAgentDialog } from '../components/dialogs/WorkspaceAgentDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 
 const SubagentsPage: React.FC = () => {
   const { t } = useI18n();
-  // 安全地檢查 context 是否可用
   const context = useContext(ClaudeCodeContext);
 
   if (!context) {
@@ -35,7 +34,7 @@ const SubagentsPageContent: React.FC = () => {
       isLoading={subagents.loading}
       error={subagents.error}
       onRefresh={subagents.refresh}
-      dialogComponent={AgentDialog}
+      dialogComponent={WorkspaceAgentDialog}
       config={{
         metaKey: 'subagents',
         createButtonLabel: t('workspace.claudeCode.subagents.actions.create'),

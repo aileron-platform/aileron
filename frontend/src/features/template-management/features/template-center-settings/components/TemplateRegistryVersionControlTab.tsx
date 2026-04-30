@@ -18,7 +18,7 @@ import {
   type GitRepositoryStatus,
   rebuildTemplates,
   templateVersionControlApi,
-} from '@/shared/services/templateGitApi';
+} from '@/features/template-management/api/templateGitApi';
 import type {
   VersionControlBranch,
   VersionControlChangesResponse,

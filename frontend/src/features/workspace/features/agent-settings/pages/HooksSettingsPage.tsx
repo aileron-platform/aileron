@@ -4,7 +4,11 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Button } from '@/shared/components/ui/button';
-import { HookDialog, type WorkspaceHookData, type EventOption } from '@/shared/components/dialogs';
+import {
+  WorkspaceHookDialog,
+  type EventOption,
+  type WorkspaceHookData,
+} from './dialogs/WorkspaceHookDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import {
@@ -25,7 +29,6 @@ import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/comp
 
 const logger = createLogger('HooksSettingsPage');
 
-// 使用 ClaudeHookWithEvent 作為本地的 ClaudeHook 類型
 type ClaudeHook = ClaudeHookWithEvent;
 
 type HookScopeState = Record<ClaudeHook['scope'], ClaudeHookScopeDocument>;
@@ -125,7 +128,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
 
   const describeEvent = (eventName: string) => eventLabels[eventName] ?? eventName;
 
-  // 為 HookDialog 產生 eventOptions
   const dialogEventOptions = useMemo<EventOption[] | undefined>(() => {
     if (!hookEvents) return undefined;
     return hookEvents.map((e) => ({
@@ -202,7 +204,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
       });
       setScopeDocuments(next);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '載入 Hook 設定失敗';
+      const message = err instanceof Error ? err.message : t(`${i18nNamespace}.hooks.messages.loadFailed`);
       setError(message);
       logger.error('Failed to load hooks', { error: err });
     } finally {
@@ -223,7 +225,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeLoading);
   const isBusy = loading || processing;
 
-  // 權限檢查函數
   const canEdit = (hook: ClaudeHook): boolean => {
     return hook.scope !== 'plugin';
   };
@@ -301,7 +302,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
       setActiveHook(null);
       setError(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '更新 Hook 設定失敗';
+      const message = err instanceof Error ? err.message : t(`${i18nNamespace}.hooks.messages.updateFailed`);
       setError(message);
       logger.error('Failed to update hook', { error: err });
     } finally {
@@ -311,7 +312,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
 
   const handleDelete = async (hook: ClaudeHook) => {
     if (!canDelete(hook)) {
-      // Plugin hooks 無法刪除
       return;
     }
 
@@ -355,7 +355,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
       }
       setError(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '刪除 Hook 失敗';
+      const message = err instanceof Error ? err.message : t(`${i18nNamespace}.hooks.messages.deleteFailed`);
       setError(message);
       logger.error('Failed to delete hook', { error: err });
     } finally {
@@ -371,7 +371,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
 
   const handleOpenEdit = (hook: ClaudeHook) => {
     if (!canEdit(hook)) {
-      // Plugin hooks 無法編輯
       return;
     }
     setDialogMode('edit');
@@ -468,7 +467,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                 <div key={hook.id} className="relative rounded-lg border border-border bg-background p-6">
                   <div className="flex items-start">
                     <div className="min-w-0 flex-1">
-                      {/* 事件名稱和範圍 */}
                       <div className="mb-3 flex items-center gap-3">
                         <h3 className="text-lg font-semibold text-foreground">
                           {describeEvent(hook.eventName)}
@@ -479,7 +477,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                         >
                           {t(`${i18nNamespace}.hooks.scope.badge.${hook.scope}`)}
                         </Badge>
-                        {/* Plugin 來源標記 */}
                         {hook.scope === 'plugin' && hook.pluginName && (
                           <Badge variant="outline" className="flex items-center gap-1 text-xs">
                             <Puzzle className="h-3 w-3" />
@@ -488,7 +485,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                         )}
                       </div>
 
-                      {/* 匹配器列表 */}
                       <div className="mb-4">
                         <div className="mb-3 flex items-center gap-2">
                           <Terminal className="h-4 w-4 text-muted-foreground" />
@@ -545,7 +541,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                         </div>
                       </div>
 
-                      {/* 統計資訊 */}
                       <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                         <span>
                           {t(`${i18nNamespace}.hooks.matchers.summary.matchers`, {
@@ -561,7 +556,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                     </div>
                   </div>
 
-                  {/* Action Buttons - 絕對定位在右上角 */}
                   <div className="absolute top-4 right-4 flex items-center gap-2">
                     {canEdit(hook) && (
                       <button
@@ -600,7 +594,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
         </div>
       </SettingsWorkflowShell>
 
-      <HookDialog
+      <WorkspaceHookDialog
         open={dialogOpen}
         mode={dialogMode}
         hook={activeHook}

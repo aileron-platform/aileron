@@ -11,7 +11,7 @@ import {
   generateSSHKeys,
   updateSSHKeys,
   type SSHKeys,
-} from '@/shared/services/templateSshApi';
+} from '@/features/template-management/api/templateSshApi';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('SSHKeysTab');

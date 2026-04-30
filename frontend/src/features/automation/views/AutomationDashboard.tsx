@@ -41,9 +41,9 @@ import {
   ExecutionLogDialog as SharedExecutionLogDialog,
   ExecutionLogDialogCopy,
   ExecutionLogBuilder,
-} from '@/shared/components/composite/ExecutionLogDialog';
-import { JobExecutionsDialog as SharedJobExecutionsDialog } from '@/shared/components/composite/JobExecutionsDialog';
-import { SessionViewerDialog } from '@/shared/components/composite/SessionViewerDialog';
+} from '@/features/automation/components/ExecutionLogDialog';
+import { JobExecutionsDialog as SharedJobExecutionsDialog } from '@/features/automation/components/JobExecutionsDialog';
+import { SessionViewerDialog } from '@/features/workspace/components/session-viewer/SessionViewerDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { getExecutionStatusLabelKey } from '../constants';
 import { TaskLog } from '@/shared/types/task';

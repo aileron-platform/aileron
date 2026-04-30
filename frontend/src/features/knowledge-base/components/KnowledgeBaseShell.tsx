@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlobalNavigation } from '@/shared/components/navigation/GlobalNavigation';
+import { GlobalNavigation } from '@/app/components/navigation/GlobalNavigation';
 
 export interface KnowledgeBaseShellProps {
   children: React.ReactNode;

@@ -11,7 +11,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { ScrollArea } from '@/shared/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
-import { getKnowledgeBaseGraph } from '@/shared/services/knowledgeBaseApi';
+import { getKnowledgeBaseGraph } from '@/features/knowledge-base/api/knowledgeBaseApi';
 import type { KnowledgeBaseGraphEdge, KnowledgeBaseGraphNode, KnowledgeBaseGraphResponse } from '@/shared/types/knowledgeBase';
 import { cn } from '@/shared/utils/cn';
 import { useI18n } from '@/shared/hooks/useI18n';

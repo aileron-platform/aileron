@@ -11,7 +11,7 @@ import {
   createAgentFile,
   updateAgentFile,
   deleteAgentFile,
-} from '@/shared/services/templateApi';
+} from '@/features/template-management/api/templateApi';
 import type { CommandFormValue, AgentFormValue } from '../formTypes';
 import { useI18n } from '@/shared/hooks/useI18n';
 

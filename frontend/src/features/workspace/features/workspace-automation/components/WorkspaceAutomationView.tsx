@@ -38,8 +38,8 @@ import {
   AutomationMetrics,
   JobUpdateInput,
 } from '@/features/automation/types';
-import { JobExecutionsDialog } from '@/shared/components/composite/JobExecutionsDialog';
-import { AutomationJobEditDialog, type SchedulerWorkspaceSummary } from '@/shared/components/composite';
+import { JobExecutionsDialog } from '@/features/automation/components/JobExecutionsDialog';
+import { AutomationJobEditDialog, type SchedulerWorkspaceSummary } from '@/features/automation/components/AutomationJobEditDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { automationApi } from '@/features/automation/services/automationApi';
 import { schedulerWorkspaceApi } from '@/features/automation/services/workspaceApi';

@@ -6,3 +6,12 @@ export type {
 } from './DocumentWorkflowShell';
 export { MarkdownDocumentShell } from './MarkdownDocumentShell';
 export type { MarkdownDocumentShellProps } from './MarkdownDocumentShell';
+export {
+  DocumentEditorDialogCore,
+  ensureMarkdownExtension,
+  formatDocumentContentSize,
+} from './DocumentEditorDialogCore';
+export type {
+  DocumentEditorDialogCoreProps,
+  DocumentEditorScopeOption,
+} from './DocumentEditorDialogCore';

@@ -152,27 +152,6 @@ vi.mock('@/shared/components/file-workbench', () => ({
   FileRenameDialog: () => null,
   FileDeleteDialog: () => null,
   BatchDeleteDialog: () => null,
-  createKnowledgeBaseFileWorkbenchAdapter: ({
-    knowledgeBaseId,
-    readFile,
-    saveFile,
-    copyPath,
-    revealInTree,
-  }: {
-    knowledgeBaseId: string;
-    readFile: (path: string) => Promise<string>;
-    saveFile?: (path: string, content: string) => Promise<void>;
-    copyPath?: (path: string) => Promise<void>;
-    revealInTree?: (path: string) => void;
-  }) => ({
-    readFile,
-    readBlob: (path: string) => apiGetBlobMock(
-      `/knowledge-bases/${knowledgeBaseId}/files/content?path=${encodeURIComponent(path)}&raw=true`,
-    ),
-    saveFile,
-    copyPath,
-    revealInTree,
-  }),
   toFileWorkbenchTab: (tab: {
     id?: string;
     path: string;
@@ -207,6 +186,30 @@ vi.mock('@/shared/components/file-workbench', () => ({
   useFileTreeManager: () => mockManager,
   useFileOperationsWithDialog: () => mockFileOps,
   useFileTreeContextMenu: () => [],
+}));
+
+vi.mock('./file-workbench/knowledgeBaseFileWorkbenchAdapter', () => ({
+  createKnowledgeBaseFileWorkbenchAdapter: ({
+    knowledgeBaseId,
+    readFile,
+    saveFile,
+    copyPath,
+    revealInTree,
+  }: {
+    knowledgeBaseId: string;
+    readFile: (path: string) => Promise<string>;
+    saveFile?: (path: string, content: string) => Promise<void>;
+    copyPath?: (path: string) => Promise<void>;
+    revealInTree?: (path: string) => void;
+  }) => ({
+    readFile,
+    readBlob: (path: string) => apiGetBlobMock(
+      `/knowledge-bases/${knowledgeBaseId}/files/content?path=${encodeURIComponent(path)}&raw=true`,
+    ),
+    saveFile,
+    copyPath,
+    revealInTree,
+  }),
 }));
 
 describe('KnowledgeBaseFilesTab', () => {

@@ -23,7 +23,7 @@ import { createLogger } from '@/shared/services/logger';
 import { dispatchWorkspaceTemplateInstalledEvent } from '@/features/workspace/events/templateInstallEvents';
 
 const logger = createLogger('TemplateManagementProvider');
-import * as templateApi from '@/shared/services/templateApi';
+import * as templateApi from '@/features/template-management/api/templateApi';
 import { apiClient } from '@/shared/api/apiClient';
 
 export interface TemplateUpsertPayload {

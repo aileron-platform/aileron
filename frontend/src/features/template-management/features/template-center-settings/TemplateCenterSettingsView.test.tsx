@@ -21,7 +21,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/services/templateGitApi', () => ({
+vi.mock('@/features/template-management/api/templateGitApi', () => ({
   checkCloneStatus: vi.fn(async () => ({ success: true, data: { remote_url: 'git@example.com:repo.git' } })),
   getCloneProgress: vi.fn(),
   getRepositoryStatus: vi.fn(async () => ({

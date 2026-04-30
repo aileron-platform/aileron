@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import SectionSidebarShell from '@/shared/components/template/SectionSidebarShell';
+import SectionSidebarShell from '@/features/template-management/components/metadata-viewers/SectionSidebarShell';
 
 const logger = createLogger('TemplateFileManager');
 import { useFileTreeManager } from '@/shared/components/file-workbench';

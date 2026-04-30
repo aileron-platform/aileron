@@ -1,3 +1,4 @@
+import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@/__tests__/utils/render';
 import { FileEditor } from './FileEditor';
@@ -29,19 +30,23 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   }),
 }));
 
-vi.mock('@/shared/components/file-workbench/viewer/CodeTextEditor', () => ({
-  CodeTextEditor: ({ content, onContentChange }: { content: string; onContentChange: (content: string) => void }) => (
-    <textarea
-      aria-label="code-editor"
-      value={content}
-      onChange={(event) => onContentChange(event.target.value)}
-    />
-  ),
+vi.mock('@/app/providers/AppProvider', () => ({
+  useApp: () => ({
+    state: {
+      ui: {
+        currentTheme: 'light',
+      },
+    },
+  }),
 }));
 
-vi.mock('@/shared/components/file-workbench/viewer/SharedMarkdownViewer', () => ({
-  SharedMarkdownViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
-    <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="markdown-viewer" />
+vi.mock('@monaco-editor/react', () => ({
+  default: ({ onChange, value }: { onChange?: (value: string) => void; value?: string }) => (
+    <textarea
+      aria-label="code-editor"
+      value={value ?? ''}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
   ),
 }));
 
@@ -152,7 +157,7 @@ describe('FileEditor editor-pane expansion', () => {
 
     render(<FileEditor />);
 
-    expect(screen.getByTestId('markdown-viewer')).toHaveAttribute('data-focus-mode', 'true');
+    expect(screen.getByText('shared.fileViewer.markdown.title')).toBeInTheDocument();
     expect(screen.queryByLabelText('shared.fileViewer.toolbar.more')).not.toBeInTheDocument();
   });
 

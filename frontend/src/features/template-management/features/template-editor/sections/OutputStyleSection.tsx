@@ -1,8 +1,8 @@
 import React from 'react';
-import { OutputStyleDialog } from '@/shared/components/dialogs';
+import { TemplateOutputStyleDialog } from '../components/TemplateOutputStyleDialog';
 import type { OutputStyleFormValue } from '../formTypes';
-import { adaptOutputStyleFormValues } from '@/shared/components/template/adapters';
-import { OutputStyleViewer, type OutputStyleData } from '@/shared/components/template/OutputStyleViewer';
+import { adaptOutputStyleFormValues } from '@/features/template-management/components/metadata-viewers/adapters';
+import { OutputStyleViewer, type OutputStyleData } from '@/features/template-management/components/metadata-viewers/OutputStyleViewer';
 import useTemplateDocumentSection from '../hooks/useTemplateDocumentSection';
 
 interface OutputStyleSectionProps {
@@ -49,8 +49,7 @@ const OutputStyleSection: React.FC<OutputStyleSectionProps> = ({
         onRefresh={onReloadTemplate}
       />
 
-      <OutputStyleDialog
-        variant="template"
+      <TemplateOutputStyleDialog
         open={dialogOpen}
         mode={dialogMode}
         initialValue={editingItem}

@@ -31,6 +31,10 @@ const automation = {
         loading: 'Loading workspaces…',
         empty: 'No workspaces available',
         error: 'Unable to load workspaces',
+        accessSource: {
+          owned: 'Owned',
+          shared: 'Shared',
+        },
       },
       description: {
         label: 'Description',

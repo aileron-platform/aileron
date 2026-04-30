@@ -77,7 +77,7 @@ vi.mock('graphology-layout-forceatlas2', () => ({
   },
 }));
 
-vi.mock('@/shared/services/knowledgeBaseApi', () => ({
+vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
   getKnowledgeBaseGraph: getGraphMock,
 }));
 

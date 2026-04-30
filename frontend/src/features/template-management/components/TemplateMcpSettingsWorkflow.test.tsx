@@ -62,8 +62,8 @@ vi.mock('@/features/template-management/components/TemplateMcpServerCard', () =>
   ),
 }));
 
-vi.mock('@/shared/components/dialogs', () => ({
-  MCPServerDialog: ({
+vi.mock('./TemplateMCPServerDialog', () => ({
+  TemplateMCPServerDialog: ({
     open,
     onSave,
   }: {

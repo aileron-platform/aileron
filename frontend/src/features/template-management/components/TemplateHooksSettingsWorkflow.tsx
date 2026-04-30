@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Download, Plus, Zap } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { HookDialog } from '@/shared/components/dialogs';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { SettingsWorkflowActionButton, SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import HookCard from '@/features/template-management/components/HookCard';
 import { useTemplateApi } from '@/features/template-management/features/template-editor/hooks/useTemplateApi';
 import type { HookFormValue } from '@/features/template-management/features/template-editor/formTypes';
+import { TemplateHookDialog } from './TemplateHookDialog';
 
 interface TemplateHooksSettingsWorkflowProps {
   templateId?: string;
@@ -128,8 +128,7 @@ export const TemplateHooksSettingsWorkflow: React.FC<TemplateHooksSettingsWorkfl
       </SettingsWorkflowShell>
 
       {editable ? (
-        <HookDialog
-          variant="template"
+        <TemplateHookDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
           onSave={handleSave}

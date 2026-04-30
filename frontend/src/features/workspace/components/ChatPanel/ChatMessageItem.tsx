@@ -7,7 +7,7 @@
 import React, { useMemo } from 'react';
 import type { AgentMessage, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
 import { AgentContentBlockRenderer, type AskUserQuestionSubmitHandler } from './AgentContentBlockRenderer';
-import { PermissionScope } from '@/shared/components/ui/ClaudeToolWidget';
+import { PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
 import { Button } from '@/shared/components/ui/button';
 import { Eye } from 'lucide-react';
 

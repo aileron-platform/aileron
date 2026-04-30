@@ -1,12 +1,8 @@
-/**
- * JobEditDialog - Edit automation job dialog (使用共用組件)
- */
-
 import React, { useEffect, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('JobEditDialog');
-import { AutomationJobEditDialog, type SchedulerWorkspaceSummary } from '@/shared/components/composite';
+import { AutomationJobEditDialog, type SchedulerWorkspaceSummary } from '@/features/automation/components/AutomationJobEditDialog';
 import { useAutomation } from '../providers/AutomationProvider';
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
 import { workspaceApi } from '../services/workspaceApi';
@@ -18,7 +14,6 @@ export const JobEditDialog: React.FC = () => {
   const [commands, setCommands] = useState<SlashCommandItem[]>([]);
   const [commandsLoading, setCommandsLoading] = useState(false);
 
-  // 載入工作區列表
   useEffect(() => {
     if (!state.isEditDialogOpen) {
       setWorkspaces([]);
@@ -55,7 +50,6 @@ export const JobEditDialog: React.FC = () => {
     return () => controller.abort();
   }, [state.editingTask?.workspaceId, state.isEditDialogOpen]);
 
-  // 載入 Slash Commands
   useEffect(() => {
     if (!state.isEditDialogOpen || !state.editingTask?.workspaceId) {
       setCommands([]);
@@ -88,7 +82,6 @@ export const JobEditDialog: React.FC = () => {
     return () => controller.abort();
   }, [state.editingTask?.workspaceId, state.isEditDialogOpen]);
 
-  // 收集現有的標籤建議
   const existingTags = React.useMemo(() => {
     const tags = new Set<string>();
     state.automationJobs.forEach(task => task.tags.forEach(tag => tags.add(tag)));

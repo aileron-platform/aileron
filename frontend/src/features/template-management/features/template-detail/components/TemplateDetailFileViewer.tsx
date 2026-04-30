@@ -11,11 +11,11 @@ import {
 } from '@/shared/components/file-workbench';
 import { findNodeByPath, getAllFileNodes } from '@/shared/components/file-workbench';
 import {
-  createTemplateFileWorkbenchAdapter,
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench';
+import { createTemplateFileWorkbenchAdapter } from '@/features/template-management/components/file-workbench/templateFileWorkbenchAdapter';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';

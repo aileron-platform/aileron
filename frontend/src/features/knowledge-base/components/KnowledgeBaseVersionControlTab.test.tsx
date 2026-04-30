@@ -66,7 +66,7 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
 }));
 
-vi.mock('@/shared/services/knowledgeBaseApi', () => ({
+vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
   getKnowledgeBaseGitRepositoryStatus: apiMocks.getKnowledgeBaseGitRepositoryStatus,
   enableKnowledgeBaseGitRepository: apiMocks.enableKnowledgeBaseGitRepository,
   enableKnowledgeBaseGitLfs: apiMocks.enableKnowledgeBaseGitLfs,

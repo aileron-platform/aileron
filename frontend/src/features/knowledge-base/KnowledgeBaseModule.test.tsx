@@ -31,7 +31,7 @@ vi.mock('@/shared/api/apiClient', () => ({
   },
 }));
 
-vi.mock('@/shared/services/knowledgeBaseApi', () => ({
+vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
   listKnowledgeBases: vi.fn(async () => [
     {
       id: 'kb-1',
@@ -173,7 +173,7 @@ vi.mock('@/shared/services/knowledgeBaseApi', () => ({
   deleteKnowledgeBaseAttachment: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/shared/components/navigation/GlobalNavigation', () => ({
+vi.mock('@/app/components/navigation/GlobalNavigation', () => ({
   GlobalNavigation: () => <div>global-navigation</div>,
 }));
 

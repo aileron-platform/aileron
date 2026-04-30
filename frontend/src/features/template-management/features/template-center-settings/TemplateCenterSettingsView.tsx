@@ -17,7 +17,7 @@ const logger = createLogger('TemplateCenterSettingsView');
 import { GitUserConfigTab } from './components/GitUserConfigTab';
 import { SSHKeysTab } from './components/SSHKeysTab';
 import { TemplateRegistryVersionControlTab } from './components/TemplateRegistryVersionControlTab';
-import type { SSHKeys } from '@/shared/services/templateSshApi';
+import type { SSHKeys } from '@/features/template-management/api/templateSshApi';
 import {
   getRepositoryStatus,
   getGitUserConfig,
@@ -28,7 +28,7 @@ import {
   type GitUserConfigRequest,
   updateGitUserConfig,
   cloneRepository,
-} from '@/shared/services/templateGitApi';
+} from '@/features/template-management/api/templateGitApi';
 
 export const TemplateCenterSettingsView: React.FC = () => {
   const navigate = useNavigate();

@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/shared/components/ui/avat
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Label } from '@/shared/components/ui/label';
 import { UserCircle, Save, Upload, Mail } from 'lucide-react';
-import GlobalNavigation from '@/shared/components/navigation/GlobalNavigation';
+import GlobalNavigation from '@/app/components/navigation/GlobalNavigation';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useApp } from '@/app/providers/AppProvider';
 import { apiClient } from '@/shared/api/apiClient';

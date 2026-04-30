@@ -1,11 +1,5 @@
-/**
- *
- */
-
 import { createLogger } from '@/shared/services/logger';
 import { apiClient, ApiClient } from '@/shared/api/apiClient';
-
-const logger = createLogger('FileTreeAdapter');
 import type {
   FileTreeNode,
   FileTreeApiConfig,
@@ -19,8 +13,8 @@ import type {
 } from '../types';
 import { API_ENDPOINTS, ERROR_MESSAGES } from '../constants';
 
-/**
- */
+const logger = createLogger('FileTreeAdapter');
+
 export class FileTreeApiAdapter {
   private static readonly workspaceRootTreeRequests = new Map<string, Promise<FileTreeNode[]>>();
   private client: ApiClient;
@@ -57,9 +51,7 @@ export class FileTreeApiAdapter {
     });
   }
 
-  /**
-   */
-  private validateConfig(): void {
+    private validateConfig(): void {
     const { type, workspaceId, templateId, knowledgeBaseId, scope } = this.config;
 
     if (type === 'workspace' || type === 'claude-code') {
@@ -82,9 +74,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async getTree(): Promise<FileTreeNode[]> {
+    async getTree(): Promise<FileTreeNode[]> {
     const { type } = this.config;
 
     switch (type) {
@@ -101,18 +91,14 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async getChildren(path: string): Promise<FileTreeNode[]> {
+    async getChildren(path: string): Promise<FileTreeNode[]> {
     if (this.config.type === 'workspace') {
       return this.getWorkspaceChildren(path);
     }
     return [];
   }
 
-  /**
-   */
-  async getContent(path: string): Promise<string> {
+    async getContent(path: string): Promise<string> {
     const { type } = this.config;
 
     switch (type) {
@@ -129,9 +115,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async create(request: FileOperationRequest): Promise<FileOperationResponse> {
+    async create(request: FileOperationRequest): Promise<FileOperationResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -148,9 +132,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async update(path: string, content: string): Promise<FileOperationResponse> {
+    async update(path: string, content: string): Promise<FileOperationResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -167,9 +149,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async delete(path: string, recursive = false): Promise<FileOperationResponse> {
+    async delete(path: string, recursive = false): Promise<FileOperationResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -186,9 +166,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async batchDelete(request: BatchDeleteRequest): Promise<BatchDeleteResponse> {
+    async batchDelete(request: BatchDeleteRequest): Promise<BatchDeleteResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -206,9 +184,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async rename(oldPath: string, newPath: string): Promise<FileOperationResponse> {
+    async rename(oldPath: string, newPath: string): Promise<FileOperationResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -225,9 +201,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async move(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
+    async move(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
     const { type } = this.config;
 
     switch (type) {
@@ -244,9 +218,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async upload(options: FileUploadOptions): Promise<FileUploadResult[]> {
+    async upload(options: FileUploadOptions): Promise<FileUploadResult[]> {
     const { type } = this.config;
 
     switch (type) {
@@ -263,9 +235,7 @@ export class FileTreeApiAdapter {
     }
   }
 
-  /**
-   */
-  async download(options: FileDownloadOptions): Promise<void> {
+    async download(options: FileDownloadOptions): Promise<void> {
     const { type } = this.config;
 
     switch (type) {

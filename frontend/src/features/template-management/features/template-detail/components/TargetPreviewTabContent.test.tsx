@@ -31,7 +31,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/shared/services/templateApi', () => ({
+vi.mock('@/features/template-management/api/templateApi', () => ({
   getTemplateCompilePreview: (...args: unknown[]) => getTemplateCompilePreviewMock(...args),
 }));
 

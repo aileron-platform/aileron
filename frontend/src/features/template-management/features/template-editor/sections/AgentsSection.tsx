@@ -1,8 +1,8 @@
 import React from 'react';
-import { AgentDialog } from '@/shared/components/dialogs';
+import { TemplateAgentDialog } from '../components/TemplateAgentDialog';
 import type { AgentFormValue } from '../formTypes';
-import { AgentViewer, type AgentData } from '@/shared/components/template/AgentViewer';
-import { adaptAgentFormValues } from '@/shared/components/template/adapters';
+import { AgentViewer, type AgentData } from '@/features/template-management/components/metadata-viewers/AgentViewer';
+import { adaptAgentFormValues } from '@/features/template-management/components/metadata-viewers/adapters';
 import useTemplateDocumentSection from '../hooks/useTemplateDocumentSection';
 
 interface AgentsSectionProps {
@@ -49,8 +49,7 @@ const AgentsSection: React.FC<AgentsSectionProps> = ({
         onRefresh={onReloadTemplate}
       />
 
-      <AgentDialog
-        variant="template"
+      <TemplateAgentDialog
         open={dialogOpen}
         mode={dialogMode}
         initialValue={editingItem}

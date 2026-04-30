@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DocumentPage } from '../components/DocumentPage';
-import { CommandDialog } from '@/shared/components/dialogs';
+import { WorkspaceCommandDialog } from '../../claude-code/components/dialogs/WorkspaceCommandDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
@@ -83,7 +83,6 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     await loadDocuments();
   }, [loadDocuments]);
 
-  // 包裝 CommandDialog 以注入 format 和 availableScopes
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
       open: boolean;
@@ -92,7 +91,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onClose: () => void;
       onSubmit: (document: ClaudeDocument) => Promise<void> | void;
     }> = (props) => (
-      <CommandDialog
+      <WorkspaceCommandDialog
         {...props}
         format={format}
         availableScopes={availableScopes}

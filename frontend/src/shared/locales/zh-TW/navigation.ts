@@ -34,9 +34,11 @@ const navigation = {
     },
   },
   userMenu: {
+    defaultUser: '使用者',
     profile: '個人資料',
     settings: '系統設定',
     logout: '登出',
+    login: '登入',
   },
   fullscreen: {
     enter: '進入全螢幕',

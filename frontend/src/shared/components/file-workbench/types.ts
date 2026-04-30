@@ -1,9 +1,3 @@
-/**
- * 
- */
-
-/**
- */
 export interface FileTreeNode {
   id: string;
   name: string;
@@ -18,16 +12,12 @@ export interface FileTreeNode {
   createdAt?: string;
 }
 
-/**
- */
 export type ApiEndpointType = 
   | 'workspace'
   | 'template'
-  | 'claude-code'    // Claude Code
-  | 'knowledge-base'; // Knowledge Base
+  | 'claude-code'
+  | 'knowledge-base';
 
-/**
- */
 export interface FileTreeApiConfig {
   type: ApiEndpointType;
   workspaceId?: string;
@@ -40,8 +30,6 @@ export interface FileTreeApiConfig {
   includeHidden?: boolean;
 }
 
-/**
- */
 export type FileOperationType = 
   | 'create'
   | 'read'
@@ -53,8 +41,6 @@ export type FileOperationType =
   | 'upload'
   | 'download';
 
-/**
- */
 export interface FileOperationRequest {
   type: FileOperationType;
   path: string;
@@ -64,8 +50,6 @@ export interface FileOperationRequest {
   recursive?: boolean;
 }
 
-/**
- */
 export interface FileOperationResponse {
   success: boolean;
   message?: string;
@@ -73,15 +57,11 @@ export interface FileOperationResponse {
   data?: any;
 }
 
-/**
- */
 export interface BatchDeleteRequest {
   paths: string[];
   recursive?: boolean;
 }
 
-/**
- */
 export interface BatchDeleteResponse {
   success: boolean;
   deleted: string[];
@@ -91,8 +71,6 @@ export interface BatchDeleteResponse {
   failedCount: number;
 }
 
-/**
- */
 export interface FileTab {
   path: string;
   name: string;
@@ -102,8 +80,6 @@ export interface FileTab {
   node: FileTreeNode;
 }
 
-/**
- */
 export interface FileTreeFeatures {
   enableMultiSelect?: boolean;
   enableDragDrop?: boolean;
@@ -117,20 +93,14 @@ export interface FileTreeFeatures {
   readOnly?: boolean;
 }
 
-/**
- */
 export type SelectionModifier = 'none' | 'ctrl' | 'shift';
 
-/**
- */
 export interface ContextMenuState {
   x: number;
   y: number;
   node: FileTreeNode;
 }
 
-/**
- */
 export interface FileUploadOptions {
   targetPath: string;
   files: File[];

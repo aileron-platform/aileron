@@ -953,6 +953,11 @@ const claudeCode = {
     list: {
       empty: 'No hooks match the current filters.',
     },
+    messages: {
+      loadFailed: 'Failed to load hook settings.',
+      updateFailed: 'Failed to update hook settings.',
+      deleteFailed: 'Failed to delete hook.',
+    },
     dialog: {
       title: {
         edit: 'Edit hook',

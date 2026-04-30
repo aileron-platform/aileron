@@ -1023,6 +1023,11 @@ const claudeCode = {
     list: {
       empty: '未找到符合條件的 Hook。',
     },
+    messages: {
+      loadFailed: '載入 Hook 設定失敗。',
+      updateFailed: '更新 Hook 設定失敗。',
+      deleteFailed: '刪除 Hook 失敗。',
+    },
     dialog: {
       title: {
         edit: '編輯 Hook',

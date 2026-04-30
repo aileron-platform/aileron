@@ -35,7 +35,7 @@ import type { Template, TemplateFeatureKey, TemplateInstallOptions, CliType } fr
 import { listFeaturesForCli } from '@/shared/types/templates';
 import { filterTemplates } from '../../utils/templateSelectors';
 import { useI18n } from '@/shared/hooks/useI18n';
-import * as templateApi from '@/shared/services/templateApi';
+import * as templateApi from '@/features/template-management/api/templateApi';
 import { apiClient } from '@/shared/api/apiClient';
 import { ROUTES } from '@/shared/constants/routes';
 

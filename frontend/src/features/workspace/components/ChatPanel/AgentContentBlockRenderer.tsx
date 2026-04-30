@@ -6,9 +6,9 @@
  */
 
 import React from 'react';
-import ClaudeToolWidget, { ClaudeToolType, PermissionScope } from '@/shared/components/ui/ClaudeToolWidget';
-import AcpToolWidget from '@/shared/components/ui/AcpToolWidget';
-import AcpDecisionWidget from '@/shared/components/ui/AcpDecisionWidget';
+import ClaudeToolWidget, { ClaudeToolType, PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
+import AcpToolWidget from '@/features/agent-tools/components/AcpToolWidget';
+import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
 import { MarkdownRenderer } from '@/features/workspace/components/MarkdownRenderer';
 import { createLogger } from '@/shared/services/logger';
 import { ChevronDown, ChevronUp } from 'lucide-react';

@@ -10,7 +10,7 @@ import {
   getTemplateCompilePreview,
   type TemplateCompileIssue,
   type TemplateCompilePreview,
-} from '@/shared/services/templateApi';
+} from '@/features/template-management/api/templateApi';
 
 interface TargetPreviewTabContentProps {
   templateId: string;

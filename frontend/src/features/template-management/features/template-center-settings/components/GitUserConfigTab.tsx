@@ -8,8 +8,8 @@ import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useTaskProgress } from '@/shared/hooks/useTaskProgress';
 import { TaskProgressCard } from '@/shared/components/task-progress/TaskProgressCard';
-import type { GitRepositoryStatus, GitUserConfigRequest } from '@/shared/services/templateGitApi';
-import { getCloneProgress } from '@/shared/services/templateGitApi';
+import type { GitRepositoryStatus, GitUserConfigRequest } from '@/features/template-management/api/templateGitApi';
+import { getCloneProgress } from '@/features/template-management/api/templateGitApi';
 
 interface GitUserConfigTabProps {
   value: GitUserConfigRequest | null;

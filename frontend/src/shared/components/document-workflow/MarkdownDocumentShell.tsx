@@ -4,7 +4,7 @@ import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { Button } from '@/shared/components/ui/button';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
-import { MarkdownEditor } from '@/shared/components/composite/MarkdownEditor';
+import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 
 export interface MarkdownDocumentShellProps {
   title: string;

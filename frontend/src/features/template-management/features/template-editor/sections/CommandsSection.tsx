@@ -1,8 +1,8 @@
 import React from 'react';
-import { CommandDialog } from '@/shared/components/dialogs';
+import { TemplateCommandDialog } from '../components/TemplateCommandDialog';
 import type { CommandFormValue } from '../formTypes';
-import { CommandViewer, type CommandData } from '@/shared/components/template/CommandViewer';
-import { adaptCommandFormValues } from '@/shared/components/template/adapters';
+import { CommandViewer, type CommandData } from '@/features/template-management/components/metadata-viewers/CommandViewer';
+import { adaptCommandFormValues } from '@/features/template-management/components/metadata-viewers/adapters';
 import useTemplateDocumentSection from '../hooks/useTemplateDocumentSection';
 
 interface CommandsSectionProps {
@@ -49,8 +49,7 @@ const CommandsSection: React.FC<CommandsSectionProps> = ({
         onRefresh={onReloadTemplate}
       />
 
-      <CommandDialog
-        variant="template"
+      <TemplateCommandDialog
         open={dialogOpen}
         mode={dialogMode}
         initialValue={editingItem}

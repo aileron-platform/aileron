@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Download, Plus, Server } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { MCPServerDialog } from '@/shared/components/dialogs';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { SettingsWorkflowActionButton, SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import type { McpServerFormValue } from '@/features/template-management/features/template-editor/formTypes';
 import TemplateMcpServerCard from '@/features/template-management/components/TemplateMcpServerCard';
 import { useTemplateApi } from '@/features/template-management/features/template-editor/hooks/useTemplateApi';
+import { TemplateMCPServerDialog } from './TemplateMCPServerDialog';
 
 interface TemplateMcpSettingsWorkflowProps {
   templateId?: string;
@@ -128,8 +128,7 @@ export const TemplateMcpSettingsWorkflow: React.FC<TemplateMcpSettingsWorkflowPr
       </SettingsWorkflowShell>
 
       {editable ? (
-        <MCPServerDialog
-          variant="template"
+        <TemplateMCPServerDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
           onSave={handleSave}
