@@ -1,15 +1,9 @@
-/**
- * useFileOperations Hook
- *
- */
-
 import { useCallback, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useFileOperations');
-import { FileTreeApiAdapter } from '../services/fileTreeAdapter';
 import type {
-  FileTreeApiConfig,
+  FileTreeDataAdapter,
   FileOperationRequest,
   FileOperationResponse,
   BatchDeleteRequest,
@@ -21,7 +15,7 @@ import type {
 import { SUCCESS_MESSAGES } from '../constants';
 
 export interface UseFileOperationsOptions {
-  apiConfig: FileTreeApiConfig;
+  adapter: FileTreeDataAdapter;
   onSuccess?: (message: string) => void;
   onError?: (error: Error) => void;
   onComplete?: () => void;
@@ -61,10 +55,8 @@ export interface UseFileOperationsReturn {
 export function useFileOperations(
   options: UseFileOperationsOptions
 ): UseFileOperationsReturn {
-  const { apiConfig, onSuccess, onError, onComplete } = options;
-
-
-  const adapter = useMemo(() => new FileTreeApiAdapter(apiConfig), [apiConfig]);
+  const { adapter, onSuccess, onError, onComplete } = options;
+  const stableAdapter = useMemo(() => adapter, [adapter]);
 
 
   const [isCreating, setIsCreating] = useState(false);
@@ -116,7 +108,7 @@ export function useFileOperations(
   const createFile = useCallback(
     async (path: string, content = ''): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.create({
+        () => stableAdapter.create({
           type: 'create',
           path,
           content,
@@ -126,13 +118,13 @@ export function useFileOperations(
         SUCCESS_MESSAGES.FILE_CREATED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const createDirectory = useCallback(
     async (path: string): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.create({
+        () => stableAdapter.create({
           type: 'create',
           path,
           isDirectory: true,
@@ -141,74 +133,74 @@ export function useFileOperations(
         SUCCESS_MESSAGES.FILE_CREATED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const readFile = useCallback(
     async (path: string): Promise<string> => {
       return withErrorHandling(
-        () => adapter.getContent(path),
+        () => stableAdapter.getContent(path),
         setIsUpdating
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const updateFile = useCallback(
     async (path: string, content: string): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.update(path, content),
+        () => stableAdapter.update(path, content),
         setIsUpdating,
         SUCCESS_MESSAGES.FILE_UPDATED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const deleteFile = useCallback(
     async (path: string, recursive = false): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.delete(path, recursive),
+        () => stableAdapter.delete(path, recursive),
         setIsDeleting,
         SUCCESS_MESSAGES.FILE_DELETED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
 
   const batchDelete = useCallback(
     async (paths: string[], recursive = false): Promise<BatchDeleteResponse> => {
       return withErrorHandling(
-        () => adapter.batchDelete({ paths, recursive }),
+        () => stableAdapter.batchDelete({ paths, recursive }),
         setIsDeleting,
         paths.length > 1 ? SUCCESS_MESSAGES.BATCH_DELETE_SUCCESS : SUCCESS_MESSAGES.FILE_DELETED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
 
   const renameFile = useCallback(
     async (oldPath: string, newPath: string): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.rename(oldPath, newPath),
+        () => stableAdapter.move(oldPath, newPath),
         setIsUpdating,
         SUCCESS_MESSAGES.FILE_RENAMED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const moveFile = useCallback(
     async (sourcePath: string, targetPath: string): Promise<FileOperationResponse> => {
       return withErrorHandling(
-        () => adapter.move(sourcePath, targetPath),
+        () => stableAdapter.move(sourcePath, targetPath),
         setIsUpdating,
         SUCCESS_MESSAGES.FILE_MOVED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
 
@@ -222,23 +214,23 @@ export function useFileOperations(
       return withErrorHandling(
         () => {
           logger.debug('uploadFiles: calling adapter.upload()');
-          return adapter.upload(uploadOptions);
+          return stableAdapter.upload(uploadOptions);
         },
         setIsUploading,
         SUCCESS_MESSAGES.FILE_UPLOADED
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
   const downloadFile = useCallback(
     async (downloadOptions: FileDownloadOptions): Promise<void> => {
       return withErrorHandling(
-        () => adapter.download(downloadOptions),
+        () => stableAdapter.download(downloadOptions),
         setIsDownloading
       );
     },
-    [adapter, withErrorHandling]
+    [stableAdapter, withErrorHandling]
   );
 
 
@@ -257,7 +249,7 @@ export function useFileOperations(
         case 'delete':
           return deleteFile(request.path, request.recursive);
         case 'rename':
-          return renameFile(request.path, request.targetPath!);
+          return moveFile(request.path, request.targetPath!);
         case 'move':
           return moveFile(request.path, request.targetPath!);
         case 'upload':

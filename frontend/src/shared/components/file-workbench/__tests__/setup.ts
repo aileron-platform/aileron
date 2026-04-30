@@ -1,11 +1,5 @@
-/**
- * 
- */
+import { FileTreeNode } from '../types';
 
-import { FileTreeNode, FileTreeApiConfig } from '../types';
-
-/**
- */
 export function createMockNode(overrides: Partial<FileTreeNode> = {}): FileTreeNode {
   return {
     id: 'test-id',
@@ -20,8 +14,6 @@ export function createMockNode(overrides: Partial<FileTreeNode> = {}): FileTreeN
   };
 }
 
-/**
- */
 export function createMockTree(): FileTreeNode[] {
   return [
     {
@@ -67,18 +59,6 @@ export function createMockTree(): FileTreeNode[] {
   ];
 }
 
-/**
- */
-export function createMockApiConfig(overrides: Partial<FileTreeApiConfig> = {}): FileTreeApiConfig {
-  return {
-    type: 'workspace',
-    workspaceId: 'test-workspace-id',
-    ...overrides,
-  };
-}
-
-/**
- */
 export function mockFetch(response: any, options: { ok?: boolean; status?: number } = {}) {
   const { ok = true, status = 200 } = options;
   
@@ -92,27 +72,18 @@ export function mockFetch(response: any, options: { ok?: boolean; status?: numbe
   );
 }
 
-/**
- */
 export function clearAllMocks() {
   vi.clearAllMocks();
 }
 
-/**
- */
 export function waitFor(ms: number = 0): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- */
 export const MOCK_FILE_CONTENT = `// Test file content
 export function hello() {
   console.log('Hello, World!');
 }
 `;
 
-/**
- */
 export const MOCK_ERROR_MESSAGE = 'Test error message';
-

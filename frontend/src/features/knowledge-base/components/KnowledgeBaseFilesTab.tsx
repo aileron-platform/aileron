@@ -1,7 +1,6 @@
 import React from 'react';
 import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, RefreshCw, Upload } from 'lucide-react';
 import {
-  API_ENDPOINTS,
   BatchDeleteDialog,
   FileCreateDialog,
   FileDeleteDialog,
@@ -16,6 +15,10 @@ import {
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
 import { createKnowledgeBaseFileWorkbenchAdapter } from './file-workbench/knowledgeBaseFileWorkbenchAdapter';
+import {
+  createKnowledgeBaseFileTreeDataAdapter,
+  knowledgeBaseFileEndpoints,
+} from './file-workbench/knowledgeBaseFileTreeDataAdapter';
 import {
   FileViewerWorkbench,
   toFileWorkbenchTab,
@@ -93,12 +96,17 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const dragDepthRef = React.useRef(0);
   const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
 
-  const manager = useFileTreeManager({
-    apiConfig: {
-      type: 'knowledge-base',
+  const fileTreeAdapter = React.useMemo(
+    () => createKnowledgeBaseFileTreeDataAdapter({
       knowledgeBaseId,
       includeHidden: showHiddenEntries,
-    },
+    }),
+    [knowledgeBaseId, showHiddenEntries],
+  );
+
+  const manager = useFileTreeManager({
+    adapter: fileTreeAdapter,
+    adapterKey: `knowledge-base:${knowledgeBaseId}:${showHiddenEntries ? 'hidden' : 'visible'}`,
     stateOptions: {
       enableMultiSelect: !readOnly,
     },
@@ -302,7 +310,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
         dest_path: targetPath,
         overwrite: 'false',
       });
-      await apiClient.post(`${API_ENDPOINTS.knowledgeBase.copy(knowledgeBaseId)}?${queryParams.toString()}`);
+      await apiClient.post(`${knowledgeBaseFileEndpoints.copy(knowledgeBaseId)}?${queryParams.toString()}`);
       await manager.loadTree();
       setClipboardItem(null);
       toast({

@@ -13,7 +13,7 @@ import { ChatInputBar } from './ChatInputBar';
 import { TypingIndicator } from './TypingIndicator';
 import { FileChooserDialog } from './dialogs/FileChooserDialog';
 import { UploadFileDialog } from './dialogs/UploadFileDialog';
-import { SlashCommandPickerDialog } from '@/shared/components/slash-commands';
+import { SlashCommandPickerDialog } from '@/shared/components/slash-command-picker';
 import { OpenSpecActionPickerDialog } from './OpenSpecActionPickerDialog';
 import { QueuedMessagesPanel } from './QueuedMessagesPanel';
 import { useChatPanelStateContext } from './chatPanelStateContext';

@@ -12,22 +12,17 @@ export interface FileTreeNode {
   createdAt?: string;
 }
 
-export type ApiEndpointType = 
-  | 'workspace'
-  | 'template'
-  | 'claude-code'
-  | 'knowledge-base';
-
-export interface FileTreeApiConfig {
-  type: ApiEndpointType;
-  workspaceId?: string;
-  contextId?: string | null;
-  templateId?: string;
-  knowledgeBaseId?: string;
-  scope?: string;
-  collection?: 'skills' | 'scripts';
-  baseUrl?: string;
-  includeHidden?: boolean;
+export interface FileTreeDataAdapter {
+  getTree: () => Promise<FileTreeNode[]>;
+  getChildren: (path: string) => Promise<FileTreeNode[]>;
+  getContent: (path: string) => Promise<string>;
+  create: (request: FileOperationRequest) => Promise<FileOperationResponse>;
+  update: (path: string, content: string) => Promise<FileOperationResponse>;
+  delete: (path: string, recursive?: boolean) => Promise<FileOperationResponse>;
+  batchDelete: (request: BatchDeleteRequest) => Promise<BatchDeleteResponse>;
+  move: (sourcePath: string, targetPath: string) => Promise<FileOperationResponse>;
+  upload: (options: FileUploadOptions) => Promise<FileUploadResult[]>;
+  download: (options: FileDownloadOptions) => Promise<void>;
 }
 
 export type FileOperationType = 
@@ -109,8 +104,6 @@ export interface FileUploadOptions {
   conflictStrategy?: 'rename' | 'overwrite' | 'reject';
 }
 
-/**
- */
 export interface FileUploadResult {
   fileName: string;
   success: boolean;
@@ -118,15 +111,11 @@ export interface FileUploadResult {
   path?: string;
 }
 
-/**
- */
 export interface FileDownloadOptions {
   path: string;
   fileName?: string;
 }
 
-/**
- */
 export const DEFAULT_FEATURES: Required<FileTreeFeatures> = {
   enableMultiSelect: true,
   enableDragDrop: true,
@@ -140,8 +129,6 @@ export const DEFAULT_FEATURES: Required<FileTreeFeatures> = {
   readOnly: false,
 };
 
-/**
- */
 export const FILE_TYPE_EXTENSIONS = {
   image: ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'],
   markdown: ['md', 'markdown'],

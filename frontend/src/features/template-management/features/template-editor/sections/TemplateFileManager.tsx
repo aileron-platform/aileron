@@ -17,7 +17,6 @@ import {
   FileTreePanel,
   FileTreeContextMenu,
   useFileTreeContextMenu,
-  type FileTreeApiConfig,
   type FileTreeNode as FileTreeNodeType,
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
@@ -30,6 +29,7 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import { FileEditor } from '@/shared/components/file-workbench';
 import { apiClient } from '@/shared/api/apiClient';
+import { createTemplateFileTreeDataAdapter } from '@/features/template-management/components/file-workbench/templateFileTreeDataAdapter';
 
 export interface FileNode {
   id: string;
@@ -78,14 +78,18 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [clipboardItem, setClipboardItem] = useState<{ path: string; type: 'file' | 'directory' } | null>(null);
 
-  const apiConfig: FileTreeApiConfig = useMemo(() => ({
-    type: 'template',
+  const fileTreeAdapter = useMemo(() => createTemplateFileTreeDataAdapter({
     templateId,
     scope: basePath,
   }), [templateId, basePath]);
+  const fileTreeAdapterKey = useMemo(
+    () => JSON.stringify({ templateId, scope: basePath }),
+    [basePath, templateId],
+  );
 
   const manager = useFileTreeManager({
-    apiConfig,
+    adapter: fileTreeAdapter,
+    adapterKey: fileTreeAdapterKey,
     stateOptions: {
       enableMultiSelect: true,
     },
@@ -97,7 +101,7 @@ const TemplateFileManagerContent: React.FC<TemplateFileManagerContentProps> = ({
       manager.loadTree();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiConfig]);
+  }, [fileTreeAdapterKey]);
 
   const handleContentChange = useCallback((content: string) => {
     if (manager.editor.activeTab) {

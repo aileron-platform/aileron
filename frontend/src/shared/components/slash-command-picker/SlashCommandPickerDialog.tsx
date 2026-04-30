@@ -64,7 +64,6 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
     return tabs;
   }, [availableScopes]);
 
-  // 當可用 scopes 改變時，如果當前選中的 scope 不在新列表中，重置為 'all'
   useEffect(() => {
     if (!scopeTabs.includes(selectedScope)) {
       setSelectedScope('all');

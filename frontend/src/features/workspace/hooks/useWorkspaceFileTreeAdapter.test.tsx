@@ -10,13 +10,13 @@ const {
   managerLoadTreeMock,
   managerStateMock,
   managerResetStateMock,
-  managerApiConfigSnapshots,
+  managerAdapterKeySnapshots,
 } = vi.hoisted(() => ({
   saveFileContentMock: vi.fn().mockResolvedValue({ path: '/docs/guide.md' }),
   refreshVersionControlQueriesMock: vi.fn().mockResolvedValue(undefined),
   managerLoadTreeMock: vi.fn().mockResolvedValue(undefined),
   managerResetStateMock: vi.fn(),
-  managerApiConfigSnapshots: [] as Array<Record<string, unknown>>,
+  managerAdapterKeySnapshots: [] as string[],
   managerStateMock: {
     nodes: [],
     expandedIds: new Set<string>(),
@@ -42,13 +42,14 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench', () => ({
-  useFileTreeManager: ({ apiConfig }: { apiConfig: Record<string, unknown> }) => {
-    managerApiConfigSnapshots.push(apiConfig);
+  useFileTreeManager: ({ adapterKey }: { adapterKey: string }) => {
+    managerAdapterKeySnapshots.push(adapterKey);
     return {
     state: managerStateMock,
     loadTree: managerLoadTreeMock,
     };
   },
+  findNodeByPath: vi.fn(),
 }));
 
 vi.mock('../services/workspaceRuntimeApi', () => ({
@@ -85,7 +86,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     managerStateMock.setError.mockClear();
     managerResetStateMock.mockClear();
     managerStateMock.resetState = managerResetStateMock;
-    managerApiConfigSnapshots.length = 0;
+    managerAdapterKeySnapshots.length = 0;
   });
 
   it('refreshes version-control queries after saving a file successfully', async () => {
@@ -192,7 +193,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     );
 
     expect(result.current.state.showHiddenEntries).toBe(false);
-    expect(managerApiConfigSnapshots.at(-1)?.includeHidden).toBe(false);
+    expect(managerAdapterKeySnapshots.at(-1)).toContain('"includeHidden":false');
   });
 
   it('toggles hidden entry visibility and reloads the tree with includeHidden enabled', async () => {
@@ -231,7 +232,7 @@ describe('useWorkspaceFileTreeAdapter', () => {
     rerender({ showHiddenEntries: true });
 
     expect(result.current.state.showHiddenEntries).toBe(true);
-    expect(managerApiConfigSnapshots.at(-1)?.includeHidden).toBe(true);
+    expect(managerAdapterKeySnapshots.at(-1)).toContain('"includeHidden":true');
     expect(managerResetStateMock).toHaveBeenCalledTimes(1);
     expect(managerLoadTreeMock).toHaveBeenCalledTimes(1);
   });

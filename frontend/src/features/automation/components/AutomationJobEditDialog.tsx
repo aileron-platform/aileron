@@ -21,7 +21,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
 import { AutomationJob, AutomationJobUpdateInput } from '@/features/automation/types';
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
-import { SlashCommandPickerDialog } from '@/shared/components/slash-commands';
+import { SlashCommandPickerDialog } from '@/shared/components/slash-command-picker';
 import { Clock, Plus, Slash, Tag as TagIcon, X } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';

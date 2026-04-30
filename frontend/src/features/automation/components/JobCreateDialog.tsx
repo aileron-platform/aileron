@@ -27,7 +27,7 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { useAutomation } from '../providers/AutomationProvider';
 import { JobCreateInput } from '../types';
-import { SlashCommandPickerDialog } from '@/shared/components/slash-commands';
+import { SlashCommandPickerDialog } from '@/shared/components/slash-command-picker';
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
 import { Clock, Plus, Slash, Tag as TagIcon, X } from 'lucide-react';
 import { STATUS_OPTIONS, TRIGGER_OPTIONS } from './jobFormOptions';

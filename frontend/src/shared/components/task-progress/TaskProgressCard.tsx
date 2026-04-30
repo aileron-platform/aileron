@@ -1,9 +1,3 @@
-/**
- * TaskProgressCard - 任務進度卡片組件
- * 
- * 統一的進度顯示組件，用於展示異步任務的執行進度
- */
-
 import React from 'react';
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -20,10 +14,11 @@ interface TaskProgressCardProps {
 
 export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
   progress,
-  title = '任務進度',
+  title,
   onDismiss,
 }) => {
   const { t } = useI18n();
+  const resolvedTitle = title ?? t('common.taskProgress.title');
 
   const getStatusLabel = (status: string): string => {
     const statusKey = `common.taskProgress.status.${status}`;
@@ -46,36 +41,33 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
             {isRunning && <Loader2 className="h-4 w-4 animate-spin" />}
             {isCompleted && <CheckCircle2 className="h-4 w-4 text-green-600" />}
             {isFailed && <AlertCircle className="h-4 w-4 text-red-600" />}
-            {getStatusLabel(progress.status)}
+            {resolvedTitle}: {getStatusLabel(progress.status)}
           </CardTitle>
           {onDismiss && (
             <button
               onClick={onDismiss}
               className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="關閉"
+              aria-label={t('common.taskProgress.close')}
             >
-              ✕
+              <span aria-hidden="true">x</span>
             </button>
           )}
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* 進度條 */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">進度</span>
+            <span className="text-sm font-medium">{t('common.taskProgress.progress')}</span>
             <span className="text-sm text-muted-foreground">{progress.progress}%</span>
           </div>
           <Progress value={progress.progress} className="h-2" />
         </div>
 
-        {/* 訊息 */}
         {progress.message && (
           <p className="text-sm text-muted-foreground">{progress.message}</p>
         )}
 
-        {/* 成功結果 */}
         {isCompleted && progress.result && (
           <Alert className="border-green-200 bg-green-50">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -90,7 +82,6 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
           </Alert>
         )}
 
-        {/* 失敗結果 */}
         {isFailed && progress.error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -98,14 +89,13 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
           </Alert>
         )}
 
-        {/* 時間戳 */}
         {(progress.started_at || progress.completed_at) && (
           <div className="text-xs text-muted-foreground space-y-1">
             {progress.started_at && (
-              <div>開始時間: {new Date(progress.started_at).toLocaleString()}</div>
+              <div>{t('common.taskProgress.startedAt')}: {new Date(progress.started_at).toLocaleString()}</div>
             )}
             {progress.completed_at && (
-              <div>完成時間: {new Date(progress.completed_at).toLocaleString()}</div>
+              <div>{t('common.taskProgress.completedAt')}: {new Date(progress.completed_at).toLocaleString()}</div>
             )}
           </div>
         )}
@@ -115,4 +105,3 @@ export const TaskProgressCard: React.FC<TaskProgressCardProps> = ({
 };
 
 export default TaskProgressCard;
-

@@ -1,11 +1,6 @@
-/**
- * Consolidated file workbench public API.
- */
-
 export type {
   FileTreeNode,
-  ApiEndpointType,
-  FileTreeApiConfig,
+  FileTreeDataAdapter,
   FileOperationType,
   FileOperationRequest,
   FileOperationResponse,
@@ -26,7 +21,6 @@ export {
 } from './types';
 
 export {
-  API_ENDPOINTS,
   ERROR_MESSAGES,
   SUCCESS_MESSAGES,
   FILE_SIZE_LIMITS,
@@ -52,8 +46,6 @@ export {
   sortNodes,
   validateFileName,
 } from './utils/fileTreeUtils';
-
-export { FileTreeApiAdapter } from './services/fileTreeAdapter';
 
 export { FileTreePanel } from './tree/FileTreePanel';
 export type { FileTreePanelProps } from './tree/FileTreePanel';

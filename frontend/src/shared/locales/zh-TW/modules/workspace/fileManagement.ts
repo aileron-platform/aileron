@@ -108,6 +108,7 @@ const fileManagement = {
       uploadSuccessDescription: '檔案已新增至 {{path}}',
       uploadFailed: '上傳失敗',
       extractSuccess: '解壓完成',
+      extractSuccessDescription: '已解壓 {{count}} 個項目',
       extractFailed: '解壓失敗',
       createFolderSuccess: '資料夾建立成功',
       createFolderSuccessDescription: '已建立 {{path}}',

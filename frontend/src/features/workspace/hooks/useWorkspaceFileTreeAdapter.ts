@@ -1,21 +1,12 @@
-/**
- * useWorkspaceFileTreeAdapter
- *
- * 使用 file-tree-manager 作為核心，轉接為 WorkspaceProvider 既有的
- * fileTreeState / fileTreeActions 介面，方便過渡階段維持相容性。
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useWorkspaceFileTreeAdapter');
 import { useFileTreeManager } from '@/shared/components/file-workbench';
-import type {
-  FileTreeNode as ManagerFileTreeNode,
-  FileTreeApiConfig,
-} from '@/shared/components/file-workbench';
+import type { FileTreeNode as ManagerFileTreeNode } from '@/shared/components/file-workbench';
 import { findNodeByPath as findManagerNode } from '@/shared/components/file-workbench';
+import { createWorkspaceFileTreeDataAdapter } from '../features/file-management/adapters/workspaceFileTreeDataAdapter';
 import type {
   FileTreeState,
   FileTreeActions,
@@ -73,7 +64,6 @@ const mapManagerNodeToFileNode = (
 ): FileNode => {
   const children = node.children?.map(child => mapManagerNodeToFileNode(child, expandedIds, depth + 1)) ?? [];
   const normalizedPath = ensureLeadingSlash(node.path);
-  // hasChildren 優先使用後端回傳的欄位（懶載入截斷時 children=[] 但 hasChildren=true）
   const hasChildren =
     node.type === 'directory' && (
       node.hasChildren === true ||
@@ -120,19 +110,29 @@ export function useWorkspaceFileTreeAdapter(
   const { workspaceId, runtimeBaseUrl, contextId, showHiddenEntries, onShowHiddenEntriesChange } = options;
   const queryClient = useQueryClient();
 
-  const apiConfig: FileTreeApiConfig = useMemo(
-    () => ({
-      type: 'workspace',
+  const fileTreeAdapter = useMemo(
+    () => createWorkspaceFileTreeDataAdapter({
       workspaceId: workspaceId ?? 'pending-workspace',
       contextId,
-      baseUrl: runtimeBaseUrl ?? undefined,
+      runtimeBaseUrl: runtimeBaseUrl ?? undefined,
       includeHidden: showHiddenEntries,
     }),
     [contextId, runtimeBaseUrl, showHiddenEntries, workspaceId]
   );
+  const fileTreeAdapterKey = useMemo(
+    () =>
+      JSON.stringify({
+        workspaceId: workspaceId ?? 'pending-workspace',
+        contextId: contextId ?? null,
+        runtimeBaseUrl: runtimeBaseUrl ?? null,
+        includeHidden: showHiddenEntries,
+      }),
+    [contextId, runtimeBaseUrl, showHiddenEntries, workspaceId],
+  );
 
   const manager = useFileTreeManager({
-    apiConfig,
+    adapter: fileTreeAdapter,
+    adapterKey: fileTreeAdapterKey,
     stateOptions: { enableMultiSelect: true },
     autoLoad: false,
   });
@@ -154,7 +154,7 @@ export function useWorkspaceFileTreeAdapter(
 
   const ensureRuntimeReady = useCallback(() => {
     if (!runtimeReady) {
-      manager.state.setError('Workspace Runtime 尚未就緒');
+      manager.state.setError(t('workspace.fileManagement.runtime.unavailableTitle'));
       return false;
     }
     manager.state.setError(null);
@@ -259,7 +259,6 @@ export function useWorkspaceFileTreeAdapter(
     const normalized = ensureLeadingSlash(nodePath);
     const node = findManagerNode(manager.state.nodes, normalized);
     if (!node) return;
-    // 使用 toggleDirectory 走懶載入路徑，避免全樹重載
     await manager.toggleDirectory(node);
   }, [manager]);
 
@@ -458,7 +457,9 @@ export function useWorkspaceFileTreeAdapter(
       const extractedCount = uploadResult.extractedPaths.length;
       return {
         success: true,
-        message: extractedCount > 0 ? `已解壓 ${extractedCount} 個項目` : t('common.fileOperations.success.fileUploaded'),
+        message: extractedCount > 0
+          ? t('workspace.fileManagement.tree.notifications.extractSuccessDescription', { count: extractedCount })
+          : t('common.fileOperations.success.fileUploaded'),
         data: {
           uploadedPaths: uploadResult.uploadedPaths,
           extractedPaths: uploadResult.extractedPaths,
@@ -481,7 +482,7 @@ export function useWorkspaceFileTreeAdapter(
         window.open(downloadUrl, '_blank', 'noopener');
       }
     } catch (error) {
-      logger.error('下載檔案失敗', { error });
+      logger.error('Download file failed', { error });
       throw error;
     }
   }, [contextId, ensureRuntimeReady, runtimeBaseUrl, t]);
@@ -513,7 +514,7 @@ export function useWorkspaceFileTreeAdapter(
         throw new Error(t('common.fileOperations.error.packageTaskFailed'));
       }
     } catch (error) {
-      logger.error('批次下載檔案失敗', { error });
+      logger.error('Batch download files failed', { error });
       throw error;
     }
   }, [contextId, downloadFile, ensureRuntimeReady, runtimeBaseUrl, t]);

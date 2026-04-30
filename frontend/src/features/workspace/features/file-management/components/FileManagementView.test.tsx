@@ -162,14 +162,11 @@ describe('FileManagementView', () => {
 
     expect(useFileTreeManagerMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiConfig: expect.objectContaining({
-          type: 'workspace',
-          workspaceId: 'ws-1',
-          baseUrl: 'http://runtime.local',
-          contextId: 'worktree:feature-auth',
-        }),
+        adapterKey: expect.stringContaining('"contextId":"worktree:feature-auth"'),
       })
     );
+    expect(useFileTreeManagerMock.mock.calls.at(-1)?.[0].adapterKey).toContain('"workspaceId":"ws-1"');
+    expect(useFileTreeManagerMock.mock.calls.at(-1)?.[0].adapterKey).toContain('"runtimeBaseUrl":"http://runtime.local"');
   });
 
   it('omits contextId when no git context is selected', () => {
@@ -202,12 +199,7 @@ describe('FileManagementView', () => {
 
     expect(useFileTreeManagerMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiConfig: expect.objectContaining({
-          type: 'workspace',
-          workspaceId: 'ws-1',
-          baseUrl: 'http://runtime.local',
-          contextId: null,
-        }),
+        adapterKey: expect.stringContaining('"contextId":null'),
       })
     );
   });
@@ -242,9 +234,7 @@ describe('FileManagementView', () => {
 
     expect(useFileTreeManagerMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        apiConfig: expect.objectContaining({
-          includeHidden: true,
-        }),
+        adapterKey: expect.stringContaining('"includeHidden":true'),
       })
     );
   });

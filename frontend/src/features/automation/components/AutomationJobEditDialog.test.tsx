@@ -54,7 +54,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({ t: tMock }),
 }));
 
-vi.mock('@/shared/components/slash-commands', () => ({
+vi.mock('@/shared/components/slash-command-picker', () => ({
   SlashCommandPickerDialog: ({
     open,
     commands,

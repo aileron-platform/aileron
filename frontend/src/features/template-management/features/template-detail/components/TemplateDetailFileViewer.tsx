@@ -16,6 +16,7 @@ import {
   type FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench';
 import { createTemplateFileWorkbenchAdapter } from '@/features/template-management/components/file-workbench/templateFileWorkbenchAdapter';
+import { createTemplateFileTreeDataAdapter } from '@/features/template-management/components/file-workbench/templateFileTreeDataAdapter';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -40,17 +41,21 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
 }) => {
   const { t } = useI18n();
 
-  const apiConfig = useMemo(
-    () => ({
-      type: 'template' as const,
+  const fileTreeAdapter = useMemo(
+    () => createTemplateFileTreeDataAdapter({
       templateId,
       scope: basePath,
     }),
     [templateId, basePath],
   );
+  const fileTreeAdapterKey = useMemo(
+    () => JSON.stringify({ templateId, scope: basePath }),
+    [basePath, templateId],
+  );
 
   const manager = useFileTreeManager({
-    apiConfig,
+    adapter: fileTreeAdapter,
+    adapterKey: fileTreeAdapterKey,
     autoLoad: true,
     stateOptions: {
       enableMultiSelect: false,

@@ -1,11 +1,3 @@
-/**
- * 檔案管理主視圖（重構版 - 階段 3）
- *
- * 1. 使用 file-tree-manager 的 useFileTreeManager 作為核心狀態管理
- * 2. 採用 StandardFileTreeLayout + FileTreePanel 統一 UI 架構
- * 3. 與 WorkspaceProvider 維持原有 tab 操作與佈局整合
- */
-
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createLogger } from '@/shared/services/logger';
@@ -17,7 +9,6 @@ import {
   StandardFileTreeLayout,
   FileTreeContextMenu,
   useFileTreeContextMenu,
-  type FileTreeApiConfig,
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
@@ -41,6 +32,7 @@ import {
   startExtractArchive,
 } from '../../../services/workspaceRuntimeApi';
 import { refreshVersionControlQueries } from '../../version-control/lib/queryClient';
+import { createWorkspaceFileTreeDataAdapter } from '../adapters/workspaceFileTreeDataAdapter';
 interface ClipboardEntry {
   path: string;
   type: 'file' | 'directory';
@@ -99,20 +91,29 @@ export const FileManagementView: React.FC = () => {
   const selectedGitContextId = workspaceState.versionControl.selectedGitContextId;
   const showHiddenEntries = workspaceState.fileTreeShowHiddenEntries;
 
-  // 只有當 runtime 準備好時才創建 apiConfig
-  const apiConfig: FileTreeApiConfig = useMemo(
-    () => ({
-      type: 'workspace',
+  const fileTreeAdapter = useMemo(
+    () => createWorkspaceFileTreeDataAdapter({
       workspaceId: workspaceRuntime.workspaceId ?? 'pending-workspace',
       contextId: selectedGitContextId,
-      baseUrl: workspaceRuntime.runtimeBaseUrl || undefined,
+      runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl || undefined,
       includeHidden: showHiddenEntries,
     }),
     [selectedGitContextId, showHiddenEntries, workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl]
   );
+  const fileTreeAdapterKey = useMemo(
+    () =>
+      JSON.stringify({
+        workspaceId: workspaceRuntime.workspaceId ?? 'pending-workspace',
+        contextId: selectedGitContextId ?? null,
+        runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl ?? null,
+        includeHidden: showHiddenEntries,
+      }),
+    [selectedGitContextId, showHiddenEntries, workspaceRuntime.workspaceId, workspaceRuntime.runtimeBaseUrl],
+  );
 
   const manager = useFileTreeManager({
-    apiConfig,
+    adapter: fileTreeAdapter,
+    adapterKey: fileTreeAdapterKey,
     stateOptions: { enableMultiSelect: true },
     autoLoad: false,
     onError: (error) => {
@@ -135,9 +136,7 @@ export const FileManagementView: React.FC = () => {
     const baseUrl = workspaceRuntime.runtimeBaseUrl;
     if (!baseUrl) {
       throw new Error(
-        t('workspace.fileManagement.runtime.unavailableDescription', {
-          defaultValue: 'Workspace Runtime 尚未就緒，請稍候或重新整理後再試一次。',
-        })
+        t('workspace.fileManagement.runtime.unavailableDescription')
       );
     }
     return baseUrl;
@@ -146,12 +145,8 @@ export const FileManagementView: React.FC = () => {
   const ensureRuntimeReady = useCallback(() => {
     if (!workspaceRuntime.runtimeBaseUrl) {
       toast({
-        title: t('workspace.fileManagement.runtime.unavailableTitle', {
-          defaultValue: 'Workspace Runtime 尚未就緒',
-        }),
-        description: t('workspace.fileManagement.runtime.unavailableDescription', {
-          defaultValue: '請稍候或重新整理後再試一次',
-        }),
+        title: t('workspace.fileManagement.runtime.unavailableTitle'),
+        description: t('workspace.fileManagement.runtime.unavailableDescription'),
         variant: 'destructive',
       });
       return false;
@@ -358,7 +353,6 @@ export const FileManagementView: React.FC = () => {
       requireRuntimeBaseUrl();
       const fullPath = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
       await operations.createFile(fullPath, '');
-      // operations 的 onComplete 會自動重新載入，不需要手動調用
       await refreshVersionControl();
       openFileInTab(fullPath);
     },
@@ -366,7 +360,6 @@ export const FileManagementView: React.FC = () => {
       requireRuntimeBaseUrl();
       const fullPath = parentPath === '/' ? `/${name}` : `${parentPath}/${name}`;
       await operations.createDirectory(fullPath);
-      // operations 的 onComplete 會自動重新載入，不需要手動調用
       await refreshVersionControl();
     },
     onRename: async (oldPath, newName) => {
@@ -379,7 +372,6 @@ export const FileManagementView: React.FC = () => {
       );
 
       await operations.renameFile(oldPath, newPath);
-      // operations 的 onComplete 會自動重新載入，不需要手動調用
       await refreshVersionControl({ includeBranches: true });
 
       if (isOpen) {
@@ -401,7 +393,6 @@ export const FileManagementView: React.FC = () => {
       }
 
       await operations.deleteFile(path, node?.type === 'directory');
-      // operations 的 onComplete 會自動重新載入，不需要手動調用
       await refreshVersionControl({ includeBranches: true });
       closeTabsForPaths(Array.from(relatedPaths));
     },
@@ -423,7 +414,6 @@ export const FileManagementView: React.FC = () => {
       });
 
       await operations.batchDelete(paths, true);
-      // operations 的 onComplete 會自動重新載入，不需要手動調用
       await refreshVersionControl({ includeBranches: true });
       closeTabsForPaths(Array.from(pathsToClose));
       managerState.clearSelection();
@@ -509,7 +499,7 @@ export const FileManagementView: React.FC = () => {
   );
 
   const handleRefresh = useCallback(() => {
-    logger.debug('handleRefresh: 觸發重新整理');
+    logger.debug('handleRefresh: refreshing file tree');
     void loadTree();
   }, [loadTree]);
 
@@ -623,7 +613,6 @@ export const FileManagementView: React.FC = () => {
           title: t('workspace.fileManagement.tree.notifications.uploadSuccess'),
           description: result.message,
         });
-        // operations 的 onComplete 會自動重新載入，不需要手動調用
         await refreshVersionControl({ includeBranches: true });
       } catch (error) {
         toast({
@@ -666,7 +655,6 @@ export const FileManagementView: React.FC = () => {
           title: t('workspace.fileManagement.tree.notifications.uploadSuccess'),
           description: result.message,
         });
-        // operations 的 onComplete 會自動重新載入，不需要手動調用
         await refreshVersionControl({ includeBranches: true });
       } catch (error) {
         toast({
@@ -679,25 +667,20 @@ export const FileManagementView: React.FC = () => {
     [ensureRuntimeReady, managerState.selectedId, operations, refreshVersionControl, resolveTargetDirectory, resolveUploadOptions, t, toast]
   );
 
-
-
-  // ==================== 拖曳處理 ====================
-
   const handleDragStart = useCallback((node: FileTreeNode, event: React.DragEvent) => {
-    logger.debug('handleDragStart: 開始拖曳', { path: node.path });
+    logger.debug('handleDragStart: drag started', { path: node.path });
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', node.path);
     setDraggingPath(node.path);
   }, []);
 
   const handleDragEnd = useCallback((node: FileTreeNode, event: React.DragEvent) => {
-    logger.debug('handleDragEnd: 拖曳結束', { path: node.path });
+    logger.debug('handleDragEnd: drag ended', { path: node.path });
     setDraggingPath(null);
     setDragOverPath(null);
   }, []);
 
   const handleDragOver = useCallback((node: FileTreeNode, event: React.DragEvent) => {
-    // 只有資料夾可以作為放置目標
     if (node.type === 'directory') {
       event.preventDefault();
       event.dataTransfer.dropEffect = 'move';
@@ -715,10 +698,10 @@ export const FileManagementView: React.FC = () => {
 
   const handleDrop = useCallback(async (targetNode: FileTreeNode, event: React.DragEvent) => {
     event.preventDefault();
-    logger.debug('handleDrop: 放置檔案到', { targetPath: targetNode.path });
+    logger.debug('handleDrop: dropping file', { targetPath: targetNode.path });
 
     if (!draggingPath || !targetNode || targetNode.type !== 'directory') {
-      logger.debug('handleDrop: 無效的拖曳操作');
+      logger.debug('handleDrop: invalid drag operation');
       setDraggingPath(null);
       setDragOverPath(null);
       return;
@@ -727,19 +710,15 @@ export const FileManagementView: React.FC = () => {
     const sourcePath = draggingPath;
     const targetPath = targetNode.path;
 
-    logger.debug('handleDrop: 移動檔案', { from: sourcePath, to: targetPath });
-
-    // 檢查是否試圖移動到自己
+    logger.debug('handleDrop: moving file', { from: sourcePath, to: targetPath });
     if (sourcePath === targetPath) {
-      logger.debug('handleDrop: 試圖移動到自己，取消操作');
+      logger.debug('handleDrop: skipped moving file onto itself');
       setDraggingPath(null);
       setDragOverPath(null);
       return;
     }
-
-    // 檢查是否試圖將資料夾移動到自己的子資料夾中
     if (targetPath.startsWith(sourcePath + '/')) {
-      logger.debug('handleDrop: 試圖將資料夾移動到自己的子資料夾中，取消操作');
+      logger.debug('handleDrop: skipped moving folder into its descendant');
       toast({
         title: t('workspace.fileManagement.tree.notifications.moveFailed'),
         description: t('workspace.fileManagement.tree.notifications.moveToSubfolderError'),
@@ -749,17 +728,13 @@ export const FileManagementView: React.FC = () => {
       setDragOverPath(null);
       return;
     }
-
-    // 計算新路徑
     const fileName = sourcePath.split('/').filter(Boolean).pop() || '';
     const newPath = targetPath === '/' ? `/${fileName}` : `${targetPath}/${fileName}`;
 
-    logger.debug('handleDrop: 新路徑', { newPath });
-
-    // 檢查目標位置是否已存在同名檔案
+    logger.debug('handleDrop: computed destination path', { newPath });
     const targetExists = managerState.flatNodes.some(node => node.path === newPath);
     if (targetExists) {
-      logger.debug('handleDrop: 目標位置已存在同名檔案');
+      logger.debug('handleDrop: destination already contains an entry with the same name');
       toast({
         title: t('workspace.fileManagement.tree.notifications.moveFailed'),
         description: t('workspace.fileManagement.tree.notifications.fileExistsError', { name: fileName }),
@@ -769,8 +744,6 @@ export const FileManagementView: React.FC = () => {
       setDragOverPath(null);
       return;
     }
-
-    // 檢查 runtime 是否就緒
     if (!ensureRuntimeReady()) {
       setDraggingPath(null);
       setDragOverPath(null);
@@ -778,7 +751,7 @@ export const FileManagementView: React.FC = () => {
     }
 
     try {
-      logger.debug('handleDrop: 呼叫 operations.moveFile');
+      logger.debug('handleDrop: calling operations.moveFile');
       await operations.moveFile(sourcePath, newPath);
 
       toast({
@@ -789,8 +762,6 @@ export const FileManagementView: React.FC = () => {
         }),
       });
       await refreshVersionControl({ includeBranches: true });
-
-      // 如果移動的檔案有開啟的 tab，關閉並重新開啟
       const normalizedSourcePath = ensureLeadingSlash(sourcePath);
       const isOpen = workspace.openTabs.some(
         (tab) => ensureLeadingSlash(tab.path) === normalizedSourcePath
@@ -800,10 +771,8 @@ export const FileManagementView: React.FC = () => {
         closeTabsForPaths([normalizedSourcePath]);
         openFileInTab(newPath);
       }
-
-      // operations 的 onComplete 會自動重新載入
     } catch (error) {
-      logger.error('handleDrop: 移動檔案失敗', { error });
+      logger.error('handleDrop: move file failed', { error });
       toast({
         title: t('workspace.fileManagement.tree.notifications.moveFailed'),
         description: error instanceof Error ? error.message : String(error),
@@ -814,8 +783,6 @@ export const FileManagementView: React.FC = () => {
       setDragOverPath(null);
     }
   }, [draggingPath, managerState.flatNodes, ensureRuntimeReady, operations, toast, t, workspace.openTabs, closeTabsForPaths, openFileInTab, refreshVersionControl]);
-
-  // 使用統一的右鍵選單 Hook
   const contextMenuItems = useFileTreeContextMenu({
     node: managerState.contextMenu?.node || null,
     enableMultiSelect: true,
@@ -929,9 +896,7 @@ export const FileManagementView: React.FC = () => {
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
               <p className="text-sm text-muted-foreground">
-                {t('workspace.fileManagement.runtime.initializing', {
-                  defaultValue: 'Workspace Runtime 初始化中...',
-                })}
+                {t('workspace.fileManagement.runtime.initializing')}
               </p>
             </div>
           </div>
@@ -939,9 +904,7 @@ export const FileManagementView: React.FC = () => {
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <p className="text-sm text-destructive mb-2">
-                {t('workspace.fileManagement.runtime.unavailableTitle', {
-                  defaultValue: 'Workspace Runtime 尚未就緒',
-                })}
+                {t('workspace.fileManagement.runtime.unavailableTitle')}
               </p>
               <p className="text-xs text-muted-foreground">
                 {workspaceRuntime.error}

@@ -1,25 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useFileTreeManager } from './useFileTreeManager';
-import type { FileTreeNode } from '../types';
-
-const { getTreeMock } = vi.hoisted(() => ({
-  getTreeMock: vi.fn(),
-}));
-
-vi.mock('../services/fileTreeAdapter', () => ({
-  FileTreeApiAdapter: class {
-    private readonly apiConfig: { workspaceId?: string };
-
-    constructor(apiConfig: { workspaceId?: string }) {
-      this.apiConfig = apiConfig;
-    }
-
-    getTree() {
-      return getTreeMock(this.apiConfig);
-    }
-  },
-}));
+import type { FileTreeDataAdapter, FileTreeNode } from '../types';
 
 vi.mock('./useFileOperations', () => ({
   useFileOperations: () => ({
@@ -60,15 +42,39 @@ const createDeferred = <T,>(): Deferred<T> => {
   return { promise, resolve };
 };
 
+const createAdapter = (
+  getTree: FileTreeDataAdapter['getTree'],
+  overrides: Partial<FileTreeDataAdapter> = {},
+): FileTreeDataAdapter => ({
+  getTree,
+  getChildren: vi.fn().mockResolvedValue([]),
+  getContent: vi.fn().mockResolvedValue(''),
+  create: vi.fn().mockResolvedValue({ success: true }),
+  update: vi.fn().mockResolvedValue({ success: true }),
+  delete: vi.fn().mockResolvedValue({ success: true }),
+  batchDelete: vi.fn().mockResolvedValue({
+    success: true,
+    deleted: [],
+    failed: [],
+    total: 0,
+    successCount: 0,
+    failedCount: 0,
+  }),
+  move: vi.fn().mockResolvedValue({ success: true }),
+  upload: vi.fn().mockResolvedValue([]),
+  download: vi.fn().mockResolvedValue(undefined),
+  ...overrides,
+});
+
 describe('useFileTreeManager', () => {
   beforeEach(() => {
-    getTreeMock.mockReset();
+    vi.clearAllMocks();
   });
 
   it('ignores a stale tree response after the active workspace changes', async () => {
     const deferredByWorkspace = new Map<string, Deferred<FileTreeNode[]>>();
 
-    getTreeMock.mockImplementation(({ workspaceId }: { workspaceId?: string }) => {
+    const getTree = vi.fn((workspaceId: string) => {
       const key = workspaceId ?? 'unknown';
       let deferred = deferredByWorkspace.get(key);
       if (!deferred) {
@@ -81,11 +87,8 @@ describe('useFileTreeManager', () => {
     const { result, rerender } = renderHook(
       ({ workspaceId }: { workspaceId: string }) =>
         useFileTreeManager({
-          apiConfig: {
-            type: 'workspace',
-            workspaceId,
-            baseUrl: 'http://runtime',
-          },
+          adapter: createAdapter(() => getTree(workspaceId)),
+          adapterKey: `workspace:${workspaceId}`,
           autoLoad: false,
         }),
       {
@@ -131,7 +134,7 @@ describe('useFileTreeManager', () => {
   it('treats includeHidden as part of the active workspace tree identity', async () => {
     const deferredByVisibility = new Map<string, Deferred<FileTreeNode[]>>();
 
-    getTreeMock.mockImplementation(({ includeHidden }: { includeHidden?: boolean }) => {
+    const getTree = vi.fn((includeHidden: boolean) => {
       const key = includeHidden ? 'show-hidden' : 'hide-hidden';
       let deferred = deferredByVisibility.get(key);
       if (!deferred) {
@@ -144,12 +147,8 @@ describe('useFileTreeManager', () => {
     const { result, rerender } = renderHook(
       ({ includeHidden }: { includeHidden: boolean }) =>
         useFileTreeManager({
-          apiConfig: {
-            type: 'workspace',
-            workspaceId: 'ws-a',
-            baseUrl: 'http://runtime',
-            includeHidden,
-          },
+          adapter: createAdapter(() => getTree(includeHidden)),
+          adapterKey: `workspace:ws-a:${includeHidden ? 'show-hidden' : 'hide-hidden'}`,
           autoLoad: false,
         }),
       {
@@ -193,18 +192,15 @@ describe('useFileTreeManager', () => {
   });
 
   it('does not auto-reload the tree on rerender when the logical api config is unchanged', async () => {
-    getTreeMock.mockResolvedValue([
+    const getTreeMock = vi.fn().mockResolvedValue([
       { id: 'root-readme', name: 'README.md', path: '/README.md', type: 'file' },
     ]);
 
     const { rerender } = renderHook(
       ({ knowledgeBaseId }: { knowledgeBaseId: string }) =>
         useFileTreeManager({
-          apiConfig: {
-            type: 'knowledge-base',
-            knowledgeBaseId,
-            includeHidden: false,
-          },
+          adapter: createAdapter(getTreeMock),
+          adapterKey: `knowledge-base:${knowledgeBaseId}:hide-hidden`,
           autoLoad: true,
         }),
       {

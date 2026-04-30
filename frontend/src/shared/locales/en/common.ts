@@ -26,6 +26,8 @@ const common = {
       title: 'Workspace Connection Failed',
       connectionFailed: 'Workspace is not started or unable to connect',
       noWorkspace: 'No Workspace Created',
+      noWorkspaceErrorMessage: '尚未建立任何工作區',
+      invalidWorkspaceErrorMessage: '找不到有效的工作區',
       noWorkspaceHint: 'Please create a workspace to get started',
       createWorkspace: 'Create New Workspace',
       deleteWorkspace: 'Delete Workspace',
@@ -179,6 +181,10 @@ const common = {
 
   // Task progress
   taskProgress: {
+    title: 'Task progress',
+    progress: 'Progress',
+    startedAt: 'Started at',
+    completedAt: 'Completed at',
     status: {
       completed: '✓ Completed',
       failed: '✗ Failed',

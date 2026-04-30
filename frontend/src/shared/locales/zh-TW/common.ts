@@ -20,12 +20,14 @@ const common = {
   reconnect: '重新連接',
   reconnecting: '重新連接中...',
 
-  // 錯誤頁面相關
+  // Error page related
   error: {
     workspaceRuntime: {
       title: '工作區連接失敗',
       connectionFailed: '工作區尚未啟動或無法連接',
       noWorkspace: '尚未建立工作區',
+      noWorkspaceErrorMessage: '尚未建立任何工作區',
+      invalidWorkspaceErrorMessage: '找不到有效的工作區',
       noWorkspaceHint: '請先建立一個工作區來開始使用',
       createWorkspace: '建立新工作區',
       deleteWorkspace: '刪除工作區',
@@ -177,8 +179,11 @@ const common = {
     },
   },
 
-  // 任務進度
   taskProgress: {
+    title: '任務進度',
+    progress: '進度',
+    startedAt: '開始時間',
+    completedAt: '完成時間',
     status: {
       completed: '✓ 完成',
       failed: '✗ 失敗',

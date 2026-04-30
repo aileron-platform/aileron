@@ -1,39 +1,20 @@
-/**
- * useFileTreeManager Hook
- *
- *
- */
-
-import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
-import { FileTreeApiAdapter } from '../services/fileTreeAdapter';
 
 const logger = createLogger('useFileTreeManager');
 import { useFileTreeState, type UseFileTreeStateOptions } from './useFileTreeState';
 import { useFileOperations, type UseFileOperationsOptions } from './useFileOperations';
 import { useFileEditor, type UseFileEditorOptions } from './useFileEditor';
 import { computeLoadedChildrenPaths, findNodeByPath } from '../utils/fileTreeUtils';
-import type { FileTreeApiConfig, FileTreeNode } from '../types';
-
-const buildApiConfigKey = (apiConfig: FileTreeApiConfig): string =>
-  JSON.stringify({
-    type: apiConfig.type,
-    workspaceId: apiConfig.workspaceId ?? null,
-    contextId: apiConfig.contextId ?? null,
-    templateId: apiConfig.templateId ?? null,
-    knowledgeBaseId: apiConfig.knowledgeBaseId ?? null,
-    scope: apiConfig.scope ?? null,
-    collection: apiConfig.collection ?? null,
-    baseUrl: apiConfig.baseUrl ?? null,
-    includeHidden: apiConfig.includeHidden ?? null,
-  });
+import type { FileTreeDataAdapter, FileTreeNode } from '../types';
 
 export interface UseFileTreeManagerOptions {
-  apiConfig: FileTreeApiConfig;
+  adapter: FileTreeDataAdapter;
+  adapterKey: string;
   
   stateOptions?: Omit<UseFileTreeStateOptions, 'initialNodes'>;
   
-  operationsOptions?: Omit<UseFileOperationsOptions, 'apiConfig'>;
+  operationsOptions?: Omit<UseFileOperationsOptions, 'adapter'>;
   
   editorOptions?: UseFileEditorOptions;
   
@@ -50,7 +31,8 @@ export interface UseFileTreeManagerOptions {
 
 export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const {
-    apiConfig,
+    adapter,
+    adapterKey,
     stateOptions = {},
     operationsOptions = {},
     editorOptions = {},
@@ -63,50 +45,48 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
 
   const state = useFileTreeState(stateOptions);
-  const apiConfigKey = useMemo(() => buildApiConfigKey(apiConfig), [apiConfig]);
-  const stableApiConfigRef = useRef(apiConfig);
-  const stableApiConfigKeyRef = useRef(apiConfigKey);
-  if (stableApiConfigKeyRef.current !== apiConfigKey) {
-    stableApiConfigRef.current = apiConfig;
-    stableApiConfigKeyRef.current = apiConfigKey;
+  const stableAdapterRef = useRef(adapter);
+  const stableAdapterKeyRef = useRef(adapterKey);
+  if (stableAdapterKeyRef.current !== adapterKey) {
+    stableAdapterRef.current = adapter;
+    stableAdapterKeyRef.current = adapterKey;
   }
-  const stableApiConfig = stableApiConfigRef.current;
+  const stableAdapter = stableAdapterRef.current;
   const latestLoadIdRef = useRef(0);
-  const activeApiConfigKeyRef = useRef(apiConfigKey);
+  const activeAdapterKeyRef = useRef(adapterKey);
 
 
   const loadedChildrenPathsRef = useRef<Set<string>>(new Set());
   const [loadingChildrenPaths, setLoadingChildrenPaths] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    activeApiConfigKeyRef.current = apiConfigKey;
+    activeAdapterKeyRef.current = adapterKey;
     latestLoadIdRef.current += 1;
-  }, [apiConfigKey]);
+  }, [adapterKey]);
 
 
   const loadTree = useCallback(async () => {
     const requestId = latestLoadIdRef.current + 1;
     latestLoadIdRef.current = requestId;
-    const requestApiConfigKey = apiConfigKey;
+    const requestAdapterKey = adapterKey;
 
     logger.debug('loadTree: starting file tree load');
     state.setLoading(true);
     state.setError(null);
 
     try {
-      const adapter = new FileTreeApiAdapter(stableApiConfig);
       logger.debug('loadTree: calling adapter.getTree()');
-      const nodes = await adapter.getTree();
+      const nodes = await stableAdapter.getTree();
 
       if (
         latestLoadIdRef.current !== requestId ||
-        activeApiConfigKeyRef.current !== requestApiConfigKey
+        activeAdapterKeyRef.current !== requestAdapterKey
       ) {
         logger.debug('loadTree: ignoring stale file tree response', {
           requestId,
-          requestApiConfigKey,
+          requestAdapterKey,
           latestLoadId: latestLoadIdRef.current,
-          activeApiConfigKey: activeApiConfigKeyRef.current,
+          activeAdapterKey: activeAdapterKeyRef.current,
         });
         return;
       }
@@ -127,13 +107,13 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     } catch (error) {
       if (
         latestLoadIdRef.current !== requestId ||
-        activeApiConfigKeyRef.current !== requestApiConfigKey
+        activeAdapterKeyRef.current !== requestAdapterKey
       ) {
         logger.debug('loadTree: ignoring stale file tree error', {
           requestId,
-          requestApiConfigKey,
+          requestAdapterKey,
           latestLoadId: latestLoadIdRef.current,
-          activeApiConfigKey: activeApiConfigKeyRef.current,
+          activeAdapterKey: activeAdapterKeyRef.current,
         });
         return;
       }
@@ -147,25 +127,25 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     } finally {
       if (
         latestLoadIdRef.current === requestId &&
-        activeApiConfigKeyRef.current === requestApiConfigKey
+        activeAdapterKeyRef.current === requestAdapterKey
       ) {
         state.setLoading(false);
         logger.debug('loadTree: load complete');
       } else {
         logger.debug('loadTree: skipping completion update for stale request', {
           requestId,
-          requestApiConfigKey,
+          requestAdapterKey,
           latestLoadId: latestLoadIdRef.current,
-          activeApiConfigKey: activeApiConfigKeyRef.current,
+          activeAdapterKey: activeAdapterKeyRef.current,
         });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    apiConfigKey,
+    adapterKey,
     onError,
     onTreeLoaded,
-    stableApiConfig,
+    stableAdapter,
     state.setError,
     state.setLoading,
     state.setNodes,
@@ -173,7 +153,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
 
   const operations = useFileOperations({
-    apiConfig,
+    adapter: stableAdapter,
     onSuccess: (message) => {
       logger.debug('operation completed successfully', { message });
     },
@@ -208,8 +188,6 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     ...editorOptions,
   });
 
-  /**
-   */
   const toggleDirectory = useCallback(async (node: FileTreeNode) => {
     if (node.type !== 'directory') return;
 
@@ -230,8 +208,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
     setLoadingChildrenPaths(prev => new Set([...prev, path]));
     try {
-      const adapter = new FileTreeApiAdapter(stableApiConfig);
-      const children = await adapter.getChildren(path);
+      const children = await stableAdapter.getChildren(path);
       state.updateNode(path, { children });
       loadedChildrenPathsRef.current.add(path);
       state.expandNode(path);
@@ -249,7 +226,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         return next;
       });
     }
-  }, [state, stableApiConfig, onError]);
+  }, [state, stableAdapter, onError]);
 
 
   useEffect(() => {

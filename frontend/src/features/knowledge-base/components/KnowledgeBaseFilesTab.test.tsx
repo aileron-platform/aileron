@@ -118,12 +118,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench', () => ({
-  API_ENDPOINTS: {
-    knowledgeBase: {
-      copy: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/copy`,
-      getContent: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/content`,
-    },
-  },
   StandardFileTreeLayout: ({
     toolbarContent,
     children,

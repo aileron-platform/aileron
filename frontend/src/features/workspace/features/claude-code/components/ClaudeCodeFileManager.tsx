@@ -1,10 +1,3 @@
-/**
- * Claude Code 檔案管理組件
- *
- * 使用統一的檔案樹組件來管理 Claude Code 的 skills 和 scripts 檔案
- * 支援 project、user、plugin 三種 scope
- */
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
@@ -25,7 +18,7 @@ import {
   FileDeleteDialog,
   BatchDeleteDialog,
 } from '@/shared/components/file-workbench';
-import type { FileTreeApiConfig, FileTreeNode as FileTreeNodeType, SelectionModifier } from '@/shared/components/file-workbench';
+import type { FileTreeNode as FileTreeNodeType, SelectionModifier } from '@/shared/components/file-workbench';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { FolderGit, User, Puzzle } from 'lucide-react';
@@ -35,6 +28,7 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
+import { createClaudeCodeFileTreeDataAdapter } from '../adapters/claudeCodeFileTreeDataAdapter';
 
 export interface SelectedFile {
   path: string;
@@ -59,7 +53,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
 
-  // Dialog 狀態管理
   type DialogState =
     | { type: 'create-file'; parentPath: string }
     | { type: 'create-folder'; parentPath: string }
@@ -75,12 +68,10 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
   }, []);
   const [clipboardItem, setClipboardItem] = useState<{ path: string; type: 'file' | 'directory'; scope: string } | null>(null);
 
-  // 根據 collectionType 設置翻譯前綴和 icon
   const i18nPrefix = `workspace.claudeCode.${collectionType}`;
   const HeaderIcon = CLAUDE_CODE_ICONS[collectionType];
   const isCollapsed = layout.secondColumnCollapsed;
 
-  // 使用 useQuery 獲取 plugin skills 資訊（僅在 skills 且 scope 為 plugin 時）
   const { data: pluginSkillsData } = useQuery({
     queryKey: ['plugin-skills', workspaceId],
     queryFn: () => claudeCodeApi.listPluginSkills(workspaceRuntime?.runtimeBaseUrl || '', workspaceId),
@@ -89,34 +80,34 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
 
   const pluginSkills = pluginSkillsData?.plugins || [];
 
-  // 構建 API 配置
-  const apiConfig: FileTreeApiConfig = useMemo(() => ({
-    type: 'claude-code' as const,
+  const fileTreeAdapter = useMemo(() => createClaudeCodeFileTreeDataAdapter({
     workspaceId,
     scope,
-    collection: collectionType, // 傳遞 collection 類型
-    baseUrl: workspaceRuntime?.runtimeBaseUrl, // 使用 workspace runtime 的 baseUrl
+    collection: collectionType,
+    runtimeBaseUrl: workspaceRuntime?.runtimeBaseUrl,
   }), [workspaceId, scope, collectionType, workspaceRuntime?.runtimeBaseUrl]);
+  const fileTreeAdapterKey = useMemo(
+    () => JSON.stringify({ workspaceId, scope, collection: collectionType, runtimeBaseUrl: workspaceRuntime?.runtimeBaseUrl ?? null }),
+    [collectionType, scope, workspaceId, workspaceRuntime?.runtimeBaseUrl],
+  );
 
-  // 判斷是否為唯讀模式（plugin scope 是唯讀的）
   const isReadOnly = scope === 'plugin';
 
-  // 使用 FileTreeManager Hook
   const manager = useFileTreeManager({
-    apiConfig,
+    adapter: fileTreeAdapter,
+    adapterKey: fileTreeAdapterKey,
     stateOptions: {
       enableMultiSelect: !isReadOnly,
     },
-    autoLoad: false, // 手動控制載入時機
+    autoLoad: false,
   });
 
-  // 當 runtimeBaseUrl 或 apiConfig 變更時，重新載入檔案樹
   useEffect(() => {
     if (workspaceRuntime?.runtimeBaseUrl) {
       manager.loadTree();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceRuntime?.runtimeBaseUrl, apiConfig]);
+  }, [workspaceRuntime?.runtimeBaseUrl, fileTreeAdapterKey]);
 
   useWorkspaceTemplateInstallRefresh({
     workspaceId,
@@ -124,76 +115,54 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     onRefresh: manager.loadTree,
   });
 
-  // 處理節點點擊
   const handleNodeClick = useCallback((node: FileTreeNodeType, modifier: SelectionModifier) => {
     manager.state.selectNodeWithModifier(node.path, modifier);
 
-    // 如果是檔案且無修飾鍵，通知父組件
     if (node.type === 'file' && modifier === 'none') {
       onSelect({ path: node.path, scope: node.scope || scope });
     }
   }, [manager.state, onSelect, scope]);
 
-  // 處理節點雙擊
   const handleNodeDoubleClick = useCallback((node: FileTreeNodeType) => {
     if (node.type === 'file') {
       onSelect({ path: node.path, scope: node.scope || scope });
     }
   }, [onSelect, scope]);
 
-  // 處理右鍵選單
   const handleContextMenu = useCallback((node: FileTreeNodeType, event: React.MouseEvent) => {
     manager.state.openContextMenu(event.clientX, event.clientY, node);
   }, [manager.state]);
 
-  // 處理新增檔案
   const handleCreateFile = useCallback(async () => {
     if (isReadOnly) return;
-
-    // 取得當前右鍵選單的節點
     const contextNode = manager.state.contextMenu?.node;
     let parentPath = '/';
-
-    // 如果右鍵點擊的是資料夾，則在該資料夾內創建檔案
     if (contextNode) {
       if (contextNode.type === 'directory') {
         parentPath = contextNode.path;
       } else {
-        // 如果是檔案，則在同一層級創建（取得父目錄）
         parentPath = contextNode.path.split('/').slice(0, -1).join('/') || '/';
       }
     }
 
     setDialogState({ type: 'create-file', parentPath });
   }, [manager, isReadOnly]);
-
-  // 處理新增資料夾
   const handleCreateFolder = useCallback(async () => {
     if (isReadOnly) return;
-
-    // 取得當前右鍵選單的節點
     const contextNode = manager.state.contextMenu?.node;
     let parentPath = '/';
-
-    // 如果右鍵點擊的是資料夾，則在該資料夾內創建
     if (contextNode) {
       if (contextNode.type === 'directory') {
         parentPath = contextNode.path;
       } else {
-        // 如果是檔案，則在同一層級創建（取得父目錄）
         parentPath = contextNode.path.split('/').slice(0, -1).join('/') || '/';
       }
     }
 
     setDialogState({ type: 'create-folder', parentPath });
   }, [manager, isReadOnly]);
-
-  // 處理上傳
   const handleUpload = useCallback(() => {
     if (isReadOnly) return;
-
-    // 獲取當前選中的資料夾路徑（如果有右鍵選單，使用右鍵選單的節點）
-    // 注意：使用空字串 '' 而不是 '/' 來表示根目錄，避免 Path 處理問題
     let targetPath = '';
     if (manager.state.contextMenu?.node?.type === 'directory') {
       targetPath = manager.state.contextMenu.node.path;
@@ -218,12 +187,8 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     };
     input.click();
   }, [isReadOnly, manager, t, collectionType]);
-
-  // 處理檔案貼上（從剪貼簿）
   const handleFilePaste = useCallback(async (files: File[]) => {
     if (isReadOnly || !files || files.length === 0) return;
-
-    // 獲取目標路徑（如果有選中的資料夾，使用該資料夾；否則使用根目錄）
     let targetPath = '';
     if (manager.state.selectedId) {
       const selectedNode = manager.state.flatNodes.find(n => n.path === manager.state.selectedId);
@@ -242,8 +207,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       logger.error('pasteFileFailed', { collectionType, error });
     }
   }, [isReadOnly, manager, t, collectionType]);
-
-  // 處理重新命名
   const handleRename = useCallback(async (node: FileTreeNodeType) => {
     if (isReadOnly) return;
 
@@ -251,7 +214,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     if (!newName || newName === node.name) return;
 
     try {
-      // 計算新路徑
       const pathParts = node.path.split('/');
       pathParts[pathParts.length - 1] = newName;
       const newPath = pathParts.join('/');
@@ -263,8 +225,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       alert(t(`workspace.claudeCode.${collectionType}.fileOperations.renameFailedAlert`));
     }
   }, [isReadOnly, manager, t, collectionType]);
-
-  // 處理重新整理
   const handleRefresh = useCallback(async () => {
     try {
       await manager.loadTree();
@@ -272,12 +232,8 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       logger.error('refreshFailed', { collectionType, error });
     }
   }, [manager, t, collectionType]);
-
-  // 處理批次刪除
   const handleBatchDelete = useCallback(async (paths: string[]) => {
     if (isReadOnly) return;
-
-    // 構建節點列表用於 Dialog
     const nodes: FileTreeNodeType[] = paths.map(path => ({
       id: path,
       name: path.split('/').pop() || path,
@@ -296,15 +252,10 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
 
     setDialogState({ type: 'batch-delete', nodes });
   }, [manager, isReadOnly]);
-
-  // 處理 scope 變更
   const handleScopeChange = (newScope: 'project' | 'user' | 'plugin') => {
     setScope(newScope);
-    // 切換 scope 時清除選擇
     manager.state.clearSelection();
   };
-
-  // Dialog 處理函數
   const handleDialogCreateFile = useCallback(async (name: string) => {
     if (!dialogState || dialogState.type !== 'create-file') return;
 
@@ -371,35 +322,25 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       logger.error('batchDeleteFailed', { collectionType, error });
     }
   }, [dialogState, manager, closeDialog, t, collectionType]);
-
-  // 處理拖曳開始
   const handleDragStart = useCallback((node: FileTreeNodeType, event: React.DragEvent) => {
     if (isReadOnly) return;
     setDraggingPath(node.path);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', node.path);
   }, [isReadOnly]);
-
-  // 處理拖曳結束
   const handleDragEnd = useCallback(() => {
     setDraggingPath(null);
     setDragOverPath(null);
   }, []);
-
-  // 處理拖曳經過
   const handleDragOver = useCallback((node: FileTreeNodeType, event: React.DragEvent) => {
     if (isReadOnly || node.type !== 'directory') return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
     setDragOverPath(node.path);
   }, [isReadOnly]);
-
-  // 處理拖曳離開
   const handleDragLeave = useCallback(() => {
     setDragOverPath(null);
   }, []);
-
-  // 處理放置
   const handleDrop = useCallback(async (node: FileTreeNodeType, event: React.DragEvent) => {
     if (isReadOnly || node.type !== 'directory') return;
 
@@ -411,10 +352,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       setDragOverPath(null);
       return;
     }
-
-    // 檢查是否拖曳到自己的子目錄
-    // 正確邏輯：目標路徑不能是源路徑的子目錄
-    // 例如：不能將 /a 移動到 /a/b，但可以將 /a/b/c 移動到 /a
     if (node.path.startsWith(sourcePath + '/') || node.path === sourcePath) {
       alert(t(`workspace.claudeCode.${collectionType}.fileOperations.moveFolderToSubfolderAlert`));
       setDragOverPath(null);
@@ -422,13 +359,8 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     }
 
     try {
-      // 執行移動操作
       await manager.operations.moveFile(sourcePath, node.path);
-
-      // 重新載入檔案樹
       await manager.loadTree();
-
-      // 清除拖曳狀態
       setDragOverPath(null);
       setDraggingPath(null);
     } catch (error) {
@@ -437,8 +369,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       setDragOverPath(null);
     }
   }, [isReadOnly, manager, t, collectionType]);
-
-  // 複製處理
   const handleCopy = useCallback(() => {
     if (!manager.state.contextMenu) return;
 
@@ -450,8 +380,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     });
     manager.state.closeContextMenu();
   }, [manager, scope]);
-
-  // 貼上處理
   const handlePaste = useCallback(async () => {
     logger.debug('pasteStarted', { clipboardItem, hasContextMenu: !!manager.state.contextMenu });
 
@@ -467,7 +395,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     manager.state.closeContextMenu();
 
     try {
-      // 使用 claudeCodeApi 調用複製 API
       const collection = collectionType;
       const copyMethod = collection === 'skills' ? claudeCodeApi.copySkill : claudeCodeApi.copyScript;
 
@@ -488,8 +415,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       );
 
       logger.debug('pasteSuccess');
-
-      // 重新載入檔案樹
       await manager.loadTree();
 
       logger.debug('pasteTreeReloaded');
@@ -498,30 +423,19 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
       alert(t(`workspace.claudeCode.${collectionType}.fileOperations.pasteFailedAlert`));
     }
   }, [clipboardItem, manager, collectionType, workspaceId, workspaceRuntime, t]);
-
-  // 判斷是否可以貼上
   const isPasteDisabled = useMemo(() => {
     if (!clipboardItem || !manager.state.contextMenu) return true;
 
     const targetNode = manager.state.contextMenu.node;
     const isDirectoryTarget = targetNode.type === 'directory';
-
-    // 只能貼到資料夾
     if (!isDirectoryTarget) return true;
-
-    // 不能貼到自己
     if (clipboardItem.path === targetNode.path) return true;
-
-    // 不能貼到自己的子目錄
     if (clipboardItem.type === 'directory' && targetNode.path.startsWith(clipboardItem.path + '/')) {
       return true;
     }
 
     return false;
   }, [clipboardItem, manager.state.contextMenu]);
-
-  // 右鍵選單項目
-  // 使用統一的右鍵選單 Hook
   const contextMenuItems = useFileTreeContextMenu({
     node: manager.state.contextMenu?.node || null,
     readOnly: isReadOnly,
@@ -559,35 +473,29 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
     },
     t,
   });
-
-  // Scope 選項配置
   const scopeOptions: ScopeOption[] = useMemo(() => {
     const options: ScopeOption[] = [
       {
         value: 'project',
-        label: t(`${i18nPrefix}.scope.project`, { defaultValue: 'Project' }),
+        label: t(`${i18nPrefix}.scope.project`),
         icon: <FolderGit className="h-3 w-3" />,
       },
       {
         value: 'user',
-        label: t(`${i18nPrefix}.scope.user`, { defaultValue: 'User' }),
+        label: t(`${i18nPrefix}.scope.user`),
         icon: <User className="h-3 w-3" />,
       },
     ];
-
-    // Skills 才有 Plugin scope
     if (collectionType === 'skills') {
       options.push({
         value: 'plugin',
-        label: t(`${i18nPrefix}.scope.plugin`, { defaultValue: 'Plugin' }),
+        label: t(`${i18nPrefix}.scope.plugin`),
         icon: <Puzzle className="h-3 w-3" />,
       });
     }
 
     return options;
   }, [collectionType, t, i18nPrefix]);
-
-  // 工具列內容
   const toolbarContent = useMemo(() => {
     return (
       <FileTreeToolbar
@@ -596,15 +504,14 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
             value={scope}
             onChange={handleScopeChange}
             options={scopeOptions}
-            label={t(`${i18nPrefix}.scope.label`, { defaultValue: 'Scope:' })}
+            label={t(`${i18nPrefix}.scope.label`)}
           />
         }
         rightContent={
-          /* 第二行：Plugin 選擇器（僅在 plugin scope 時顯示） */
           scope === 'plugin' && pluginSkills && pluginSkills.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {t(`${i18nPrefix}.plugin.label`, { defaultValue: 'Plugin:' })}
+                {t(`${i18nPrefix}.plugin.label`)}
               </span>
               <Select value={selectedPlugin} onValueChange={setSelectedPlugin}>
                 <SelectTrigger className="h-7 w-32 text-xs">
@@ -612,7 +519,7 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">
-                    {t(`${i18nPrefix}.plugin.all`, { defaultValue: 'All Plugins' })}
+                    {t(`${i18nPrefix}.plugin.all`)}
                   </SelectItem>
                   {pluginSkills.map((plugin) => {
                     const pluginKey = `${plugin.pluginName}@${plugin.marketplaceName}:${plugin.skillName}`;
@@ -655,7 +562,7 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
   return (
     <div className="flex h-full flex-col border-r border-sidebar-border">
       <StandardFileTreeLayout
-        title={t(`${i18nPrefix}.title`, { defaultValue: collectionType === 'skills' ? 'Skills' : 'Scripts' })}
+        title={t(`${i18nPrefix}.title`)}
         icon={<HeaderIcon className="h-5 w-5 text-sidebar-primary" />}
         isCollapsed={isCollapsed}
         onToggleCollapse={toggleSecondColumn}
@@ -699,8 +606,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
               dragOverPath={dragOverPath}
               className="flex-1"
             />
-
-            {/* 右鍵選單 */}
             <FileTreeContextMenu
               contextMenu={manager.state.contextMenu}
               items={contextMenuItems}
@@ -709,8 +614,6 @@ const ClaudeCodeFileManager: React.FC<ClaudeCodeFileManagerProps> = ({
           </>
         )}
       </StandardFileTreeLayout>
-
-      {/* Dialog 組件 */}
       <FileCreateDialog
         open={dialogState?.type === 'create-file'}
         type="file"

@@ -108,6 +108,7 @@ const fileManagement = {
       uploadSuccessDescription: 'Files added to {{path}}',
       uploadFailed: 'Upload failed',
       extractSuccess: 'Extraction completed',
+      extractSuccessDescription: 'Extracted {{count}} item(s)',
       extractFailed: 'Extraction failed',
       createFolderSuccess: 'Folder created',
       createFolderSuccessDescription: 'Created {{path}}',
