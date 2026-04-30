@@ -174,6 +174,7 @@ const knowledgeBase = {
       updateHelper: 'Update the cron expression or pick a different eligible workspace. Saving a different workspace moves the existing schedule.',
       workspace: 'Workspace',
       workspaceEmpty: 'No workspaces attached',
+      workspaceOption: '{{workspaceName}} · {{mountAlias}} ({{mode}})',
       cron: 'Cron schedule',
       mountNotice: 'To configure a Wiki Index schedule for a workspace, attach this knowledge base to that workspace first and make sure the attachment is read/write.',
       moveNotice: 'Saving a different workspace moves the existing Wiki Index schedule to that workspace; only one schedule is allowed per knowledge base.',

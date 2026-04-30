@@ -1,6 +1,65 @@
 const template = {
   center: {
     loading: '載入中...',
+    onboarding: {
+      loading: '正在檢查模板中心倉庫...',
+      title: '設定模板中心 Registry',
+      description: '請先 clone 既有 registry，或將目前 registry 初始化為 Git，才能進入模板中心。',
+      unknownError: '未知錯誤',
+      statusError: {
+        title: '無法檢查倉庫狀態',
+        description: '模板中心需要先取得倉庫狀態，才能載入一般工作流程。',
+      },
+      actions: {
+        retry: '重新嘗試',
+      },
+      validation: {
+        cloneUrlRequired: 'Repository URL 為必填。',
+      },
+      clone: {
+        title: 'Clone 既有 Registry',
+        description: '使用已包含模板中心 registry 檔案的 Git 倉庫。',
+        blockedTitle: '無法 Clone',
+        blockedDescription: '本地 registry 檔案已存在，為避免覆蓋內容已停用 clone。',
+        blockedReason: '請初始化目前 registry，以保留並追蹤既有本地檔案。',
+        urlLabel: 'Repository URL',
+        urlPlaceholder: 'git@github.com:username/template-registry.git',
+        branchLabel: '分支',
+        branchPlaceholder: 'main',
+        branchHelper: '留空則使用倉庫預設分支。',
+        progressTitle: 'Clone 進度',
+        actions: {
+          clone: 'Clone Registry',
+          cloning: 'Clone 中...',
+        },
+      },
+      init: {
+        title: '初始化目前 Registry',
+        description: '保留既有本地檔案，並開始用 Git 追蹤此 registry。',
+        actions: {
+          init: '初始化 Registry',
+          initializing: '初始化中...',
+        },
+      },
+      toasts: {
+        cloneStarted: {
+          title: 'Clone 已開始',
+          description: '模板中心正在背景 clone registry。',
+        },
+        cloneFailed: {
+          title: 'Clone 失敗',
+          description: '無法 clone registry：{{error}}',
+        },
+        initSuccess: {
+          title: 'Registry 已初始化',
+          description: '模板中心 registry 現在已由 Git 追蹤。',
+        },
+        initFailed: {
+          title: '初始化失敗',
+          description: '無法初始化 registry：{{error}}',
+        },
+      },
+    },
     header: {
       title: '模板中心',
       description: '瀏覽與管理所有模板，支援快速安裝、匯出與匯入。',

@@ -174,6 +174,7 @@ const knowledgeBase = {
       updateHelper: '可以調整 cron 排程，或改選其他符合條件的工作區。若選擇不同工作區並儲存，將會把現有排程移動到該工作區。',
       workspace: '工作區',
       workspaceEmpty: '尚未掛載至任何工作區',
+      workspaceOption: '{{workspaceName}} · {{mountAlias}} ({{mode}})',
       cron: 'Cron schedule',
       mountNotice: '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
       moveNotice: '若選擇不同的工作區並儲存，會將現有的 Wiki Index 排程移動到該工作區；每個知識庫只能保有一個排程。',

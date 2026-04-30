@@ -275,6 +275,7 @@ def _to_attachment_summary(attachment) -> KnowledgeBaseAttachmentSummary:
     return KnowledgeBaseAttachmentSummary(
         id=attachment.id,
         workspace_id=attachment.workspace_id,
+        workspace_name=attachment.workspace.name,
         kb_id=attachment.kb_id,
         mount_alias=attachment.mount_alias,
         mode=attachment.mode,

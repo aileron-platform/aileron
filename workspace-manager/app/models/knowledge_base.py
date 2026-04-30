@@ -60,6 +60,7 @@ class KnowledgeBaseShareSummary(CamelModel):
 class KnowledgeBaseAttachmentSummary(CamelModel):
     id: str
     workspace_id: str = Field(..., alias="workspaceId")
+    workspace_name: str = Field(..., alias="workspaceName")
     kb_id: str = Field(..., alias="kbId")
     mount_alias: str = Field(..., alias="mountAlias")
     mode: str

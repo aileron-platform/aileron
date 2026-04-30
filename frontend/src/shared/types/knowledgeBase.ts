@@ -45,6 +45,7 @@ export interface KnowledgeBaseShareUpdatePayload {
 export interface KnowledgeBaseAttachmentSummary {
   id: string;
   workspaceId: string;
+  workspaceName: string;
   kbId: string;
   mountAlias: string;
   mode: KnowledgeBaseAttachmentMode;

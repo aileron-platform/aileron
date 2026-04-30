@@ -57,6 +57,7 @@ vi.mock('../providers/KnowledgeBaseProvider', () => ({
         {
           id: 'att-1',
           workspaceId: 'ws-1',
+          workspaceName: 'Workspace One',
           kbId: 'kb-1',
           mountAlias: 'product-docs',
           mode: 'rw',
@@ -122,6 +123,7 @@ describe('KnowledgeBaseAttachmentsTab', () => {
     createAttachmentMock.mockResolvedValue({
       id: 'att-2',
       workspaceId: 'ws-2',
+      workspaceName: 'Workspace Two',
       kbId: 'kb-1',
       mountAlias: 'product-docs-2',
       mode: 'rw',

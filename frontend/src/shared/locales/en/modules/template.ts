@@ -1,6 +1,65 @@
 const template = {
   center: {
     loading: 'Loading...',
+    onboarding: {
+      loading: 'Checking Template Center repository...',
+      title: 'Set up Template Center registry',
+      description: 'Clone an existing registry or initialize the current registry with Git before entering Template Center.',
+      unknownError: 'Unknown error',
+      statusError: {
+        title: 'Unable to check repository status',
+        description: 'Template Center needs repository status before it can load normal workflows.',
+      },
+      actions: {
+        retry: 'Retry',
+      },
+      validation: {
+        cloneUrlRequired: 'Repository URL is required.',
+      },
+      clone: {
+        title: 'Clone existing registry',
+        description: 'Use a Git repository that already contains Template Center registry files.',
+        blockedTitle: 'Clone is unavailable',
+        blockedDescription: 'Local registry files already exist, so clone is disabled to avoid replacing them.',
+        blockedReason: 'Initialize the current registry to keep and track existing local files.',
+        urlLabel: 'Repository URL',
+        urlPlaceholder: 'git@github.com:username/template-registry.git',
+        branchLabel: 'Branch',
+        branchPlaceholder: 'main',
+        branchHelper: 'Leave blank to use the repository default branch.',
+        progressTitle: 'Clone progress',
+        actions: {
+          clone: 'Clone registry',
+          cloning: 'Cloning...',
+        },
+      },
+      init: {
+        title: 'Initialize current registry',
+        description: 'Keep existing local files and start tracking the registry with Git.',
+        actions: {
+          init: 'Initialize registry',
+          initializing: 'Initializing...',
+        },
+      },
+      toasts: {
+        cloneStarted: {
+          title: 'Clone started',
+          description: 'Template Center is cloning the registry in the background.',
+        },
+        cloneFailed: {
+          title: 'Clone failed',
+          description: 'Unable to clone registry: {{error}}',
+        },
+        initSuccess: {
+          title: 'Registry initialized',
+          description: 'Template Center registry is now tracked by Git.',
+        },
+        initFailed: {
+          title: 'Initialization failed',
+          description: 'Unable to initialize registry: {{error}}',
+        },
+      },
+    },
     header: {
       title: 'Template Center',
       description: 'Browse and manage all templates with quick install, export, and import.',

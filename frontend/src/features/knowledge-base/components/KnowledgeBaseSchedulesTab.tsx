@@ -197,7 +197,11 @@ export const KnowledgeBaseSchedulesTab: React.FC<KnowledgeBaseSchedulesTabProps>
                 )}
                 {attachments.map((attachment) => (
                   <option key={attachment.id} value={attachment.workspaceId} disabled={attachment.mode !== 'rw'}>
-                    {attachment.mountAlias} ({t(`knowledgeBase.common.mode.${attachment.mode}`)})
+                    {t('knowledgeBase.schedules.editor.workspaceOption', {
+                      workspaceName: attachment.workspaceName,
+                      mountAlias: attachment.mountAlias,
+                      mode: t(`knowledgeBase.common.mode.${attachment.mode}`),
+                    })}
                   </option>
                 ))}
               </select>
