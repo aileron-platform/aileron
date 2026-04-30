@@ -85,9 +85,12 @@ export const KnowledgeBaseListRoute: React.FC = () => {
                 className="rounded-xl border bg-background/80 p-4 transition-colors hover:border-primary/40 hover:bg-background"
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-base font-semibold text-foreground">{kb.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{kb.slug}</div>
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
+                    <Database className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-base font-semibold text-foreground">{kb.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">{kb.slug}</div>
+                    </div>
                   </div>
                   <Badge variant={roleVariant(kb.accessRole)}>
                     {kb.accessRole}

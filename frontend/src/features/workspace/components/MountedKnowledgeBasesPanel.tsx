@@ -136,6 +136,7 @@ export const MountedKnowledgeBasesPanel: React.FC<MountedKnowledgeBasesPanelProp
                 className="rounded-xl border border-border/60 bg-card/60 p-4"
               >
                 <div className="flex flex-wrap items-center gap-2">
+                  <Database className="h-4 w-4 shrink-0 text-primary" />
                   <span className="font-medium text-foreground">{attachment.name}</span>
                   <Badge variant="outline">{attachment.slug}</Badge>
                   <Badge variant={attachment.mode === 'rw' ? 'secondary' : 'outline'}>
