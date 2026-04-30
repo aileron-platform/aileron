@@ -153,6 +153,46 @@ def test_knowledge_base_file_endpoints_support_create_read_delete(test_app, crea
 
 
 @pytest.mark.integration
+def test_knowledge_base_file_content_raw_supports_viewer_and_rejects_bad_paths(test_app, create_user, monkeypatch):
+    client, _ = test_app
+    owner = create_user(username="kb-raw-owner")
+    viewer = create_user(username="kb-raw-viewer")
+    _authenticate_as(client, monkeypatch, owner)
+    create_kb_response = client.post(
+        "/api/v1/knowledge-bases",
+        json={"name": "Raw Files", "slug": "raw-files"},
+    )
+    kb_id = create_kb_response.json()["id"]
+    write_response = client.put(
+        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+        json={"path": "/pixel.png", "type": "file", "content": "png-bytes"},
+    )
+    client.post(f"/api/v1/knowledge-bases/{kb_id}/shares", json={"userId": viewer.id, "role": "viewer"})
+
+    _authenticate_as(client, monkeypatch, viewer)
+    raw_response = client.get(
+        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+        params={"path": "/pixel.png", "raw": "true"},
+    )
+    traversal_response = client.get(
+        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+        params={"path": "/../pixel.png", "raw": "true"},
+    )
+    missing_response = client.get(
+        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+        params={"path": "/missing.png", "raw": "true"},
+    )
+
+    assert write_response.status_code == 200
+    assert raw_response.status_code == 200
+    assert raw_response.headers["content-type"].startswith("image/png")
+    assert raw_response.content == b"png-bytes"
+    assert traversal_response.status_code == 400
+    assert traversal_response.json()["detail"]["code"] == "INVALID_PATH"
+    assert missing_response.status_code == 404
+
+
+@pytest.mark.integration
 def test_knowledge_base_source_api_uploads_normalizes_and_imports_web_clip(test_app, create_user, monkeypatch):
     client, _ = test_app
     owner = create_user(username="kb-source-owner")

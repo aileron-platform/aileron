@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 import tempfile
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 from git import GitCommandError
 
 from app.core.file_management import FileContentResponse, FileManagementException, FileTreeResponse, FileUploadResponse
@@ -634,7 +635,7 @@ def get_knowledge_base_file_tree(
 
 @router.get(
     "/{kb_id}/files/content",
-    response_model=FileContentResponse,
+    response_model=None,
     summary="Read knowledge base FileContent",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
@@ -642,10 +643,15 @@ def get_knowledge_base_file_content(
     kb_id: str,
     request: Request,
     path: str = Query(...),
+    raw: bool = Query(False),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseFileService = Depends(get_knowledge_base_file_service),
-) -> FileContentResponse:
+) -> FileContentResponse | Response:
     try:
+        if raw:
+            content, _ = service.read_file_bytes(user_id=current_user_id, kb_id=kb_id, path=path)
+            media_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+            return Response(content=content, media_type=media_type)
         return service.read_file(user_id=current_user_id, kb_id=kb_id, path=path)
     except Exception as exc:
         _raise_kb_error(request, exc)

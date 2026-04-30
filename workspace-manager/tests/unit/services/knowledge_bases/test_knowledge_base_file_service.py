@@ -134,6 +134,34 @@ def test_create_and_read_file_updates_cached_size(file_service, kb):
 
 
 @pytest.mark.unit
+def test_read_file_bytes_allows_viewer_and_enforces_size_limit(file_service, kb):
+    file_service.kb_service.get_kb = MagicMock(
+        return_value=(kb, type("Access", (), {"access_role": "viewer"})())
+    )
+    kb_root = file_service.storage_root / kb.id
+    kb_root.mkdir(parents=True, exist_ok=True)
+    target = kb_root / "image.png"
+    target.write_bytes(b"png-bytes")
+
+    content, size = file_service.read_file_bytes(
+        user_id="viewer-1",
+        kb_id="kb-1",
+        path="/image.png",
+    )
+
+    assert content == b"png-bytes"
+    assert size == len(b"png-bytes")
+
+    target.write_bytes(b"01234567890")
+    with pytest.raises(FileTooLargeException):
+        file_service.read_file_bytes(
+            user_id="viewer-1",
+            kb_id="kb-1",
+            path="/image.png",
+        )
+
+
+@pytest.mark.unit
 def test_get_tree_lazily_initializes_team_wiki_layout(file_service, kb):
     tree = file_service.get_tree(
         user_id="owner-1",

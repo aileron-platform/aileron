@@ -90,11 +90,8 @@ const knowledgeBase = {
   },
   files: {
     toolbarTitle: '知識庫檔案',
-    headerTitle: '檔案與資料夾',
-    headerDescription: '支援拖放上傳、建立檔案與資料夾、重新命名、移動與刪除。後端會直接回傳白名單、單檔大小與配額錯誤。',
     readOnlyBadge: '唯讀',
     viewerBadge: '檢視者',
-    viewerNotice: '檢視者僅可讀取',
     uploadSuccessTitle: '檔案已上傳',
     uploadSuccessDescription: '已處理 {{count}} 個檔案。',
     uploadFailed: '上傳失敗',

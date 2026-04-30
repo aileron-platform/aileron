@@ -144,12 +144,13 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
   loadingChildrenPaths,
 }) => {
   const { t } = useI18n();
+  const { toggleNode } = state;
   const containerRef = useRef<HTMLDivElement>(null);
   const [isBottomStatusOpen, setIsBottomStatusOpen] = React.useState(false);
 
   // 調試：監控 state.nodes 變化
   React.useEffect(() => {
-    logger.debug('state.nodes 已更新', { nodeCount: state.nodes.length });
+    logger.debug('state.nodes updated', { nodeCount: state.nodes.length });
   }, [state.nodes]);
 
   // 空白區域點擊處理（清除選擇）
@@ -215,7 +216,7 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
           if (onExpandDirectory) {
             onExpandDirectory(n);
           } else {
-            state.toggleNode(n.path);
+            toggleNode(n.path);
           }
         }}
         onContextMenu={onContextMenu}
@@ -228,12 +229,12 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
         className="text-foreground hover:bg-muted/40"
       />
     );
-  }, [onNodeClick, onNodeDoubleClick, onContextMenu, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, state.toggleNode, onExpandDirectory, loadingChildrenPaths, enableDragDrop, draggingPath, dragOverPath]);
+  }, [onNodeClick, onNodeDoubleClick, onContextMenu, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, toggleNode, onExpandDirectory, loadingChildrenPaths, enableDragDrop, draggingPath, dragOverPath]);
 
   // 決定要顯示的節點
   const nodesToRender = React.useMemo(() => {
     const nodes = state.isSearching ? state.filteredNodes : state.nodes;
-    logger.debug('nodesToRender 重新計算', { nodeCount: nodes.length });
+    logger.debug('nodesToRender recalculated', { nodeCount: nodes.length });
     return nodes;
   }, [state.isSearching, state.filteredNodes, state.nodes]);
 

@@ -78,7 +78,13 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   // 狀態管理
   const state = useFileTreeState(stateOptions);
   const apiConfigKey = useMemo(() => buildApiConfigKey(apiConfig), [apiConfig]);
-  const stableApiConfig = useMemo(() => apiConfig, [apiConfigKey]);
+  const stableApiConfigRef = useRef(apiConfig);
+  const stableApiConfigKeyRef = useRef(apiConfigKey);
+  if (stableApiConfigKeyRef.current !== apiConfigKey) {
+    stableApiConfigRef.current = apiConfig;
+    stableApiConfigKeyRef.current = apiConfigKey;
+  }
+  const stableApiConfig = stableApiConfigRef.current;
   const latestLoadIdRef = useRef(0);
   const activeApiConfigKeyRef = useRef(apiConfigKey);
 
@@ -97,20 +103,20 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     latestLoadIdRef.current = requestId;
     const requestApiConfigKey = apiConfigKey;
 
-    logger.debug('loadTree: 開始載入檔案樹');
+    logger.debug('loadTree: starting file tree load');
     state.setLoading(true);
     state.setError(null);
 
     try {
       const adapter = new FileTreeApiAdapter(stableApiConfig);
-      logger.debug('loadTree: 調用 adapter.getTree()');
+      logger.debug('loadTree: calling adapter.getTree()');
       const nodes = await adapter.getTree();
 
       if (
         latestLoadIdRef.current !== requestId ||
         activeApiConfigKeyRef.current !== requestApiConfigKey
       ) {
-        logger.debug('loadTree: 忽略過期的檔案樹回應', {
+        logger.debug('loadTree: ignoring stale file tree response', {
           requestId,
           requestApiConfigKey,
           latestLoadId: latestLoadIdRef.current,
@@ -119,7 +125,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         return;
       }
 
-      logger.debug('loadTree: 獲取到節點數量', { count: nodes.length });
+      logger.debug('loadTree: received node count', { count: nodes.length });
       state.setNodes(nodes);
 
       // 重新計算已載入的子項路徑，並收起不再覆蓋的展開節點
@@ -127,7 +133,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
       loadedChildrenPathsRef.current = newLoadedPaths;
       state.syncExpandedWithLoaded(newLoadedPaths);
 
-      logger.debug('loadTree: 已調用 state.setNodes()');
+      logger.debug('loadTree: called state.setNodes()');
 
       if (onTreeLoaded) {
         onTreeLoaded(nodes);
@@ -137,7 +143,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         latestLoadIdRef.current !== requestId ||
         activeApiConfigKeyRef.current !== requestApiConfigKey
       ) {
-        logger.debug('loadTree: 忽略過期的檔案樹錯誤', {
+        logger.debug('loadTree: ignoring stale file tree error', {
           requestId,
           requestApiConfigKey,
           latestLoadId: latestLoadIdRef.current,
@@ -146,7 +152,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         return;
       }
 
-      logger.error('loadTree: 載入失敗', { error });
+      logger.error('loadTree: failed to load file tree', { error });
       const errorMessage = error instanceof Error ? error.message : '載入檔案樹失敗';
       state.setError(errorMessage);
       if (onError) {
@@ -158,9 +164,9 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         activeApiConfigKeyRef.current === requestApiConfigKey
       ) {
         state.setLoading(false);
-        logger.debug('loadTree: 載入完成');
+        logger.debug('loadTree: load complete');
       } else {
-        logger.debug('loadTree: 跳過過期請求的完成狀態更新', {
+        logger.debug('loadTree: skipping completion update for stale request', {
           requestId,
           requestApiConfigKey,
           latestLoadId: latestLoadIdRef.current,
@@ -183,7 +189,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const operations = useFileOperations({
     apiConfig,
     onSuccess: (message) => {
-      logger.debug('操作成功', { message });
+      logger.debug('operation completed successfully', { message });
     },
     onError: (error) => {
       state.setError(error.message);
@@ -205,7 +211,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         await operations.updateFile(path, content);
         editor.saveTab(path);
       } catch (error) {
-        logger.error('自動儲存失敗', { error });
+        logger.error('auto save failed', { error });
       }
     },
     onFileOpen: (node) => {
@@ -246,7 +252,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
       loadedChildrenPathsRef.current.add(path);
       state.expandNode(path);
     } catch (error) {
-      logger.error('toggleDirectory: 懶載入子項失敗', { path, error });
+      logger.error('toggleDirectory: failed to lazy-load children', { path, error });
       // 即使失敗也展開（顯示已有的空子項）
       state.expandNode(path);
       if (onError) {
@@ -280,7 +286,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
           const content = await operations.readFile(node.path);
           editor.openTab(node, content);
         } catch (error) {
-          logger.error('載入檔案失敗', { error });
+          logger.error('failed to load file', { error });
           if (onError) {
             onError(error instanceof Error ? error : new Error('載入檔案失敗'));
           }
@@ -330,7 +336,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         await operations.updateFile(editor.activeTab.path, editor.activeTab.content);
         editor.saveTab(editor.activeTab.path);
       } catch (error) {
-        logger.error('儲存檔案失敗', { error });
+        logger.error('failed to save file', { error });
         if (onError) {
           onError(error instanceof Error ? error : new Error('儲存檔案失敗'));
         }
@@ -346,7 +352,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
       try {
         await operations.updateFile(tab.path, tab.content);
       } catch (error) {
-        logger.error('儲存檔案失敗', { path: tab.path, error });
+        logger.error('failed to save file', { path: tab.path, error });
       }
     }
     
@@ -357,10 +363,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const deleteFileAndCloseTab = useCallback(async (path: string, recursive = false) => {
     const response = await operations.deleteFile(path, recursive);
     if (response.success) {
-      // 關閉相關標籤
-      if (editor.isTabOpen(path)) {
-        editor.closeTab(path);
-      }
+      editor.closeTabsForPath(path, recursive);
       
       // 從狀態中移除節點
       state.removeNode(path);
@@ -374,9 +377,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     
     // 關閉所有相關標籤
     paths.forEach(path => {
-      if (editor.isTabOpen(path)) {
-        editor.closeTab(path);
-      }
+      editor.closeTabsForPath(path, recursive);
       state.removeNode(path);
     });
     
@@ -387,17 +388,19 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const renameFileAndUpdateTab = useCallback(async (oldPath: string, newPath: string) => {
     const response = await operations.renameFile(oldPath, newPath);
     if (response.success) {
-      // 如果標籤開啟，更新標籤路徑
-      if (editor.isTabOpen(oldPath)) {
-        const tab = editor.getTab(oldPath);
-        if (tab) {
-          editor.closeTab(oldPath);
-          const newNode = { ...tab.node, path: newPath, name: newPath.split('/').pop() || newPath };
-          editor.openTab(newNode, tab.content);
-        }
-      }
+      editor.remapPath(oldPath, newPath);
       
       // 重新載入檔案樹
+      await loadTree();
+    }
+    return response;
+  }, [operations, editor, loadTree]);
+
+  // 移動檔案或資料夾（帶標籤更新）
+  const moveFileAndUpdateTabs = useCallback(async (sourcePath: string, targetPath: string) => {
+    const response = await operations.moveFile(sourcePath, targetPath);
+    if (response.success) {
+      editor.remapPath(sourcePath, targetPath);
       await loadTree();
     }
     return response;
@@ -425,5 +428,6 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     deleteFileAndCloseTab,
     batchDeleteAndCloseTabs,
     renameFileAndUpdateTab,
+    moveFileAndUpdateTabs,
   };
 }

@@ -3,7 +3,7 @@ import { CloudUpload, FileText, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Button } from '@/shared/components/ui/button';
 import type { ChatUploadItem } from '../../types';
-import { formatFileSize } from '@/features/workspace/features/file-management/utils/fileTypeUtils';
+import { formatFileSize } from '@/shared/utils/fileTypeUtils';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('UploadFileDialog');

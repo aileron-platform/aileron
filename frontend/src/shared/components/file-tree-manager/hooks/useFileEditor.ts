@@ -39,7 +39,9 @@ export interface UseFileEditorReturn {
   closeTab: (path: string) => void;
   closeAllTabs: () => void;
   closeOtherTabs: (path: string) => void;
+  closeTabsForPath: (path: string, recursive?: boolean) => void;
   setActiveTab: (path: string) => void;
+  remapPath: (sourcePath: string, targetPath: string) => void;
   getTab: (path: string) => FileTab | undefined;
   isTabOpen: (path: string) => boolean;
 
@@ -170,8 +172,77 @@ export function useFileEditor(
     });
   }, []);
 
+  const closeTabsForPath = useCallback((path: string, recursive = false) => {
+    const isTargetPath = (tabPath: string) => (
+      tabPath === path || (recursive && tabPath.startsWith(`${path}/`))
+    );
+
+    setTabs(prevTabs => {
+      const closedTabs = prevTabs.filter(tab => isTargetPath(tab.path));
+      const newTabs = prevTabs.filter(tab => !isTargetPath(tab.path));
+
+      setActiveTabPath(current => (
+        current && isTargetPath(current) ? newTabs[0]?.path ?? null : current
+      ));
+
+      closedTabs.forEach((tab) => {
+        const timer = autoSaveTimers.current.get(tab.path);
+        if (timer) {
+          clearTimeout(timer);
+          autoSaveTimers.current.delete(tab.path);
+        }
+
+        onFileClose?.(tab.path);
+      });
+
+      return newTabs;
+    });
+  }, [onFileClose]);
+
   const setActiveTab = useCallback((path: string) => {
     setActiveTabPath(path);
+  }, []);
+
+  const remapPath = useCallback((sourcePath: string, targetPath: string) => {
+    const isTargetPath = (tabPath: string) => (
+      tabPath === sourcePath || tabPath.startsWith(`${sourcePath}/`)
+    );
+
+    const remapTabPath = (tabPath: string) => (
+      tabPath === sourcePath
+        ? targetPath
+        : `${targetPath}${tabPath.slice(sourcePath.length)}`
+    );
+
+    setTabs(prevTabs => prevTabs.map(tab => {
+      if (!isTargetPath(tab.path)) {
+        return tab;
+      }
+
+      const nextPath = remapTabPath(tab.path);
+      const nextName = nextPath.split('/').pop() || nextPath;
+      const timer = autoSaveTimers.current.get(tab.path);
+      if (timer) {
+        autoSaveTimers.current.delete(tab.path);
+        autoSaveTimers.current.set(nextPath, timer);
+      }
+
+      return {
+        ...tab,
+        path: nextPath,
+        name: nextName,
+        node: {
+          ...tab.node,
+          id: nextPath,
+          path: nextPath,
+          name: nextName,
+        },
+      };
+    }));
+
+    setActiveTabPath(current => (
+      current && isTargetPath(current) ? remapTabPath(current) : current
+    ));
   }, []);
 
   const getTab = useCallback((path: string) => {
@@ -299,7 +370,9 @@ export function useFileEditor(
     closeTab,
     closeAllTabs,
     closeOtherTabs,
+    closeTabsForPath,
     setActiveTab,
+    remapPath,
     getTab,
     isTabOpen,
 
@@ -315,4 +388,3 @@ export function useFileEditor(
     previousTab,
   };
 }
-

@@ -302,10 +302,10 @@ export class FileTreeApiAdapter {
   // Workspace 直接調用 runtime API，不經過 workspace-manager
 
   private async getWorkspaceTree(): Promise<FileTreeNode[]> {
-    logger.debug('getWorkspaceTree: 開始獲取檔案樹');
+    logger.debug('getWorkspaceTree: starting file tree fetch');
     const { baseUrl, includeHidden } = this.config;
     if (!baseUrl) {
-      logger.error('getWorkspaceTree: baseUrl 未設置');
+      logger.error('getWorkspaceTree: baseUrl is not set');
       throw new Error('Workspace runtime baseUrl is required');
     }
 
@@ -316,17 +316,17 @@ export class FileTreeApiAdapter {
       `/files/tree?path=${encodeURIComponent(path)}&includeHidden=${String(includeHidden ?? false)}&maxDepth=${maxDepth}`
     );
     const requestKey = this.buildWorkspaceTreeRequestKey(path, maxDepth);
-    logger.debug('getWorkspaceTree: 請求 URL', { url });
+    logger.debug('getWorkspaceTree: request URL', { url });
 
     const inflightRequest = FileTreeApiAdapter.workspaceRootTreeRequests.get(requestKey);
     if (inflightRequest) {
-      logger.debug('getWorkspaceTree: 重用進行中的根目錄請求', { requestKey });
+      logger.debug('getWorkspaceTree: reusing in-flight root request', { requestKey });
       return inflightRequest;
     }
 
     const request = this.client.get(url)
       .then((data) => {
-        logger.debug('getWorkspaceTree: 獲取到的數據', { data, nodeCount: data.nodes?.length || 0 });
+        logger.debug('getWorkspaceTree: received data', { data, nodeCount: data.nodes?.length || 0 });
         return data.nodes || [];
       })
       .finally(() => {
@@ -433,10 +433,10 @@ export class FileTreeApiAdapter {
   }
 
   private async uploadWorkspaceFiles(options: FileUploadOptions): Promise<FileUploadResult[]> {
-    logger.debug('uploadWorkspaceFiles: 開始準備上傳', { options });
+    logger.debug('uploadWorkspaceFiles: preparing upload', { options });
     const { baseUrl } = this.config;
     if (!baseUrl) {
-      logger.error('uploadWorkspaceFiles: baseUrl 未設置');
+      logger.error('uploadWorkspaceFiles: baseUrl is not set');
       throw new Error('Workspace runtime baseUrl is required');
     }
 
@@ -450,14 +450,14 @@ export class FileTreeApiAdapter {
     // 添加所有文件到 FormData
     for (const file of options.files) {
       formData.append('files', file);
-      logger.debug('uploadWorkspaceFiles: 添加檔案到 FormData', { fileName: file.name, size: file.size });
+      logger.debug('uploadWorkspaceFiles: adding file to FormData', { fileName: file.name, size: file.size });
     }
 
     // 使用 POST /files/upload 端點（multipart 上傳）
-    logger.debug('uploadWorkspaceFiles: 請求 URL: /files/upload');
+    logger.debug('uploadWorkspaceFiles: request URL: /files/upload');
 
     const result: any = await this.client.post(this.appendWorkspaceContext('/files/upload'), formData);
-    logger.debug('uploadWorkspaceFiles: 上傳成功', { result });
+    logger.debug('uploadWorkspaceFiles: upload succeeded', { result });
 
     // 將 multipart 上傳的結果轉換為 FileUploadResult 格式
     const results: FileUploadResult[] = [];
@@ -493,7 +493,7 @@ export class FileTreeApiAdapter {
       }
     }
 
-    logger.debug('uploadWorkspaceFiles: 所有檔案處理完成', { results });
+    logger.debug('uploadWorkspaceFiles: all files processed', { results });
     return results;
   }
 

@@ -179,45 +179,8 @@ export interface FileTreeFeatures {
   enableContextMenu?: boolean;
   /** 啟用搜尋 */
   enableSearch?: boolean;
-  /** 啟用編輯器 */
-  enableEditor?: boolean;
   /** 唯讀模式 */
   readOnly?: boolean;
-}
-
-/**
- * FileTreeManager Props
- */
-export interface FileTreeManagerProps {
-  /** API 配置 */
-  apiConfig: FileTreeApiConfig;
-  
-  /** 功能配置 */
-  features?: FileTreeFeatures;
-  
-  /** 自訂 className */
-  className?: string;
-  
-  /** 高度 */
-  height?: string | number;
-  
-  /** 檔案選擇回調 */
-  onFileSelect?: (node: FileTreeNode) => void;
-  
-  /** 檔案雙擊回調 */
-  onFileDoubleClick?: (node: FileTreeNode) => void;
-  
-  /** 檔案變更回調 */
-  onFilesChange?: (nodes: FileTreeNode[]) => void;
-  
-  /** 錯誤回調 */
-  onError?: (error: Error) => void;
-  
-  /** 自訂工具列渲染 */
-  renderToolbar?: () => React.ReactNode;
-
-  /** 自訂編輯器渲染 */
-  renderEditor?: (tab: FileTab) => React.ReactNode;
 }
 
 /**
@@ -290,7 +253,6 @@ export const DEFAULT_FEATURES: Required<FileTreeFeatures> = {
   enableCreate: true,
   enableContextMenu: true,
   enableSearch: true,
-  enableEditor: true,
   readOnly: false,
 };
 

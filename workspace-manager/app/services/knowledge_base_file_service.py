@@ -118,6 +118,20 @@ class KnowledgeBaseFileService:
             contentHash=content_hash,
         )
 
+    def read_file_bytes(self, *, user_id: str, kb_id: str, path: str) -> tuple[bytes, int]:
+        kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
+        fs_path = self._resolve_path(kb.id, path)
+        if not fs_path.exists():
+            raise FileNotFoundException(path, self._scope(kb.id))
+        if not fs_path.is_file():
+            raise InvalidPathException(path, KB_NOT_A_FILE_REASON)
+
+        file_size = fs_path.stat().st_size
+        if file_size > self.settings.KB_SINGLE_FILE_SIZE_LIMIT:
+            raise FileTooLargeException(path, file_size, self.settings.KB_SINGLE_FILE_SIZE_LIMIT)
+
+        return fs_path.read_bytes(), file_size
+
     def write_file(
         self,
         *,

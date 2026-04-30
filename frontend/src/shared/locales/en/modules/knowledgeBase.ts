@@ -90,11 +90,8 @@ const knowledgeBase = {
   },
   files: {
     toolbarTitle: 'Knowledge base files',
-    headerTitle: 'Files and folders',
-    headerDescription: 'Supports drag-and-drop upload, file and folder creation, rename, move, and delete. Backend validation returns allowlist, single-file limit, and quota errors directly.',
     readOnlyBadge: 'Read only',
     viewerBadge: 'Viewer',
-    viewerNotice: 'Viewer access is read-only',
     uploadSuccessTitle: 'Files uploaded',
     uploadSuccessDescription: '{{count}} file(s) processed.',
     uploadFailed: 'Upload failed',

@@ -1,9 +1,6 @@
 import React, { useCallback, useLayoutEffect, useMemo } from 'react';
-import Editor from '@monaco-editor/react';
-import { AlertCircle, File as FileIcon, Folder as FolderIcon, Loader2, Lock, RefreshCw } from 'lucide-react';
-import { useApp } from '@/app/providers/AppProvider';
+import { AlertCircle, File as FileIcon, Folder as FolderIcon, Loader2, RefreshCw } from 'lucide-react';
 import {
-  FileEditorPanel,
   FileTreeContextMenu,
   FileTreePanel,
   StandardFileTreeLayout,
@@ -12,13 +9,17 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-tree-manager';
-import { findNodeByPath, getAllFileNodes, isImageFile } from '@/shared/components/file-tree-manager/utils/fileTreeUtils';
+import { findNodeByPath, getAllFileNodes } from '@/shared/components/file-tree-manager/utils/fileTreeUtils';
+import {
+  FileViewerWorkbench,
+  type FileViewerWorkbenchAdapter,
+  type FileViewerWorkbenchTab,
+} from '@/shared/components/file-viewer-workbench';
+import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { getLanguageFromFileName } from '@/shared/utils/languageUtils';
 import { createLogger } from '@/shared/services/logger';
 import { flattenFileTree } from '@/features/template-management/utils/templateFiles';
 
@@ -31,10 +32,23 @@ interface TemplateDetailFileViewerProps {
   onTreeUpdate?: (nodes: FileTreeNode[], flattenedCount: number) => void;
 }
 
-const isMarkdownFile = (filename: string) => filename.toLowerCase().endsWith('.md');
-
 const getTemplateFileContentUrl = (templateId: string, scope: string, path: string) =>
   `/api/v1/templates/${templateId}/files/content?scope=${encodeURIComponent(scope)}&path=${encodeURIComponent(path)}`;
+
+const toWorkbenchTab = (tab: {
+  path: string;
+  name: string;
+  content: string;
+  originalContent: string;
+  isModified: boolean;
+}): FileViewerWorkbenchTab => ({
+  id: tab.path,
+  path: tab.path,
+  name: tab.name,
+  content: tab.content,
+  originalContent: tab.originalContent,
+  isModified: tab.isModified,
+});
 
 export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> = ({
   templateId,
@@ -43,7 +57,6 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
   onTreeUpdate,
 }) => {
   const { t } = useI18n();
-  const { state } = useApp();
 
   const apiConfig = useMemo(
     () => ({
@@ -62,21 +75,16 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
     },
   });
 
-  const currentTheme = useMemo(
-    () => (state.ui.currentTheme === 'dark' ? 'vs-dark' : 'vs'),
-    [state.ui.currentTheme],
-  );
-
   const { state: treeState, editor, handleFileSelect, handleFileDoubleClick, loadTree } = manager;
+  const { expandNode, nodes, openContextMenu, selectNodeWithModifier } = treeState;
 
   useLayoutEffect(() => {
-    const nodes = treeState.nodes;
     const flattened = flattenFileTree(nodes as Parameters<typeof flattenFileTree>[0]);
     onTreeUpdate?.(nodes, flattened.length);
 
     nodes
       .filter(node => node.type === 'directory')
-      .forEach(node => treeState.expandNode(node.path));
+      .forEach(node => expandNode(node.path));
 
     const activePath = editor.activeTab?.path;
     const activeNode = activePath ? findNodeByPath(nodes, activePath) : null;
@@ -89,29 +97,61 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
     if (firstFile) {
       void handleFileSelect(firstFile);
     }
-  }, [editor.activeTab?.path, handleFileSelect, onTreeUpdate, treeState.expandNode, treeState.nodes]);
+  }, [editor.activeTab?.path, expandNode, handleFileSelect, nodes, onTreeUpdate]);
 
   const handleNodeClick = useCallback((node: FileTreeNode, modifier: SelectionModifier) => {
-    treeState.selectNodeWithModifier(node.path, modifier);
+    selectNodeWithModifier(node.path, modifier);
 
     if (node.type === 'file' && modifier === 'none') {
       void handleFileSelect(node);
     }
-  }, [handleFileSelect, treeState]);
+  }, [handleFileSelect, selectNodeWithModifier]);
 
   const handleNodeDoubleClick = useCallback((node: FileTreeNode) => {
     void handleFileDoubleClick(node);
   }, [handleFileDoubleClick]);
 
   const handleContextMenu = useCallback((node: FileTreeNode, event: React.MouseEvent) => {
-    treeState.openContextMenu(event.clientX, event.clientY, node);
-  }, [treeState]);
+    openContextMenu(event.clientX, event.clientY, node);
+  }, [openContextMenu]);
 
   const handleCopyPath = useCallback((path: string) => {
     void navigator.clipboard?.writeText(path).catch((error) => {
-      logger.error('複製 template 檔案路徑失敗', { error, path });
+      logger.error('Failed to copy template file path', { error, path });
     });
   }, []);
+
+  const workbenchTabs = useMemo(
+    () => editor.tabs.map(toWorkbenchTab),
+    [editor.tabs],
+  );
+
+  const workbenchAdapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: manager.operations.readFile,
+    readBlob: (path) => apiClient.getBlob(getTemplateFileContentUrl(templateId, basePath, path)),
+    copyPath: async (path) => {
+      handleCopyPath(path);
+    },
+    revealInTree: (path) => {
+      treeState.selectNode(path);
+    },
+  }), [basePath, handleCopyPath, manager.operations.readFile, templateId, treeState]);
+
+  const handleWorkbenchTabsChange = useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
+    const nextPaths = new Set(nextTabs.map((tab) => tab.path));
+
+    editor.tabs.forEach((tab) => {
+      if (!nextPaths.has(tab.path)) {
+        editor.closeTab(tab.path);
+      }
+    });
+  }, [editor]);
+
+  const handleWorkbenchActiveTabChange = useCallback((tabId: string | null) => {
+    if (tabId) {
+      editor.setActiveTab(tabId);
+    }
+  }, [editor]);
 
   const contextMenuItems = useFileTreeContextMenu({
     node: treeState.contextMenu?.node ?? null,
@@ -129,84 +169,6 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
     },
     t,
   });
-
-  const renderReadOnlyEditor = useCallback((tab: {
-    name: string;
-    path: string;
-    content: string;
-  }) => {
-    if (isImageFile(tab.name)) {
-      return (
-        <div className="flex h-full flex-col bg-background">
-          <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-            <span>{tab.path}</span>
-            <span className="inline-flex items-center gap-1">
-              <Lock className="h-3.5 w-3.5" />
-              {t('template.detail.fileViewer.viewerNotice')}
-            </span>
-          </div>
-          <div className="flex flex-1 items-center justify-center overflow-auto bg-muted/10 p-6">
-            <img
-              src={getTemplateFileContentUrl(templateId, basePath, tab.path)}
-              alt={tab.name}
-              className="max-h-full max-w-full rounded border border-border bg-background shadow-sm"
-            />
-          </div>
-        </div>
-      );
-    }
-
-    if (isMarkdownFile(tab.name)) {
-      return (
-        <div className="flex h-full flex-col bg-background">
-          <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-            <span>{tab.path}</span>
-            <span className="inline-flex items-center gap-1">
-              <Lock className="h-3.5 w-3.5" />
-              {t('template.detail.fileViewer.viewerNotice')}
-            </span>
-          </div>
-          <div className="flex-1 overflow-auto">
-            <MarkdownContent content={tab.content} variant="detailed" className="px-6 py-4" />
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex h-full flex-col bg-background">
-        <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-          <span>{tab.path}</span>
-          <span className="inline-flex items-center gap-1">
-            <Lock className="h-3.5 w-3.5" />
-            {t('template.detail.fileViewer.viewerNotice')}
-          </span>
-        </div>
-        <div className="relative flex-1 overflow-hidden">
-          <Editor
-            height="100%"
-            language={getLanguageFromFileName(tab.name)}
-            value={tab.content}
-            theme={currentTheme}
-            options={{
-              readOnly: true,
-              minimap: { enabled: false },
-              fontSize: 14,
-              wordWrap: 'on',
-              automaticLayout: true,
-              scrollBeyondLastLine: false,
-              fontFamily: 'var(--font-mono)',
-            }}
-          />
-          {!tab.content && (
-            <div className="pointer-events-none absolute inset-x-0 top-0 p-6 text-sm text-muted-foreground">
-              {t('template.detail.fileViewer.emptyFile')}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }, [basePath, currentTheme, t, templateId]);
 
   const flattenedFilesCount = useMemo(
     () => flattenFileTree(treeState.nodes as Parameters<typeof flattenFileTree>[0]).length,
@@ -290,9 +252,21 @@ export const TemplateDetailFileViewer: React.FC<TemplateDetailFileViewerProps> =
               </div>
             </div>
           ) : (
-            <FileEditorPanel
-              editor={editor}
-              renderEditor={renderReadOnlyEditor}
+            <FileViewerWorkbench
+              tabs={workbenchTabs}
+              activeTabId={editor.activeTabPath}
+              adapter={workbenchAdapter}
+              capabilities={{
+                canEdit: false,
+                canSave: false,
+                canReadBlob: true,
+                canCopyPath: true,
+                canRevealInTree: true,
+                canCloseTabs: true,
+              }}
+              readOnly
+              onTabsChange={handleWorkbenchTabsChange}
+              onActiveTabChange={handleWorkbenchActiveTabChange}
             />
           )}
         </div>

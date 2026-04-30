@@ -1533,8 +1533,6 @@ const template = {
       empty: 'No files available yet.',
       emptySearch: 'No files match your search criteria.',
       noSelection: 'Select a file to preview its content.',
-      viewerNotice: 'Read only',
-      emptyFile: 'This file is currently empty.',
       actions: {
         refresh: 'Reload',
       },

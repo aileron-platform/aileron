@@ -42,6 +42,8 @@ vi.mock('./useFileEditor', () => ({
     saveTab: vi.fn(),
     saveAllTabs: vi.fn(),
     closeTab: vi.fn(),
+    closeTabsForPath: vi.fn(),
+    remapPath: vi.fn(),
   }),
 }));
 

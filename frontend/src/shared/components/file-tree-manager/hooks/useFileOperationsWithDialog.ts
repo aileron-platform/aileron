@@ -101,7 +101,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
         }),
       });
     } catch (error) {
-      logger.error('建立檔案失敗', { error });
+      logger.error('failed to create file', { error });
       toast({
         title: t('common.fileTree.operations.createFile.error'),
         description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
@@ -133,7 +133,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
         }),
       });
     } catch (error) {
-      logger.error('建立資料夾失敗', { error });
+      logger.error('failed to create folder', { error });
       toast({
         title: t('common.fileTree.operations.createFolder.error'),
         description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
@@ -159,7 +159,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
         }),
       });
     } catch (error) {
-      logger.error('重新命名失敗', { error });
+      logger.error('failed to rename item', { error });
       toast({
         title: t('common.fileTree.operations.rename.error'),
         description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
@@ -185,7 +185,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
         }),
       });
     } catch (error) {
-      logger.error('刪除失敗', { error });
+      logger.error('failed to delete item', { error });
       toast({
         title: t('common.fileTree.operations.delete.error'),
         description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
@@ -213,7 +213,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
         }),
       });
     } catch (error) {
-      logger.error('批次刪除失敗', { error });
+      logger.error('failed to delete items', { error });
       toast({
         title: t('common.fileTree.operations.batchDelete.error'),
         description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),

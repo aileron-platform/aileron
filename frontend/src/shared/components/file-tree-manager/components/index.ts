@@ -2,12 +2,8 @@
  * 統一檔案樹管理組件 - 組件導出
  */
 
-export { FileTreeManager } from './FileTreeManager';
 export { FileTreePanel } from './FileTreePanel';
 export type { FileTreePanelProps } from './FileTreePanel';
-
-export { FileEditorPanel } from './FileEditorPanel';
-export type { FileEditorPanelProps } from './FileEditorPanel';
 
 export { FileTreeNode } from './FileTreeNode';
 export type { FileTreeNodeProps } from './FileTreeNode';

@@ -14,7 +14,6 @@ export type {
   BatchDeleteResponse,
   FileTab,
   FileTreeFeatures,
-  FileTreeManagerProps,
   SelectionModifier,
   ContextMenuState,
   FileUploadOptions,
@@ -60,14 +59,8 @@ export {
 // 服務
 export { FileTreeApiAdapter } from './services/fileTreeAdapter';
 
-// 組件
-export { FileTreeManager } from './components/FileTreeManager';
-
 export { FileTreePanel } from './components/FileTreePanel';
 export type { FileTreePanelProps } from './components/FileTreePanel';
-
-export { FileEditorPanel } from './components/FileEditorPanel';
-export type { FileEditorPanelProps } from './components/FileEditorPanel';
 
 export { FileTreeNode as FileTreeNodeComponent } from './components/FileTreeNode';
 export type { FileTreeNodeProps } from './components/FileTreeNode';

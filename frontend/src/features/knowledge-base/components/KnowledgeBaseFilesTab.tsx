@@ -1,11 +1,10 @@
 import React from 'react';
-import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, FolderTree, Lock, RefreshCw, Upload } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Database, Eye, EyeOff, FilePlus, FolderPlus, RefreshCw, Upload } from 'lucide-react';
 import {
   API_ENDPOINTS,
   BatchDeleteDialog,
   FileCreateDialog,
   FileDeleteDialog,
-  FileEditorPanel,
   FileRenameDialog,
   FileTreeContextMenu,
   FileTreePanel,
@@ -16,6 +15,11 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-tree-manager';
+import {
+  FileViewerWorkbench,
+  type FileViewerWorkbenchAdapter,
+  type FileViewerWorkbenchTab,
+} from '@/shared/components/file-viewer-workbench';
 import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
@@ -70,6 +74,21 @@ const getApiErrorCode = (error: unknown): string | undefined => {
 
   return undefined;
 };
+
+const toWorkbenchTab = (tab: {
+  path: string;
+  name: string;
+  content: string;
+  originalContent: string;
+  isModified: boolean;
+}): FileViewerWorkbenchTab => ({
+  id: tab.path,
+  path: tab.path,
+  name: tab.name,
+  content: tab.content,
+  originalContent: tab.originalContent,
+  isModified: tab.isModified,
+});
 
 export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   knowledgeBaseId,
@@ -210,8 +229,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     }
 
     try {
-      await manager.operations.moveFile(sourcePath, targetPath);
-      await manager.loadTree();
+      await manager.moveFileAndUpdateTabs(sourcePath, targetPath);
     } catch (error) {
       showErrorToast(error, t('knowledgeBase.files.moveFailed'));
     }
@@ -236,6 +254,54 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       showErrorToast(error, t('knowledgeBase.files.copyPathFailed'));
     }
   }, [showErrorToast, t, toast]);
+
+  const workbenchTabs = React.useMemo(
+    () => manager.editor.tabs.map(toWorkbenchTab),
+    [manager.editor.tabs],
+  );
+
+  const workbenchAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: (path) => manager.operations.readFile(path),
+    readBlob: (path) => apiClient.getBlob(
+      `${API_ENDPOINTS.knowledgeBase.getContent(knowledgeBaseId)}?path=${encodeURIComponent(path)}&raw=true`,
+    ),
+    saveFile: handleSave,
+    copyPath: handleCopyPath,
+    revealInTree: (path) => {
+      manager.state.selectNode(path);
+    },
+  }), [handleCopyPath, handleSave, knowledgeBaseId, manager.operations, manager.state]);
+
+  const handleWorkbenchTabsChange = React.useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
+    const nextPaths = new Set(nextTabs.map((tab) => tab.path));
+
+    manager.editor.tabs.forEach((tab) => {
+      if (!nextPaths.has(tab.path)) {
+        manager.editor.closeTab(tab.path);
+      }
+    });
+
+    nextTabs.forEach((nextTab) => {
+      const currentTab = manager.editor.getTab(nextTab.path);
+      if (!currentTab) {
+        return;
+      }
+
+      if (currentTab.content !== nextTab.content) {
+        manager.editor.updateContent(nextTab.path, nextTab.content);
+      }
+
+      if (!nextTab.isModified && currentTab.isModified) {
+        manager.editor.saveTab(nextTab.path);
+      }
+    });
+  }, [manager.editor]);
+
+  const handleWorkbenchActiveTabChange = React.useCallback((tabId: string | null) => {
+    if (tabId) {
+      manager.editor.setActiveTab(tabId);
+    }
+  }, [manager.editor]);
 
   const handlePaste = React.useCallback(async () => {
     const targetNode = manager.state.contextMenu?.node;
@@ -445,27 +511,6 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     },
     t,
   });
-
-  const renderReadOnlyEditor = React.useCallback((tab: {
-    path: string;
-    content: string;
-  }) => (
-    <div className="flex h-full flex-col bg-background">
-      <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
-        <span>{tab.path}</span>
-        <span className="inline-flex items-center gap-1">
-          <Lock className="h-3.5 w-3.5" />
-          {t('knowledgeBase.files.viewerNotice')}
-        </span>
-      </div>
-      <textarea
-        readOnly
-        value={tab.content}
-        className="h-full w-full resize-none border-0 bg-background p-4 font-mono text-sm outline-none"
-        spellCheck={false}
-      />
-    </div>
-  ), [t]);
 
   const handleTreeResizeStart = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -680,26 +725,6 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-b bg-muted/20 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <FolderTree className="h-4 w-4 text-sky-600" />
-                {t('knowledgeBase.files.headerTitle')}
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('knowledgeBase.files.headerDescription')}
-              </p>
-            </div>
-            {readOnly && (
-              <Badge variant="secondary" className="gap-1">
-                <Lock className="h-3.5 w-3.5" />
-                {t('knowledgeBase.files.viewerBadge')}
-              </Badge>
-            )}
-          </div>
-        </div>
-
         {manager.state.error && (
           <Alert variant="destructive" className="m-4 mb-0">
             <AlertCircle className="h-4 w-4" />
@@ -709,10 +734,21 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
         )}
 
         <div className="min-h-0 flex-1">
-          <FileEditorPanel
-            editor={manager.editor}
-            onSave={handleSave}
-            renderEditor={readOnly ? renderReadOnlyEditor : undefined}
+          <FileViewerWorkbench
+            tabs={workbenchTabs}
+            activeTabId={manager.editor.activeTabPath}
+            adapter={workbenchAdapter}
+            capabilities={{
+              canEdit: !readOnly,
+              canSave: !readOnly,
+              canReadBlob: true,
+              canCopyPath: true,
+              canRevealInTree: true,
+              canCloseTabs: true,
+            }}
+            readOnly={readOnly}
+            onTabsChange={handleWorkbenchTabsChange}
+            onActiveTabChange={handleWorkbenchActiveTabChange}
           />
         </div>
       </div>

@@ -113,7 +113,7 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
 
       <Tabs value={activeTab} className="flex w-full flex-shrink-0 flex-col">
         <TopTabsBar>
-          <TopTabsList className="max-w-2xl">
+          <TopTabsList>
             <TopTabsTrigger value="files" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_FILES(knowledgeBaseId)} className="gap-2">
                 <FolderTree className="h-4 w-4" />

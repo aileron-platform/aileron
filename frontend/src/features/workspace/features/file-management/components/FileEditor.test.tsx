@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type React from 'react';
-import { fireEvent, render, screen } from '@/__tests__/utils/render';
+import { fireEvent, render, screen, waitFor } from '@/__tests__/utils/render';
 import { FileEditor } from './FileEditor';
 
 const { useWorkspaceMock, toggleFileManagementEditorExpandedMock, fileTypeState } = vi.hoisted(() => ({
@@ -30,17 +29,8 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   }),
 }));
 
-vi.mock('./EditorToolbar', () => ({
-  EditorToolbar: ({ editorExpansionControl }: { editorExpansionControl?: React.ReactNode }) => (
-    <div data-testid="editor-toolbar">
-      {editorExpansionControl}
-      <button aria-label="workspace.fileManagement.editor.toolbar.more" type="button" />
-    </div>
-  ),
-}));
-
-vi.mock('./CodeEditor', () => ({
-  CodeEditor: ({ content, onContentChange }: { content: string; onContentChange: (content: string) => void }) => (
+vi.mock('@/shared/components/file-viewer-workbench/CodeTextEditor', () => ({
+  CodeTextEditor: ({ content, onContentChange }: { content: string; onContentChange: (content: string) => void }) => (
     <textarea
       aria-label="code-editor"
       value={content}
@@ -49,31 +39,13 @@ vi.mock('./CodeEditor', () => ({
   ),
 }));
 
-vi.mock('./MermaidViewer', () => ({
-  MermaidViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
-    <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="mermaid-viewer" />
-  ),
-}));
-
-vi.mock('./MarkdownViewer', () => ({
-  MarkdownViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
+vi.mock('@/shared/components/file-viewer-workbench/SharedMarkdownViewer', () => ({
+  SharedMarkdownViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
     <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="markdown-viewer" />
   ),
 }));
 
-vi.mock('./ImageViewer', () => ({
-  ImageViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
-    <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="image-viewer" />
-  ),
-}));
-
-vi.mock('./DrawioViewer', () => ({
-  DrawioViewer: ({ isFocusMode }: { isFocusMode?: boolean }) => (
-    <div data-focus-mode={String(Boolean(isFocusMode))} data-testid="drawio-viewer" />
-  ),
-}));
-
-vi.mock('../utils/fileIconUtils', () => ({
+vi.mock('@/shared/utils/fileIconUtils', () => ({
   getFileIcon: () => null,
   getFileLanguage: () => 'TypeScript',
   isMermaidFile: () => fileTypeState.mermaid,
@@ -81,7 +53,7 @@ vi.mock('../utils/fileIconUtils', () => ({
   isDrawioFile: () => fileTypeState.drawio,
 }));
 
-vi.mock('../utils/fileTypeUtils', () => ({
+vi.mock('@/shared/utils/fileTypeUtils', () => ({
   formatFileSize: (size: number) => `${size} B`,
   isImageFile: () => fileTypeState.image,
 }));
@@ -110,6 +82,7 @@ const createWorkspaceValue = (expanded = false) => ({
   closeAllTabs: vi.fn(),
   fileTreeActions: {
     readFileContent: vi.fn(),
+    saveFileContent: vi.fn().mockResolvedValue({ success: true }),
     selectFile: vi.fn(),
   },
   fileEditor: {
@@ -118,6 +91,7 @@ const createWorkspaceValue = (expanded = false) => ({
       '/src/App.tsx': 'const value = 0;',
     },
     updateTabContent: vi.fn(),
+    setOriginalContent: vi.fn(),
     setTabModified: vi.fn(),
     saveFile: vi.fn(),
     saveAllFiles: vi.fn(),
@@ -138,16 +112,19 @@ describe('FileEditor editor-pane expansion', () => {
     useWorkspaceMock.mockReturnValue(createWorkspaceValue(false));
   });
 
-  it('renders a localized expand control in the file tab area', () => {
+  it('renders a localized expand control in the shared action menu', () => {
     render(<FileEditor />);
 
-    expect(screen.getByLabelText('workspace.fileManagement.focus.enter')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
+
+    expect(screen.getByText('shared.fileViewer.toolbar.expand')).toBeInTheDocument();
   });
 
   it('toggles file focus mode and reflects the focused code toolbar', () => {
     const view = render(<FileEditor />);
 
-    fireEvent.click(screen.getByLabelText('workspace.fileManagement.focus.enter'));
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
+    fireEvent.click(screen.getByText('shared.fileViewer.toolbar.expand'));
 
     expect(toggleFileManagementEditorExpandedMock).toHaveBeenCalledTimes(1);
 
@@ -155,7 +132,7 @@ describe('FileEditor editor-pane expansion', () => {
     view.rerender(<FileEditor />);
 
     expect(screen.getByLabelText('workspace.fileManagement.focus.exit')).toBeInTheDocument();
-    expect(screen.queryByTestId('editor-toolbar')).not.toBeInTheDocument();
+    expect(screen.queryByText('shared.fileViewer.toolbar.expand')).not.toBeInTheDocument();
     expect(screen.getByText('TypeScript')).toBeInTheDocument();
   });
 
@@ -165,7 +142,7 @@ describe('FileEditor editor-pane expansion', () => {
     render(<FileEditor />);
 
     expect(screen.getAllByText('App.tsx').length).toBeGreaterThan(0);
-    expect(screen.getByText('workspace.fileManagement.editor.status.modified')).toBeInTheDocument();
+    expect(screen.getByText('shared.fileViewer.status.modified')).toBeInTheDocument();
     expect(screen.getByLabelText('code-editor')).toHaveValue('const value = 1;');
   });
 
@@ -176,6 +153,49 @@ describe('FileEditor editor-pane expansion', () => {
     render(<FileEditor />);
 
     expect(screen.getByTestId('markdown-viewer')).toHaveAttribute('data-focus-mode', 'true');
-    expect(screen.queryByTestId('editor-toolbar')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('shared.fileViewer.toolbar.more')).not.toBeInTheDocument();
+  });
+
+  it('saves the active tab through the workspace adapter and clears modified state', async () => {
+    const workspaceValue = createWorkspaceValue(false);
+    useWorkspaceMock.mockReturnValue(workspaceValue);
+
+    render(<FileEditor />);
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
+    fireEvent.click(screen.getByText('shared.fileViewer.toolbar.save'));
+
+    await waitFor(() => {
+      expect(workspaceValue.fileTreeActions.saveFileContent).toHaveBeenCalledWith(
+        '/src/App.tsx',
+        'const value = 1;',
+      );
+    });
+    expect(workspaceValue.fileEditor.updateTabContent).toHaveBeenCalledWith('/src/App.tsx', 'const value = 1;');
+    expect(workspaceValue.fileEditor.setOriginalContent).toHaveBeenCalledWith('/src/App.tsx', 'const value = 1;');
+    expect(workspaceValue.fileEditor.setTabModified).toHaveBeenCalledWith('/src/App.tsx', false);
+  });
+
+  it('syncs tab switching and reveal-in-tree through workspace selection', () => {
+    const workspaceValue = createWorkspaceValue(false);
+    workspaceValue.workspace.openTabs.push({
+      id: '/src/Other.ts',
+      name: 'Other.ts',
+      path: '/src/Other.ts',
+      content: 'const other = 1;',
+    });
+    useWorkspaceMock.mockReturnValue(workspaceValue);
+
+    render(<FileEditor />);
+
+    fireEvent.click(screen.getByText('Other.ts'));
+
+    expect(workspaceValue.switchToTab).toHaveBeenCalledWith('/src/Other.ts');
+    expect(workspaceValue.fileTreeActions.selectFile).toHaveBeenCalledWith('/src/Other.ts');
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
+    fireEvent.click(screen.getByText('shared.fileViewer.toolbar.revealInTree'));
+
+    expect(workspaceValue.fileTreeActions.selectFile).toHaveBeenCalledWith('/src/App.tsx');
   });
 });

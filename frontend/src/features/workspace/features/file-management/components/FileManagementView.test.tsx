@@ -72,7 +72,7 @@ vi.mock('lucide-react', () => ({
   Loader2: () => null,
 }));
 
-vi.mock('../utils/fileTypeUtils', () => ({
+vi.mock('@/shared/utils/fileTypeUtils', () => ({
   isImageFile: () => false,
 }));
 

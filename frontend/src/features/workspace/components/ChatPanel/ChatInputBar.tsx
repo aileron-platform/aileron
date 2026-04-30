@@ -3,8 +3,8 @@ import { AtSign, BookOpen, FileText, Paperclip, Send, Slash, X, XCircle } from '
 import { Button } from '@/shared/components/ui/button';
 import { Textarea } from '@/shared/components/ui/textarea';
 import type { ChatUploadItem, ChatCodeReference } from './types';
-import { formatFileSize } from '@/features/workspace/features/file-management/utils/fileTypeUtils';
-import { getFileIcon } from '@/features/workspace/features/file-management/utils/fileIconUtils';
+import { getFileIcon } from '@/shared/utils/fileIconUtils';
+import { formatFileSize } from '@/shared/utils/fileTypeUtils';
 import { PermissionModeSelector, type PermissionMode } from './PermissionModeSelector';
 import { normalizeAgentType } from '../../features/agent-settings/utils';
 

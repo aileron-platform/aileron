@@ -34,7 +34,7 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { Button } from '@/shared/components/ui/button';
-import { isImageFile } from '../utils/fileTypeUtils';
+import { isImageFile } from '@/shared/utils/fileTypeUtils';
 import {
   duplicateFile,
   fetchExtractArchiveStatus,

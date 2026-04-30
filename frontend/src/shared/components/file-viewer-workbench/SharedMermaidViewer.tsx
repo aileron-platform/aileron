@@ -1,0 +1,226 @@
+import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import mermaid from 'mermaid';
+import { AlertCircle, Check, Copy, Download, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import { useI18n } from '@/shared/hooks/useI18n';
+import { cn } from '@/shared/utils/cn';
+import { createLogger } from '@/shared/services/logger';
+
+const logger = createLogger('SharedMermaidViewer');
+
+interface SharedMermaidViewerProps {
+  content: string;
+  fileName: string;
+  className?: string;
+  i18nBase?: string;
+  isFocusMode?: boolean;
+  renderFocusToolbar?: (params: {
+    actions: ReactNode;
+    title: string;
+    subtitle: string;
+  }) => ReactNode;
+}
+
+export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
+  content,
+  fileName,
+  className,
+  i18nBase = 'shared.fileViewer.mermaid',
+  isFocusMode = false,
+  renderFocusToolbar,
+}) => {
+  const { t } = useI18n();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState('');
+  const [isRendering, setIsRendering] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+      securityLevel: 'loose',
+      fontFamily: 'inherit',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+      sequence: { useMaxWidth: true, wrap: true },
+      gantt: { useMaxWidth: true },
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!content.trim()) {
+      setSvg('');
+      setError('');
+      return;
+    }
+
+    let isMounted = true;
+
+    const renderDiagram = async () => {
+      setIsRendering(true);
+      setError('');
+
+      try {
+        const id = `shared-mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+        const { svg: renderedSvg } = await mermaid.render(id, content);
+        if (isMounted) {
+          setSvg(renderedSvg);
+        }
+      } catch (renderError) {
+        logger.error('Mermaid rendering error', { error: renderError });
+        if (isMounted) {
+          setError(renderError instanceof Error ? renderError.message : 'Unknown error');
+          setSvg('');
+        }
+      } finally {
+        if (isMounted) {
+          setIsRendering(false);
+        }
+      }
+    };
+
+    void renderDiagram();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [content]);
+
+  const handleZoomIn = () => setZoom((current) => Math.min(current + 0.1, 3));
+  const handleZoomOut = () => setZoom((current) => Math.max(current - 0.1, 0.3));
+  const handleResetZoom = () => setZoom(1);
+
+  const handleDownload = () => {
+    if (!svg) return;
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName.replace(/\.(mmd|mermaid)$/i, '.svg');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopySvg = async () => {
+    if (!svg) return;
+    try {
+      await navigator.clipboard.writeText(svg);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (copyError) {
+      logger.error('Failed to copy SVG', { error: copyError });
+    }
+  };
+
+  const toolbarActions = (
+    <>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomOut}
+        disabled={zoom <= 0.3}
+        title={t(`${i18nBase}.zoomOut`)}
+        aria-label={t(`${i18nBase}.zoomOut`)}
+      >
+        <ZoomOut className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleResetZoom}
+        title={t(`${i18nBase}.resetZoom`)}
+        aria-label={t(`${i18nBase}.resetZoom`)}
+      >
+        <span className="font-mono text-xs">{Math.round(zoom * 100)}%</span>
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleZoomIn}
+        disabled={zoom >= 3}
+        title={t(`${i18nBase}.zoomIn`)}
+        aria-label={t(`${i18nBase}.zoomIn`)}
+      >
+        <ZoomIn className="h-4 w-4" />
+      </Button>
+      <div className="mx-1 h-4 w-px bg-border" />
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => void handleCopySvg()}
+        disabled={!svg}
+        title={t(`${i18nBase}.copySvg`)}
+        aria-label={t(`${i18nBase}.copySvg`)}
+      >
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={handleDownload}
+        disabled={!svg}
+        title={t(`${i18nBase}.download`)}
+        aria-label={t(`${i18nBase}.download`)}
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+    </>
+  );
+
+  return (
+    <div ref={containerRef} className={cn('flex h-full flex-col bg-background', className)}>
+      {isFocusMode && renderFocusToolbar ? (
+        renderFocusToolbar({
+          actions: toolbarActions,
+          title: fileName,
+          subtitle: t(`${i18nBase}.title`),
+        })
+      ) : (
+        <div className="flex items-center justify-between border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">{t(`${i18nBase}.title`)}</span>
+            {isRendering && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
+          </div>
+          <div className="flex items-center gap-1">{toolbarActions}</div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-auto bg-background">
+        {error ? (
+          <div className="flex h-full items-center justify-center p-8">
+            <div className="max-w-2xl text-center">
+              <AlertCircle className="mx-auto mb-4 h-12 w-12 text-destructive" />
+              <h3 className="mb-2 text-lg font-semibold text-foreground">{t(`${i18nBase}.error.title`)}</h3>
+              <p className="mb-4 text-sm text-muted-foreground">{t(`${i18nBase}.error.description`)}</p>
+              <pre className="overflow-auto rounded-lg bg-muted p-4 text-left text-xs">{error}</pre>
+            </div>
+          </div>
+        ) : svg ? (
+          <div
+            className="flex min-h-full items-center justify-center p-8"
+            style={{
+              transform: `scale(${zoom})`,
+              transformOrigin: 'center',
+              transition: 'transform 0.2s ease-out',
+            }}
+          >
+            <div dangerouslySetInnerHTML={{ __html: svg }} className="mermaid-diagram" />
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            <div className="text-center">
+              <RefreshCw className="mx-auto mb-4 h-12 w-12 opacity-50" />
+              <p className="text-sm">
+                {isRendering ? t(`${i18nBase}.rendering`) : t(`${i18nBase}.empty`)}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

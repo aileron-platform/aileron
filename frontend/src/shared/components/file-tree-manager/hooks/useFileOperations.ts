@@ -8,7 +8,7 @@
  * - 檔案傳輸（上傳、下載）
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useFileOperations');
@@ -73,7 +73,7 @@ export function useFileOperations(
   const { apiConfig, onSuccess, onError, onComplete } = options;
 
   // 創建 API 適配器
-  const adapter = new FileTreeApiAdapter(apiConfig);
+  const adapter = useMemo(() => new FileTreeApiAdapter(apiConfig), [apiConfig]);
 
   // 操作狀態
   const [isCreating, setIsCreating] = useState(false);
@@ -91,29 +91,29 @@ export function useFileOperations(
       setLoading: (loading: boolean) => void,
       successMessage?: string
     ): Promise<T> => {
-      logger.debug('withErrorHandling: 開始執行操作');
+      logger.debug('withErrorHandling: starting operation');
       setLoading(true);
       try {
-        logger.debug('withErrorHandling: 執行 operation()');
+        logger.debug('withErrorHandling: executing operation()');
         const result = await operation();
-        logger.debug('withErrorHandling: 操作成功', { result });
+        logger.debug('withErrorHandling: operation succeeded', { result });
         if (successMessage && onSuccess) {
-          logger.debug('withErrorHandling: 呼叫 onSuccess', { successMessage });
+          logger.debug('withErrorHandling: calling onSuccess', { successMessage });
           onSuccess(successMessage);
         }
         return result;
       } catch (error) {
-        logger.error('withErrorHandling: 操作失敗', { error });
+        logger.error('withErrorHandling: operation failed', { error });
         if (onError) {
-          logger.debug('withErrorHandling: 呼叫 onError');
+          logger.debug('withErrorHandling: calling onError');
           onError(error instanceof Error ? error : new Error('操作失敗'));
         }
         throw error;
       } finally {
-        logger.debug('withErrorHandling: 設置 loading 為 false');
+        logger.debug('withErrorHandling: setting loading to false');
         setLoading(false);
         if (onComplete) {
-          logger.debug('withErrorHandling: 呼叫 onComplete');
+          logger.debug('withErrorHandling: calling onComplete');
           onComplete();
         }
       }
@@ -223,14 +223,14 @@ export function useFileOperations(
   // 檔案傳輸
   const uploadFiles = useCallback(
     async (uploadOptions: FileUploadOptions): Promise<FileUploadResult[]> => {
-      logger.debug('uploadFiles: 開始上傳', {
+      logger.debug('uploadFiles: starting upload', {
         targetPath: uploadOptions.targetPath,
         filesCount: uploadOptions.files.length,
         files: uploadOptions.files.map(f => ({ name: f.name, size: f.size }))
       });
       return withErrorHandling(
         () => {
-          logger.debug('uploadFiles: 呼叫 adapter.upload()');
+          logger.debug('uploadFiles: calling adapter.upload()');
           return adapter.upload(uploadOptions);
         },
         setIsUploading,
@@ -311,4 +311,3 @@ export function useFileOperations(
     executeOperation,
   };
 }
-
