@@ -24,19 +24,37 @@ def _patch_session_repo(monkeypatch: pytest.MonkeyPatch, session_repo) -> None:
 
 
 class FakeClient:
-    def __init__(self, options=None, messages=None, connect_error=None, interrupt_error=None, set_mode_error=None):
+    def __init__(
+        self,
+        options=None,
+        messages=None,
+        connect_error=None,
+        interrupt_error=None,
+        set_mode_error=None,
+        events: list[str] | None = None,
+        block_on_receive: asyncio.Event | None = None,
+        receive_started: asyncio.Event | None = None,
+    ):
         self.options = options
         self.messages = list(messages or [])
         self.connect_error = connect_error
         self.interrupt_error = interrupt_error
         self.set_mode_error = set_mode_error
+        self.events = events if events is not None else []
+        self.block_on_receive = block_on_receive
+        self.receive_started = receive_started
         self.connected_payload = None
         self.queries: list[object] = []
+        self.receive_calls = 0
+        self.receive_cancelled = 0
+        self.yielded_messages = 0
         self.interrupt_calls = 0
         self.disconnect_calls = 0
         self.mode_calls: list[str] = []
+        self.events.append("create")
 
     async def connect(self, payload=None):
+        self.events.append("connect")
         if self.connect_error:
             raise self.connect_error
         if payload is None:
@@ -47,6 +65,7 @@ class FakeClient:
             self.connected_payload.append(item)
 
     async def query(self, prompt):
+        self.events.append("query")
         if isinstance(prompt, str):
             self.queries.append(prompt)
             return
@@ -57,23 +76,38 @@ class FakeClient:
         self.queries.append(streamed)
 
     def receive_messages(self):
+        self.events.append("receive_messages")
+        self.receive_calls += 1
+
         async def _gen():
+            if self.receive_started:
+                self.receive_started.set()
+            if self.block_on_receive:
+                try:
+                    await self.block_on_receive.wait()
+                except asyncio.CancelledError:
+                    self.receive_cancelled += 1
+                    raise
             for item in self.messages:
                 if isinstance(item, Exception):
                     raise item
+                self.yielded_messages += 1
                 yield item
 
         return _gen()
 
     async def interrupt(self):
+        self.events.append("interrupt")
         self.interrupt_calls += 1
         if self.interrupt_error:
             raise self.interrupt_error
 
     async def disconnect(self):
+        self.events.append("disconnect")
         self.disconnect_calls += 1
 
     async def set_permission_mode(self, mode: str):
+        self.events.append("set_permission_mode")
         self.mode_calls.append(mode)
         if self.set_mode_error:
             raise self.set_mode_error
@@ -98,9 +132,11 @@ async def test_prompt_session_streaming_yields_processor_events(monkeypatch: pyt
     )
     _patch_session_repo(monkeypatch, session_repo)
     service = prompt_module.ClaudePromptService()
-    service.query_builder.setup_query = AsyncMock(return_value=SimpleNamespace(name="opts"))
+    options = SimpleNamespace(name="opts")
+    service.query_builder.setup_query = AsyncMock(return_value=options)
 
-    client = FakeClient(messages=[object()])
+    lifecycle_events: list[str] = []
+    client = FakeClient(options=options, messages=[object()], events=lifecycle_events)
 
     class FakeProcessor:
         def __init__(self, options):
@@ -116,15 +152,25 @@ async def test_prompt_session_streaming_yields_processor_events(monkeypatch: pyt
         async def process(self, msg):
             return [PartialEvent(text="chunk"), EndEvent(reason="result")]
 
-    monkeypatch.setattr(prompt_module, "ClaudeSDKClient", lambda options: client)
+    created_options: list[object] = []
+
+    def fake_client_factory(options):
+        created_options.append(options)
+        assert options is client.options
+        return client
+
+    monkeypatch.setattr(prompt_module, "ClaudeSDKClient", fake_client_factory)
     monkeypatch.setattr(prompt_module, "SDKMessageProcessor", FakeProcessor)
 
     events = [event async for event in service.prompt_session_streaming("session-1", "hello", task_id="task-1")]
 
     assert [type(event) for event in events] == [PartialEvent, EndEvent]
+    assert created_options == [options]
     assert client.connected_payload is None
     assert client.queries == ["hello"]
+    assert client.receive_calls == 1
     assert service.active_clients["session-1"] is client
+    assert lifecycle_events == ["create", "connect", "query", "receive_messages"]
 
 
 @pytest.mark.asyncio
@@ -139,7 +185,8 @@ async def test_prompt_session_streaming_uses_async_iterable_query_when_can_use_t
     service = prompt_module.ClaudePromptService()
     service.query_builder.setup_query = AsyncMock(return_value=SimpleNamespace(name="opts"))
 
-    client = FakeClient(messages=[object()])
+    lifecycle_events: list[str] = []
+    client = FakeClient(messages=[object()], events=lifecycle_events)
 
     class FakeProcessor:
         def __init__(self, options):
@@ -180,6 +227,51 @@ async def test_prompt_session_streaming_uses_async_iterable_query_when_can_use_t
             "session_id": "default",
         }
     ]]
+    assert lifecycle_events == ["create", "connect", "query", "receive_messages"]
+
+
+@pytest.mark.asyncio
+async def test_prompt_session_streaming_tracks_client_when_connect_fails_until_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_repo = SimpleNamespace(
+        find_by_id=AsyncMock(return_value=SimpleNamespace()),
+        to_entity=lambda _: SimpleNamespace(sdk_session_id="sdk-1"),
+    )
+    _patch_session_repo(monkeypatch, session_repo)
+    service = prompt_module.ClaudePromptService()
+    service.query_builder.setup_query = AsyncMock(return_value=SimpleNamespace(name="opts"))
+
+    lifecycle_events: list[str] = []
+    client = FakeClient(connect_error=RuntimeError("connect failed"), events=lifecycle_events)
+
+    class FakeProcessor:
+        def __init__(self, options):
+            self.state = SimpleNamespace(last_activity_time=0.0, idle_timeout_ms=1000, message_count=0)
+
+        def has_timed_out(self):
+            return False
+
+        def get_state(self):
+            return self.state
+
+        async def process(self, msg):
+            return []
+
+    monkeypatch.setattr(prompt_module, "ClaudeSDKClient", lambda options: client)
+    monkeypatch.setattr(prompt_module, "SDKMessageProcessor", FakeProcessor)
+
+    with pytest.raises(RuntimeError, match="connect failed"):
+        async for _ in service.prompt_session_streaming("session-1", "hello"):
+            pass
+
+    assert service.active_clients["session-1"] is client
+    assert lifecycle_events == ["create", "connect"]
+
+    await service.cleanup_client("session-1")
+
+    assert "session-1" not in service.active_clients
+    assert lifecycle_events == ["create", "connect", "disconnect"]
 
 
 @pytest.mark.asyncio
@@ -216,6 +308,72 @@ async def test_prompt_session_streaming_stops_when_abort_event_is_set(monkeypatc
     assert len(events) == 1
     assert isinstance(events[0], StoppedEvent)
     assert client.interrupt_calls == 1
+    assert client.receive_calls == 1
+    assert client.yielded_messages == 0
+
+
+@pytest.mark.asyncio
+async def test_prompt_session_streaming_interrupts_when_abort_event_triggers_during_message_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_repo = SimpleNamespace(
+        find_by_id=AsyncMock(return_value=SimpleNamespace()),
+        to_entity=lambda _: SimpleNamespace(sdk_session_id="sdk-1"),
+    )
+    _patch_session_repo(monkeypatch, session_repo)
+    service = prompt_module.ClaudePromptService()
+    service.query_builder.setup_query = AsyncMock(return_value=SimpleNamespace(name="opts"))
+
+    block_on_receive = asyncio.Event()
+    receive_started = asyncio.Event()
+    lifecycle_events: list[str] = []
+    client = FakeClient(
+        messages=[object()],
+        events=lifecycle_events,
+        block_on_receive=block_on_receive,
+        receive_started=receive_started,
+    )
+
+    class FakeProcessor:
+        def __init__(self, options):
+            self.state = SimpleNamespace(last_activity_time=0.0, idle_timeout_ms=1000, message_count=0)
+
+        def has_timed_out(self):
+            return False
+
+        def get_state(self):
+            return self.state
+
+        async def process(self, msg):
+            return []
+
+    monkeypatch.setattr(prompt_module, "ClaudeSDKClient", lambda options: client)
+    monkeypatch.setattr(prompt_module, "SDKMessageProcessor", FakeProcessor)
+
+    abort_event = asyncio.Event()
+
+    async def collect_events():
+        return [
+            event
+            async for event in service.prompt_session_streaming(
+                "session-1",
+                "hello",
+                abort_event=abort_event,
+            )
+        ]
+
+    collect_task = asyncio.create_task(collect_events())
+    await asyncio.wait_for(receive_started.wait(), timeout=1)
+    abort_event.set()
+    events = await asyncio.wait_for(collect_task, timeout=1)
+
+    assert len(events) == 1
+    assert isinstance(events[0], StoppedEvent)
+    assert client.interrupt_calls == 1
+    assert client.receive_calls == 1
+    assert client.receive_cancelled == 1
+    assert client.yielded_messages == 0
+    assert lifecycle_events == ["create", "connect", "query", "receive_messages", "interrupt"]
 
 
 @pytest.mark.asyncio
