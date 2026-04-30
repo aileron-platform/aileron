@@ -66,7 +66,14 @@ export { FileTreeContextMenu } from './tree/FileTreeContextMenu';
 export type { FileTreeContextMenuProps } from './tree/FileTreeContextMenu';
 export * from './tree/FileOperationDialogs';
 export * from './adapters';
-export * from './viewer';
+export type {
+  FileEditorProps,
+  FileViewerWorkbenchAdapter,
+  FileViewerWorkbenchCapabilities,
+  FileViewerWorkbenchProps,
+  FileViewerWorkbenchStatusMetadata,
+  FileViewerWorkbenchTab,
+} from './viewer/types';
 
 export { StandardFileTreeLayout } from './layouts/StandardFileTreeLayout';
 export type { StandardFileTreeLayoutProps } from './layouts/StandardFileTreeLayout';

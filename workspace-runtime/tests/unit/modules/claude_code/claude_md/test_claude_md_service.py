@@ -101,7 +101,7 @@ class TestClaudeMdService:
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
         claude_md_file = claude_dir / "CLAUDE.md"
-        content = "# 中文標題\n\n這是中文內容 with émojis 🎉"
+        content = "# Test Heading\n\nContent with multi-byte emojis 🎉"
         claude_md_file.write_text(content, encoding="utf-8")
 
         mock_resolve.return_value = claude_dir
@@ -234,8 +234,8 @@ class TestClaudeMdService:
         claude_dir.mkdir()
         mock_resolve.return_value = claude_dir
 
-        # Prepare request - includes Chinese and emojis
-        new_content = "# 測試標題 🚀\n\n中文內容測試 with émojis 🎉"
+        # Prepare request - includes multi-byte UTF-8 emojis
+        new_content = "# Test Heading 🚀\n\nContent with multi-byte emojis 🎉"
         request = ClaudeMdUpdateRequest(scope=ClaudeMdScope.PROJECT, content=new_content)
 
         # Execute

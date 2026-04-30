@@ -16,13 +16,13 @@ def test_workspace_state_when_cli_missing(tmp_path: Path, monkeypatch) -> None:
     service = OpenSpecService(workspace_path=tmp_path)
     monkeypatch.setattr("app.modules.openspec.service.shutil.which", lambda _: None)
 
-    result = service.get_workspace_state("ws-1")
+    result = service.get_workspace_state("ws-1", language="en-US")
 
     assert result.workspaceId == "ws-1"
     assert result.state.cliInstalled is False
     assert result.state.initialized is False
     assert result.actions[0].availability == OpenSpecActionAvailability.SETUP_REQUIRED
-    assert result.actions[0].reason == "OpenSpec CLI 尚未安裝於 workspace runtime"
+    assert result.actions[0].reason == "OpenSpec CLI is not installed in the workspace runtime"
     assert result.changes == []
 
 
@@ -145,25 +145,27 @@ def test_workspace_state_blocks_change_actions_without_active_changes(tmp_path: 
         ),
     )
 
-    result = service.get_workspace_state("ws-1", language="zh-TW")
+    result = service.get_workspace_state("ws-1", language="en-US")
 
     action_map = {action.id: action for action in result.actions}
     assert action_map["propose"].availability == OpenSpecActionAvailability.ENABLED
     assert action_map["propose"].recommended is True
-    assert action_map["propose"].title == "提案"
+    assert action_map["propose"].title == "Propose"
     assert action_map["apply"].availability == OpenSpecActionAvailability.BLOCKED
-    assert action_map["apply"].reason == "目前沒有可用的 OpenSpec change"
+    assert action_map["apply"].reason == "There is no available OpenSpec change right now"
 
 
 def test_workspace_state_falls_back_to_default_language_for_unsupported_locale(tmp_path: Path, monkeypatch) -> None:
     service = OpenSpecService(workspace_path=tmp_path)
     monkeypatch.setattr("app.modules.openspec.service.shutil.which", lambda _: None)
 
-    result = service.get_workspace_state("ws-1", language="fr-FR")
+    result_unsupported = service.get_workspace_state("ws-1", language="fr-FR")
+    result_default = service.get_workspace_state("ws-1")
 
-    assert result.actions[0].title == "提案"
-    assert result.actions[0].description == "建立 change 並產生規劃 artifacts"
-    assert result.actions[0].reason == "OpenSpec CLI 尚未安裝於 workspace runtime"
+    # Unsupported locale must fall back to the same output as the default language
+    assert result_unsupported.actions[0].title == result_default.actions[0].title
+    assert result_unsupported.actions[0].description == result_default.actions[0].description
+    assert result_unsupported.actions[0].reason == result_default.actions[0].reason
 
 
 def test_workspace_state_includes_complete_and_archived_navigation_changes(tmp_path: Path, monkeypatch) -> None:

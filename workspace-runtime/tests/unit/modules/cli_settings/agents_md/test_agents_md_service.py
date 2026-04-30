@@ -118,7 +118,7 @@ class TestAgentsMdService:
     def test_get_document_utf8(self, mock_ws_path, service, config, workspace_id, tmp_path):
         mock_ws_path.return_value = str(tmp_path)
         doc_file = tmp_path / config.file_name
-        content = "# 中文標題\n\n這是中文內容 with émojis 🎉"
+        content = "# Test Heading\n\nContent with multi-byte emojis 🎉"
         doc_file.write_text(content, encoding="utf-8")
 
         result = service.get_document(workspace_id, AgentsMdScope.PROJECT)

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Expand, FileCog, GitFork, type LucideIcon, Minimize2, Plus, RefreshCw, Wrench } from 'lucide-react';
-import Editor from '@monaco-editor/react';
 import yaml from 'js-yaml';
 import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
@@ -21,6 +20,8 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useOpenSpecWorkspace } from '../OpenSpecWorkspaceContext';
 import { getOpenSpecDesignerSection } from '../utils/designerRouting';
 import { openSpecApi, type OpenSpecDesignerSchemaDetail, type OpenSpecDesignerSection, type OpenSpecDesignerValidationResult } from '../../../components/ChatPanel/openSpecApi';
+import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
+import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
 
 const stringifyRules = (rules: Record<string, string[]>) =>
   Object.entries(rules)
@@ -469,6 +470,7 @@ export const OpenSpecDesignerFeature: React.FC = () => {
                             language="yaml"
                             value={schemaEditorValue}
                             theme={editorTheme}
+                            onMount={(_editor, monaco) => disableMonacoDiagnostics(monaco)}
                             onChange={(value) => setSchemaEditorValue(value ?? '')}
                             options={{
                               readOnly: schemaDetail.source !== 'project',

@@ -118,32 +118,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench', () => ({
-  FileFocusToolbar: ({
-    actions,
-    exitLabel,
-    icon,
-    metadata,
-    onExit,
-    subtitle,
-    title,
-  }: {
-    actions?: ReactNode;
-    exitLabel: string;
-    icon?: ReactNode;
-    metadata?: ReactNode;
-    onExit: () => void;
-    subtitle?: ReactNode;
-    title: ReactNode;
-  }) => (
-    <div>
-      <button type="button" onClick={onExit}>{exitLabel}</button>
-      <div>{icon}</div>
-      <div>{title}</div>
-      <div>{subtitle}</div>
-      <div>{metadata}</div>
-      <div>{actions}</div>
-    </div>
-  ),
   StandardFileTreeLayout: ({
     toolbarContent,
     children,
@@ -172,6 +146,38 @@ vi.mock('@/shared/components/file-workbench', () => ({
   FileRenameDialog: () => null,
   FileDeleteDialog: () => null,
   BatchDeleteDialog: () => null,
+  useFileTreeManager: () => mockManager,
+  useFileOperationsWithDialog: () => mockFileOps,
+  useFileTreeContextMenu: () => [],
+}));
+
+vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
+  FileFocusToolbar: ({
+    actions,
+    exitLabel,
+    icon,
+    metadata,
+    onExit,
+    subtitle,
+    title,
+  }: {
+    actions?: ReactNode;
+    exitLabel: string;
+    icon?: ReactNode;
+    metadata?: ReactNode;
+    onExit: () => void;
+    subtitle?: ReactNode;
+    title: ReactNode;
+  }) => (
+    <div>
+      <button type="button" onClick={onExit}>{exitLabel}</button>
+      <div>{icon}</div>
+      <div>{title}</div>
+      <div>{subtitle}</div>
+      <div>{metadata}</div>
+      <div>{actions}</div>
+    </div>
+  ),
   toFileWorkbenchTab: (tab: {
     id?: string;
     path: string;
@@ -213,9 +219,6 @@ vi.mock('@/shared/components/file-workbench', () => ({
       </div>
     );
   },
-  useFileTreeManager: () => mockManager,
-  useFileOperationsWithDialog: () => mockFileOps,
-  useFileTreeContextMenu: () => [],
 }));
 
 vi.mock('./file-workbench/knowledgeBaseFileWorkbenchAdapter', () => ({

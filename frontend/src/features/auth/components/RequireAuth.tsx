@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 
 import { useAuth } from '../hooks/useAuth';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import { useI18n } from '@/shared/hooks/useI18n';
 
 interface RequireAuthProps {
   children: React.ReactElement;
@@ -21,11 +22,12 @@ interface LocationState {
 export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  const { t } = useI18n();
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <LoadingSpinner label="正在驗證使用者..." />
+        <LoadingSpinner label={t('common.authChecking')} />
       </div>
     );
   }
@@ -46,11 +48,12 @@ export const RequireAuth: React.FC<RequireAuthProps> = ({ children }) => {
 export const PublicRoute: React.FC<RequireAuthProps> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  const { t } = useI18n();
 
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <LoadingSpinner label="載入中..." />
+        <LoadingSpinner label={t('common.loading')} />
       </div>
     );
   }

@@ -42,6 +42,7 @@ let lastResetAt = null;
 let lastPackageSignature = null;
 let currentDependencyStrategy = "none";
 let syncInProgress = false;
+let lastDependencyPreparationMs = 0;
 const logs = [];
 
 const REVIEW_BRIDGE_MARKER = "data-aileron-web-canvas-review-bridge";
@@ -550,24 +551,57 @@ function cleanupPort(port) {
   }
 }
 
-function syncToCanvas(sourceDir) {
-  pushLog("management", `Syncing ${sourceDir} to ${WEB_CANVAS_DIR}`);
-  execSync(
-    `rsync -a --delete \
+function elapsedMs(startedAt) {
+  return Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+}
+
+function roundTiming(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
+function buildRsyncCommand(sourceDir, targetDir = WEB_CANVAS_DIR) {
+  return `rsync -a --delete \
+      --chown=developer:developer \
+      --out-format='%i %n%L' \
       --exclude='node_modules' \
       --exclude='.next' \
       --exclude='.git' \
-      "${sourceDir}/" "${WEB_CANVAS_DIR}/"`,
-    {
-      timeout: 60000,
-      stdio: "pipe",
-    }
-  );
-  execSync(`chown -R developer:developer "${WEB_CANVAS_DIR}"`, {
-    timeout: 10000,
+      "${sourceDir}/" "${targetDir}/"`;
+}
+
+function ownershipModeForSync({ recursiveOwnership = false } = {}) {
+  return recursiveOwnership ? "recursive" : "transfer";
+}
+
+function syncToCanvas(sourceDir, { recursiveOwnership = false } = {}) {
+  pushLog("management", `Syncing ${sourceDir} to ${WEB_CANVAS_DIR}`);
+  const startedAt = process.hrtime.bigint();
+  const transferStartedAt = process.hrtime.bigint();
+  execSync(buildRsyncCommand(sourceDir), {
+    timeout: 60000,
     stdio: "pipe",
+    encoding: "utf8",
   });
+  const fileTransferMs = elapsedMs(transferStartedAt);
+  let ownershipMs = 0;
+  const ownershipMode = ownershipModeForSync({ recursiveOwnership });
+  if (ownershipMode === "recursive") {
+    const ownershipStartedAt = process.hrtime.bigint();
+    execSync(`chown -R developer:developer "${WEB_CANVAS_DIR}"`, {
+      timeout: 10000,
+      stdio: "pipe",
+    });
+    ownershipMs = elapsedMs(ownershipStartedAt);
+  }
   lastSyncAt = new Date().toISOString();
+  const timing = {
+    fileTransferMs: roundTiming(fileTransferMs),
+    ownershipMs: roundTiming(ownershipMs),
+    ownershipMode,
+    totalMs: roundTiming(elapsedMs(startedAt)),
+  };
+  pushLog("management", `Sync phase timing ${JSON.stringify(timing)}`);
+  return timing;
 }
 
 function dependencySnapshot(dir) {
@@ -677,6 +711,35 @@ function classifyDependencyStrategy(execDir) {
     reason: extras.length === 0 ? "standard-contract" : "standard-plus-extra",
     extras,
   };
+}
+
+function selectDependencyPreparationAction({
+  execDir,
+  nodeModulesExists,
+  nodeModulesIsSymlink = false,
+  lastSignature,
+  signature,
+  currentStrategy,
+  strategy,
+}) {
+  const needsInstall = !nodeModulesExists
+    || !lastSignature
+    || (signature && signature !== lastSignature)
+    || currentStrategy !== strategy;
+
+  if (!needsInstall) {
+    return { action: "reuse", reason: "signature-unchanged" };
+  }
+  if (execDir === WEB_CANVAS_DIR && strategy === "standard") {
+    return { action: "link-standard", reason: "standard-dependencies" };
+  }
+  if (execDir === WEB_CANVAS_DIR && strategy === "extended") {
+    return { action: "seed-standard-and-install", reason: "extended-dependencies" };
+  }
+  if (nodeModulesIsSymlink) {
+    return { action: "replace-symlink-and-install", reason: "custom-dependencies" };
+  }
+  return { action: "install", reason: "custom-dependencies" };
 }
 
 function removeNodeModules(nodeModulesPath) {
@@ -857,46 +920,56 @@ async function startHtmlRenderer(detection) {
 }
 
 function ensureDependencies(execDir) {
+  const startedAt = process.hrtime.bigint();
   const nodeModulesPath = path.join(execDir, "node_modules");
-  const classification = execDir === WEB_CANVAS_DIR
-    ? classifyDependencyStrategy(execDir)
-    : { strategy: "custom", reason: "non-web-canvas", extras: [] };
-  const signature = dependencySignature(execDir, classification.strategy);
-  const needsInstall = !fs.existsSync(nodeModulesPath)
-    || !lastPackageSignature
-    || (signature && signature !== lastPackageSignature)
-    || currentDependencyStrategy !== classification.strategy;
-  if (!needsInstall) {
-    pushLog("management", `Dependency strategy ${classification.strategy} unchanged for ${execDir}`);
-    return;
-  }
-
-  pushLog("management", `Dependency strategy for ${execDir}: ${classification.strategy} (${classification.reason})`);
-  currentDependencyStrategy = classification.strategy;
-
-  if (execDir === WEB_CANVAS_DIR && classification.strategy === "standard") {
-    removeNodeModules(nodeModulesPath);
-    fs.symlinkSync(NEXTJS_TEMPLATE_NODE_MODULES, nodeModulesPath, "dir");
-    pushLog("management", `Linked standard dependencies from ${NEXTJS_TEMPLATE_NODE_MODULES}`);
-  } else if (execDir === WEB_CANVAS_DIR && classification.strategy === "extended") {
-    removeNodeModules(nodeModulesPath);
-    statusMessage = "Seeding dependencies...";
-    pushLog("management", `Seeding standard dependencies for extended project; extras=${classification.extras.join(",") || "none"}`);
-    execSync(`cp -a "${NEXTJS_TEMPLATE_NODE_MODULES}" "${nodeModulesPath}"`, {
-      timeout: 120000,
-      stdio: "pipe",
-    });
-    chownDeveloper(nodeModulesPath);
-    runNpmInstall(execDir);
-  } else {
+  try {
     const existingNodeModules = fs.existsSync(nodeModulesPath) ? fs.lstatSync(nodeModulesPath) : null;
-    if (existingNodeModules?.isSymbolicLink()) {
-      removeNodeModules(nodeModulesPath);
+    const classification = execDir === WEB_CANVAS_DIR
+      ? classifyDependencyStrategy(execDir)
+      : { strategy: "custom", reason: "non-web-canvas", extras: [] };
+    const signature = dependencySignature(execDir, classification.strategy);
+    const preparationAction = selectDependencyPreparationAction({
+      execDir,
+      nodeModulesExists: Boolean(existingNodeModules),
+      nodeModulesIsSymlink: existingNodeModules?.isSymbolicLink() === true,
+      lastSignature: lastPackageSignature,
+      signature,
+      currentStrategy: currentDependencyStrategy,
+      strategy: classification.strategy,
+    });
+    if (preparationAction.action === "reuse") {
+      pushLog("management", `Dependency strategy ${classification.strategy} unchanged for ${execDir}`);
+      return;
     }
-    runNpmInstall(execDir);
-  }
 
-  lastPackageSignature = signature;
+    pushLog("management", `Dependency strategy for ${execDir}: ${classification.strategy} (${classification.reason})`);
+    currentDependencyStrategy = classification.strategy;
+
+    if (preparationAction.action === "link-standard") {
+      removeNodeModules(nodeModulesPath);
+      fs.symlinkSync(NEXTJS_TEMPLATE_NODE_MODULES, nodeModulesPath, "dir");
+      pushLog("management", `Linked standard dependencies from ${NEXTJS_TEMPLATE_NODE_MODULES}`);
+    } else if (preparationAction.action === "seed-standard-and-install") {
+      removeNodeModules(nodeModulesPath);
+      statusMessage = "Seeding dependencies...";
+      pushLog("management", `Seeding standard dependencies for extended project; extras=${classification.extras.join(",") || "none"}`);
+      execSync(`cp -a "${NEXTJS_TEMPLATE_NODE_MODULES}" "${nodeModulesPath}"`, {
+        timeout: 120000,
+        stdio: "pipe",
+      });
+      chownDeveloper(nodeModulesPath);
+      runNpmInstall(execDir);
+    } else {
+      if (preparationAction.action === "replace-symlink-and-install") {
+        removeNodeModules(nodeModulesPath);
+      }
+      runNpmInstall(execDir);
+    }
+
+    lastPackageSignature = signature;
+  } finally {
+    lastDependencyPreparationMs += elapsedMs(startedAt);
+  }
 }
 
 function startNextProxy(targetPort) {
@@ -1060,6 +1133,8 @@ async function startRendererFromSnapshot() {
 }
 
 async function syncAndStart({ reset = false } = {}) {
+  const totalStartedAt = process.hrtime.bigint();
+  lastDependencyPreparationMs = 0;
   const beforeState = rendererState();
   const beforeDetection = detectCanvas(WEB_CANVAS_DIR);
   const beforeDependencies = dependencySnapshot(WEB_CANVAS_DIR);
@@ -1076,9 +1151,10 @@ async function syncAndStart({ reset = false } = {}) {
     lastPackageSignature = null;
     lastResetAt = new Date().toISOString();
   }
-  syncToCanvas(WORKSPACE_DIR);
+  const syncTiming = syncToCanvas(WORKSPACE_DIR, { recursiveOwnership: reset });
   const detection = detectCanvas(WEB_CANVAS_DIR);
   const afterDependencies = dependencySnapshot(WEB_CANVAS_DIR);
+  const rendererStartedAt = process.hrtime.bigint();
   const rendererAction = selectSyncRendererAction({
     reset,
     beforeState,
@@ -1095,14 +1171,32 @@ async function syncAndStart({ reset = false } = {}) {
     serviceStatus = "running";
     statusMessage = "Canvas Next.js renderer reused";
     pushLog("management", `Reused Canvas renderer after sync (${rendererAction.reason})`);
-    return { detection, rendererAction };
+    const syncTimings = {
+      fileTransferMs: syncTiming.fileTransferMs,
+      ownershipMs: syncTiming.ownershipMs,
+      ownershipMode: syncTiming.ownershipMode,
+      dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
+      rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
+      totalMs: roundTiming(elapsedMs(totalStartedAt)),
+    };
+    pushLog("management", `Sync timing summary ${JSON.stringify(syncTimings)}`);
+    return { detection, rendererAction, syncTimings };
   }
 
   pushLog("management", `Restarting Canvas renderer after sync (${rendererAction.reason})`);
   await stopRenderer();
   serviceStatus = "starting";
   const startedDetection = await startRendererFromSnapshot();
-  return { detection: startedDetection, rendererAction };
+  const syncTimings = {
+    fileTransferMs: syncTiming.fileTransferMs,
+    ownershipMs: syncTiming.ownershipMs,
+    ownershipMode: syncTiming.ownershipMode,
+    dependencyPreparationMs: roundTiming(lastDependencyPreparationMs),
+    rendererReconciliationMs: roundTiming(elapsedMs(rendererStartedAt)),
+    totalMs: roundTiming(elapsedMs(totalStartedAt)),
+  };
+  pushLog("management", `Sync timing summary ${JSON.stringify(syncTimings)}`);
+  return { detection: startedDetection, rendererAction, syncTimings };
 }
 
 app.get("/detect", (_req, res) => {
@@ -1180,7 +1274,7 @@ app.post("/sync", async (_req, res) => {
   }
   syncInProgress = true;
   try {
-    const { detection, rendererAction } = await syncAndStart();
+    const { detection, rendererAction, syncTimings } = await syncAndStart();
     res.json({
       status: "completed",
       type: currentType,
@@ -1190,6 +1284,7 @@ app.post("/sync", async (_req, res) => {
       syncedAt: lastSyncAt,
       rendererAction: rendererAction.action,
       rendererActionReason: rendererAction.reason,
+      syncTimings,
     });
   } catch (err) {
     serviceStatus = "error";
@@ -1208,7 +1303,7 @@ app.post("/reset", async (_req, res) => {
   }
   syncInProgress = true;
   try {
-    const { detection, rendererAction } = await syncAndStart({ reset: true });
+    const { detection, rendererAction, syncTimings } = await syncAndStart({ reset: true });
     res.json({
       status: "completed",
       type: currentType,
@@ -1218,6 +1313,7 @@ app.post("/reset", async (_req, res) => {
       resetAt: lastResetAt,
       rendererAction: rendererAction.action,
       rendererActionReason: rendererAction.reason,
+      syncTimings,
     });
   } catch (err) {
     serviceStatus = "error";
@@ -1278,6 +1374,9 @@ module.exports = {
   REVIEW_BRIDGE_VERSION,
   ENABLE_REVIEW_BRIDGE,
   canvasReviewBridgeScript,
+  buildRsyncCommand,
+  ownershipModeForSync,
+  selectDependencyPreparationAction,
   selectSyncRendererAction,
   injectReviewBridge,
 };

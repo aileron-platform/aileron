@@ -1,8 +1,10 @@
 import React, { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
-import Editor, { type OnChange, type OnMount } from '@monaco-editor/react';
+import type { OnChange, OnMount } from '@monaco-editor/react';
 import { FileText } from 'lucide-react';
 import { useApp } from '@/app/providers/AppProvider';
 import { getLanguageFromFileName } from '@/shared/utils/languageUtils';
+import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
+import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
 
 export interface CodeTextEditorRef {
   undo: () => void;
@@ -49,8 +51,9 @@ export const CodeTextEditor = forwardRef<CodeTextEditorRef, CodeTextEditorProps>
     state.ui.currentTheme === 'dark' ? 'vs-dark' : 'vs'
   ), [state.ui.currentTheme]);
 
-  const handleEditorDidMount: OnMount = (editor) => {
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    disableMonacoDiagnostics(monaco);
   };
 
   const handleEditorChange: OnChange = (value) => {

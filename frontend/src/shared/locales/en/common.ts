@@ -1,6 +1,8 @@
 const common = {
   welcome: 'Welcome, {{name}}',
   loading: 'Loading...',
+  authChecking: 'Verifying user...',
+  notFound: 'Page not found',
   save: 'Save',
   cancel: 'Cancel',
   confirm: 'Confirm',

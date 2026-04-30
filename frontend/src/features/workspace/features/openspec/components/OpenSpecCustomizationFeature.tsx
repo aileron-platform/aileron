@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bug, FileCode2, FileCog, FileText, Save, ShieldCheck } from 'lucide-react';
-import Editor from '@monaco-editor/react';
 import { useApp } from '@/app/providers/AppProvider';
 import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
@@ -12,6 +11,8 @@ import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { openSpecApi, type OpenSpecCustomizationDiagnostic, type OpenSpecCustomizationFileResponse } from '../../../components/ChatPanel/openSpecApi';
 import { useOpenSpecWorkspace } from '../OpenSpecWorkspaceContext';
+import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
+import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
 
 const getFileIcon = (kind?: OpenSpecCustomizationFileResponse['kind']) => {
   if (kind === 'config') return FileCog;
@@ -200,6 +201,7 @@ const OpenSpecCustomizationFeature: React.FC = () => {
                   language={file.language}
                   theme={theme}
                   value={editorValue}
+                  onMount={(_editor, monaco) => disableMonacoDiagnostics(monaco)}
                   onChange={(value) => {
                     setEditorValue(value ?? '');
                     setIsDirty((value ?? '') !== file.content);

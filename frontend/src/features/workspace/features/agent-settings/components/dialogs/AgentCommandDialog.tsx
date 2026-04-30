@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Editor from '@monaco-editor/react';
 import { Terminal } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -26,6 +25,8 @@ import {
 } from '@/shared/components/document-workflow';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
+import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
 import type { AgentDocument, AgentScope } from '../../types';
 
 export interface AgentCommandDialogProps extends DocumentWorkflowDialogProps<AgentDocument> {
@@ -223,6 +224,7 @@ export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
                       height="100%"
                       language="toml"
                       value={content}
+                      onMount={(_editor, monaco) => disableMonacoDiagnostics(monaco)}
                       onChange={(value) => setContent(value ?? '')}
                       options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 13 }}
                     />

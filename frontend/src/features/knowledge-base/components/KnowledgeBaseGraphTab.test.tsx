@@ -1,17 +1,21 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeBaseGraphTab } from './KnowledgeBaseGraphTab';
 
 const {
   getGraphMock,
   apiGetMock,
+  forceAssignMock,
+  forceInferSettingsMock,
   loadGraphMock,
   registerEventsMock,
   translateMock,
 } = vi.hoisted(() => ({
   getGraphMock: vi.fn(),
   apiGetMock: vi.fn(),
+  forceAssignMock: vi.fn(),
+  forceInferSettingsMock: vi.fn(() => ({})),
   loadGraphMock: vi.fn(),
   registerEventsMock: vi.fn(),
   translateMock: vi.fn((key: string, params?: Record<string, string | number>) => {
@@ -72,8 +76,8 @@ vi.mock('@react-sigma/core', () => ({
 
 vi.mock('graphology-layout-forceatlas2', () => ({
   default: {
-    inferSettings: vi.fn(() => ({})),
-    assign: vi.fn(),
+    inferSettings: forceInferSettingsMock,
+    assign: forceAssignMock,
   },
 }));
 
@@ -97,8 +101,14 @@ describe('KnowledgeBaseGraphTab', () => {
   beforeEach(() => {
     getGraphMock.mockReset();
     apiGetMock.mockReset();
+    forceAssignMock.mockReset();
+    forceInferSettingsMock.mockClear();
     loadGraphMock.mockReset();
     registerEventsMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders graph nodes, edges, and type legend', async () => {
@@ -148,6 +158,121 @@ describe('KnowledgeBaseGraphTab', () => {
     expect(screen.getByText('概念')).toBeInTheDocument();
     expect(screen.getByTestId('sigma-container')).toBeInTheDocument();
     await waitFor(() => expect(loadGraphMock).toHaveBeenCalledTimes(1));
+  });
+
+  it('reuses cached node positions when graph topology is unchanged', async () => {
+    const graphResponse = {
+      kbId: 'kb-1',
+      generatedAt: '2026-04-29T00:00:00Z',
+      nodes: [
+        {
+          id: 'wiki/cache/a',
+          label: 'Cache A',
+          type: 'entity',
+          path: 'wiki/cache/a.md',
+          sources: [],
+          outboundCount: 1,
+          inboundCount: 0,
+          degree: 1,
+        },
+        {
+          id: 'wiki/cache/b',
+          label: 'Cache B',
+          type: 'concept',
+          path: 'wiki/cache/b.md',
+          sources: [],
+          outboundCount: 0,
+          inboundCount: 1,
+          degree: 1,
+        },
+      ],
+      edges: [
+        {
+          id: 'wiki/cache/a--wiki/cache/b',
+          source: 'wiki/cache/a',
+          target: 'wiki/cache/b',
+          weight: 1,
+          reasons: [{ type: 'direct_wikilink', weight: 1 }],
+        },
+      ],
+    };
+    getGraphMock.mockResolvedValue(graphResponse);
+
+    const firstRender = render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
+    await waitFor(() => expect(forceAssignMock).toHaveBeenCalledTimes(1));
+    firstRender.unmount();
+
+    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
+
+    await waitFor(() => expect(loadGraphMock).toHaveBeenCalledTimes(2));
+    expect(forceAssignMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds large graph layout and defers refinement', async () => {
+    const idleCallbacks: IdleRequestCallback[] = [];
+    const originalRequestIdleCallback = window.requestIdleCallback;
+    const originalCancelIdleCallback = window.cancelIdleCallback;
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: (callback: IdleRequestCallback) => {
+        idleCallbacks.push(callback);
+        return idleCallbacks.length;
+      },
+    });
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const nodes = Array.from({ length: 90 }, (_, index) => ({
+      id: `wiki/large/${index}`,
+      label: `Large ${index}`,
+      type: index % 2 === 0 ? 'entity' : 'concept',
+      path: `wiki/large/${index}.md`,
+      sources: [],
+      outboundCount: 0,
+      inboundCount: 0,
+      degree: 1,
+    }));
+    const edges = nodes.slice(1).map((node, index) => ({
+      id: `${nodes[index].id}--${node.id}`,
+      source: nodes[index].id,
+      target: node.id,
+      weight: 1,
+      reasons: [{ type: 'direct_wikilink', weight: 1 }],
+    }));
+    getGraphMock.mockResolvedValue({
+      kbId: 'kb-1',
+      generatedAt: '2026-04-29T00:00:00Z',
+      nodes,
+      edges,
+    });
+
+    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
+    await screen.findByText('90 個頁面');
+
+    expect(forceAssignMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ iterations: 48 }),
+    );
+    expect(loadGraphMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      idleCallbacks[0]?.({ didTimeout: false, timeRemaining: () => 50 });
+    });
+
+    expect(forceAssignMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ iterations: 64 }),
+    );
+    expect(loadGraphMock).toHaveBeenCalledTimes(2);
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: originalRequestIdleCallback,
+    });
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: originalCancelIdleCallback,
+    });
   });
 
   it('renders empty state when graph has no pages', async () => {

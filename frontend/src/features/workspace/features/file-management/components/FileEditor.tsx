@@ -5,7 +5,7 @@ import {
   FileFocusToolbar,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-workbench';
+} from '@/shared/components/file-workbench/viewer-entry';
 import { createWorkspaceFileWorkbenchAdapter } from '../adapters/workspaceFileWorkbenchAdapter';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';

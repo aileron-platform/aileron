@@ -156,10 +156,10 @@ class FakeOpenSpecService:
         )
 
 
-def _translate_zh(key: str) -> str:
+def _translate_en(key: str) -> str:
     translations = {
-        "openspec.actions.propose.title": "提案",
-        "openspec.actions.propose.description": "建立 change",
+        "openspec.actions.propose.title": "Propose",
+        "openspec.actions.propose.description": "Create a change",
     }
     return translations[key]
 
@@ -172,8 +172,8 @@ def test_openspec_router_returns_workspace_state() -> None:
 
     @app.middleware("http")
     async def inject_i18n(request, call_next):
-        request.state.language = "zh-TW"
-        request.state.translate = _translate_zh
+        request.state.language = "en-US"
+        request.state.translate = _translate_en
         return await call_next(request)
 
     client = TestClient(app)
@@ -188,8 +188,8 @@ def test_openspec_router_returns_workspace_state() -> None:
     assert payload["workspaceId"] == "ws-1"
     assert payload["state"]["cliInstalled"] is True
     assert payload["actions"][0]["id"] == "propose"
-    assert payload["actions"][0]["title"] == "提案"
-    assert payload["actions"][0]["description"] == "建立 change"
+    assert payload["actions"][0]["title"] == "Propose"
+    assert payload["actions"][0]["description"] == "Create a change"
     assert payload["changes"][0]["name"] == "add-auth"
     assert payload["changes"][0]["status"] == "in-progress"
     assert fake_service.last_context == (OpenSpecActionContextSubview.COMPLETE, "add-auth")
@@ -226,8 +226,8 @@ def test_openspec_router_accepts_customization_subview() -> None:
 
     @app.middleware("http")
     async def inject_i18n(request, call_next):
-        request.state.language = "zh-TW"
-        request.state.translate = _translate_zh
+        request.state.language = "en-US"
+        request.state.translate = _translate_en
         return await call_next(request)
 
     client = TestClient(app)

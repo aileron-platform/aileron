@@ -7,7 +7,6 @@ import { cn } from '@/shared/utils/cn';
 import { sharedComponents } from './markdownComponents';
 import { parseFrontmatterSegments, preprocessMarkdown, type FrontmatterValue } from './markdownPreprocess';
 import { remarkLineBreakTag } from './remarkLineBreakTag';
-import 'katex/dist/katex.min.css';
 
 export type MarkdownVariant = 'default' | 'compact' | 'chat';
 
@@ -81,6 +80,12 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
   className,
 }) => {
   const segments = React.useMemo(() => parseFrontmatterSegments(content ?? ''), [content]);
+
+  React.useEffect(() => {
+    if (content) {
+      void import('katex/dist/katex.min.css');
+    }
+  }, [content]);
 
   if (!content) return null;
 

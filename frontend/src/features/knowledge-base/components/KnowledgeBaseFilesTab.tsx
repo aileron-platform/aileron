@@ -24,7 +24,7 @@ import {
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-workbench';
+} from '@/shared/components/file-workbench/viewer-entry';
 import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';

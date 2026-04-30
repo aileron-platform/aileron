@@ -1,81 +1,81 @@
 #!/bin/bash
-# 測試 Client Browser Relay 連線
+# Test Client Browser Relay connection
 
 set -e
 
 BASE_URL="http://localhost:3002/api/v1/client-browser-relay"
 
 echo "============================================================"
-echo "Client Browser Relay 連線測試"
+echo "Client Browser Relay Connection Test"
 echo "============================================================"
 
-# 測試 1: 檢查 Relay 狀態
+# Test 1: Check Relay status
 echo ""
-echo "=== 測試 1: 檢查 Relay 狀態 ==="
+echo "=== Test 1: Check Relay Status ==="
 RESPONSE=$(curl -s "${BASE_URL}/")
-echo "✓ Relay 狀態:"
+echo "✓ Relay status:"
 echo "$RESPONSE" | jq '.'
 
 EXTENSION_CONNECTED=$(echo "$RESPONSE" | jq -r '.extensionConnected')
 if [ "$EXTENSION_CONNECTED" = "true" ]; then
-    echo "✓ Extension 已連接"
+    echo "✓ Extension connected"
 else
-    echo "✗ Extension 未連接！請確認 Chrome extension 已啟用。"
+    echo "✗ Extension not connected! Please ensure the Chrome extension is enabled."
     exit 1
 fi
 
 TARGETS_COUNT=$(echo "$RESPONSE" | jq -r '.connectedTargetsCount')
 CLIENTS_COUNT=$(echo "$RESPONSE" | jq -r '.playwrightClientsCount')
-echo "✓ 已連接 Targets 數量: $TARGETS_COUNT"
-echo "✓ Playwright 客戶端數量: $CLIENTS_COUNT"
+echo "✓ Connected targets count: $TARGETS_COUNT"
+echo "✓ Playwright clients count: $CLIENTS_COUNT"
 
-# 測試 2: 創建命名頁面
+# Test 2: Create named page
 echo ""
-echo "=== 測試 2: 創建命名頁面 ==="
+echo "=== Test 2: Create Named Page ==="
 PAGE_NAME="test-page-$(date +%s)"
 RESPONSE=$(curl -s -X POST "${BASE_URL}/pages" \
     -H "Content-Type: application/json" \
     -d "{\"name\": \"${PAGE_NAME}\"}")
 
 if echo "$RESPONSE" | jq -e '.wsEndpoint' > /dev/null 2>&1; then
-    echo "✓ 頁面已創建:"
+    echo "✓ Page created:"
     echo "$RESPONSE" | jq '.'
 else
-    echo "✗ 創建頁面失敗:"
+    echo "✗ Failed to create page:"
     echo "$RESPONSE"
 fi
 
-# 測試 3: 列出所有命名頁面
+# Test 3: List all named pages
 echo ""
-echo "=== 測試 3: 列出所有命名頁面 ==="
+echo "=== Test 3: List All Named Pages ==="
 RESPONSE=$(curl -s "${BASE_URL}/pages")
 PAGES=$(echo "$RESPONSE" | jq -r '.pages | length')
 
 if [ "$PAGES" -eq 0 ]; then
-    echo "  (目前沒有命名頁面)"
+    echo "  (no named pages)"
 else
-    echo "✓ 找到 $PAGES 個命名頁面:"
+    echo "✓ Found $PAGES named page(s):"
     echo "$RESPONSE" | jq -r '.pages[]' | sed 's/^/  - /'
 fi
 
-# 測試 4: 健康檢查
+# Test 4: Health check
 echo ""
-echo "=== 測試 4: 健康檢查 ==="
+echo "=== Test 4: Health Check ==="
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/")
 if [ "$HTTP_CODE" = "200" ]; then
-    echo "✓ 健康檢查通過 (HTTP $HTTP_CODE)"
+    echo "✓ Health check passed (HTTP $HTTP_CODE)"
 else
-    echo "✗ 健康檢查失敗 (HTTP $HTTP_CODE)"
+    echo "✗ Health check failed (HTTP $HTTP_CODE)"
 fi
 
 echo ""
 echo "============================================================"
-echo "測試結果摘要"
+echo "Test Results Summary"
 echo "============================================================"
-echo "✓ PASS: Relay 狀態檢查"
-echo "✓ PASS: Extension 連線確認"
-echo "✓ PASS: 創建命名頁面"
-echo "✓ PASS: 列出命名頁面"
-echo "✓ PASS: 健康檢查"
+echo "✓ PASS: Relay status check"
+echo "✓ PASS: Extension connection confirmed"
+echo "✓ PASS: Create named page"
+echo "✓ PASS: List named pages"
+echo "✓ PASS: Health check"
 echo ""
-echo "🎉 所有測試通過！"
+echo "All tests passed!"

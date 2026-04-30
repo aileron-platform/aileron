@@ -8,6 +8,12 @@ vi.mock('../features/auth/components/RequireAuth', () => ({
   PublicRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('@/shared/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 vi.mock('../features/workspace/WorkspaceModule', () => ({
   default: () => <div>workspace-module</div>,
 }));

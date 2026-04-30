@@ -6,6 +6,7 @@ import { SharedMarkdownViewer } from './SharedMarkdownViewer';
 import { SharedMermaidViewer } from './SharedMermaidViewer';
 import type { FileViewerWorkbenchAdapter } from './types';
 
+const mermaidInitializeMock = vi.hoisted(() => vi.fn());
 const mermaidRenderMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -18,7 +19,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 
 vi.mock('mermaid', () => ({
   default: {
-    initialize: vi.fn(),
+    initialize: mermaidInitializeMock,
     render: mermaidRenderMock,
   },
 }));
@@ -44,6 +45,7 @@ class DrawioUnavailableError extends Error {
 
 describe('shared specialized file viewers', () => {
   beforeEach(() => {
+    mermaidInitializeMock.mockReset();
     mermaidRenderMock.mockReset();
     mermaidRenderMock.mockResolvedValue({ svg: '<svg data-testid="diagram-svg"></svg>' });
     vi.stubGlobal('URL', {
@@ -111,11 +113,40 @@ describe('shared specialized file viewers', () => {
     );
 
     await waitFor(() => {
+      expect(mermaidInitializeMock).toHaveBeenCalledWith(expect.objectContaining({ startOnLoad: false }));
       expect(mermaidRenderMock).toHaveBeenCalledWith(expect.stringMatching(/^shared-mermaid-/), 'graph TD; A-->B;');
     });
     expect(document.querySelector('.mermaid-diagram svg')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.mermaid.zoomIn')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.mermaid.copySvg')).toBeInTheDocument();
+  });
+
+  it('defers Mermaid loading until diagram content is rendered', () => {
+    render(
+      <SharedMermaidViewer
+        content="   "
+        fileName="empty.mmd"
+      />,
+    );
+
+    expect(mermaidInitializeMock).not.toHaveBeenCalled();
+    expect(mermaidRenderMock).not.toHaveBeenCalled();
+    expect(screen.getByText('shared.fileViewer.mermaid.empty')).toBeInTheDocument();
+  });
+
+  it('shows a localized Mermaid error fallback when rendering fails', async () => {
+    mermaidRenderMock.mockRejectedValueOnce(new Error('Invalid diagram'));
+
+    render(
+      <SharedMermaidViewer
+        content="graph TD;"
+        fileName="broken.mmd"
+      />,
+    );
+
+    expect(await screen.findByText('shared.fileViewer.mermaid.error.title')).toBeInTheDocument();
+    expect(screen.getByText('shared.fileViewer.mermaid.error.description')).toBeInTheDocument();
+    expect(screen.getByText('Invalid diagram')).toBeInTheDocument();
   });
 
   it('loads image blobs through the injected adapter and keeps image tools shared', async () => {

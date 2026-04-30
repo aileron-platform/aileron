@@ -5,8 +5,10 @@ from __future__ import annotations
 import itertools
 import json
 import re
+from collections.abc import Iterable
 from collections import defaultdict
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +37,7 @@ class KnowledgeBaseGraphService:
         frozenset(("decision", "project")),
         frozenset(("overview", "concept")),
     }
+    CACHE_PATH = ".aileron-kb/graph-cache.json"
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -51,7 +54,24 @@ class KnowledgeBaseGraphService:
         self.wiki_service.initialize(kb)
         root = self._kb_root(kb.id)
         wiki_root = root / "wiki"
-        pages = [self._parse_page(root, path) for path in sorted(wiki_root.rglob("*.md")) if path.is_file()]
+        wiki_paths = [path for path in sorted(wiki_root.rglob("*.md")) if path.is_file()]
+        fingerprint = self._graph_content_fingerprint(root, wiki_paths)
+        cached_graph = self._read_graph_cache(kb_id=kb.id, fingerprint=fingerprint)
+        if cached_graph is not None:
+            return cached_graph
+
+        graph = self._build_graph_from_paths(kb_id=kb.id, root=root, wiki_paths=wiki_paths)
+        self._write_graph_cache(kb_id=kb.id, fingerprint=fingerprint, graph=graph)
+        return graph
+
+    def _build_graph_from_paths(
+        self,
+        *,
+        kb_id: str,
+        root: Path,
+        wiki_paths: list[Path],
+    ) -> KnowledgeBaseGraphResponse:
+        pages = [self._parse_page(root, path) for path in wiki_paths]
         pages_by_id = {page["id"]: page for page in pages}
         aliases = self._page_aliases(pages)
         direct_edges: set[tuple[str, str]] = set()
@@ -112,7 +132,7 @@ class KnowledgeBaseGraphService:
             if source in pages_by_id and target in pages_by_id
         ]
         return KnowledgeBaseGraphResponse(
-            kbId=kb.id,
+            kbId=kb_id,
             generatedAt=datetime.now(timezone.utc),
             nodes=nodes,
             edges=edges,
@@ -121,8 +141,9 @@ class KnowledgeBaseGraphService:
     def write_graph_snapshot(self, *, user_id: str, kb_id: str) -> KnowledgeBaseGraphResponse:
         """Build and persist a graph snapshot report."""
         kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
-        graph = self.build_graph(user_id=user_id, kb_id=kb.id)
-        relative_path = f"reports/graph/graph-{graph.generated_at.strftime('%Y%m%dT%H%M%SZ')}.json"
+        generated_at = datetime.now(timezone.utc)
+        graph = self.build_graph(user_id=user_id, kb_id=kb.id).model_copy(update={"generated_at": generated_at})
+        relative_path = f"reports/graph/graph-{generated_at.strftime('%Y%m%dT%H%M%S%fZ')}.json"
         target = self._resolve_path(kb.id, relative_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         graph.report_path = "/" + relative_path
@@ -137,12 +158,24 @@ class KnowledgeBaseGraphService:
         pages: list[dict[str, Any]],
         edge_reasons: dict[tuple[str, str], list[KnowledgeBaseGraphEdgeReason]],
     ) -> None:
-        for left, right in itertools.combinations(pages, 2):
-            shared = sorted(set(left["sources"]) & set(right["sources"]))
-            if not shared:
+        pages_by_source: dict[str, list[str]] = defaultdict(list)
+        page_by_id = {page["id"]: page for page in pages}
+        for page in pages:
+            for source in page["sources"]:
+                pages_by_source[source].append(page["id"])
+
+        shared_sources_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
+        for source, page_ids in pages_by_source.items():
+            for left_id, right_id in itertools.combinations(sorted(set(page_ids)), 2):
+                shared_sources_by_pair[self._edge_key(left_id, right_id)].add(source)
+
+        for edge_key, shared_sources in sorted(shared_sources_by_pair.items()):
+            left_id, right_id = edge_key
+            if left_id not in page_by_id or right_id not in page_by_id:
                 continue
+            shared = sorted(shared_sources)
             weight = min(0.75, 0.25 * len(shared))
-            edge_reasons[self._edge_key(left["id"], right["id"])].append(
+            edge_reasons[edge_key].append(
                 KnowledgeBaseGraphEdgeReason(
                     type="source_overlap",
                     weight=weight,
@@ -159,18 +192,66 @@ class KnowledgeBaseGraphService:
         edge_reasons: dict[tuple[str, str], list[KnowledgeBaseGraphEdgeReason]],
     ) -> None:
         neighbors = {page["id"]: outbound[page["id"]] | inbound[page["id"]] for page in pages}
-        for left, right in itertools.combinations((page["id"] for page in pages), 2):
-            shared = sorted(neighbors[left] & neighbors[right])
-            if not shared:
-                continue
+        pages_by_neighbor: dict[str, list[str]] = defaultdict(list)
+        for page_id, page_neighbors in neighbors.items():
+            for neighbor in page_neighbors:
+                pages_by_neighbor[neighbor].append(page_id)
+
+        shared_neighbors_by_pair: dict[tuple[str, str], set[str]] = defaultdict(set)
+        for neighbor, page_ids in pages_by_neighbor.items():
+            for left, right in itertools.combinations(sorted(set(page_ids)), 2):
+                shared_neighbors_by_pair[self._edge_key(left, right)].add(neighbor)
+
+        for edge_key, shared_neighbors in sorted(shared_neighbors_by_pair.items()):
+            left, right = edge_key
+            shared = sorted(shared_neighbors)
             weight = min(0.6, 0.2 * len(shared))
-            edge_reasons[self._edge_key(left, right)].append(
+            edge_reasons[edge_key].append(
                 KnowledgeBaseGraphEdgeReason(
                     type="common_neighbor",
                     weight=weight,
                     details={"neighbors": shared, "hasDirectLink": self._edge_key(left, right) in direct_edges},
                 )
             )
+
+    def _graph_content_fingerprint(self, root: Path, wiki_paths: Iterable[Path]) -> str:
+        digest = sha256()
+        for path in sorted(wiki_paths):
+            relative_path = path.relative_to(root).as_posix()
+            content = path.read_bytes()
+            digest.update(relative_path.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(str(len(content)).encode("ascii"))
+            digest.update(b"\0")
+            digest.update(sha256(content).hexdigest().encode("ascii"))
+            digest.update(b"\0")
+        return digest.hexdigest()
+
+    def _read_graph_cache(self, *, kb_id: str, fingerprint: str) -> KnowledgeBaseGraphResponse | None:
+        cache_path = self._resolve_path(kb_id, self.CACHE_PATH)
+        if not cache_path.exists():
+            return None
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if payload.get("fingerprint") != fingerprint:
+            return None
+        graph_payload = payload.get("graph")
+        if not isinstance(graph_payload, dict) or graph_payload.get("kbId") != kb_id:
+            return None
+        return KnowledgeBaseGraphResponse.model_validate(graph_payload)
+
+    def _write_graph_cache(self, *, kb_id: str, fingerprint: str, graph: KnowledgeBaseGraphResponse) -> None:
+        cache_path = self._resolve_path(kb_id, self.CACHE_PATH)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "fingerprint": fingerprint,
+            "graph": graph.model_dump(by_alias=True, mode="json"),
+        }
+        temp_path = cache_path.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temp_path.replace(cache_path)
 
     def _add_type_affinity_edges(
         self,

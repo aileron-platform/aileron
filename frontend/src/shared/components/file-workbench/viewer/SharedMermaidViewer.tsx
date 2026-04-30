@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react';
-import mermaid from 'mermaid';
 import { AlertCircle, Check, Copy, Download, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -7,6 +6,14 @@ import { cn } from '@/shared/utils/cn';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('SharedMermaidViewer');
+type MermaidApi = typeof import('mermaid').default;
+
+let mermaidPromise: Promise<MermaidApi> | null = null;
+
+const loadMermaid = async (): Promise<MermaidApi> => {
+  mermaidPromise ??= import('mermaid').then((module) => module.default);
+  return mermaidPromise;
+};
 
 interface SharedMermaidViewerProps {
   content: string;
@@ -38,18 +45,6 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-      securityLevel: 'loose',
-      fontFamily: 'inherit',
-      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
-      sequence: { useMaxWidth: true, wrap: true },
-      gantt: { useMaxWidth: true },
-    });
-  }, []);
-
-  useEffect(() => {
     if (!content.trim()) {
       setSvg('');
       setError('');
@@ -63,6 +58,16 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
       setError('');
 
       try {
+        const mermaid = await loadMermaid();
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+          securityLevel: 'loose',
+          fontFamily: 'inherit',
+          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+          sequence: { useMaxWidth: true, wrap: true },
+          gantt: { useMaxWidth: true },
+        });
         const id = `shared-mermaid-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
         const { svg: renderedSvg } = await mermaid.render(id, content);
         if (isMounted) {

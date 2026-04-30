@@ -7,9 +7,11 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { Edit, Save, X, Copy, Download, Loader2 } from 'lucide-react';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import MarkdownEditor from '@/shared/components/markdown/MarkdownEditor';
-import Editor, { type OnChange, type OnMount } from '@monaco-editor/react';
+import type { OnChange, OnMount } from '@monaco-editor/react';
 import { useApp } from '@/app/providers/AppProvider';
 import { getLanguageFromFileName } from '@/shared/utils/languageUtils';
+import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
+import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
 
 const logger = createLogger('FileEditor');
 
@@ -146,9 +148,10 @@ export const FileEditor: React.FC<FileEditorProps> = ({
     }
   };
 
-  const handleEditorDidMount: OnMount = (editor) => {
+  const handleEditorDidMount: OnMount = (editor, monaco) => {
     try {
       editorRef.current = editor;
+      disableMonacoDiagnostics(monaco);
     } catch (error) {
       logger.error('Failed to initialize Monaco editor', { error });
     }

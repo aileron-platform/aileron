@@ -9,7 +9,6 @@ import { I18nProvider } from './providers/I18nProvider';
 import { AppRouter } from './AppRouter';
 import { GlobalDialogSystem } from '@/app/components/dialogs/GlobalDialogSystem';
 import { Toaster } from '../shared/components/ui/toaster';
-import { MonacoInitializer } from '../shared/components/monaco/MonacoInitializer';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,7 +29,6 @@ export const AppShell: React.FC = () => {
         enableSystem
       >
         <I18nProvider>
-          <MonacoInitializer />
           <AuthProvider>
             <AppProvider>
               <NavigationProvider>

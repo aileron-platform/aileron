@@ -5,8 +5,11 @@ const {
   REVIEW_BRIDGE_MARKER,
   REVIEW_BRIDGE_SOURCE,
   REVIEW_BRIDGE_VERSION,
+  buildRsyncCommand,
   canvasReviewBridgeScript,
   injectReviewBridge,
+  ownershipModeForSync,
+  selectDependencyPreparationAction,
   selectSyncRendererAction,
 } = require("./server");
 
@@ -39,6 +42,21 @@ test("review bridge script includes protocol constants and selection commands", 
   assert.match(script, /popstate/);
   assert.match(script, /TARGET_SELECTED/);
   assert.match(script, /TARGET_RECTS/);
+});
+
+test("source sync applies ownership during transfer without full-tree chown command", () => {
+  const command = buildRsyncCommand("/workspace", "/web-canvas");
+
+  assert.match(command, /--chown=developer:developer/);
+  assert.match(command, /--out-format=/);
+  assert.doesNotMatch(command, /chown -R/);
+  assert.match(command, /--exclude='node_modules'/);
+  assert.match(command, /"\/workspace\/" "\/web-canvas\/"/);
+});
+
+test("sync ownership mode reserves recursive ownership for reset recovery paths", () => {
+  assert.equal(ownershipModeForSync({ recursiveOwnership: false }), "transfer");
+  assert.equal(ownershipModeForSync({ recursiveOwnership: true }), "recursive");
 });
 
 const nextjsDetection = {
@@ -163,4 +181,57 @@ test("selectSyncRendererAction restarts reset requests", () => {
   });
 
   assert.deepEqual(result, { action: "restarted", reason: "reset" });
+});
+
+test("dependency preparation reuses standard dependencies when signature is unchanged", () => {
+  const result = selectDependencyPreparationAction({
+    execDir: "/web-canvas",
+    nodeModulesExists: true,
+    lastSignature: "signature-1",
+    signature: "signature-1",
+    currentStrategy: "standard",
+    strategy: "standard",
+  });
+
+  assert.deepEqual(result, { action: "reuse", reason: "signature-unchanged" });
+});
+
+test("dependency preparation reuses extended dependencies when signature is unchanged", () => {
+  const result = selectDependencyPreparationAction({
+    execDir: "/web-canvas",
+    nodeModulesExists: true,
+    lastSignature: "signature-1",
+    signature: "signature-1",
+    currentStrategy: "extended",
+    strategy: "extended",
+  });
+
+  assert.deepEqual(result, { action: "reuse", reason: "signature-unchanged" });
+});
+
+test("dependency preparation seeds extended dependencies when signature changes", () => {
+  const result = selectDependencyPreparationAction({
+    execDir: "/web-canvas",
+    nodeModulesExists: true,
+    lastSignature: "signature-1",
+    signature: "signature-2",
+    currentStrategy: "extended",
+    strategy: "extended",
+  });
+
+  assert.deepEqual(result, { action: "seed-standard-and-install", reason: "extended-dependencies" });
+});
+
+test("dependency preparation replaces standard symlinks before custom installs", () => {
+  const result = selectDependencyPreparationAction({
+    execDir: "/default-canvas",
+    nodeModulesExists: true,
+    nodeModulesIsSymlink: true,
+    lastSignature: "signature-1",
+    signature: "signature-2",
+    currentStrategy: "standard",
+    strategy: "custom",
+  });
+
+  assert.deepEqual(result, { action: "replace-symlink-and-install", reason: "custom-dependencies" });
 });

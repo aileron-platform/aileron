@@ -27,7 +27,7 @@ import {
   BatchDeleteDialog,
 } from '@/shared/components/file-workbench';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { FileEditor } from '@/shared/components/file-workbench';
+import { FileEditor } from '@/shared/components/file-workbench/viewer-entry';
 import { apiClient } from '@/shared/api/apiClient';
 import { createTemplateFileTreeDataAdapter } from '@/features/template-management/components/file-workbench/templateFileTreeDataAdapter';
 

@@ -2,10 +2,8 @@
  * ReadWidget - file read display with Markdown parsing and code highlighting.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { FileText, Maximize2 } from 'lucide-react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -19,6 +17,94 @@ import {
 import { WidgetProps } from './types';
 import { ErrorDisplay } from './ErrorDisplay';
 import { useApp } from '@/app/providers/AppProvider';
+
+type SyntaxHighlighterBundle = {
+  SyntaxHighlighter: React.ComponentType<any>;
+  oneDark: any;
+  oneLight: any;
+};
+
+let syntaxHighlighterPromise: Promise<SyntaxHighlighterBundle> | null = null;
+
+const loadSyntaxHighlighter = async (): Promise<SyntaxHighlighterBundle> => {
+  syntaxHighlighterPromise ??= Promise.all([
+    import('react-syntax-highlighter'),
+    import('react-syntax-highlighter/dist/esm/styles/prism'),
+  ]).then(([syntaxModule, stylesModule]) => ({
+    SyntaxHighlighter: syntaxModule.Prism,
+    oneDark: stylesModule.oneDark,
+    oneLight: stylesModule.oneLight,
+  }));
+  return syntaxHighlighterPromise;
+};
+
+interface LazySyntaxHighlighterProps {
+  children: string;
+  isDark: boolean;
+  language: string;
+  showLineNumbers?: boolean;
+  startingLineNumber?: number;
+  PreTag?: string;
+  customStyle?: React.CSSProperties;
+  lineNumberStyle?: React.CSSProperties;
+}
+
+const LazySyntaxHighlighter: React.FC<LazySyntaxHighlighterProps> = ({
+  children,
+  isDark,
+  language,
+  showLineNumbers,
+  startingLineNumber,
+  PreTag,
+  customStyle,
+  lineNumberStyle,
+}) => {
+  const [bundle, setBundle] = React.useState<SyntaxHighlighterBundle | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadSyntaxHighlighter()
+      .then((loadedBundle) => {
+        if (isMounted) {
+          setBundle(loadedBundle);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setBundle(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (!bundle) {
+    return (
+      <pre style={customStyle}>
+        <code>{children}</code>
+      </pre>
+    );
+  }
+
+  const { SyntaxHighlighter, oneDark, oneLight } = bundle;
+
+  return (
+    <SyntaxHighlighter
+      style={isDark ? oneDark : oneLight}
+      language={language}
+      showLineNumbers={showLineNumbers}
+      startingLineNumber={startingLineNumber}
+      PreTag={PreTag}
+      customStyle={customStyle}
+      lineNumberStyle={lineNumberStyle}
+    >
+      {children}
+    </SyntaxHighlighter>
+  );
+};
 
 // Resolve a syntax highlighter language from the file path.
 const getLanguageFromPath = (filePath: string): string => {
@@ -121,8 +207,8 @@ const createMarkdownComponents = (isDark: boolean): Components => ({
     }
 
     return (
-      <SyntaxHighlighter
-        style={isDark ? oneDark : oneLight}
+      <LazySyntaxHighlighter
+        isDark={isDark}
         language={match ? match[1] : 'text'}
         PreTag="div"
         customStyle={{
@@ -132,7 +218,7 @@ const createMarkdownComponents = (isDark: boolean): Components => ({
         }}
       >
         {String(children).replace(/\n$/, '')}
-      </SyntaxHighlighter>
+      </LazySyntaxHighlighter>
     );
   },
   a: ({ href, children }) => (
@@ -206,8 +292,8 @@ export const ReadWidget: React.FC<WidgetProps> = ({ input, output, error, status
     const displayCode = displayLines.join('\n');
 
     return (
-      <SyntaxHighlighter
-        style={isDark ? oneDark : oneLight}
+      <LazySyntaxHighlighter
+        isDark={isDark}
         language={language}
         showLineNumbers={true}
         startingLineNumber={startLine}
@@ -227,7 +313,7 @@ export const ReadWidget: React.FC<WidgetProps> = ({ input, output, error, status
         }}
       >
         {displayCode}
-      </SyntaxHighlighter>
+      </LazySyntaxHighlighter>
     );
   };
 

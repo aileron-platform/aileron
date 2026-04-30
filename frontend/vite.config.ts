@@ -2,9 +2,35 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
+const normalizeModuleId = (id: string) => id.split(path.sep).join('/');
+
+const dependencyChunk = (id: string): string | undefined => {
+  const normalizedId = normalizeModuleId(id);
+  if (!normalizedId.includes('/node_modules/')) {
+    return undefined;
+  }
+
+  if (/[\\/]node_modules[\\/](react|react-dom|react-router-dom|scheduler)[\\/]/.test(id)) {
+    return 'vendor-react';
+  }
+  if (normalizedId.includes('/node_modules/@radix-ui/') || normalizedId.includes('/node_modules/@headlessui/')) {
+    return 'vendor-ui';
+  }
+  if (normalizedId.includes('/node_modules/@monaco-editor/') || normalizedId.includes('/node_modules/monaco-editor/')) {
+    return 'vendor-monaco';
+  }
+  if (normalizedId.includes('/node_modules/@xterm/')) {
+    return 'vendor-terminal';
+  }
+
+  return undefined;
+};
+
+const optionalPreloadPattern = /^assets\/vendor-(mermaid|monaco|syntax-highlighter|terminal)-/;
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // 在 Docker 容器內使用服務名稱，否則使用 localhost
+  // Use the service name inside Docker; use localhost for local development.
   const backendTarget = process.env.DOCKER_ENV === 'true'
     ? 'http://workspace-manager:3001'
     : 'http://localhost:3001';
@@ -14,26 +40,21 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       port: 8082,
       strictPort: true,
-      // 強制清除快取
       hmr: {
         overlay: true,
       },
-      // 代理所有 API 請求到後端服務
       proxy: {
-        // API 路由代理
         '/api': {
           target: backendTarget,
           changeOrigin: true,
           secure: false,
           ws: true
         },
-        // 健康檢查
         '/health': {
           target: backendTarget,
           changeOrigin: true,
           secure: false
         },
-        // 文檔相關
         '/docs': {
           target: backendTarget,
           changeOrigin: true,
@@ -64,20 +85,19 @@ export default defineConfig(({ mode }) => {
         '@/pages': path.resolve(__dirname, './src/pages'),
       },
     },
-    // 構建配置
     build: {
       outDir: 'dist',
       sourcemap: mode === 'development',
+      modulePreload: {
+        polyfill: false,
+        resolveDependencies: (_filename, deps) => deps.filter((dep) => !optionalPreloadPattern.test(dep)),
+      },
       rollupOptions: {
         output: {
-          manualChunks: {
-            vendor: ['react', 'react-dom', 'react-router-dom'],
-            ui: ['@headlessui/react']
-          }
+          manualChunks: dependencyChunk,
         }
       }
     },
-    // 優化依賴
     optimizeDeps: {
       include: ['react', 'react-dom', 'react-router-dom']
     }

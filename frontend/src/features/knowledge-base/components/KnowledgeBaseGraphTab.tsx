@@ -35,6 +35,10 @@ const TYPE_COLORS: Record<string, string> = {
 
 const BASE_NODE_SIZE = 7;
 const MAX_NODE_SIZE = 26;
+const LARGE_GRAPH_LAYOUT_THRESHOLD = 80;
+const SMALL_GRAPH_LAYOUT_ITERATIONS = 120;
+const LARGE_GRAPH_INITIAL_LAYOUT_ITERATIONS = 48;
+const LARGE_GRAPH_IDLE_REFINEMENT_ITERATIONS = 64;
 
 const getNodeColor = (type: string): string => TYPE_COLORS[type] ?? TYPE_COLORS.page;
 
@@ -49,8 +53,47 @@ const normalizePathForApi = (path: string): string => (path.startsWith('/') ? pa
 
 const reasonLabelKey = (type: string): string => `knowledgeBase.graph.reasons.${type}`;
 
-const NODE_POSITION_CACHE = new Map<string, { x: number; y: number }>();
-let lastLayoutKey = '';
+type NodePosition = { x: number; y: number };
+type IdleSchedulerWindow = Window & {
+  requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+const NODE_POSITION_CACHE = new Map<string, Map<string, NodePosition>>();
+
+const graphIdentity = (nodes: KnowledgeBaseGraphNode[], edges: KnowledgeBaseGraphEdge[]): string => {
+  const nodeSignature = nodes
+    .map((node) => `${node.id}:${node.type}:${node.path}`)
+    .sort()
+    .join('|');
+  const edgeSignature = edges
+    .map((edge) => `${edge.source}->${edge.target}:${edge.reasons.map((reason) => reason.type).sort().join(',')}`)
+    .sort()
+    .join('|');
+  return `${nodeSignature}::${edgeSignature}`;
+};
+
+const scheduleIdleLayout = (callback: () => void): (() => void) => {
+  if (typeof window === 'undefined') {
+    callback();
+    return () => undefined;
+  }
+  const schedulerWindow = window as IdleSchedulerWindow;
+  if (schedulerWindow.requestIdleCallback && schedulerWindow.cancelIdleCallback) {
+    const handle = schedulerWindow.requestIdleCallback(() => callback(), { timeout: 1200 });
+    return () => schedulerWindow.cancelIdleCallback?.(handle);
+  }
+  const handle = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(handle);
+};
+
+const updatePositionCache = (identity: string, graph: Graph): void => {
+  const positions = new Map<string, NodePosition>();
+  graph.forEachNode((nodeId, attributes) => {
+    positions.set(nodeId, { x: attributes.x, y: attributes.y });
+  });
+  NODE_POSITION_CACHE.set(identity, positions);
+};
 
 const GraphLoader: React.FC<{
   nodes: KnowledgeBaseGraphNode[];
@@ -61,11 +104,12 @@ const GraphLoader: React.FC<{
   React.useEffect(() => {
     const graph = new Graph({ type: 'undirected' });
     const maxDegree = Math.max(...nodes.map((node) => node.degree), 1);
-    const layoutKey = `${nodes.map((node) => node.id).sort().join('|')}::${edges.length}`;
-    const needsLayout = layoutKey !== lastLayoutKey;
+    const identity = graphIdentity(nodes, edges);
+    const cachedPositions = NODE_POSITION_CACHE.get(identity);
+    const hasCompleteCachedPositions = Boolean(cachedPositions && nodes.every((node) => cachedPositions.has(node.id)));
 
     nodes.forEach((node) => {
-      const cached = NODE_POSITION_CACHE.get(node.id);
+      const cached = cachedPositions?.get(node.id);
       graph.addNode(node.id, {
         x: cached?.x ?? Math.random() * 100,
         y: cached?.y ?? Math.random() * 100,
@@ -94,25 +138,53 @@ const GraphLoader: React.FC<{
       });
     });
 
-    if (needsLayout && nodes.length > 1) {
+    const shouldRunLayout = !hasCompleteCachedPositions && nodes.length > 1;
+    const isLargeGraph = nodes.length > LARGE_GRAPH_LAYOUT_THRESHOLD;
+
+    if (shouldRunLayout) {
       const settings = forceAtlas2.inferSettings(graph);
       forceAtlas2.assign(graph, {
-        iterations: nodes.length > 80 ? 180 : 120,
+        iterations: isLargeGraph ? LARGE_GRAPH_INITIAL_LAYOUT_ITERATIONS : SMALL_GRAPH_LAYOUT_ITERATIONS,
         settings: {
           ...settings,
           gravity: 1,
           scalingRatio: 2,
           strongGravityMode: true,
-          barnesHutOptimize: nodes.length > 50,
+          barnesHutOptimize: isLargeGraph,
         },
       });
-      lastLayoutKey = layoutKey;
-      graph.forEachNode((nodeId, attributes) => {
-        NODE_POSITION_CACHE.set(nodeId, { x: attributes.x, y: attributes.y });
-      });
+      updatePositionCache(identity, graph);
     }
 
     loadGraph(graph);
+
+    if (!shouldRunLayout || !isLargeGraph) {
+      return undefined;
+    }
+
+    let isActive = true;
+    const cancelIdleLayout = scheduleIdleLayout(() => {
+      if (!isActive) {
+        return;
+      }
+      const settings = forceAtlas2.inferSettings(graph);
+      forceAtlas2.assign(graph, {
+        iterations: LARGE_GRAPH_IDLE_REFINEMENT_ITERATIONS,
+        settings: {
+          ...settings,
+          gravity: 1,
+          scalingRatio: 2,
+          strongGravityMode: true,
+          barnesHutOptimize: true,
+        },
+      });
+      updatePositionCache(identity, graph);
+      loadGraph(graph);
+    });
+    return () => {
+      isActive = false;
+      cancelIdleLayout();
+    };
   }, [edges, loadGraph, nodes]);
 
   return null;

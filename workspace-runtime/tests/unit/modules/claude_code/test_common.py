@@ -367,12 +367,12 @@ class TestWriteJsonFile:
     def test_write_json_file_unicode(self, tmp_path):
         """Test Unicode characters."""
         json_file = tmp_path / "test.json"
-        data = {"中文": "測試", "emoji": "😀"}
+        data = {"greeting": "hello 🎉", "emoji": "😀"}
 
         write_json_file(json_file, data)
 
         result = read_json_file(json_file)
-        assert result["中文"] == "測試"
+        assert result["greeting"] == "hello 🎉"
         assert result["emoji"] == "😀"
 
 

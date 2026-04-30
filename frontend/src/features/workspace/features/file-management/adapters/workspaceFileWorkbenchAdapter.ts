@@ -1,5 +1,5 @@
 import { ApiClient } from '@/shared/api/apiClient';
-import type { FileViewerWorkbenchAdapter } from '@/shared/components/file-workbench';
+import type { FileViewerWorkbenchAdapter } from '@/shared/components/file-workbench/viewer-entry';
 
 export interface WorkspaceFileWorkbenchAdapterOptions {
   runtimeBaseUrl?: string;

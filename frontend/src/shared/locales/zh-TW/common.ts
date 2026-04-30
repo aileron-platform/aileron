@@ -1,6 +1,8 @@
 const common = {
   welcome: '歡迎，{{name}}',
   loading: '載入中...',
+  authChecking: '正在驗證使用者...',
+  notFound: '頁面不存在',
   save: '儲存',
   cancel: '取消',
   confirm: '確認',

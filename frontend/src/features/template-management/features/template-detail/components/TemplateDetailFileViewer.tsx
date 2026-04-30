@@ -14,7 +14,7 @@ import {
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
-} from '@/shared/components/file-workbench';
+} from '@/shared/components/file-workbench/viewer-entry';
 import { createTemplateFileWorkbenchAdapter } from '@/features/template-management/components/file-workbench/templateFileWorkbenchAdapter';
 import { createTemplateFileTreeDataAdapter } from '@/features/template-management/components/file-workbench/templateFileTreeDataAdapter';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';

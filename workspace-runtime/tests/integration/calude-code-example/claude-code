@@ -1,16 +1,16 @@
-| 類別 | 範圍 | 路徑 | 備註 |
+| Category | Scope | Path | Notes |
 |------|------|------|------|
-| suagents | project | /worksapce/.claude/agents/ | 放置檔案 |
-|  | user | ~/.claude/agents/ | 放置檔案 |
-| slash commands | project | /workspace/.claude/commands/ | 放置檔案 |
-|  | user | ~/.claude/commands/ | 放置檔案 |
-| output-styles | user | ~/.claude/output-styles (放置檔案) <br /> ~/.claude/settings.local.json (設定OutputStyle) <br />欄位階層：root → outputStyle |  |
-|  | local | .claude/settings.local.json | 放置檔案及修改設定 |
-| mcp | project | /workspace/.claude/.mcp.json | 修改設定 |
-|  | user | ~/.claude.json <br/> 欄位階層：root → projects → /workspace → mcpServers | 修改設定 |
-| hooks | user | ~/.claude/settings.json <br/> 欄位階層：root → hooks | 修改設定 |
-|  | project | /worksapce/.claude/settings.json | 修改設定 |
-|  | local | /workspace/.claude/settings.local.json | 本地覆寫層 |
-| claude.md | user | ~/.claude/CLAUDE.md | 放置檔案 |
-|  | project | /worksapce/.claude/CLAUDE.md | 放置檔案 |
-| permission | user | ~/.claude/settings.json <br /> 欄位階層：root → permissions| 與 hooks 重複 |
+| suagents | project | /worksapce/.claude/agents/ | place files |
+|  | user | ~/.claude/agents/ | place files |
+| slash commands | project | /workspace/.claude/commands/ | place files |
+|  | user | ~/.claude/commands/ | place files |
+| output-styles | user | ~/.claude/output-styles (place files) <br /> ~/.claude/settings.local.json (configure OutputStyle) <br />field hierarchy: root → outputStyle |  |
+|  | local | .claude/settings.local.json | place files and modify settings |
+| mcp | project | /workspace/.claude/.mcp.json | modify settings |
+|  | user | ~/.claude.json <br/> field hierarchy: root → projects → /workspace → mcpServers | modify settings |
+| hooks | user | ~/.claude/settings.json <br/> field hierarchy: root → hooks | modify settings |
+|  | project | /worksapce/.claude/settings.json | modify settings |
+|  | local | /workspace/.claude/settings.local.json | local override layer |
+| claude.md | user | ~/.claude/CLAUDE.md | place files |
+|  | project | /worksapce/.claude/CLAUDE.md | place files |
+| permission | user | ~/.claude/settings.json <br /> field hierarchy: root → permissions| duplicates hooks |

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ScrollText, Wand2 } from 'lucide-react';
-import { FileEditor } from '@/shared/components/file-workbench';
+import { FileEditor } from '@/shared/components/file-workbench/viewer-entry';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentFileCollection, AgentSelectedFile } from '../types';

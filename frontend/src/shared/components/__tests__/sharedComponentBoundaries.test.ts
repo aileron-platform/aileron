@@ -60,9 +60,9 @@ describe('shared component boundaries', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('keeps feature code on the public file-workbench barrel', () => {
+  it('keeps feature code on the public file-workbench barrels', () => {
     const internalFileWorkbenchPattern =
-      /@\/shared\/components\/file-workbench\/(?:adapters|hooks|layouts|primitives|services|tree|utils|viewer)/;
+      /@\/shared\/components\/file-workbench\/(?:adapters|hooks|layouts|primitives|services|tree|utils|viewer(?:\/|['"]))/;
 
     const offenders = readFiles(featureRoots.flatMap(collectSourceFiles))
       .filter(({ relativePath }) => !testPattern.test(relativePath))
@@ -70,6 +70,41 @@ describe('shared component boundaries', () => {
       .map(({ relativePath }) => relativePath);
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps the lightweight file-workbench barrel free of viewer runtime exports', () => {
+    const publicBarrelPath = path.join(sharedComponentsRoot, 'file-workbench/index.ts');
+    const publicBarrel = fs.readFileSync(publicBarrelPath, 'utf8');
+
+    expect(publicBarrel).not.toMatch(/export\s+\*\s+from\s+['"]\.\/viewer['"]/);
+    expect(publicBarrel).not.toMatch(/export\s+\{[^}]*\}\s+from\s+['"]\.\/viewer['"]/s);
+  });
+
+  it('keeps viewer implementations on the viewer-specific file-workbench entry point', () => {
+    const publicBarrelImportsPattern =
+      /import\s+[\s\S]*?\s+from\s+['"]@\/shared\/components\/file-workbench['"]/g;
+    const viewerSymbolsPattern =
+      /\b(FileViewerWorkbench|FileFocusToolbar|FileEditor|CodeTextEditor|Shared(?:Image|Drawio|Markdown|Mermaid)Viewer)\b/;
+
+    const offenders = readFiles(featureRoots.flatMap(collectSourceFiles))
+      .filter(({ relativePath }) => !testPattern.test(relativePath))
+      .filter(({ content }) => {
+        const imports = content.match(publicBarrelImportsPattern) ?? [];
+        return imports.some((importStatement) => viewerSymbolsPattern.test(importStatement));
+      })
+      .map(({ relativePath }) => relativePath);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('keeps Claude read syntax highlighting behind dynamic imports', () => {
+    const readWidgetPath = path.join(srcRoot, 'features/agent-tools/components/ClaudeToolWidget/ReadWidget.tsx');
+    const readWidget = fs.readFileSync(readWidgetPath, 'utf8');
+
+    expect(readWidget).not.toMatch(/import\s+\{?\s*Prism\b[\s\S]*from\s+['"]react-syntax-highlighter['"]/);
+    expect(readWidget).not.toMatch(/from\s+['"]react-syntax-highlighter\/dist\/esm\/styles\/prism['"]/);
+    expect(readWidget).toMatch(/import\(['"]react-syntax-highlighter['"]\)/);
+    expect(readWidget).toMatch(/import\(['"]react-syntax-highlighter\/dist\/esm\/styles\/prism['"]\)/);
   });
 
   it('keeps extracted shared cores free of legacy dialog and union variant contracts', () => {
