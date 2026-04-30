@@ -82,6 +82,7 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
         {
           id: 'att-1',
           workspaceId: 'ws-1',
+          workspaceName: 'Workspace One',
           kbId: 'kb-1',
           mountAlias: 'product-docs',
           mode: 'rw',
@@ -203,6 +204,7 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
   createKnowledgeBaseAttachment: vi.fn(async () => ({
     id: 'att-2',
     workspaceId: 'ws-2',
+    workspaceName: 'Workspace Two',
     kbId: 'kb-1',
     mountAlias: 'product-docs-2',
     mode: 'rw',
@@ -213,6 +215,7 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
   updateKnowledgeBaseAttachment: vi.fn(async () => ({
     id: 'att-1',
     workspaceId: 'ws-1',
+    workspaceName: 'Workspace One',
     kbId: 'kb-1',
     mountAlias: 'product-docs-renamed',
     mode: 'ro',

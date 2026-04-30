@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
       'knowledgeBase.schedules.editor.updateHelper':
         '可以調整 cron 排程，或改選其他符合條件的工作區。若選擇不同工作區並儲存，將會把現有排程移動到該工作區。',
       'knowledgeBase.schedules.editor.workspace': '工作區',
-      'knowledgeBase.schedules.editor.workspaceOption': `${params?.mountAlias ?? ''} (${params?.mode ?? ''})`,
+      'knowledgeBase.schedules.editor.workspaceOption': `${params?.workspaceName ?? ''} · ${params?.mountAlias ?? ''} (${params?.mode ?? ''})`,
       'knowledgeBase.schedules.editor.workspaceEmpty': '尚未掛載至任何工作區',
       'knowledgeBase.schedules.editor.cron': 'Cron schedule',
       'knowledgeBase.schedules.editor.schedule': '排程',
@@ -165,6 +165,7 @@ describe('KnowledgeBaseSchedulesTab', () => {
           {
             id: 'att-1',
             workspaceId: 'ws-rw',
+            workspaceName: 'Production Workspace',
             kbId: 'kb-1',
             mountAlias: 'docs',
             mode: 'rw',
@@ -174,6 +175,7 @@ describe('KnowledgeBaseSchedulesTab', () => {
           {
             id: 'att-2',
             workspaceId: 'ws-ro',
+            workspaceName: 'Staging Workspace',
             kbId: 'kb-1',
             mountAlias: 'docs-readonly',
             mode: 'ro',
@@ -190,8 +192,8 @@ describe('KnowledgeBaseSchedulesTab', () => {
     const select = screen.getByLabelText('工作區');
     const options = within(select).getAllByRole('option');
     expect(options).toHaveLength(2);
-    expect(options[0]).toHaveTextContent('docs (可讀寫)');
-    expect(options[1]).toHaveTextContent('docs-readonly (唯讀)');
+    expect(options[0]).toHaveTextContent('Production Workspace · docs (可讀寫)');
+    expect(options[1]).toHaveTextContent('Staging Workspace · docs-readonly (唯讀)');
     expect(options[1]).toBeDisabled();
     expect(screen.getByText(
       '若要在某個工作區設定 Wiki Index 排程，請先將此知識庫掛載到該工作區，並確認掛載模式為可讀寫。',
@@ -228,6 +230,7 @@ describe('KnowledgeBaseSchedulesTab', () => {
           {
             id: 'att-1',
             workspaceId: 'ws-rw',
+            workspaceName: 'Production Workspace',
             kbId: 'kb-1',
             mountAlias: 'docs',
             mode: 'rw',
@@ -237,6 +240,7 @@ describe('KnowledgeBaseSchedulesTab', () => {
           {
             id: 'att-3',
             workspaceId: 'ws-rw-2',
+            workspaceName: 'Backup Workspace',
             kbId: 'kb-1',
             mountAlias: 'docs-2',
             mode: 'rw',
@@ -281,6 +285,7 @@ describe('KnowledgeBaseSchedulesTab', () => {
           {
             id: 'att-2',
             workspaceId: 'ws-ro',
+            workspaceName: 'Staging Workspace',
             kbId: 'kb-1',
             mountAlias: 'docs-readonly',
             mode: 'ro',
@@ -295,6 +300,45 @@ describe('KnowledgeBaseSchedulesTab', () => {
       '目前沒有可讀寫的工作區掛載。請先把此知識庫以可讀寫模式掛載到目標工作區，再設定 Wiki Index 排程。',
     )).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '建立排程' })).toBeDisabled();
+  });
+
+  it('disambiguates workspaces when two attachments share the same mount alias', async () => {
+    render(
+      <KnowledgeBaseSchedulesTab
+        knowledgeBaseId="kb-1"
+        knowledgeBaseName="Docs"
+        accessRole="editor"
+        attachments={[
+          {
+            id: 'att-1',
+            workspaceId: 'ws-a',
+            workspaceName: 'Alpha Workspace',
+            kbId: 'kb-1',
+            mountAlias: 'docs',
+            mode: 'rw',
+            attachedById: 'user-1',
+            createdAt: '2026-04-29T00:00:00Z',
+          },
+          {
+            id: 'att-2',
+            workspaceId: 'ws-b',
+            workspaceName: 'Beta Workspace',
+            kbId: 'kb-1',
+            mountAlias: 'docs',
+            mode: 'rw',
+            attachedById: 'user-1',
+            createdAt: '2026-04-29T00:00:00Z',
+          },
+        ]}
+      />,
+    );
+
+    const select = await screen.findByLabelText('工作區');
+    const options = within(select).getAllByRole('option');
+    expect(options).toHaveLength(2);
+    expect(options[0]).toHaveTextContent('Alpha Workspace · docs (可讀寫)');
+    expect(options[1]).toHaveTextContent('Beta Workspace · docs (可讀寫)');
+    expect(options[0].textContent).not.toBe(options[1].textContent);
   });
 
   it('uses i18n keys for new schedule UI labels', async () => {

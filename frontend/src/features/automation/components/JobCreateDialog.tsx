@@ -471,7 +471,8 @@ export const JobCreateDialog: React.FC = () => {
                     onChange={(schedule) => setForm(prev => ({ ...prev, schedule }))}
                     onValidationChange={setScheduleValidation}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     {t('automation.form.fields.schedule.timezoneHelper')}
                   </p>
                 </div>

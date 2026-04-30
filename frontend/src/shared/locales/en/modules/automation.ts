@@ -65,7 +65,7 @@ const automation = {
         label: 'Job configuration',
         placeholder: 'e.g. 0 9 * * *',
         helper: 'Cron example: 0 9 * * * runs every day at 09:00.',
-        timezoneHelper: '⏰ All tasks use the system timezone. No need to configure individually.',
+        timezoneHelper: 'All tasks use the system timezone. No need to configure individually.',
       },
       webhookApiKey: {
         label: 'Webhook API Key',

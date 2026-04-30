@@ -295,7 +295,8 @@ export const AutomationJobEditDialog: React.FC<AutomationJobEditDialogProps> = (
                     onChange={(schedule) => setForm(prev => prev ? { ...prev, schedule } : prev)}
                     onValidationChange={setScheduleValidation}
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     {t('automation.form.fields.schedule.timezoneHelper')}
                   </p>
                 </div>

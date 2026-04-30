@@ -118,8 +118,10 @@ def test_knowledge_base_share_and_attachment_flow(test_app, create_user, monkeyp
     assert create_attachment_response.status_code == 201
     assert create_attachment_response.json()["mountAlias"] == "team-docs"
     assert create_attachment_response.json()["mode"] == "rw"
+    assert create_attachment_response.json()["workspaceName"] == "KB Workspace"
     assert list_attachment_response.status_code == 200
     assert len(list_attachment_response.json()["items"]) == 1
+    assert list_attachment_response.json()["items"][0]["workspaceName"] == "KB Workspace"
 
 
 @pytest.mark.integration

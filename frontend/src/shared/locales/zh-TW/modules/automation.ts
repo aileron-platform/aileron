@@ -65,7 +65,7 @@ const automation = {
         label: '執行設定',
         placeholder: '例如：0 9 * * *',
         helper: 'Cron 例：0 9 * * * 表示每日 09:00。',
-        timezoneHelper: '⏰ 所有任務統一使用系統時區，無需個別設定。',
+        timezoneHelper: '所有任務統一使用系統時區，無需個別設定。',
       },
       webhookApiKey: {
         label: 'Webhook API Key',
