@@ -26,8 +26,10 @@ import { GitContextSelector } from './GitContextSelector';
 import {
   VersionControlChangesSidebar,
   VersionControlCreateBranchDialog,
+  useVersionControlFileSelection,
   type VersionControlActionMenuItem,
   type VersionControlCreateBranchPayload,
+  type VersionControlFileGroup,
 } from '@/shared/components/version-control';
 import type { VersionControlFileChange } from '../types';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
@@ -64,14 +66,6 @@ const getErrorDescription = (error: unknown) => (
 export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect }) => {
   // ==================== State Management ====================
 
-  // 選擇狀態
-  const [selectedStagedPath, setSelectedStagedPath] = useState<string | null>(null);
-  const [selectedUnstagedPath, setSelectedUnstagedPath] = useState<string | null>(null);
-  const [selectedStagedPaths, setSelectedStagedPaths] = useState<Set<string>>(new Set());
-  const [selectedUnstagedPaths, setSelectedUnstagedPaths] = useState<Set<string>>(new Set());
-  const [lastSelectedStagedPath, setLastSelectedStagedPath] = useState<string | null>(null);
-  const [lastSelectedUnstagedPath, setLastSelectedUnstagedPath] = useState<string | null>(null);
-
   // 分頁狀態
   const [untrackedPage, setUntrackedPage] = useState(1);
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
@@ -82,9 +76,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const unstagedLoadMoreRef = useRef<HTMLDivElement>(null);
   const previousViewIdentityRef = useRef<string | null>(null);
 
-  // 使用 ref 避免 callback 依賴問題
-  const stagedFilesRef = useRef<VersionControlFileChange[]>([]);
-  const allUnstagedFilesRef = useRef<VersionControlFileChange[]>([]);
   // ==================== Hooks ====================
 
   const { t } = useI18n();
@@ -163,6 +154,12 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     [unstagedFiles, untrackedFiles]
   );
 
+  const fileSelection = useVersionControlFileSelection({
+    stagedFiles,
+    unstagedFiles: allUnstagedFiles,
+    onFileSelect: (file) => onFileSelect?.(file),
+  });
+
   const isMutating = commitMutation.isPending
     || stageMutation.isPending
     || unstageMutation.isPending
@@ -173,12 +170,6 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     || pushMutation.isPending;
 
   // ==================== Effects ====================
-
-  // 更新 ref（避免 callback 依賴問題）
-  useEffect(() => {
-    stagedFilesRef.current = stagedFiles;
-    allUnstagedFilesRef.current = allUnstagedFiles;
-  }, [stagedFiles, allUnstagedFiles]);
 
   // 無限滾動 - Intersection Observer
   useEffect(() => {
@@ -218,14 +209,9 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       return;
     }
 
-    setSelectedStagedPath(null);
-    setSelectedUnstagedPath(null);
-    setSelectedStagedPaths(new Set());
-    setSelectedUnstagedPaths(new Set());
-    setLastSelectedStagedPath(null);
-    setLastSelectedUnstagedPath(null);
+    fileSelection.clearSelection();
     onFileSelect?.(null);
-  }, [currentBranch, onFileSelect, selectedGitContextId]);
+  }, [currentBranch, fileSelection.clearSelection, onFileSelect, selectedGitContextId]);
 
   // 分支切換
   const handleBranchChange = useCallback(async (branch: string) => {
@@ -328,97 +314,23 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   // 處理檔案選擇（支援多選）
   const handleFileSelect = useCallback((
     file: VersionControlFileChange,
-    type: 'staged' | 'unstaged',
+    type: VersionControlFileGroup,
     event?: React.MouseEvent
   ) => {
-    // 防止文字選取
-    if (event?.shiftKey) {
-      event.preventDefault();
-    }
-
-    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
-    const isCtrlOrCmd = isMac ? event?.metaKey : event?.ctrlKey;
-    const isShift = event?.shiftKey;
-
-    if (type === 'staged') {
-      if (isCtrlOrCmd) {
-        setSelectedStagedPaths(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(file.path)) {
-            newSet.delete(file.path);
-          } else {
-            newSet.add(file.path);
-          }
-          return newSet;
-        });
-        setLastSelectedStagedPath(file.path);
-      } else if (isShift && lastSelectedStagedPath) {
-        // 使用 ref 來避免依賴問題
-        const currentStagedFiles = stagedFilesRef.current;
-        const lastIndex = currentStagedFiles.findIndex(f => f.path === lastSelectedStagedPath);
-        const currentIndex = currentStagedFiles.findIndex(f => f.path === file.path);
-
-        if (lastIndex !== -1 && currentIndex !== -1) {
-          const [start, end] = [Math.min(lastIndex, currentIndex), Math.max(lastIndex, currentIndex)];
-          const pathsToSelect = currentStagedFiles.slice(start, end + 1).map(f => f.path);
-          setSelectedStagedPaths(new Set(pathsToSelect));
-        }
-      } else {
-        setSelectedStagedPaths(new Set([file.path]));
-        setLastSelectedStagedPath(file.path);
-      }
-      setSelectedStagedPath(file.path);
-      setSelectedUnstagedPath(null);
-      setSelectedUnstagedPaths(new Set());
-    } else {
-      // 類似邏輯處理 unstaged
-      if (isCtrlOrCmd) {
-        setSelectedUnstagedPaths(prev => {
-          const newSet = new Set(prev);
-          if (newSet.has(file.path)) {
-            newSet.delete(file.path);
-          } else {
-            newSet.add(file.path);
-          }
-          return newSet;
-        });
-        setLastSelectedUnstagedPath(file.path);
-      } else if (isShift && lastSelectedUnstagedPath) {
-        // 使用 ref 來避免依賴問題
-        const currentUnstagedFiles = allUnstagedFilesRef.current;
-        const lastIndex = currentUnstagedFiles.findIndex(f => f.path === lastSelectedUnstagedPath);
-        const currentIndex = currentUnstagedFiles.findIndex(f => f.path === file.path);
-
-        if (lastIndex !== -1 && currentIndex !== -1) {
-          const [start, end] = [Math.min(lastIndex, currentIndex), Math.max(lastIndex, currentIndex)];
-          const pathsToSelect = currentUnstagedFiles.slice(start, end + 1).map(f => f.path);
-          setSelectedUnstagedPaths(new Set(pathsToSelect));
-        }
-      } else {
-        setSelectedUnstagedPaths(new Set([file.path]));
-        setLastSelectedUnstagedPath(file.path);
-      }
-      setSelectedUnstagedPath(file.path);
-      setSelectedStagedPath(null);
-      setSelectedStagedPaths(new Set());
-    }
-    onFileSelect?.(file);
-  }, [lastSelectedStagedPath, lastSelectedUnstagedPath, onFileSelect]);
+    fileSelection.selectFile(file, type, event);
+  }, [fileSelection]);
 
   // 暫存/取消暫存
-  const handleStageToggle = useCallback(async (file: VersionControlFileChange, type: 'staged' | 'unstaged') => {
-    const selectedPaths = type === 'staged' ? selectedStagedPaths : selectedUnstagedPaths;
-    const pathsToProcess = selectedPaths.has(file.path) && selectedPaths.size > 1
-      ? Array.from(selectedPaths)
-      : [file.path];
+  const handleStageToggle = useCallback(async (file: VersionControlFileChange, type: VersionControlFileGroup) => {
+    const pathsToProcess = fileSelection.getActionPaths(file, type);
 
     try {
       if (type === 'staged') {
         await unstageMutation.mutateAsync(pathsToProcess);
-        setSelectedStagedPaths(new Set());
+        fileSelection.clearSelection('staged');
       } else {
         await stageMutation.mutateAsync(pathsToProcess);
-        setSelectedUnstagedPaths(new Set());
+        fileSelection.clearSelection('unstaged');
       }
       resetPagination();
     } catch (error) {
@@ -433,19 +345,17 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [selectedStagedPaths, selectedUnstagedPaths, stageMutation, unstageMutation, resetPagination, t, toast]);
+  }, [fileSelection, stageMutation, unstageMutation, resetPagination, t, toast]);
 
   // 暫存所有
   const handleStageAll = useCallback(async () => {
-    const currentUnstagedFiles = allUnstagedFilesRef.current;
-    const pathsToStage = currentUnstagedFiles.map(f => f.path);
+    const pathsToStage = allUnstagedFiles.map(f => f.path);
     if (pathsToStage.length === 0) return;
 
     try {
-      setSelectedUnstagedPaths(new Set(pathsToStage));
+      fileSelection.selectAll('unstaged', allUnstagedFiles);
       await stageMutation.mutateAsync(pathsToStage);
-      setSelectedUnstagedPaths(new Set());
-      setSelectedUnstagedPath(null);
+      fileSelection.clearSelection('unstaged');
       resetPagination();
     } catch (error) {
       logger.error('Stage all failed', { error });
@@ -455,19 +365,17 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [stageMutation, resetPagination, t, toast]);
+  }, [allUnstagedFiles, fileSelection, stageMutation, resetPagination, t, toast]);
 
   // 取消暫存所有
   const handleUnstageAll = useCallback(async () => {
-    const currentStagedFiles = stagedFilesRef.current;
-    if (currentStagedFiles.length === 0) return;
-    const pathsToUnstage = currentStagedFiles.map(f => f.path);
+    if (stagedFiles.length === 0) return;
+    const pathsToUnstage = stagedFiles.map(f => f.path);
 
     try {
-      setSelectedStagedPaths(new Set(pathsToUnstage));
+      fileSelection.selectAll('staged', stagedFiles);
       await unstageMutation.mutateAsync(pathsToUnstage);
-      setSelectedStagedPaths(new Set());
-      setSelectedStagedPath(null);
+      fileSelection.clearSelection('staged');
       resetPagination();
     } catch (error) {
       logger.error('Unstage all failed', { error });
@@ -477,21 +385,16 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [unstageMutation, resetPagination, t, toast]);
+  }, [fileSelection, resetPagination, stagedFiles, t, toast, unstageMutation]);
 
   // 捨棄變更
   const handleDiscard = useCallback(async (file: VersionControlFileChange) => {
-    const pathsToDiscard = selectedUnstagedPaths.has(file.path) && selectedUnstagedPaths.size > 1
-      ? Array.from(selectedUnstagedPaths)
-      : [file.path];
+    const pathsToDiscard = fileSelection.getActionPaths(file, 'unstaged');
 
     try {
       await discardMutation.mutateAsync(pathsToDiscard);
-      setSelectedUnstagedPaths(new Set());
-      if (pathsToDiscard.includes(selectedUnstagedPath ?? '')) {
-        onFileSelect?.(null);
-        setSelectedUnstagedPath(null);
-      }
+      fileSelection.clearSelection('unstaged');
+      onFileSelect?.(null);
       resetPagination();
     } catch (error) {
       logger.error('Discard failed', { error });
@@ -501,13 +404,13 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [selectedUnstagedPaths, selectedUnstagedPath, discardMutation, onFileSelect, resetPagination, t, toast]);
+  }, [discardMutation, fileSelection, onFileSelect, resetPagination, t, toast]);
 
   // 提交變更
   const handleCommit = useCallback(async (data: { message: string }) => {
     try {
       await commitMutation.mutateAsync(data.message);
-      setSelectedStagedPath(null);
+      fileSelection.clearSelection();
       onFileSelect?.(null);
       resetPagination();
       toast({ title: t('workspace.versionControl.toasts.commitSuccess.title'), variant: 'success' });
@@ -519,7 +422,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [commitMutation, onFileSelect, resetPagination, t, toast]);
+  }, [commitMutation, fileSelection, onFileSelect, resetPagination, t, toast]);
 
   // ==================== Early Returns ====================
 
@@ -580,10 +483,10 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         actions={actionItems}
         stagedFiles={stagedFiles}
         unstagedFiles={allUnstagedFiles}
-        selectedStagedPath={selectedStagedPath}
-        selectedUnstagedPath={selectedUnstagedPath}
-        selectedStagedPaths={selectedStagedPaths}
-        selectedUnstagedPaths={selectedUnstagedPaths}
+        selectedStagedPath={fileSelection.selectedStagedPath}
+        selectedUnstagedPath={fileSelection.selectedUnstagedPath}
+        selectedStagedPaths={fileSelection.selectedStagedPaths}
+        selectedUnstagedPaths={fileSelection.selectedUnstagedPaths}
         isMutating={isMutating}
         onBranchChange={handleBranchChange}
         onCreateBranch={() => setCreateBranchOpen(true)}

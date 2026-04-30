@@ -265,6 +265,7 @@ const knowledgeBase = {
     loadFailed: 'Failed to load version control status',
     errorTitle: 'Version control error',
     confirmDiscard: 'Discard local changes to {{path}}?',
+    confirmDiscardMultiple: 'Discard local changes to {{count}} files?',
     setup: {
       title: 'Enable Git for this knowledge base',
       description: 'Git is optional. Enable it when this wiki needs commit history, rollback, remote sync, or large-file tracking.',

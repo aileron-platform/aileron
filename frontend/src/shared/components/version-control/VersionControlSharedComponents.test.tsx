@@ -53,6 +53,13 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'shared.versionControl.commitFiles.status.modified': 'Modified',
         'shared.versionControl.fileItem.stageTooltip': 'Stage file',
         'shared.versionControl.fileItem.unstageTooltip': 'Unstage file',
+        'shared.versionControl.fileItem.stage': 'Stage',
+        'shared.versionControl.fileItem.unstage': 'Unstage',
+        'shared.versionControl.fileItem.discard': 'Discard changes',
+        'shared.versionControl.fileItem.selectedCount': `${params?.count ?? 0} files selected`,
+        'shared.versionControl.fileItem.stageMultiple': `Stage ${params?.count ?? 0} files`,
+        'shared.versionControl.fileItem.unstageMultiple': `Unstage ${params?.count ?? 0} files`,
+        'shared.versionControl.fileItem.discardMultiple': `Discard changes for ${params?.count ?? 0} files`,
         'shared.versionControl.diff.empty': 'Select a file',
         'shared.versionControl.diff.noDifference': 'No differences',
         'shared.versionControl.diff.loading': 'Loading diff',
@@ -99,6 +106,54 @@ describe('shared version-control components', () => {
 
     expect(screen.getByText('README.md')).toBeInTheDocument();
     expect(onStageToggle).toHaveBeenCalled();
+  });
+
+  it('opens multi-file context actions for selected rows', async () => {
+    const user = userEvent.setup();
+    const onStageToggle = vi.fn();
+
+    render(
+      <VersionControlFileChangeItem
+        file={{ name: 'README.md', path: 'templates/demo/README.md', status: 'M' }}
+        isSelected
+        isMultiSelected
+        type="unstaged"
+        onSelect={vi.fn()}
+        onStageToggle={onStageToggle}
+        selectedCount={2}
+      />,
+    );
+
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByText('README.md') });
+    expect(screen.getByText('2 files selected')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Stage 2 files' }));
+
+    expect(onStageToggle).toHaveBeenCalledWith(expect.objectContaining({ path: 'templates/demo/README.md' }));
+  });
+
+  it('selects an unselected row before opening its context menu', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+
+    render(
+      <VersionControlFileChangeItem
+        file={{ name: 'staged.md', path: 'templates/demo/staged.md', status: 'M' }}
+        isSelected={false}
+        isMultiSelected={false}
+        type="staged"
+        onSelect={onSelect}
+        onStageToggle={vi.fn()}
+        selectedCount={1}
+      />,
+    );
+
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByText('staged.md') });
+
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'templates/demo/staged.md' }),
+      'staged',
+    );
+    expect(screen.getByRole('button', { name: 'Unstage' })).toBeInTheDocument();
   });
 
   it('submits branch creation payloads through the shared dialog', async () => {

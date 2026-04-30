@@ -265,6 +265,7 @@ const knowledgeBase = {
     loadFailed: '無法載入版本控制狀態',
     errorTitle: '版本控制錯誤',
     confirmDiscard: '要捨棄 {{path}} 的本機變更嗎？',
+    confirmDiscardMultiple: '要捨棄 {{count}} 個檔案的本機變更嗎？',
     setup: {
       title: '為這個知識庫啟用 Git',
       description: 'Git 是選用功能。當這份 Wiki 需要變更記錄、復原舊版本、遠端同步或大型檔案追蹤時再啟用。',

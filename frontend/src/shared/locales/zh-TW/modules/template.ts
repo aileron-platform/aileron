@@ -144,6 +144,7 @@ const template = {
       versionControl: {
         rebuildProgressTitle: '模板重建進度',
         confirmDiscard: '確定要捨棄「{{path}}」的變更嗎？此操作無法復原。',
+        confirmDiscardMultiple: '確定要捨棄 {{count}} 個檔案的變更嗎？此操作無法復原。',
         mode: {
           title: '版本控制',
           fileChanges: '檔案變更',

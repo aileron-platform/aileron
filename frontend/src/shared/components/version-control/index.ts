@@ -20,3 +20,5 @@ export type {
 } from './VersionControlRemoteSettingsDialog';
 export { VersionControlResizablePanels } from './VersionControlResizablePanels';
 export type { VersionControlModeRailItem } from './VersionControlModeRail';
+export { useVersionControlFileSelection } from './useVersionControlFileSelection';
+export type { VersionControlFileGroup } from './useVersionControlFileSelection';

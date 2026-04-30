@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@/__tests__/utils/render';
+import { fireEvent, render, screen, waitFor } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplateRegistryVersionControlTab } from './TemplateRegistryVersionControlTab';
@@ -20,6 +20,7 @@ const templateVersionControlApiMock = vi.hoisted(() => ({
     ],
     unstaged: [
       { name: 'README.md', path: 'templates/demo/README.md', status: 'M', additions: 1, deletions: 1 },
+      { name: 'notes.md', path: 'templates/demo/notes.md', status: 'M', additions: 1, deletions: 0 },
     ],
     untracked: [],
   })),
@@ -105,6 +106,11 @@ const tMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) =
     'shared.versionControl.fileItem.stage': 'Stage',
     'shared.versionControl.fileItem.unstage': 'Unstage',
     'shared.versionControl.fileItem.discard': 'Discard',
+    'shared.versionControl.fileItem.selectedCount': `${params?.count ?? 0} files selected`,
+    'shared.versionControl.fileItem.stageMultiple': `Stage ${params?.count ?? 0} files`,
+    'shared.versionControl.fileItem.unstageMultiple': `Unstage ${params?.count ?? 0} files`,
+    'shared.versionControl.fileItem.discardMultiple': `Discard ${params?.count ?? 0} files`,
+    'template.center.settings.versionControl.confirmDiscardMultiple': `Discard ${params?.count ?? 0} files?`,
     'shared.versionControl.diff.empty': 'Select a file',
     'shared.versionControl.diff.noDifference': 'No differences',
     'shared.versionControl.diff.loading': 'Loading diff',
@@ -194,7 +200,7 @@ describe('TemplateRegistryVersionControlTab', () => {
     await user.click(screen.getByRole('button', { name: 'Fetch' }));
     await waitFor(() => expect(templateVersionControlApiMock.fetch).toHaveBeenCalledWith({ branch: 'main' }));
 
-    await user.click(screen.getByTitle('Stage file'));
+    await user.click(screen.getAllByTitle('Stage file')[0]);
     await waitFor(() => expect(templateVersionControlApiMock.stage).toHaveBeenCalledWith(['templates/demo/README.md']));
 
     await user.type(screen.getByPlaceholderText('Commit message'), 'Update registry');
@@ -205,6 +211,28 @@ describe('TemplateRegistryVersionControlTab', () => {
     expect(screen.getByText('Initial registry')).toBeInTheDocument();
     await user.click(screen.getByText('Initial registry'));
     await waitFor(() => expect(templateVersionControlApiMock.getCommitFiles).toHaveBeenCalledWith('abcdef1234567890'));
+  });
+
+  it('stages selected registry files as a batch', async () => {
+    render(
+      <TemplateRegistryVersionControlTab
+        repositoryStatus={initializedRepositoryStatus}
+        onOpenRemoteSettings={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByText('README.md')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('README.md'));
+    fireEvent.click(screen.getByText('notes.md'), { ctrlKey: true });
+    fireEvent.click(screen.getAllByTitle('Stage file')[1]);
+
+    await waitFor(() => {
+      expect(templateVersionControlApiMock.stage).toHaveBeenCalledWith([
+        'templates/demo/README.md',
+        'templates/demo/notes.md',
+      ]);
+    });
   });
 
   it('shows repository setup state before Git is initialized', async () => {

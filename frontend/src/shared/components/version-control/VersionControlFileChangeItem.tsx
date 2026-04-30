@@ -92,7 +92,7 @@ export const VersionControlFileChangeItem: React.FC<VersionControlFileChangeItem
     event.preventDefault();
     event.stopPropagation();
     if (!isMultiSelected) {
-      onSelect(file, type, event);
+      onSelect(file, type);
     }
     const menuHeight = type === 'unstaged' ? 120 : 60;
     const spaceBelow = window.innerHeight - event.clientY;

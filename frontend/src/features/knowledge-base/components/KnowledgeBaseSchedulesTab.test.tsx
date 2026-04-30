@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
       'knowledgeBase.schedules.editor.updateHelper':
         '可以調整 cron 排程，或改選其他符合條件的工作區。若選擇不同工作區並儲存，將會把現有排程移動到該工作區。',
       'knowledgeBase.schedules.editor.workspace': '工作區',
+      'knowledgeBase.schedules.editor.workspaceOption': `${params?.mountAlias ?? ''} (${params?.mode ?? ''})`,
       'knowledgeBase.schedules.editor.workspaceEmpty': '尚未掛載至任何工作區',
       'knowledgeBase.schedules.editor.cron': 'Cron schedule',
       'knowledgeBase.schedules.editor.mountNotice':

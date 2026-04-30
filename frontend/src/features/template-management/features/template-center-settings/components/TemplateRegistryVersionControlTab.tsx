@@ -32,7 +32,9 @@ import {
   VersionControlLayout,
   VersionControlMainDiff,
   VersionControlModeRail,
+  useVersionControlFileSelection,
   type VersionControlActionMenuItem,
+  type VersionControlFileGroup,
 } from '@/shared/components/version-control';
 
 type FileGroup = 'staged' | 'unstaged';
@@ -103,6 +105,14 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
   );
   const changeCount = stagedFiles.length + allUnstagedFiles.length;
   const selectedDiffFile = mode === 'history' ? selectedCommitFile : selectedFile;
+  const fileSelection = useVersionControlFileSelection({
+    stagedFiles,
+    unstagedFiles: allUnstagedFiles,
+    onFileSelect: (file, group) => {
+      setSelectedFile(file);
+      setSelectedGroup(group);
+    },
+  });
 
   const loadData = useCallback(async () => {
     if (!repositoryStatus?.isGitRepo) {
@@ -121,6 +131,8 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
       setChanges(nextChanges);
       setBranches(nextBranches);
       setCommits(nextCommits.items ?? []);
+      setSelectedFile(null);
+      fileSelection.clearSelection();
     } catch (error) {
       toast({
         title: t('template.center.settings.versionControl.toasts.loadFailed.title'),
@@ -132,7 +144,7 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
     } finally {
       setIsLoading(false);
     }
-  }, [repositoryStatus?.isGitRepo, t, toast]);
+  }, [fileSelection.clearSelection, repositoryStatus?.isGitRepo, t, toast]);
 
   useEffect(() => {
     void loadData();
@@ -192,7 +204,7 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
 
   const runMutation = useCallback(async (
     action: () => Promise<unknown>,
-    options?: { staleRegistry?: boolean; successKey?: string },
+    options?: { staleRegistry?: boolean; successKey?: string; onSuccess?: () => void },
   ) => {
     setIsMutating(true);
     try {
@@ -204,6 +216,7 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
         toast({ title: t(options.successKey), variant: 'success' });
       }
       await loadData();
+      options?.onSuccess?.();
     } catch (error) {
       toast({
         title: t('template.center.settings.versionControl.toasts.operationFailed.title'),
@@ -224,39 +237,44 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
       setSelectedCommitFile(null);
     } else {
       setSelectedFile(null);
+      fileSelection.clearSelection();
     }
   };
 
-  const handleFileSelect = (file: VersionControlFileChange, group: FileGroup) => {
-    setSelectedFile(file);
-    setSelectedGroup(group);
+  const clearChangeSelection = useCallback(() => {
+    setSelectedFile(null);
+    fileSelection.clearSelection();
+  }, [fileSelection.clearSelection]);
+
+  const handleFileSelect = (file: VersionControlFileChange, group: VersionControlFileGroup, event?: React.MouseEvent) => {
+    fileSelection.selectFile(file, group, event);
   };
 
   const handleStageToggle = (file: VersionControlFileChange, group: FileGroup) => {
-    const paths = [file.path];
+    const paths = fileSelection.getActionPaths(file, group);
     void runMutation(() => (
       group === 'staged'
         ? templateVersionControlApi.unstage(paths)
         : templateVersionControlApi.stage(paths)
-    ));
+    ), { onSuccess: clearChangeSelection });
   };
 
   const handleDiscard = (file: VersionControlFileChange) => {
-    const confirmed = window.confirm(t('template.center.settings.versionControl.confirmDiscard', { path: file.path }));
+    const paths = fileSelection.getActionPaths(file, 'unstaged');
+    const confirmed = window.confirm(paths.length > 1
+      ? t('template.center.settings.versionControl.confirmDiscardMultiple', { count: paths.length })
+      : t('template.center.settings.versionControl.confirmDiscard', { path: file.path }));
     if (!confirmed) {
       return;
     }
-    void runMutation(() => templateVersionControlApi.discard([file.path]), { staleRegistry: true });
-    if (selectedFile?.path === file.path) {
-      setSelectedFile(null);
-    }
+    void runMutation(() => templateVersionControlApi.discard(paths), { staleRegistry: true, onSuccess: clearChangeSelection });
   };
 
   const handleCommit = ({ message }: { message: string }) => {
     void runMutation(() => templateVersionControlApi.commit(message), {
       successKey: 'template.center.settings.versionControl.toasts.commitSuccess.title',
+      onSuccess: clearChangeSelection,
     });
-    setSelectedFile(null);
   };
 
   const handleRemoteAction = (action: 'fetch' | 'pull' | 'push') => {
@@ -277,8 +295,8 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
     void runMutation(() => templateVersionControlApi.checkoutBranch(branch, { create: false }), {
       staleRegistry: true,
       successKey: 'template.center.settings.versionControl.toasts.checkoutSuccess.title',
+      onSuccess: clearChangeSelection,
     });
-    setSelectedFile(null);
   };
 
   const handleRebuild = async () => {
@@ -306,11 +324,19 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
   };
 
   const handleStageAll = () => {
-    void runMutation(() => templateVersionControlApi.stage(allUnstagedFiles.map((file) => file.path)));
+    fileSelection.selectAll('unstaged', allUnstagedFiles);
+    void runMutation(
+      () => templateVersionControlApi.stage(allUnstagedFiles.map((file) => file.path)),
+      { onSuccess: clearChangeSelection },
+    );
   };
 
   const handleUnstageAll = () => {
-    void runMutation(() => templateVersionControlApi.unstage(stagedFiles.map((file) => file.path)));
+    fileSelection.selectAll('staged', stagedFiles);
+    void runMutation(
+      () => templateVersionControlApi.unstage(stagedFiles.map((file) => file.path)),
+      { onSuccess: clearChangeSelection },
+    );
   };
 
   const actionItems: VersionControlActionMenuItem[] = [
@@ -342,6 +368,8 @@ export const TemplateRegistryVersionControlTab: React.FC<TemplateRegistryVersion
       unstagedFiles={allUnstagedFiles}
       selectedStagedPath={selectedGroup === 'staged' ? selectedFile?.path : null}
       selectedUnstagedPath={selectedGroup === 'unstaged' ? selectedFile?.path : null}
+      selectedStagedPaths={fileSelection.selectedStagedPaths}
+      selectedUnstagedPaths={fileSelection.selectedUnstagedPaths}
       isMutating={isMutating}
       onBranchChange={handleCheckout}
       onCommit={handleCommit}

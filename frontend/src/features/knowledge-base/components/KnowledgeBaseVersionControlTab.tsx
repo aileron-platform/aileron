@@ -15,8 +15,10 @@ import {
   VersionControlModeRail,
   VersionControlCreateBranchDialog,
   VersionControlRemoteSettingsDialog,
+  useVersionControlFileSelection,
   type VersionControlActionMenuItem,
   type VersionControlCreateBranchPayload,
+  type VersionControlFileGroup,
 } from '@/shared/components/version-control';
 import { useI18n } from '@/shared/hooks/useI18n';
 import {
@@ -111,6 +113,14 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
   );
   const changeCount = stagedFiles.length + allUnstagedFiles.length;
   const selectedDiffFile = mode === 'history' ? selectedCommitFile : selectedFile;
+  const fileSelection = useVersionControlFileSelection({
+    stagedFiles,
+    unstagedFiles: allUnstagedFiles,
+    onFileSelect: (file, group) => {
+      setSelectedFile(file);
+      setSelectedGroup(group);
+    },
+  });
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -137,6 +147,8 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
       setChanges(nextChanges);
       setBranches(nextBranches);
       setCommits(nextCommits.items ?? []);
+      setSelectedFile(null);
+      fileSelection.clearSelection();
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : t('knowledgeBase.versionControl.loadFailed');
       setError(message);
@@ -148,7 +160,7 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
     } finally {
       setIsLoading(false);
     }
-  }, [knowledgeBaseId, t, toast]);
+  }, [fileSelection.clearSelection, knowledgeBaseId, t, toast]);
 
   useEffect(() => {
     void loadData();
@@ -235,7 +247,7 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
 
   const runMutation = useCallback(async (
     action: () => Promise<unknown>,
-    options?: { successKey?: string },
+    options?: { successKey?: string; onSuccess?: () => void },
   ) => {
     setIsMutating(true);
     try {
@@ -244,6 +256,7 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
         toast({ title: t(options.successKey), variant: 'success' });
       }
       await loadData();
+      options?.onSuccess?.();
     } catch (mutationError) {
       toast({
         title: t('knowledgeBase.versionControl.toasts.operationFailed.title'),
@@ -294,39 +307,44 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
       setSelectedCommitFile(null);
     } else {
       setSelectedFile(null);
+      fileSelection.clearSelection();
     }
   };
 
-  const handleFileSelect = (file: VersionControlFileChange, group: FileGroup) => {
-    setSelectedFile(file);
-    setSelectedGroup(group);
+  const clearChangeSelection = useCallback(() => {
+    setSelectedFile(null);
+    fileSelection.clearSelection();
+  }, [fileSelection.clearSelection]);
+
+  const handleFileSelect = (file: VersionControlFileChange, group: VersionControlFileGroup, event?: React.MouseEvent) => {
+    fileSelection.selectFile(file, group, event);
   };
 
   const handleStageToggle = (file: VersionControlFileChange, group: FileGroup) => {
-    const paths = [file.path];
+    const paths = fileSelection.getActionPaths(file, group);
     void runMutation(() => (
       group === 'staged'
         ? knowledgeBaseVersionControlApi.unstage(knowledgeBaseId, paths)
         : knowledgeBaseVersionControlApi.stage(knowledgeBaseId, paths)
-    ));
+    ), { onSuccess: clearChangeSelection });
   };
 
   const handleDiscard = (file: VersionControlFileChange) => {
-    const confirmed = window.confirm(t('knowledgeBase.versionControl.confirmDiscard', { path: file.path }));
+    const paths = fileSelection.getActionPaths(file, 'unstaged');
+    const confirmed = window.confirm(paths.length > 1
+      ? t('knowledgeBase.versionControl.confirmDiscardMultiple', { count: paths.length })
+      : t('knowledgeBase.versionControl.confirmDiscard', { path: file.path }));
     if (!confirmed) {
       return;
     }
-    void runMutation(() => knowledgeBaseVersionControlApi.discard(knowledgeBaseId, [file.path]));
-    if (selectedFile?.path === file.path) {
-      setSelectedFile(null);
-    }
+    void runMutation(() => knowledgeBaseVersionControlApi.discard(knowledgeBaseId, paths), { onSuccess: clearChangeSelection });
   };
 
   const handleCommit = ({ message }: { message: string }) => {
     void runMutation(() => knowledgeBaseVersionControlApi.commit(knowledgeBaseId, message), {
       successKey: 'knowledgeBase.versionControl.toasts.commitSuccess.title',
+      onSuccess: clearChangeSelection,
     });
-    setSelectedFile(null);
   };
 
   const handleRemoteAction = (action: 'fetch' | 'pull' | 'push') => {
@@ -342,8 +360,8 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
     }
     void runMutation(() => knowledgeBaseVersionControlApi.checkoutBranch(knowledgeBaseId, branch, { create: false }), {
       successKey: 'knowledgeBase.versionControl.toasts.checkoutSuccess.title',
+      onSuccess: clearChangeSelection,
     });
-    setSelectedFile(null);
   };
 
   const handleCreateBranch = ({
@@ -360,9 +378,9 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
       stashChanges: stashChanges ?? false,
     }), {
       successKey: 'knowledgeBase.versionControl.toasts.checkoutSuccess.title',
+      onSuccess: clearChangeSelection,
     });
     setCreateBranchOpen(false);
-    setSelectedFile(null);
   };
 
   const handleSetRemoteUrl = (remoteUrl: string) => {
@@ -376,11 +394,19 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
   };
 
   const handleStageAll = () => {
-    void runMutation(() => knowledgeBaseVersionControlApi.stage(knowledgeBaseId, allUnstagedFiles.map((file) => file.path)));
+    fileSelection.selectAll('unstaged', allUnstagedFiles);
+    void runMutation(
+      () => knowledgeBaseVersionControlApi.stage(knowledgeBaseId, allUnstagedFiles.map((file) => file.path)),
+      { onSuccess: clearChangeSelection },
+    );
   };
 
   const handleUnstageAll = () => {
-    void runMutation(() => knowledgeBaseVersionControlApi.unstage(knowledgeBaseId, stagedFiles.map((file) => file.path)));
+    fileSelection.selectAll('staged', stagedFiles);
+    void runMutation(
+      () => knowledgeBaseVersionControlApi.unstage(knowledgeBaseId, stagedFiles.map((file) => file.path)),
+      { onSuccess: clearChangeSelection },
+    );
   };
 
   if (isLoading) {
@@ -438,6 +464,8 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
       unstagedFiles={allUnstagedFiles}
       selectedStagedPath={selectedGroup === 'staged' ? selectedFile?.path : null}
       selectedUnstagedPath={selectedGroup === 'unstaged' ? selectedFile?.path : null}
+      selectedStagedPaths={fileSelection.selectedStagedPaths}
+      selectedUnstagedPaths={fileSelection.selectedUnstagedPaths}
       isMutating={isMutating}
       onBranchChange={handleCheckout}
       onCreateBranch={canWriteGit(accessRole) ? () => setCreateBranchOpen(true) : undefined}

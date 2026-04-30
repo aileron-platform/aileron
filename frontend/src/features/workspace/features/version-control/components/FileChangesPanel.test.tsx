@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@/__tests__/utils/render';
+import { fireEvent, render, screen } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/shared/api/apiClient';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,9 @@ const {
   pullMutationMock,
   pushMutationMock,
   checkoutMutationMock,
+  stageMutationMock,
+  unstageMutationMock,
+  discardMutationMock,
   toastMock,
 } = vi.hoisted(() => ({
   onFileSelectMock: vi.fn(),
@@ -42,6 +45,9 @@ const {
   pullMutationMock: { mutateAsync: vi.fn(), isPending: false },
   pushMutationMock: { mutateAsync: vi.fn(), isPending: false },
   checkoutMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  stageMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  unstageMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  discardMutationMock: { mutateAsync: vi.fn(), isPending: false },
   toastMock: vi.fn(),
 }));
 
@@ -120,10 +126,10 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
   useChangesQuery: () => changesQueryMock,
   useBranchesQuery: (...args: unknown[]) => useBranchesQueryMock(...args),
   useStatusQuery: () => statusQueryMock,
-  useStageMutation: () => ({ mutateAsync: vi.fn() }),
-  useUnstageMutation: () => ({ mutateAsync: vi.fn() }),
+  useStageMutation: () => stageMutationMock,
+  useUnstageMutation: () => unstageMutationMock,
   useCommitMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useDiscardMutation: () => ({ mutateAsync: vi.fn() }),
+  useDiscardMutation: () => discardMutationMock,
   useFetchMutation: () => fetchMutationMock,
   usePullMutation: () => pullMutationMock,
   usePushMutation: () => pushMutationMock,
@@ -141,6 +147,12 @@ describe('FileChangesPanel', () => {
     pullMutationMock.mutateAsync.mockResolvedValue({});
     pushMutationMock.mutateAsync.mockResolvedValue({});
     checkoutMutationMock.mutateAsync.mockResolvedValue({ branch: 'feature/new', created: true });
+    stageMutationMock.mutateAsync.mockClear();
+    unstageMutationMock.mutateAsync.mockClear();
+    discardMutationMock.mutateAsync.mockClear();
+    stageMutationMock.mutateAsync.mockResolvedValue({});
+    unstageMutationMock.mutateAsync.mockResolvedValue({});
+    discardMutationMock.mutateAsync.mockResolvedValue({});
     toastMock.mockClear();
   });
 
@@ -175,6 +187,22 @@ describe('FileChangesPanel', () => {
 
     expect(screen.getAllByText('notes.md').length).toBeGreaterThan(0);
     expect(screen.getAllByText('draft.txt').length).toBeGreaterThan(0);
+  });
+
+  it('stages selected workspace files as a batch', async () => {
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getAllByText('notes.md')[0]);
+    fireEvent.click(screen.getAllByText('draft.txt')[0], { ctrlKey: true });
+    fireEvent.click(screen.getAllByTitle('Stage file')[1]);
+
+    expect(stageMutationMock.mutateAsync).toHaveBeenCalledWith(['notes.md', 'draft.txt']);
   });
 
   it('wires refresh, fetch, pull, and push actions', async () => {

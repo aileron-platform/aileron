@@ -29,6 +29,14 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 const toastMock = vi.hoisted(() => vi.fn());
+const selectionActionPathsMock = vi.hoisted(() => vi.fn((file: { path: string }) => [file.path]));
+const selectionClearMock = vi.hoisted(() => vi.fn());
+const selectionSelectAllMock = vi.hoisted(() => vi.fn());
+const selectionSelectFileMock = vi.hoisted(() => vi.fn((
+  file: { path: string },
+  group: 'staged' | 'unstaged',
+  onFileSelect?: (file: { path: string }, group: 'staged' | 'unstaged') => void,
+) => onFileSelect?.(file, group)));
 const translateMock = vi.hoisted(() => {
   const translations: Record<string, string> = {
     'knowledgeBase.versionControl.loading': '載入版本控制',
@@ -46,6 +54,7 @@ const translateMock = vi.hoisted(() => {
     'shared.versionControl.mode.commitHistory': '變更記錄',
     'shared.versionControl.branchDialog.title': '建立分支',
     'shared.versionControl.remoteDialog.title': '遠端設定',
+    'knowledgeBase.versionControl.confirmDiscardMultiple': '捨棄 {{count}} 個檔案',
   };
   return vi.fn((key: string, values?: Record<string, string | number>) => {
     let value = translations[key] ?? key;
@@ -93,6 +102,18 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
 }));
 
 vi.mock('@/shared/components/version-control', () => ({
+  useVersionControlFileSelection: ({ onFileSelect }: {
+    onFileSelect?: (file: { path: string }, group: 'staged' | 'unstaged') => void;
+  }) => ({
+    selectedStagedPath: null,
+    selectedUnstagedPath: null,
+    selectedStagedPaths: new Set<string>(),
+    selectedUnstagedPaths: new Set<string>(),
+    clearSelection: selectionClearMock,
+    getActionPaths: selectionActionPathsMock,
+    selectAll: selectionSelectAllMock,
+    selectFile: (file: { path: string }, group: 'staged' | 'unstaged') => selectionSelectFileMock(file, group, onFileSelect),
+  }),
   VersionControlLayout: ({ modeRail, sidebar, main }: {
     modeRail: React.ReactNode;
     sidebar: React.ReactNode;
@@ -120,16 +141,33 @@ vi.mock('@/shared/components/version-control', () => ({
       {footer}
     </div>
   ),
-  VersionControlChangesSidebar: ({ currentBranch, stagedFiles, unstagedFiles, onCreateBranch, actions }: {
+  VersionControlChangesSidebar: ({ currentBranch, stagedFiles, unstagedFiles, onCreateBranch, actions, onStageToggle, onDiscard }: {
     currentBranch: string;
-    stagedFiles: unknown[];
-    unstagedFiles: unknown[];
+    stagedFiles: Array<{ path: string; name: string }>;
+    unstagedFiles: Array<{ path: string; name: string }>;
     onCreateBranch?: () => void;
     actions: Array<{ id: string; onClick: () => void }>;
+    onStageToggle: (file: { path: string; name: string }, group: 'staged' | 'unstaged') => void;
+    onDiscard?: (file: { path: string; name: string }) => void;
   }) => (
     <div data-testid="version-control-changes-sidebar">
       {currentBranch}:{stagedFiles.length}:{unstagedFiles.length}
       {onCreateBranch && <button type="button" onClick={onCreateBranch}>create branch</button>}
+      {stagedFiles.map((file) => (
+        <button key={`unstage-${file.path}`} type="button" onClick={() => onStageToggle(file, 'staged')}>
+          unstage {file.name}
+        </button>
+      ))}
+      {unstagedFiles.map((file) => (
+        <button key={`stage-${file.path}`} type="button" onClick={() => onStageToggle(file, 'unstaged')}>
+          stage {file.name}
+        </button>
+      ))}
+      {unstagedFiles.map((file) => (
+        <button key={`discard-${file.path}`} type="button" onClick={() => onDiscard?.(file)}>
+          discard {file.name}
+        </button>
+      ))}
       {actions.map((action) => (
         <button key={action.id} type="button" onClick={action.onClick}>
           {action.id}
@@ -220,7 +258,10 @@ describe('KnowledgeBaseVersionControlTab', () => {
     });
     apiMocks.getChanges.mockResolvedValue({
       staged: [{ name: 'README.md', path: 'README.md', status: 'modified' }],
-      unstaged: [{ name: 'notes.md', path: 'notes.md', status: 'modified' }],
+      unstaged: [
+        { name: 'notes.md', path: 'notes.md', status: 'modified' },
+        { name: 'draft.md', path: 'draft.md', status: 'modified' },
+      ],
       untracked: [],
     });
     apiMocks.getBranches.mockResolvedValue([{ name: 'main', isActive: true }]);
@@ -231,6 +272,7 @@ describe('KnowledgeBaseVersionControlTab', () => {
     apiMocks.revert.mockResolvedValue({ success: true, message: 'ok' });
     apiMocks.rollback.mockResolvedValue({ success: true, message: 'ok' });
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    selectionActionPathsMock.mockImplementation((file: { path: string }) => [file.path]);
   });
 
   it('renders the enable card when the knowledge base has no Git repository', async () => {
@@ -271,7 +313,7 @@ describe('KnowledgeBaseVersionControlTab', () => {
 
     expect(await screen.findByTestId('version-control-layout')).toBeInTheDocument();
     expect(screen.getByTestId('version-control-mode-rail')).toHaveTextContent('版本控制');
-    expect(screen.getByTestId('version-control-changes-sidebar')).toHaveTextContent('main:1:1');
+    expect(screen.getByTestId('version-control-changes-sidebar')).toHaveTextContent('main:1:2');
     expect(screen.getByTestId('version-control-main-diff')).toHaveTextContent('empty');
   });
 
@@ -353,5 +395,28 @@ describe('KnowledgeBaseVersionControlTab', () => {
     expect(screen.queryByText('ahead 0 / behind 0')).not.toBeInTheDocument();
     expect(apiMocks.revert).not.toHaveBeenCalled();
     expect(apiMocks.rollback).not.toHaveBeenCalled();
+  });
+
+  it('passes selected Knowledge Base file paths to batch actions', async () => {
+    const user = userEvent.setup();
+    apiMocks.getKnowledgeBaseGitRepositoryStatus.mockResolvedValue({
+      isGitRepo: true,
+      currentBranch: 'main',
+      remoteUrl: null,
+      hasOrigin: false,
+      hasLocalContent: true,
+      canCloneSafely: false,
+      canInitSafely: false,
+      cloneBlockedReason: null,
+    });
+    selectionActionPathsMock.mockReturnValue(['notes.md', 'draft.md']);
+
+    render(<KnowledgeBaseVersionControlTab knowledgeBaseId="kb-1" accessRole="owner" versionControlEnabled />);
+
+    await user.click(await screen.findByRole('button', { name: 'stage notes.md' }));
+    await waitFor(() => expect(apiMocks.stage).toHaveBeenCalledWith('kb-1', ['notes.md', 'draft.md']));
+
+    await user.click(screen.getByRole('button', { name: 'discard notes.md' }));
+    await waitFor(() => expect(apiMocks.discard).toHaveBeenCalledWith('kb-1', ['notes.md', 'draft.md']));
   });
 });

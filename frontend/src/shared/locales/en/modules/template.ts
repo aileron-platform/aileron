@@ -144,6 +144,7 @@ const template = {
       versionControl: {
         rebuildProgressTitle: 'Template rebuild progress',
         confirmDiscard: 'Discard changes to "{{path}}"? This action cannot be undone.',
+        confirmDiscardMultiple: 'Discard changes to {{count}} files? This action cannot be undone.',
         mode: {
           title: 'Version Control',
           fileChanges: 'File Changes',
