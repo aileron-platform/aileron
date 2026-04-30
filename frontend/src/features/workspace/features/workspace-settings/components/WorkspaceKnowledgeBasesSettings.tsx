@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, Database, Link2, Plus, Unplug, Workflow } from 'lucide-react';
+import { Check, Database, FolderTree, Link2, Plus, Unplug, Workflow } from 'lucide-react';
 import { apiClient } from '@/shared/api/apiClient';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -209,39 +209,6 @@ export const WorkspaceKnowledgeBasesSettings: React.FC = () => {
     workspaceId,
   ]);
 
-  const handleAliasUpdate = React.useCallback(
-    async (attachmentId: string, nextAlias: string) => {
-      if (!workspaceId || !canManageAttachments) {
-        return;
-      }
-
-      setBusyAttachmentId(attachmentId);
-      setError(null);
-      try {
-        await apiClient.patch(
-          `/workspaces/${encodeURIComponent(workspaceId)}/knowledge-bases/${encodeURIComponent(attachmentId)}`,
-          {
-            mountAlias: nextAlias.trim() || undefined,
-          },
-        );
-        await loadWorkspaceDetail();
-        toast({
-          title: t('workspace.workspaceSettings.knowledgeBases.notifications.aliasUpdatedTitle'),
-          description: nextAlias,
-        });
-      } catch (err) {
-        setError(
-          err instanceof Error && err.message
-            ? err.message
-            : t('workspace.workspaceSettings.knowledgeBases.notifications.updateFailed'),
-        );
-      } finally {
-        setBusyAttachmentId(null);
-      }
-    },
-    [canManageAttachments, loadWorkspaceDetail, t, toast, workspaceId],
-  );
-
   const handleModeUpdate = React.useCallback(
     async (attachmentId: string, attachment: WorkspaceKnowledgeBaseAttachmentSummary, nextMode: KnowledgeBaseAttachmentMode) => {
       if (!workspaceId || !canManageAttachments) {
@@ -367,31 +334,21 @@ export const WorkspaceKnowledgeBasesSettings: React.FC = () => {
                   {t('workspace.workspaceSettings.knowledgeBases.desired.empty')}
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="-mx-4 divide-y divide-border/60 border-y border-border/60 sm:-mx-6">
                   {attachments.map((attachment) => {
                     const modeLocked = attachment.role === 'viewer';
                     return (
-                      <div
-                        key={attachment.id}
-                        className="flex flex-col gap-4 rounded-xl border border-border/60 bg-card/60 p-4"
-                      >
+                      <div key={attachment.id} className="space-y-3 px-4 py-4 sm:px-6">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="truncate font-medium text-foreground">
-                                {attachment.name}
-                              </span>
-                              <Badge variant="outline">{attachment.slug}</Badge>
-                              <Badge variant={attachment.mode === 'rw' ? 'secondary' : 'outline'}>
-                                {attachment.mode.toUpperCase()}
-                              </Badge>
-                              {attachment.role ? (
-                                <Badge variant="outline">{attachment.role}</Badge>
-                              ) : null}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              /knowledge/{attachment.mountAlias}
-                            </div>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Database className="h-4 w-4 shrink-0 text-sky-600" />
+                            <span className="truncate font-medium text-foreground">
+                              {attachment.name}
+                            </span>
+                            <Badge variant="outline">{attachment.slug}</Badge>
+                            {attachment.role ? (
+                              <Badge variant="outline">{attachment.role}</Badge>
+                            ) : null}
                           </div>
                           {canManageAttachments ? (
                             <Button
@@ -413,22 +370,16 @@ export const WorkspaceKnowledgeBasesSettings: React.FC = () => {
                             <Label htmlFor={`workspace-kb-alias-${attachment.id}`}>
                               {t('workspace.workspaceSettings.knowledgeBases.form.aliasLabel')}
                             </Label>
-                            <div className="flex gap-2">
-                              <Input
-                                id={`workspace-kb-alias-${attachment.id}`}
-                                defaultValue={attachment.mountAlias}
-                                disabled={!canManageAttachments || isMutating || busyAttachmentId === attachment.id}
-                                onBlur={(event) => {
-                                  const nextAlias = event.target.value.trim();
-                                  if (nextAlias && nextAlias !== attachment.mountAlias) {
-                                    void handleAliasUpdate(attachment.id, nextAlias);
-                                  }
-                                }}
-                              />
-                              <Badge variant="outline" className="shrink-0 self-center">
-                                /knowledge/{attachment.mountAlias}
-                              </Badge>
-                            </div>
+                            <Input
+                              id={`workspace-kb-alias-${attachment.id}`}
+                              value={attachment.mountAlias}
+                              readOnly
+                              disabled
+                            />
+                            <p className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground">
+                              <FolderTree className="h-3.5 w-3.5" />
+                              /knowledge/{attachment.mountAlias}
+                            </p>
                           </div>
 
                           <div className="space-y-2">

@@ -6,11 +6,10 @@
 
 import React from 'react';
 import { Command } from 'lucide-react';
-import { SettingsPage, OutputStylesPage, SubagentsPage, MemoryPage } from './pages';
+import { SettingsPage, OutputStylesPage, SubagentsPage, MemoryPage, SlashCommandsPage } from './pages';
 import AgentsMdPage from '../agent-settings/pages/AgentsMdPage';
 import MCPSettingsPage from '../agent-settings/pages/MCPSettingsPage';
 import HooksSettingsPage from '../agent-settings/pages/HooksSettingsPage';
-import SlashCommandsPage from '../agent-settings/pages/SlashCommandsPage';
 import SkillsPage from '../agent-settings/pages/SkillsPage';
 import ScriptsPage from '../agent-settings/pages/ScriptsPage';
 import { getAgentToolConfig } from '../agent-settings/utils';

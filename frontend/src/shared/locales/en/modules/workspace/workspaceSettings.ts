@@ -150,7 +150,6 @@ const workspaceSettings = {
       loadFailed: 'Failed to load workspace knowledge bases.',
       attachSuccessTitle: 'Knowledge base attached',
       attachFailed: 'Failed to attach knowledge base.',
-      aliasUpdatedTitle: 'Mount alias updated',
       modeUpdatedTitle: 'Mount mode updated',
       updateFailed: 'Failed to update knowledge base attachment.',
       detachSuccessTitle: 'Knowledge base detached',

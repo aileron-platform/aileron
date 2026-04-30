@@ -150,7 +150,6 @@ const workspaceSettings = {
       loadFailed: '無法載入工作區知識庫設定。',
       attachSuccessTitle: '知識庫已掛載',
       attachFailed: '無法掛載知識庫。',
-      aliasUpdatedTitle: '掛載別名已更新',
       modeUpdatedTitle: '掛載模式已更新',
       updateFailed: '無法更新知識庫掛載設定。',
       detachSuccessTitle: '知識庫已解除掛載',
