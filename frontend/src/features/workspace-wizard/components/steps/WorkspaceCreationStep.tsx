@@ -1,10 +1,18 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('WorkspaceCreationStep');
-import { ArrowLeft, CheckCircle, Loader2, Server, FileText, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Copy, Loader2, Server, FileText, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/shared/components/ui/dialog';
+import { Progress } from '@/shared/components/ui/progress';
 import { workspaceWizardService } from '../../services/workspaceWizardService';
 import { apiClient } from '@/shared/api/apiClient';
 
@@ -27,6 +35,21 @@ interface WorkspaceCreationStepProps {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
+const areLogEntriesEqual = (current: RuntimeLogEntry[], next: RuntimeLogEntry[]) => {
+  if (current.length !== next.length) {
+    return false;
+  }
+
+  return current.every((entry, index) => {
+    const nextEntry = next[index];
+    return nextEntry
+      && entry.id === nextEntry.id
+      && entry.stage === nextEntry.stage
+      && entry.message === nextEntry.message
+      && entry.createdAt === nextEntry.createdAt;
+  });
+};
+
 export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
   workspaceId,
   isPolling,
@@ -38,28 +61,98 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
 }) => {
   const [logs, setLogs] = useState<RuntimeLogEntry[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
-  const [showLogs, setShowLogs] = useState(true);
+  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
+  const logsRef = useRef<RuntimeLogEntry[]>([]);
 
-  // Health check 狀態
   const [healthCheckPassed, setHealthCheckPassed] = useState(false);
   const [healthCheckError, setHealthCheckError] = useState<string | null>(null);
   const healthCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const isReady = !isPolling && !errorKey && healthCheckPassed;
+  const isHealthCheckActive = !isPolling && !errorKey && !healthCheckPassed;
 
-  // 輪詢日誌
+  const progressState = useMemo(() => {
+    if (errorKey) {
+      return {
+        value: 100,
+        title: t('workspace.wizard.steps.workspaceCreation.progress.failedTitle'),
+        description: t('workspace.wizard.steps.workspaceCreation.progress.failedDescription'),
+      };
+    }
+
+    if (isReady) {
+      return {
+        value: 100,
+        title: t('workspace.wizard.steps.workspaceCreation.progress.readyTitle'),
+        description: t('workspace.wizard.steps.workspaceCreation.progress.readyDescription'),
+      };
+    }
+
+    if (isPolling) {
+      return {
+        value: 35,
+        title: t('workspace.wizard.steps.workspaceCreation.progress.provisioningTitle'),
+        description: t('workspace.wizard.steps.workspaceCreation.progress.provisioningDescription'),
+      };
+    }
+
+    return {
+      value: 72,
+      title: t('workspace.wizard.steps.workspaceCreation.progress.healthTitle'),
+      description: healthCheckError || t('workspace.wizard.steps.workspaceCreation.progress.healthDescription'),
+    };
+  }, [errorKey, healthCheckError, isPolling, isReady, t]);
+
+  const progressPhases = useMemo(() => [
+    {
+      key: 'infrastructure',
+      title: t('workspace.wizard.steps.workspaceCreation.infrastructure.title'),
+      description: isPolling
+        ? t('workspace.wizard.steps.workspaceCreation.infrastructure.pending')
+        : errorKey
+          ? t('workspace.wizard.steps.workspaceCreation.infrastructure.failed')
+          : t('workspace.wizard.steps.workspaceCreation.infrastructure.success'),
+      status: errorKey ? 'failed' : isPolling ? 'active' : 'complete',
+    },
+    {
+      key: 'health',
+      title: t('workspace.wizard.steps.workspaceCreation.health.title'),
+      description: isHealthCheckActive
+        ? healthCheckError || t('workspace.wizard.steps.workspaceCreation.health.pending')
+        : healthCheckPassed
+          ? t('workspace.wizard.steps.workspaceCreation.health.success')
+          : t('workspace.wizard.steps.workspaceCreation.health.waiting'),
+      status: errorKey ? 'pending' : healthCheckPassed ? 'complete' : isHealthCheckActive ? 'active' : 'pending',
+    },
+  ], [errorKey, healthCheckError, healthCheckPassed, isHealthCheckActive, isPolling, t]);
+
   useEffect(() => {
     if (!workspaceId || isReady) return;
 
     const fetchLogs = async () => {
+      const shouldShowLoading = logsRef.current.length === 0;
+
       try {
-        setIsLogsLoading(true);
+        if (shouldShowLoading) {
+          setIsLogsLoading(true);
+        }
+
         const runtimeLogs = await workspaceWizardService.getRuntimeLogs(workspaceId);
-        setLogs(runtimeLogs);
+
+        setLogs((currentLogs) => {
+          if (areLogEntriesEqual(currentLogs, runtimeLogs)) {
+            return currentLogs;
+          }
+
+          logsRef.current = runtimeLogs;
+          return runtimeLogs;
+        });
       } catch (error) {
         logger.error('Failed to fetch runtime logs', { error });
       } finally {
-        setIsLogsLoading(false);
+        if (shouldShowLoading) {
+          setIsLogsLoading(false);
+        }
       }
     };
 
@@ -68,30 +161,26 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
     return () => clearInterval(timer);
   }, [workspaceId, isReady]);
 
-  // Health check 輪詢 - 只在容器佈建完成後開始
   useEffect(() => {
-    // 只在容器佈建完成（isPolling = false）且尚未通過 health check 時執行
     if (!workspaceId || isPolling || healthCheckPassed || errorKey) {
       return;
     }
 
     let consecutiveFailures = 0;
-    const MAX_CONSECUTIVE_FAILURES = 3; // 連續失敗 3 次才顯示錯誤
+    const MAX_CONSECUTIVE_FAILURES = 3;
 
     const checkHealth = async () => {
       try {
-        // 1. 取得 workspace 資訊以獲取 runtime URL
         const workspace = await apiClient.get<any>(`/workspaces/${workspaceId}`);
         const externalUrl = workspace.runtimeStatus?.externalUrl;
 
         if (!externalUrl) {
           logger.debug('Runtime URL not available yet');
-          consecutiveFailures = 0; // 重置失敗計數
+          consecutiveFailures = 0;
           setHealthCheckError(null);
           return;
         }
 
-        // 2. 直接呼叫 workspace-runtime 的 health endpoint
         const healthResponse = await fetch(`${externalUrl}/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(5000),
@@ -104,7 +193,6 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
           setHealthCheckError(null);
           consecutiveFailures = 0;
 
-          // 清除輪詢
           if (healthCheckIntervalRef.current) {
             clearInterval(healthCheckIntervalRef.current);
             healthCheckIntervalRef.current = null;
@@ -119,17 +207,14 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
       } catch (error) {
         logger.debug('Health check failed, will retry', { error });
         consecutiveFailures++;
-        // 只在連續失敗多次後才顯示錯誤，避免閃爍
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           setHealthCheckError(t('workspace.wizard.steps.workspaceCreation.health.retrying'));
         }
       }
     };
 
-    // 立即檢查一次
     checkHealth();
 
-    // 每 2 秒檢查一次
     healthCheckIntervalRef.current = setInterval(checkHealth, 2000);
 
     return () => {
@@ -139,6 +224,22 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
       }
     };
   }, [workspaceId, isPolling, healthCheckPassed, errorKey, t]);
+
+  const renderPhaseIcon = (status: string) => {
+    if (status === 'complete') {
+      return <CheckCircle className="h-4 w-4 text-emerald-500" />;
+    }
+
+    if (status === 'active') {
+      return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+    }
+
+    if (status === 'failed') {
+      return <AlertCircle className="h-4 w-4 text-destructive" />;
+    }
+
+    return <div className="h-4 w-4 rounded-full border-2 border-muted" />;
+  };
 
   return (
     <div className="space-y-6">
@@ -154,10 +255,6 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
         </p>
       </div>
 
-      <div className="h-2 w-full rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary transition-all" style={{ width: '75%' }} />
-      </div>
-
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -169,48 +266,46 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* 狀態顯示區域 */}
-          <div className="space-y-4">
-            {/* 容器佈建狀態 */}
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4">
-              {isPolling ? (
-                <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
-              ) : errorKey ? (
-                <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0" />
-              ) : (
-                <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+          <div className="space-y-5 rounded-lg border bg-muted/20 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">{progressState.title}</p>
+                <p className="text-sm text-muted-foreground">{progressState.description}</p>
+              </div>
+              {workspaceId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-fit gap-2"
+                  onClick={() => setLogsDialogOpen(true)}
+                >
+                  <FileText className="h-4 w-4" />
+                  {t('workspace.wizard.steps.workspaceCreation.logs.open', { count: logs.length })}
+                </Button>
               )}
-              <div className="flex-1">
-                <p className="text-sm font-medium">{t('workspace.wizard.steps.workspaceCreation.infrastructure.title')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {isPolling
-                    ? t('workspace.wizard.steps.workspaceCreation.infrastructure.pending')
-                    : errorKey
-                      ? t('workspace.wizard.steps.workspaceCreation.infrastructure.failed')
-                      : t('workspace.wizard.steps.workspaceCreation.infrastructure.success')}
-                </p>
+            </div>
+
+            <div className="space-y-2">
+              <Progress value={progressState.value} className="h-2" />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{t('workspace.wizard.steps.workspaceCreation.progress.label')}</span>
+                <span>{t('workspace.wizard.steps.workspaceCreation.progress.percent', { value: progressState.value })}</span>
               </div>
             </div>
 
-            {/* Health Check 狀態 */}
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4">
-              {!isPolling && !errorKey && !healthCheckPassed ? (
-                <Loader2 className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
-              ) : healthCheckPassed ? (
-                <CheckCircle className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-              ) : (
-                <div className="h-5 w-5 rounded-full border-2 border-muted flex-shrink-0" />
-              )}
-              <div className="flex-1">
-                <p className="text-sm font-medium">{t('workspace.wizard.steps.workspaceCreation.health.title')}</p>
-                <p className="text-xs text-muted-foreground">
-                  {!isPolling && !errorKey && !healthCheckPassed
-                    ? healthCheckError || t('workspace.wizard.steps.workspaceCreation.health.pending')
-                    : healthCheckPassed
-                      ? t('workspace.wizard.steps.workspaceCreation.health.success')
-                      : t('workspace.wizard.steps.workspaceCreation.health.waiting')}
-                </p>
-              </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {progressPhases.map((phase) => (
+                <div key={phase.key} className="flex min-w-0 items-start gap-3 rounded-md bg-background p-3">
+                  <div className="mt-0.5 flex h-5 w-5 items-center justify-center">
+                    {renderPhaseIcon(phase.status)}
+                  </div>
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-medium text-foreground">{phase.title}</p>
+                    <p className="text-xs text-muted-foreground">{phase.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {workspaceId && (
@@ -231,20 +326,7 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
                       }}
                       title={t('workspace.wizard.steps.workspaceCreation.workspaceId.copyTitle')}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-                      </svg>
+                      <Copy className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                 </div>
@@ -257,57 +339,6 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
               </div>
             )}
           </div>
-
-          {/* 日誌顯示區域 */}
-          {workspaceId && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  <span className="text-sm font-medium">{t('workspace.wizard.steps.workspaceCreation.logs.title')}</span>
-                  {isLogsLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowLogs(!showLogs)}
-                >
-                  {(showLogs
-                    ? t('workspace.wizard.steps.workspaceCreation.logs.hide')
-                    : t('workspace.wizard.steps.workspaceCreation.logs.show'))} ({logs.length})
-                </Button>
-              </div>
-
-              {showLogs && (
-                <div className="max-h-64 overflow-y-auto rounded-md border bg-muted/20 p-3">
-                  {logs.length === 0 ? (
-                    <div className="text-center text-sm text-muted-foreground py-4">
-                      {isLogsLoading
-                        ? t('workspace.wizard.steps.workspaceCreation.logs.loading')
-                        : t('workspace.wizard.steps.workspaceCreation.logs.empty')}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {[...logs].reverse().map((log) => (
-                        <div key={log.id} className="text-xs">
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="font-mono">
-                              {new Date(log.createdAt).toLocaleTimeString()}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded-md bg-primary/10 text-primary text-[10px] font-medium">
-                              {log.stage}
-                            </span>
-                          </div>
-                          <div className="text-foreground mt-1">{log.message}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="flex items-center justify-between border-t pt-4">
             <div className="flex items-center gap-2">
@@ -325,6 +356,46 @@ export const WorkspaceCreationStep: React.FC<WorkspaceCreationStepProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              {t('workspace.wizard.steps.workspaceCreation.logs.dialogTitle')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('workspace.wizard.steps.workspaceCreation.logs.dialogDescription')}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[52vh] overflow-y-auto rounded-md border bg-muted/20 p-3">
+            {logs.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                {isLogsLoading
+                  ? t('workspace.wizard.steps.workspaceCreation.logs.loading')
+                  : t('workspace.wizard.steps.workspaceCreation.logs.empty')}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {[...logs].reverse().map((log) => (
+                  <div key={log.id} className="rounded-md bg-background p-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+                      <span className="font-mono">
+                        {new Date(log.createdAt).toLocaleTimeString()}
+                      </span>
+                      <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                        {log.stage}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-foreground">{log.message}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

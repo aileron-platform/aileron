@@ -147,6 +147,18 @@ const wizard = {
       pendingDescription: '請稍候，完成後會自動進入下一步。',
       readyTitle: '工作區已準備就緒！',
       readyDescription: '工作區 {{workspaceId}} 已上線，接著完成 CLI 設定即可開始使用。',
+      progress: {
+        label: '工作區建立進度',
+        percent: '{{value}}%',
+        provisioningTitle: '正在建立工作區基礎環境',
+        provisioningDescription: '正在準備容器與工作區資源。',
+        healthTitle: '正在確認 Runtime 健康狀態',
+        healthDescription: 'Runtime 服務正在啟動，這個階段通常會比佈建花更久。',
+        readyTitle: 'Workspace Runtime 已準備就緒',
+        readyDescription: '必要服務皆已通過健康檢查，請繼續完成設定。',
+        failedTitle: '工作區建立需要處理',
+        failedDescription: '請查看錯誤與日誌後重新嘗試佈建。',
+      },
       infrastructure: {
         title: '容器佈建',
         pending: '正在建立容器...',
@@ -166,8 +178,9 @@ const wizard = {
       },
       logs: {
         title: '建置日誌',
-        show: '顯示',
-        hide: '隱藏',
+        open: '日誌（{{count}}）',
+        dialogTitle: '建置日誌詳細資料',
+        dialogDescription: '工作區建立期間收集到的 Runtime 事件。',
         empty: '暫無日誌',
         loading: '載入日誌中...',
       },
@@ -179,6 +192,8 @@ const wizard = {
       cardTitle: '同步設定到工作區',
       cardDescription: '將您的 SSH Keys 與 Git 設定同步到新建立的工作區。',
       loading: '載入設定中...',
+      compactTitle: '設定與同步狀態',
+      compactDescription: '工作區設定會在此同步，不需要額外操作。',
       currentSettings: '目前設定',
       syncStatus: '同步狀態',
       empty: {
@@ -186,8 +201,10 @@ const wizard = {
         description: '您可以稍後在設定頁面中配置 SSH Keys 與 Git。',
       },
       settings: {
+        configured: '已設定',
         notConfigured: '未設定',
         ssh: {
+          title: 'SSH Keys',
           configured: '已設定私鑰與公鑰',
         },
         git: {
@@ -211,8 +228,11 @@ const wizard = {
         polling: '正在確認同步結果...',
         syncing: '正在同步設定...',
         success: '同步完成',
+        compactSuccessDescription: '設定已同步，可以完成建立流程。',
+        compactRunningDescription: '同步會在背景執行，通常很快完成。',
         partial: '部分同步成功',
         failed: '同步失敗',
+        readyToSync: '準備同步',
         idle: '點擊下方按鈕將設定同步到工作區。',
       },
       actions: {

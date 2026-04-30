@@ -147,6 +147,18 @@ const wizard = {
       pendingDescription: 'This usually takes a moment. We will move on automatically when everything is ready.',
       readyTitle: 'Workspace is ready!',
       readyDescription: 'Workspace {{workspaceId}} is now online. Continue with the CLI setup to finish.',
+      progress: {
+        label: 'Workspace creation progress',
+        percent: '{{value}}%',
+        provisioningTitle: 'Creating workspace infrastructure',
+        provisioningDescription: 'Containers and workspace resources are being prepared.',
+        healthTitle: 'Verifying runtime health',
+        healthDescription: 'The runtime service is starting. This step can take a little longer than provisioning.',
+        readyTitle: 'Workspace runtime is ready',
+        readyDescription: 'All required services are healthy. Continue to finish setup.',
+        failedTitle: 'Workspace creation needs attention',
+        failedDescription: 'Review the error and logs, then retry provisioning.',
+      },
       infrastructure: {
         title: 'Container provisioning',
         pending: 'Creating containers...',
@@ -166,8 +178,9 @@ const wizard = {
       },
       logs: {
         title: 'Provisioning logs',
-        show: 'Show',
-        hide: 'Hide',
+        open: 'Logs ({{count}})',
+        dialogTitle: 'Provisioning log details',
+        dialogDescription: 'Runtime events collected while the workspace is being created.',
         empty: 'No logs yet',
         loading: 'Loading logs...',
       },
@@ -179,6 +192,8 @@ const wizard = {
       cardTitle: 'Sync settings to workspace',
       cardDescription: 'Copy your SSH keys and Git settings into the newly created workspace.',
       loading: 'Loading settings...',
+      compactTitle: 'Settings and sync status',
+      compactDescription: 'Workspace setup keeps these settings in sync without requiring another step.',
       currentSettings: 'Current settings',
       syncStatus: 'Sync status',
       empty: {
@@ -186,8 +201,10 @@ const wizard = {
         description: 'You can configure SSH keys and Git later from the settings page.',
       },
       settings: {
+        configured: 'Configured',
         notConfigured: 'Not configured',
         ssh: {
+          title: 'SSH keys',
           configured: 'Private key and public key are configured',
         },
         git: {
@@ -211,8 +228,11 @@ const wizard = {
         polling: 'Confirming sync results...',
         syncing: 'Syncing settings...',
         success: 'Sync completed',
+        compactSuccessDescription: 'Settings are synced. You can finish the wizard.',
+        compactRunningDescription: 'This runs in the background and usually finishes quickly.',
         partial: 'Partially synced',
         failed: 'Sync failed',
+        readyToSync: 'Ready to sync',
         idle: 'Click the button below to sync settings to the workspace.',
       },
       actions: {

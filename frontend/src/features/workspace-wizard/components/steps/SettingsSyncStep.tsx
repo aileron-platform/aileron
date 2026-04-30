@@ -26,8 +26,8 @@ import {
 import { apiClient } from '@/shared/api/apiClient';
 
 const TASK_ITEMS = [
-  { key: 'ssh', label: 'SSH Keys', icon: Key },
-  { key: 'git', label: 'Git', icon: GitBranch },
+  { key: 'ssh', labelKey: 'workspace.wizard.steps.settingsSync.settings.ssh.title', icon: Key },
+  { key: 'git', labelKey: 'workspace.wizard.steps.settingsSync.settings.git.title', icon: GitBranch },
 ] as const;
 
 const TASK_KEYS = TASK_ITEMS.map(item => item.key);
@@ -67,7 +67,7 @@ const createPlaceholderStatus = (
   completed: status === 'success' || status === 'skipped',
   tasks: TASK_ITEMS.map(item => ({
     taskKey: item.key,
-    taskName: item.label,
+    taskName: item.key,
     status,
     message,
   })),
@@ -81,9 +81,9 @@ const normalizeStatus = (
   const taskMap: NormalizedTaskMap = TASK_KEYS.reduce((acc, key) => {
     acc[key] = {
       taskKey: key,
-      taskName: TASK_ITEMS.find(item => item.key === key)?.label ?? key,
+      taskName: key,
       status: 'pending',
-      message: '等待同步結果',
+      message: 'Waiting for sync result',
     };
     return acc;
   }, {} as NormalizedTaskMap);
@@ -93,7 +93,7 @@ const normalizeStatus = (
     if (TASK_KEYS.includes(key)) {
       taskMap[key] = {
         taskKey: key,
-        taskName: TASK_ITEMS.find(item => item.key === key)?.label ?? task.taskName,
+        taskName: key,
         status: task.status,
         message: task.message,
       };
@@ -184,7 +184,7 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
 
       announcedStatusRef.current = status;
     },
-    [toast],
+    [t, toast],
   );
 
   const stopPolling = useCallback(() => {
@@ -212,14 +212,14 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
         stopPolling();
       }
     } catch (error) {
-      logger.error('輪詢同步狀態失敗', { error });
+      logger.error('Failed to poll sync status', { error });
       const message = error instanceof Error ? error.message : t('workspace.wizard.steps.settingsSync.status.unavailable');
       setLastError(message);
       setOverallStatus('failed');
       announceStatus('failed', message);
       stopPolling();
     }
-  }, [announceStatus, stopPolling, workspaceId]);
+  }, [announceStatus, stopPolling, t, workspaceId]);
 
   const startPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -260,7 +260,7 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
         startPolling();
       }
     } catch (error) {
-      logger.error('啟動同步流程失敗', { error });
+      logger.error('Failed to start sync workflow', { error });
       const message = error instanceof Error ? error.message : t('workspace.wizard.steps.settingsSync.notifications.failedTitle');
       setOverallStatus('failed');
       setLastError(message);
@@ -268,7 +268,7 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
       announceStatus('failed', message);
       stopPolling();
     }
-  }, [announceStatus, startPolling, stopPolling, workspaceId]);
+  }, [announceStatus, startPolling, stopPolling, t, workspaceId]);
 
   useEffect(() => {
     let mounted = true;
@@ -276,7 +276,7 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
       setLoading(true);
       try {
         if (!user?.id) {
-          logger.warn('用戶未登入，無法載入設定');
+          logger.warn('User is not signed in, cannot load settings');
           if (mounted) {
             setUserSettings(null);
             setLoading(false);
@@ -289,9 +289,9 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
           setUserSettings(response.data);
         }
       } catch (error: any) {
-        logger.error('載入用戶設定失敗', { error });
+        logger.error('Failed to load user settings', { error });
         if (error?.message?.includes('User not found') || error?.message?.includes('404')) {
-          logger.info('用戶設定不存在，將顯示為無設定');
+          logger.info('User settings do not exist, showing empty settings state');
         }
         if (mounted) {
           setUserSettings(null);
@@ -326,11 +326,60 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
       hasTriggeredSyncRef.current = true;
       void triggerSync();
     }
-  }, [hasAnySettings, loading, stopPolling, triggerSync, workspaceId]);
+  }, [hasAnySettings, loading, stopPolling, t, triggerSync, workspaceId]);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
 
   const currentTasks = setupStatus?.tasks ?? [];
+  const sshTask = currentTasks.find(task => task.taskKey === 'ssh');
+  const gitTask = currentTasks.find(task => task.taskKey === 'git');
+
+  const statusDisplay = useMemo(() => {
+    if (overallStatus === 'running' || isPolling) {
+      return {
+        icon: <Loader2 className="h-4 w-4 animate-spin text-primary" />,
+        title: isPolling
+          ? t('workspace.wizard.steps.settingsSync.status.polling')
+          : t('workspace.wizard.steps.settingsSync.status.syncing'),
+        description: t('workspace.wizard.steps.settingsSync.status.compactRunningDescription'),
+        className: 'border-primary/20 bg-primary/5 text-primary',
+      };
+    }
+
+    if (overallStatus === 'success') {
+      return {
+        icon: <CheckCircle className="h-4 w-4 text-emerald-500" />,
+        title: t('workspace.wizard.steps.settingsSync.status.success'),
+        description: t('workspace.wizard.steps.settingsSync.status.compactSuccessDescription'),
+        className: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300',
+      };
+    }
+
+    if (overallStatus === 'partial') {
+      return {
+        icon: <AlertCircle className="h-4 w-4 text-yellow-500" />,
+        title: t('workspace.wizard.steps.settingsSync.status.partial'),
+        description: lastError || t('workspace.wizard.steps.settingsSync.notifications.partialDescription'),
+        className: 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-900/60 dark:bg-yellow-950/30 dark:text-yellow-300',
+      };
+    }
+
+    if (overallStatus === 'failed') {
+      return {
+        icon: <AlertCircle className="h-4 w-4 text-destructive" />,
+        title: t('workspace.wizard.steps.settingsSync.status.failed'),
+        description: lastError || t('workspace.wizard.steps.settingsSync.notifications.failedDescription'),
+        className: 'border-destructive/20 bg-destructive/10 text-destructive',
+      };
+    }
+
+    return {
+      icon: <RefreshCw className="h-4 w-4 text-muted-foreground" />,
+      title: t('workspace.wizard.steps.settingsSync.status.readyToSync'),
+      description: t('workspace.wizard.steps.settingsSync.status.idle'),
+      className: 'border-border bg-background text-foreground',
+    };
+  }, [isPolling, lastError, overallStatus, t]);
 
   const renderStatusIcon = (status: WorkspaceSetupTaskState) => {
     if (status === 'success' || status === 'skipped') {
@@ -341,6 +390,14 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
     }
     return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
   };
+
+  const renderSettingState = (configured: boolean) => (
+    <span className={configured ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>
+      {configured
+        ? t('workspace.wizard.steps.settingsSync.settings.configured')
+        : t('workspace.wizard.steps.settingsSync.settings.notConfigured')}
+    </span>
+  );
 
   return (
     <div className="space-y-6">
@@ -369,123 +426,99 @@ export const SettingsSyncStep: React.FC<SettingsSyncStepProps> = ({
             {t('workspace.wizard.steps.settingsSync.cardDescription')}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {loading ? (
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-muted/30 p-8 text-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="flex items-center gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 p-4">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">{t('workspace.wizard.steps.settingsSync.loading')}</p>
             </div>
           ) : !hasAnySettings ? (
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border/60 bg-muted/30 p-8 text-center">
-              <AlertCircle className="h-8 w-8 text-muted-foreground" />
-              <p className="text-sm font-medium">{t('workspace.wizard.steps.settingsSync.empty.title')}</p>
-              <p className="text-xs text-muted-foreground">
-                {t('workspace.wizard.steps.settingsSync.empty.description')}
-              </p>
+            <div className="flex items-start gap-3 rounded-lg border border-dashed border-border/60 bg-muted/30 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 text-muted-foreground" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t('workspace.wizard.steps.settingsSync.empty.title')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('workspace.wizard.steps.settingsSync.empty.description')}
+                </p>
+              </div>
             </div>
           ) : (
-            <>
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium text-foreground">{t('workspace.wizard.steps.settingsSync.currentSettings')}</h3>
-
-                <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-                  <Key className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">SSH Keys</p>
-                    {userSettings?.ssh?.privateKey ? (
-                      <p className="text-xs text-muted-foreground mt-1">{t('workspace.wizard.steps.settingsSync.settings.ssh.configured')}</p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-1">{t('workspace.wizard.steps.settingsSync.settings.notConfigured')}</p>
-                    )}
-                  </div>
+            <div className="rounded-lg border bg-muted/20 p-4">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t('workspace.wizard.steps.settingsSync.compactTitle')}</p>
+                  <p className="text-xs text-muted-foreground">{t('workspace.wizard.steps.settingsSync.compactDescription')}</p>
                 </div>
-
-                <div className="flex items-start gap-3 rounded-lg border bg-muted/30 p-4">
-                  <GitBranch className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{t('workspace.wizard.steps.settingsSync.settings.git.title')}</p>
-                    {userSettings?.git?.userName ? (
-                      <div className="text-xs text-muted-foreground mt-1 space-y-0.5">
-                        <p>{t('workspace.wizard.steps.settingsSync.settings.git.userName', { value: userSettings.git.userName })}</p>
-                        <p>{t('workspace.wizard.steps.settingsSync.settings.git.userEmail', { value: userSettings.git.userEmail || t('workspace.wizard.steps.settingsSync.settings.notConfigured') })}</p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-1">{t('workspace.wizard.steps.settingsSync.settings.notConfigured')}</p>
-                    )}
-                  </div>
-                </div>
-
+                <Badge variant="outline" className="w-fit">
+                  {t('workspace.wizard.steps.settingsSync.syncStatus')}
+                </Badge>
               </div>
 
-              <div className="rounded-lg border bg-muted/20 p-4 space-y-3">
-                <p className="text-sm font-medium text-foreground">{t('workspace.wizard.steps.settingsSync.syncStatus')}</p>
-                <div className="space-y-2">
-                  {TASK_ITEMS.map(item => {
-                    const task = currentTasks.find(t => t.taskKey === item.key);
-                    const Icon = item.icon;
-                    return (
-                      <div key={item.key} className="flex items-start gap-3 rounded-md bg-background/60 p-3">
-                        <Icon className="h-4 w-4 text-primary mt-0.5" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 text-sm font-medium">
-                            <span>{item.label}</span>
-                            {task && renderStatusIcon(task.status)}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {task?.message || t('workspace.wizard.steps.settingsSync.status.pending')}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center gap-3 rounded-lg border bg-primary/5 p-6">
-                {overallStatus === 'running' || isPolling ? (
-                  <>
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">
-                      {isPolling
-                        ? t('workspace.wizard.steps.settingsSync.status.polling')
-                        : t('workspace.wizard.steps.settingsSync.status.syncing')}
+              <div className="grid gap-2 md:grid-cols-2">
+                <div className="flex min-w-0 items-start gap-3 rounded-md bg-background p-3">
+                  <Key className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{t('workspace.wizard.steps.settingsSync.settings.ssh.title')}</p>
+                      {sshTask && renderStatusIcon(sshTask.status)}
+                    </div>
+                    <p className="text-xs">{renderSettingState(Boolean(userSettings?.ssh?.privateKey))}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {sshTask?.message || t('workspace.wizard.steps.settingsSync.status.pending')}
                     </p>
-                  </>
-                ) : overallStatus === 'success' ? (
-                  <>
-                    <CheckCircle className="h-8 w-8 text-emerald-500" />
-                    <p className="text-sm font-medium text-emerald-600">{t('workspace.wizard.steps.settingsSync.status.success')}</p>
-                  </>
-                ) : overallStatus === 'partial' ? (
-                  <>
-                    <AlertCircle className="h-8 w-8 text-yellow-500" />
-                    <p className="text-sm font-medium text-yellow-600">{t('workspace.wizard.steps.settingsSync.status.partial')}</p>
-                    <Button onClick={() => triggerSync()} variant="outline" size="sm">
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {t('workspace.wizard.steps.settingsSync.actions.resync')}
-                    </Button>
-                  </>
-                ) : overallStatus === 'failed' ? (
-                  <>
-                    <AlertCircle className="h-8 w-8 text-destructive" />
-                    <p className="text-sm font-medium text-destructive">{t('workspace.wizard.steps.settingsSync.status.failed')}</p>
-                    {lastError && <p className="text-xs text-muted-foreground text-center">{lastError}</p>}
-                    <Button onClick={() => triggerSync()} variant="outline" size="sm">
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {t('workspace.wizard.steps.settingsSync.actions.retry')}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">{t('workspace.wizard.steps.settingsSync.status.idle')}</p>
-                    <Button onClick={() => triggerSync()} className="w-full max-w-xs">
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      {t('workspace.wizard.steps.settingsSync.actions.start')}
-                    </Button>
-                  </>
+                  </div>
+                </div>
+
+                <div className="flex min-w-0 items-start gap-3 rounded-md bg-background p-3">
+                  <GitBranch className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium">{t('workspace.wizard.steps.settingsSync.settings.git.title')}</p>
+                      {gitTask && renderStatusIcon(gitTask.status)}
+                    </div>
+                    {userSettings?.git?.userName ? (
+                      <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+                        <p className="truncate">{t('workspace.wizard.steps.settingsSync.settings.git.userName', { value: userSettings.git.userName })}</p>
+                        <p className="truncate">{t('workspace.wizard.steps.settingsSync.settings.git.userEmail', { value: userSettings.git.userEmail || t('workspace.wizard.steps.settingsSync.settings.notConfigured') })}</p>
+                      </div>
+                    ) : (
+                      <p className="text-xs">{renderSettingState(false)}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {gitTask?.message || t('workspace.wizard.steps.settingsSync.status.pending')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`mt-3 flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between ${statusDisplay.className}`}>
+                <div className="flex min-w-0 items-start gap-2">
+                  <div className="mt-0.5">{statusDisplay.icon}</div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{statusDisplay.title}</p>
+                    <p className="text-xs opacity-80">{statusDisplay.description}</p>
+                  </div>
+                </div>
+                {overallStatus === 'partial' && (
+                  <Button onClick={() => triggerSync()} variant="outline" size="sm" className="w-fit bg-background">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {t('workspace.wizard.steps.settingsSync.actions.resync')}
+                  </Button>
+                )}
+                {overallStatus === 'failed' && (
+                  <Button onClick={() => triggerSync()} variant="outline" size="sm" className="w-fit bg-background">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {t('workspace.wizard.steps.settingsSync.actions.retry')}
+                  </Button>
+                )}
+                {overallStatus === 'idle' && (
+                  <Button onClick={() => triggerSync()} size="sm" className="w-fit">
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {t('workspace.wizard.steps.settingsSync.actions.start')}
+                  </Button>
                 )}
               </div>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
