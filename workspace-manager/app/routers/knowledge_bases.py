@@ -317,6 +317,10 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.invalid.owner")
     if code == "KB_INVALID_ROLE":
         return translate("knowledge_base.invalid.role")
+    if code == "KB_INVALID_QUOTA":
+        return translate("knowledge_base.invalid.quota")
+    if code == "KB_QUOTA_BELOW_USAGE":
+        return translate("knowledge_base.invalid.quota_below_usage")
     if code == "KB_CONFLICT":
         return translate("knowledge_base.conflict")
     if code == "KB_INVALID_REQUEST":
@@ -580,6 +584,8 @@ def update_knowledge_base(
             kb = service.rename_kb(user_id=current_user_id, kb_id=kb_id, name=payload.name)
         if payload.description is not None:
             kb = service.update_description(user_id=current_user_id, kb_id=kb_id, description=payload.description)
+        if "quota_bytes" in payload.model_fields_set:
+            kb = service.update_quota(user_id=current_user_id, kb_id=kb_id, quota_bytes=payload.quota_bytes)
         return KnowledgeBaseDetail(**_to_summary(kb, access.access_role).model_dump())
     except Exception as exc:
         _raise_kb_error(request, exc)

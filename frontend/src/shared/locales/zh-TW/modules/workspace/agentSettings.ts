@@ -1,6 +1,46 @@
 const agentSettings = {
   claude: {
     agentsMd: 'CLAUDE.md',
+    hooks: {
+      events: {
+        PreToolUse: {
+          name: 'PreToolUse：在工具呼叫之前執行（可以阻止它們）',
+          option: 'PreToolUse：在工具呼叫之前執行（可以阻止它們）',
+        },
+        PostToolUse: {
+          name: 'PostToolUse：在工具呼叫完成後執行',
+          option: 'PostToolUse：在工具呼叫完成後執行',
+        },
+        UserPromptSubmit: {
+          name: 'UserPromptSubmit：當使用者提交提示時執行，在 Claude 處理之前',
+          option: 'UserPromptSubmit：當使用者提交提示時執行，在 Claude 處理之前',
+        },
+        Notification: {
+          name: 'Notification：當 Claude Code 發送通知時執行',
+          option: 'Notification：當 Claude Code 發送通知時執行',
+        },
+        Stop: {
+          name: 'Stop：當 Claude Code 完成回應時執行',
+          option: 'Stop：當 Claude Code 完成回應時執行',
+        },
+        SubagentStop: {
+          name: 'SubagentStop：當子代理任務完成時執行',
+          option: 'SubagentStop：當子代理任務完成時執行',
+        },
+        PreCompact: {
+          name: 'PreCompact：在 Claude Code 即將執行壓縮操作之前執行',
+          option: 'PreCompact：在 Claude Code 即將執行壓縮操作之前執行',
+        },
+        SessionStart: {
+          name: 'SessionStart：當 Claude Code 開始新會話或恢復現有會話時執行',
+          option: 'SessionStart：當 Claude Code 開始新會話或恢復現有會話時執行',
+        },
+        SessionEnd: {
+          name: 'SessionEnd：當 Claude Code 會話結束時執行',
+          option: 'SessionEnd：當 Claude Code 會話結束時執行',
+        },
+      },
+    },
   },
   gemini: {
     instructionFile: 'GEMINI.md',
@@ -60,6 +100,7 @@ const agentSettings = {
     agentsMd: 'AGENTS.md',
   },
   common: {
+    loading: '載入中...',
     subViews: {
       geminiMd: 'GEMINI.md',
       agentsMd: 'AGENTS.md',
@@ -86,6 +127,7 @@ const agentSettings = {
         runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}',
         loading: '載入 {{fileName}}...',
         fallbackNotice: '當前顯示預設模板內容，儲存後將建立新的 {{fileName}}。',
+        staleTemplate: '偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。',
       },
       notifications: {
         saveSuccess: {
@@ -103,6 +145,9 @@ const agentSettings = {
         runtimeUnavailable: {
           title: 'Workspace Runtime 尚未就緒',
           description: '請確認執行環境狀態後再試一次。',
+        },
+        templateUpdated: {
+          description: '偵測到模板安裝更新。已保留你未儲存的內容，請儲存或手動重新整理後再載入最新版本。',
         },
       },
       confirmDiscard: '目前有尚未儲存的變更，確定要放棄嗎？',
@@ -139,6 +184,17 @@ const agentSettings = {
           plugin: '外掛',
         },
       },
+      events: {
+        PreToolUse: { name: 'PreToolUse', option: 'PreToolUse' },
+        PostToolUse: { name: 'PostToolUse', option: 'PostToolUse' },
+        UserPromptSubmit: { name: 'UserPromptSubmit', option: 'UserPromptSubmit' },
+        Notification: { name: 'Notification', option: 'Notification' },
+        Stop: { name: 'Stop', option: 'Stop' },
+        SubagentStop: { name: 'SubagentStop', option: 'SubagentStop' },
+        PreCompact: { name: 'PreCompact', option: 'PreCompact' },
+        SessionStart: { name: 'SessionStart', option: 'SessionStart' },
+        SessionEnd: { name: 'SessionEnd', option: 'SessionEnd' },
+      },
       matchers: {
         title: '匹配器配置',
         matcherLabel: '匹配規則',
@@ -150,6 +206,11 @@ const agentSettings = {
         summary: { matchers: '{{count}} 個匹配器', commands: '{{count}} 個動作' },
       },
       list: { empty: '未找到符合條件的 Hook。' },
+      messages: {
+        loadFailed: '載入 Hook 設定失敗。',
+        updateFailed: '更新 Hook 設定失敗。',
+        deleteFailed: '刪除 Hook 失敗。',
+      },
       dialog: {
         title: { edit: '編輯 Hook', create: '新增 Hook' },
         description: '設定 Hook 的範圍、觸發事件與執行命令。',
@@ -206,7 +267,7 @@ const agentSettings = {
       },
       search: { placeholder: '搜尋服務器...' },
       server: {
-        status: { running: '運行中', stopped: '已停用', error: '錯誤' },
+        status: { running: '運行中', stopped: '已停用', error: '錯誤', enabled: '已啟用', disabled: '已停用' },
         scope: {
           label: '範圍',
           all: '全部',
@@ -224,7 +285,48 @@ const agentSettings = {
         env: '環境變數',
         headers: 'HTTP 標頭',
       },
-      list: { empty: '未找到符合條件的服務器' },
+      list: { empty: '未找到符合條件的服務器', loading: '正在載入 MCP 服務器...' },
+      status: { runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}' },
+      actions: { showEnvValues: '顯示值', hideEnvValues: '隱藏值' },
+      plugin: { readonly: '外掛管理' },
+      confirm: { delete: '確定要刪除 MCP 服務器「{{name}}」嗎？' },
+      messages: {
+        runtimeNotReady: 'Workspace Runtime 尚未就緒。',
+        loadFailed: {
+          title: '載入 MCP 服務器失敗',
+          description: '無法載入 MCP 服務器設定。',
+        },
+        editForbidden: {
+          title: '外掛服務器為唯讀',
+          description: '外掛管理的 MCP 服務器無法在此編輯。',
+        },
+        deleteForbidden: {
+          title: '外掛服務器為唯讀',
+          description: '外掛管理的 MCP 服務器無法在此刪除。',
+        },
+        createSuccess: { title: '已建立 MCP 服務器' },
+        updateSuccess: { title: '已更新 MCP 服務器' },
+        deleteSuccess: { title: '已刪除 MCP 服務器' },
+        operationFailed: {
+          title: 'MCP 操作失敗',
+          description: 'MCP 服務器操作失敗。',
+        },
+        deleteFailed: {
+          title: '刪除 MCP 服務器失敗',
+          description: '無法刪除 MCP 服務器。',
+        },
+        toggleEnabled: { title: '已啟用 MCP 服務器' },
+        toggleDisabled: { title: '已停用 MCP 服務器' },
+        toggleFailed: { description: '無法更新 MCP 服務器狀態。' },
+        importSuccess: {
+          title: '已導入 MCP 服務器',
+          description: '新增 {{created}} 個，更新 {{updated}} 個，跳過 {{skipped}} 個。',
+        },
+        importFailed: {
+          title: 'MCP 導入失敗',
+          description: '無法導入 MCP 服務器設定。',
+        },
+      },
       import: { descriptionFromJson: '透過 JSON 導入的服務器' },
       dialogs: {
         server: {
@@ -348,10 +450,23 @@ const agentSettings = {
     skills: {
       header: { title: '編輯器', description: '瀏覽檔案。', count: '共 {{count}} 個檔案' },
       noSelection: '請從左側選擇技能檔案以檢視內容。',
+      title: 'Skills',
+      searchPlaceholder: '搜尋技能或檔案',
+      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛' },
+      plugin: { label: '外掛', all: '所有外掛' },
+    },
+    scripts: {
+      header: { title: '編輯器', description: '瀏覽腳本。', count: '共 {{count}} 個檔案' },
+      noSelection: '請從左側選擇腳本檔案以檢視內容。',
+      title: 'Scripts',
+      searchPlaceholder: '搜尋腳本或檔案',
+      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛' },
+      plugin: { label: '外掛', all: '所有外掛' },
     },
     documents: {
       meta: {
         'slash-commands': { title: 'Slash Command 設定' },
+        subagents: { title: 'Subagent 設定' },
       },
       actions: { refresh: '重整', edit: '編輯', copyContent: '複製內容', download: '下載', delete: '刪除' },
       loading: '載入資料中…',
@@ -369,6 +484,44 @@ const agentSettings = {
         scope: { all: '所有範圍' },
         loading: '載入資料中…',
         empty: '尚未找到符合條件的項目',
+      },
+    },
+    subagents: {
+      pageTitle: 'Subagent 設定',
+      actions: { create: '新增 Subagent' },
+      empty: {
+        title: '尚未建立任何 Subagent',
+        description: '建立專責 Subagent 以協助處理任務。',
+      },
+      dialog: {
+        title: { create: '新增 Subagent', edit: '編輯 Subagent' },
+        description: {
+          create: '設定新的 Subagent 以協助團隊。',
+          edit: '更新此 Subagent 的詳細資訊。',
+        },
+        fields: {
+          scope: { label: '範圍' },
+          identifier: {
+            label: 'Subagent ID',
+            placeholder: '輸入 Subagent ID',
+            helper: 'ID 必須唯一，可使用字母、數字與分隔符號。',
+          },
+          title: { label: 'Subagent 名稱', placeholder: '輸入 Subagent 名稱' },
+          fileName: { label: '檔案名稱', placeholder: '輸入檔案名稱' },
+          description: { label: '描述', placeholder: '選填描述' },
+          content: {
+            label: 'Subagent 描述',
+            estimatedSize: '預估大小：{{size}}',
+            helper: '描述 Subagent 的行為、工具與專長。',
+          },
+        },
+        validation: {
+          identifier: '請輸入 Subagent ID。',
+          title: '請輸入 Subagent 名稱。',
+          fileName: '請輸入檔案名稱。',
+          content: '內容不可為空。',
+        },
+        actions: { cancel: '取消', save: '儲存變更', create: '建立項目' },
       },
     },
   },

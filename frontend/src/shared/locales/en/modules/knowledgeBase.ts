@@ -67,6 +67,46 @@ const knowledgeBase = {
     noDescription: 'This knowledge base does not have a description yet.',
     settingsAction: 'Settings',
     deleteAction: 'Delete',
+    settings: {
+      title: 'Knowledge base settings',
+      description: 'Update the display metadata and storage quota for this knowledge base.',
+      nameLabel: 'Name',
+      slugLabel: 'Slug',
+      slugHint: 'Slug is used for identifiers and default mount aliases. It cannot be changed here.',
+      descriptionLabel: 'Description',
+      quotaLabel: 'Storage quota (bytes)',
+      quotaPlaceholder: 'Leave empty to use the default quota',
+      quotaHint: 'Current usage: {{usage}}. The quota must be empty or at least the current usage.',
+      validation: {
+        nameRequired: 'Name is required.',
+        quotaNumeric: 'Quota must be a non-negative whole number of bytes.',
+        quotaBelowUsage: 'Quota cannot be lower than the current usage ({{usage}}).',
+      },
+      toasts: {
+        saveSuccess: {
+          title: 'Knowledge base updated',
+        },
+        saveFailed: {
+          title: 'Failed to update knowledge base',
+          description: 'Please try again later.',
+        },
+      },
+    },
+    delete: {
+      title: 'Delete knowledge base',
+      description: 'Delete {{name}}? This action cannot be undone. Knowledge bases attached to workspaces must be detached before deletion.',
+      cancel: 'Cancel',
+      confirm: 'Delete',
+      toasts: {
+        success: {
+          title: 'Knowledge base deleted',
+        },
+        failed: {
+          title: 'Failed to delete knowledge base',
+          description: 'Detach it from workspaces first, then try again.',
+        },
+      },
+    },
     cards: {
       storageTitle: 'Storage',
       storageDescription: 'Current usage and quota',

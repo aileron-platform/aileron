@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import {
   FileViewerWorkbench,
+  FileFocusToolbar,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench';
@@ -12,7 +13,6 @@ import { getFileIcon } from '@/shared/utils/fileIconUtils';
 import { isImageFile } from '@/shared/utils/fileTypeUtils';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
-import { FileFocusToolbar } from './FileFocusToolbar';
 
 const logger = createLogger('FileEditor');
 

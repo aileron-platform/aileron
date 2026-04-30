@@ -26,10 +26,10 @@ import {
 } from '@/shared/components/document-workflow';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { ClaudeDocument, ClaudeScope } from '../../types';
+import type { AgentDocument, AgentScope } from '../../types';
 
-export interface WorkspaceCommandDialogProps extends DocumentWorkflowDialogProps<ClaudeDocument> {
-  availableScopes?: ClaudeScope[];
+export interface AgentCommandDialogProps extends DocumentWorkflowDialogProps<AgentDocument> {
+  availableScopes?: AgentScope[];
   format?: 'markdown' | 'toml';
   i18nNamespace?: string;
 }
@@ -40,13 +40,13 @@ const ensureFileExtension = (fileName: string, format: 'markdown' | 'toml'): str
   return trimmed.toLowerCase().endsWith(extension) ? trimmed : `${trimmed}${extension}`;
 };
 
-export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
+export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
   open,
   mode,
   initialValue,
   availableScopes,
   format = 'markdown',
-  i18nNamespace = 'workspace.claudeCode',
+  i18nNamespace = 'workspace.agentSettings.common',
   onClose,
   onSubmit,
 }) => {
@@ -54,7 +54,7 @@ export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
   const [activeTab, setActiveTab] = useState<'basic' | 'editor'>('basic');
   const [fileName, setFileName] = useState('');
   const [namespace, setNamespace] = useState('');
-  const [scope, setScope] = useState<ClaudeScope>('project');
+  const [scope, setScope] = useState<AgentScope>('project');
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ fileName?: string; content?: string }>({});
@@ -62,8 +62,8 @@ export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
 
   const scopeOptions = useMemo(() => {
     const allOptions = [
-      { value: 'project' as ClaudeScope, label: t(`${i18nNamespace}.documents.scope.values.project`) },
-      { value: 'user' as ClaudeScope, label: t(`${i18nNamespace}.documents.scope.values.user`) },
+      { value: 'project' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.project`) },
+      { value: 'user' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.user`) },
     ];
     return availableScopes ? allOptions.filter((option) => availableScopes.includes(option.value)) : allOptions;
   }, [availableScopes, i18nNamespace, t]);
@@ -111,7 +111,7 @@ export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
         ? (initialValue?.metadata?.fileName as string | undefined) ?? initialValue?.id ?? normalizedFileName
         : normalizedFileName;
       const normalizedNamespace = namespace.trim();
-      const document: ClaudeDocument = {
+      const document: AgentDocument = {
         id: `${scope}:${identifier}`,
         title: normalizedFileName,
         description: '',
@@ -169,7 +169,7 @@ export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
                       {scopeOptions.find((option) => option.value === scope)?.label ?? scope}
                     </Badge>
                   ) : (
-                    <Select value={scope} onValueChange={(value) => setScope(value as ClaudeScope)}>
+                    <Select value={scope} onValueChange={(value) => setScope(value as AgentScope)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -260,4 +260,4 @@ export const WorkspaceCommandDialog: React.FC<WorkspaceCommandDialogProps> = ({
   );
 };
 
-export default WorkspaceCommandDialog;
+export default AgentCommandDialog;

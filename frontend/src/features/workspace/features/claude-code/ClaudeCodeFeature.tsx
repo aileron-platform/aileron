@@ -1,32 +1,28 @@
 /**
- * Claude Code 設定功能
+ * Claude Code settings feature.
  *
- * 提供 Claude Code 設定的第三欄主要內容組件
+ * Provides the main content component for Claude Code settings.
  */
 
 import React from 'react';
 import { Command } from 'lucide-react';
-import {
-  MCPSettingsPage,
-  HooksSettingsPage,
-  SettingsPage,
-  SlashCommandsPage,
-  OutputStylesPage,
-  SubagentsPage,
-  SkillsPage,
-  ScriptsPage,
-  MemoryPage,
-} from './pages';
+import { SettingsPage, OutputStylesPage, SubagentsPage, MemoryPage } from './pages';
 import AgentsMdPage from '../agent-settings/pages/AgentsMdPage';
+import MCPSettingsPage from '../agent-settings/pages/MCPSettingsPage';
+import HooksSettingsPage from '../agent-settings/pages/HooksSettingsPage';
+import SlashCommandsPage from '../agent-settings/pages/SlashCommandsPage';
+import SkillsPage from '../agent-settings/pages/SkillsPage';
+import ScriptsPage from '../agent-settings/pages/ScriptsPage';
 import { getAgentToolConfig } from '../agent-settings/utils';
-import type { SelectedFile } from './components/ClaudeCodeFileManager';
+import type { AgentSelectedFile } from '../agent-settings/types';
+import { useI18n } from '@/shared/hooks/useI18n';
 
 export interface ClaudeCodeFeatureProps {
   subView: 'claude-md' | 'mcp' | 'hooks' | 'settings' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'scripts' | 'memory';
-  skillSelectedFile?: SelectedFile | null;
-  onSkillSelect?: (file: SelectedFile | null) => void;
-  scriptSelectedFile?: SelectedFile | null;
-  onScriptSelect?: (file: SelectedFile | null) => void;
+  skillSelectedFile?: AgentSelectedFile | null;
+  onSkillSelect?: (file: AgentSelectedFile | null) => void;
+  scriptSelectedFile?: AgentSelectedFile | null;
+  onScriptSelect?: (file: AgentSelectedFile | null) => void;
 }
 
 const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
@@ -36,9 +32,10 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
   scriptSelectedFile,
   onScriptSelect
 }) => {
-  // 使用外部傳入的狀態，如果沒有則使用內部狀態
-  const [internalSkillFile, setInternalSkillFile] = React.useState<SelectedFile | null>(null);
-  const [internalScriptFile, setInternalScriptFile] = React.useState<SelectedFile | null>(null);
+  const { t } = useI18n();
+  // Use external selection state when provided, otherwise keep local state.
+  const [internalSkillFile, setInternalSkillFile] = React.useState<AgentSelectedFile | null>(null);
+  const [internalScriptFile, setInternalScriptFile] = React.useState<AgentSelectedFile | null>(null);
 
   const selectedSkillFileValue = skillSelectedFile !== undefined ? skillSelectedFile : internalSkillFile;
   const setSelectedSkillFile = onSkillSelect || setInternalSkillFile;
@@ -50,7 +47,7 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
         <Command className="h-6 w-6" />
-        <p>請透過 WorkspaceShell 使用 Claude Code 功能。</p>
+        <p>{t('workspace.claudeCode.shellRequired')}</p>
       </div>
     );
   }
@@ -79,7 +76,7 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
     default:
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          未支援的視圖。
+          {t('workspace.claudeCode.unsupportedView')}
         </div>
       );
   }

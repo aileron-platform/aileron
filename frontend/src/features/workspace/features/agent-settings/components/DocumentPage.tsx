@@ -9,13 +9,13 @@ import {
 import { Badge } from '@/shared/components/ui/badge';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';
-import type { ClaudeDocument } from '../../claude-code/types';
+import type { AgentDocument } from '../types';
 import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
 
 const logger = createLogger('DocumentPage');
 
-export type DocumentDialogProps = DocumentWorkflowDialogProps<ClaudeDocument>;
+export type DocumentDialogProps = DocumentWorkflowDialogProps<AgentDocument>;
 
 export interface DocumentPageConfig {
   metaKey: 'slash-commands' | 'output-styles' | 'subagents' | 'memory';
@@ -28,11 +28,11 @@ export interface DocumentPageConfig {
 }
 
 export interface DocumentPageProps {
-  documents: ClaudeDocument[];
+  documents: AgentDocument[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  onCreate: (document: ClaudeDocument) => Promise<ClaudeDocument>;
-  onUpdate: (document: ClaudeDocument) => Promise<ClaudeDocument>;
+  onCreate: (document: AgentDocument) => Promise<AgentDocument>;
+  onUpdate: (document: AgentDocument) => Promise<AgentDocument>;
   onDelete: (id: string) => Promise<void>;
   isLoading?: boolean;
   error?: string | null;
@@ -109,7 +109,7 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
   onRefresh,
   dialogComponent: DialogComponent,
   config,
-  i18nNamespace = 'workspace.claudeCode',
+  i18nNamespace = 'workspace.agentSettings.common',
 }) => {
   const { t } = useI18n();
 
@@ -133,7 +133,7 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
   const title = translatedMetaLabel === metaLabelKey ? config.dialogTitle : translatedMetaLabel;
 
   return (
-    <DocumentWorkflowShell<ClaudeDocument>
+    <DocumentWorkflowShell<AgentDocument>
       documents={documents}
       selectedId={selectedId}
       onSelect={onSelect}
@@ -165,7 +165,7 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
         try {
           await navigator.clipboard.writeText(document.content);
         } catch (err) {
-          logger.error('無法複製到剪貼板', { error: err });
+          logger.error('copyToClipboardFailed', { error: err });
         }
       }}
       onDownload={(document) => {
@@ -207,6 +207,6 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
 
 DocumentPage.displayName = 'DocumentPage';
 
-export { DocumentPage as ClaudeDocumentPage };
+export { DocumentPage as AgentDocumentPage };
 
 export default DocumentPage;

@@ -28,10 +28,10 @@ import {
 } from '@/shared/components/mcp-workflow';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
-import type { ClaudeMcpServer, ClaudeScope } from '@/features/workspace/features/claude-code/data';
+import type { AgentMcpServer, AgentScope } from '@/features/workspace/features/agent-settings/types';
 
-export type EditableMCPServerScope = Exclude<ClaudeScope, 'plugin'>;
-export type WorkspaceMCPServerData = ClaudeMcpServer & {
+export type EditableMCPServerScope = Exclude<AgentScope, 'plugin'>;
+export type WorkspaceMCPServerData = AgentMcpServer & {
   scope: EditableMCPServerScope;
   transport?: MCPTransport;
 };
@@ -63,8 +63,8 @@ const EDITABLE_SCOPES: EditableMCPServerScope[] = ['project', 'user', 'local'];
 export interface WorkspaceMCPServerDialogProps {
   open: boolean;
   mode: 'create' | 'edit';
-  server: ClaudeMcpServer | null;
-  availableScopes?: ClaudeScope[];
+  server: AgentMcpServer | null;
+  availableScopes?: AgentScope[];
   i18nNamespace?: string;
   onClose: () => void;
   onSubmit: (server: WorkspaceMCPServerData) => Promise<void>;
@@ -75,7 +75,7 @@ export const WorkspaceMCPServerDialog: React.FC<WorkspaceMCPServerDialogProps> =
   mode,
   server,
   availableScopes,
-  i18nNamespace = 'workspace.claudeCode',
+  i18nNamespace = 'workspace.agentSettings.common',
   onClose,
   onSubmit,
 }) => {

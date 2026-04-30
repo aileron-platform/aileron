@@ -147,6 +147,117 @@ def test_delete_kb_rejects_when_attached_without_force(
 
 
 @pytest.mark.unit
+def test_update_quota_persists_valid_quota(
+    knowledge_base_service,
+    mock_db_session,
+):
+    kb = db_models.KnowledgeBase(
+        id="kb-1",
+        owner_id="owner-1",
+        slug="docs",
+        name="Docs",
+        description=None,
+        current_size_bytes=10,
+        quota_bytes=None,
+    )
+    mock_db_session.get.return_value = kb
+
+    updated = knowledge_base_service.update_quota(
+        user_id="owner-1",
+        kb_id="kb-1",
+        quota_bytes=20,
+    )
+
+    assert updated.quota_bytes == 20
+    mock_db_session.commit.assert_called_once()
+    mock_db_session.refresh.assert_called_once_with(kb)
+
+
+@pytest.mark.unit
+def test_update_quota_clears_explicit_quota(
+    knowledge_base_service,
+    mock_db_session,
+):
+    kb = db_models.KnowledgeBase(
+        id="kb-1",
+        owner_id="owner-1",
+        slug="docs",
+        name="Docs",
+        description=None,
+        current_size_bytes=10,
+        quota_bytes=100,
+    )
+    mock_db_session.get.return_value = kb
+
+    updated = knowledge_base_service.update_quota(
+        user_id="owner-1",
+        kb_id="kb-1",
+        quota_bytes=None,
+    )
+
+    assert updated.quota_bytes is None
+    mock_db_session.commit.assert_called_once()
+    mock_db_session.refresh.assert_called_once_with(kb)
+
+
+@pytest.mark.unit
+def test_update_quota_rejects_negative_quota(
+    knowledge_base_service,
+    mock_db_session,
+):
+    kb = db_models.KnowledgeBase(
+        id="kb-1",
+        owner_id="owner-1",
+        slug="docs",
+        name="Docs",
+        description=None,
+        current_size_bytes=10,
+        quota_bytes=100,
+    )
+    mock_db_session.get.return_value = kb
+
+    with pytest.raises(KnowledgeBaseError, match="quota is invalid") as exc_info:
+        knowledge_base_service.update_quota(
+            user_id="owner-1",
+            kb_id="kb-1",
+            quota_bytes=-1,
+        )
+
+    assert exc_info.value.code == "KB_INVALID_QUOTA"
+    assert kb.quota_bytes == 100
+    mock_db_session.commit.assert_not_called()
+
+
+@pytest.mark.unit
+def test_update_quota_rejects_quota_below_current_usage(
+    knowledge_base_service,
+    mock_db_session,
+):
+    kb = db_models.KnowledgeBase(
+        id="kb-1",
+        owner_id="owner-1",
+        slug="docs",
+        name="Docs",
+        description=None,
+        current_size_bytes=10,
+        quota_bytes=100,
+    )
+    mock_db_session.get.return_value = kb
+
+    with pytest.raises(KnowledgeBaseError, match="lower than current usage") as exc_info:
+        knowledge_base_service.update_quota(
+            user_id="owner-1",
+            kb_id="kb-1",
+            quota_bytes=9,
+        )
+
+    assert exc_info.value.code == "KB_QUOTA_BELOW_USAGE"
+    assert exc_info.value.params["currentSizeBytes"] == 10
+    assert kb.quota_bytes == 100
+    mock_db_session.commit.assert_not_called()
+
+
+@pytest.mark.unit
 def test_grant_share_rejects_owner_target(
     sharing_service,
     mock_db_session,

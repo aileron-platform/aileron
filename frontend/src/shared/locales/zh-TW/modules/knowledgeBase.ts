@@ -67,6 +67,46 @@ const knowledgeBase = {
     noDescription: '這個知識庫尚未提供描述。',
     settingsAction: '設定',
     deleteAction: '刪除',
+    settings: {
+      title: '知識庫設定',
+      description: '更新這個知識庫的顯示資訊與容量上限。',
+      nameLabel: '名稱',
+      slugLabel: 'Slug',
+      slugHint: 'Slug 會用於系統識別與預設掛載別名，這裡不可變更。',
+      descriptionLabel: '描述',
+      quotaLabel: '容量上限（bytes）',
+      quotaPlaceholder: '留空以使用預設容量上限',
+      quotaHint: '目前使用量：{{usage}}。容量上限必須留空，或大於等於目前使用量。',
+      validation: {
+        nameRequired: '名稱為必填。',
+        quotaNumeric: '容量上限必須是非負整數 bytes。',
+        quotaBelowUsage: '容量上限不可低於目前使用量（{{usage}}）。',
+      },
+      toasts: {
+        saveSuccess: {
+          title: '知識庫已更新',
+        },
+        saveFailed: {
+          title: '更新知識庫失敗',
+          description: '請稍後再試。',
+        },
+      },
+    },
+    delete: {
+      title: '刪除知識庫',
+      description: '要刪除 {{name}} 嗎？此操作無法復原。已掛載到工作區的知識庫必須先解除掛載才能刪除。',
+      cancel: '取消',
+      confirm: '刪除',
+      toasts: {
+        success: {
+          title: '知識庫已刪除',
+        },
+        failed: {
+          title: '刪除知識庫失敗',
+          description: '請先從工作區解除掛載後再試一次。',
+        },
+      },
+    },
     cards: {
       storageTitle: '容量',
       storageDescription: '目前使用量與配額',

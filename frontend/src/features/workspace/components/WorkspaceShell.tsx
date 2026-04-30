@@ -1,6 +1,6 @@
 /**
- * WorkspaceShell - 工作區模組專用外殼
- * 保留原始設計的四欄佈局與互動邏輯
+ * WorkspaceShell - workspace module shell.
+ * Keeps the original four-column layout and interaction model.
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
@@ -18,7 +18,7 @@ import { getNavigationItems } from './navigation-constants';
 import { normalizeAgentType, getAgentToolConfig } from '../features/agent-settings/utils';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { WorkspaceRealtimeProvider } from '../realtime';
-import type { SelectedFile } from '../features/claude-code/components/ClaudeCodeFileManager';
+import type { AgentSelectedFile } from '../features/agent-settings/types';
 import { workspaceLifecycleApi } from '../services/workspaceLifecycleApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createLogger } from '@/shared/services/logger';
@@ -86,8 +86,8 @@ const MarkdownSidebar = React.lazy(() =>
   })),
 );
 
-const ClaudeCodeFileManager = React.lazy(() =>
-  import('../features/claude-code/components/ClaudeCodeFileManager'),
+const AgentFileManager = React.lazy(() =>
+  import('../features/agent-settings/components/AgentFileManager'),
 );
 
 const OpenSpecSidebar = React.lazy(() =>
@@ -137,11 +137,11 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     startX: number;
     startWidth: number;
   } | null>(null);
-  const [skillSelectedFile, setSkillSelectedFile] = useState<SelectedFile | null>(null);
-  const [scriptSelectedFile, setScriptSelectedFile] = useState<SelectedFile | null>(null);
+  const [skillSelectedFile, setSkillSelectedFile] = useState<AgentSelectedFile | null>(null);
+  const [scriptSelectedFile, setScriptSelectedFile] = useState<AgentSelectedFile | null>(null);
   const resolveDeleteFallback = useWorkspaceDeleteFallback();
 
-  // 拖曳處理函數
+  // Drag resize handler.
   const handleMouseDown = useCallback((e: React.MouseEvent, type: 'sidebar' | 'secondColumn' | 'rightChat') => {
     e.preventDefault();
     const startWidth =
@@ -178,16 +178,16 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         const newWidth = Math.max(dragState.startWidth + deltaX, 250);
         dispatch({ type: 'SET_SECOND_COLUMN_WIDTH', payload: newWidth });
       } else if (dragState.type === 'rightChat') {
-        // 計算其他欄位的總寬度
+        // Calculate the total width of the other columns.
         const sidebarWidth = state.sidebarCollapsed ? 64 : state.sidebarWidth;
         const secondColumnWidth = state.secondColumnCollapsed ? 64 : state.secondColumnWidth;
-        const mainContentMinWidth = 400; // 主內容區最小寬度
+        const mainContentMinWidth = 400; // Minimum main content width.
         const otherColumnsWidth = sidebarWidth + secondColumnWidth + mainContentMinWidth;
 
-        // 計算最大寬度（視窗寬度減去其他欄位，並保留一些邊距）
+        // Calculate the max width from the viewport minus other columns.
         const maxWidth = Math.max(window.innerWidth - otherColumnsWidth - 16, 360);
 
-        // 限制在最小和最大寬度之間
+        // Clamp between min and max width.
         const newWidth = Math.max(
           Math.min(dragState.startWidth - deltaX, maxWidth),
           360
@@ -211,12 +211,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     };
   }, [isDragging, dispatch]);
 
-  // 根據原始邏輯判斷當前視圖模式
+  // Resolve the active view mode.
   const cliType = normalizeAgentType(workspaceRuntime.cliType);
   const navigationItems = React.useMemo(() => getNavigationItems(cliType), [cliType]);
   const currentItem = navigationItems.find(item => item.id === state.currentFeature);
 
-  // Claude Code 設定中的特殊子視圖是四欄模式
+  // Claude Code subviews that use four-column mode.
   const isSlashCommandsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'slash-commands';
   const isOutputStylesView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'output-styles';
   const isSubagentsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'subagents';
@@ -224,20 +224,21 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   const isScriptsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'scripts';
   const isMemoryView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'memory';
 
-  // 其他 Agent 工具的四欄子視圖
+  // Other agent tool subviews that use four-column mode.
   const AGENT_TOOL_FEATURES = ['gemini', 'opencode', 'codex'] as const;
   const isAgentToolFeatureActive = (AGENT_TOOL_FEATURES as readonly string[]).includes(state.currentFeature);
-  const isAgentToolFourColumn = isAgentToolFeatureActive && ['slash-commands', 'skills'].includes(state.agentToolSettings.subView);
+  const isAgentToolFourColumn = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
+  const isAgentToolSkillsView = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
 
   const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isScriptsView || isMemoryView || isAgentToolFourColumn;
   const isFileManagementEditorExpanded =
     state.currentFeature === 'file-management' && state.fileManagementEditorExpanded;
 
   useEffect(() => {
-    if (!isSkillsView) {
+    if (!isSkillsView && !isAgentToolSkillsView) {
       setSkillSelectedFile(null);
     }
-  }, [isSkillsView]);
+  }, [isAgentToolSkillsView, isSkillsView]);
 
   useEffect(() => {
     if (!isScriptsView) {
@@ -245,19 +246,19 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     }
   }, [isScriptsView]);
 
-  // 判斷是否為三欄模式
+  // Determine whether the current mode is three-column.
   const isThreeColumn = currentItem?.mode === 'three-column' && !isFourColumnView;
 
   const isAgentSettingsFeature = state.currentFeature === 'claude-code' || isAgentToolFeatureActive;
 
-  // 根據當前功能決定第二欄內容
+  // Resolve second-column content for the active feature.
   const getSecondColumnContent = () => {
     if (state.currentFeature === 'file-management') {
       return (
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入檔案樹...
+              {t('workspace.layout.loading.fileTree')}
             </div>
           }
         >
@@ -270,7 +271,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入版本控制側欄...
+              {t('workspace.layout.loading.versionControlSidebar')}
             </div>
           }
         >
@@ -284,7 +285,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入 OpenSpec 自定流程...
+                {t('workspace.layout.loading.openspecCustomization')}
               </div>
             }
           >
@@ -296,7 +297,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入 OpenSpec 導覽...
+              {t('workspace.layout.loading.openspecNavigation')}
             </div>
           }
         >
@@ -306,12 +307,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     }
     if (state.currentFeature === 'claude-code') {
       const subView = state.claudeCodeSettings.subView;
+      const cliConfig = getAgentToolConfig('claude');
       if (subView === 'skills') {
-        // 確保 workspaceId 存在才渲染 ClaudeCodeFileManager
         if (!workspaceRuntime.workspaceId) {
           return (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {workspaceRuntime.isLoading ? '載入工作區...' : '無法載入工作區'}
+              {workspaceRuntime.isLoading ? t('workspace.layout.loading.workspace') : t('workspace.layout.loading.workspaceUnavailable')}
             </div>
           );
         }
@@ -319,11 +320,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入Skills檔案樹...
+                {t('workspace.layout.loading.skillsTree')}
               </div>
             }
           >
-            <ClaudeCodeFileManager
+            <AgentFileManager
+              config={cliConfig}
               collectionType="skills"
               onSelect={setSkillSelectedFile}
               workspaceId={workspaceRuntime.workspaceId}
@@ -333,11 +335,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       }
 
       if (subView === 'scripts') {
-        // 確保 workspaceId 存在才渲染 ClaudeCodeFileManager
         if (!workspaceRuntime.workspaceId) {
           return (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {workspaceRuntime.isLoading ? '載入工作區...' : '無法載入工作區'}
+              {workspaceRuntime.isLoading ? t('workspace.layout.loading.workspace') : t('workspace.layout.loading.workspaceUnavailable')}
             </div>
           );
         }
@@ -345,11 +346,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入Scripts檔案樹...
+                {t('workspace.layout.loading.scriptsTree')}
               </div>
             }
           >
-            <ClaudeCodeFileManager
+            <AgentFileManager
+              config={cliConfig}
               collectionType="scripts"
               onSelect={setScriptSelectedFile}
               workspaceId={workspaceRuntime.workspaceId}
@@ -362,7 +364,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入 Claude Code 側欄...
+                {t('workspace.layout.loading.claudeSidebar')}
               </div>
             }
           >
@@ -372,14 +374,15 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       }
     }
 
-    // 其他 Agent 工具的第二欄
+    // Second column for other agent tools.
     if (isAgentToolFeatureActive) {
       const subView = state.agentToolSettings.subView;
       if (subView === 'skills') {
+        const cliConfig = getAgentToolConfig(cliType);
         if (!workspaceRuntime.workspaceId) {
           return (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {workspaceRuntime.isLoading ? '載入工作區...' : '無法載入工作區'}
+              {workspaceRuntime.isLoading ? t('workspace.layout.loading.workspace') : t('workspace.layout.loading.workspaceUnavailable')}
             </div>
           );
         }
@@ -387,11 +390,12 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入Skills檔案樹...
+                {t('workspace.layout.loading.skillsTree')}
               </div>
             }
           >
-            <ClaudeCodeFileManager
+            <AgentFileManager
+              config={cliConfig}
               collectionType="skills"
               onSelect={setSkillSelectedFile}
               workspaceId={workspaceRuntime.workspaceId}
@@ -399,34 +403,20 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           </React.Suspense>
         );
       }
-      if (subView === 'slash-commands') {
-        const cliConfig = getAgentToolConfig(cliType);
-        return (
-          <React.Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入側欄...
-              </div>
-            }
-          >
-            <MarkdownSidebar subView={subView} availableScopes={cliConfig.availableScopes} />
-          </React.Suspense>
-        );
-      }
     }
 
-    // 其他功能的第二欄內容可以在這裡添加
+    // Other features can add second-column content here.
     return null;
   };
 
-  // 根據當前功能決定第三欄內容
+  // Resolve third-column content for the active feature.
   const getThirdColumnContent = () => {
     if (state.currentFeature === 'version-control') {
       return (
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入版本控制內容...
+              {t('workspace.layout.loading.versionControlContent')}
             </div>
           }
         >
@@ -439,7 +429,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入工作區設定...
+              {t('workspace.layout.loading.workspaceSettings')}
             </div>
           }
         >
@@ -453,7 +443,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           <React.Suspense
             fallback={
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                載入 OpenSpec 自定流程編輯器...
+                {t('workspace.layout.loading.openspecCustomizationEditor')}
               </div>
             }
           >
@@ -465,7 +455,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入 OpenSpec 文件...
+              {t('workspace.layout.loading.openspecDocuments')}
             </div>
           }
         >
@@ -479,7 +469,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入容器管理...
+              {t('workspace.layout.loading.containerManagement')}
             </div>
           }
         >
@@ -496,7 +486,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入自動化任務...
+              {t('workspace.layout.loading.automationTasks')}
             </div>
           }
         >
@@ -509,7 +499,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入 Claude Code 設定...
+              {t('workspace.layout.loading.claudeSettings')}
             </div>
           }
         >
@@ -528,13 +518,17 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <React.Suspense
           fallback={
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              載入 Agent 設定...
+              {t('workspace.layout.loading.agentSettings')}
             </div>
           }
         >
           <AgentSettingsFeature
             cliType={cliType}
             subView={state.agentToolSettings.subView}
+            skillSelectedFile={skillSelectedFile}
+            onSkillSelect={setSkillSelectedFile}
+            scriptSelectedFile={scriptSelectedFile}
+            onScriptSelect={setScriptSelectedFile}
           />
         </React.Suspense>
       );
@@ -557,15 +551,15 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         </React.Suspense>
       );
     }
-    // 其他功能的第三欄內容可以在這裡添加
+    // Other features can add third-column content here.
     return null;
   };
 
-  // 渲染內容區域
+  // Render the shell content area.
   const renderContent = () => {
     const mainColumns = (
       <>
-        {/* 第一欄：功能導航列表 */}
+        {/* First column: feature navigation list. */}
         <div className={`bg-background border-r border-border transition-all duration-300 ${(state.chatExpanded || isFileManagementEditorExpanded) ? 'hidden' : ''
           } flex flex-col relative`}
           style={{
@@ -573,7 +567,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           }}>
           <WorkspaceSidebar />
 
-          {/* 拖拽分隔線 - 左側導航 */}
+          {/* Resize divider for the left navigation. */}
           {!state.sidebarCollapsed && (
             <div
               className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isDragging === 'sidebar' ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
@@ -583,7 +577,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           )}
         </div>
 
-        {/* 第二欄：功能特定內容（四欄模式或三欄模式的特定情況顯示） */}
+        {/* Second column: feature-specific content for selected layout modes. */}
         {(!isThreeColumn || isFourColumnView) && !isFileManagementEditorExpanded && (
           <div
             data-testid="workspace-second-column"
@@ -619,7 +613,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
               )}
             </div>
 
-            {/* 拖拽分隔線 - 第二欄 */}
+            {/* Resize divider for the second column. */}
             {!state.secondColumnCollapsed && (
               <div
                 className={`absolute top-0 right-0 w-1 h-full cursor-col-resize transition-colors ${isDragging === 'secondColumn' ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20'
@@ -655,7 +649,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       <React.Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-            載入版本控制...
+            {t('workspace.layout.loading.versionControl')}
           </div>
         }
       >
@@ -687,24 +681,24 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     );
   };
 
-  // 處理 Runtime 錯誤時的重試邏輯
+  // Retry runtime connection after an error.
   const handleRetryConnection = useCallback(async () => {
     await workspaceRuntime.reload();
   }, [workspaceRuntime]);
 
-  // 處理建立新工作區
+  // Create a new workspace.
   const handleCreateWorkspace = useCallback(() => {
     navigate('/workspaces/workspace-wizard');
   }, [navigate]);
 
-  // 處理刪除工作區
+  // Delete the current workspace.
   const { toast } = useToast();
   const handleDeleteWorkspace = useCallback(async () => {
     if (!workspaceRuntime.workspaceId) {
       return;
     }
 
-    // 確認對話框
+    // Confirmation dialog.
     const confirmMessage = t('common.error.workspaceRuntime.deleteConfirmMessage');
     if (!window.confirm(confirmMessage)) {
       return;
@@ -726,7 +720,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         variant: 'default',
       });
     } catch (error) {
-      logger.error('刪除工作區失敗', { error });
+      logger.error('deleteWorkspaceFailed', { error });
       toast({
         title: t('workspace.workspaceSettings.reset.delete.error.title'),
         description: error instanceof Error ? error.message : t('workspace.workspaceSettings.reset.delete.error.description'),
@@ -735,7 +729,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     }
   }, [resolveDeleteFallback, t, toast, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
-  // 如果有 runtime 錯誤且不在載入狀態，顯示錯誤頁面
+  // Show the runtime error page when runtime failed and is not loading.
   const shouldShowRuntimeError = workspaceRuntime.error &&
     !workspaceRuntime.isLoading &&
     !workspaceRuntime.runtimeBaseUrl;
@@ -743,10 +737,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   if (shouldShowRuntimeError) {
     return (
       <div className="h-screen w-screen flex flex-col bg-background">
-        {/* Header - 保持 GlobalNavigation 在頂部 */}
+        {/* Header keeps GlobalNavigation at the top. */}
         <GlobalNavigation />
 
-        {/* Runtime 錯誤頁面 */}
+        {/* Runtime error page. */}
         <RuntimeErrorPage
           error={workspaceRuntime.error!}
           isLoading={workspaceRuntime.isLoading}
@@ -775,10 +769,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         <ChatPanelStateProvider>
           <OpenSpecWorkspaceProvider>
             <div className="h-screen w-screen flex flex-col bg-background">
-              {/* Header - 檔案管理編輯器展開時隱藏，讓第三欄佔滿整個畫面 */}
+              {/* Hide the header when the file editor expands so the third column fills the screen. */}
               {!isFileManagementEditorExpanded && <GlobalNavigation />}
 
-              {/* 主要Layout區域 - 填滿剩餘空間 */}
+              {/* Main layout area fills the remaining space. */}
               {renderContent()}
             </div>
           </OpenSpecWorkspaceProvider>

@@ -12,6 +12,7 @@ import type {
   KnowledgeBaseShareSummary,
   KnowledgeBaseShareUpdatePayload,
   KnowledgeBaseSummary,
+  KnowledgeBaseUpdatePayload,
 } from '@/shared/types/knowledgeBase';
 
 export interface KnowledgeBaseProviderProps {
@@ -30,6 +31,8 @@ export interface KnowledgeBaseContextValue {
   isMutating: boolean;
   reloadKnowledgeBases: () => Promise<void>;
   createKnowledgeBase: (payload: KnowledgeBaseCreatePayload) => Promise<KnowledgeBaseDetail>;
+  updateKnowledgeBase: (kbId: string, payload: KnowledgeBaseUpdatePayload) => Promise<KnowledgeBaseDetail>;
+  deleteKnowledgeBase: (kbId: string) => Promise<void>;
   loadKnowledgeBaseDetail: (kbId: string) => Promise<KnowledgeBaseDetail>;
   loadKnowledgeBaseShares: (kbId: string) => Promise<KnowledgeBaseShareSummary[]>;
   loadKnowledgeBaseAttachments: (kbId: string) => Promise<KnowledgeBaseAttachmentSummary[]>;
@@ -119,6 +122,51 @@ export const KnowledgeBaseProvider: React.FC<KnowledgeBaseProviderProps> = ({ ch
       setAttachmentsById((current) => ({ ...current, [created.id]: [] }));
       setSharesById((current) => ({ ...current, [created.id]: [] }));
       return created;
+    } finally {
+      setIsMutating(false);
+    }
+  }, []);
+
+  const updateKnowledgeBase = useCallback(async (
+    kbId: string,
+    payload: KnowledgeBaseUpdatePayload,
+  ) => {
+    setIsMutating(true);
+    try {
+      const updated = await knowledgeBaseApi.updateKnowledgeBase(kbId, payload);
+      setKnowledgeBases((current) => current.map((item) => (item.id === kbId ? updated : item)));
+      setDetailById((current) => ({ ...current, [kbId]: updated }));
+      return updated;
+    } finally {
+      setIsMutating(false);
+    }
+  }, []);
+
+  const deleteKnowledgeBase = useCallback(async (kbId: string) => {
+    setIsMutating(true);
+    try {
+      await knowledgeBaseApi.deleteKnowledgeBase(kbId);
+      setKnowledgeBases((current) => current.filter((item) => item.id !== kbId));
+      setDetailById((current) => {
+        const next = { ...current };
+        delete next[kbId];
+        return next;
+      });
+      setSharesById((current) => {
+        const next = { ...current };
+        delete next[kbId];
+        return next;
+      });
+      setAttachmentsById((current) => {
+        const next = { ...current };
+        delete next[kbId];
+        return next;
+      });
+      setAttachmentCounts((current) => {
+        const next = { ...current };
+        delete next[kbId];
+        return next;
+      });
     } finally {
       setIsMutating(false);
     }
@@ -246,6 +294,8 @@ export const KnowledgeBaseProvider: React.FC<KnowledgeBaseProviderProps> = ({ ch
     isMutating,
     reloadKnowledgeBases,
     createKnowledgeBase,
+    updateKnowledgeBase,
+    deleteKnowledgeBase,
     loadKnowledgeBaseDetail,
     loadKnowledgeBaseShares,
     loadKnowledgeBaseAttachments,
@@ -266,6 +316,8 @@ export const KnowledgeBaseProvider: React.FC<KnowledgeBaseProviderProps> = ({ ch
     isMutating,
     reloadKnowledgeBases,
     createKnowledgeBase,
+    updateKnowledgeBase,
+    deleteKnowledgeBase,
     loadKnowledgeBaseDetail,
     loadKnowledgeBaseShares,
     loadKnowledgeBaseAttachments,

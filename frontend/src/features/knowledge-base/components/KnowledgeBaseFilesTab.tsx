@@ -20,6 +20,7 @@ import {
   knowledgeBaseFileEndpoints,
 } from './file-workbench/knowledgeBaseFileTreeDataAdapter';
 import {
+  FileFocusToolbar,
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
@@ -92,6 +93,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [treeCollapsed, setTreeCollapsed] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [showHiddenEntries, setShowHiddenEntries] = React.useState(false);
+  const [isWorkbenchExpanded, setIsWorkbenchExpanded] = React.useState(false);
   const [clipboardItem, setClipboardItem] = React.useState<{ path: string; type: 'file' | 'directory' } | null>(null);
   const dragDepthRef = React.useRef(0);
   const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
@@ -739,6 +741,20 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
               canCloseTabs: true,
             }}
             readOnly={readOnly}
+            isExpanded={isWorkbenchExpanded}
+            onExpandedChange={setIsWorkbenchExpanded}
+            hideChromeWhenExpanded
+            renderFocusToolbar={({ actions, icon, metadata, subtitle, title }) => (
+              <FileFocusToolbar
+                icon={icon}
+                title={title}
+                subtitle={subtitle}
+                metadata={metadata}
+                actions={actions}
+                exitLabel={t('shared.fileViewer.toolbar.collapse')}
+                onExit={() => setIsWorkbenchExpanded(false)}
+              />
+            )}
             onTabsChange={handleWorkbenchTabsChange}
             onActiveTabChange={handleWorkbenchActiveTabChange}
           />

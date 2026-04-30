@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DocumentPage } from '../components/DocumentPage';
-import { WorkspaceCommandDialog } from '../../claude-code/components/dialogs/WorkspaceCommandDialog';
+import { AgentCommandDialog } from '../components/dialogs/AgentCommandDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import type { ClaudeDocument, ClaudeScope } from '../../claude-code/types';
+import type { AgentDocument, AgentScope } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface SlashCommandsPageProps {
   apiPrefix?: string;
-  availableScopes?: ClaudeScope[];
+  availableScopes?: AgentScope[];
   format?: 'markdown' | 'toml';
   i18nNamespace?: string;
 }
@@ -18,7 +18,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
   apiPrefix = 'claude-code',
   availableScopes = ['project', 'user'],
   format = 'markdown',
-  i18nNamespace = 'workspace.claudeCode',
+  i18nNamespace = 'workspace.agentSettings.common',
 }) => {
   const { t } = useI18n();
   const { workspaceRuntime } = useWorkspace();
@@ -28,7 +28,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
 
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
-  const [documents, setDocuments] = useState<ClaudeDocument[]>([]);
+  const [documents, setDocuments] = useState<AgentDocument[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,13 +60,13 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     onRefresh: loadDocuments,
   });
 
-  const handleCreate = useCallback(async (doc: ClaudeDocument): Promise<ClaudeDocument> => {
+  const handleCreate = useCallback(async (doc: AgentDocument): Promise<AgentDocument> => {
     const created = await api.createSlashCommand(runtimeBaseUrl, workspaceId, doc);
     await loadDocuments();
     return created;
   }, [api, runtimeBaseUrl, workspaceId, loadDocuments]);
 
-  const handleUpdate = useCallback(async (doc: ClaudeDocument): Promise<ClaudeDocument> => {
+  const handleUpdate = useCallback(async (doc: AgentDocument): Promise<AgentDocument> => {
     const updated = await api.updateSlashCommand(runtimeBaseUrl, workspaceId, doc);
     await loadDocuments();
     return updated;
@@ -87,11 +87,11 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     const Wrapper: React.FC<{
       open: boolean;
       mode: 'create' | 'edit';
-      initialValue?: ClaudeDocument | null;
+      initialValue?: AgentDocument | null;
       onClose: () => void;
-      onSubmit: (document: ClaudeDocument) => Promise<void> | void;
+      onSubmit: (document: AgentDocument) => Promise<void> | void;
     }> = (props) => (
-      <WorkspaceCommandDialog
+        <AgentCommandDialog
         {...props}
         format={format}
         availableScopes={availableScopes}

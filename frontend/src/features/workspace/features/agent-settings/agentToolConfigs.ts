@@ -1,24 +1,29 @@
-/**
- * Agent Tool Configs - 四種 AI Agent 工具的設定常數物件
- */
-
 import { Bot, Building, Globe, Sparkles, User } from 'lucide-react';
-import type { AgentToolType, AgentToolConfig, HookEventOption } from './types';
+import type {
+  AgentToolType,
+  AgentToolConfig,
+  AgentToolCapabilities,
+  AgentToolScopeOption,
+  HookEventOption,
+} from './types';
 
-/** Claude Code hook 事件 */
-const claudeHookEvents: HookEventOption[] = [
-  { value: 'PreToolUse', labelKey: 'workspace.claudeCode.hooks.events.PreToolUse.name', optionKey: 'workspace.claudeCode.hooks.events.PreToolUse.option' },
-  { value: 'PostToolUse', labelKey: 'workspace.claudeCode.hooks.events.PostToolUse.name', optionKey: 'workspace.claudeCode.hooks.events.PostToolUse.option' },
-  { value: 'UserPromptSubmit', labelKey: 'workspace.claudeCode.hooks.events.UserPromptSubmit.name', optionKey: 'workspace.claudeCode.hooks.events.UserPromptSubmit.option' },
-  { value: 'Notification', labelKey: 'workspace.claudeCode.hooks.events.Notification.name', optionKey: 'workspace.claudeCode.hooks.events.Notification.option' },
-  { value: 'Stop', labelKey: 'workspace.claudeCode.hooks.events.Stop.name', optionKey: 'workspace.claudeCode.hooks.events.Stop.option' },
-  { value: 'SubagentStop', labelKey: 'workspace.claudeCode.hooks.events.SubagentStop.name', optionKey: 'workspace.claudeCode.hooks.events.SubagentStop.option' },
-  { value: 'PreCompact', labelKey: 'workspace.claudeCode.hooks.events.PreCompact.name', optionKey: 'workspace.claudeCode.hooks.events.PreCompact.option' },
-  { value: 'SessionStart', labelKey: 'workspace.claudeCode.hooks.events.SessionStart.name', optionKey: 'workspace.claudeCode.hooks.events.SessionStart.option' },
-  { value: 'SessionEnd', labelKey: 'workspace.claudeCode.hooks.events.SessionEnd.name', optionKey: 'workspace.claudeCode.hooks.events.SessionEnd.option' },
+const projectUserScopes: AgentToolScopeOption[] = [
+  { value: 'project', labelKey: 'workspace.agentSettings.common.scope.project', icon: Building },
+  { value: 'user', labelKey: 'workspace.agentSettings.common.scope.user', icon: User },
 ];
 
-/** Gemini CLI hook 事件 */
+const claudeHookEvents: HookEventOption[] = [
+  { value: 'PreToolUse', labelKey: 'workspace.agentSettings.claude.hooks.events.PreToolUse.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PreToolUse.option' },
+  { value: 'PostToolUse', labelKey: 'workspace.agentSettings.claude.hooks.events.PostToolUse.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PostToolUse.option' },
+  { value: 'UserPromptSubmit', labelKey: 'workspace.agentSettings.claude.hooks.events.UserPromptSubmit.name', optionKey: 'workspace.agentSettings.claude.hooks.events.UserPromptSubmit.option' },
+  { value: 'Notification', labelKey: 'workspace.agentSettings.claude.hooks.events.Notification.name', optionKey: 'workspace.agentSettings.claude.hooks.events.Notification.option' },
+  { value: 'Stop', labelKey: 'workspace.agentSettings.claude.hooks.events.Stop.name', optionKey: 'workspace.agentSettings.claude.hooks.events.Stop.option' },
+  { value: 'SubagentStop', labelKey: 'workspace.agentSettings.claude.hooks.events.SubagentStop.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SubagentStop.option' },
+  { value: 'PreCompact', labelKey: 'workspace.agentSettings.claude.hooks.events.PreCompact.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PreCompact.option' },
+  { value: 'SessionStart', labelKey: 'workspace.agentSettings.claude.hooks.events.SessionStart.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SessionStart.option' },
+  { value: 'SessionEnd', labelKey: 'workspace.agentSettings.claude.hooks.events.SessionEnd.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SessionEnd.option' },
+];
+
 const geminiHookEvents: HookEventOption[] = [
   { value: 'BeforeTool', labelKey: 'workspace.agentSettings.gemini.hooks.events.BeforeTool.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.BeforeTool.option' },
   { value: 'AfterTool', labelKey: 'workspace.agentSettings.gemini.hooks.events.AfterTool.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.AfterTool.option' },
@@ -33,61 +38,60 @@ const geminiHookEvents: HookEventOption[] = [
   { value: 'Notification', labelKey: 'workspace.agentSettings.gemini.hooks.events.Notification.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.Notification.option' },
 ];
 
-/** Claude Code 設定 */
-const claudeConfig: AgentToolConfig = {
-  id: 'claude',
-  navigationId: 'claude-code',
-  navigationLabelKey: 'workspace.navigation.main.claudeCodeSettings',
-  navigationIcon: Bot,
-  agentsMd: {
+const buildAvailableSubViews = (instructionSubView: string, capabilities: AgentToolCapabilities, extra: string[] = []) => [
+  instructionSubView,
+  ...(capabilities.mcp?.supported === false ? [] : ['mcp']),
+  ...(capabilities.hooks?.supported === false || !capabilities.hooks ? [] : ['hooks']),
+  ...(capabilities.slashCommands?.supported === false || !capabilities.slashCommands ? [] : ['slash-commands']),
+  ...(capabilities.agentDefinitions?.supported === false || !capabilities.agentDefinitions ? [] : ['subagents']),
+  ...(capabilities.skills?.supported === false || !capabilities.skills ? [] : ['skills']),
+  ...(capabilities.scripts?.supported === false || !capabilities.scripts ? [] : ['scripts']),
+  ...extra,
+];
+
+const claudeCapabilities: AgentToolCapabilities = {
+  instructions: {
+    supported: true,
     fileName: 'CLAUDE.md',
     subViewId: 'claude-md',
     labelKey: 'workspace.agentSettings.claude.agentsMd',
-    scopes: [
-      { value: 'project', labelKey: 'workspace.agentSettings.common.scope.project', icon: Building },
-      { value: 'user', labelKey: 'workspace.agentSettings.common.scope.user', icon: User },
-    ],
+    scopes: projectUserScopes,
+    endpoint: 'claude-md',
   },
-  availableSubViews: ['claude-md', 'memory', 'mcp', 'hooks', 'slash-commands', 'output-styles', 'subagents', 'skills', 'scripts', 'settings'],
-  apiPathPrefix: 'claude-code',
-  availableScopes: ['project', 'user', 'local', 'plugin'],
-  i18nNamespace: 'workspace.claudeCode',
-  globalSettingsLabelKey: 'pages.settings.tabs.claudeCode',
-  hookEvents: claudeHookEvents,
+  mcp: { supported: true, scopes: ['project', 'user', 'local', 'plugin'], supportsToggle: true },
+  hooks: { supported: true, scopes: ['project', 'user', 'local', 'plugin'], events: claudeHookEvents },
+  slashCommands: { supported: true, scopes: ['project', 'user'], format: 'markdown', supportsNamespace: true },
+  agentDefinitions: {
+    supported: true,
+    endpoint: 'subagents',
+    displayLabelKey: 'workspace.navigation.sub.claudeCodeSettings.subagents',
+    scopes: ['project', 'user', 'plugin'],
+    format: 'markdown',
+  },
+  skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
+  scripts: { supported: true, collection: 'scripts', scopes: ['project', 'user'], supportsPlugin: false },
 };
 
-/** Gemini 設定 */
-const geminiConfig: AgentToolConfig = {
-  id: 'gemini',
-  navigationId: 'gemini',
-  navigationLabelKey: 'workspace.navigation.main.geminiSettings',
-  navigationIcon: Sparkles,
-  agentsMd: {
+const geminiCapabilities: AgentToolCapabilities = {
+  instructions: {
+    supported: true,
     fileName: 'GEMINI.md',
     subViewId: 'gemini-md',
     labelKey: 'workspace.agentSettings.gemini.agentsMd',
-    scopes: [
-      { value: 'project', labelKey: 'workspace.agentSettings.common.scope.project', icon: Building },
-      { value: 'user', labelKey: 'workspace.agentSettings.common.scope.user', icon: User },
-    ],
+    scopes: projectUserScopes,
+    endpoint: 'agents-md',
   },
-  availableSubViews: ['gemini-md', 'mcp', 'hooks', 'slash-commands', 'skills'],
-  apiPathPrefix: 'gemini',
-  availableScopes: ['project', 'user'],
-  supportsToggle: false,
-  slashCommandFormat: 'toml',
-  i18nNamespace: 'workspace.agentSettings.common',
-  globalSettingsLabelKey: 'pages.settings.tabs.gemini',
-  hookEvents: geminiHookEvents,
+  mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: false },
+  hooks: { supported: true, scopes: ['project', 'user'], events: geminiHookEvents },
+  slashCommands: { supported: true, scopes: ['project', 'user'], format: 'toml', supportsNamespace: true },
+  skills: { supported: true, collection: 'skills', scopes: ['project', 'user'], supportsPlugin: false },
+  scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
+  agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
 };
 
-/** OpenCode 設定 */
-const opencodeConfig: AgentToolConfig = {
-  id: 'opencode',
-  navigationId: 'opencode',
-  navigationLabelKey: 'workspace.navigation.main.opencodeSettings',
-  navigationIcon: Globe,
-  agentsMd: {
+const opencodeCapabilities: AgentToolCapabilities = {
+  instructions: {
+    supported: true,
     fileName: 'AGENTS.md',
     subViewId: 'agents-md',
     labelKey: 'workspace.agentSettings.opencode.agentsMd',
@@ -95,37 +99,95 @@ const opencodeConfig: AgentToolConfig = {
       { value: 'project', labelKey: 'workspace.agentSettings.common.scope.project', icon: Building },
       { value: 'user', labelKey: 'workspace.agentSettings.common.scope.global', icon: User },
     ],
+    endpoint: 'agents-md',
   },
-  availableSubViews: ['agents-md', 'mcp', 'hooks', 'slash-commands', 'skills'],
+  mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: true },
+  hooks: { supported: false, scopes: [], events: [] },
+  slashCommands: { supported: true, scopes: ['project', 'user'], format: 'markdown', supportsNamespace: true },
+  skills: { supported: true, collection: 'skills', scopes: ['project', 'user'], supportsPlugin: false },
+  scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
+  agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
+};
+
+const codexCapabilities: AgentToolCapabilities = {
+  instructions: {
+    supported: true,
+    fileName: 'AGENTS.md',
+    subViewId: 'agents-md',
+    labelKey: 'workspace.agentSettings.codex.agentsMd',
+    scopes: projectUserScopes,
+    endpoint: 'agents-md',
+  },
+  mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: true },
+  hooks: { supported: false, scopes: [], events: [] },
+  slashCommands: { supported: true, scopes: ['project', 'user'], format: 'markdown', supportsNamespace: false },
+  skills: { supported: true, collection: 'skills', scopes: ['project', 'user'], supportsPlugin: false },
+  scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
+  agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
+};
+
+const claudeConfig: AgentToolConfig = {
+  id: 'claude',
+  navigationId: 'claude-code',
+  navigationLabelKey: 'workspace.navigation.main.claudeCodeSettings',
+  navigationIcon: Bot,
+  agentsMd: claudeCapabilities.instructions!,
+  availableSubViews: buildAvailableSubViews('claude-md', claudeCapabilities, ['memory', 'output-styles', 'settings']),
+  apiPathPrefix: 'claude-code',
+  availableScopes: ['project', 'user', 'local', 'plugin'],
+  supportsToggle: true,
+  slashCommandFormat: 'markdown',
+  i18nNamespace: 'workspace.agentSettings.common',
+  globalSettingsLabelKey: 'pages.settings.tabs.claudeCode',
+  hookEvents: claudeHookEvents,
+  capabilities: claudeCapabilities,
+};
+
+const geminiConfig: AgentToolConfig = {
+  id: 'gemini',
+  navigationId: 'gemini',
+  navigationLabelKey: 'workspace.navigation.main.geminiSettings',
+  navigationIcon: Sparkles,
+  agentsMd: geminiCapabilities.instructions!,
+  availableSubViews: buildAvailableSubViews('gemini-md', geminiCapabilities),
+  apiPathPrefix: 'gemini',
+  availableScopes: ['project', 'user'],
+  supportsToggle: false,
+  slashCommandFormat: 'toml',
+  i18nNamespace: 'workspace.agentSettings.common',
+  globalSettingsLabelKey: 'pages.settings.tabs.gemini',
+  hookEvents: geminiHookEvents,
+  capabilities: geminiCapabilities,
+};
+
+const opencodeConfig: AgentToolConfig = {
+  id: 'opencode',
+  navigationId: 'opencode',
+  navigationLabelKey: 'workspace.navigation.main.opencodeSettings',
+  navigationIcon: Globe,
+  agentsMd: opencodeCapabilities.instructions!,
+  availableSubViews: buildAvailableSubViews('agents-md', opencodeCapabilities),
   apiPathPrefix: 'opencode',
   availableScopes: ['project', 'user'],
   i18nNamespace: 'workspace.agentSettings.common',
   globalSettingsLabelKey: 'pages.settings.tabs.opencode',
+  capabilities: opencodeCapabilities,
 };
 
-/** Codex 設定 */
 const codexConfig: AgentToolConfig = {
   id: 'codex',
   navigationId: 'codex',
   navigationLabelKey: 'workspace.navigation.main.codexSettings',
   navigationIcon: Bot,
-  agentsMd: {
-    fileName: 'AGENTS.md',
-    subViewId: 'agents-md',
-    labelKey: 'workspace.agentSettings.codex.agentsMd',
-    scopes: [
-      { value: 'project', labelKey: 'workspace.agentSettings.common.scope.project', icon: Building },
-      { value: 'user', labelKey: 'workspace.agentSettings.common.scope.user', icon: User },
-    ],
-  },
-  availableSubViews: ['agents-md', 'mcp', 'hooks', 'slash-commands', 'skills'],
+  agentsMd: codexCapabilities.instructions!,
+  availableSubViews: buildAvailableSubViews('agents-md', codexCapabilities),
   apiPathPrefix: 'codex',
   availableScopes: ['project', 'user'],
   i18nNamespace: 'workspace.agentSettings.common',
   globalSettingsLabelKey: 'pages.settings.tabs.codex',
+  capabilities: codexCapabilities,
 };
 
-/** 所有 Agent 工具設定 */
 export const AGENT_TOOL_CONFIGS: Record<AgentToolType, AgentToolConfig> = {
   claude: claudeConfig,
   gemini: geminiConfig,
@@ -133,7 +195,4 @@ export const AGENT_TOOL_CONFIGS: Record<AgentToolType, AgentToolConfig> = {
   codex: codexConfig,
 };
 
-
-
-/** 所有 Agent 工具的 navigationId 清單 */
-export const AGENT_NAVIGATION_IDS = Object.values(AGENT_TOOL_CONFIGS).map(c => c.navigationId);
+export const AGENT_NAVIGATION_IDS = Object.values(AGENT_TOOL_CONFIGS).map((config) => config.navigationId);

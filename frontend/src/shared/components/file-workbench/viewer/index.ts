@@ -1,4 +1,5 @@
 export { FileViewerWorkbench } from './FileViewerWorkbench';
+export { FileFocusToolbar } from './FileFocusToolbar';
 export { FileEditor } from './FileEditor';
 export { CodeTextEditor } from './CodeTextEditor';
 export { SharedImageViewer } from './SharedImageViewer';

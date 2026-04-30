@@ -18,9 +18,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/shared/components/ui/tooltip';
-import type { ClaudeMcpServer, ClaudeScope } from '../../claude-code/data';
+import type { AgentMcpServer, AgentScope } from '../types';
 
-const ALL_SCOPES: ClaudeScope[] = ['project', 'user', 'local', 'plugin'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 import MCPImportDialog from './dialogs/MCPImportDialog';
 import { WorkspaceMCPServerDialog } from './dialogs/WorkspaceMCPServerDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -33,12 +33,12 @@ import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/comp
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
-  availableScopes?: ClaudeScope[];
+  availableScopes?: AgentScope[];
   supportsToggle?: boolean;
   i18nNamespace?: string;
 }
 
-const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-code', availableScopes = ALL_SCOPES, supportsToggle = true, i18nNamespace = 'workspace.claudeCode' }) => {
+const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-code', availableScopes = ALL_SCOPES, supportsToggle = true, i18nNamespace = 'workspace.agentSettings.common' }) => {
   const { t } = useI18n();
   const { toast } = useToast();
   const { workspaceRuntime } = useWorkspace();
@@ -50,13 +50,13 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
-  const [servers, setServers] = useState<ClaudeMcpServer[]>([]);
+  const [servers, setServers] = useState<AgentMcpServer[]>([]);
   const [search, setSearch] = useState('');
-  const [selectedScope, setSelectedScope] = useState<ClaudeScope | 'all'>('all');
+  const [selectedScope, setSelectedScope] = useState<AgentScope | 'all'>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [importOpen, setImportOpen] = useState(false);
-  const [activeServer, setActiveServer] = useState<ClaudeMcpServer | null>(null);
+  const [activeServer, setActiveServer] = useState<AgentMcpServer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visibleEnvs, setVisibleEnvs] = useState<Record<string, boolean>>({});
@@ -120,11 +120,11 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     onRefresh: fetchServers,
   });
 
-  const canEdit = (server: ClaudeMcpServer): boolean => {
+  const canEdit = (server: AgentMcpServer): boolean => {
     return server.scope !== 'plugin';
   };
 
-  const canDelete = (server: ClaudeMcpServer): boolean => {
+  const canDelete = (server: AgentMcpServer): boolean => {
     return server.scope !== 'plugin';
   };
 
@@ -134,7 +134,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     setDialogOpen(true);
   };
 
-  const handleOpenEdit = (server: ClaudeMcpServer) => {
+  const handleOpenEdit = (server: AgentMcpServer) => {
     if (!canEdit(server)) {
       toast({
         variant: 'destructive',
@@ -149,12 +149,12 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   };
 
   const handleSubmit = useCallback(
-    async (payload: ClaudeMcpServer) => {
+    async (payload: AgentMcpServer) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         throw new Error(t(`${i18nNamespace}.mcp.messages.runtimeNotReady`));
       }
 
-      const normalized: ClaudeMcpServer = {
+      const normalized: AgentMcpServer = {
         ...payload,
         id: `${payload.scope}:${payload.name}`,
         command: payload.command?.trim(),
@@ -196,7 +196,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   );
 
   const handleDelete = useCallback(
-    async (server: ClaudeMcpServer) => {
+    async (server: AgentMcpServer) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         toast({
           variant: 'destructive',
@@ -246,7 +246,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   );
 
   const handleToggleStatus = useCallback(
-    async (server: ClaudeMcpServer, enabled: boolean) => {
+    async (server: AgentMcpServer, enabled: boolean) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         toast({
           variant: 'destructive',
@@ -280,7 +280,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   );
 
   const handleImport = useCallback(
-    async (options: { scope: ClaudeMcpServer['scope']; file: File; overwrite?: boolean }) => {
+    async (options: { scope: AgentMcpServer['scope']; file: File; overwrite?: boolean }) => {
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         throw new Error(t(`${i18nNamespace}.mcp.messages.runtimeNotReady`));
       }
@@ -324,7 +324,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                 <span className="text-xs text-muted-foreground">
                   {t(`${i18nNamespace}.mcp.server.scope.label`)}
                 </span>
-                <Select value={selectedScope} onValueChange={(value) => setSelectedScope(value as ClaudeScope | 'all')}>
+                <Select value={selectedScope} onValueChange={(value) => setSelectedScope(value as AgentScope | 'all')}>
                   <SelectTrigger className="h-7 w-32 text-xs">
                     <SelectValue />
                   </SelectTrigger>

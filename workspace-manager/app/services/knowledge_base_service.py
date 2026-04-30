@@ -33,6 +33,8 @@ KB_SHARE_OWNER_FORBIDDEN_MESSAGE = "Cannot share knowledge base with owner"
 KB_SHARE_INVALID_ROLE_MESSAGE = "Invalid knowledge base sharing role"
 KB_SHARE_CONFLICT_MESSAGE = "Knowledge base share already exists"
 KB_SHARE_NOT_FOUND_MESSAGE = "Knowledge base share does not exist"
+KB_INVALID_QUOTA_MESSAGE = "Knowledge base quota is invalid"
+KB_QUOTA_BELOW_USAGE_MESSAGE = "Knowledge base quota cannot be lower than current usage"
 
 
 class KnowledgeBaseError(ValueError):
@@ -166,6 +168,38 @@ class KnowledgeBaseService:
     ) -> db_models.KnowledgeBase:
         kb = self._get_accessible_kb(kb_id, user_id=user_id, minimum_role="manager")
         kb.description = description
+        kb.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(kb)
+        return kb
+
+    def update_quota(
+        self,
+        *,
+        user_id: str,
+        kb_id: str,
+        quota_bytes: Optional[int],
+    ) -> db_models.KnowledgeBase:
+        kb = self._get_accessible_kb(kb_id, user_id=user_id, minimum_role="manager")
+        if quota_bytes is not None:
+            if quota_bytes < 0:
+                raise KnowledgeBaseError(
+                    KB_INVALID_QUOTA_MESSAGE,
+                    code="KB_INVALID_QUOTA",
+                    params={"quotaBytes": quota_bytes},
+                )
+            current_size = kb.current_size_bytes or 0
+            if quota_bytes < current_size:
+                raise KnowledgeBaseError(
+                    KB_QUOTA_BELOW_USAGE_MESSAGE,
+                    code="KB_QUOTA_BELOW_USAGE",
+                    params={
+                        "currentSizeBytes": current_size,
+                        "quotaBytes": quota_bytes,
+                    },
+                )
+
+        kb.quota_bytes = quota_bytes
         kb.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(kb)

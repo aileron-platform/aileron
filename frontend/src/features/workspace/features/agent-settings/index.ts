@@ -1,8 +1,8 @@
 /**
- * Agent Settings Module - 模組匯出
+ * Agent Settings module exports.
  */
 
-// 型別
+// Types.
 export type {
   AgentToolType,
   AgentToolConfig,
@@ -11,13 +11,13 @@ export type {
   HookEventOption,
 } from './types';
 
-// 設定常數
+// Configuration constants.
 export {
   AGENT_TOOL_CONFIGS,
   AGENT_NAVIGATION_IDS,
 } from './agentToolConfigs';
 
-// 工具函數
+// Utilities.
 export {
   normalizeAgentType,
   getAgentToolConfig,
@@ -26,10 +26,9 @@ export {
   getDefaultSubView,
 } from './utils';
 
-// API 工廠
+// API factory.
 export { createAgentSettingsApi } from './services/agentSettingsApi';
 export type { AgentSettingsApi } from './services/agentSettingsApi';
 
-// 共用常數
+// Shared constants.
 export { SCOPE_BADGE_CLASSES } from './constants/scopeStyles';
-

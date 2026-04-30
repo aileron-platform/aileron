@@ -256,6 +256,8 @@
   "knowledge_base.invalid.slug": "Knowledge base slug cannot be empty",
   "knowledge_base.invalid.owner": "Knowledge base owner not found",
   "knowledge_base.invalid.role": "Unknown knowledge base role",
+  "knowledge_base.invalid.quota": "Knowledge base quota is invalid",
+  "knowledge_base.invalid.quota_below_usage": "Knowledge base quota cannot be lower than current usage",
   "knowledge_base.invalid.request": "Invalid knowledge base request",
   "knowledge_base.unexpected_error": "Unexpected knowledge base error",
   "knowledge_base.file.not_found": "File not found: {path}",

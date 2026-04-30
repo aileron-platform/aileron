@@ -118,6 +118,32 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench', () => ({
+  FileFocusToolbar: ({
+    actions,
+    exitLabel,
+    icon,
+    metadata,
+    onExit,
+    subtitle,
+    title,
+  }: {
+    actions?: ReactNode;
+    exitLabel: string;
+    icon?: ReactNode;
+    metadata?: ReactNode;
+    onExit: () => void;
+    subtitle?: ReactNode;
+    title: ReactNode;
+  }) => (
+    <div>
+      <button type="button" onClick={onExit}>{exitLabel}</button>
+      <div>{icon}</div>
+      <div>{title}</div>
+      <div>{subtitle}</div>
+      <div>{metadata}</div>
+      <div>{actions}</div>
+    </div>
+  ),
   StandardFileTreeLayout: ({
     toolbarContent,
     children,
@@ -165,6 +191,16 @@ vi.mock('@/shared/components/file-workbench', () => ({
     readOnly?: boolean;
     tabs: Array<{ name: string; content: string }>;
     activeTabId: string | null;
+    hideChromeWhenExpanded?: boolean;
+    isExpanded?: boolean;
+    onExpandedChange?: (expanded: boolean) => void;
+    renderFocusToolbar?: (params: {
+      actions?: ReactNode;
+      icon?: ReactNode;
+      metadata?: ReactNode;
+      subtitle?: ReactNode;
+      title: ReactNode;
+    }) => ReactNode;
   }) => {
     workbenchPropsMock(props);
     return (
@@ -301,6 +337,32 @@ describe('KnowledgeBaseFilesTab', () => {
     ]);
     expect(screen.getByText('active:/docs/guide.mmd')).toBeInTheDocument();
     expect(screen.getByText('guide.mmd:graph TD; A-->B;')).toBeInTheDocument();
+  });
+
+  it('展開 shared workbench 時隱藏 chrome 並使用單檔 focus toolbar', () => {
+    render(<KnowledgeBaseFilesTab knowledgeBaseId="kb-1" readOnly={false} />);
+
+    const props = workbenchPropsMock.mock.calls.at(-1)?.[0];
+    expect(props.hideChromeWhenExpanded).toBe(true);
+    expect(props.isExpanded).toBe(false);
+    expect(props.onExpandedChange).toBeTypeOf('function');
+    expect(props.renderFocusToolbar).toBeTypeOf('function');
+
+    const toolbar = props.renderFocusToolbar({
+      actions: <span>focus-actions</span>,
+      icon: <span>file-icon</span>,
+      metadata: <span>metadata</span>,
+      subtitle: '/docs/readme.md',
+      title: 'readme.md',
+    });
+
+    render(<>{toolbar}</>);
+
+    expect(screen.getByText('readme.md')).toBeInTheDocument();
+    expect(screen.getByText('/docs/readme.md')).toBeInTheDocument();
+    expect(screen.getByText('metadata')).toBeInTheDocument();
+    expect(screen.getByText('focus-actions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'shared.fileViewer.toolbar.collapse' })).toBeInTheDocument();
   });
 
   it('提供 shared workbench adapter 的文字讀取、儲存、raw blob、複製路徑與 reveal-in-tree 能力', async () => {

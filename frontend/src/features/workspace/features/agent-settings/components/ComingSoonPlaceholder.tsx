@@ -1,5 +1,5 @@
 /**
- * ComingSoonPlaceholder - 功能即將支援佔位元件
+ * ComingSoonPlaceholder - placeholder for unsupported agent capabilities.
  */
 
 import React from 'react';
@@ -30,12 +30,12 @@ const ComingSoonPlaceholder: React.FC<ComingSoonPlaceholderProps> = ({ feature, 
         <div className="space-y-2">
           <h3 className="text-lg font-medium text-foreground">
             {t('workspace.agentSettings.common.comingSoon.title', {
-              defaultValue: '即將推出',
+              defaultValue: 'Coming soon',
             })}
           </h3>
           <p className="text-sm text-muted-foreground max-w-md">
             {t('workspace.agentSettings.common.comingSoon.description', {
-              defaultValue: `${feature} 功能即將支援 ${toolName}。`,
+              defaultValue: `${feature} will be available for ${toolName} soon.`,
               feature,
               toolName,
             })}

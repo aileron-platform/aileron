@@ -13,25 +13,24 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import {
   createAgentSettingsApi,
-  buildHookRulesFromClaudeHook,
-  mapHookScopeDocumentToClaudeHooks,
-  type ClaudeHookScopeDocument,
-  type ClaudeHookRuleMap,
-  type ClaudeHookWithEvent,
-  type ClaudeHookMatcher,
+  buildHookRulesFromAgentHook,
+  mapHookScopeDocumentToAgentHooks,
+  type AgentHookScopeDocument,
+  type AgentHookRuleMap,
+  type AgentHookWithEvent,
+  type AgentHookMatcher,
 } from '../services/agentSettingsApi';
 import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
-import type { ClaudeScope } from '../../claude-code/types';
-import type { HookEventOption } from '../types';
+import type { AgentScope, HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 
 const logger = createLogger('HooksSettingsPage');
 
-type ClaudeHook = ClaudeHookWithEvent;
+type AgentHook = AgentHookWithEvent;
 
-type HookScopeState = Record<ClaudeHook['scope'], ClaudeHookScopeDocument>;
+type HookScopeState = Record<AgentHook['scope'], AgentHookScopeDocument>;
 
 const createEmptyScopeDocuments = (): HookScopeState => ({
   project: { scope: 'project', hooks: {} },
@@ -40,7 +39,7 @@ const createEmptyScopeDocuments = (): HookScopeState => ({
   plugin: { scope: 'plugin', hooks: {} },
 });
 
-const cloneRuleMap = (hooks: ClaudeHookRuleMap | undefined): ClaudeHookRuleMap => {
+const cloneRuleMap = (hooks: AgentHookRuleMap | undefined): AgentHookRuleMap => {
   if (!hooks) {
     return {};
   }
@@ -56,15 +55,15 @@ const cloneRuleMap = (hooks: ClaudeHookRuleMap | undefined): ClaudeHookRuleMap =
 };
 
 const upsertHookInMap = (
-  hooks: ClaudeHookRuleMap,
-  payload: ClaudeHook,
-  previous?: ClaudeHook | null,
-): ClaudeHookRuleMap => {
+  hooks: AgentHookRuleMap,
+  payload: AgentHook,
+  previous?: AgentHook | null,
+): AgentHookRuleMap => {
   const next = cloneRuleMap(hooks);
   if (previous && previous.scope === payload.scope && previous.eventName !== payload.eventName) {
     delete next[previous.eventName];
   }
-  const rules = buildHookRulesFromClaudeHook(payload);
+  const rules = buildHookRulesFromAgentHook(payload);
   if (rules.length > 0) {
     next[payload.eventName] = rules;
   } else {
@@ -73,28 +72,28 @@ const upsertHookInMap = (
   return next;
 };
 
-const removeHookFromMap = (hooks: ClaudeHookRuleMap, target: ClaudeHook): ClaudeHookRuleMap => {
+const removeHookFromMap = (hooks: AgentHookRuleMap, target: AgentHook): AgentHookRuleMap => {
   const next = cloneRuleMap(hooks);
   delete next[target.eventName];
   return next;
 };
 
-const ALL_SCOPES: ClaudeScope[] = ['project', 'user', 'local', 'plugin'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
-  availableScopes?: ClaudeScope[];
+  availableScopes?: AgentScope[];
   hookEvents?: HookEventOption[];
   i18nNamespace?: string;
 }
 
-const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'claude-code', availableScopes = ALL_SCOPES, hookEvents, i18nNamespace = 'workspace.claudeCode' }) => {
+const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'claude-code', availableScopes = ALL_SCOPES, hookEvents, i18nNamespace = 'workspace.agentSettings.common' }) => {
   const [scopeDocuments, setScopeDocuments] = useState<HookScopeState>(() => createEmptyScopeDocuments());
   const [search, setSearch] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<'all' | ClaudeHook['scope']>('all');
+  const [scopeFilter, setScopeFilter] = useState<'all' | AgentHook['scope']>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
-  const [activeHook, setActiveHook] = useState<ClaudeHook | null>(null);
+  const [activeHook, setActiveHook] = useState<AgentHook | null>(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +148,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
   const hooks = useMemo(
     () =>
       Object.values(scopeDocuments)
-        .flatMap((document) => mapHookScopeDocumentToClaudeHooks(document))
+        .flatMap((document) => mapHookScopeDocumentToAgentHooks(document))
         .sort((a, b) => a.eventName.localeCompare(b.eventName)),
     [scopeDocuments],
   );
@@ -225,15 +224,15 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeLoading);
   const isBusy = loading || processing;
 
-  const canEdit = (hook: ClaudeHook): boolean => {
+  const canEdit = (hook: AgentHook): boolean => {
     return hook.scope !== 'plugin';
   };
 
-  const canDelete = (hook: ClaudeHook): boolean => {
+  const canDelete = (hook: AgentHook): boolean => {
     return hook.scope !== 'plugin';
   };
 
-  const handleSubmit = async (payload: ClaudeHook) => {
+  const handleSubmit = async (payload: AgentHook) => {
     if (!runtimeBaseUrl || !workspaceId) {
       if (runtimeError) {
         setError(t(`${i18nNamespace}.agentsMd.status.runtimeUnavailable`, { message: runtimeError }));
@@ -310,7 +309,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
     }
   };
 
-  const handleDelete = async (hook: ClaudeHook) => {
+  const handleDelete = async (hook: AgentHook) => {
     if (!canDelete(hook)) {
       return;
     }
@@ -369,7 +368,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
     setDialogOpen(true);
   };
 
-  const handleOpenEdit = (hook: ClaudeHook) => {
+  const handleOpenEdit = (hook: AgentHook) => {
     if (!canEdit(hook)) {
       return;
     }
@@ -493,7 +492,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                           </span>
                         </div>
                         <div className="space-y-2">
-                          {hook.matchers.map((matcher: ClaudeHookMatcher, matcherIndex) => (
+                          {hook.matchers.map((matcher: AgentHookMatcher, matcherIndex) => (
                             <div key={`${hook.id}-matcher-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
                               <div className="mb-2 flex items-center justify-between">
                                 <div className="flex items-center gap-2">

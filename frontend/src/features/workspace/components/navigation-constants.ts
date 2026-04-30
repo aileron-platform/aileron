@@ -1,6 +1,6 @@
 /**
- * 導航相關常數配置
- * 基於原始 navigation.ts 的導航項目
+ * Navigation constants.
+ * Based on the original navigation.ts items.
  */
 
 import type { LucideIcon } from 'lucide-react';
@@ -35,7 +35,7 @@ import {
 import type { AgentToolType, AgentToolConfig } from '../features/agent-settings/types';
 import { AGENT_TOOL_CONFIGS } from '../features/agent-settings/agentToolConfigs';
 
-// Claude Code 功能統一 Icon 配置
+// Shared Claude Code icon configuration.
 export const CLAUDE_CODE_ICONS = {
   'claude-md': FileText,
   'hooks': Zap,
@@ -289,9 +289,9 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
   },
 ];
 
-// ============ 動態 Agent 工具導航 ============
+// ============ Dynamic agent tool navigation ============
 
-/** Agent 設定通用 Icon 配置 */
+/** Shared icon configuration for agent settings. */
 const AGENT_SETTINGS_ICONS: Record<string, LucideIcon> = {
   'mcp': Network,
   'hooks': Zap,
@@ -307,7 +307,7 @@ const AGENT_SETTINGS_ICONS: Record<string, LucideIcon> = {
   'memory': Brain,
 };
 
-/** 子視圖的 i18n key 對照表 */
+/** Subview i18n key mapping. */
 const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'claude-md': 'workspace.navigation.sub.claudeCodeSettings.claudeMd',
   'gemini-md': 'workspace.agentSettings.common.subViews.geminiMd',
@@ -324,7 +324,7 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
 };
 
 /**
- * 根據 AgentToolConfig 建立導航項目
+ * Build a navigation item from AgentToolConfig.
  */
 export const buildAgentToolNavigationItem = (config: AgentToolConfig): NavigationConfig => ({
   id: config.navigationId,
@@ -340,14 +340,14 @@ export const buildAgentToolNavigationItem = (config: AgentToolConfig): Navigatio
   })),
 });
 
-/** 不包含 Agent 工具的靜態導航項目 */
+/** Static navigation items without agent tools. */
 const STATIC_NAVIGATION_ITEMS: NavigationConfig[] = MAIN_NAVIGATION_ITEMS.filter(
   (item) => item.id !== 'claude-code',
 );
 
 /**
- * 根據 agentType 取得完整的導航項目列表
- * 動態替換 Agent 工具設定區段
+ * Get the complete navigation item list for the active agent type.
+ * Replaces the agent tool settings section dynamically.
  */
 export const getNavigationItems = (agentType: AgentToolType): NavigationConfig[] => {
   const config = AGENT_TOOL_CONFIGS[agentType];

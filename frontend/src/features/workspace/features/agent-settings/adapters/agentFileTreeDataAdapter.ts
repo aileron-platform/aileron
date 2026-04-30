@@ -10,36 +10,35 @@ import type {
   FileUploadOptions,
   FileUploadResult,
 } from '@/shared/components/file-workbench';
+import type { AgentFileCollection, AgentSelectedFile } from '../types';
 
-type ClaudeCodeCollection = 'skills' | 'scripts';
-type ClaudeCodeScope = 'project' | 'user' | 'plugin';
-
-export interface ClaudeCodeFileTreeDataAdapterOptions {
+export interface AgentFileTreeDataAdapterOptions {
   workspaceId: string;
-  scope: ClaudeCodeScope;
-  collection: ClaudeCodeCollection;
+  apiPrefix: 'claude-code' | 'gemini' | 'codex' | 'opencode';
+  scope: AgentSelectedFile['scope'];
+  collection: AgentFileCollection;
   runtimeBaseUrl?: string | null;
 }
 
-const claudeCodeFileEndpoints = {
-  getTree: (workspaceId: string, collection: ClaudeCodeCollection, scope: string) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}/tree?scope=${scope}&includeHidden=true`,
-  getContent: (workspaceId: string, collection: ClaudeCodeCollection, path: string, scope: string) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}/content?path=${encodeURIComponent(path)}&scope=${scope}`,
-  create: (workspaceId: string, collection: ClaudeCodeCollection, scope: string) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}?scope=${scope}`,
-  update: (workspaceId: string, collection: ClaudeCodeCollection, path: string, scope: string) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}/content?path=${encodeURIComponent(path)}&scope=${scope}`,
-  delete: (workspaceId: string, collection: ClaudeCodeCollection, path: string, scope: string, recursive: boolean) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}?path=${encodeURIComponent(path)}&scope=${scope}&recursive=${recursive}`,
-  move: (workspaceId: string, collection: ClaudeCodeCollection, scope: string) =>
-    `/workspaces/${workspaceId}/claude-code/${collection}/move?scope=${scope}`,
+const agentFileEndpoints = {
+  getTree: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, scope: string) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}/tree?scope=${scope}&includeHidden=true`,
+  getContent: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, path: string, scope: string) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}/content?path=${encodeURIComponent(path)}&scope=${scope}`,
+  create: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, scope: string) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}?scope=${scope}`,
+  update: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, path: string, scope: string) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}/content?path=${encodeURIComponent(path)}&scope=${scope}`,
+  delete: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, path: string, scope: string, recursive: boolean) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}?path=${encodeURIComponent(path)}&scope=${scope}&recursive=${recursive}`,
+  move: (workspaceId: string, apiPrefix: string, collection: AgentFileCollection, scope: string) =>
+    `/workspaces/${workspaceId}/${apiPrefix}/${collection}/move?scope=${scope}`,
 };
 
-export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
+export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   private readonly client: ApiClient;
 
-  constructor(private readonly options: ClaudeCodeFileTreeDataAdapterOptions) {
+  constructor(private readonly options: AgentFileTreeDataAdapterOptions) {
     if (!options.workspaceId) {
       throw new Error('Missing Workspace ID');
     }
@@ -50,9 +49,9 @@ export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 
   async getTree(): Promise<FileTreeNode[]> {
-    const { workspaceId, collection, scope } = this.options;
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
     const response = await this.client.get<{ nodes?: FileTreeNode[] }>(
-      claudeCodeFileEndpoints.getTree(workspaceId, collection, scope),
+      agentFileEndpoints.getTree(workspaceId, apiPrefix, collection, scope),
     );
     return response.nodes ?? [];
   }
@@ -62,16 +61,16 @@ export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 
   async getContent(path: string): Promise<string> {
-    const { workspaceId, collection, scope } = this.options;
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
     const response = await this.client.get<{ data?: { content?: string } }>(
-      claudeCodeFileEndpoints.getContent(workspaceId, collection, path, scope),
+      agentFileEndpoints.getContent(workspaceId, apiPrefix, collection, path, scope),
     );
     return response.data?.content ?? '';
   }
 
   async create(request: FileOperationRequest): Promise<FileOperationResponse> {
-    const { workspaceId, collection, scope } = this.options;
-    const baseUrl = claudeCodeFileEndpoints.create(workspaceId, collection, scope);
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
+    const baseUrl = agentFileEndpoints.create(workspaceId, apiPrefix, collection, scope);
     const url = `${baseUrl}&path=${encodeURIComponent(request.path)}&type=file${
       request.content ? `&content=${encodeURIComponent(request.content)}` : ''
     }`;
@@ -79,14 +78,14 @@ export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 
   async update(path: string, content: string): Promise<FileOperationResponse> {
-    const { workspaceId, collection, scope } = this.options;
-    const baseUrl = claudeCodeFileEndpoints.update(workspaceId, collection, path, scope);
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
+    const baseUrl = agentFileEndpoints.update(workspaceId, apiPrefix, collection, path, scope);
     return this.client.put(`${baseUrl}&content=${encodeURIComponent(content)}`);
   }
 
   async delete(path: string, recursive = false): Promise<FileOperationResponse> {
-    const { workspaceId, collection, scope } = this.options;
-    return this.client.delete(claudeCodeFileEndpoints.delete(workspaceId, collection, path, scope, recursive));
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
+    return this.client.delete(agentFileEndpoints.delete(workspaceId, apiPrefix, collection, path, scope, recursive));
   }
 
   async batchDelete(request: BatchDeleteRequest): Promise<BatchDeleteResponse> {
@@ -154,12 +153,12 @@ export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 
   async download(_options: FileDownloadOptions): Promise<void> {
-    throw new Error('Claude Code does not support download');
+    throw new Error('Agent file collections do not support download');
   }
 
   private postMove(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
-    const { workspaceId, collection, scope } = this.options;
-    const baseUrl = claudeCodeFileEndpoints.move(workspaceId, collection, scope);
+    const { workspaceId, apiPrefix, collection, scope } = this.options;
+    const baseUrl = agentFileEndpoints.move(workspaceId, apiPrefix, collection, scope);
     const url = new URL(baseUrl, window.location.origin);
     url.searchParams.set('sourcePath', sourcePath);
     url.searchParams.set('destPath', targetPath);
@@ -170,6 +169,6 @@ export class ClaudeCodeFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 }
 
-export const createClaudeCodeFileTreeDataAdapter = (
-  options: ClaudeCodeFileTreeDataAdapterOptions,
-): ClaudeCodeFileTreeDataAdapter => new ClaudeCodeFileTreeDataAdapter(options);
+export const createAgentFileTreeDataAdapter = (
+  options: AgentFileTreeDataAdapterOptions,
+): AgentFileTreeDataAdapter => new AgentFileTreeDataAdapter(options);

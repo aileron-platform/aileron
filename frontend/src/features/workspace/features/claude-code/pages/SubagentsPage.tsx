@@ -1,6 +1,6 @@
 import React, { useContext } from 'react';
-import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
-import { WorkspaceAgentDialog } from '../components/dialogs/WorkspaceAgentDialog';
+import { AgentDocumentPage } from '../../agent-settings/components/DocumentPage';
+import { AgentDefinitionDialog } from '../../agent-settings/components/dialogs/AgentDefinitionDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 
@@ -24,7 +24,7 @@ const SubagentsPageContent: React.FC = () => {
   const { subagents } = useClaudeCode();
 
   return (
-    <ClaudeDocumentPage
+    <AgentDocumentPage
       documents={subagents.items}
       selectedId={subagents.selectedId}
       onSelect={subagents.select}
@@ -34,13 +34,13 @@ const SubagentsPageContent: React.FC = () => {
       isLoading={subagents.loading}
       error={subagents.error}
       onRefresh={subagents.refresh}
-      dialogComponent={WorkspaceAgentDialog}
+      dialogComponent={AgentDefinitionDialog}
       config={{
         metaKey: 'subagents',
-        createButtonLabel: t('workspace.claudeCode.subagents.actions.create'),
-        emptyStateTitle: t('workspace.claudeCode.subagents.empty.title'),
-        emptyStateDescription: t('workspace.claudeCode.subagents.empty.description'),
-        dialogTitle: t('workspace.claudeCode.subagents.pageTitle'),
+        createButtonLabel: t('workspace.agentSettings.common.subagents.actions.create'),
+        emptyStateTitle: t('workspace.agentSettings.common.subagents.empty.title'),
+        emptyStateDescription: t('workspace.agentSettings.common.subagents.empty.description'),
+        dialogTitle: t('workspace.agentSettings.common.subagents.pageTitle'),
       }}
     />
   );

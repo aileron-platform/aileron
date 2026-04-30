@@ -26,8 +26,8 @@ interface MCPImportDialogProps {
   i18nNamespace?: string;
 }
 
-const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImport, availableScopes, i18nNamespace = 'workspace.claudeCode' }) => {
-  // 過濾掉 plugin（import 不支援 plugin scope），只保留有效的 McpScope
+const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImport, availableScopes, i18nNamespace = 'workspace.agentSettings.common' }) => {
+  // Exclude plugin because import does not support plugin scope.
   const importScopes: McpScope[] = availableScopes
     ? (availableScopes.filter((s): s is McpScope => s === 'project' || s === 'user' || s === 'local'))
     : DEFAULT_IMPORT_SCOPES;
@@ -271,19 +271,19 @@ const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImpo
                   <div>
                     <div className="text-2xl font-bold text-green-600">{importResult.created.length}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t(`${i18nNamespace}.mcp.dialogs.import.result.created`, { defaultValue: '新增' })}
+                      {t(`${i18nNamespace}.mcp.dialogs.import.result.created`, { defaultValue: 'Created' })}
                     </div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-blue-600">{importResult.updated.length}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t(`${i18nNamespace}.mcp.dialogs.import.result.updated`, { defaultValue: '更新' })}
+                      {t(`${i18nNamespace}.mcp.dialogs.import.result.updated`, { defaultValue: 'Updated' })}
                     </div>
                   </div>
                   <div>
                     <div className="text-2xl font-bold text-amber-600">{importResult.skipped.length}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t(`${i18nNamespace}.mcp.dialogs.import.result.skipped`, { defaultValue: '跳過' })}
+                      {t(`${i18nNamespace}.mcp.dialogs.import.result.skipped`, { defaultValue: 'Skipped' })}
                     </div>
                   </div>
                 </div>
@@ -318,14 +318,14 @@ const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImpo
                           <div className="text-xs text-muted-foreground">
                             {entry.status === 'created'
                               ? t(`${i18nNamespace}.mcp.dialogs.import.result.created`, {
-                                  defaultValue: '新增',
+                                  defaultValue: 'Created',
                                 })
                               : entry.status === 'updated'
                               ? t(`${i18nNamespace}.mcp.dialogs.import.result.updated`, {
-                                  defaultValue: '更新',
+                                  defaultValue: 'Updated',
                                 })
                               : t(`${i18nNamespace}.mcp.dialogs.import.result.skipped`, {
-                                  defaultValue: '已跳過',
+                                  defaultValue: 'Skipped',
                                 })}
                           </div>
                         </div>

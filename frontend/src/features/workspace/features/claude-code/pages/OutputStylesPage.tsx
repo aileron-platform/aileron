@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
+import { AgentDocumentPage } from '../../agent-settings/components/DocumentPage';
 import { WorkspaceOutputStyleDialog } from '../components/dialogs/WorkspaceOutputStyleDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
@@ -24,7 +24,7 @@ const OutputStylesPageContent: React.FC = () => {
   const { outputStyles } = useClaudeCode();
 
   return (
-    <ClaudeDocumentPage
+    <AgentDocumentPage
       documents={outputStyles.items}
       selectedId={outputStyles.selectedId}
       onSelect={outputStyles.select}
@@ -35,6 +35,7 @@ const OutputStylesPageContent: React.FC = () => {
       error={outputStyles.error}
       onRefresh={outputStyles.refresh}
       dialogComponent={WorkspaceOutputStyleDialog}
+      i18nNamespace="workspace.claudeCode"
       config={{
         metaKey: 'output-styles',
         createButtonLabel: t('workspace.claudeCode.outputStyles.actions.create'),

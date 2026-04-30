@@ -7,42 +7,45 @@ import {
   type DocumentWorkflowDialogProps,
 } from '@/shared/components/document-workflow';
 import { useI18n } from '@/shared/hooks/useI18n';
-import type { ClaudeDocument, ClaudeScope } from '../../types';
+import type { AgentDocument, AgentScope } from '../../types';
 
-interface WorkspaceAgentFormState {
+interface AgentDefinitionFormState {
   fileName: string;
-  scope: ClaudeScope;
+  scope: AgentScope;
   content: string;
 }
 
-export type WorkspaceAgentDialogProps = DocumentWorkflowDialogProps<ClaudeDocument>;
+export interface AgentDefinitionDialogProps extends DocumentWorkflowDialogProps<AgentDocument> {
+  i18nNamespace?: string;
+}
 
-export const WorkspaceAgentDialog: React.FC<WorkspaceAgentDialogProps> = ({
+export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
   open,
   mode,
   initialValue,
+  i18nNamespace = 'workspace.agentSettings.common',
   onClose,
   onSubmit,
 }) => {
   const { t } = useI18n();
 
-  const buildInitialState = useCallback((): WorkspaceAgentFormState => ({
+  const buildInitialState = useCallback((): AgentDefinitionFormState => ({
     fileName: (initialValue?.metadata?.fileName as string | undefined) ?? '',
     scope: initialValue?.scope ?? 'project',
     content: initialValue?.content ?? '',
   }), [initialValue]);
 
-  const [formState, setFormState] = useState<WorkspaceAgentFormState>(buildInitialState);
+  const [formState, setFormState] = useState<AgentDefinitionFormState>(buildInitialState);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ fileName?: string; content?: string }>({});
   const isEdit = mode === 'edit';
 
   const scopeOptions = useMemo(
     () => [
-      { value: 'project' as ClaudeScope, label: t('workspace.claudeCode.documents.scope.values.project') },
-      { value: 'user' as ClaudeScope, label: t('workspace.claudeCode.documents.scope.values.user') },
+      { value: 'project' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.project`) },
+      { value: 'user' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.user`) },
     ],
-    [t],
+    [i18nNamespace, t],
   );
 
   useEffect(() => {
@@ -52,7 +55,7 @@ export const WorkspaceAgentDialog: React.FC<WorkspaceAgentDialogProps> = ({
     setSubmitting(false);
   }, [buildInitialState, open]);
 
-  const getTranslationKey = (key: string) => `workspace.claudeCode.subagents.dialog.${key}`;
+  const getTranslationKey = (key: string) => `${i18nNamespace}.subagents.dialog.${key}`;
 
   const validate = () => {
     const nextErrors: { fileName?: string; content?: string } = {};
@@ -76,7 +79,7 @@ export const WorkspaceAgentDialog: React.FC<WorkspaceAgentDialogProps> = ({
     try {
       const identifier =
         (initialValue?.metadata?.fileName as string | undefined) ?? initialValue?.id ?? normalizedFileName;
-      const document: ClaudeDocument = {
+      const document: AgentDocument = {
         id: `${formState.scope}:${identifier}`,
         title: normalizedFileName,
         description: '',
@@ -96,7 +99,7 @@ export const WorkspaceAgentDialog: React.FC<WorkspaceAgentDialogProps> = ({
   };
 
   return (
-    <DocumentEditorDialogCore<ClaudeScope>
+    <DocumentEditorDialogCore<AgentScope>
       open={open}
       isEdit={isEdit}
       submitting={submitting}
@@ -133,4 +136,4 @@ export const WorkspaceAgentDialog: React.FC<WorkspaceAgentDialogProps> = ({
   );
 };
 
-export default WorkspaceAgentDialog;
+export default AgentDefinitionDialog;

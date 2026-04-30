@@ -1,66 +1,53 @@
-/**
- * Agent Settings API 工廠函數
- *
- * 根據 apiPrefix 動態生成 API 方法，供不同 AI Agent 工具（Claude/Gemini/OpenCode/Codex）使用。
- * 共用的 API 介面包含：指令檔案、MCP、Hooks、Skills。
- */
-
 import { ApiClient } from '@/shared/api/apiClient';
-import type { ClaudeDocument, ClaudeMcpServer, ClaudeScope, ClaudeHookScope } from '../../claude-code/types';
 import { buildSlashCommandDisplayName } from '@/shared/types/slashCommands';
 import type {
-  ClaudeHookRuleMap,
-  ClaudeHookScopesResponse,
-  ClaudeHookScopeResponse,
-  ClaudeHookDeleteResponse,
-  ClaudeHookExportResponse,
-  ClaudeHookImportRequest,
-  ClaudeHookImportResponse,
-  FileCollectionResponse,
-  FileResponse,
-  FileCreateRequest,
-  FileUpdateRequest,
-  FileDeleteResponse,
-  PluginSkillsResponse,
-} from '../../claude-code/services/claudeCodeApi';
+  AgentDocument,
+  AgentMcpServer,
+  AgentScope,
+  AgentHookScope,
+  AgentHookRuleMap,
+  AgentHookScopesResponse,
+  AgentHookScopeResponse,
+  AgentHookDeleteResponse,
+  AgentHookExportResponse,
+  AgentHookImportRequest,
+  AgentHookImportResponse,
+  AgentFileCollectionResponse,
+  AgentFileResponse,
+  AgentFileCreateRequest,
+  AgentFileUpdateRequest,
+  AgentFileDeleteResponse,
+  AgentPluginSkillsResponse,
+  AgentHookScopeDocument,
+  AgentHookWithEvent,
+  AgentHookRuleConfig,
+} from '../types';
 
-// Re-export types for convenience
 export type {
-  ClaudeHookRuleMap,
-  ClaudeHookScopesResponse,
-  ClaudeHookScopeResponse,
-  ClaudeHookDeleteResponse,
-  ClaudeHookExportResponse,
-  ClaudeHookImportRequest,
-  ClaudeHookImportResponse,
-  ClaudeHookScopeDocument,
-  ClaudeHookWithEvent,
-  ClaudeHookMatcher,
-  ClaudeHookActionConfig,
-  ClaudeHookRuleConfig,
-  FileCollectionResponse,
-  FileResponse,
-  FileCreateRequest,
-  FileUpdateRequest,
-  FileDeleteResponse,
-  PluginSkillsResponse,
-} from '../../claude-code/services/claudeCodeApi';
+  AgentHookRuleMap,
+  AgentHookScopesResponse,
+  AgentHookScopeResponse,
+  AgentHookDeleteResponse,
+  AgentHookExportResponse,
+  AgentHookImportRequest,
+  AgentHookImportResponse,
+  AgentHookScopeDocument,
+  AgentHookWithEvent,
+  AgentHookMatcher,
+  AgentHookActionConfig,
+  AgentHookRuleConfig,
+  AgentFileCollectionResponse,
+  AgentFileResponse,
+  AgentFileCreateRequest,
+  AgentFileUpdateRequest,
+  AgentFileDeleteResponse,
+  AgentPluginSkillsResponse,
+} from '../types';
 
-export {
-  buildHookRulesFromClaudeHook,
-  mapHookScopeDocumentToClaudeHooks,
-} from '../../claude-code/services/claudeCodeApi';
-
-/**
- * 創建帶認證的 Runtime API Client
- */
 const createRuntimeClient = (runtimeBaseUrl: string): ApiClient => {
   return new ApiClient({ baseUrl: runtimeBaseUrl });
 };
 
-/**
- * 輔助函數：使用 ApiClient 發送請求
- */
 const apiRequest = async <T>(
   runtimeBaseUrl: string,
   path: string,
@@ -91,10 +78,6 @@ const apiRequest = async <T>(
       throw new Error(`Unsupported HTTP method: ${method}`);
   }
 };
-
-// ============ 內部型別 ============
-
-// --- Slash Commands ---
 
 type CliSlashCommandScope = 'project' | 'user';
 
@@ -127,7 +110,7 @@ const buildCliDocumentId = (scope: string, fileName: string) => `${scope}:${file
 const mapCliSlashCommandDocument = (
   scope: CliSlashCommandScope,
   detail: CliSlashCommandDetail,
-): ClaudeDocument => {
+): AgentDocument => {
   const namespace = detail.namespace ?? undefined;
   const title = buildSlashCommandDisplayName(detail.fileName, namespace);
 
@@ -146,12 +129,10 @@ const mapCliSlashCommandDocument = (
   };
 };
 
-// --- MCP ---
-
-type ClaudeMcpScope = ClaudeScope;
+type AgentMcpScope = AgentScope;
 
 interface McpServerConfigResponse {
-  type: ClaudeMcpServer['transport'];
+  type: AgentMcpServer['transport'];
   command?: string | null;
   url?: string | null;
   args?: string[] | null;
@@ -164,18 +145,18 @@ interface McpServerConfigResponse {
 
 interface McpScopeResponse {
   workspaceId: string;
-  scope: ClaudeMcpScope;
+  scope: AgentMcpScope;
   mcpServers: Record<string, McpServerConfigResponse>;
 }
 
 interface McpServerCollectionResponse {
   workspaceId: string;
-  scopes: Array<{ scope: ClaudeMcpScope; mcpServers: Record<string, McpServerConfigResponse> }>;
+  scopes: Array<{ scope: AgentMcpScope; mcpServers: Record<string, McpServerConfigResponse> }>;
 }
 
 interface McpImportResponse {
   workspaceId: string;
-  scope: ClaudeMcpScope;
+  scope: AgentMcpScope;
   created: string[];
   updated: string[];
   skipped: string[];
@@ -192,9 +173,7 @@ interface AgentsMdUpdateResponse {
   scope: string;
 }
 
-// ============ 輔助函數 ============
-
-const cloneHookRuleMap = (hooks: ClaudeHookRuleMap | undefined): ClaudeHookRuleMap => {
+const cloneHookRuleMap = (hooks: AgentHookRuleMap | undefined): AgentHookRuleMap => {
   if (!hooks) return {};
   return Object.fromEntries(
     Object.entries(hooks).map(([event, rules]) => [
@@ -207,11 +186,44 @@ const cloneHookRuleMap = (hooks: ClaudeHookRuleMap | undefined): ClaudeHookRuleM
   );
 };
 
+export const buildHookRulesFromAgentHook = (hook: AgentHookWithEvent): AgentHookRuleConfig[] =>
+  hook.matchers
+    .map((matcher) => ({
+      matcher: matcher.matcher.trim() || '*',
+      hooks: matcher.hooks
+        .filter((action) => Boolean(action.command?.trim()))
+        .map((action) => ({
+          type: 'command' as const,
+          command: action.command?.trim() ?? '',
+          timeout: typeof action.timeout === 'number' ? action.timeout : null,
+        })),
+    }))
+    .filter((rule) => rule.hooks.length > 0);
+
+export const mapHookScopeDocumentToAgentHooks = (
+  document: AgentHookScopeDocument,
+): AgentHookWithEvent[] =>
+  Object.entries(document.hooks ?? {})
+    .map(([eventName, rules]) => ({
+      id: `${document.scope}:${eventName}`,
+      scope: document.scope,
+      eventName,
+      matchers: rules.map((rule) => ({
+        matcher: rule.matcher,
+        hooks: rule.hooks.map((action) => ({
+          type: 'command' as const,
+          command: action.command ?? '',
+          timeout: typeof action.timeout === 'number' ? action.timeout : undefined,
+        })),
+      })),
+    }))
+    .sort((a, b) => a.eventName.localeCompare(b.eventName));
+
 const mapMcpServer = (
-  scope: ClaudeMcpScope,
+  scope: AgentMcpScope,
   name: string,
   config: McpServerConfigResponse,
-): ClaudeMcpServer => ({
+): AgentMcpServer => ({
   id: `${scope}:${name}`,
   name,
   scope,
@@ -226,12 +238,12 @@ const mapMcpServer = (
   marketplaceName: config.marketplaceName,
 });
 
-const normalizeMcpServers = (payload: McpServerCollectionResponse): ClaudeMcpServer[] =>
+const normalizeMcpServers = (payload: McpServerCollectionResponse): AgentMcpServer[] =>
   payload.scopes.flatMap(({ scope, mcpServers }) =>
     Object.entries(mcpServers ?? {}).map(([name, config]) => mapMcpServer(scope, name, config)),
   ).sort((a, b) => a.name.localeCompare(b.name));
 
-const buildMcpServerPayload = (server: ClaudeMcpServer): Record<string, McpServerConfigResponse> => {
+const buildMcpServerPayload = (server: AgentMcpServer): Record<string, McpServerConfigResponse> => {
   const config: McpServerConfigResponse = {
     type: server.transport,
     command: server.transport === 'stdio' ? server.command ?? '' : undefined,
@@ -248,16 +260,9 @@ const buildMcpServerPayload = (server: ClaudeMcpServer): Record<string, McpServe
   return { [server.name]: config };
 };
 
-// ============ API 工廠函數 ============
+// ============ API factory ============
 
-/**
- * 根據 apiPrefix 建立 Agent Settings API 物件
- *
- * @param apiPrefix - API 路徑前綴，如 'claude-code', 'gemini', 'opencode', 'codex'
- */
 export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: string = 'agents-md') => ({
-  // ============ 指令檔案 (Instruction File) ============
-
   async getAgentsMd(
     runtimeBaseUrl: string,
     workspaceId: string,
@@ -283,7 +288,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
 
   // ============ MCP Servers ============
 
-  async listMcpServers(runtimeBaseUrl: string, workspaceId: string): Promise<ClaudeMcpServer[]> {
+  async listMcpServers(runtimeBaseUrl: string, workspaceId: string): Promise<AgentMcpServer[]> {
     const response = await apiRequest<McpServerCollectionResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/mcp-servers`,
@@ -294,8 +299,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async createMcpServer(
     runtimeBaseUrl: string,
     workspaceId: string,
-    server: ClaudeMcpServer,
-  ): Promise<ClaudeMcpServer> {
+    server: AgentMcpServer,
+  ): Promise<AgentMcpServer> {
     const payload = { mcpServers: buildMcpServerPayload(server) };
     const response = await apiRequest<McpScopeResponse>(
       runtimeBaseUrl,
@@ -303,15 +308,15 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
       { method: 'POST', body: payload },
     );
     const config = response.mcpServers?.[server.name];
-    if (!config) throw new Error(`無法建立 MCP 伺服器：${server.name}`);
+    if (!config) throw new Error(`Unable to create MCP server: ${server.name}`);
     return mapMcpServer(response.scope, server.name, config);
   },
 
   async updateMcpServer(
     runtimeBaseUrl: string,
     workspaceId: string,
-    server: ClaudeMcpServer,
-  ): Promise<ClaudeMcpServer> {
+    server: AgentMcpServer,
+  ): Promise<AgentMcpServer> {
     const payload = { mcpServers: buildMcpServerPayload(server) };
     const response = await apiRequest<McpScopeResponse>(
       runtimeBaseUrl,
@@ -319,14 +324,14 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
       { method: 'PUT', body: payload, headers: { 'If-Match': '*' } },
     );
     const config = response.mcpServers?.[server.name];
-    if (!config) throw new Error(`無法更新 MCP 伺服器：${server.name}`);
+    if (!config) throw new Error(`Unable to update MCP server: ${server.name}`);
     return mapMcpServer(response.scope, server.name, config);
   },
 
   async deleteMcpServer(
     runtimeBaseUrl: string,
     workspaceId: string,
-    server: Pick<ClaudeMcpServer, 'name' | 'scope'>,
+    server: Pick<AgentMcpServer, 'name' | 'scope'>,
   ): Promise<void> {
     await apiRequest(
       runtimeBaseUrl,
@@ -338,23 +343,23 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async toggleMcpServerStatus(
     runtimeBaseUrl: string,
     workspaceId: string,
-    server: Pick<ClaudeMcpServer, 'name' | 'scope'>,
+    server: Pick<AgentMcpServer, 'name' | 'scope'>,
     enabled: boolean,
-  ): Promise<ClaudeMcpServer> {
+  ): Promise<AgentMcpServer> {
     const response = await apiRequest<McpScopeResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/mcp-servers/${server.scope}/${server.name}/toggle?enabled=${enabled}`,
       { method: 'PATCH' },
     );
     const config = response.mcpServers[server.name];
-    if (!config) throw new Error(`無法切換 MCP 伺服器狀態：${server.name}`);
+    if (!config) throw new Error(`Unable to toggle MCP server status: ${server.name}`);
     return mapMcpServer(response.scope, server.name, config);
   },
 
   async importMcpServers(
     runtimeBaseUrl: string,
     workspaceId: string,
-    payload: { scope: ClaudeMcpScope; file: File; overwrite?: boolean },
+    payload: { scope: AgentMcpScope; file: File; overwrite?: boolean },
   ): Promise<McpImportResponse> {
     const formData = new FormData();
     formData.append('scope', payload.scope);
@@ -372,12 +377,12 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async listHookScopes(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope?: ClaudeHookScope,
-  ): Promise<ClaudeHookScopesResponse> {
+    scope?: AgentHookScope,
+  ): Promise<AgentHookScopesResponse> {
     const path = scope
       ? `workspaces/${workspaceId}/${apiPrefix}/hooks?scope=${scope}`
       : `workspaces/${workspaceId}/${apiPrefix}/hooks`;
-    const response = await apiRequest<ClaudeHookScopesResponse>(runtimeBaseUrl, path);
+    const response = await apiRequest<AgentHookScopesResponse>(runtimeBaseUrl, path);
     return {
       ...response,
       scopes: response.scopes.map((document) => ({
@@ -390,9 +395,9 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async getHookScope(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope: ClaudeHookScope,
-  ): Promise<ClaudeHookScopeResponse> {
-    const response = await apiRequest<ClaudeHookScopeResponse>(
+    scope: AgentHookScope,
+  ): Promise<AgentHookScopeResponse> {
+    const response = await apiRequest<AgentHookScopeResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/hooks/${scope}`,
     );
@@ -405,10 +410,10 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async updateHookScope(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope: ClaudeHookScope,
-    hooks: ClaudeHookRuleMap,
-  ): Promise<ClaudeHookScopeResponse> {
-    const response = await apiRequest<ClaudeHookScopeResponse>(
+    scope: AgentHookScope,
+    hooks: AgentHookRuleMap,
+  ): Promise<AgentHookScopeResponse> {
+    const response = await apiRequest<AgentHookScopeResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/hooks/${scope}`,
       { method: 'PUT', body: { hooks } },
@@ -422,9 +427,9 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async deleteHookScope(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope: ClaudeHookScope,
-  ): Promise<ClaudeHookDeleteResponse> {
-    return apiRequest<ClaudeHookDeleteResponse>(
+    scope: AgentHookScope,
+  ): Promise<AgentHookDeleteResponse> {
+    return apiRequest<AgentHookDeleteResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/hooks/${scope}`,
       { method: 'DELETE' },
@@ -434,12 +439,12 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async exportHooks(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope?: ClaudeHookScope,
-  ): Promise<ClaudeHookExportResponse> {
+    scope?: AgentHookScope,
+  ): Promise<AgentHookExportResponse> {
     const path = scope
       ? `workspaces/${workspaceId}/${apiPrefix}/hooks/export?scope=${scope}`
       : `workspaces/${workspaceId}/${apiPrefix}/hooks/export`;
-    const response = await apiRequest<ClaudeHookExportResponse>(runtimeBaseUrl, path);
+    const response = await apiRequest<AgentHookExportResponse>(runtimeBaseUrl, path);
     return {
       ...response,
       scopes: response.scopes.map((document) => ({
@@ -452,9 +457,9 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async importHooks(
     runtimeBaseUrl: string,
     workspaceId: string,
-    payload: ClaudeHookImportRequest,
-  ): Promise<ClaudeHookImportResponse> {
-    return apiRequest<ClaudeHookImportResponse>(
+    payload: AgentHookImportRequest,
+  ): Promise<AgentHookImportResponse> {
+    return apiRequest<AgentHookImportResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/hooks/import`,
       { method: 'POST', body: payload },
@@ -467,15 +472,15 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     scope?: 'project' | 'user' | 'plugin',
-  ): Promise<FileCollectionResponse> {
+  ): Promise<AgentFileCollectionResponse> {
     const path = scope
       ? `workspaces/${workspaceId}/${apiPrefix}/skills/tree?scope=${scope}`
       : `workspaces/${workspaceId}/${apiPrefix}/skills/tree`;
-    return apiRequest<FileCollectionResponse>(runtimeBaseUrl, path);
+    return apiRequest<AgentFileCollectionResponse>(runtimeBaseUrl, path);
   },
 
-  async listPluginSkills(runtimeBaseUrl: string, workspaceId: string): Promise<PluginSkillsResponse> {
-    return apiRequest<PluginSkillsResponse>(
+  async listPluginSkills(runtimeBaseUrl: string, workspaceId: string): Promise<AgentPluginSkillsResponse> {
+    return apiRequest<AgentPluginSkillsResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/plugins`,
     );
@@ -486,8 +491,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     workspaceId: string,
     filePath: string,
     scope: 'project' | 'user' | 'plugin' = 'project',
-  ): Promise<FileResponse> {
-    return apiRequest<FileResponse>(
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/content?path=${encodeURIComponent(filePath)}&scope=${scope}`,
     );
@@ -496,9 +501,9 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async createSkill(
     runtimeBaseUrl: string,
     workspaceId: string,
-    payload: FileCreateRequest,
-  ): Promise<FileResponse> {
-    return apiRequest<FileResponse>(
+    payload: AgentFileCreateRequest,
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills`,
       { method: 'POST', body: payload },
@@ -509,10 +514,10 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     filePath: string,
-    payload: FileUpdateRequest,
+    payload: AgentFileUpdateRequest,
     scope?: 'project' | 'user',
-  ): Promise<FileResponse> {
-    return apiRequest<FileResponse>(
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/content?path=${encodeURIComponent(filePath)}&scope=${scope}&content=${encodeURIComponent(payload.content)}`,
       { method: 'PUT' },
@@ -525,8 +530,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     filePath: string,
     scope: 'project' | 'user' = 'project',
     recursive: boolean = false,
-  ): Promise<FileDeleteResponse> {
-    return apiRequest<FileDeleteResponse>(
+  ): Promise<AgentFileDeleteResponse> {
+    return apiRequest<AgentFileDeleteResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/${filePath}?scope=${scope}&recursive=${recursive}`,
       { method: 'DELETE' },
@@ -539,8 +544,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     sourcePath: string,
     destPath: string,
     scope: 'project' | 'user' = 'project',
-  ): Promise<FileResponse> {
-    return apiRequest<FileResponse>(
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/move?scope=${scope}`,
       { method: 'POST', body: { sourcePath, destPath } },
@@ -553,10 +558,87 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     sourcePath: string,
     destPath: string,
     scope: 'project' | 'user' = 'project',
-  ): Promise<FileResponse> {
-    return apiRequest<FileResponse>(
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/skills/copy?sourcePath=${encodeURIComponent(sourcePath)}&destPath=${encodeURIComponent(destPath)}&sourceScope=${scope}&destScope=${scope}&overwrite=false`,
+      { method: 'POST' },
+    );
+  },
+
+  async listScripts(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    scope?: 'project' | 'user' | 'plugin',
+  ): Promise<AgentFileCollectionResponse> {
+    const path = scope
+      ? `workspaces/${workspaceId}/${apiPrefix}/scripts/tree?scope=${scope}`
+      : `workspaces/${workspaceId}/${apiPrefix}/scripts/tree`;
+    return apiRequest<AgentFileCollectionResponse>(runtimeBaseUrl, path);
+  },
+
+  async getScript(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    filePath: string,
+    scope: 'project' | 'user' | 'plugin' = 'project',
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/scripts/content?path=${encodeURIComponent(filePath)}&scope=${scope}`,
+    );
+  },
+
+  async createScript(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    payload: AgentFileCreateRequest,
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/scripts`,
+      { method: 'POST', body: payload },
+    );
+  },
+
+  async updateScript(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    filePath: string,
+    payload: AgentFileUpdateRequest,
+    scope?: 'project' | 'user',
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/scripts/content?path=${encodeURIComponent(filePath)}&scope=${scope}&content=${encodeURIComponent(payload.content)}`,
+      { method: 'PUT' },
+    );
+  },
+
+  async deleteScript(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    filePath: string,
+    scope: 'project' | 'user' = 'project',
+    recursive: boolean = false,
+  ): Promise<AgentFileDeleteResponse> {
+    return apiRequest<AgentFileDeleteResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/scripts/${filePath}?scope=${scope}&recursive=${recursive}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  async copyScript(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    sourcePath: string,
+    destPath: string,
+    scope: 'project' | 'user' = 'project',
+  ): Promise<AgentFileResponse> {
+    return apiRequest<AgentFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/scripts/copy?sourcePath=${encodeURIComponent(sourcePath)}&destPath=${encodeURIComponent(destPath)}&sourceScope=${scope}&destScope=${scope}&overwrite=false`,
       { method: 'POST' },
     );
   },
@@ -566,16 +648,16 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async listSlashCommands(
     runtimeBaseUrl: string,
     workspaceId: string,
-  ): Promise<ClaudeDocument[]> {
+  ): Promise<AgentDocument[]> {
     const scopesRes = await apiRequest<CliSlashCommandScopesResponse>(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/slash-commands`,
     );
 
-    const documents: ClaudeDocument[] = [];
+    const documents: AgentDocument[] = [];
     for (const group of scopesRes.scopes) {
       for (const summary of group.documents) {
-        // 取得完整內容
+        // Fetch full document content.
         const detailRes = await apiRequest<CliSlashCommandDocumentResponse>(
           runtimeBaseUrl,
           `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${group.scope}/${encodeURIComponent(summary.fileName)}`,
@@ -589,8 +671,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async createSlashCommand(
     runtimeBaseUrl: string,
     workspaceId: string,
-    document: ClaudeDocument,
-  ): Promise<ClaudeDocument> {
+    document: AgentDocument,
+  ): Promise<AgentDocument> {
     const scope = document.scope as CliSlashCommandScope;
     const payload = {
       fileName: (document.metadata?.fileName as string) ?? document.title,
@@ -608,8 +690,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async updateSlashCommand(
     runtimeBaseUrl: string,
     workspaceId: string,
-    document: ClaudeDocument,
-  ): Promise<ClaudeDocument> {
+    document: AgentDocument,
+  ): Promise<AgentDocument> {
     const scope = document.scope as CliSlashCommandScope;
     const fileName = (document.metadata?.fileName as string) ?? document.title;
     const payload = {
@@ -627,7 +709,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async deleteSlashCommand(
     runtimeBaseUrl: string,
     workspaceId: string,
-    document: Pick<ClaudeDocument, 'scope' | 'metadata' | 'title'>,
+    document: Pick<AgentDocument, 'scope' | 'metadata' | 'title'>,
   ): Promise<void> {
     const scope = document.scope as CliSlashCommandScope;
     const fileName = (document.metadata?.fileName as string) ?? document.title;
@@ -640,4 +722,3 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
 });
 
 export type AgentSettingsApi = ReturnType<typeof createAgentSettingsApi>;
-

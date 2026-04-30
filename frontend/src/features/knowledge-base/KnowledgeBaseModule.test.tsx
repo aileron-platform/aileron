@@ -1,15 +1,39 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as knowledgeBaseApi from '@/features/knowledge-base/api/knowledgeBaseApi';
 import { KnowledgeBaseModule } from './KnowledgeBaseModule';
 
 const { translateMock } = vi.hoisted(() => ({
-  translateMock: vi.fn((key: string) => {
+  translateMock: vi.fn((key: string, params?: Record<string, string | number>) => {
     const translations: Record<string, string> = {
       'knowledgeBase.list.title': '知識庫中心',
       'knowledgeBase.create.routeTitle': '新建知識庫',
       'knowledgeBase.detail.settingsAction': '設定',
       'knowledgeBase.detail.deleteAction': '刪除',
+      'knowledgeBase.detail.settings.title': '知識庫設定',
+      'knowledgeBase.detail.settings.description': '更新這個知識庫的顯示資訊與容量上限。',
+      'knowledgeBase.detail.settings.nameLabel': '名稱',
+      'knowledgeBase.detail.settings.slugLabel': 'Slug',
+      'knowledgeBase.detail.settings.slugHint': 'Slug 不可變更。',
+      'knowledgeBase.detail.settings.descriptionLabel': '描述',
+      'knowledgeBase.detail.settings.quotaLabel': '容量上限（bytes）',
+      'knowledgeBase.detail.settings.quotaPlaceholder': '留空以使用預設容量上限',
+      'knowledgeBase.detail.settings.quotaHint': '目前使用量：{{usage}}',
+      'knowledgeBase.detail.settings.validation.nameRequired': '名稱為必填。',
+      'knowledgeBase.detail.settings.validation.quotaNumeric': '容量上限必須是非負整數 bytes。',
+      'knowledgeBase.detail.settings.validation.quotaBelowUsage': '容量上限不可低於目前使用量（{{usage}}）。',
+      'knowledgeBase.detail.settings.toasts.saveSuccess.title': '知識庫已更新',
+      'knowledgeBase.detail.settings.toasts.saveFailed.title': '更新知識庫失敗',
+      'knowledgeBase.detail.settings.toasts.saveFailed.description': '請稍後再試。',
+      'knowledgeBase.detail.delete.title': '刪除知識庫',
+      'knowledgeBase.detail.delete.description': '要刪除 {{name}} 嗎？',
+      'knowledgeBase.detail.delete.cancel': '取消',
+      'knowledgeBase.detail.delete.confirm': '確認刪除',
+      'knowledgeBase.detail.delete.toasts.success.title': '知識庫已刪除',
+      'knowledgeBase.detail.delete.toasts.failed.title': '刪除知識庫失敗',
+      'knowledgeBase.detail.delete.toasts.failed.description': '請先從工作區解除掛載後再試一次。',
       'knowledgeBase.detail.tabs.files': '檔案',
       'knowledgeBase.detail.tabs.graph': '關聯圖',
       'knowledgeBase.detail.tabs.versionControl': '版本控制',
@@ -20,8 +44,14 @@ const { translateMock } = vi.hoisted(() => ({
       'knowledgeBase.sharing.description': '管理誰可以查看、編輯或管理這個知識庫。',
       'knowledgeBase.attachments.description': '管理這個知識庫掛載到哪些工作區，以及 alias / mode。',
       'knowledgeBase.attachments.attachAction': '掛載到工作區',
+      'knowledgeBase.common.actions.cancel': '取消',
+      'knowledgeBase.common.actions.save': '儲存',
     };
-    return translations[key] ?? key;
+    const template = translations[key] ?? key;
+    return Object.entries(params ?? {}).reduce(
+      (value, [paramKey, paramValue]) => value.replaceAll(`{{${paramKey}}}`, String(paramValue)),
+      template,
+    );
   }),
 }));
 
@@ -62,18 +92,38 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
       ]
       : []
   )),
-  getKnowledgeBase: vi.fn(async (kbId: string) => ({
+  getKnowledgeBase: vi.fn(async (kbId: string) => {
+    const accessRole = kbId === 'kb-editor'
+      ? 'editor'
+      : kbId === 'kb-viewer'
+        ? 'viewer'
+        : 'owner';
+    return {
+      id: kbId,
+      slug: 'product-docs',
+      name: kbId === 'kb-1' ? '產品文件中心' : '新知識庫',
+      description: '集中保存產品與營運文件',
+      ownerId: 'user-1',
+      currentSizeBytes: 2048,
+      quotaBytes: 4096,
+      accessRole,
+      createdAt: '2026-04-21T00:00:00Z',
+      updatedAt: '2026-04-21T00:00:00Z',
+    };
+  }),
+  updateKnowledgeBase: vi.fn(async (kbId: string, payload: { name?: string; description?: string; quotaBytes?: number | null }) => ({
     id: kbId,
     slug: 'product-docs',
-    name: kbId === 'kb-1' ? '產品文件中心' : '新知識庫',
-    description: '集中保存產品與營運文件',
+    name: payload.name ?? '產品文件中心',
+    description: payload.description ?? '集中保存產品與營運文件',
     ownerId: 'user-1',
     currentSizeBytes: 2048,
-    quotaBytes: 4096,
+    quotaBytes: payload.quotaBytes,
     accessRole: 'owner',
     createdAt: '2026-04-21T00:00:00Z',
     updatedAt: '2026-04-21T00:00:00Z',
   })),
+  deleteKnowledgeBase: vi.fn(async () => undefined),
   listKnowledgeBaseShares: vi.fn(async () => [
     {
       id: 'share-1',
@@ -184,6 +234,10 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 }));
 
 describe('KnowledgeBaseModule', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   const renderModule = (initialEntry: string) => {
     return render(
       <MemoryRouter initialEntries={[initialEntry]}>
@@ -232,5 +286,116 @@ describe('KnowledgeBaseModule', () => {
 
     expect(await screen.findByText('管理這個知識庫掛載到哪些工作區，以及 alias / mode。')).toBeInTheDocument();
     expect(screen.getByText('掛載到工作區')).toBeInTheDocument();
+  });
+
+  it('allows owners to open knowledge base settings', async () => {
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '設定' }));
+
+    expect(screen.getByText('知識庫設定')).toBeInTheDocument();
+    expect(screen.getByLabelText('名稱')).toHaveValue('產品文件中心');
+    expect(screen.getByLabelText('Slug')).toHaveValue('product-docs');
+    expect(screen.getByLabelText('容量上限（bytes）')).toHaveValue('4096');
+  });
+
+  it.each([
+    ['/knowledge-bases/kb-editor/files'],
+    ['/knowledge-bases/kb-viewer/files'],
+  ])('keeps settings and delete unavailable for non-manager roles on %s', async (route) => {
+    renderModule(route);
+
+    await screen.findByText('新知識庫');
+
+    expect(screen.getByRole('button', { name: '設定' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '刪除' })).toBeDisabled();
+  });
+
+  it('saves metadata and quota through the update API', async () => {
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '設定' }));
+    await user.clear(screen.getByLabelText('名稱'));
+    await user.type(screen.getByLabelText('名稱'), '更新後知識庫');
+    await user.clear(screen.getByLabelText('描述'));
+    await user.type(screen.getByLabelText('描述'), '更新後描述');
+    await user.clear(screen.getByLabelText('容量上限（bytes）'));
+    await user.type(screen.getByLabelText('容量上限（bytes）'), '8192');
+    await user.click(screen.getByRole('button', { name: '儲存' }));
+
+    await waitFor(() => {
+      expect(knowledgeBaseApi.updateKnowledgeBase).toHaveBeenCalledWith('kb-1', {
+        name: '更新後知識庫',
+        description: '更新後描述',
+        quotaBytes: 8192,
+      });
+    });
+    expect(await screen.findByText('更新後知識庫')).toBeInTheDocument();
+    expect(screen.getByText('Storage: 2 KB / 8 KB')).toBeInTheDocument();
+  });
+
+  it('submits null quota when the quota field is cleared', async () => {
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '設定' }));
+    await user.clear(screen.getByLabelText('容量上限（bytes）'));
+    await user.click(screen.getByRole('button', { name: '儲存' }));
+
+    await waitFor(() => {
+      expect(knowledgeBaseApi.updateKnowledgeBase).toHaveBeenCalledWith('kb-1', {
+        name: '產品文件中心',
+        description: '集中保存產品與營運文件',
+        quotaBytes: null,
+      });
+    });
+  });
+
+  it('shows quota validation before submitting invalid quota', async () => {
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '設定' }));
+    await user.clear(screen.getByLabelText('容量上限（bytes）'));
+    await user.type(screen.getByLabelText('容量上限（bytes）'), '1024');
+    await user.click(screen.getByRole('button', { name: '儲存' }));
+
+    expect(screen.getByText('容量上限不可低於目前使用量（2 KB）。')).toBeInTheDocument();
+    expect(knowledgeBaseApi.updateKnowledgeBase).not.toHaveBeenCalled();
+  });
+
+  it('deletes a knowledge base and navigates back to the list', async () => {
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '刪除' }));
+    await user.click(screen.getByRole('button', { name: '確認刪除' }));
+
+    await waitFor(() => {
+      expect(knowledgeBaseApi.deleteKnowledgeBase).toHaveBeenCalledWith('kb-1');
+    });
+    expect(await screen.findByText('知識庫中心')).toBeInTheDocument();
+  });
+
+  it('keeps detail state when delete is blocked', async () => {
+    vi.mocked(knowledgeBaseApi.deleteKnowledgeBase).mockRejectedValueOnce(new Error('still attached'));
+    const user = userEvent.setup();
+    renderModule('/knowledge-bases/kb-1/files');
+
+    await screen.findByText('產品文件中心');
+    await user.click(screen.getByRole('button', { name: '刪除' }));
+    await user.click(screen.getByRole('button', { name: '確認刪除' }));
+
+    await waitFor(() => {
+      expect(knowledgeBaseApi.deleteKnowledgeBase).toHaveBeenCalledWith('kb-1');
+    });
+    expect(screen.getByText('產品文件中心')).toBeInTheDocument();
   });
 });

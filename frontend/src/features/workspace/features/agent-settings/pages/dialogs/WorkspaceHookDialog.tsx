@@ -83,7 +83,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
   existingHooks,
   availableScopes,
   eventOptions: externalEventOptions,
-  i18nNamespace = 'workspace.claudeCode',
+  i18nNamespace = 'workspace.agentSettings.common',
   onClose,
   onSubmit,
 }) => {

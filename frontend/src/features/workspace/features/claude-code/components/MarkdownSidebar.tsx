@@ -6,7 +6,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
-import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
+import { SCOPE_BADGE_CLASSES } from '../../agent-settings/constants/scopeStyles';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
 import type { ClaudeScope } from '../types';
@@ -54,9 +54,9 @@ const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, avail
   const showScopeFilter = subView !== 'memory';
   const showScopeBadges = subView !== 'memory';
 
-  // 根據不同的 subView 決定可用的 scope 選項
+  // Resolve available scope options for each subview.
   const availableScopes = useMemo<ReadonlyArray<'all' | 'project' | 'user' | 'local' | 'plugin'>>(() => {
-    // subView 層級的限制
+    // Subview-level scope limits.
     let subViewScopes: ClaudeScope[];
     switch (subView) {
       case 'output-styles':
@@ -70,7 +70,7 @@ const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, avail
         break;
     }
 
-    // 若有傳入 availableScopesProp，與 subView 限制取交集
+    // Intersect explicit scope props with the subview limits when provided.
     const effectiveScopes = availableScopesProp
       ? subViewScopes.filter((s) => availableScopesProp.includes(s))
       : subViewScopes;
@@ -81,7 +81,7 @@ const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, avail
   const documents = collection.items;
   const selectedId = collection.selectedId;
 
-  // 根據 subView 動態選擇 icon
+  // Pick an icon for the active subview.
   const Icon = useMemo(() => {
     switch (subView) {
       case 'slash-commands':

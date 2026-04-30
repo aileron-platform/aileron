@@ -1,19 +1,19 @@
 /**
- * Agent Settings - 工具函數
+ * Agent Settings utilities.
  */
 
 import type { AgentToolType, AgentToolConfig } from './types';
 import { AGENT_TOOL_CONFIGS, AGENT_NAVIGATION_IDS } from './agentToolConfigs';
 
 /**
- * Agent type 正規化對照表
- * 參考 agentSessionTypes.ts 的 CLI_TO_AGENTIC_TOOL_MAP
+ * Normalize agent type names to stable keys.
+ * Mirrors the CLI mapping in agentSessionTypes.ts.
  */
 const normalizeAgentTypeKey = (value: string): string =>
   value.trim().toLowerCase().replace(/[\s-]+/g, '');
 
 /**
- * 將原始 Agent type 字串正規化為 AgentToolType
+ * Normalize a raw agent type string to AgentToolType.
  */
 export const normalizeAgentType = (raw: string | null | undefined): AgentToolType => {
   if (!raw) return 'claude';
@@ -35,21 +35,21 @@ export const normalizeAgentType = (raw: string | null | undefined): AgentToolTyp
 };
 
 /**
- * 取得 Agent 工具設定物件
+ * Return the configuration for an agent tool.
  */
 export const getAgentToolConfig = (agentType: AgentToolType): AgentToolConfig => {
   return AGENT_TOOL_CONFIGS[agentType];
 };
 
 /**
- * 判斷 featureId 是否為 Agent 工具設定功能
+ * Check whether a feature id belongs to an agent tool settings feature.
  */
 export const isAgentToolFeature = (featureId: string): boolean => {
   return AGENT_NAVIGATION_IDS.includes(featureId);
 };
 
 /**
- * 從 featureId 反查 AgentToolType
+ * Resolve AgentToolType from a feature id.
  */
 export const getAgentTypeFromFeatureId = (featureId: string): AgentToolType | null => {
   for (const config of Object.values(AGENT_TOOL_CONFIGS)) {
@@ -61,7 +61,7 @@ export const getAgentTypeFromFeatureId = (featureId: string): AgentToolType | nu
 };
 
 /**
- * 取得 Agent 工具的預設子視圖（指令檔案）
+ * Return the default instruction-file subview for an agent tool.
  */
 export const getDefaultSubView = (agentType: AgentToolType): string => {
   const config = getAgentToolConfig(agentType);

@@ -1,22 +1,28 @@
 import React, { useMemo, useState } from 'react';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { Wand2 } from 'lucide-react';
+import { ScrollText, Wand2 } from 'lucide-react';
 import { FileEditor } from '@/shared/components/file-workbench';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import type { SelectedFile } from '../../claude-code/components/ClaudeCodeFileManager';
+import type { AgentFileCollection, AgentSelectedFile } from '../types';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('SkillsPage');
 
 export interface SkillsPageProps {
-  selectedFile: SelectedFile | null;
+  selectedFile: AgentSelectedFile | null;
   apiPrefix?: string;
   i18nNamespace?: string;
+  collectionType?: AgentFileCollection;
 }
 
-const SkillsPage: React.FC<SkillsPageProps> = ({ selectedFile, apiPrefix = 'claude-code', i18nNamespace = 'workspace.claudeCode' }) => {
+const SkillsPage: React.FC<SkillsPageProps> = ({
+  selectedFile,
+  apiPrefix = 'claude-code',
+  i18nNamespace = 'workspace.agentSettings.common',
+  collectionType = 'skills',
+}) => {
   const { t } = useI18n();
   const { workspaceRuntime } = useWorkspace();
 
@@ -34,7 +40,12 @@ const SkillsPage: React.FC<SkillsPageProps> = ({ selectedFile, apiPrefix = 'clau
 
     setIsLoadingFile(true);
     api
-      .getSkill(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId, selectedFile.path, selectedFile.scope)
+      [collectionType === 'scripts' ? 'getScript' : 'getSkill'](
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        selectedFile.path,
+        selectedFile.scope,
+      )
       .then((response) => {
         setFileContent(response.content || '');
       })
@@ -45,14 +56,14 @@ const SkillsPage: React.FC<SkillsPageProps> = ({ selectedFile, apiPrefix = 'clau
       .finally(() => {
         setIsLoadingFile(false);
       });
-  }, [selectedFile, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+  }, [api, collectionType, selectedFile, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   const handleSaveFile = async (content: string) => {
     if (!selectedFile) return;
 
     setIsSaving(true);
     try {
-      await api.updateSkill(
+      await api[collectionType === 'scripts' ? 'updateScript' : 'updateSkill'](
         workspaceRuntime.runtimeBaseUrl,
         workspaceRuntime.workspaceId,
         selectedFile.path,
@@ -69,18 +80,19 @@ const SkillsPage: React.FC<SkillsPageProps> = ({ selectedFile, apiPrefix = 'clau
 
   const isPluginFile = selectedFile?.scope === 'plugin';
   const fileName = selectedFile?.path.split('/').pop() || '';
+  const FileIcon = collectionType === 'scripts' ? ScrollText : Wand2;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <FeatureHeader
-        title={t(`${i18nNamespace}.skills.header.title`)}
-        icon={Wand2}
+        title={t(`${i18nNamespace}.${collectionType}.header.title`)}
+        icon={FileIcon}
       />
 
       <div className="flex-1 overflow-hidden border-t border-border bg-background">
         {!selectedFile ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {t(`${i18nNamespace}.skills.noSelection`)}
+            {t(`${i18nNamespace}.${collectionType}.noSelection`)}
           </div>
         ) : (
           <FileEditor
@@ -88,7 +100,7 @@ const SkillsPage: React.FC<SkillsPageProps> = ({ selectedFile, apiPrefix = 'clau
             fileName={fileName}
             filePath={selectedFile.path}
             fileContent={fileContent}
-            fileIcon={<Wand2 className="h-4 w-4 text-purple-600 dark:text-purple-400" />}
+            fileIcon={<FileIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />}
             readOnly={isPluginFile}
             onSave={handleSaveFile}
             isLoading={isLoadingFile}

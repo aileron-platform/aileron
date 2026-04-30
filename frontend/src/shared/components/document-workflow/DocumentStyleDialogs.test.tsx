@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { TemplateAgentDialog } from '@/features/template-management/features/template-editor/components/TemplateAgentDialog';
 import { TemplateCommandDialog } from '@/features/template-management/features/template-editor/components/TemplateCommandDialog';
 import { TemplateOutputStyleDialog } from '@/features/template-management/features/template-editor/components/TemplateOutputStyleDialog';
-import { WorkspaceAgentDialog } from '@/features/workspace/features/claude-code/components/dialogs/WorkspaceAgentDialog';
-import { WorkspaceCommandDialog } from '@/features/workspace/features/claude-code/components/dialogs/WorkspaceCommandDialog';
+import { AgentDefinitionDialog } from '@/features/workspace/features/agent-settings/components/dialogs/AgentDefinitionDialog';
+import { AgentCommandDialog } from '@/features/workspace/features/agent-settings/components/dialogs/AgentCommandDialog';
 import { WorkspaceOutputStyleDialog } from '@/features/workspace/features/claude-code/components/dialogs/WorkspaceOutputStyleDialog';
 
 vi.mock('@/shared/components/markdown/MarkdownEditor', () => ({
@@ -45,22 +45,22 @@ vi.mock('@/shared/hooks/useI18n', () => ({
     t: (key: string, options?: Record<string, string | number>) => {
       const map: Record<string, string> = {
         'common.cancel': 'Cancel',
-        'workspace.claudeCode.documents.scope.values.project': 'Project',
-        'workspace.claudeCode.documents.scope.values.user': 'User',
-        'workspace.claudeCode.subagents.dialog.title.create': 'Create agent',
-        'workspace.claudeCode.subagents.dialog.title.edit': 'Edit agent',
-        'workspace.claudeCode.subagents.dialog.description.create': 'Create agent description',
-        'workspace.claudeCode.subagents.dialog.description.edit': 'Edit agent description',
-        'workspace.claudeCode.subagents.dialog.fields.scope.label': 'Scope',
-        'workspace.claudeCode.subagents.dialog.fields.fileName.label': 'File name',
-        'workspace.claudeCode.subagents.dialog.fields.fileName.placeholder': 'agent.md',
-        'workspace.claudeCode.subagents.dialog.fields.content.label': 'Content',
-        'workspace.claudeCode.subagents.dialog.fields.content.helper': 'Agent helper',
-        'workspace.claudeCode.subagents.dialog.actions.cancel': 'Cancel',
-        'workspace.claudeCode.subagents.dialog.actions.create': 'Create',
-        'workspace.claudeCode.subagents.dialog.actions.save': 'Save',
-        'workspace.claudeCode.subagents.dialog.validation.fileName': 'File name is required',
-        'workspace.claudeCode.subagents.dialog.validation.content': 'Content is required',
+        'workspace.agentSettings.common.documents.scope.values.project': 'Project',
+        'workspace.agentSettings.common.documents.scope.values.user': 'User',
+        'workspace.agentSettings.common.subagents.dialog.title.create': 'Create agent',
+        'workspace.agentSettings.common.subagents.dialog.title.edit': 'Edit agent',
+        'workspace.agentSettings.common.subagents.dialog.description.create': 'Create agent description',
+        'workspace.agentSettings.common.subagents.dialog.description.edit': 'Edit agent description',
+        'workspace.agentSettings.common.subagents.dialog.fields.scope.label': 'Scope',
+        'workspace.agentSettings.common.subagents.dialog.fields.fileName.label': 'File name',
+        'workspace.agentSettings.common.subagents.dialog.fields.fileName.placeholder': 'agent.md',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.label': 'Content',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.helper': 'Agent helper',
+        'workspace.agentSettings.common.subagents.dialog.actions.cancel': 'Cancel',
+        'workspace.agentSettings.common.subagents.dialog.actions.create': 'Create',
+        'workspace.agentSettings.common.subagents.dialog.actions.save': 'Save',
+        'workspace.agentSettings.common.subagents.dialog.validation.fileName': 'File name is required',
+        'workspace.agentSettings.common.subagents.dialog.validation.content': 'Content is required',
         'workspace.claudeCode.outputStyles.dialog.title.create': 'Create output style',
         'workspace.claudeCode.outputStyles.dialog.title.edit': 'Edit output style',
         'workspace.claudeCode.outputStyles.dialog.description.create': 'Create output style description',
@@ -75,24 +75,24 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.claudeCode.outputStyles.dialog.actions.save': 'Save',
         'workspace.claudeCode.outputStyles.dialog.validation.fileName': 'File name is required',
         'workspace.claudeCode.outputStyles.dialog.validation.content': 'Content is required',
-        'workspace.claudeCode.slashCommands.dialog.title.create': 'Create command',
-        'workspace.claudeCode.slashCommands.dialog.title.edit': 'Edit command',
-        'workspace.claudeCode.slashCommands.dialog.description.create': 'Create command description',
-        'workspace.claudeCode.slashCommands.dialog.description.edit': 'Edit command description',
-        'workspace.claudeCode.slashCommands.dialog.tabs.basic': 'Basic',
-        'workspace.claudeCode.slashCommands.dialog.tabs.editor': 'Editor',
-        'workspace.claudeCode.slashCommands.dialog.fields.scope.label': 'Scope',
-        'workspace.claudeCode.slashCommands.dialog.fields.fileName.label': 'File name',
-        'workspace.claudeCode.slashCommands.dialog.fields.fileName.placeholder': 'command.md',
-        'workspace.claudeCode.slashCommands.dialog.fields.namespace.label': 'Namespace',
-        'workspace.claudeCode.slashCommands.dialog.fields.namespace.placeholder': 'ops',
-        'workspace.claudeCode.slashCommands.dialog.fields.namespace.helper': 'Optional namespace',
-        'workspace.claudeCode.slashCommands.dialog.fields.content.label': 'Content',
-        'workspace.claudeCode.slashCommands.dialog.actions.cancel': 'Cancel',
-        'workspace.claudeCode.slashCommands.dialog.actions.create': 'Create',
-        'workspace.claudeCode.slashCommands.dialog.actions.save': 'Save',
-        'workspace.claudeCode.slashCommands.dialog.validation.fileName': 'File name is required',
-        'workspace.claudeCode.slashCommands.dialog.validation.content': 'Content is required',
+        'workspace.agentSettings.common.slashCommands.dialog.title.create': 'Create command',
+        'workspace.agentSettings.common.slashCommands.dialog.title.edit': 'Edit command',
+        'workspace.agentSettings.common.slashCommands.dialog.description.create': 'Create command description',
+        'workspace.agentSettings.common.slashCommands.dialog.description.edit': 'Edit command description',
+        'workspace.agentSettings.common.slashCommands.dialog.tabs.basic': 'Basic',
+        'workspace.agentSettings.common.slashCommands.dialog.tabs.editor': 'Editor',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.scope.label': 'Scope',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.fileName.label': 'File name',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.fileName.placeholder': 'command.md',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.namespace.label': 'Namespace',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.namespace.placeholder': 'ops',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.namespace.helper': 'Optional namespace',
+        'workspace.agentSettings.common.slashCommands.dialog.fields.content.label': 'Content',
+        'workspace.agentSettings.common.slashCommands.dialog.actions.cancel': 'Cancel',
+        'workspace.agentSettings.common.slashCommands.dialog.actions.create': 'Create',
+        'workspace.agentSettings.common.slashCommands.dialog.actions.save': 'Save',
+        'workspace.agentSettings.common.slashCommands.dialog.validation.fileName': 'File name is required',
+        'workspace.agentSettings.common.slashCommands.dialog.validation.content': 'Content is required',
         'template.editor.commands.dialog.title.create': 'Create template command',
         'template.editor.commands.dialog.title.edit': 'Edit template command',
         'template.editor.commands.dialog.description.create': 'Create template command description',
@@ -139,7 +139,7 @@ describe('document-style shared dialogs', () => {
     const onSubmit = vi.fn();
 
     render(
-      <WorkspaceAgentDialog
+      <AgentDefinitionDialog
         open
         mode="create"
         initialValue={null}
@@ -250,7 +250,7 @@ describe('document-style shared dialogs', () => {
     const onSubmit = vi.fn();
 
     render(
-      <WorkspaceCommandDialog
+      <AgentCommandDialog
         open
         mode="create"
         initialValue={null}

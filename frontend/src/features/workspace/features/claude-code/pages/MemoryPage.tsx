@@ -1,5 +1,5 @@
 import React, { useContext } from 'react';
-import { ClaudeDocumentPage } from '../components/ClaudeDocumentPage';
+import { AgentDocumentPage } from '../../agent-settings/components/DocumentPage';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
 import MemoryDialog from '../components/MemoryDialog';
@@ -24,7 +24,7 @@ const MemoryPageContent: React.FC = () => {
   const { memory } = useClaudeCode();
 
   return (
-    <ClaudeDocumentPage
+    <AgentDocumentPage
       documents={memory.items}
       selectedId={memory.selectedId}
       onSelect={memory.select}
@@ -35,6 +35,7 @@ const MemoryPageContent: React.FC = () => {
       error={memory.error}
       onRefresh={memory.refresh}
       dialogComponent={MemoryDialog}
+      i18nNamespace="workspace.claudeCode"
       config={{
         metaKey: 'memory',
         createButtonLabel: t('workspace.claudeCode.memory.actions.create'),

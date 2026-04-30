@@ -99,6 +99,7 @@ export interface KnowledgeBaseCreatePayload {
 export interface KnowledgeBaseUpdatePayload {
   name?: string;
   description?: string;
+  quotaBytes?: number | null;
 }
 
 export interface KnowledgeBaseGitRepositoryStatus {

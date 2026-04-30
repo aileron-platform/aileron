@@ -256,6 +256,8 @@
   "knowledge_base.invalid.slug": "知識庫 slug 不可為空",
   "knowledge_base.invalid.owner": "知識庫擁有者不存在",
   "knowledge_base.invalid.role": "未知的知識庫角色",
+  "knowledge_base.invalid.quota": "無效的知識庫容量上限",
+  "knowledge_base.invalid.quota_below_usage": "知識庫容量上限不可低於目前使用量",
   "knowledge_base.invalid.request": "無效的知識庫請求",
   "knowledge_base.unexpected_error": "知識庫發生未預期錯誤",
   "knowledge_base.file.not_found": "找不到檔案: {path}",

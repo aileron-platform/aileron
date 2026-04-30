@@ -1,8 +1,8 @@
 /**
- * AgentsMdPage - 通用指令檔案編輯器
+ * AgentsMdPage - generic instruction file editor.
  *
- * 泛化自 ClaudeMdPage，根據 AgentToolConfig 動態設定
- * scope 選項、標題、API prefix 等。
+ * Generalizes ClaudeMdPage through AgentToolConfig for scopes, titles,
+ * API prefixes, and instruction file metadata.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -145,7 +145,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       setIsStale(true);
       toast({
         title: headerTitle,
-        description: '偵測到模板安裝更新。已保留你未儲存的內容，請儲存或手動重新整理後再載入最新版本。',
+        description: t(`${i18nNs}.agentsMd.notifications.templateUpdated.description`, fileNameInterp),
       });
     },
   });
@@ -216,7 +216,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       isSaving={saving}
       isStale={isStale}
       statusMessage={showFallbackNotice ? t(`${i18nNs}.agentsMd.status.fallbackNotice`, fileNameInterp) : null}
-      staleMessage="偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。"
+      staleMessage={t(`${i18nNs}.agentsMd.status.staleTemplate`, fileNameInterp)}
       value={content}
       onChange={setContent}
       onRefresh={handleRefresh}

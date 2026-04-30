@@ -1,6 +1,6 @@
 /**
  * Settings State Hook
- * 管理 SettingsPage 的所有狀態
+ * Manages SettingsPage state.
  */
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
@@ -26,14 +26,14 @@ import { createLogger } from '@/shared/services/logger';
 const logger = createLogger('useSettingsState');
 
 export interface SettingsState {
-  // UI 狀態
+  // UI state
   activeTab: 'basic' | 'plugins' | 'rules' | 'mcp';
   scope: ClaudeCodeSettingsScope;
   isLoading: boolean;
   isSaving: boolean;
   loadError: string | null;
 
-  // 基本設定
+  // Basic settings
   mode: string;
   model: string;
   outputStyle: string;
@@ -45,19 +45,19 @@ export interface SettingsState {
   enableAllProjectMcpServers: boolean;
   envVars: Array<{ key: string; value: string }>;
 
-  // 規則設定
+  // Rule settings
   allowRules: string[];
   denyRules: string[];
   askRules: string[];
   additionalDirectories: string[];
 
-  // 輸入欄位
+  // Input fields
   newAllowRule: string;
   newDenyRule: string;
   newAskRule: string;
   newAdditionalDirectory: string;
 
-  // MCP 設定
+  // MCP settings
   enabledMcpjsonServers: string[];
   disabledMcpjsonServers: string[];
   allowedMcpServers: McpServerPolicyState[];
@@ -67,27 +67,27 @@ export interface SettingsState {
   newAllowedMcpServer: string;
   newDeniedMcpServer: string;
 
-  // 插件設定
+  // Plugin settings
   enabledPlugins: Record<string, boolean>;
   marketplaces: Marketplace[];
   expandedMarketplaces: Set<string>;
 }
 
 export interface UseSettingsStateReturn extends SettingsState {
-  // 計算屬性
+  // Computed properties
   isRuntimeReady: boolean;
   hasChanges: boolean;
   inputsDisabled: boolean;
   refreshDisabled: boolean;
   saveDisabled: boolean;
 
-  // Tab 操作
+  // Tab operations
   setActiveTab: (tab: SettingsState['activeTab']) => void;
 
-  // Scope 操作
+  // Scope operations
   handleScopeChange: (scope: ClaudeCodeSettingsScope) => void;
 
-  // 基本設定操作
+  // Basic setting operations
   setMode: (value: string) => void;
   setModel: (value: string) => void;
   setOutputStyle: (value: string) => void;
@@ -97,24 +97,24 @@ export interface UseSettingsStateReturn extends SettingsState {
   setDisableAllHooks: (value: boolean) => void;
   setEnableAllProjectMcpServers: (value: boolean) => void;
 
-  // 環境變數操作
+  // Environment variable operations
   addEnvVar: () => void;
   updateEnvVar: (index: number, field: 'key' | 'value', value: string) => void;
   removeEnvVar: (index: number) => void;
 
-  // 規則操作
+  // Rule operations
   addRule: (rule: string, type: 'allow' | 'deny' | 'ask') => void;
   removeRule: (rule: string, type: 'allow' | 'deny' | 'ask') => void;
   setNewAllowRule: (value: string) => void;
   setNewDenyRule: (value: string) => void;
   setNewAskRule: (value: string) => void;
 
-  // 目錄操作
+  // Directory operations
   addDirectory: (directory: string) => void;
   removeDirectory: (directory: string) => void;
   setNewAdditionalDirectory: (value: string) => void;
 
-  // MCP 操作
+  // MCP operations
   addEnabledMcpjsonServer: (server: string) => void;
   removeEnabledMcpjsonServer: (server: string) => void;
   addDisabledMcpjsonServer: (server: string) => void;
@@ -128,11 +128,11 @@ export interface UseSettingsStateReturn extends SettingsState {
   setNewAllowedMcpServer: (value: string) => void;
   setNewDeniedMcpServer: (value: string) => void;
 
-  // 插件操作
+  // Plugin operations
   togglePlugin: (pluginId: string) => void;
   toggleMarketplace: (marketplaceId: string) => void;
 
-  // 資料操作
+  // Data operations
   fetchSettings: () => Promise<void>;
   handleSave: () => Promise<void>;
 }
@@ -143,14 +143,14 @@ export function useSettingsState(): UseSettingsStateReturn {
   const { workspaceRuntime } = useWorkspace();
   const { runtimeBaseUrl, workspaceId, isLoading: runtimeLoading, error: runtimeError } = workspaceRuntime;
 
-  // UI 狀態
+  // UI state
   const [activeTab, setActiveTab] = useState<'basic' | 'plugins' | 'rules' | 'mcp'>('basic');
   const [scope, setScope] = useState<ClaudeCodeSettingsScope>('project');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // 當前值與初始值（用於變更偵測）
+  // Current and initial values for change detection.
   const [mode, setMode] = useState('default');
   const [initialMode, setInitialMode] = useState('default');
   const [model, setModel] = useState('');
@@ -171,7 +171,7 @@ export function useSettingsState(): UseSettingsStateReturn {
   const [envVars, setEnvVars] = useState<Array<{ key: string; value: string }>>([]);
   const [initialEnvVars, setInitialEnvVars] = useState<Array<{ key: string; value: string }>>([]);
 
-  // 規則
+  // Rules
   const [allowRules, setAllowRules] = useState<string[]>([]);
   const [denyRules, setDenyRules] = useState<string[]>([]);
   const [askRules, setAskRules] = useState<string[]>([]);
@@ -181,7 +181,7 @@ export function useSettingsState(): UseSettingsStateReturn {
   const [initialAskRules, setInitialAskRules] = useState<string[]>([]);
   const [initialAdditionalDirectories, setInitialAdditionalDirectories] = useState<string[]>([]);
 
-  // 輸入欄位
+  // Input fields
   const [newAllowRule, setNewAllowRule] = useState('');
   const [newDenyRule, setNewDenyRule] = useState('');
   const [newAskRule, setNewAskRule] = useState('');
@@ -201,13 +201,13 @@ export function useSettingsState(): UseSettingsStateReturn {
   const [newAllowedMcpServer, setNewAllowedMcpServer] = useState('');
   const [newDeniedMcpServer, setNewDeniedMcpServer] = useState('');
 
-  // 插件
+  // Plugins
   const [enabledPlugins, setEnabledPlugins] = useState<Record<string, boolean>>({});
   const [initialEnabledPlugins, setInitialEnabledPlugins] = useState<Record<string, boolean>>({});
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
   const [expandedMarketplaces, setExpandedMarketplaces] = useState<Set<string>>(new Set());
 
-  // 計算屬性
+  // Computed properties
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
 
   const pluginsChanged = useMemo(() => {
@@ -256,7 +256,7 @@ export function useSettingsState(): UseSettingsStateReturn {
   const refreshDisabled = !isRuntimeReady || isLoading;
   const saveDisabled = !isRuntimeReady || isLoading || isSaving || !hasChanges;
 
-  // 重置狀態
+  // Reset state
   const resetState = useCallback(() => {
     setMode('default');
     setInitialMode('default');
@@ -305,7 +305,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     setLoadError(null);
   }, []);
 
-  // 載入設定
+  // Load settings
   const fetchSettings = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId || runtimeError) {
       return;
@@ -354,7 +354,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       }));
       const sortedEnvEntries = [...envEntries].sort((a, b) => a.key.localeCompare(b.key));
 
-      // 建立 output style 選項
+      // Build output style options.
       const uniqueOptions = new Map<string, { value: string; label: string }>();
       outputStyles.forEach((doc) => {
         const value = (doc.metadata?.fileName as string) ?? doc.id;
@@ -364,7 +364,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       });
       setOutputStyleOptions(Array.from(uniqueOptions.values()));
 
-      // 設定當前值和初始值
+      // Set current and initial values.
       setMode(resolvedMode);
       setInitialMode(resolvedMode);
       setModel(nextModel);
@@ -402,7 +402,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       setEnvVars(sortedEnvEntries);
       setInitialEnvVars(sortedEnvEntries.map((e) => ({ ...e })));
 
-      // 清除輸入欄位
+      // Clear input fields.
       setNewAllowRule('');
       setNewDenyRule('');
       setNewAskRule('');
@@ -419,7 +419,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     }
   }, [runtimeBaseUrl, runtimeError, scope, workspaceId]);
 
-  // 載入 Marketplaces
+  // Load marketplaces
   const fetchMarketplaces = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId || runtimeError) {
       return;
@@ -433,7 +433,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     }
   }, [runtimeBaseUrl, runtimeError, workspaceId]);
 
-  // 初始化載入
+  // Initial load
   useEffect(() => {
     if (!isRuntimeReady) {
       resetState();
@@ -444,7 +444,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     void fetchMarketplaces();
   }, [fetchSettings, fetchMarketplaces, isRuntimeReady, resetState]);
 
-  // Scope 變更
+  // Scope change
   const handleScopeChange = useCallback(
     (nextScope: ClaudeCodeSettingsScope) => {
       if (nextScope === scope) return;
@@ -455,7 +455,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     [resetState, scope]
   );
 
-  // 環境變數操作
+  // Environment variable operations
   const addEnvVar = useCallback(() => {
     setEnvVars((prev) => [...prev, { key: '', value: '' }]);
   }, []);
@@ -470,7 +470,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     setEnvVars((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  // 規則操作
+  // Rule operations
   const addRule = useCallback(
     (rule: string, type: 'allow' | 'deny' | 'ask') => {
       const trimmedRule = rule.trim();
@@ -512,7 +512,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     }
   }, []);
 
-  // 目錄操作
+  // Directory operations
   const addDirectory = useCallback(
     (directory: string) => {
       const trimmed = directory.trim();
@@ -531,13 +531,13 @@ export function useSettingsState(): UseSettingsStateReturn {
     setAdditionalDirectories((prev) => prev.filter((item) => item !== directory));
   }, []);
 
-  // MCP 伺服器操作
+  // MCP server operations.
   const addEnabledMcpjsonServer = useCallback(
     (server: string) => {
       const trimmed = server.trim();
       if (!trimmed) return;
       if (enabledMcpjsonServers.includes(trimmed)) {
-        toast({ variant: 'destructive', title: t('workspace.claudeCode.mcp.messages.serverExists') });
+        toast({ variant: 'destructive', title: t('workspace.claudeCode.permissions.messages.mcpJsonServerExists') });
         return;
       }
       setEnabledMcpjsonServers((prev) => normalizeRules([...prev, trimmed]));
@@ -555,7 +555,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       const trimmed = server.trim();
       if (!trimmed) return;
       if (disabledMcpjsonServers.includes(trimmed)) {
-        toast({ variant: 'destructive', title: t('workspace.claudeCode.mcp.messages.serverExists') });
+        toast({ variant: 'destructive', title: t('workspace.claudeCode.permissions.messages.mcpJsonServerExists') });
         return;
       }
       setDisabledMcpjsonServers((prev) => normalizeRules([...prev, trimmed]));
@@ -573,7 +573,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       const trimmed = server.trim();
       if (!trimmed) return;
       if (allowedMcpServers.some((p) => p.serverName === trimmed)) {
-        toast({ variant: 'destructive', title: t('workspace.claudeCode.mcp.messages.serverExists') });
+        toast({ variant: 'destructive', title: t('workspace.claudeCode.permissions.messages.mcpJsonServerExists') });
         return;
       }
       setAllowedMcpServers((prev) => normalizeMcpPolicies([...prev, { serverName: trimmed }]));
@@ -591,7 +591,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       const trimmed = server.trim();
       if (!trimmed) return;
       if (deniedMcpServers.some((p) => p.serverName === trimmed)) {
-        toast({ variant: 'destructive', title: t('workspace.claudeCode.mcp.messages.serverExists') });
+        toast({ variant: 'destructive', title: t('workspace.claudeCode.permissions.messages.mcpJsonServerExists') });
         return;
       }
       setDeniedMcpServers((prev) => normalizeMcpPolicies([...prev, { serverName: trimmed }]));
@@ -604,7 +604,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     setDeniedMcpServers((prev) => prev.filter((p) => p.serverName !== server));
   }, []);
 
-  // 插件操作
+  // Plugin operations
   const togglePlugin = useCallback((pluginId: string) => {
     setEnabledPlugins((prev) => ({
       ...prev,
@@ -624,7 +624,7 @@ export function useSettingsState(): UseSettingsStateReturn {
     });
   }, []);
 
-  // 儲存設定
+  // Save settings
   const handleSave = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId || runtimeError) {
       return;
@@ -666,7 +666,7 @@ export function useSettingsState(): UseSettingsStateReturn {
         scope
       );
 
-      // 更新初始值
+      // Update initial values.
       setInitialMode(mode);
       setInitialModel(model);
       setInitialOutputStyle(outputStyle);
@@ -708,7 +708,7 @@ export function useSettingsState(): UseSettingsStateReturn {
   ]);
 
   return {
-    // 狀態
+    // State
     activeTab,
     scope,
     isLoading,
@@ -744,14 +744,14 @@ export function useSettingsState(): UseSettingsStateReturn {
     marketplaces,
     expandedMarketplaces,
 
-    // 計算屬性
+    // Computed properties
     isRuntimeReady,
     hasChanges,
     inputsDisabled,
     refreshDisabled,
     saveDisabled,
 
-    // 操作
+    // Operations
     setActiveTab,
     handleScopeChange,
     setMode,

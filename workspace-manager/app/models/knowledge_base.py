@@ -82,6 +82,7 @@ class KnowledgeBaseCreateRequest(CamelModel):
 class KnowledgeBaseUpdateRequest(CamelModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    quota_bytes: Optional[int] = Field(None, alias="quotaBytes")
 
 
 class KnowledgeBaseShareCreateRequest(CamelModel):
