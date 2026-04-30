@@ -238,9 +238,9 @@ def test_in_014_get_workspace_setup_status_success(client):
     """Test workspace setup status query success"""
     service = InternalServiceStub()
     service.setup_status = {
-        "ssh": {"status": "success", "message": "SSH Keys 已就緒"},
-        "git": {"status": "success", "message": "Git 使用者資訊已設定"},
-        "claudeCode": {"status": "pending", "message": "尚未同步 Claude Code 設定"},
+        "ssh": {"status": "success", "message": "SSH Keys are ready"},
+        "git": {"status": "success", "message": "Git user information has been configured"},
+        "claudeCode": {"status": "pending", "message": "Claude Code settings not yet synced"},
     }
 
     with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
