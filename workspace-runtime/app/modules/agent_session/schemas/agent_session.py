@@ -55,6 +55,7 @@ class AgentSessionCreate(BaseModel):
     title: Optional[str] = None
     context_files: List[str] = Field(default_factory=list)
     git_context_id: Optional[str] = None
+    workspace_path: Optional[str] = Field(None, alias="workspacePath")
 
     model_config = {"populate_by_name": True}
 

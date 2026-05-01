@@ -24,7 +24,7 @@ from ..schemas.agent_session import (
     AgentSessionUpdate,
     ToolResultRequest,
 )
-from ..services.agent_session_service import AgentSessionService
+from ..services.agent_session_service import AgentSessionService, AgentSessionValidationError
 from ..services.task_service import TaskService
 from ..services.tool_decision_service import ToolDecisionService
 from ..services.execution_service import ExecutionService
@@ -82,6 +82,11 @@ async def create_session(
             raise HTTPException(
                 status_code=exc.status_code,
                 detail=str(exc),
+            ) from exc
+        except AgentSessionValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=exc.to_dict(),
             ) from exc
     return AgentSessionResponse.from_entity(session)
 

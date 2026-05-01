@@ -36,7 +36,7 @@ async def test_setup_query_builds_expected_options(monkeypatch: pytest.MonkeyPat
     session_repo.to_entity.return_value = SimpleNamespace(
         sdk_session_id="sdk-1",
         custom_context={
-            "workspace_path": "/tmp/ws",
+            "workspace_path": "/knowledge/team-docs",
             "allowed_tools": [],
             "disallowedTools": ["rm"],
             "mcpServers": {"a": {"command": "node"}},
@@ -72,7 +72,7 @@ async def test_setup_query_builds_expected_options(monkeypatch: pytest.MonkeyPat
     )
 
     assert isinstance(result, FakeOptions)
-    assert captured["cwd"] == "/tmp/ws"
+    assert captured["cwd"] == "/knowledge/team-docs"
     assert captured["resume"] == "sdk-1"
     assert captured["model"] == "claude-test"
     assert captured["permission_mode"] == PermissionMode.DEFAULT.value
@@ -80,6 +80,7 @@ async def test_setup_query_builds_expected_options(monkeypatch: pytest.MonkeyPat
     assert captured["disallowed_tools"] == ["rm"]
     assert captured["mcp_servers"] == {"a": {"command": "node"}}
     assert captured["max_turns"] == 55
+    assert captured["add_dirs"] == ["/knowledge"]
     assert captured["max_thinking_tokens"] == 128
     assert captured["include_partial_messages"] is False
 
@@ -112,5 +113,6 @@ async def test_setup_query_uses_session_defaults_and_missing_session_errors(
     assert result.kwargs["cwd"] == "/workspace"
     assert result.kwargs["permission_mode"] == PermissionMode.ACCEPT_EDITS.value
     assert result.kwargs["max_turns"] == qb_module.DEFAULT_MAX_TURNS
+    assert result.kwargs["add_dirs"] == qb_module.DEFAULT_ADDITIONAL_DIRS
     assert "resume" not in result.kwargs
     assert result.kwargs["include_partial_messages"] is True

@@ -26,23 +26,24 @@ For path safety rules see `references/safe-paths.md`.
 
 Read the KB context and source files, then produce a structured analysis. See `references/stage1-analysis.md` for the full analysis prompt.
 
-### Stage 2 — Generation
+### Stage 2 — Generation And File Writes
 
-Using the Stage 1 analysis as context, write wiki pages using FILE blocks. See `references/stage2-generation.md` for the generation prompt and FILE block format.
+Using the Stage 1 analysis as context, generate wiki page content and immediately write it to disk with the Write or Edit tool. See `references/stage2-generation.md` for page planning and safe path rules.
 
 ### Stage 3 — Review Blocks
 
-After generating wiki pages, emit REVIEW blocks for any ambiguities, contradictions, unreadable sources, or suggestions that need human attention. See `references/review-blocks.md` for the format.
+After writing wiki pages, emit REVIEW blocks for any ambiguities, contradictions, unreadable sources, or suggestions that need human attention. See `references/review-blocks.md` for the format.
 
 ## Output Contract
 
-The skill output MUST contain only:
+The skill MUST persist wiki updates to files under the KB working directory. Do not only print generated content.
 
-1. Zero or more `---FILE:---` blocks (wiki page content).
-2. Zero or more `---REVIEW:---` blocks (human-attention items).
-3. No other prose, preamble, or commentary outside these blocks.
+1. Use Write or Edit to create or update every generated wiki page.
+2. Write only under `wiki/` inside the KB working directory.
+3. After all writes complete, output zero or more `---REVIEW:---` blocks for human-attention items.
+4. If there are no review items, output a single short completion line: `KB wiki index updated.`
 
-Start immediately with the first FILE or REVIEW block. Do not add any introduction.
+Do not output `---FILE:---` blocks as the final result. FILE blocks are not applied by the runtime.
 
 ## Frontmatter
 
@@ -54,6 +55,7 @@ Every wiki page MUST include valid YAML frontmatter. See `references/frontmatter
 2. Read `wiki/index.md` and `wiki/overview.md` for current wiki state.
 3. List all files under `raw/sources/` to identify sources to process.
 4. For each unprocessed or changed source: run Stage 1 analysis (see `references/stage1-analysis.md`).
-5. Using the analysis: run Stage 2 generation, emitting FILE blocks (see `references/stage2-generation.md`).
-6. Emit REVIEW blocks for any flagged items (see `references/review-blocks.md`).
-7. Emit a FILE block for `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` with updated content.
+5. Using the analysis: plan Stage 2 page generation (see `references/stage2-generation.md`).
+6. Use Write or Edit to persist generated pages under `wiki/`.
+7. Always write updated `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md`.
+8. Emit REVIEW blocks for any flagged items (see `references/review-blocks.md`).

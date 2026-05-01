@@ -64,7 +64,9 @@ def test_skill_md_references_review_blocks():
 @skip_no_skill
 def test_skill_md_defines_output_contract():
     content = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
-    assert "Output Contract" in content or "FILE" in content
+    assert "Output Contract" in content
+    assert "Use Write or Edit" in content
+    assert "Do not output `---FILE:---` blocks as the final result" in content
 
 
 @pytest.mark.unit
@@ -79,6 +81,15 @@ def test_all_reference_files_exist():
     ]
     for rel in required:
         assert (SKILL_ROOT / rel).is_file(), f"Missing: {rel}"
+
+
+@pytest.mark.unit
+@skip_no_skill
+def test_stage2_generation_requires_file_writes():
+    content = (SKILL_ROOT / "references/stage2-generation.md").read_text(encoding="utf-8")
+    assert "Use Write or Edit" in content
+    assert "Only print generated pages without writing them" in content
+    assert "Emit `---FILE:---` blocks as the final result" in content
 
 
 @pytest.mark.unit

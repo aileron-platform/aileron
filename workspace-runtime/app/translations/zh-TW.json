@@ -47,5 +47,7 @@
   "drawio.errors.invalid_xml": "無效的 Draw.io XML 格式",
   "drawio.errors.save_failed": "保存 Draw.io 檔案失敗：{error}",
   "drawio.errors.invalid_format": "不支援的匯出格式：{format}",
-  "drawio.errors.export_failed": "匯出 Draw.io 圖表失敗：{error}"
+  "drawio.errors.export_failed": "匯出 Draw.io 圖表失敗：{error}",
+  "agentSession.errors.workspacePath.notAbsolute": "Workspace path 必須是絕對路徑",
+  "agentSession.errors.workspacePath.outsideAllowedRoots": "Workspace path 必須位於允許的 runtime 根目錄下"
 }

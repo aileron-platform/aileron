@@ -47,5 +47,7 @@
   "drawio.errors.invalid_xml": "Invalid Draw.io XML format",
   "drawio.errors.save_failed": "Failed to save Draw.io file: {error}",
   "drawio.errors.invalid_format": "Unsupported export format: {format}",
-  "drawio.errors.export_failed": "Failed to export Draw.io diagram: {error}"
+  "drawio.errors.export_failed": "Failed to export Draw.io diagram: {error}",
+  "agentSession.errors.workspacePath.notAbsolute": "Workspace path must be an absolute path",
+  "agentSession.errors.workspacePath.outsideAllowedRoots": "Workspace path must be under one of the allowed runtime roots"
 }

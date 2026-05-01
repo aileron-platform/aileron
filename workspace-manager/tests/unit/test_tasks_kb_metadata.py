@@ -7,7 +7,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.db import models as db_models
-from app.tasks import _knowledge_base_wiki_index_version_metadata
+from app.tasks import (
+    AUTOMATION_PERMISSION_MODE,
+    _automation_session_create_payload,
+    _knowledge_base_wiki_index_version_metadata,
+)
 
 
 @pytest.mark.unit
@@ -80,3 +84,30 @@ def test_wiki_index_metadata_skips_commit_when_version_control_disabled():
         "filesChanged": [],
         "commitId": None,
     }
+
+
+@pytest.mark.unit
+def test_automation_session_create_payload_uses_bypass_permissions():
+    payload = _automation_session_create_payload(
+        workspace_id="workspace-1",
+        agentic_tool="claude-code",
+    )
+
+    assert payload["workspace_id"] == "workspace-1"
+    assert payload["agentic_tool"] == "claude-code"
+    assert payload["source"] == "automation"
+    assert payload["permission_config"] == {"mode": AUTOMATION_PERMISSION_MODE}
+    assert "workspace_path" not in payload
+    assert AUTOMATION_PERMISSION_MODE == "bypassPermissions"
+
+
+@pytest.mark.unit
+def test_automation_session_create_payload_includes_wiki_index_workspace_path():
+    payload = _automation_session_create_payload(
+        workspace_id="workspace-1",
+        agentic_tool="claude-code",
+        workspace_path="/knowledge/team-docs",
+    )
+
+    assert payload["workspace_path"] == "/knowledge/team-docs"
+    assert payload["permission_config"] == {"mode": AUTOMATION_PERMISSION_MODE}

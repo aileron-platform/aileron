@@ -927,6 +927,92 @@ class TestJobExecutionManagement:
         assert result.status == "failed"
         assert result.error_message == "Test error message"
 
+    def test_complete_execution_updates_kb_index_status_on_wiki_index_success(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+    ):
+        """Test: successful KB wiki index execution updates KB index status."""
+        # Arrange
+        execution = db_models.JobExecution(
+            id="exec-123",
+            job_id="job-123",
+            status="running",
+            trigger="cron",
+            started_at=utcnow() - timedelta(seconds=30),
+            summary="Running",
+        )
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        kb = db_models.KnowledgeBase(
+            id="kb-123",
+            slug="kb-123",
+            name="Test KB",
+            owner_id="user-123",
+            current_size_bytes=0,
+        )
+        db_session.get.side_effect = [execution, sample_job_record, kb]
+
+        # Act
+        result = automation_service.complete_execution(
+            execution_id="exec-123",
+            status="success",
+            summary="Completed successfully",
+            session_id="session-123",
+        )
+
+        # Assert
+        assert result is not None
+        assert kb.last_indexed_at == result.finished_at
+        assert kb.last_index_status == "success"
+        assert kb.last_index_error is None
+
+    def test_complete_execution_updates_kb_index_status_on_wiki_index_failure(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+    ):
+        """Test: failed KB wiki index execution updates KB index error."""
+        # Arrange
+        execution = db_models.JobExecution(
+            id="exec-123",
+            job_id="job-123",
+            status="running",
+            trigger="cron",
+            started_at=utcnow() - timedelta(seconds=30),
+            summary="Running",
+        )
+        sample_job_record.task_metadata = {
+            "jobType": "knowledge_base.wiki_index",
+            "knowledgeBaseId": "kb-123",
+        }
+        kb = db_models.KnowledgeBase(
+            id="kb-123",
+            slug="kb-123",
+            name="Test KB",
+            owner_id="user-123",
+            current_size_bytes=0,
+        )
+        db_session.get.side_effect = [execution, sample_job_record, kb]
+
+        # Act
+        result = automation_service.complete_execution(
+            execution_id="exec-123",
+            status="failed",
+            summary="Failed",
+            error_message="KB_WIKI_INDEX_LOCK_BUSY",
+        )
+
+        # Assert
+        assert result is not None
+        assert kb.last_indexed_at == result.finished_at
+        assert kb.last_index_status == "failed"
+        assert kb.last_index_error == "KB_WIKI_INDEX_LOCK_BUSY"
+
     def test_mark_execution_waiting_success(self, automation_service, db_session, sample_execution_record):
         """Test: mark execution record as waiting successfully"""
         # Arrange
@@ -1007,6 +1093,31 @@ class TestJobScheduling:
         # Assert
         assert len(result) == 1
         assert result[0].id == "job-123"
+
+    def test_enqueue_execution_advances_overdue_cron_to_future(
+        self,
+        automation_service,
+        db_session,
+        sample_job_record,
+    ):
+        """Test: overdue cron jobs skip missed ticks instead of remaining due."""
+        # Arrange
+        now = utcnow()
+        sample_job_record.schedule = "* * * * *"
+        sample_job_record.next_run_at = now - timedelta(minutes=10)
+        db_session.get.return_value = sample_job_record
+
+        # Act
+        record = automation_service.enqueue_execution(
+            sample_job_record.id,
+            trigger="cron",
+            summary="Queued",
+        )
+
+        # Assert
+        assert record is not None
+        assert sample_job_record.next_run_at is not None
+        assert sample_job_record.next_run_at > now
 
     def test_estimate_next_run_cron(self, automation_service):
         """Test: calculate next run time for cron task"""

@@ -86,21 +86,12 @@ chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2
 # Bind mounts can remove +x from host scripts, overriding Dockerfile chmod; restore it here.
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true
 
-echo "🔧 Fixing /root Cargo toolchain access permissions..."
-for dir in /root /root/.cargo /root/.cargo/bin; do
-    [ -d "$dir" ] && chmod o+x "$dir" 2>/dev/null && echo "  ✓ $dir" || true
-done
-
 # Volume mounts can drop execute permissions from .venv/bin.
 if [ -d "/workspace-runtime/.venv" ]; then
     echo "🔧 Fixing .venv execute permissions..."
     chmod -R u+x /workspace-runtime/.venv/bin 2>/dev/null || true
     chmod -R u+x /workspace-runtime/.venv/lib/python*/bin 2>/dev/null || true
 fi
-
-# If the agent-browser daemon runs as root, it creates root-owned socket directories; prepare ownership up front.
-mkdir -p /home/developer/.agent-browser
-chown -R developer:developer /home/developer/.agent-browser
 
 echo "✅ Directory permissions configured"
 echo ""
@@ -159,9 +150,7 @@ if [ -n "${GIT_USER_NAME:-}" ] && [ -n "${GIT_USER_EMAIL:-}" ]; then
     git config --global user.email "$GIT_USER_EMAIL"
     echo "✅ Git user configuration set"
 else
-    git config --global user.name "Developer"
-    git config --global user.email "developer@workspace.local"
-    echo "✅ Git user uses default configuration"
+    echo "✅ Git user uses image default configuration"
 fi
 git config --global --add safe.directory /workspace 2>/dev/null || true
 git config --global --add safe.directory /workspace-runtime 2>/dev/null || true
@@ -260,16 +249,7 @@ fi
 echo ""
 
 # ============================================================================
-# 10. Configure log directory
-# ============================================================================
-echo "📋 Configuring log directory..."
-mkdir -p /var/log/supervisor
-chown -R developer:developer /var/log/supervisor 2>/dev/null || true
-echo "✅ Log directory configured"
-echo ""
-
-# ============================================================================
-# 11. Create Terminal Service cache directory
+# 10. Create Terminal Service cache directory
 # ============================================================================
 echo "🔧 Preparing Terminal Service cache directory..."
 mkdir -p "${WORKSPACE_TERMINAL_CACHE_DIR:-/workspace/.cache/terminal-service}"
@@ -278,7 +258,7 @@ echo "✅ Terminal Service will resolve its binary when started by supervisord"
 echo ""
 
 # ============================================================================
-# 12. Start Supervisor
+# 11. Start Supervisor
 # ============================================================================
 echo "🎯 Starting service manager..."
 

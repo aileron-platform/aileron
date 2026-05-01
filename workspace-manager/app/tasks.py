@@ -23,6 +23,7 @@ from app.utils.datetime_utils import calculate_duration, utcnow
 logger = get_celery_logger()
 
 DEFAULT_MODEL = "claude-3-7-sonnet-20250219"
+AUTOMATION_PERMISSION_MODE = "bypassPermissions"
 
 
 @contextmanager
@@ -595,11 +596,11 @@ def _execute_automation_job(
         if isinstance(images_value, list):
             images = images_value
 
-    create_payload = {
-        "workspace_id": job.workspace_id,
-        "agentic_tool": agentic_tool,
-        "source": "automation",
-    }
+    create_payload = _automation_session_create_payload(
+        workspace_id=job.workspace_id,
+        agentic_tool=agentic_tool,
+        workspace_path=f"/knowledge/{kb_mount_alias}" if kb_mount_alias else None,
+    )
 
     effective_prompt = (
         service.build_knowledge_base_wiki_index_prompt(mount_alias=kb_mount_alias)
@@ -611,6 +612,7 @@ def _execute_automation_job(
         "prompt": effective_prompt,
         "images": images,
         "stream": True,  # Streaming is handled by the pub/sub wait
+        "permission_mode": AUTOMATION_PERMISSION_MODE,
         "automation_execution_id": execution_id,  # For completion notification
     }
 
@@ -784,6 +786,24 @@ def _execute_automation_job(
             raise error_with_session from e
         else:
             raise
+
+
+def _automation_session_create_payload(
+    *,
+    workspace_id: str,
+    agentic_tool: str,
+    workspace_path: str | None = None,
+) -> dict[str, Any]:
+    """Build the runtime session payload for scheduled automation."""
+    payload = {
+        "workspace_id": workspace_id,
+        "agentic_tool": agentic_tool,
+        "source": "automation",
+        "permission_config": {"mode": AUTOMATION_PERMISSION_MODE},
+    }
+    if workspace_path is not None:
+        payload["workspace_path"] = workspace_path
+    return payload
 
 
 def _extract_http_error_detail(error: httpx.HTTPStatusError) -> str:

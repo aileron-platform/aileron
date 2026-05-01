@@ -510,7 +510,7 @@ class AutomationService:
         now = utcnow()
         job.updated_at = now
         if trigger == "cron":
-            reference = job.next_run_at or now
+            reference = self._latest_datetime(job.next_run_at, now) or now
             system_tz = get_system_timezone()
             next_run = self._estimate_next_run(
                 job.trigger,
@@ -577,6 +577,7 @@ class AutomationService:
         job = self.db.get(db_models.AutomationJob, record.job_id)
         if job:
             self._update_task_statistics(job, record)
+            self._update_knowledge_base_index_status(job, record)
 
         self.db.commit()
         self.db.refresh(record)
@@ -795,7 +796,6 @@ class AutomationService:
 
         if job.trigger == "cron":
             reference = job.next_run_at or completion_time
-            # Use unified timezone handling utility for time comparison
             completion_utc = ensure_utc(completion_time)
             next_run_utc = ensure_utc(job.next_run_at)
 
@@ -810,10 +810,50 @@ class AutomationService:
                     job.trigger,
                     job.schedule,
                     system_tz,
-                    reference=reference,
+                    reference=self._latest_datetime(reference, completion_time) or completion_time,
                 )
         else:
             job.next_run_at = None
+
+    def _update_knowledge_base_index_status(
+        self,
+        job: db_models.AutomationJob,
+        execution: db_models.JobExecution,
+    ) -> None:
+        if execution.status not in {"success", "failed"}:
+            return
+        metadata = job.task_metadata or {}
+        if not isinstance(metadata, dict) or metadata.get("jobType") != KB_WIKI_INDEX_JOB_TYPE:
+            return
+        knowledge_base_id = metadata.get("knowledgeBaseId")
+        if not isinstance(knowledge_base_id, str) or not knowledge_base_id.strip():
+            return
+
+        kb = self.db.get(db_models.KnowledgeBase, knowledge_base_id)
+        if kb is None:
+            logger.warning(
+                "Cannot update knowledge base index status because KB does not exist: %s",
+                knowledge_base_id,
+            )
+            return
+
+        kb.last_indexed_at = execution.finished_at or utcnow()
+        kb.last_index_status = execution.status
+        kb.last_index_error = execution.error_message if execution.status == "failed" else None
+        kb.updated_at = utcnow()
+
+    def _latest_datetime(
+        self,
+        first: Optional[datetime],
+        second: Optional[datetime],
+    ) -> Optional[datetime]:
+        first_utc = ensure_utc(first)
+        second_utc = ensure_utc(second)
+        if first_utc is None:
+            return second_utc
+        if second_utc is None:
+            return first_utc
+        return first_utc if first_utc >= second_utc else second_utc
 
     def _mark_execution_dispatch_failed(
         self,

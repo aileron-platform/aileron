@@ -19,6 +19,8 @@ from app.utils.datetime_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_WORKSPACE_PATH_ROOTS = (Path("/workspace"), Path("/knowledge"))
+
 from ..domain.entities import AgentSession
 from ..domain.enums import AgenticTool, AgentSessionStatus
 from ..domain.value_objects import (
@@ -37,6 +39,24 @@ from ..schemas.agent_session import (
     AgentSessionUpdate,
 )
 from ..websocket.events import EventEmitter, get_event_emitter
+
+
+class AgentSessionValidationError(Exception):
+    """Agent session validation error with localizable metadata."""
+
+    def __init__(self, *, error_code: str, message_key: str, params: dict[str, Any] | None = None) -> None:
+        super().__init__(message_key)
+        self.error_code = error_code
+        self.message_key = message_key
+        self.params = params or {}
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize validation error for API responses."""
+        return {
+            "errorCode": self.error_code,
+            "messageKey": self.message_key,
+            "params": self.params,
+        }
 
 
 class AgentSessionService:
@@ -93,6 +113,9 @@ class AgentSessionService:
             )
             custom_context["git_context_id"] = data.git_context_id
             custom_context["workspace_path"] = workspace_path
+
+        if data.workspace_path:
+            custom_context["workspace_path"] = self._validate_workspace_path(data.workspace_path)
 
         # Create data blob
         data_blob: Dict[str, Any] = {
@@ -467,6 +490,29 @@ class AgentSessionService:
         return TOOL_CAPABILITIES
 
     @staticmethod
+    def _validate_workspace_path(workspace_path: str) -> str:
+        """Validate an explicit runtime workspace path."""
+        raw_path = Path(workspace_path)
+        if not raw_path.is_absolute():
+            raise AgentSessionValidationError(
+                error_code="AGENT_SESSION_WORKSPACE_PATH_NOT_ABSOLUTE",
+                message_key="agentSession.errors.workspacePath.notAbsolute",
+                params={"field": "workspacePath"},
+            )
+        candidate = raw_path.resolve(strict=False)
+
+        for root in ALLOWED_WORKSPACE_PATH_ROOTS:
+            if candidate == root or root in candidate.parents:
+                return str(candidate)
+
+        allowed_roots = [str(root) for root in ALLOWED_WORKSPACE_PATH_ROOTS]
+        raise AgentSessionValidationError(
+            error_code="AGENT_SESSION_WORKSPACE_PATH_OUTSIDE_ALLOWED_ROOTS",
+            message_key="agentSession.errors.workspacePath.outsideAllowedRoots",
+            params={"field": "workspacePath", "allowedRoots": allowed_roots},
+        )
+
+    @staticmethod
     def _session_to_event_data(session: AgentSession) -> Dict[str, Any]:
         """Convert AgentSession entity to event data.
 
@@ -505,4 +551,4 @@ class AgentSessionService:
         return data
 
 
-__all__ = ["AgentSessionService"]
+__all__ = ["AgentSessionService", "AgentSessionValidationError"]

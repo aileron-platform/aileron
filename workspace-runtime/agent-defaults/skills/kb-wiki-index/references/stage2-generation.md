@@ -1,21 +1,21 @@
 # Stage 2 — Wiki Page Generation
 
-Using the Stage 1 analysis as context, generate wiki pages as FILE blocks.
+Using the Stage 1 analysis as context, generate wiki pages and write them to disk.
 
-## FILE Block Format
+## Write Contract
 
-```
----FILE: wiki/sources/example.md---
-<full file content including YAML frontmatter>
----END FILE---
-```
+Use Write or Edit for each generated page. The file path passed to the tool MUST be inside the KB working directory.
+
+Example target:
+
+`<KB_ROOT>/wiki/sources/example.md`
 
 Rules:
-- The path after `---FILE:` MUST be relative to the KB root.
-- The path MUST start with `wiki/` — no other prefix is allowed.
-- No `..` segments. No absolute paths. No paths starting with `/`.
+- The relative path MUST start with `wiki/` — no other prefix is allowed.
+- No `..` segments. No absolute paths from generated relative paths.
 - Always include valid YAML frontmatter (see `references/frontmatter.md`).
-- One FILE block per wiki page. Do not split a page across multiple blocks.
+- Write the full page content in one operation whenever possible.
+- Create parent directories before writing new pages.
 
 ## What to generate
 
@@ -33,7 +33,8 @@ Always generate at the end:
 
 ## Do NOT
 
-- Emit analysis prose outside FILE/REVIEW blocks.
+- Only print generated pages without writing them.
+- Emit `---FILE:---` blocks as the final result.
 - Emit preamble such as "Here are the files:" or "Based on the analysis...".
 - Write to paths outside `wiki/`.
 - Omit frontmatter from any wiki page.

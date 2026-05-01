@@ -24,6 +24,7 @@ from app.modules.agent_session.repositories.agent_session_repository import Agen
 
 # Default max_turns limit to prevent agent infinite loop consuming tokens
 DEFAULT_MAX_TURNS = 200
+DEFAULT_ADDITIONAL_DIRS = ["/knowledge"]
 
 
 def to_sdk_permission_mode(mode: BackendPermissionMode | None) -> SDKPermissionMode | None:
@@ -163,6 +164,8 @@ class QueryBuilder:
             "disallowed_tools": disallowed_tools,
             # Conversation turn limit, prevent agent infinite loop
             "max_turns": max_turns,
+            # Additional directories Claude Code may access besides cwd
+            "add_dirs": DEFAULT_ADDITIONAL_DIRS,
             # Extended thinking
             "max_thinking_tokens": max_thinking_tokens,
             # TODO: add other options (hooks, commands, subagents, output_styles, env)

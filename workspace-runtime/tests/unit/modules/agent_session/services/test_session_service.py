@@ -19,7 +19,7 @@ from app.modules.agent_session.schemas.agent_session import (
     PermissionConfigCreate,
     AgentSessionUpdate,
 )
-from app.modules.agent_session.services.agent_session_service import AgentSessionService
+from app.modules.agent_session.services.agent_session_service import AgentSessionService, AgentSessionValidationError
 from app.modules.version_control.utils import VersionControlError
 
 
@@ -224,6 +224,63 @@ class TestAgentSessionService:
             "git_context_id": "worktree:feature-auth",
             "workspace_path": "/workspace/.worktrees/feature-auth",
         }
+
+    @pytest.mark.asyncio
+    async def test_create_session_persists_explicit_knowledge_workspace_path(self, service) -> None:
+        model = MagicMock()
+        entity = self._session_entity(session_id="knowledge-session")
+        service.session_repo.create = AsyncMock(return_value=model)
+        service.session_repo.to_entity = MagicMock(return_value=entity)
+
+        await service.create_session(
+            AgentSessionCreate(
+                workspace_id="ws-knowledge",
+                workspace_path="/knowledge/team-docs",
+            )
+        )
+
+        data_blob = json.loads(service.session_repo.create.await_args.args[0]["data"])
+        assert data_blob["custom_context"] == {
+            "workspace_path": "/knowledge/team-docs",
+        }
+
+    @pytest.mark.asyncio
+    async def test_create_session_rejects_workspace_path_outside_runtime_roots(self, service) -> None:
+        service.session_repo.create = AsyncMock()
+
+        with pytest.raises(AgentSessionValidationError) as exc_info:
+            await service.create_session(
+                AgentSessionCreate(
+                    workspace_id="ws-invalid",
+                    workspace_path="/etc",
+                )
+            )
+
+        assert exc_info.value.to_dict() == {
+            "errorCode": "AGENT_SESSION_WORKSPACE_PATH_OUTSIDE_ALLOWED_ROOTS",
+            "messageKey": "agentSession.errors.workspacePath.outsideAllowedRoots",
+            "params": {"field": "workspacePath", "allowedRoots": ["/workspace", "/knowledge"]},
+        }
+        service.session_repo.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_session_rejects_relative_workspace_path(self, service) -> None:
+        service.session_repo.create = AsyncMock()
+
+        with pytest.raises(AgentSessionValidationError) as exc_info:
+            await service.create_session(
+                AgentSessionCreate(
+                    workspace_id="ws-invalid",
+                    workspace_path="knowledge/team-docs",
+                )
+            )
+
+        assert exc_info.value.to_dict() == {
+            "errorCode": "AGENT_SESSION_WORKSPACE_PATH_NOT_ABSOLUTE",
+            "messageKey": "agentSession.errors.workspacePath.notAbsolute",
+            "params": {"field": "workspacePath"},
+        }
+        service.session_repo.create.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_create_session_propagates_git_context_resolution_errors(self, service) -> None:

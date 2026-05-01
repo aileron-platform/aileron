@@ -18,6 +18,7 @@ from app.modules.agent_session.schemas.agent_session import (
     ToolResultRequest,
 )
 from app.modules.agent_session.services.execution_service import ExecutionServiceError
+from app.modules.agent_session.services.agent_session_service import AgentSessionValidationError
 from app.modules.version_control.utils import VersionControlError
 
 router_module = importlib.import_module("app.modules.agent_session.routers.agent_session_router")
@@ -111,6 +112,36 @@ async def test_create_session_maps_version_control_errors(monkeypatch: pytest.Mo
         )
 
     assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_create_session_maps_workspace_path_validation_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    service = AsyncMock()
+    service.create_session.side_effect = AgentSessionValidationError(
+        error_code="AGENT_SESSION_WORKSPACE_PATH_OUTSIDE_ALLOWED_ROOTS",
+        message_key="agentSession.errors.workspacePath.outsideAllowedRoots",
+        params={"field": "workspacePath", "allowedRoots": ["/workspace", "/knowledge"]},
+    )
+    mock_db = AsyncMock()
+
+    @asynccontextmanager
+    async def fake_scope():
+        yield mock_db
+
+    monkeypatch.setattr(router_module, "async_session_scope", fake_scope)
+    monkeypatch.setattr(router_module, "AgentSessionService", lambda db: service)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await router_module.create_session(
+            AgentSessionCreate(workspace_id="ws-1", workspace_path="/etc")
+        )
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == {
+        "errorCode": "AGENT_SESSION_WORKSPACE_PATH_OUTSIDE_ALLOWED_ROOTS",
+        "messageKey": "agentSession.errors.workspacePath.outsideAllowedRoots",
+        "params": {"field": "workspacePath", "allowedRoots": ["/workspace", "/knowledge"]},
+    }
 
 
 @pytest.mark.asyncio

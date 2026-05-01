@@ -1,6 +1,6 @@
 # Multi-stage build for workspace-runtime
 # Stage 1: go-terminal-builder / Stage 2: base / Stage 3: development / Stage 4: production
-# runtime-base 可由 build context 指向不同 base image，例如：
+# runtime-base can be provided by build context, for example:
 #   1. codex-universal
 #   2. workspace-runtime/base-lite
 FROM golang:1.23 AS go-terminal-builder
@@ -27,8 +27,8 @@ FROM runtime-base AS base
 
 USER root
 
-# 建立目錄結構
-RUN mkdir -p /workspace-runtime /workspace /workspace-terminal /var/run/sshd /var/log/supervisor
+# Create runtime directory structure.
+RUN mkdir -p /workspace-runtime /workspace /workspace-terminal /knowledge /var/run/sshd /var/log/supervisor
 
 WORKDIR /workspace-runtime
 
@@ -51,7 +51,7 @@ RUN apt-get update && apt-get install -y --fix-missing \
 RUN locale-gen en_US.UTF-8 && update-locale LANG=en_US.UTF-8
 ENV LANG=en_US.UTF-8
 
-# SSH：停用密碼驗證，僅允許 developer 使用金鑰登入
+# SSH: disable password authentication and allow only developer key login.
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
     && sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config \
@@ -62,7 +62,7 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/s
     && sed -i 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' /etc/pam.d/sshd \
     && echo 'AllowUsers developer' >> /etc/ssh/sshd_config
 
-# base image 已建立 developer 用戶（UID 1000），補充 SSH config
+# The base image already creates the developer user (UID 1000); add SSH config.
 RUN mkdir -p /home/developer/.ssh \
     && echo 'Host *' > /home/developer/.ssh/config \
     && echo '    StrictHostKeyChecking no' >> /home/developer/.ssh/config \
@@ -71,10 +71,10 @@ RUN mkdir -p /home/developer/.ssh \
     && chmod 700 /home/developer/.ssh \
     && chmod 600 /home/developer/.ssh/config
 
-# 加入 docker 群組（部分 base image 未預設）
+# Add the docker group when the base image does not already provide it.
 RUN usermod -aG docker developer 2>/dev/null || true
 
-# 讓 developer 可存取 root 的 Cargo 工具鏈（若 base image 提供）
+# Allow developer to access the root Cargo toolchain when the base image provides it.
 RUN mkdir -p /home/developer/.cargo && \
     (chmod o+x /root 2>/dev/null || true) && \
     (chmod 755 /root/.cargo /root/.cargo/bin 2>/dev/null || true) && \
@@ -82,7 +82,7 @@ RUN mkdir -p /home/developer/.cargo && \
     (chown developer:developer /home/developer/.cargo 2>/dev/null || true) && \
     if [ -f /root/.cargo/env ]; then ln -sf /root/.cargo/env /home/developer/.cargo/env 2>/dev/null || true; fi
 
-# developer .bashrc：環境變數與 PATH
+# Configure developer .bashrc environment variables and PATH.
 RUN echo 'export PYTHONPATH="/workspace-runtime:/workspace"' >> /home/developer/.bashrc && \
     echo 'export CARGO_HOME="/home/developer/.cargo"' >> /home/developer/.bashrc && \
     echo 'export RUSTUP_HOME="/root/.rustup"' >> /home/developer/.bashrc && \
@@ -103,7 +103,7 @@ RUN git config --global --add safe.directory /workspace 2>/dev/null || true && \
 
 USER root
 
-# 以 developer 身份安裝全域工具
+# Install global tools as developer.
 ARG OPENSPEC_VERSION=1.3.0
 ARG CLAUDE_CLI_VERSION=stable
 ARG GEMINI_VERSION=latest
@@ -152,10 +152,10 @@ RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CLI_VERSION}"
 
 USER root
 
-RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal && \
-    chmod 755 /workspace /workspace-runtime /workspace-terminal
+RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal /knowledge /var/log/supervisor && \
+    chmod 755 /workspace /workspace-runtime /workspace-terminal /knowledge
 
-# Anthropic 設定由執行時環境變數注入，不在映像中提供預設值
+# Anthropic settings are injected at runtime, not baked into the image.
 
 ENV PATH="/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
 
@@ -164,7 +164,7 @@ ENV DISABLE_AUTOUPDATER=1
 ENV OPENSPEC_AUTO_INIT=1
 ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"
 
-# Stage 2: Development - 程式碼透過 volume mount 掛入
+# Stage 2: Development - source code is mounted through volumes.
 FROM base AS development
 
 COPY --chown=developer:developer workspace-runtime/pyproject.toml workspace-runtime/uv.lock* ./
@@ -190,11 +190,11 @@ COPY workspace-runtime/supervisord.conf workspace-runtime/supervisord.dev.conf .
 COPY workspace-runtime/agent-defaults/ ./agent-defaults/
 RUN chmod +x /start_services.sh
 
-# 容器以 root 執行（sshd 需要），應用服務以 developer 執行（supervisord.dev.conf 中設定）
+# The container runs as root for sshd; app services run as developer in supervisord.dev.conf.
 ENTRYPOINT []
 CMD ["/start_services.sh"]
 
-# Stage 3: Production - 應用程式打包進容器
+# Stage 3: Production - application code is packaged into the image.
 FROM base AS production
 
 COPY --chown=developer:developer workspace-runtime/pyproject.toml workspace-runtime/uv.lock* ./
@@ -218,8 +218,8 @@ WORKDIR /workspace-terminal
 COPY workspace-terminal/ ./
 WORKDIR /workspace-runtime
 
-RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal && \
-    chmod 755 /workspace /workspace-runtime /workspace-terminal
+RUN chown -R developer:developer /workspace-runtime /workspace /workspace-terminal /knowledge && \
+    chmod 755 /workspace /workspace-runtime /workspace-terminal /knowledge
 
 COPY workspace-runtime/start_services.sh /start_services.sh
 COPY workspace-runtime/supervisord.conf workspace-runtime/supervisord.dev.conf ./
@@ -231,5 +231,5 @@ EXPOSE 3002 3004 22
 HEALTHCHECK --interval=30s --timeout=30s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:3002/health || exit 1
 
-# 容器以 root 執行（sshd 需要），應用服務以 developer 執行（supervisord.conf 中設定）
+# The container runs as root for sshd; app services run as developer in supervisord.conf.
 CMD ["/start_services.sh"]
