@@ -75,6 +75,7 @@ openspec/
 AGENTS.md
 GEMINI.md
 CLAUDE.md
+!workspace-manager/app/resources/kb_templates/**/AGENTS.md
 /docs/
 
 # Runtime and Temporary Files
