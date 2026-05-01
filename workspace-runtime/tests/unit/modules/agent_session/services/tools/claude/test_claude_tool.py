@@ -14,6 +14,7 @@ from app.modules.agent_session.services.tools.base.types import (
     ResultEvent,
     ThinkingCompleteEvent,
     ThinkingPartialEvent,
+    ToolAuthenticationError,
     TokenUsage,
     ToolType,
 )
@@ -276,6 +277,50 @@ async def test_execute_task_handles_stopped_event_and_skips_permission_hooks_wit
     assert result.assistant_message_ids == []
     tool.prompt_service.cleanup_client.assert_awaited_once_with("session-1")
     assert "session-1" not in tool.abort_events
+
+
+@pytest.mark.asyncio
+async def test_execute_task_converts_auth_retry_without_response_to_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = tool_module.ClaudeTool(api_key="key")
+    message_repo = _make_message_repo()
+    session_repo = _make_session_repo()
+    _patch_db_layer(monkeypatch, message_repo=message_repo, session_repo=session_repo)
+
+    session_entity = SimpleNamespace(permission_config=SimpleNamespace(mode=PermissionMode.BYPASS_PERMISSIONS), data="{}")
+    session_repo.find_by_id = AsyncMock(return_value=SimpleNamespace())
+    session_repo.to_entity = lambda _: session_entity
+
+    monkeypatch.setattr(
+        tool_module,
+        "create_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool_module, "create_system_message", AsyncMock(return_value="system-1"))
+
+    async def fake_stream(**kwargs):
+        yield CompleteEvent(
+            role=MessageRole.SYSTEM,
+            content=[{
+                "type": "system",
+                "subtype": "api_retry",
+                "data": {"error_status": 401, "error": "authentication_failed"},
+            }],
+        )
+        yield SimpleNamespace(type="stopped")
+
+    tool.prompt_service.prompt_session_streaming = fake_stream
+    tool.prompt_service.cleanup_client = AsyncMock()
+
+    with pytest.raises(ToolAuthenticationError) as exc_info:
+        await tool.execute_task("session-1", "hi", task_id="task-1", streaming_callbacks=None)
+
+    assert exc_info.value.error_code == "AUTHENTICATION_FAILED"
+    assert exc_info.value.message_key == "workspace.chat.errors.authenticationFailed"
+    tool.prompt_service.cleanup_client.assert_awaited_once_with("session-1")
+    assert "session-1" not in tool.abort_events
+    tool_module.create_system_message.assert_not_awaited()
 
 
 @pytest.mark.asyncio

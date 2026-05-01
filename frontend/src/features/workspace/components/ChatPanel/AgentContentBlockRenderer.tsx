@@ -11,11 +11,15 @@ import AcpToolWidget from '@/features/agent-tools/components/AcpToolWidget';
 import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
 import { MarkdownRenderer } from '@/features/workspace/components/MarkdownRenderer';
 import { createLogger } from '@/shared/services/logger';
+import { useI18n } from '@/shared/hooks/useI18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { AgentMessage, ContentBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, SystemBlock, SystemCompleteBlock, SystemStatusBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
 import { resolveAcpToolWidgetTypeWithKind } from './agentSessionTypes';
 
 const logger = createLogger('AgentContentBlockRenderer');
+
+const isI18nKey = (value?: string): boolean =>
+  typeof value === 'string' && value.startsWith('workspace.');
 
 /** AskUserQuestion 提交答案的回調類型 */
 export type AskUserQuestionSubmitHandler = (
@@ -455,6 +459,7 @@ const AssistantMessageRenderer: React.FC<{
   onAskUserQuestionSubmit?: AskUserQuestionSubmitHandler;
   activeTaskId?: string | null;
 }> = ({ message, allMessages, agentTool, onApprove, onDeny, pendingUserInput, onAskUserQuestionSubmit, activeTaskId }) => {
+  const { t } = useI18n();
   const blocks = message.content_blocks || [];
   const isMessageActive =
     message.session_id === 'temp' ||
@@ -549,18 +554,20 @@ const AssistantMessageRenderer: React.FC<{
         if (block.type === 'system_complete') {
           const completeBlock = block as SystemCompleteBlock;
           const { stop_reason, result, message } = completeBlock;
+          const localizedMessage = isI18nKey(message) ? t(message) : message;
+          const localizedResult = isI18nKey(result) ? t(result) : result;
 
           // 檢查是否為錯誤終止或包含錯誤訊息
           // 即使 stop_reason 是 'end_turn' 或 'max_tokens'，如果 result/message 包含錯誤關鍵字，也要顯示錯誤
           const errorKeywords = ['timeout', 'error', 'failed', 'crashed', 'hung', 'exception'];
-          const resultStr = (result || '').toLowerCase();
-          const messageStr = (message || '').toLowerCase();
+          const resultStr = (localizedResult || '').toLowerCase();
+          const messageStr = (localizedMessage || '').toLowerCase();
           const hasErrorKeyword = errorKeywords.some(kw =>
             resultStr.includes(kw) || messageStr.includes(kw)
           );
 
           const isError = stop_reason && stop_reason !== 'end_turn' && stop_reason !== 'max_tokens';
-          const hasErrorMessage = hasErrorKeyword && (result || message);
+          const hasErrorMessage = hasErrorKeyword && (localizedResult || localizedMessage);
 
           if (isError || hasErrorMessage) {
             return (
@@ -570,7 +577,7 @@ const AssistantMessageRenderer: React.FC<{
                 toolId={`system-error-${idx}`}
                 status="error"
                 input={{
-                  error: message || result || `任務因以下原因終止：${stop_reason}`,
+                  error: localizedMessage || localizedResult || t('workspace.chat.errors.systemCompleteFallback', { reason: stop_reason }),
                   code: stop_reason || 'task_error',
                 }}
                 collapsible={true}
@@ -588,6 +595,7 @@ const AssistantMessageRenderer: React.FC<{
 
           // 如果狀態為 error，顯示錯誤 Widget
           if (status === 'error') {
+            const localizedStatusMessage = isI18nKey(statusMessage) ? t(statusMessage) : statusMessage;
             return (
               <ClaudeToolWidget
                 key={idx}
@@ -595,7 +603,7 @@ const AssistantMessageRenderer: React.FC<{
                 toolId={`system-error-${idx}`}
                 status="error"
                 input={{
-                  error: statusMessage || '發生錯誤',
+                  error: localizedStatusMessage || t('workspace.chat.errors.executionFailed'),
                   code: 'system_error',
                 }}
                 collapsible={true}

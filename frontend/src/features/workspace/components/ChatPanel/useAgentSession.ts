@@ -10,6 +10,7 @@ import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useAgentSession');
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useI18n } from '@/shared/hooks/useI18n';
 import { useAgentSessionStore } from './agentSessionStore';
 import { getEventDispatcher } from './agentSessionEvents';
 import { agentApi } from './agentSessionApi';
@@ -46,6 +47,18 @@ type StreamingSnapshot = {
   content: string;
   thinkingContent?: string;
 };
+
+const resolveChatErrorKey = (code?: string): string => {
+  switch (code) {
+    case 'AUTHENTICATION_FAILED':
+      return 'workspace.chat.errors.authenticationFailed';
+    default:
+      return 'workspace.chat.errors.executionFailed';
+  }
+};
+
+const isI18nKey = (value?: string): boolean =>
+  typeof value === 'string' && value.startsWith('workspace.');
 
 export const hasRestorableSnapshotContent = (snapshot: StreamingSnapshot | null): boolean => {
   if (!snapshot) return false;
@@ -276,6 +289,7 @@ const clearStreamingSnapshot = (sessionId: string) => {
 export function useAgentSession(options: UseAgentSessionOptions) {
   const { runtimeBaseUrl, workspaceId, cliType, autoConnect = true, gitContextId } = options;
   const { state, store } = useAgentSessionStore();
+  const { t } = useI18n();
   const { getAccessToken } = useAuth();
   const workspaceDefaultTool = resolveAgenticToolFromCliType(cliType);
   const restoredStreamingRef = useRef<string | null>(null);
@@ -286,8 +300,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const pendingThinkingResumeRef = useRef(false);
   // 追蹤已停止的任務 ID，用於忽略後續的 streaming 訊息
   const stoppedTaskIdsRef = useRef<Set<string>>(new Set());
-  // 追蹤已顯示錯誤的任務 ID，避免 task:failed 和 streaming:error 重複顯示
-  const failedTaskIdsRef = useRef<Set<string>>(new Set());
   // 追蹤 sessionStorage 配額是否已經用盡，避免重複嘗試儲存
   const sessionStorageQuotaExceededRef = useRef(false);
   const latestWsSeqRef = useRef(0);
@@ -817,7 +829,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           stoppedTaskIdsRef.current.delete(taskId);
         }, 1000);
       },
-      onTaskFailed: (sessionId, taskId, errorMsg) => {
+      onTaskFailed: (sessionId, taskId, errorMsg, code) => {
         if (sessionId !== currentSessionIdRef.current) return;
 
         // 記錄任務失敗事件（這是重要的錯誤事件）
@@ -831,29 +843,12 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           isThinking: currentState.isThinking
         });
 
-        const displayError = errorMsg || 'Task failed unexpectedly. Please try again.';
+        const displayError = isI18nKey(errorMsg)
+          ? t(errorMsg)
+          : t(resolveChatErrorKey(code));
 
         // 記錄任務錯誤到 store
         store.setTaskError(taskId, displayError);
-
-        // 將錯誤訊息插入聊天流（避免與 streaming:error 重複）
-        if (!failedTaskIdsRef.current.has(taskId)) {
-          failedTaskIdsRef.current.add(taskId);
-          store.addMessage({
-            message_id: `error-${taskId}-${Date.now()}`,
-            session_id: sessionId,
-            task_id: taskId,
-            created_at: new Date().toISOString(),
-            index: currentState.messages.length,
-            type: 'assistant',
-            role: 'assistant',
-            content_blocks: [{
-              type: 'system_complete',
-              stop_reason: 'error',
-              message: displayError,
-            } as any],
-          });
-        }
 
         // 任務失敗時也要清除 streaming 狀態
         store.endStreaming();
@@ -909,25 +904,10 @@ export function useAgentSession(options: UseAgentSessionOptions) {
 
         logger.error('Streaming error', { sessionId, taskId, error, code });
 
-        // 將 streaming 錯誤插入聊天流（避免與 task:failed 重複）
-        if (!failedTaskIdsRef.current.has(taskId)) {
-          failedTaskIdsRef.current.add(taskId);
-          const currentState = store.getSnapshot();
-          store.addMessage({
-            message_id: `streaming-error-${taskId}-${Date.now()}`,
-            session_id: sessionId,
-            task_id: taskId,
-            created_at: new Date().toISOString(),
-            index: currentState.messages.length,
-            type: 'assistant',
-            role: 'assistant',
-            content_blocks: [{
-              type: 'system_complete',
-              stop_reason: code || 'error',
-              message: error,
-            } as any],
-          });
-        }
+        const displayError = isI18nKey(error)
+          ? t(error)
+          : t(resolveChatErrorKey(code));
+        store.setTaskError(taskId, displayError);
 
         store.endStreaming();
         store.endThinking();
@@ -938,7 +918,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     return () => {
       unsubscribe();
     };
-  }, [refresh, store]);
+  }, [refresh, store, t]);
 
   // 切換 Session 時重置暫態狀態，避免跨 Session 汙染。
   useEffect(() => {
@@ -951,7 +931,6 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     store.setPendingUserInput(null);
     store.clearQueue();
     stoppedTaskIdsRef.current.clear();
-    failedTaskIdsRef.current.clear();
     restoredStreamingRef.current = null;
     restoredStreamingPrefixRef.current = null;
     restoredThinkingPrefixRef.current = null;

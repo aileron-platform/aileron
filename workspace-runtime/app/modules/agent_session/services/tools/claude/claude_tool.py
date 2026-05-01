@@ -43,6 +43,7 @@ from app.modules.agent_session.services.tools.base.types import (
     TaskResult,
     ThinkingCompleteEvent,
     ThinkingPartialEvent,
+    ToolAuthenticationError,
     ToolCapabilities,
     ToolType,
     TokenUsage,
@@ -74,6 +75,26 @@ def _build_message_dict(msg_entity) -> Dict[str, Any]:
         "metadata": msg_entity.metadata,
         "created_at": msg_entity.created_at.isoformat() if msg_entity.created_at else None,
     }
+
+
+def _is_authentication_retry_event(content: list[dict[str, Any]]) -> bool:
+    """Detect provider authentication failures reported as SDK retry system events."""
+    for block in content:
+        if block.get("type") != "system" or block.get("subtype") != "api_retry":
+            continue
+        data = block.get("data")
+        if not isinstance(data, dict):
+            continue
+        if data.get("error_status") == 401:
+            return True
+        error = data.get("error")
+        if isinstance(error, str) and error.lower() in {
+            "authentication_failed",
+            "invalid_api_key",
+            "unauthorized",
+        }:
+            return True
+    return False
 
 
 class ClaudeTool(ITool):
@@ -202,6 +223,7 @@ class ClaudeTool(ITool):
         duration_ms: Optional[int] = None
         raw_sdk_response: Optional[dict] = None
         was_stopped = False
+        saw_authentication_failure = False
 
         # Set up permission callback (based on Claude SDK native permission mode)
         can_use_tool_callback: Optional[CanUseTool] = None
@@ -383,6 +405,9 @@ class ClaudeTool(ITool):
 
             # Handle complete (complete message)
             if isinstance(event, CompleteEvent):
+                if event.role == MessageRole.SYSTEM and _is_authentication_retry_event(event.content):
+                    saw_authentication_failure = True
+
                 # End streaming
                 if current_text_message_id and streaming_callbacks:
                     if streaming_callbacks.on_stream_end:
@@ -393,6 +418,9 @@ class ClaudeTool(ITool):
                     if streaming_callbacks.on_thinking_end:
                         await streaming_callbacks.on_thinking_end(current_thinking_message_id)
                     current_thinking_message_id = None
+
+                if saw_authentication_failure:
+                    break
 
                 # Create message
                 if event.role == MessageRole.ASSISTANT:
@@ -516,6 +544,9 @@ class ClaudeTool(ITool):
         # Cleanup SDK client and process (fix process leak)
         # Must be called outside generator to avoid anyio context issues
         await self.prompt_service.cleanup_client(session_id)
+
+        if saw_authentication_failure and not assistant_message_ids and raw_sdk_response is None:
+            raise ToolAuthenticationError()
 
         # DEBUG: Track execute_task return
         logger.info(

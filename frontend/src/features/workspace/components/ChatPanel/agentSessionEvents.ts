@@ -36,7 +36,7 @@ export interface EventHandlers {
   onTaskRemoved?: (taskId: string) => void;
   onTaskStarted?: (sessionId: string, taskId: string) => void;
   onTaskCompleted?: (sessionId: string, taskId: string) => void;
-  onTaskFailed?: (sessionId: string, taskId: string, error?: string) => void;
+  onTaskFailed?: (sessionId: string, taskId: string, error?: string, code?: string) => void;
   onTaskStopAck?: (sessionId: string, taskId: string) => void;
   onTaskStopped?: (sessionId: string, taskId: string) => void;
 
@@ -245,8 +245,8 @@ export class AgentSessionEventDispatcher {
         logger.debug('Task failed', { session_id, task_id, data });
         this.emit('onTaskPatched', data as unknown as Partial<AgentTask> & { task_id: string });
         if (session_id && task_id) {
-          const errorMsg = (data as { error_message?: string }).error_message;
-          this.emit('onTaskFailed', session_id, task_id, errorMsg);
+          const failedData = data as { error_message?: string; error_code?: string };
+          this.emit('onTaskFailed', session_id, task_id, failedData.error_message, failedData.error_code);
         }
         break;
       case 'task:stop_ack':

@@ -23,6 +23,12 @@ vi.mock('@/features/auth/hooks/useAuth', () => ({
   }),
 }));
 
+vi.mock('@/shared/hooks/useI18n', () => ({
+  useI18n: () => ({
+    t: (key: string) => key,
+  }),
+}));
+
 vi.mock('./agentSessionEvents', () => ({
   getEventDispatcher: () => ({
     subscribe: vi.fn(() => vi.fn()),

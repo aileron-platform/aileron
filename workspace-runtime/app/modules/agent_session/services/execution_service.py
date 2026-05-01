@@ -13,18 +13,19 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_scope
-from app.modules.agent_session.domain.enums import PermissionMode, TaskStatus
+from app.modules.agent_session.domain.enums import MessageRole, MessageType, PermissionMode, TaskStatus
 from app.modules.agent_session.repositories.message_repository import MessageRepository
 from app.modules.agent_session.repositories.agent_session_repository import AgentSessionRepository
 from app.modules.agent_session.repositories.task_repository import TaskRepository
 from app.modules.agent_session.services.message_service import MessageService
 from app.modules.agent_session.services.agent_session_service import AgentSessionService
 from app.modules.agent_session.services.task_service import TaskService, TaskServiceError
+from app.modules.agent_session.schemas.message import MessageCreate, MessageResponse
 from app.modules.agent_session.services.tools.base.streaming_callbacks import (
     StreamingCallbacks,
 )
 from app.modules.agent_session.services.tools.base.tool_interface import ITool
-from app.modules.agent_session.services.tools.base.types import TaskResult
+from app.modules.agent_session.services.tools.base.types import TaskResult, ToolExecutionError
 from app.modules.agent_session.services.tools.claude.claude_tool import ClaudeTool
 from app.modules.agent_session.services.tools.claude.tool_manager import get_claude_tool_manager
 from app.modules.agent_session.services.tools.acp.tool_manager import get_acp_tool_manager
@@ -320,6 +321,59 @@ class ExecutionService:
 
         # Track active executions
         self._active_executions: dict[str, asyncio.Task] = {}
+
+    @staticmethod
+    def _execution_error_code(error: Exception) -> str:
+        """Return a stable error code for task failure events."""
+        if isinstance(error, ToolExecutionError):
+            return error.error_code
+        return type(error).__name__
+
+    @staticmethod
+    def _execution_error_message(error: Exception) -> str:
+        """Return a client-resolvable message key when available."""
+        if isinstance(error, ToolExecutionError):
+            return error.message_key
+        return str(error)
+
+    async def _persist_error_message(
+        self,
+        session_id: str,
+        task_id: str,
+        error_message: str,
+        error_code: str,
+    ) -> None:
+        """Persist and emit a task error message so the UI survives refreshes."""
+        async with async_session_scope() as db:
+            message_service = MessageService(db)
+            message = await message_service.create_message(
+                MessageCreate(
+                    session_id=session_id,
+                    task_id=task_id,
+                    type=MessageType.ASSISTANT,
+                    role=MessageRole.ASSISTANT,
+                    content=[
+                        {
+                            "type": "system_complete",
+                            "stop_reason": error_code,
+                            "message": error_message,
+                            "metadata": {"error_code": error_code},
+                        }
+                    ],
+                    metadata={
+                        "source": "runtime",
+                        "error_code": error_code,
+                    },
+                )
+            )
+            payload = MessageResponse.from_entity(message).model_dump(mode="json")
+
+        await self.emitter.emit_message_created(
+            session_id=session_id,
+            message_id=message.id,
+            data=payload,
+            task_id=task_id,
+        )
     
     def get_tool(self, tool_type: str) -> ITool:
         """
@@ -704,13 +758,25 @@ class ExecutionService:
 
         except Exception as e:
             logger.error(f"Error executing prompt: {e}", exc_info=True)
+            error_message = self._execution_error_message(e)
+            error_code = self._execution_error_code(e)
+            try:
+                await self._persist_error_message(
+                    session_id=session_id,
+                    task_id=task_id,
+                    error_message=error_message,
+                    error_code=error_code,
+                )
+            except Exception:
+                logger.exception("Failed to persist task error message")
+
             # In exception case, use new session to update task status
             try:
                 async with async_session_scope() as db:
                     task_service = TaskService(db)
                     await task_service.fail_task(
                         task_id,
-                        error_message=str(e),
+                        error_message=error_message,
                     )
             except TaskServiceError:
                 logger.warning(
@@ -723,16 +789,16 @@ class ExecutionService:
             await self.emitter.emit_task_failed(
                 session_id=session_id,
                 task_id=task_id,
-                error_message=str(e),
-                error_code=type(e).__name__,
+                error_message=error_message,
+                error_code=error_code,
             )
 
             # Emit streaming:error event (if streaming is in progress)
             await self.emitter.emit_streaming_error(
                 session_id=session_id,
                 task_id=task_id,
-                error=str(e),
-                code=type(e).__name__,
+                error=error_message,
+                code=error_code,
             )
 
             # Publish Redis failure event (if automation_execution_id exists)
@@ -742,7 +808,7 @@ class ExecutionService:
                     session_id=session_id,
                     status="failed",
                     has_error=True,
-                    error_message=str(e),
+                    error_message=error_message,
                 )
         finally:
             # Clean up SDK client and process (ensure cleanup even in exception cases)

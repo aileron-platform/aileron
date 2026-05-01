@@ -20,6 +20,25 @@ class ToolType(str, Enum):
     OPENCODE = "opencode"
 
 
+class ToolExecutionError(Exception):
+    """Tool execution error with a stable client-facing code."""
+
+    error_code = "TOOL_EXECUTION_FAILED"
+    message_key = "workspace.chat.errors.executionFailed"
+
+    def __init__(self, message_key: str | None = None, *, error_code: str | None = None) -> None:
+        self.message_key = message_key or self.message_key
+        self.error_code = error_code or self.error_code
+        super().__init__(self.message_key)
+
+
+class ToolAuthenticationError(ToolExecutionError):
+    """Tool authentication failure."""
+
+    error_code = "AUTHENTICATION_FAILED"
+    message_key = "workspace.chat.errors.authenticationFailed"
+
+
 @dataclass
 class ToolCapabilities:
     """Tool capability flags."""
@@ -184,4 +203,3 @@ ProcessedEvent = Union[
     ToolStartEvent,
     ToolCompleteEvent,
 ]
-

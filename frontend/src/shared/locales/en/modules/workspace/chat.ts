@@ -300,6 +300,11 @@ const chat = {
     loadingMore: 'Loading older messages...',
     viewResult: 'View Result',
   },
+  errors: {
+    authenticationFailed: 'AI provider authentication failed. Please check the API credentials and try again.',
+    executionFailed: 'The assistant could not complete this request. Please try again.',
+    systemCompleteFallback: 'The task stopped: {{reason}}',
+  },
   queue: {
     title: 'Queued Messages ({{count}}/{{max}})',
     emptyMessage: '(empty message)',

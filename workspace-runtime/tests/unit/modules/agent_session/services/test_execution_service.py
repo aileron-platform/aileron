@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from app.modules.agent_session.domain.enums import AgenticTool
+from app.modules.agent_session.domain.enums import AgenticTool, MessageRole, MessageType
 from app.modules.agent_session.services.execution_service import (
     ExecutionService,
     ExecutionServiceError,
     WebSocketStreamingCallbacks,
 )
+from app.modules.agent_session.services.tools.base.types import ToolAuthenticationError
 from app.modules.agent_session.services.task_service import TaskService
 from app.modules.agent_session.websocket.events import EventType
 
@@ -358,6 +360,24 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
     message_service = AsyncMock()
     message_repo = AsyncMock()
     session_repo = AsyncMock()
+    message_service.create_message.side_effect = lambda data: SimpleNamespace(
+        id=f"error-message-{data.task_id}",
+        created_at=datetime(2026, 5, 1, tzinfo=UTC),
+        session_id=data.session_id,
+        task_id=data.task_id,
+        type=MessageType.ASSISTANT,
+        role=MessageRole.ASSISTANT,
+        index=1,
+        timestamp=None,
+        content_preview=None,
+        parent_tool_use_id=None,
+        status=None,
+        queue_position=None,
+        content=data.content,
+        tool_uses=[],
+        metadata=data.metadata,
+        get_content_preview=lambda: "",
+    )
 
     @asynccontextmanager
     async def fake_scope():
@@ -459,6 +479,47 @@ async def test_execute_in_background_success_stopped_and_failure(monkeypatch: py
     task_service.fail_task.assert_awaited_once_with("task-3", error_message="boom")
     service.emitter.emit_task_failed.assert_awaited_once()
     service.emitter.emit_streaming_error.assert_awaited_once()
+    service.emitter.emit_message_created.assert_awaited()
+
+    task_service.fail_task.reset_mock()
+    service.emitter.emit_message_created.reset_mock()
+    service.emitter.emit_task_failed.reset_mock()
+    service.emitter.emit_streaming_error.reset_mock()
+    service._active_executions = {"task-4": Mock()}
+    cleanup_tool.execute_task = AsyncMock(side_effect=ToolAuthenticationError())
+    await ExecutionService._execute_in_background(
+        service,
+        session_id="session-4",
+        prompt="auth fail",
+        task_id="task-4",
+        stream=True,
+        tool_type="claude-code",
+        automation_execution_id="exec-4",
+    )
+    task_service.fail_task.assert_awaited_once_with(
+        "task-4",
+        error_message="workspace.chat.errors.authenticationFailed",
+    )
+    service.emitter.emit_message_created.assert_awaited_once()
+    created_payload = service.emitter.emit_message_created.await_args.kwargs["data"]
+    assert created_payload["content_blocks"] == [{
+        "type": "system_complete",
+        "stop_reason": "AUTHENTICATION_FAILED",
+        "message": "workspace.chat.errors.authenticationFailed",
+        "metadata": {"error_code": "AUTHENTICATION_FAILED"},
+    }]
+    service.emitter.emit_task_failed.assert_awaited_once_with(
+        session_id="session-4",
+        task_id="task-4",
+        error_message="workspace.chat.errors.authenticationFailed",
+        error_code="AUTHENTICATION_FAILED",
+    )
+    service.emitter.emit_streaming_error.assert_awaited_once_with(
+        session_id="session-4",
+        task_id="task-4",
+        error="workspace.chat.errors.authenticationFailed",
+        code="AUTHENTICATION_FAILED",
+    )
 
 
 @pytest.mark.asyncio

@@ -31,4 +31,32 @@ describe('AgentSessionEventDispatcher', () => {
       }),
     );
   });
+
+  it('dispatches task failure code with error message', () => {
+    const dispatcher = new AgentSessionEventDispatcher();
+    const onTaskFailed = vi.fn();
+
+    dispatcher.subscribe({ onTaskFailed });
+
+    dispatcher.dispatch({
+      type: 'task:failed',
+      session_id: 'session-1',
+      task_id: 'task-1',
+      timestamp: '2026-05-01T00:00:00.000Z',
+      data: {
+        session_id: 'session-1',
+        task_id: 'task-1',
+        status: 'failed',
+        error_message: 'workspace.chat.errors.authenticationFailed',
+        error_code: 'AUTHENTICATION_FAILED',
+      },
+    });
+
+    expect(onTaskFailed).toHaveBeenCalledWith(
+      'session-1',
+      'task-1',
+      'workspace.chat.errors.authenticationFailed',
+      'AUTHENTICATION_FAILED',
+    );
+  });
 });

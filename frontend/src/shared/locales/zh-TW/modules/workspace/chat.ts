@@ -300,6 +300,11 @@ const chat = {
     loadingMore: '載入更舊的訊息...',
     viewResult: '查看結果',
   },
+  errors: {
+    authenticationFailed: 'AI 供應商認證失敗，請檢查 API 認證資訊後再試一次。',
+    executionFailed: '助理無法完成這次請求，請稍後再試。',
+    systemCompleteFallback: '任務已停止：{{reason}}',
+  },
   queue: {
     title: '排隊中的訊息 ({{count}}/{{max}})',
     emptyMessage: '(空白訊息)',
