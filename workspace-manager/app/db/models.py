@@ -354,6 +354,7 @@ class KnowledgeBase(Base):
     git_lfs_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     git_default_branch: Mapped[str] = mapped_column(String(255), nullable=False, default="main")
     git_last_commit_sha: Mapped[Optional[str]] = mapped_column(String(64))
+    template_id: Mapped[str] = mapped_column(String(64), nullable=False, default="general")
     wiki_initialized_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_indexed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_index_status: Mapped[Optional[str]] = mapped_column(String(32))

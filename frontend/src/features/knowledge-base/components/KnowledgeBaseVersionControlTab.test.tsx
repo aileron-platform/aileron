@@ -362,7 +362,7 @@ describe('KnowledgeBaseVersionControlTab', () => {
     });
   });
 
-  it('uses shared dialogs for branch and remote workflows without sidebar recovery controls', async () => {
+  it('uses shared remote workflow without sidebar branch or recovery controls', async () => {
     const user = userEvent.setup();
     apiMocks.getKnowledgeBaseGitRepositoryStatus.mockResolvedValue({
       isGitRepo: true,
@@ -377,20 +377,16 @@ describe('KnowledgeBaseVersionControlTab', () => {
 
     render(<KnowledgeBaseVersionControlTab knowledgeBaseId="kb-1" accessRole="owner" versionControlEnabled />);
 
-    await user.click(await screen.findByRole('button', { name: 'create branch' }));
-    await user.click(screen.getByRole('button', { name: 'confirm branch' }));
-
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'create branch' })).not.toBeInTheDocument();
+    });
     await user.click(screen.getByRole('button', { name: 'remoteSettings' }));
     await user.click(screen.getByRole('button', { name: 'save remote' }));
 
     await waitFor(() => {
-      expect(apiMocks.checkoutBranch).toHaveBeenCalledWith('kb-1', 'feature/wiki', {
-        create: true,
-        startPoint: 'main',
-        stashChanges: true,
-      });
       expect(apiMocks.setRemoteUrl).toHaveBeenCalledWith('kb-1', 'git@example.com:team/wiki.git');
     });
+    expect(apiMocks.checkoutBranch).not.toHaveBeenCalled();
     expect(screen.queryByText('復原操作')).not.toBeInTheDocument();
     expect(screen.queryByText('ahead 0 / behind 0')).not.toBeInTheDocument();
     expect(apiMocks.revert).not.toHaveBeenCalled();

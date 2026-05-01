@@ -6,10 +6,11 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from git import Repo
 
 from app.core.file_management import InvalidPathException
 from app.db import models as db_models
-from app.services.knowledge_base_ingest_service import KnowledgeBaseIngestService
+from app.services.knowledge_base_ingest_service import KnowledgeBaseIngestService, git_blob_sha
 
 
 @pytest.fixture
@@ -113,46 +114,10 @@ def test_create_job_skips_unchanged_source_after_successful_ingest(ingest_servic
 
 
 @pytest.mark.unit
-def test_build_analysis_prompt_uses_normalized_source_when_available(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "raw text")
-    normalized = ingest_service.storage_root / kb.id / "normalized/text/research.md"
-    normalized.parent.mkdir(parents=True, exist_ok=True)
-    normalized.write_text("normalized text", encoding="utf-8")
-    cache = {
-        "raw/uploads/research.md": {
-            "sourceHash": "hash",
-            "normalizedTextPath": "/normalized/text/research.md",
-        }
-    }
-    cache_path = ingest_service.storage_root / kb.id / ".aileron-kb/ingest-cache.json"
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(json.dumps(cache), encoding="utf-8")
-    ingest_service.wiki_service.storage_root = ingest_service.storage_root
-    ingest_service.wiki_service.initialize(kb)
-
-    prompt = ingest_service.build_analysis_prompt(
-        kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
-    )
-
-    assert "## File: /raw/uploads/research.md" in prompt
-    assert "normalized text" in prompt
-    assert "raw text" not in prompt
-    assert "purpose.md" in prompt
-    assert "schema.md" in prompt
-
-
-@pytest.mark.unit
-def test_generation_prompt_requests_structured_file_blocks(ingest_service):
-    prompt = ingest_service.build_generation_prompt(
-        analysis="Create source summary.",
-        source_paths=["/raw/uploads/research.md"],
-    )
-
-    assert "\"files\"" in prompt
-    assert "\"path\"" in prompt
-    assert "Only write under wiki/ or reports/ingest/" in prompt
-    assert "/raw/uploads/research.md" in prompt
+def test_build_skill_invocation_prompt(ingest_service):
+    prompt = ingest_service.build_skill_invocation_prompt(mount_alias="my-kb")
+    assert "kb-wiki-index" in prompt
+    assert "my-kb" in prompt
 
 
 @pytest.mark.unit
@@ -220,26 +185,69 @@ def test_apply_generation_output_writes_updates_source_summary_and_status(ingest
     assert len(source_summaries) == 1
     assert "/raw/uploads/research.md" in source_summaries[0].read_text(encoding="utf-8")
     cache = json.loads((ingest_service.storage_root / kb.id / ".aileron-kb/ingest-cache.json").read_text(encoding="utf-8"))
-    assert cache["raw/uploads/research.md"]["lastIngestedAt"]
+    assert cache["raw/uploads/research.md"]["ingestedAt"]
+    assert set(cache["raw/uploads/research.md"]) == {"sourceHash", "ingestedAt", "generatedFiles"}
     assert kb.last_index_status == "success"
     assert kb.last_index_error is None
+
+
+@pytest.mark.unit
+def test_git_blob_sha_matches_git_hash_object(ingest_service, kb):
+    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    root = ingest_service.storage_root / kb.id
+    repo = Repo.init(root, initial_branch="main")
+
+    assert git_blob_sha(root / "raw/uploads/research.md") == repo.git.hash_object("raw/uploads/research.md")
+
+
+@pytest.mark.unit
+def test_discover_candidates_uses_three_cache_rules(ingest_service, kb):
+    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    generated = ingest_service.storage_root / kb.id / "wiki/generated.md"
+    generated.parent.mkdir(parents=True, exist_ok=True)
+    generated.write_text("# Generated\n", encoding="utf-8")
+    cache_path = ingest_service.storage_root / kb.id / ".aileron-kb/ingest-cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
+        json.dumps(
+            {
+                "raw/uploads/research.md": {
+                    "sourceHash": ingest_service._hash_file(ingest_service.storage_root / kb.id / "raw/uploads/research.md"),
+                    "ingestedAt": "2026-05-01T00:00:00+00:00",
+                    "generatedFiles": ["wiki/generated.md"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    assert candidates[0].skipped is True
+
+    generated.unlink()
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    assert candidates[0].skipped is False
+
+    generated.write_text("# Generated\n", encoding="utf-8")
+    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source changed\n")
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    assert candidates[0].skipped is False
 
 
 @pytest.mark.unit
 def test_apply_generation_output_commits_changed_files_when_git_enabled(ingest_service, kb):
     kb.version_control_enabled = True
     _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    root = ingest_service.storage_root / kb.id
+    repo = Repo.init(root, initial_branch="main")
+    (root / ".gitignore").write_text(".aileron-kb/\n", encoding="utf-8")
+    repo.git.add("--all")
+    repo.index.commit("Initialize knowledge base")
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
         source_paths=["/raw/uploads/research.md"],
     )
-    ingest_service.git_service = MagicMock()
-    ingest_service.git_service.commit.return_value = type(
-        "CommitResponse",
-        (),
-        {"commit": type("Commit", (), {"id": "abc1234"})()},
-    )()
     output = json.dumps(
         {
             "files": [
@@ -259,18 +267,53 @@ def test_apply_generation_output_commits_changed_files_when_git_enabled(ingest_s
         source_paths=job.source_paths,
     )
 
-    ingest_service.git_service.commit.assert_called_once()
-    call_kwargs = ingest_service.git_service.commit.call_args.kwargs
-    assert call_kwargs["user_id"] == "owner-1"
-    assert call_kwargs["kb_id"] == kb.id
-    assert call_kwargs["message"] == "Update knowledge base wiki index"
-    assert "wiki/index.md" in call_kwargs["paths"]
-    assert all(not path.startswith("/") for path in call_kwargs["paths"])
+    repo = Repo(root)
+    assert completed.commit_id == repo.head.commit.hexsha
+    assert repo.git.status("--porcelain") == ""
+    assert repo.head.commit.message.startswith("ingest: 1 source")
+    assert repo.head.commit.author.name == "KB Wiki Index"
+    assert repo.head.commit.author.email == "wiki-index@aileron.local"
     assert completed.version_control_enabled is True
-    assert completed.commit_id == "abc1234"
     queue = json.loads((ingest_service.storage_root / kb.id / ".aileron-kb/ingest-queue.json").read_text(encoding="utf-8"))
     assert queue[0]["versionControlEnabled"] is True
-    assert queue[0]["commitId"] == "abc1234"
+    assert queue[0]["commitId"] == completed.commit_id
+
+
+@pytest.mark.unit
+def test_apply_generation_output_rolls_back_writes_on_commit_failure(ingest_service, kb):
+    kb.version_control_enabled = True
+    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    job = ingest_service.create_job(
+        user_id="owner-1",
+        kb_id=kb.id,
+        source_paths=["/raw/uploads/research.md"],
+    )
+    original_index = (ingest_service.storage_root / kb.id / "wiki/index.md").read_text(encoding="utf-8")
+    output = json.dumps(
+        {
+            "files": [
+                {
+                    "path": "wiki/index.md",
+                    "content": "---\ntitle: Index\ntype: overview\nsources: []\n---\n\n# Index\nUpdated\n",
+                }
+            ]
+        }
+    )
+
+    with pytest.raises(ValueError, match="GIT_REPO_NOT_FOUND"):
+        ingest_service.apply_generation_output(
+            user_id="owner-1",
+            kb_id=kb.id,
+            job_id=job.id,
+            output=output,
+            source_paths=job.source_paths,
+        )
+
+    assert (ingest_service.storage_root / kb.id / "wiki/index.md").read_text(encoding="utf-8") == original_index
+    cache = json.loads((ingest_service.storage_root / kb.id / ".aileron-kb/ingest-cache.json").read_text(encoding="utf-8"))
+    assert cache == {}
+    failed = ingest_service.get_job(user_id="owner-1", kb_id=kb.id, job_id=job.id)
+    assert failed.status == "failed"
 
 
 @pytest.mark.unit

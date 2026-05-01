@@ -1,0 +1,9 @@
+id: business
+name_key: knowledgeBase.template.business.name
+description_key: knowledgeBase.template.business.description
+icon: Briefcase
+extra_dirs:
+  - wiki/decisions
+  - wiki/projects
+  - wiki/meetings
+  - wiki/stakeholders

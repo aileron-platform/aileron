@@ -175,7 +175,9 @@ def test_get_tree_lazily_initializes_team_wiki_layout(file_service, kb):
     assert (root / "wiki/index.md").is_file()
     assert (root / "raw/sources").is_dir()
     assert kb.wiki_initialized_at is not None
-    assert {node.name for node in tree.nodes} >= {"raw", "normalized", "wiki", "reports", "AGENTS.md"}
+    assert {node.name for node in tree.nodes} >= {"raw", "wiki", "AGENTS.md"}
+    assert "normalized" not in {node.name for node in tree.nodes}
+    assert "reports" not in {node.name for node in tree.nodes}
 
 
 @pytest.mark.unit

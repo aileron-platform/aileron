@@ -26,6 +26,7 @@ export const ROUTES = {
   KNOWLEDGE_BASES: '/knowledge-bases',
   KNOWLEDGE_BASE_DETAIL: (id: string) => `/knowledge-bases/${id}`,
   KNOWLEDGE_BASE_DETAIL_FILES: (id: string) => `/knowledge-bases/${id}/files`,
+  KNOWLEDGE_BASE_DETAIL_WIKI: (id: string) => `/knowledge-bases/${id}/wiki`,
   KNOWLEDGE_BASE_DETAIL_GRAPH: (id: string) => `/knowledge-bases/${id}/graph`,
   KNOWLEDGE_BASE_DETAIL_VERSION_CONTROL: (id: string) => `/knowledge-bases/${id}/version-control`,
   KNOWLEDGE_BASE_DETAIL_SCHEDULES: (id: string) => `/knowledge-bases/${id}/schedules`,

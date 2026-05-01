@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileDiff, GitBranch, History, Loader2, ShieldCheck } from 'lucide-react';
+import { FileDiff, GitBranch, History, Info, Loader2, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Button } from '@/shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -455,8 +455,16 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
     },
   ];
 
+  const singleBranchHint = (
+    <div className="flex items-start gap-2 border-b bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      <span>{t('knowledgeBase.versionControl.singleBranchHint')}</span>
+    </div>
+  );
+
   const changesSidebar = (
     <VersionControlChangesSidebar
+      contextSlot={singleBranchHint}
       branches={branches}
       currentBranch={activeBranch}
       actions={actionItems}
@@ -467,8 +475,13 @@ export const KnowledgeBaseVersionControlTab: React.FC<KnowledgeBaseVersionContro
       selectedStagedPaths={fileSelection.selectedStagedPaths}
       selectedUnstagedPaths={fileSelection.selectedUnstagedPaths}
       isMutating={isMutating}
-      onBranchChange={handleCheckout}
-      onCreateBranch={canWriteGit(accessRole) ? () => setCreateBranchOpen(true) : undefined}
+      onBranchChange={() => {
+        toast({
+          title: t('knowledgeBase.versionControl.singleBranchHint'),
+          variant: 'default',
+        });
+      }}
+      onCreateBranch={undefined}
       onCommit={handleCommit}
       onFileSelect={handleFileSelect}
       onStageToggle={handleStageToggle}

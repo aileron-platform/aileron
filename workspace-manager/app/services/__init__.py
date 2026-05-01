@@ -29,8 +29,10 @@ from .knowledge_base_graph_service import KnowledgeBaseGraphService
 from .knowledge_base_ingest_service import KnowledgeBaseIngestService
 from .knowledge_base_lint_service import KnowledgeBaseLintService
 from .knowledge_base_maintenance_service import KnowledgeBaseMaintenanceService
+from .knowledge_base_review_item_service import KnowledgeBaseReviewItemService
 from .knowledge_base_query_service import KnowledgeBaseQueryService
 from .knowledge_base_source_service import KnowledgeBaseSourceService
+from .knowledge_base_wiki_browse_service import KnowledgeBaseWikiBrowseService
 from .workspace_service import WorkspaceService
 from .workspace_setup_service import WorkspaceSetupService
 from .workspace_lifecycle_service import WorkspaceLifecycleService
@@ -125,6 +127,20 @@ def get_knowledge_base_lint_service(
     return KnowledgeBaseLintService(db)
 
 
+def get_knowledge_base_review_item_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseReviewItemService:
+    """Get knowledge base review item service"""
+    return KnowledgeBaseReviewItemService(db)
+
+
+def get_knowledge_base_wiki_browse_service(
+    db: Session = Depends(get_db),
+) -> KnowledgeBaseWikiBrowseService:
+    """Get knowledge base wiki browse service"""
+    return KnowledgeBaseWikiBrowseService(db)
+
+
 def get_knowledge_base_maintenance_service(
     db: Session = Depends(get_db),
 ) -> KnowledgeBaseMaintenanceService:
@@ -183,6 +199,9 @@ __all__ = [
     "get_knowledge_base_graph_service",
     "get_knowledge_base_ingest_service",
     "get_knowledge_base_lint_service",
+    "get_knowledge_base_review_item_service",
+    "KnowledgeBaseReviewItemService",
+    "get_knowledge_base_wiki_browse_service",
     "get_knowledge_base_query_service",
     "get_knowledge_base_source_service",
     "get_knowledge_base_maintenance_service",

@@ -9,6 +9,7 @@ export interface KnowledgeBaseSummary {
   ownerId: string;
   currentSizeBytes: number;
   quotaBytes?: number | null;
+  templateId?: string;
   versionControlEnabled?: boolean;
   gitLfsEnabled?: boolean;
   gitDefaultBranch?: string;
@@ -20,6 +21,36 @@ export interface KnowledgeBaseSummary {
   accessRole: KnowledgeBaseRole;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface KnowledgeBaseTemplateMetadata {
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  icon: string;
+  extraDirs: string[];
+}
+
+export interface KnowledgeBaseTemplateListResponse {
+  items: KnowledgeBaseTemplateMetadata[];
+}
+
+export interface KnowledgeBaseReviewItem {
+  id: string;
+  type: string;
+  pagePath: string;
+  detail: string;
+  context?: string;
+  status: 'open' | 'resolved' | 'dismissed';
+  createdAt?: string | null;
+  resolvedAt?: string | null;
+  resolvedBy?: string | null;
+  queryPage?: string | null;
+}
+
+export interface KnowledgeBaseReviewItemListResponse {
+  items: KnowledgeBaseReviewItem[];
+  counts: Record<string, number>;
 }
 
 export type KnowledgeBaseDetail = KnowledgeBaseSummary;
@@ -95,6 +126,7 @@ export interface KnowledgeBaseCreatePayload {
   slug: string;
   description?: string;
   quotaBytes?: number | null;
+  templateId?: string;
 }
 
 export interface KnowledgeBaseUpdatePayload {
@@ -166,4 +198,68 @@ export interface KnowledgeBaseGraphResponse {
   generatedAt: string;
   nodes: KnowledgeBaseGraphNode[];
   edges: KnowledgeBaseGraphEdge[];
+}
+
+export interface KnowledgeBaseWikiPageSummary {
+  path: string;
+  title: string;
+  type: string;
+  tags: string[];
+  origin?: string | null;
+  description?: string | null;
+}
+
+export interface KnowledgeBaseWikiGroup {
+  type: string;
+  labelKey: string;
+  items: KnowledgeBaseWikiPageSummary[];
+}
+
+export interface KnowledgeBaseWikiPagesResponse {
+  groups: KnowledgeBaseWikiGroup[];
+}
+
+export interface KnowledgeBaseWikiPageRef {
+  slug?: string | null;
+  name?: string | null;
+  path?: string | null;
+  title?: string | null;
+  exists: boolean;
+}
+
+export interface KnowledgeBaseWikiPageResponse {
+  frontmatter: Record<string, unknown>;
+  body: string;
+  resolved: {
+    sources: KnowledgeBaseWikiPageRef[];
+    related: KnowledgeBaseWikiPageRef[];
+  };
+}
+
+export interface KnowledgeBaseLintIssue {
+  issueType: string;
+  severity: 'info' | 'warning' | 'error';
+  path: string;
+  details: Record<string, unknown>;
+}
+
+export interface KnowledgeBaseLintReportResponse {
+  kbId: string;
+  generatedAt: string;
+  issueCounts: Record<string, number>;
+  issues: KnowledgeBaseLintIssue[];
+}
+
+export interface KnowledgeBaseIngestJobResponse {
+  id: string;
+  kbId: string;
+  status: 'queued' | 'running' | 'skipped' | 'success' | 'failed' | 'canceled';
+  sourcePaths: string[];
+  skippedSources: string[];
+  changedFiles: string[];
+  versionControlEnabled: boolean;
+  commitId?: string | null;
+  error?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

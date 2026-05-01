@@ -119,7 +119,17 @@ class KnowledgeBaseService:
         slug: str,
         description: Optional[str] = None,
         quota_bytes: Optional[int] = None,
+        template_id: str = "general",
     ) -> db_models.KnowledgeBase:
+        from app.services.knowledge_base_template_service import KnowledgeBaseTemplateService
+        try:
+            KnowledgeBaseTemplateService().get_template(template_id)
+        except ValueError:
+            raise KnowledgeBaseError(
+                f"Knowledge base template not found: {template_id}",
+                code="KB_TEMPLATE_NOT_FOUND",
+            )
+
         owner = self.db.get(db_models.User, owner_id)
         if not owner:
             raise KnowledgeBaseError(KB_OWNER_NOT_FOUND_MESSAGE, code="KB_OWNER_NOT_FOUND")
@@ -135,6 +145,7 @@ class KnowledgeBaseService:
             description=description,
             current_size_bytes=0,
             quota_bytes=quota_bytes,
+            template_id=template_id,
             version_control_enabled=False,
             git_lfs_enabled=False,
             git_default_branch="main",

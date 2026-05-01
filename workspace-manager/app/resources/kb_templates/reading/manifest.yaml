@@ -1,0 +1,9 @@
+id: reading
+name_key: knowledgeBase.template.reading.name
+description_key: knowledgeBase.template.reading.description
+icon: BookOpen
+extra_dirs:
+  - wiki/characters
+  - wiki/themes
+  - wiki/plot-threads
+  - wiki/chapters

@@ -35,6 +35,7 @@ class KnowledgeBaseSummary(CamelModel):
     git_lfs_enabled: bool = Field(False, alias="gitLfsEnabled")
     git_default_branch: str = Field("main", alias="gitDefaultBranch")
     git_last_commit_sha: Optional[str] = Field(None, alias="gitLastCommitSha")
+    template_id: str = Field("general", alias="templateId")
     wiki_initialized_at: Optional[datetime] = Field(None, alias="wikiInitializedAt")
     last_indexed_at: Optional[datetime] = Field(None, alias="lastIndexedAt")
     last_index_status: Optional[str] = Field(None, alias="lastIndexStatus")
@@ -73,11 +74,24 @@ class KnowledgeBaseDetail(KnowledgeBaseSummary):
     pass
 
 
+class KnowledgeBaseTemplateMetadata(CamelModel):
+    id: str
+    name_key: str = Field(..., alias="nameKey")
+    description_key: str = Field(..., alias="descriptionKey")
+    icon: str
+    extra_dirs: list[str] = Field(default_factory=list, alias="extraDirs")
+
+
+class KnowledgeBaseTemplateListResponse(CamelModel):
+    items: list[KnowledgeBaseTemplateMetadata]
+
+
 class KnowledgeBaseCreateRequest(CamelModel):
     name: str
     slug: str
     description: Optional[str] = None
     quota_bytes: Optional[int] = Field(None, alias="quotaBytes")
+    template_id: str = Field("general", alias="templateId")
 
 
 class KnowledgeBaseUpdateRequest(CamelModel):
@@ -147,24 +161,8 @@ class KnowledgeBaseWebClipImportResponse(CamelModel):
     source_hash: str = Field(..., alias="sourceHash")
 
 
-class KnowledgeBaseSourceNormalizeRequest(CamelModel):
-    source_path: str = Field(..., alias="sourcePath")
-    force: bool = False
-
-
-class KnowledgeBaseSourceNormalizeResponse(CamelModel):
-    source_path: str = Field(..., alias="sourcePath")
-    normalized_text_path: str = Field(..., alias="normalizedTextPath")
-    metadata_path: str = Field(..., alias="metadataPath")
-    source_hash: str = Field(..., alias="sourceHash")
-    normalized_hash: str = Field(..., alias="normalizedHash")
-    skipped: bool
-    extractor: str
-
-
 class KnowledgeBaseSourceUploadResponse(CamelModel):
     source: KnowledgeBaseSourceImportResponse
-    normalization: Optional[KnowledgeBaseSourceNormalizeResponse] = None
 
 
 class KnowledgeBaseIngestJobRequest(CamelModel):
@@ -242,6 +240,44 @@ class KnowledgeBaseGraphResponse(CamelModel):
     report_path: Optional[str] = Field(None, alias="reportPath")
 
 
+class KnowledgeBaseWikiPageSummary(CamelModel):
+    path: str
+    title: str
+    type: str
+    tags: list[str] = Field(default_factory=list)
+    origin: Optional[str] = None
+    description: Optional[str] = None
+
+
+class KnowledgeBaseWikiGroup(CamelModel):
+    type: str
+    label_key: str = Field(..., alias="labelKey")
+    items: list[KnowledgeBaseWikiPageSummary] = Field(default_factory=list)
+
+
+class KnowledgeBaseWikiPagesResponse(CamelModel):
+    groups: list[KnowledgeBaseWikiGroup] = Field(default_factory=list)
+
+
+class KnowledgeBaseWikiPageRef(CamelModel):
+    slug: Optional[str] = None
+    name: Optional[str] = None
+    path: Optional[str] = None
+    title: Optional[str] = None
+    exists: bool = False
+
+
+class KnowledgeBaseWikiPageResolved(CamelModel):
+    sources: list[KnowledgeBaseWikiPageRef] = Field(default_factory=list)
+    related: list[KnowledgeBaseWikiPageRef] = Field(default_factory=list)
+
+
+class KnowledgeBaseWikiPageResponse(CamelModel):
+    frontmatter: dict[str, Any] = Field(default_factory=dict)
+    body: str
+    resolved: KnowledgeBaseWikiPageResolved = Field(default_factory=KnowledgeBaseWikiPageResolved)
+
+
 class KnowledgeBaseQueryCitation(CamelModel):
     path: str
     title: str
@@ -296,11 +332,32 @@ class KnowledgeBaseLintIssue(CamelModel):
 class KnowledgeBaseLintReportResponse(CamelModel):
     kb_id: str = Field(..., alias="kbId")
     generated_at: datetime = Field(..., alias="generatedAt")
-    report_path: str = Field(..., alias="reportPath")
     issue_counts: dict[str, int] = Field(default_factory=dict, alias="issueCounts")
     issues: list[KnowledgeBaseLintIssue] = Field(default_factory=list)
-    commit_id: Optional[str] = Field(None, alias="commitId")
 
 
-class KnowledgeBaseLintReportListResponse(CamelModel):
-    items: list[KnowledgeBaseLintReportResponse]
+class KnowledgeBaseReviewItem(CamelModel):
+    id: str
+    type: str
+    page_path: str = Field(..., alias="pagePath")
+    detail: str
+    context: str = ""
+    status: str = "open"
+    created_at: Optional[str] = Field(None, alias="createdAt")
+    resolved_at: Optional[str] = Field(None, alias="resolvedAt")
+    resolved_by: Optional[str] = Field(None, alias="resolvedBy")
+    query_page: Optional[str] = Field(None, alias="queryPage")
+
+
+class KnowledgeBaseReviewItemListResponse(CamelModel):
+    items: list[KnowledgeBaseReviewItem]
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
+class KnowledgeBaseReviewItemUpdateRequest(CamelModel):
+    status: str
+
+
+class KnowledgeBaseReviewItemConvertRequest(CamelModel):
+    title: str
+    slug: Optional[str] = None

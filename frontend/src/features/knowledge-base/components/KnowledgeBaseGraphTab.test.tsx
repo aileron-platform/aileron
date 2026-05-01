@@ -1,94 +1,31 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { ReactNode } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type React from 'react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeBaseGraphTab } from './KnowledgeBaseGraphTab';
 
-const {
-  getGraphMock,
-  apiGetMock,
-  forceAssignMock,
-  forceInferSettingsMock,
-  loadGraphMock,
-  registerEventsMock,
-  translateMock,
-} = vi.hoisted(() => ({
-  getGraphMock: vi.fn(),
-  apiGetMock: vi.fn(),
-  forceAssignMock: vi.fn(),
-  forceInferSettingsMock: vi.fn(() => ({})),
-  loadGraphMock: vi.fn(),
-  registerEventsMock: vi.fn(),
-  translateMock: vi.fn((key: string, params?: Record<string, string | number>) => {
-    const translations: Record<string, string> = {
-      'knowledgeBase.graph.title': '知識關聯圖',
-      'knowledgeBase.graph.loading': '正在建立關聯圖...',
-      'knowledgeBase.graph.loadFailed': '無法載入關聯圖',
-      'knowledgeBase.graph.emptyTitle': '尚未建立 Wiki 頁面',
-      'knowledgeBase.graph.emptyDescription': '執行 Wiki index 後會產生頁面與關聯。',
-      'knowledgeBase.graph.searchLabel': '搜尋關聯圖節點',
-      'knowledgeBase.graph.searchPlaceholder': '搜尋頁面、路徑或類型...',
-      'knowledgeBase.graph.preview.emptyTitle': '頁面預覽',
-      'knowledgeBase.graph.preview.emptyDescription': '尚未選擇頁面',
-      'knowledgeBase.graph.preview.selectHint': '選取關聯圖節點後，可預覽 Wiki 頁面與關聯原因。',
-      'knowledgeBase.graph.preview.relationships': '相關頁面',
-      'knowledgeBase.graph.preview.loading': '正在載入頁面預覽...',
-      'knowledgeBase.graph.legend.title': '節點類型',
-      'knowledgeBase.graph.actions.zoomIn': '放大',
-      'knowledgeBase.graph.actions.zoomOut': '縮小',
-      'knowledgeBase.graph.actions.fit': '符合畫面',
-      'knowledgeBase.graph.actions.clearSearch': '清除搜尋',
-      'knowledgeBase.graph.actions.closePreview': '關閉預覽',
-      'knowledgeBase.graph.types.entity': '實體',
-      'knowledgeBase.graph.types.concept': '概念',
-      'knowledgeBase.graph.reasons.direct_wikilink': 'Wiki 連結',
-    };
-    if (key === 'knowledgeBase.graph.stats.pages') return `${params?.count} 個頁面`;
-    if (key === 'knowledgeBase.graph.stats.relationships') return `${params?.count} 個關聯`;
-    if (key === 'knowledgeBase.graph.stats.degree') return `${params?.count} 個關聯`;
-    if (key === 'knowledgeBase.graph.stats.sources') return `${params?.count} 個來源`;
-    return translations[key] ?? String(params?.defaultValue ?? key);
-  }),
-}));
+type SigmaEvents = {
+  clickNode?: (event: { node: string }) => void;
+};
 
-vi.mock('@react-sigma/core', () => ({
-  SigmaContainer: ({ children }: { children: ReactNode }) => <div data-testid="sigma-container">{children}</div>,
-  useLoadGraph: () => loadGraphMock,
-  useRegisterEvents: () => registerEventsMock,
-  useSigma: () => ({
-    getCamera: () => ({
-      animatedZoom: vi.fn(),
-      animatedUnzoom: vi.fn(),
-      animatedReset: vi.fn(),
-    }),
-    getContainer: () => ({ style: {} }),
-    getGraph: () => ({
-      neighbors: () => [],
-      forEachNode: vi.fn(),
-      forEachEdge: vi.fn(),
-      setNodeAttribute: vi.fn(),
-      removeNodeAttribute: vi.fn(),
-      setEdgeAttribute: vi.fn(),
-      removeEdgeAttribute: vi.fn(),
-    }),
-    refresh: vi.fn(),
-  }),
+const apiMocks = vi.hoisted(() => ({
+  getKnowledgeBaseGraph: vi.fn(),
 }));
-
-vi.mock('graphology-layout-forceatlas2', () => ({
-  default: {
-    inferSettings: forceInferSettingsMock,
-    assign: forceAssignMock,
-  },
-}));
-
-vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
-  getKnowledgeBaseGraph: getGraphMock,
-}));
-
-vi.mock('@/shared/api/apiClient', () => ({
-  apiClient: {
-    get: apiGetMock,
-  },
+const translateMock = vi.hoisted(() => vi.fn((key: string) => key));
+const sigmaEvents = vi.hoisted(() => ({ current: {} as SigmaEvents }));
+const panelDefaults = vi.hoisted(() => [] as Array<{
+  id?: string;
+  defaultSize?: number;
+  minSize?: number;
+  maxSize?: number;
+  collapsible?: boolean;
+}>);
+const cameraMock = vi.hoisted(() => ({
+  reset: vi.fn(),
+  zoomIn: vi.fn(),
+  zoomOut: vi.fn(),
+  gotoNode: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -97,278 +34,187 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
+vi.mock('@react-sigma/core', () => ({
+  SigmaContainer: ({ children }: { children: React.ReactNode }) => <div data-testid="wiki-graph-canvas">{children}</div>,
+  useLoadGraph: () => vi.fn(),
+  useRegisterEvents: () => (events: SigmaEvents) => {
+    sigmaEvents.current = events;
+  },
+  useCamera: () => cameraMock,
+}));
+
+vi.mock('@/shared/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
+vi.mock('@/shared/components/ui/scroll-area', () => ({
+  ScrollArea: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className={className}>{children}</div>
+  ),
+}));
+
+vi.mock('react-resizable-panels', async () => {
+  const ReactModule = await vi.importActual<typeof import('react')>('react');
+  return {
+    PanelGroup: ({ children, onLayout }: { children: React.ReactNode; onLayout?: (sizes: number[]) => void }) => (
+      <div data-testid="panel-group" onMouseUp={() => onLayout?.([20, 50, 30])}>{children}</div>
+    ),
+    Panel: ReactModule.forwardRef(({
+      children,
+      id,
+      defaultSize,
+      minSize,
+      maxSize,
+      collapsible,
+    }: {
+      children: React.ReactNode;
+      id?: string;
+      defaultSize?: number;
+      minSize?: number;
+      maxSize?: number;
+      collapsible?: boolean;
+    }, ref) => {
+      ReactModule.useImperativeHandle(ref, () => ({
+        collapse: vi.fn(),
+        expand: vi.fn(),
+        getId: () => id ?? '',
+        getSize: () => defaultSize ?? 0,
+        isCollapsed: () => false,
+        isExpanded: () => true,
+        resize: vi.fn(),
+      }));
+      panelDefaults.push({ id, defaultSize, minSize, maxSize, collapsible });
+      return <div data-testid={id} data-default-size={defaultSize}>{children}</div>;
+    }),
+    PanelResizeHandle: ({ onDoubleClick }: { onDoubleClick?: () => void }) => (
+      <div role="separator" onDoubleClick={onDoubleClick} />
+    ),
+  };
+});
+
+vi.mock('@/shared/components/wiki-page-preview', () => ({
+  WikiPagePreview: ({ path, onNavigate }: {
+    path: string;
+    onNavigate: (path: string) => void;
+  }) => (
+    <div data-testid="wiki-preview">
+      <span>{path}</span>
+      <button type="button" onClick={() => onNavigate('wiki/overview.md')}>preview wikilink</button>
+    </div>
+  ),
+}));
+
+vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
+  getKnowledgeBaseGraph: apiMocks.getKnowledgeBaseGraph,
+}));
+
+const graph = {
+  kbId: 'kb-1',
+  generatedAt: '2026-05-01T00:00:00Z',
+  nodes: [
+    { id: 'wiki/overview', label: 'Overview', path: 'wiki/overview.md', type: 'overview', sources: [], outboundCount: 0, inboundCount: 1, degree: 1 },
+    { id: 'wiki/guide', label: 'Guide', path: 'wiki/guide.md', type: 'concept', sources: [], outboundCount: 1, inboundCount: 0, degree: 1 },
+  ],
+  edges: [{ id: 'edge-1', source: 'wiki/overview', target: 'wiki/guide', weight: 1, reasons: [] }],
+};
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}{location.search}</div>;
+};
+
+const renderGraphTab = (initialPath = '/knowledge-bases/kb-1/graph') => render(
+  <MemoryRouter initialEntries={[initialPath]}>
+    <Routes>
+      <Route
+        path="/knowledge-bases/:id/graph"
+        element={(
+          <>
+            <LocationProbe />
+            <KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />
+          </>
+        )}
+      />
+      <Route path="/knowledge-bases/:id/wiki" element={<LocationProbe />} />
+      <Route path="/knowledge-bases/:id/files" element={<LocationProbe />} />
+    </Routes>
+  </MemoryRouter>,
+);
+
 describe('KnowledgeBaseGraphTab', () => {
   beforeEach(() => {
-    getGraphMock.mockReset();
-    apiGetMock.mockReset();
-    forceAssignMock.mockReset();
-    forceInferSettingsMock.mockClear();
-    loadGraphMock.mockReset();
-    registerEventsMock.mockReset();
+    vi.clearAllMocks();
+    localStorage.clear();
+    panelDefaults.length = 0;
+    sigmaEvents.current = {};
+    translateMock.mockImplementation((key: string) => key);
+    apiMocks.getKnowledgeBaseGraph.mockResolvedValue(graph);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  it('renders graph tab with node list, canvas, and preview panes', async () => {
+    renderGraphTab();
+
+    expect(await screen.findAllByTestId('wiki-graph-canvas')).not.toHaveLength(0);
+    expect(screen.getByTestId('kb-graph-nodes')).toBeInTheDocument();
+    expect(screen.getByTestId('kb-graph-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('kb-graph-preview')).toBeInTheDocument();
+    expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/overview.md');
   });
 
-  it('renders graph nodes, edges, and type legend', async () => {
-    getGraphMock.mockResolvedValue({
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes: [
-        {
-          id: 'wiki/entities/acme',
-          label: 'Acme',
-          type: 'entity',
-          path: 'wiki/entities/acme.md',
-          sources: ['raw/sources/acme.md'],
-          outboundCount: 1,
-          inboundCount: 0,
-          degree: 1,
-        },
-        {
-          id: 'wiki/concepts/strategy',
-          label: 'Strategy',
-          type: 'concept',
-          path: 'wiki/concepts/strategy.md',
-          sources: ['raw/sources/acme.md'],
-          outboundCount: 0,
-          inboundCount: 1,
-          degree: 1,
-        },
-      ],
-      edges: [
-        {
-          id: 'wiki/entities/acme--wiki/concepts/strategy',
-          source: 'wiki/entities/acme',
-          target: 'wiki/concepts/strategy',
-          weight: 1.15,
-          reasons: [{ type: 'direct_wikilink', weight: 1 }],
-        },
-      ],
+  it('selects graph nodes and updates the preview URL state', async () => {
+    renderGraphTab();
+    await screen.findByText('Guide');
+
+    act(() => {
+      sigmaEvents.current.clickNode?.({ node: 'wiki/guide' });
     });
 
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-
-    expect(await screen.findByText('知識關聯圖')).toBeInTheDocument();
-    expect(screen.getByText('2 個頁面')).toBeInTheDocument();
-    expect(screen.getByText('1 個關聯')).toBeInTheDocument();
-    expect(screen.getByText('節點類型')).toBeInTheDocument();
-    expect(screen.getByText('實體')).toBeInTheDocument();
-    expect(screen.getByText('概念')).toBeInTheDocument();
-    expect(screen.getByTestId('sigma-container')).toBeInTheDocument();
-    await waitFor(() => expect(loadGraphMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('path=wiki%2Fguide.md');
+      expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/guide.md');
+    });
   });
 
-  it('reuses cached node positions when graph topology is unchanged', async () => {
-    const graphResponse = {
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes: [
-        {
-          id: 'wiki/cache/a',
-          label: 'Cache A',
-          type: 'entity',
-          path: 'wiki/cache/a.md',
-          sources: [],
-          outboundCount: 1,
-          inboundCount: 0,
-          degree: 1,
-        },
-        {
-          id: 'wiki/cache/b',
-          label: 'Cache B',
-          type: 'concept',
-          path: 'wiki/cache/b.md',
-          sources: [],
-          outboundCount: 0,
-          inboundCount: 1,
-          degree: 1,
-        },
-      ],
-      edges: [
-        {
-          id: 'wiki/cache/a--wiki/cache/b',
-          source: 'wiki/cache/a',
-          target: 'wiki/cache/b',
-          weight: 1,
-          reasons: [{ type: 'direct_wikilink', weight: 1 }],
-        },
-      ],
-    };
-    getGraphMock.mockResolvedValue(graphResponse);
+  it('selects node list items and opens selected page in wiki', async () => {
+    const user = userEvent.setup();
+    renderGraphTab();
+    await user.click(await screen.findByRole('button', { name: /Guide/ }));
+    expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/guide.md');
 
-    const firstRender = render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-    await waitFor(() => expect(forceAssignMock).toHaveBeenCalledTimes(1));
-    firstRender.unmount();
-
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-
-    await waitFor(() => expect(loadGraphMock).toHaveBeenCalledTimes(2));
-    expect(forceAssignMock).toHaveBeenCalledTimes(1);
+    await user.click(screen.getAllByRole('button', { name: 'knowledgeBase.graph.actions.openInWiki' })[0]);
+    expect(screen.getByTestId('location')).toHaveTextContent('/knowledge-bases/kb-1/wiki?path=wiki%2Fguide.md');
   });
 
-  it('bounds large graph layout and defers refinement', async () => {
-    const idleCallbacks: IdleRequestCallback[] = [];
-    const originalRequestIdleCallback = window.requestIdleCallback;
-    const originalCancelIdleCallback = window.cancelIdleCallback;
-    Object.defineProperty(window, 'requestIdleCallback', {
-      configurable: true,
-      value: (callback: IdleRequestCallback) => {
-        idleCallbacks.push(callback);
-        return idleCallbacks.length;
-      },
-    });
-    Object.defineProperty(window, 'cancelIdleCallback', {
-      configurable: true,
-      value: vi.fn(),
-    });
-    const nodes = Array.from({ length: 90 }, (_, index) => ({
-      id: `wiki/large/${index}`,
-      label: `Large ${index}`,
-      type: index % 2 === 0 ? 'entity' : 'concept',
-      path: `wiki/large/${index}.md`,
-      sources: [],
-      outboundCount: 0,
-      inboundCount: 0,
-      degree: 1,
+  it('restores persisted pane sizes and updates local storage when layout changes', async () => {
+    localStorage.setItem('knowledge-base-graph-layout:kb-1', JSON.stringify({
+      sizes: [25, 45, 30],
+      leftCollapsed: false,
+      rightCollapsed: false,
     }));
-    const edges = nodes.slice(1).map((node, index) => ({
-      id: `${nodes[index].id}--${node.id}`,
-      source: nodes[index].id,
-      target: node.id,
-      weight: 1,
-      reasons: [{ type: 'direct_wikilink', weight: 1 }],
-    }));
-    getGraphMock.mockResolvedValue({
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes,
-      edges,
-    });
 
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-    await screen.findByText('90 個頁面');
+    renderGraphTab();
+    await screen.findAllByTestId('wiki-graph-canvas');
 
-    expect(forceAssignMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ iterations: 48 }),
-    );
-    expect(loadGraphMock).toHaveBeenCalledTimes(1);
+    expect(panelDefaults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'kb-graph-nodes', defaultSize: 25 }),
+      expect.objectContaining({ id: 'kb-graph-preview', defaultSize: 30 }),
+    ]));
 
-    await act(async () => {
-      idleCallbacks[0]?.({ didTimeout: false, timeRemaining: () => 50 });
-    });
-
-    expect(forceAssignMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ iterations: 64 }),
-    );
-    expect(loadGraphMock).toHaveBeenCalledTimes(2);
-    Object.defineProperty(window, 'requestIdleCallback', {
-      configurable: true,
-      value: originalRequestIdleCallback,
-    });
-    Object.defineProperty(window, 'cancelIdleCallback', {
-      configurable: true,
-      value: originalCancelIdleCallback,
-    });
+    await userEvent.click(screen.getByTestId('panel-group'));
+    expect(localStorage.getItem('knowledge-base-graph-layout:kb-1')).toContain('[20,50,30]');
   });
 
-  it('renders empty state when graph has no pages', async () => {
-    getGraphMock.mockResolvedValue({
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes: [],
-      edges: [],
-    });
+  it('sets resize constraints on graph panes', async () => {
+    renderGraphTab();
+    await screen.findAllByTestId('wiki-graph-canvas');
 
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-
-    expect(await screen.findByText('尚未建立 Wiki 頁面')).toBeInTheDocument();
-    expect(screen.getByText('執行 Wiki index 後會產生頁面與關聯。')).toBeInTheDocument();
-  });
-
-  it('highlights matching nodes from search input', async () => {
-    getGraphMock.mockResolvedValue({
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes: [
-        {
-          id: 'wiki/entities/acme',
-          label: 'Acme',
-          type: 'entity',
-          path: 'wiki/entities/acme.md',
-          sources: [],
-          outboundCount: 0,
-          inboundCount: 0,
-          degree: 0,
-        },
-      ],
-      edges: [],
-    });
-
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-
-    const input = await screen.findByLabelText('搜尋關聯圖節點');
-    fireEvent.change(input, { target: { value: 'acme' } });
-
-    expect(input).toHaveValue('acme');
-    expect(screen.getByLabelText('清除搜尋')).toBeInTheDocument();
-  });
-
-  it('opens a wiki page preview when a graph node is selected', async () => {
-    getGraphMock.mockResolvedValue({
-      kbId: 'kb-1',
-      generatedAt: '2026-04-29T00:00:00Z',
-      nodes: [
-        {
-          id: 'wiki/entities/acme',
-          label: 'Acme',
-          type: 'entity',
-          path: 'wiki/entities/acme.md',
-          sources: ['raw/sources/acme.md'],
-          outboundCount: 1,
-          inboundCount: 0,
-          degree: 1,
-        },
-        {
-          id: 'wiki/concepts/strategy',
-          label: 'Strategy',
-          type: 'concept',
-          path: 'wiki/concepts/strategy.md',
-          sources: [],
-          outboundCount: 0,
-          inboundCount: 1,
-          degree: 1,
-        },
-      ],
-      edges: [
-        {
-          id: 'wiki/entities/acme--wiki/concepts/strategy',
-          source: 'wiki/entities/acme',
-          target: 'wiki/concepts/strategy',
-          weight: 1,
-          reasons: [{ type: 'direct_wikilink', weight: 1 }],
-        },
-      ],
-    });
-    apiGetMock.mockResolvedValue({ content: '# Acme\n\nPreview content.' });
-
-    render(<KnowledgeBaseGraphTab knowledgeBaseId="kb-1" />);
-
-    await screen.findByText('知識關聯圖');
-    const events = registerEventsMock.mock.calls[0]?.[0];
-    expect(() => events.enterNode({ node: 'wiki/entities/acme' })).not.toThrow();
-    expect(() => events.leaveNode()).not.toThrow();
-    await act(async () => {
-      await events.clickNode({ node: 'wiki/entities/acme' });
-    });
-
-    await waitFor(() => expect(screen.getAllByText('Acme').length).toBeGreaterThan(0));
-    expect(apiGetMock).toHaveBeenCalledWith('/knowledge-bases/kb-1/files/content?path=%2Fwiki%2Fentities%2Facme.md');
-    expect(await screen.findByText('Preview content.')).toBeInTheDocument();
-    expect(screen.getByText('相關頁面')).toBeInTheDocument();
-    expect(screen.getByText('Strategy')).toBeInTheDocument();
+    expect(panelDefaults).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'kb-graph-nodes', minSize: 16, maxSize: 35, collapsible: true }),
+      expect.objectContaining({ id: 'kb-graph-canvas', minSize: 30 }),
+      expect.objectContaining({ id: 'kb-graph-preview', minSize: 24, maxSize: 45, collapsible: true }),
+    ]));
   });
 });

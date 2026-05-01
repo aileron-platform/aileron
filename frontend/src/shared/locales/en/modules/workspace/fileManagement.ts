@@ -9,6 +9,7 @@ const fileManagement = {
     loadFailed: 'Failed to load file tree',
   },
   runtime: {
+    initializing: 'Initializing workspace runtime...',
     unavailableTitle: 'Workspace Runtime Not Ready',
     unavailableDescription: 'Please wait or refresh and try again',
   },

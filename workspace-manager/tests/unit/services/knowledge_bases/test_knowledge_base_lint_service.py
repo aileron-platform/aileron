@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -52,7 +52,7 @@ def _write_file(lint_service: KnowledgeBaseLintService, kb_id: str, path: str, c
 
 
 @pytest.mark.unit
-def test_structural_lint_reports_all_issue_types_and_persists_report(lint_service):
+def test_structural_lint_returns_inline_result_without_persistence(lint_service, tmp_path):
     _write_file(lint_service, "kb-1", "raw/sources/existing.md", "# Source\n")
     _write_file(
         lint_service,
@@ -117,33 +117,17 @@ sources:
         "duplicate_slug",
     }
     assert report.issue_counts["broken_wikilink"] == 1
-    assert report.report_path.startswith("/reports/lint/lint-")
-    payload = json.loads((lint_service.storage_root / "kb-1" / report.report_path.lstrip("/")).read_text(encoding="utf-8"))
-    assert payload["kbId"] == "kb-1"
-    assert payload["issueCounts"]["missing_source"] == 1
-    assert any(issue["details"].get("target") == "missing/page" for issue in payload["issues"])
+
+    reports_dir = tmp_path / "kb-1" / "reports"
+    assert not reports_dir.exists(), "Lint result must not be written to filesystem"
+
+    assert not hasattr(report, "report_path") or report.report_path is None, (
+        "KnowledgeBaseLintReportResponse must not include report_path"
+    )
+    assert not hasattr(report, "commit_id") or report.commit_id is None, (
+        "KnowledgeBaseLintReportResponse must not include commit_id"
+    )
     lint_service.kb_service.get_kb.assert_called_with(user_id="owner-1", kb_id="kb-1", minimum_role="editor")
-
-
-@pytest.mark.unit
-def test_structural_lint_commits_report_when_git_enabled(lint_service, kb):
-    kb.version_control_enabled = True
-    lint_service.git_service = MagicMock()
-    lint_service.git_service.commit.return_value = type(
-        "CommitResponse",
-        (),
-        {"commit": type("Commit", (), {"id": "commit-123"})()},
-    )()
-
-    report = lint_service.run_structural_lint(user_id="owner-1", kb_id="kb-1")
-
-    assert report.commit_id == "commit-123"
-    lint_service.git_service.commit.assert_called_once()
-    call_kwargs = lint_service.git_service.commit.call_args.kwargs
-    assert call_kwargs["user_id"] == "owner-1"
-    assert call_kwargs["kb_id"] == "kb-1"
-    assert call_kwargs["message"] == "Write knowledge base lint report"
-    assert call_kwargs["paths"] == [report.report_path.lstrip("/")]
 
 
 @pytest.mark.unit

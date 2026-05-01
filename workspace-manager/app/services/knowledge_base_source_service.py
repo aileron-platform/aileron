@@ -1,8 +1,7 @@
-"""Knowledge base source import and normalization service."""
+"""Knowledge base source import service."""
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 import re
@@ -43,27 +42,11 @@ class KnowledgeBaseWebClipImportResult:
     source_hash: str
 
 
-@dataclass(frozen=True)
-class KnowledgeBaseNormalizationResult:
-    source_path: str
-    normalized_text_path: str
-    metadata_path: str
-    source_hash: str
-    normalized_hash: str
-    skipped: bool
-    extractor: str
-
-
 class KnowledgeBaseSourceService:
-    """Import raw sources and normalize them into text and metadata."""
+    """Import raw sources into the KB raw source area."""
 
     RAW_ROOT = "raw"
-    RAW_SUBDIRECTORIES = {"sources", "uploads", "clipped", "assets"}
-    TEXT_EXTENSIONS = {".md", ".markdown", ".txt", ".rst"}
-    CSV_EXTENSIONS = {".csv"}
-    PDF_EXTENSIONS = {".pdf"}
-    OFFICE_EXTENSIONS = {".docx", ".pptx", ".xlsx"}
-    IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
+    RAW_SUBDIRECTORIES = {"sources", "assets"}
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -79,11 +62,11 @@ class KnowledgeBaseSourceService:
         user_id: str,
         kb_id: str,
         source_file: Path,
-        target_subdir: str = "uploads",
         target_name: str | None = None,
         overwrite: bool = False,
+        origin: str = "upload",
     ) -> KnowledgeBaseSourceImportResult:
-        """Copy a local file into the KB raw source area."""
+        """Copy a local file into raw/sources/."""
         kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         self._ensure_wiki(kb)
         if not source_file.is_file():
@@ -94,7 +77,7 @@ class KnowledgeBaseSourceService:
                 status_code=404,
             )
 
-        raw_path = self._raw_relative_path(target_subdir, target_name or source_file.name)
+        raw_path = self._raw_relative_path("sources", target_name or source_file.name)
         extension = Path(raw_path).suffix.lower()
         self._ensure_allowed_extension(extension, raw_path)
         target = self._resolve_path(kb.id, raw_path)
@@ -113,6 +96,7 @@ class KnowledgeBaseSourceService:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source_file, target)
         self._update_kb_size(kb, delta)
+        self._record_source_metadata(kb.id, raw_path, origin=origin)
 
         return KnowledgeBaseSourceImportResult(
             path="/" + raw_path,
@@ -136,7 +120,7 @@ class KnowledgeBaseSourceService:
         self._ensure_wiki(kb)
 
         safe_slug = self._clip_slug(clip_slug or title)
-        source_relative_path = f"raw/clipped/{safe_slug}.md"
+        source_relative_path = f"raw/sources/{safe_slug}.md"
         source_target = self._resolve_path(kb.id, source_relative_path)
         if source_target.exists() and not overwrite:
             raise FileManagementException(
@@ -179,6 +163,7 @@ class KnowledgeBaseSourceService:
             asset_target.parent.mkdir(parents=True, exist_ok=True)
             asset_target.write_bytes(payload)
         self._update_kb_size(kb, delta)
+        self._record_source_metadata(kb.id, source_relative_path, origin="clipped")
 
         return KnowledgeBaseWebClipImportResult(
             path="/" + source_relative_path,
@@ -186,169 +171,6 @@ class KnowledgeBaseSourceService:
             size=after_size,
             source_hash=self._hash_file(source_target),
         )
-
-    def normalize_source(
-        self,
-        *,
-        user_id: str,
-        kb_id: str,
-        source_path: str,
-        force: bool = False,
-    ) -> KnowledgeBaseNormalizationResult:
-        """Normalize a raw source into text plus metadata files."""
-        kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
-        self._ensure_wiki(kb)
-        raw_relative_path = self._validate_raw_source_path(source_path)
-        source = self._resolve_path(kb.id, raw_relative_path)
-        if not source.is_file():
-            raise FileManagementException(
-                code="FILE_NOT_FOUND",
-                message="Source file does not exist",
-                details={"path": "/" + raw_relative_path},
-                status_code=404,
-            )
-
-        source_hash = self._hash_file(source)
-        cache = self._read_cache(kb.id)
-        cache_key = raw_relative_path
-        cached = cache.get(cache_key)
-        normalized_text_path = self._normalized_text_path(raw_relative_path)
-        metadata_path = self._metadata_path(raw_relative_path)
-        if not force and cached and cached.get("sourceHash") == source_hash:
-            return KnowledgeBaseNormalizationResult(
-                source_path="/" + raw_relative_path,
-                normalized_text_path="/" + normalized_text_path,
-                metadata_path="/" + metadata_path,
-                source_hash=source_hash,
-                normalized_hash=cached.get("normalizedHash", ""),
-                skipped=True,
-                extractor=cached.get("extractor", "cache"),
-            )
-
-        text, metadata = self._extract(source, raw_relative_path)
-        normalized_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        metadata.update(
-            {
-                "sourcePath": "/" + raw_relative_path,
-                "sourceHash": source_hash,
-                "normalizedHash": normalized_hash,
-                "normalizedTextPath": "/" + normalized_text_path,
-                "normalizedAt": datetime.now(timezone.utc).isoformat(),
-            }
-        )
-
-        delta = self._write_normalized_files(
-            kb,
-            normalized_text_path=normalized_text_path,
-            text=text,
-            metadata_path=metadata_path,
-            metadata=metadata,
-        )
-        if delta:
-            self._update_kb_size(kb, delta)
-
-        cache[cache_key] = {
-            "sourceHash": source_hash,
-            "normalizedHash": normalized_hash,
-            "normalizedTextPath": "/" + normalized_text_path,
-            "metadataPath": "/" + metadata_path,
-            "extractor": metadata.get("extractor", "unknown"),
-            "updatedAt": metadata["normalizedAt"],
-        }
-        self._write_cache(kb.id, cache)
-
-        return KnowledgeBaseNormalizationResult(
-            source_path="/" + raw_relative_path,
-            normalized_text_path="/" + normalized_text_path,
-            metadata_path="/" + metadata_path,
-            source_hash=source_hash,
-            normalized_hash=normalized_hash,
-            skipped=False,
-            extractor=metadata.get("extractor", "unknown"),
-        )
-
-    def _extract(self, source: Path, raw_relative_path: str) -> tuple[str, dict[str, Any]]:
-        extension = source.suffix.lower()
-        if extension in self.TEXT_EXTENSIONS:
-            return self._extract_text(source), self._metadata(raw_relative_path, extractor="text")
-        if extension in self.CSV_EXTENSIONS:
-            return self._extract_csv(source), self._metadata(raw_relative_path, extractor="csv")
-        if extension in self.PDF_EXTENSIONS:
-            return self._extract_pdf(source), self._metadata(raw_relative_path, extractor="pdf")
-        if extension in self.OFFICE_EXTENSIONS:
-            metadata = self._metadata(raw_relative_path, extractor="office-placeholder")
-            metadata["status"] = "unsupported"
-            metadata["note"] = "Office document normalization is not available in this runtime."
-            return "", metadata
-        if extension in self.IMAGE_EXTENSIONS:
-            metadata = self._metadata(raw_relative_path, extractor="image-placeholder")
-            metadata["status"] = "metadata-only"
-            metadata["note"] = "Image OCR and caption extraction are reserved for a later extractor."
-            return "", metadata
-        raise FileManagementException(
-            code="INVALID_FILE_TYPE",
-            message=f"{KB_SOURCE_UNSUPPORTED_EXTENSION_MESSAGE}: {extension}",
-            details={"path": "/" + raw_relative_path, "extension": extension},
-            status_code=400,
-        )
-
-    def _extract_text(self, source: Path) -> str:
-        try:
-            return source.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            return source.read_text(encoding="latin-1")
-
-    def _extract_csv(self, source: Path) -> str:
-        rows: list[str] = []
-        with source.open("r", encoding="utf-8", newline="") as handle:
-            reader = csv.reader(handle)
-            for row in reader:
-                rows.append(" | ".join(cell.strip() for cell in row))
-        return "\n".join(rows) + ("\n" if rows else "")
-
-    def _extract_pdf(self, source: Path) -> str:
-        try:
-            from pypdf import PdfReader  # type: ignore
-        except ImportError:
-            return ""
-
-        reader = PdfReader(str(source))
-        pages: list[str] = []
-        for index, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() or ""
-            pages.append(f"# Page {index}\n\n{page_text.strip()}")
-        return "\n\n".join(pages).strip() + ("\n" if pages else "")
-
-    def _metadata(self, raw_relative_path: str, *, extractor: str) -> dict[str, Any]:
-        return {
-            "extractor": extractor,
-            "sourceType": Path(raw_relative_path).suffix.lower().lstrip(".") or "unknown",
-            "sourceName": Path(raw_relative_path).name,
-        }
-
-    def _write_normalized_files(
-        self,
-        kb: db_models.KnowledgeBase,
-        *,
-        normalized_text_path: str,
-        text: str,
-        metadata_path: str,
-        metadata: dict[str, Any],
-    ) -> int:
-        text_target = self._resolve_path(kb.id, normalized_text_path)
-        metadata_target = self._resolve_path(kb.id, metadata_path)
-        before_size = self._path_size(text_target) + self._path_size(metadata_target)
-        metadata_content = json.dumps(metadata, ensure_ascii=False, indent=2) + "\n"
-        after_size = len(text.encode("utf-8")) + len(metadata_content.encode("utf-8"))
-        delta = after_size - before_size
-        self._check_quota(kb, delta)
-
-        text_target.parent.mkdir(parents=True, exist_ok=True)
-        metadata_target.parent.mkdir(parents=True, exist_ok=True)
-        text_target.write_text(text, encoding="utf-8")
-        metadata_target.write_text(metadata_content, encoding="utf-8")
-
-        return delta
 
     def _ensure_wiki(self, kb: db_models.KnowledgeBase) -> None:
         self.wiki_service.storage_root = self.storage_root
@@ -408,43 +230,23 @@ class KnowledgeBaseSourceService:
                 status_code=400,
             )
 
-    def _normalized_text_path(self, raw_relative_path: str) -> str:
-        return "normalized/text/" + self._normalized_stem(raw_relative_path) + ".md"
+    def _sources_metadata_path(self, kb_id: str) -> Path:
+        return self._kb_root(kb_id) / ".aileron-kb" / "sources-metadata.json"
 
-    def _metadata_path(self, raw_relative_path: str) -> str:
-        return "normalized/metadata/" + self._normalized_stem(raw_relative_path) + ".json"
-
-    def _normalized_stem(self, raw_relative_path: str) -> str:
-        source = Path(raw_relative_path)
-        digest = hashlib.sha256(raw_relative_path.encode("utf-8")).hexdigest()[:12]
-        return f"{source.stem}-{digest}"
-
-    def _cache_path(self, kb_id: str) -> Path:
-        return self._kb_root(kb_id) / ".aileron-kb" / "ingest-cache.json"
-
-    def _read_cache(self, kb_id: str) -> dict[str, Any]:
-        path = self._cache_path(kb_id)
-        if not path.exists():
-            return {}
+    def _record_source_metadata(self, kb_id: str, relative_path: str, *, origin: str) -> None:
+        meta_path = self._sources_metadata_path(kb_id)
         try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-            return loaded if isinstance(loaded, dict) else {}
+            data = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+            if not isinstance(data, dict):
+                data = {}
         except json.JSONDecodeError:
-            return {}
-
-    def _write_cache(self, kb_id: str, cache: dict[str, Any]) -> None:
-        path = self._cache_path(kb_id)
-        before_size = self._path_size(path)
-        content = json.dumps(cache, ensure_ascii=False, indent=2) + "\n"
-        after_size = len(content.encode("utf-8"))
-        delta = after_size - before_size
-        kb = self.db.get(db_models.KnowledgeBase, kb_id)
-        if kb is not None:
-            self._check_quota(kb, delta)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        if kb is not None:
-            self._update_kb_size(kb, delta)
+            data = {}
+        data[relative_path] = {
+            "origin": origin,
+            "importedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     def _resolve_path(self, kb_id: str, relative_path: str) -> Path:
         root = self._kb_root(kb_id)

@@ -48,22 +48,13 @@ def test_initialize_creates_team_wiki_layout(wiki_service, mock_db_session, kb):
     root = wiki_service.storage_root / kb.id
     expected_directories = [
         "raw/sources",
-        "raw/uploads",
-        "raw/clipped",
         "raw/assets",
-        "normalized/text",
-        "normalized/metadata",
         "wiki/entities",
         "wiki/concepts",
         "wiki/sources",
         "wiki/queries",
         "wiki/synthesis",
         "wiki/comparisons",
-        "wiki/decisions",
-        "wiki/projects",
-        "reports/ingest",
-        "reports/lint",
-        "reports/graph",
         ".aileron-kb/vector",
     ]
     for relative_path in expected_directories:
@@ -80,6 +71,7 @@ def test_initialize_creates_team_wiki_layout(wiki_service, mock_db_session, kb):
         ".aileron-kb/ingest-cache.json",
         ".aileron-kb/reviews.json",
         ".aileron-kb/graph-cache.json",
+        ".aileron-kb/sources-metadata.json",
     ]
     for relative_path in expected_files:
         assert (root / relative_path).is_file()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -14,7 +13,6 @@ import yaml
 from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
-from app.core.file_management import FileManagementException
 from app.models import KnowledgeBaseLintIssue, KnowledgeBaseLintReportResponse
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.services.knowledge_base_wiki_service import KnowledgeBaseWikiService
@@ -47,10 +45,9 @@ class KnowledgeBaseLintService:
         self.storage_root.mkdir(parents=True, exist_ok=True)
         self.kb_service = KnowledgeBaseService(db)
         self.wiki_service = KnowledgeBaseWikiService(db)
-        self.git_service: Any | None = None
 
     def run_structural_lint(self, *, user_id: str, kb_id: str) -> KnowledgeBaseLintReportResponse:
-        """Run structural lint, persist a report, and optionally commit it."""
+        """Run structural lint and return inline result (not persisted)."""
         kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         self.wiki_service.storage_root = self.storage_root
         self.wiki_service.initialize(kb)
@@ -67,50 +64,12 @@ class KnowledgeBaseLintService:
         self._lint_sources(root, pages, issues)
         self._lint_duplicates(pages, issues)
 
-        generated_at = datetime.now(timezone.utc)
-        report_path = self._write_report(kb.id, generated_at=generated_at, issues=issues)
-        commit_id = None
-        if kb.version_control_enabled:
-            response = self._git_service().commit(
-                user_id=user_id,
-                kb_id=kb.id,
-                message="Write knowledge base lint report",
-                paths=[report_path],
-            )
-            commit_id = response.commit.id
         return KnowledgeBaseLintReportResponse(
             kbId=kb.id,
-            generatedAt=generated_at,
-            reportPath="/" + report_path,
+            generatedAt=datetime.now(timezone.utc),
             issueCounts=dict(Counter(issue.issue_type for issue in issues)),
             issues=issues,
-            commitId=commit_id,
         )
-
-    def list_reports(self, *, user_id: str, kb_id: str) -> list[KnowledgeBaseLintReportResponse]:
-        """List persisted lint reports for a knowledge base."""
-        kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
-        self.wiki_service.storage_root = self.storage_root
-        self.wiki_service.initialize(kb)
-        reports_root = self._kb_root(kb.id) / "reports" / "lint"
-        if not reports_root.exists():
-            return []
-        reports = [
-            self._read_report(kb.id, path.relative_to(self._kb_root(kb.id)).as_posix())
-            for path in sorted(reports_root.glob("*.json"), reverse=True)
-            if path.is_file()
-        ]
-        return reports
-
-    def get_report(self, *, user_id: str, kb_id: str, report_path: str) -> KnowledgeBaseLintReportResponse:
-        """Read a persisted lint report."""
-        kb, _ = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
-        self.wiki_service.storage_root = self.storage_root
-        self.wiki_service.initialize(kb)
-        normalized = report_path.strip().lstrip("/")
-        if not normalized.startswith("reports/lint/") or not normalized.endswith(".json"):
-            raise ValueError("KB_INVALID_REQUEST")
-        return self._read_report(kb.id, normalized)
 
     def _load_pages(self, root: Path) -> list[_LintPage]:
         wiki_root = root / "wiki"
@@ -239,52 +198,6 @@ class KnowledgeBaseLintService:
                         )
                     )
 
-    def _write_report(
-        self,
-        kb_id: str,
-        *,
-        generated_at: datetime,
-        issues: list[KnowledgeBaseLintIssue],
-    ) -> str:
-        relative_path = f"reports/lint/lint-{generated_at.strftime('%Y%m%dT%H%M%SZ')}.json"
-        target = self._resolve_path(kb_id, relative_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "kbId": kb_id,
-            "generatedAt": generated_at.isoformat(),
-            "issueCounts": dict(Counter(issue.issue_type for issue in issues)),
-            "issues": [issue.model_dump(by_alias=True) for issue in issues],
-        }
-        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        return relative_path
-
-    def _read_report(self, kb_id: str, relative_path: str) -> KnowledgeBaseLintReportResponse:
-        target = self._resolve_path(kb_id, relative_path)
-        if not target.is_file():
-            raise FileManagementException(
-                code="FILE_NOT_FOUND",
-                message="Knowledge base lint report does not exist",
-                details={"path": "/" + relative_path.strip().lstrip("/")},
-                status_code=404,
-            )
-        payload = json.loads(target.read_text(encoding="utf-8"))
-        return KnowledgeBaseLintReportResponse(
-            kbId=payload["kbId"],
-            generatedAt=datetime.fromisoformat(payload["generatedAt"]),
-            reportPath="/" + relative_path.strip().lstrip("/"),
-            issueCounts=dict(payload.get("issueCounts", {})),
-            issues=[
-                KnowledgeBaseLintIssue(
-                    issueType=issue["issueType"],
-                    severity=issue.get("severity", "warning"),
-                    path=issue["path"],
-                    details=dict(issue.get("details", {})),
-                )
-                for issue in payload.get("issues", [])
-                if isinstance(issue, dict)
-            ],
-        )
-
     def _parse_page(self, root: Path, path: Path) -> _LintPage:
         raw = path.read_text(encoding="utf-8")
         frontmatter, body, has_frontmatter = self._parse_frontmatter(raw)
@@ -357,25 +270,6 @@ class KnowledgeBaseLintService:
     @staticmethod
     def _page_id(relative_path: str) -> str:
         return relative_path[:-3] if relative_path.endswith(".md") else relative_path
-
-    def _resolve_path(self, kb_id: str, relative_path: str) -> Path:
-        root = self._kb_root(kb_id)
-        target = root / relative_path.strip().lstrip("/")
-        resolved = target.resolve()
-        if root.resolve() not in (resolved, *resolved.parents):
-            raise ValueError("KB_LINT_PATH_OUTSIDE_ROOT")
-        return resolved
-
-    def _git_service(self) -> Any:
-        if self.git_service is not None:
-            return self.git_service
-        from app.services.knowledge_base_git_service import KnowledgeBaseGitService
-
-        service = KnowledgeBaseGitService(self.db)
-        service.storage_root = self.storage_root
-        service.wiki_service.storage_root = self.storage_root
-        self.git_service = service
-        return service
 
     def _kb_root(self, kb_id: str) -> Path:
         root = self.storage_root / kb_id

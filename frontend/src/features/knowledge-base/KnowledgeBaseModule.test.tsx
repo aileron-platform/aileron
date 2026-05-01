@@ -35,7 +35,7 @@ const { translateMock } = vi.hoisted(() => ({
       'knowledgeBase.detail.delete.toasts.failed.title': '刪除知識庫失敗',
       'knowledgeBase.detail.delete.toasts.failed.description': '請先從工作區解除掛載後再試一次。',
       'knowledgeBase.detail.tabs.files': '檔案',
-      'knowledgeBase.detail.tabs.graph': '關聯圖',
+      'knowledgeBase.detail.tabs.wiki': 'Wiki',
       'knowledgeBase.detail.tabs.versionControl': '版本控制',
       'knowledgeBase.detail.tabs.schedules': '排程',
       'knowledgeBase.detail.tabs.sharing': '分享',
@@ -141,6 +141,38 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
     nodes: [],
     edges: [],
   })),
+  listKnowledgeBaseWikiPages: vi.fn(async () => ({
+    groups: [
+      {
+        type: 'overview',
+        labelKey: 'knowledgeBase.wiki.types.overview',
+        items: [{ path: 'wiki/overview.md', title: 'Overview', type: 'overview', tags: [] }],
+      },
+    ],
+  })),
+  getKnowledgeBaseWikiPage: vi.fn(async () => ({
+    frontmatter: { title: 'Overview', type: 'overview' },
+    body: '# Overview',
+    resolved: { sources: [], related: [] },
+  })),
+  listKnowledgeBaseReviews: vi.fn(async () => ({ items: [], counts: { open: 0 } })),
+  runKnowledgeBaseLint: vi.fn(async () => ({
+    kbId: 'kb-1',
+    generatedAt: '2026-04-29T00:00:00Z',
+    issueCounts: {},
+    issues: [],
+  })),
+  createKnowledgeBaseIngestJob: vi.fn(async () => ({
+    id: 'job-1',
+    kbId: 'kb-1',
+    status: 'queued',
+    sourcePaths: [],
+    skippedSources: [],
+    changedFiles: [],
+    versionControlEnabled: false,
+    createdAt: '2026-04-29T00:00:00Z',
+    updatedAt: '2026-04-29T00:00:00Z',
+  })),
   getKnowledgeBaseGitRepositoryStatus: vi.fn(async () => ({
     isGitRepo: false,
     currentBranch: null,
@@ -224,6 +256,7 @@ vi.mock('@/features/knowledge-base/api/knowledgeBaseApi', () => ({
     updatedAt: '2026-04-21T00:00:00Z',
   })),
   deleteKnowledgeBaseAttachment: vi.fn(async () => undefined),
+  listKnowledgeBaseTemplates: vi.fn(async () => []),
 }));
 
 vi.mock('@/app/components/navigation/GlobalNavigation', () => ({
@@ -275,7 +308,7 @@ describe('KnowledgeBaseModule', () => {
     expect(screen.queryByText('Team Wiki')).not.toBeInTheDocument();
     expect(screen.queryByText('product-docs')).not.toBeInTheDocument();
     expect(screen.getByText('檔案')).toBeInTheDocument();
-    expect(screen.getByText('關聯圖')).toBeInTheDocument();
+    expect(screen.getByText('Wiki')).toBeInTheDocument();
     expect(screen.getByText('版本控制')).toBeInTheDocument();
     expect(screen.getByText('排程')).toBeInTheDocument();
     expect(screen.getByText('分享')).toBeInTheDocument();

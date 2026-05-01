@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from git import Actor, GitCommandError, InvalidGitRepositoryError, Repo
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,14 +20,33 @@ from app.config.settings import get_settings
 from app.core.file_management import FileManagementException, InvalidPathException
 from app.db import models as db_models
 from app.services.knowledge_base_service import KnowledgeBaseService
+from app.services.knowledge_base_wiki_browse_service import WikiIndexBuilder
 from app.services.knowledge_base_wiki_service import KnowledgeBaseWikiService
 
 KB_INGEST_INVALID_OUTPUT_MESSAGE = "Invalid wiki generation output"
 KB_INGEST_PATH_TRAVERSAL_REASON = "Invalid ingest path detected"
 KB_INGEST_QUOTA_EXCEEDED_MESSAGE = "Knowledge base storage quota exceeded"
 KB_INGEST_OWNER_QUOTA_EXCEEDED_MESSAGE = "User knowledge base total storage quota exceeded"
+KB_REVIEW_MAX_ITEMS = 100
+KB_WIKI_INDEX_AUTHOR_NAME = "KB Wiki Index"
+KB_WIKI_INDEX_AUTHOR_EMAIL = "wiki-index@aileron.local"
 
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+_REVIEW_OPENER_RE = re.compile(
+    r"^---\s*REVIEW:\s*([a-z_]+)\s*,\s*([^\n,]+?)\s*,\s*(.+?)\s*---\s*$", re.IGNORECASE
+)
+_REVIEW_CLOSER_RE = re.compile(r"^---\s*END\s+REVIEW\s*---\s*$", re.IGNORECASE)
+_REVIEW_VALID_TYPES = frozenset(
+    ["contradiction", "duplicate", "missing_page", "suggestion", "confirm", "unreadable_source"]
+)
+
+
+@dataclass
+class ParsedReviewBlock:
+    type: str
+    page_path: str
+    detail: str
+    context: str = ""
 
 
 @dataclass(frozen=True)
@@ -64,6 +85,7 @@ class KnowledgeBaseIngestService:
         self.kb_service = KnowledgeBaseService(db)
         self.wiki_service = KnowledgeBaseWikiService(db)
         self.git_service: Any | None = None
+        self.wiki_index_builder = WikiIndexBuilder()
         self.storage_root = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
         self.storage_root.mkdir(parents=True, exist_ok=True)
 
@@ -157,10 +179,16 @@ class KnowledgeBaseIngestService:
             cache_entry = cache.get(normalized_source_path, {})
             normalized_path = cache_entry.get("normalizedTextPath")
             normalized_hash = cache_entry.get("normalizedHash")
+            generated_files = cache_entry.get("generatedFiles")
+            generated_files_exist = isinstance(generated_files, list) and all(
+                isinstance(generated_file, str)
+                and self._resolve_path(kb_id, self._validate_path(generated_file)).is_file()
+                for generated_file in generated_files
+            )
             skipped = (
                 not force
                 and cache_entry.get("sourceHash") == source_hash
-                and cache_entry.get("lastIngestedAt") is not None
+                and generated_files_exist
             )
             candidates.append(
                 KnowledgeBaseIngestCandidate(
@@ -173,62 +201,43 @@ class KnowledgeBaseIngestService:
             )
         return candidates
 
-    def build_analysis_prompt(
-        self,
-        *,
-        kb_id: str,
-        source_paths: list[str],
-    ) -> str:
-        """Build the analysis phase prompt from wiki context and sources."""
-        context_files = [
-            "purpose.md",
-            "schema.md",
-            "wiki/index.md",
-            "wiki/overview.md",
-        ]
-        sections = [
-            "# Team Wiki Ingest Analysis",
-            "",
-            "Analyze the sources against the Team Wiki purpose and schema.",
-            "Return structured analysis that identifies wiki pages to create or update, citations, relationships, and index/log/overview changes.",
-            "",
-        ]
-        for relative_path in context_files:
-            sections.append(self._prompt_file_section(kb_id, relative_path))
-        for source_path in source_paths:
-            normalized = self._validate_raw_source_path(source_path)
-            source_section_path = self._preferred_source_context_path(kb_id, normalized)
-            sections.append(self._prompt_file_section(kb_id, source_section_path, label="/" + normalized))
-        return "\n".join(sections).rstrip() + "\n"
+    def build_skill_invocation_prompt(self, *, mount_alias: str) -> str:
+        """Build the prompt that invokes the kb-wiki-index skill in workspace-runtime."""
+        return f"Run the kb-wiki-index skill. Working directory: /knowledge/{mount_alias}."
 
-    def build_generation_prompt(
-        self,
-        *,
-        analysis: str,
-        source_paths: list[str],
-    ) -> str:
-        """Build the generation phase prompt requesting parseable file updates."""
-        source_list = "\n".join(f"- {path}" for path in source_paths)
-        return (
-            "# Team Wiki Ingest Generation\n\n"
-            "Use the analysis to generate wiki updates. Return only JSON, optionally inside a json code fence.\n\n"
-            "Required JSON shape:\n\n"
-            "{\n"
-            "  \"files\": [\n"
-            "    {\"path\": \"wiki/sources/example.md\", \"content\": \"...\"},\n"
-            "    {\"path\": \"wiki/index.md\", \"content\": \"...\"},\n"
-            "    {\"path\": \"wiki/log.md\", \"content\": \"...\"},\n"
-            "    {\"path\": \"wiki/overview.md\", \"content\": \"...\"}\n"
-            "  ]\n"
-            "}\n\n"
-            "Rules:\n"
-            "- Paths must be relative to the KB root.\n"
-            "- Only write under wiki/ or reports/ingest/.\n"
-            "- Include frontmatter on every wiki Markdown file.\n"
-            "- Include source citations using the listed source paths.\n\n"
-            f"Sources:\n{source_list}\n\n"
-            f"Analysis:\n{analysis.strip()}\n"
-        )
+    def parse_review_blocks(self, output: str) -> list[ParsedReviewBlock]:
+        """Parse ---REVIEW--- blocks from skill output; cap at KB_REVIEW_MAX_ITEMS."""
+        results: list[ParsedReviewBlock] = []
+        lines = output.splitlines()
+        i = 0
+        while i < len(lines) and len(results) < KB_REVIEW_MAX_ITEMS:
+            m = _REVIEW_OPENER_RE.match(lines[i])
+            if m:
+                review_type = m.group(1).lower()
+                page_path = m.group(2).strip()
+                detail = m.group(3).strip()
+                if review_type not in _REVIEW_VALID_TYPES:
+                    i += 1
+                    continue
+                context_lines: list[str] = []
+                i += 1
+                while i < len(lines):
+                    if _REVIEW_CLOSER_RE.match(lines[i]):
+                        i += 1
+                        break
+                    context_lines.append(lines[i])
+                    i += 1
+                results.append(
+                    ParsedReviewBlock(
+                        type=review_type,
+                        page_path=page_path,
+                        detail=detail,
+                        context="\n".join(context_lines).strip(),
+                    )
+                )
+            else:
+                i += 1
+        return results
 
     def parse_generation_output(self, output: str) -> dict[str, str]:
         """Parse structured file updates from generation output."""
@@ -273,20 +282,45 @@ class KnowledgeBaseIngestService:
             source_summary_path = self._source_summary_path(source_path)
             if source_summary_path not in updates and not self._resolve_path(kb.id, source_summary_path).exists():
                 updates[source_summary_path] = self._default_source_summary(source_path)
-        changed_files = self._write_updates(kb, updates)
-        commit_id = self._commit_if_version_control_enabled(kb, user_id=user_id, changed_files=changed_files)
-        self._mark_sources_ingested(kb.id, source_paths=source_paths, generated_files=changed_files)
-        self._update_kb_index_status(kb, status="success", error=None)
-        job = self._update_job(
+        snapshots = self._snapshot_paths(
             kb.id,
-            job_id=job_id,
-            status="success",
-            changed_files=changed_files,
-            version_control_enabled=bool(kb.version_control_enabled),
-            commit_id=commit_id,
-            error=None,
+            [*updates.keys(), ".aileron-kb/ingest-cache.json", ".aileron-kb/wiki-index.json"],
         )
-        return job
+        try:
+            generated_files = self._write_updates(kb, updates)
+            changed_files = list(generated_files)
+            changed_files = self._mark_sources_ingested(
+                kb.id,
+                source_paths=source_paths,
+                generated_files=generated_files,
+                changed_files=changed_files,
+            )
+            changed_files = self._rebuild_wiki_index(kb, changed_files)
+            commit_id = self._commit_ingest_results(kb, sources=source_paths, changed_files=changed_files)
+            self._update_kb_index_status(kb, status="success", error=None)
+            job = self._update_job(
+                kb.id,
+                job_id=job_id,
+                status="success",
+                changed_files=changed_files,
+                version_control_enabled=bool(kb.version_control_enabled),
+                commit_id=commit_id,
+                error=None,
+            )
+            return job
+        except Exception as exc:
+            self._rollback_partial_writes(kb, snapshots)
+            self._update_kb_index_status(kb, status="failed", error=str(exc))
+            self._update_job(
+                kb.id,
+                job_id=job_id,
+                status="failed",
+                changed_files=[],
+                version_control_enabled=bool(kb.version_control_enabled),
+                commit_id=None,
+                error=str(exc),
+            )
+            raise
 
     def fail_job(self, *, kb_id: str, job_id: str, error: str) -> KnowledgeBaseIngestJob:
         """Mark an ingest job failed and persist the KB index status."""
@@ -329,41 +363,86 @@ class KnowledgeBaseIngestService:
             self._update_kb_size(kb, delta)
         return changed_files
 
+    def _rebuild_wiki_index(self, kb: db_models.KnowledgeBase, changed_files: list[str]) -> list[str]:
+        index_path = self._resolve_path(kb.id, ".aileron-kb/wiki-index.json")
+        before_size = self._path_size(index_path)
+        before_content = index_path.read_text(encoding="utf-8") if index_path.exists() else None
+        self.wiki_index_builder.write(self._kb_root(kb.id))
+        after_content = index_path.read_text(encoding="utf-8") if index_path.exists() else None
+        if after_content == before_content:
+            return changed_files
+        delta = self._path_size(index_path) - before_size
+        if delta:
+            self._update_kb_size(kb, delta)
+        normalized_path = "/.aileron-kb/wiki-index.json"
+        if normalized_path not in changed_files:
+            return [*changed_files, normalized_path]
+        return changed_files
+
     def _mark_sources_ingested(
         self,
         kb_id: str,
         *,
         source_paths: list[str],
         generated_files: list[str],
-    ) -> None:
+        changed_files: list[str],
+    ) -> list[str]:
         cache = self._read_cache(kb_id)
         now = self._now()
+        normalized_generated_files = [self._validate_path(path) for path in generated_files]
         for source_path in source_paths:
             normalized = self._validate_raw_source_path(source_path)
             source = self._resolve_path(kb_id, normalized)
-            entry = dict(cache.get(normalized, {}))
-            entry["sourceHash"] = self._hash_file(source)
-            entry["generatedFiles"] = generated_files
-            entry["lastIngestedAt"] = now
-            cache[normalized] = entry
-        self._write_json(kb_id, ".aileron-kb/ingest-cache.json", cache)
+            cache[normalized] = {
+                "sourceHash": self._hash_file(source),
+                "ingestedAt": now,
+                "generatedFiles": normalized_generated_files,
+            }
+        if self._write_json(kb_id, ".aileron-kb/ingest-cache.json", cache):
+            cache_path = "/.aileron-kb/ingest-cache.json"
+            if cache_path not in changed_files:
+                return [*changed_files, cache_path]
+        return changed_files
 
-    def _commit_if_version_control_enabled(
+    def _commit_ingest_results(
         self,
         kb: db_models.KnowledgeBase,
         *,
-        user_id: str,
+        sources: list[str],
         changed_files: list[str],
     ) -> str | None:
         if not kb.version_control_enabled or not changed_files:
             return None
-        response = self._git_service().commit(
-            user_id=user_id,
-            kb_id=kb.id,
-            message="Update knowledge base wiki index",
-            paths=[path.lstrip("/") for path in changed_files],
+        root = self._kb_root(kb.id)
+        try:
+            repo = Repo(root)
+        except (InvalidGitRepositoryError, ValueError) as exc:
+            raise ValueError("GIT_REPO_NOT_FOUND") from exc
+        repo.git.add("--all")
+        if not repo.is_dirty(untracked_files=True):
+            return None
+        author = Actor(
+            os.environ.get("KB_WIKI_INDEX_GIT_AUTHOR_NAME", KB_WIKI_INDEX_AUTHOR_NAME),
+            os.environ.get("KB_WIKI_INDEX_GIT_AUTHOR_EMAIL", KB_WIKI_INDEX_AUTHOR_EMAIL),
         )
-        return response.commit.id
+        commit = repo.index.commit(self._build_ingest_commit_message(sources), author=author, committer=author)
+        kb.git_last_commit_sha = commit.hexsha
+        kb.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(kb)
+        if repo.is_dirty(untracked_files=True):
+            raise ValueError("KB_INGEST_WORKTREE_NOT_CLEAN")
+        return commit.hexsha
+
+    def _build_ingest_commit_message(self, sources: list[str]) -> str:
+        normalized_sources = ["/" + self._validate_raw_source_path(source) for source in sources]
+        subject = f"ingest: {len(normalized_sources)} source" + ("" if len(normalized_sources) == 1 else "s")
+        body_paths = normalized_sources[:10]
+        body = "\n".join(f"- {path}" for path in body_paths)
+        remaining = len(normalized_sources) - len(body_paths)
+        if remaining > 0:
+            body = f"{body}\n- ... and {remaining} more"
+        return f"{subject}\n\n{body}\n" if body else subject
 
     def _git_service(self) -> Any:
         if self.git_service is not None:
@@ -431,9 +510,12 @@ class KnowledgeBaseIngestService:
         except json.JSONDecodeError:
             return {}
 
-    def _write_json(self, kb_id: str, relative_path: str, payload: Any) -> None:
+    def _write_json(self, kb_id: str, relative_path: str, payload: Any) -> bool:
         target = self._resolve_path(kb_id, relative_path)
         content = json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+        current_content = target.read_text(encoding="utf-8") if target.exists() else None
+        if current_content == content:
+            return False
         before_size = self._path_size(target)
         delta = len(content.encode("utf-8")) - before_size
         kb = self.db.get(db_models.KnowledgeBase, kb_id)
@@ -443,6 +525,7 @@ class KnowledgeBaseIngestService:
         target.write_text(content, encoding="utf-8")
         if kb is not None:
             self._update_kb_size(kb, delta)
+        return True
 
     def _discover_raw_sources(self, kb_id: str) -> list[str]:
         root = self._kb_root(kb_id)
@@ -546,11 +629,36 @@ class KnowledgeBaseIngestService:
         self.wiki_service.initialize(kb)
 
     def _hash_file(self, path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
+        return git_blob_sha(path)
+
+    def _snapshot_paths(self, kb_id: str, relative_paths: list[str]) -> dict[str, bytes | None]:
+        snapshots: dict[str, bytes | None] = {}
+        for relative_path in relative_paths:
+            normalized = self._validate_path(relative_path)
+            if normalized in snapshots:
+                continue
+            target = self._resolve_path(kb_id, normalized)
+            snapshots[normalized] = target.read_bytes() if target.exists() and target.is_file() else None
+        return snapshots
+
+    def _rollback_partial_writes(self, kb: db_models.KnowledgeBase, snapshots: dict[str, bytes | None]) -> None:
+        root = self._kb_root(kb.id)
+        for relative_path, content in snapshots.items():
+            target = self._resolve_path(kb.id, relative_path)
+            before_size = self._path_size(target)
+            if content is None:
+                if target.exists() and target.is_file():
+                    target.unlink()
+                    self._update_kb_size(kb, -before_size)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+            self._update_kb_size(kb, len(content) - before_size)
+        if kb.version_control_enabled:
+            try:
+                Repo(root).git.reset("--mixed")
+            except (GitCommandError, InvalidGitRepositoryError, ValueError):
+                pass
 
     def _path_size(self, path: Path) -> int:
         return path.stat().st_size if path.exists() and path.is_file() else 0
@@ -634,3 +742,10 @@ class KnowledgeBaseIngestService:
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
+
+
+def git_blob_sha(path: Path) -> str:
+    """Return the Git blob object id for a file's current bytes."""
+    content = path.read_bytes()
+    header = f"blob {len(content)}\0".encode("utf-8")
+    return hashlib.sha1(header + content).hexdigest()

@@ -1,0 +1,5 @@
+id: general
+name_key: knowledgeBase.template.general.name
+description_key: knowledgeBase.template.general.description
+icon: FileText
+extra_dirs: []

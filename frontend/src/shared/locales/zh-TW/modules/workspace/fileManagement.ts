@@ -9,6 +9,7 @@ const fileManagement = {
     loadFailed: '載入檔案樹失敗',
   },
   runtime: {
+    initializing: 'Workspace Runtime 初始化中...',
     unavailableTitle: 'Workspace Runtime 尚未就緒',
     unavailableDescription: '請稍候或重新整理後再試一次',
   },

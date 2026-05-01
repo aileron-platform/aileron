@@ -19,14 +19,22 @@ import type {
   KnowledgeBaseGitLfsEnablePayload,
   KnowledgeBaseGitRepositoryStatus,
   KnowledgeBaseGraphResponse,
+  KnowledgeBaseIngestJobResponse,
   KnowledgeBaseListResponse,
+  KnowledgeBaseLintReportResponse,
   KnowledgeBaseShareCreatePayload,
   KnowledgeBaseShareListResponse,
   KnowledgeBaseSummary,
   KnowledgeBaseShareSummary,
   KnowledgeBaseShareUpdatePayload,
+  KnowledgeBaseReviewItem,
+  KnowledgeBaseReviewItemListResponse,
+  KnowledgeBaseTemplateListResponse,
+  KnowledgeBaseTemplateMetadata,
   KnowledgeBaseUpdatePayload,
   KnowledgeBaseVersionControlStatus,
+  KnowledgeBaseWikiPageResponse,
+  KnowledgeBaseWikiPagesResponse,
 } from '@/shared/types/knowledgeBase';
 import type { TemplateCheckoutRequest, TemplateRemoteRequest } from '@/features/template-management/api/templateGitApi';
 
@@ -57,6 +65,24 @@ export async function deleteKnowledgeBase(kbId: string, force = false): Promise<
 
 export async function getKnowledgeBaseGraph(kbId: string): Promise<KnowledgeBaseGraphResponse> {
   return apiClient.get<KnowledgeBaseGraphResponse>(`/knowledge-bases/${kbId}/graph`);
+}
+
+export async function listKnowledgeBaseWikiPages(kbId: string): Promise<KnowledgeBaseWikiPagesResponse> {
+  return apiClient.get<KnowledgeBaseWikiPagesResponse>(`/knowledge-bases/${kbId}/wiki/pages`);
+}
+
+export async function getKnowledgeBaseWikiPage(kbId: string, path: string): Promise<KnowledgeBaseWikiPageResponse> {
+  return apiClient.get<KnowledgeBaseWikiPageResponse>(
+    `/knowledge-bases/${kbId}/wiki/page?path=${encodeURIComponent(path)}`,
+  );
+}
+
+export async function runKnowledgeBaseLint(kbId: string): Promise<KnowledgeBaseLintReportResponse> {
+  return apiClient.post<KnowledgeBaseLintReportResponse>(`/knowledge-bases/${kbId}/lint`, {});
+}
+
+export async function createKnowledgeBaseIngestJob(kbId: string): Promise<KnowledgeBaseIngestJobResponse> {
+  return apiClient.post<KnowledgeBaseIngestJobResponse>(`/knowledge-bases/${kbId}/ingest`, {});
 }
 
 export async function getKnowledgeBaseGitRepositoryStatus(kbId: string): Promise<KnowledgeBaseGitRepositoryStatus> {
@@ -216,4 +242,33 @@ export async function updateKnowledgeBaseAttachment(
 
 export async function deleteKnowledgeBaseAttachment(kbId: string, attachmentId: string): Promise<void> {
   return apiClient.delete<void>(`/knowledge-bases/${kbId}/attachments/${attachmentId}`);
+}
+
+export async function listKnowledgeBaseTemplates(): Promise<KnowledgeBaseTemplateMetadata[]> {
+  const response = await apiClient.get<KnowledgeBaseTemplateListResponse>('/knowledge-bases/templates');
+  return response.items ?? [];
+}
+
+export async function listKnowledgeBaseReviews(
+  kbId: string,
+  status?: 'open' | 'resolved' | 'dismissed',
+): Promise<KnowledgeBaseReviewItemListResponse> {
+  const params = status ? `?status=${status}` : '';
+  return apiClient.get<KnowledgeBaseReviewItemListResponse>(`/knowledge-bases/${kbId}/reviews${params}`);
+}
+
+export async function resolveKnowledgeBaseReview(kbId: string, itemId: string): Promise<KnowledgeBaseReviewItem> {
+  return apiClient.patch<KnowledgeBaseReviewItem>(`/knowledge-bases/${kbId}/reviews/${itemId}`, { status: 'resolved' });
+}
+
+export async function dismissKnowledgeBaseReview(kbId: string, itemId: string): Promise<KnowledgeBaseReviewItem> {
+  return apiClient.patch<KnowledgeBaseReviewItem>(`/knowledge-bases/${kbId}/reviews/${itemId}`, { status: 'dismissed' });
+}
+
+export async function convertKnowledgeBaseReview(
+  kbId: string,
+  itemId: string,
+  payload: { title: string; slug?: string },
+): Promise<KnowledgeBaseReviewItem> {
+  return apiClient.post<KnowledgeBaseReviewItem>(`/knowledge-bases/${kbId}/reviews/${itemId}/convert`, payload);
 }

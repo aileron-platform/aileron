@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarClock, Database, FolderTree, GitBranch, Link2, Loader2, Network, Settings, Share2, Trash2 } from 'lucide-react';
+import { BookOpen, CalendarClock, Database, FolderTree, GitBranch, Link2, Loader2, Network, Settings, Share2, Trash2 } from 'lucide-react';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import { KnowledgeBaseSchedulesTab } from '../components/KnowledgeBaseSchedulesT
 import { KnowledgeBaseSharingTab } from '../components/KnowledgeBaseSharingTab';
 import { useKnowledgeBase } from '../providers/KnowledgeBaseProvider';
 
+const KnowledgeBaseWikiTab = React.lazy(() => import('../components/KnowledgeBaseWikiTab'));
 const KnowledgeBaseGraphTab = React.lazy(() => import('../components/KnowledgeBaseGraphTab'));
 const KnowledgeBaseVersionControlTab = React.lazy(() => import('../components/KnowledgeBaseVersionControlTab'));
 
@@ -71,6 +72,9 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
     if (location.pathname.endsWith('/workspaces')) {
       return 'workspaces';
     }
+    if (location.pathname.endsWith('/wiki')) {
+      return 'wiki';
+    }
     if (location.pathname.endsWith('/graph')) {
       return 'graph';
     }
@@ -80,7 +84,7 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
     if (location.pathname.endsWith('/schedules')) {
       return 'schedules';
     }
-    return 'files';
+    return 'wiki';
   }, [location.pathname]);
 
   React.useEffect(() => {
@@ -206,6 +210,12 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
                 {t('knowledgeBase.detail.tabs.files')}
               </Link>
             </TopTabsTrigger>
+            <TopTabsTrigger value="wiki" asChild>
+              <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_WIKI(knowledgeBaseId)} className="gap-2">
+                <BookOpen className="h-4 w-4" />
+                {t('knowledgeBase.detail.tabs.wiki')}
+              </Link>
+            </TopTabsTrigger>
             <TopTabsTrigger value="graph" asChild>
               <Link to={ROUTES.KNOWLEDGE_BASE_DETAIL_GRAPH(knowledgeBaseId)} className="gap-2">
                 <Network className="h-4 w-4" />
@@ -246,7 +256,7 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
         <Routes>
           <Route
             index
-            element={<Navigate to={ROUTES.KNOWLEDGE_BASE_DETAIL_FILES(knowledgeBaseId)} replace />}
+            element={<Navigate to={ROUTES.KNOWLEDGE_BASE_DETAIL_WIKI(knowledgeBaseId)} replace />}
           />
           <Route
             path="files"
@@ -255,6 +265,14 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
                 knowledgeBaseId={knowledgeBaseId}
                 readOnly={detail?.accessRole === 'viewer'}
               />
+            )}
+          />
+          <Route
+            path="wiki"
+            element={(
+              <React.Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t('knowledgeBase.wiki.loading')}</div>}>
+                <KnowledgeBaseWikiTab knowledgeBaseId={knowledgeBaseId} />
+              </React.Suspense>
             )}
           />
           <Route
@@ -296,6 +314,10 @@ export const KnowledgeBaseDetailRoute: React.FC = () => {
           <Route
             path="workspaces"
             element={<KnowledgeBaseAttachmentsTab knowledgeBaseId={knowledgeBaseId} accessRole={detail?.accessRole ?? 'viewer'} />}
+          />
+          <Route
+            path="*"
+            element={<Navigate to={ROUTES.KNOWLEDGE_BASE_DETAIL_WIKI(knowledgeBaseId)} replace />}
           />
         </Routes>
       </div>

@@ -276,20 +276,11 @@ class AutomationService:
         )
 
     def build_knowledge_base_wiki_index_prompt(self, *, mount_alias: str) -> str:
-        """Build the fixed runtime prompt for KB wiki index automation."""
-        kb_path = f"/knowledge/{mount_alias}"
+        """Build the runtime prompt that invokes the kb-wiki-index skill."""
         return (
-            "You are indexing a Team Wiki knowledge base.\n\n"
-            f"Working directory: `{kb_path}`\n\n"
-            "Requirements:\n"
-            "- Work only inside the knowledge base directory above.\n"
-            "- Read and follow `AGENTS.md`, `purpose.md`, and `schema.md` before editing.\n"
-            "- Review raw sources under `raw/` and normalized content under `normalized/`.\n"
-            "- For PDFs and other binary sources, extract useful text and page/source citations using runtime tools when available.\n"
-            "- Update wiki pages under `wiki/`, including source summaries under `wiki/sources/`.\n"
-            "- Keep `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` current.\n"
-            "- Add frontmatter with source citations to every wiki Markdown page you create or update.\n"
-            "- Do not delete raw source files.\n"
+            "Run the kb-wiki-index skill. "
+            f"Working directory: /knowledge/{mount_alias}. "
+            "Follow the knowledge base AGENTS.md instructions and update wiki/index.md."
         )
 
     def _validate_knowledge_base_wiki_index_metadata(

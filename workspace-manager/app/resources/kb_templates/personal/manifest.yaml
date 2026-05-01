@@ -1,0 +1,9 @@
+id: personal
+name_key: knowledgeBase.template.personal.name
+description_key: knowledgeBase.template.personal.description
+icon: Heart
+extra_dirs:
+  - wiki/goals
+  - wiki/habits
+  - wiki/reflections
+  - wiki/journal

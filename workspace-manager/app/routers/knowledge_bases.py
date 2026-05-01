@@ -19,6 +19,8 @@ from app.models import (
     KnowledgeBaseCreateRequest,
     KnowledgeBaseDetail,
     KnowledgeBaseErrorResponse,
+    KnowledgeBaseTemplateListResponse,
+    KnowledgeBaseTemplateMetadata,
     KnowledgeBaseFileMutationRequest,
     KnowledgeBaseFilePatchRequest,
     KnowledgeBaseGitEnableRequest,
@@ -29,15 +31,18 @@ from app.models import (
     KnowledgeBaseIngestJobListResponse,
     KnowledgeBaseIngestJobRequest,
     KnowledgeBaseIngestJobResponse,
+    KnowledgeBaseWikiPageResponse,
+    KnowledgeBaseWikiPagesResponse,
     KnowledgeBaseListResponse,
-    KnowledgeBaseLintReportListResponse,
     KnowledgeBaseLintReportResponse,
+    KnowledgeBaseReviewItem,
+    KnowledgeBaseReviewItemConvertRequest,
+    KnowledgeBaseReviewItemListResponse,
+    KnowledgeBaseReviewItemUpdateRequest,
     KnowledgeBaseQueryRequest,
     KnowledgeBaseQueryResponse,
     KnowledgeBaseQuerySaveRequest,
     KnowledgeBaseQuerySaveResponse,
-    KnowledgeBaseSourceNormalizeRequest,
-    KnowledgeBaseSourceNormalizeResponse,
     KnowledgeBaseSourceUploadResponse,
     KnowledgeBaseWebClipImportRequest,
     KnowledgeBaseWebClipImportResponse,
@@ -82,9 +87,11 @@ from app.services import (
     get_knowledge_base_ingest_service,
     get_knowledge_base_lint_service,
     get_knowledge_base_query_service,
+    get_knowledge_base_review_item_service,
     get_knowledge_base_service,
     get_knowledge_base_sharing_service,
     get_knowledge_base_source_service,
+    get_knowledge_base_wiki_browse_service,
 )
 from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
 from app.services.knowledge_base_file_service import KnowledgeBaseFileService
@@ -120,8 +127,10 @@ from app.services.knowledge_base_git_service import KnowledgeBaseGitService
 from app.services.knowledge_base_graph_service import KnowledgeBaseGraphService
 from app.services.knowledge_base_ingest_service import KnowledgeBaseIngestService
 from app.services.knowledge_base_lint_service import KnowledgeBaseLintService
+from app.services.knowledge_base_review_item_service import KnowledgeBaseReviewItemService
 from app.services.knowledge_base_query_service import KnowledgeBaseQueryService
 from app.services.knowledge_base_source_service import KnowledgeBaseSourceService
+from app.services.knowledge_base_wiki_browse_service import KnowledgeBaseWikiBrowseService
 
 router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-bases"])
 
@@ -246,6 +255,7 @@ def _to_summary(kb, access_role: str) -> KnowledgeBaseSummary:
         owner_id=kb.owner_id,
         current_size_bytes=kb.current_size_bytes,
         quota_bytes=kb.quota_bytes,
+        template_id=getattr(kb, "template_id", "general"),
         version_control_enabled=getattr(kb, "version_control_enabled", False),
         git_lfs_enabled=getattr(kb, "git_lfs_enabled", False),
         git_default_branch=getattr(kb, "git_default_branch", "main"),
@@ -508,6 +518,27 @@ def _localize_file_management_error(exc: FileManagementException) -> dict:
 
 
 @router.get(
+    "/templates",
+    response_model=KnowledgeBaseTemplateListResponse,
+    summary="List available knowledge base templates",
+)
+def list_knowledge_base_templates() -> KnowledgeBaseTemplateListResponse:
+    from app.services.knowledge_base_template_service import KnowledgeBaseTemplateService
+    svc = KnowledgeBaseTemplateService()
+    items = [
+        KnowledgeBaseTemplateMetadata(
+            id=t.id,
+            name_key=t.name_key,
+            description_key=t.description_key,
+            icon=t.icon,
+            extra_dirs=t.extra_dirs,
+        )
+        for t in svc.list_templates()
+    ]
+    return KnowledgeBaseTemplateListResponse(items=items)
+
+
+@router.get(
     "",
     response_model=KnowledgeBaseListResponse,
     summary="List knowledge bases visible to current user",
@@ -541,6 +572,7 @@ def create_knowledge_base(
             slug=payload.slug,
             description=payload.description,
             quota_bytes=payload.quota_bytes,
+            template_id=payload.template_id,
         )
         return KnowledgeBaseDetail(**_to_summary(kb, "owner").model_dump())
     except Exception as exc:
@@ -808,10 +840,8 @@ async def upload_knowledge_base_source(
     kb_id: str,
     request: Request,
     file: UploadFile = File(...),
-    target_subdir: str = Form("uploads", alias="targetSubdir"),
     target_name: str | None = Form(None, alias="targetName"),
     overwrite: bool = Form(False),
-    normalize: bool = Form(True),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseSourceService = Depends(get_knowledge_base_source_service),
 ) -> KnowledgeBaseSourceUploadResponse:
@@ -828,19 +858,10 @@ async def upload_knowledge_base_source(
             user_id=current_user_id,
             kb_id=kb_id,
             source_file=temp_path,
-            target_subdir=target_subdir,
             target_name=target_name or file.filename,
             overwrite=overwrite,
         )
-        normalization = None
-        if normalize and Path(source.path).suffix.lower() != ".pdf":
-            normalization = service.normalize_source(
-                user_id=current_user_id,
-                kb_id=kb_id,
-                source_path=source.path,
-                force=overwrite,
-            )
-        return KnowledgeBaseSourceUploadResponse(source=source, normalization=normalization)
+        return KnowledgeBaseSourceUploadResponse(source=source)
     except Exception as exc:
         _raise_kb_error(request, exc)
     finally:
@@ -871,30 +892,6 @@ def import_knowledge_base_web_clip(
             assets=assets,
             clip_slug=payload.clip_slug,
             overwrite=payload.overwrite,
-        )
-    except Exception as exc:
-        _raise_kb_error(request, exc)
-
-
-@router.post(
-    "/{kb_id}/sources/normalize",
-    response_model=KnowledgeBaseSourceNormalizeResponse,
-    summary="Normalize a knowledge base source file",
-    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
-)
-def normalize_knowledge_base_source(
-    kb_id: str,
-    request: Request,
-    payload: KnowledgeBaseSourceNormalizeRequest,
-    current_user_id: str = Depends(get_current_user_id),
-    service: KnowledgeBaseSourceService = Depends(get_knowledge_base_source_service),
-) -> KnowledgeBaseSourceNormalizeResponse:
-    try:
-        return service.normalize_source(
-            user_id=current_user_id,
-            kb_id=kb_id,
-            source_path=payload.source_path,
-            force=payload.force,
         )
     except Exception as exc:
         _raise_kb_error(request, exc)
@@ -1051,6 +1048,86 @@ def save_knowledge_base_query_answer(
         _raise_kb_error(request, exc)
 
 
+@router.get(
+    "/{kb_id}/reviews",
+    response_model=KnowledgeBaseReviewItemListResponse,
+    summary="List knowledge base review items",
+    responses=_build_kb_responses(401, 403, 404, 500),
+)
+def list_knowledge_base_reviews(
+    kb_id: str,
+    request: Request,
+    status: str | None = Query(None),
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseReviewItemService = Depends(get_knowledge_base_review_item_service),
+) -> KnowledgeBaseReviewItemListResponse:
+    try:
+        valid_statuses = {"open", "resolved", "dismissed"}
+        filter_status = status if status in valid_statuses else None
+        items = service.list_items(user_id=current_user_id, kb_id=kb_id, status=filter_status)
+        counts = service.count_by_status(kb_id=kb_id)
+        return KnowledgeBaseReviewItemListResponse(
+            items=[KnowledgeBaseReviewItem(**it) for it in items],
+            counts=counts,
+        )
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.patch(
+    "/{kb_id}/reviews/{item_id}",
+    response_model=KnowledgeBaseReviewItem,
+    summary="Resolve or dismiss a review item",
+    responses=_build_kb_responses(400, 401, 403, 404, 500),
+)
+def update_knowledge_base_review(
+    kb_id: str,
+    item_id: str,
+    request: Request,
+    payload: KnowledgeBaseReviewItemUpdateRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseReviewItemService = Depends(get_knowledge_base_review_item_service),
+) -> KnowledgeBaseReviewItem:
+    try:
+        if payload.status == "resolved":
+            item = service.resolve(user_id=current_user_id, kb_id=kb_id, item_id=item_id)
+        elif payload.status == "dismissed":
+            item = service.dismiss(user_id=current_user_id, kb_id=kb_id, item_id=item_id)
+        else:
+            raise ValueError("KB_REVIEW_STATUS_INVALID")
+        return KnowledgeBaseReviewItem(**item)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
+@router.post(
+    "/{kb_id}/reviews/{item_id}/convert",
+    response_model=KnowledgeBaseReviewItem,
+    summary="Convert a review item to a wiki query page",
+    status_code=status.HTTP_201_CREATED,
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
+)
+def convert_knowledge_base_review(
+    kb_id: str,
+    item_id: str,
+    request: Request,
+    payload: KnowledgeBaseReviewItemConvertRequest,
+    current_user_id: str = Depends(get_current_user_id),
+    service: KnowledgeBaseReviewItemService = Depends(get_knowledge_base_review_item_service),
+) -> KnowledgeBaseReviewItem:
+    try:
+        item = service.convert_to_query(
+            user_id=current_user_id,
+            kb_id=kb_id,
+            item_id=item_id,
+            title=payload.title,
+            slug=payload.slug,
+        )
+        return KnowledgeBaseReviewItem(**item)
+    except Exception as exc:
+        _raise_kb_error(request, exc)
+
+
 @router.post(
     "/{kb_id}/lint",
     response_model=KnowledgeBaseLintReportResponse,
@@ -1070,38 +1147,38 @@ def run_knowledge_base_lint(
 
 
 @router.get(
-    "/{kb_id}/lint/reports",
-    response_model=KnowledgeBaseLintReportListResponse,
-    summary="List knowledge base lint reports",
+    "/{kb_id}/wiki/pages",
+    response_model=KnowledgeBaseWikiPagesResponse,
+    summary="List knowledge base wiki pages",
     responses=_build_kb_responses(401, 403, 404, 500),
 )
-def list_knowledge_base_lint_reports(
+def list_knowledge_base_wiki_pages(
     kb_id: str,
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
-    service: KnowledgeBaseLintService = Depends(get_knowledge_base_lint_service),
-) -> KnowledgeBaseLintReportListResponse:
+    service: KnowledgeBaseWikiBrowseService = Depends(get_knowledge_base_wiki_browse_service),
+) -> KnowledgeBaseWikiPagesResponse:
     try:
-        return KnowledgeBaseLintReportListResponse(items=service.list_reports(user_id=current_user_id, kb_id=kb_id))
+        return service.list_pages(user_id=current_user_id, kb_id=kb_id)
     except Exception as exc:
         _raise_kb_error(request, exc)
 
 
 @router.get(
-    "/{kb_id}/lint/reports/content",
-    response_model=KnowledgeBaseLintReportResponse,
-    summary="Read knowledge base lint report",
+    "/{kb_id}/wiki/page",
+    response_model=KnowledgeBaseWikiPageResponse,
+    summary="Get knowledge base wiki page",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
-def get_knowledge_base_lint_report(
+def get_knowledge_base_wiki_page(
     kb_id: str,
     request: Request,
     path: str = Query(...),
     current_user_id: str = Depends(get_current_user_id),
-    service: KnowledgeBaseLintService = Depends(get_knowledge_base_lint_service),
-) -> KnowledgeBaseLintReportResponse:
+    service: KnowledgeBaseWikiBrowseService = Depends(get_knowledge_base_wiki_browse_service),
+) -> KnowledgeBaseWikiPageResponse:
     try:
-        return service.get_report(user_id=current_user_id, kb_id=kb_id, report_path=path)
+        return service.get_page(user_id=current_user_id, kb_id=kb_id, path=path)
     except Exception as exc:
         _raise_kb_error(request, exc)
 
@@ -1431,10 +1508,13 @@ def checkout_knowledge_base_version_control_branch(
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
 ) -> TemplateCheckoutResponse:
-    try:
-        return service.checkout_branch(user_id=current_user_id, kb_id=kb_id, branch_name=branch_name, payload=payload)
-    except Exception as exc:
-        _raise_kb_error(request, exc)
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=_build_error_detail(
+            code="KB_SINGLE_BRANCH_POLICY",
+            message="Knowledge base uses a single-branch policy; branch switching is not allowed.",
+        ),
+    )
 
 
 @router.post(

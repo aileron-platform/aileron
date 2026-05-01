@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.db import models as db_models
+from app.services.knowledge_base_template_service import KnowledgeBaseTemplateService
 
 
 class KnowledgeBaseWikiService:
@@ -17,67 +18,18 @@ class KnowledgeBaseWikiService:
 
     DIRECTORIES = (
         "raw/sources",
-        "raw/uploads",
-        "raw/clipped",
         "raw/assets",
-        "normalized/text",
-        "normalized/metadata",
         "wiki/entities",
         "wiki/concepts",
         "wiki/sources",
         "wiki/queries",
         "wiki/synthesis",
         "wiki/comparisons",
-        "wiki/decisions",
-        "wiki/projects",
-        "reports/ingest",
-        "reports/lint",
-        "reports/graph",
         ".aileron-kb/vector",
     )
 
-    FILES = {
-        "AGENTS.md": """# Team Wiki Agent Instructions
-
-This knowledge base is a team wiki. Treat source material as evidence, keep wiki pages navigable, and preserve citations.
-
-## Rules
-
-- Write durable wiki pages under `wiki/`.
-- Store original source material under `raw/`.
-- Store normalized text and metadata under `normalized/`.
-- Keep `wiki/index.md`, `wiki/overview.md`, and `wiki/log.md` current after indexing.
-- Use wikilinks for relationships, such as `[[concepts/example]]`.
-- Do not remove source files unless explicitly instructed.
-""",
-        "purpose.md": """# Purpose
-
-This team wiki captures shared research, decisions, concepts, source summaries, and reusable answers for the attached workspaces.
-""",
-        "schema.md": """# Wiki Schema
-
-## Required Frontmatter
-
-```yaml
----
-title: Page title
-type: overview
-sources: []
----
-```
-
-## Page Types
-
-- overview
-- entity
-- concept
-- source
-- query
-- synthesis
-- comparison
-- decision
-- project
-""",
+    # Files that are always created regardless of template
+    INTERNAL_FILES = {
         "wiki/index.md": """---
 title: Index
 type: overview
@@ -113,6 +65,7 @@ This wiki is ready for source ingestion and indexing.
         ".aileron-kb/ingest-cache.json": "{}\n",
         ".aileron-kb/reviews.json": "[]\n",
         ".aileron-kb/graph-cache.json": json.dumps({"nodes": [], "edges": []}, separators=(",", ":")) + "\n",
+        ".aileron-kb/sources-metadata.json": "{}\n",
     }
 
     def __init__(self, db: Session) -> None:
@@ -120,8 +73,9 @@ This wiki is ready for source ingestion and indexing.
         self.settings = get_settings()
         self.storage_root = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
         self.storage_root.mkdir(parents=True, exist_ok=True)
+        self.template_service = KnowledgeBaseTemplateService()
 
-    def initialize(self, kb: db_models.KnowledgeBase) -> db_models.KnowledgeBase:
+    def initialize(self, kb: db_models.KnowledgeBase, locale: str = "zh-TW") -> db_models.KnowledgeBase:
         """Create missing Team Wiki directories and seed files."""
         root = self._kb_root(kb.id)
         before_size = self._calculate_size(root)
@@ -133,7 +87,19 @@ This wiki is ready for source ingestion and indexing.
                 changed = True
             target.mkdir(parents=True, exist_ok=True)
 
-        for relative_path, content in self.FILES.items():
+        template_id = getattr(kb, "template_id", None) or "general"
+        try:
+            tmpl = self.template_service.get_template(template_id)
+            for extra in tmpl.extra_dirs:
+                target = root / extra
+                if not target.exists():
+                    changed = True
+                target.mkdir(parents=True, exist_ok=True)
+            self.template_service.render(template_id, root, locale=locale)
+        except ValueError:
+            pass
+
+        for relative_path, content in self.INTERNAL_FILES.items():
             target = root / relative_path
             if target.exists():
                 continue

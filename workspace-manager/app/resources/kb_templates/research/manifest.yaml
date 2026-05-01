@@ -1,0 +1,8 @@
+id: research
+name_key: knowledgeBase.template.research.name
+description_key: knowledgeBase.template.research.description
+icon: Microscope
+extra_dirs:
+  - wiki/methodology
+  - wiki/findings
+  - wiki/thesis
