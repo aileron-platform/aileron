@@ -264,7 +264,7 @@ describe('shared version-control components', () => {
     const modeRailHandle = modeRail.querySelector('.cursor-col-resize') as HTMLElement;
     const sidebarHandle = sidebar.querySelector('.cursor-col-resize') as HTMLElement;
 
-    expect(modeRail).toHaveStyle({ width: '192px' });
+    expect(modeRail).toHaveStyle({ width: '256px' });
     expect(sidebar).toHaveStyle({ width: '320px' });
 
     fireEvent.mouseDown(modeRailHandle, { clientX: 200 });
@@ -275,7 +275,7 @@ describe('shared version-control components', () => {
     fireEvent.mouseMove(window, { clientX: 360 });
     fireEvent.mouseUp(window);
 
-    expect(modeRail).toHaveStyle({ width: '232px' });
+    expect(modeRail).toHaveStyle({ width: '296px' });
     expect(sidebar).toHaveStyle({ width: '280px' });
   });
 

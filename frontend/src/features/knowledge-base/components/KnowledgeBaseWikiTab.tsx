@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, ChevronDown, ChevronRight, GitBranch, Loader2, RefreshCw } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronLeft, ChevronRight, GitBranch, Loader2, RefreshCw } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -18,6 +18,11 @@ import type {
 } from '@/shared/types/knowledgeBase';
 import { IssuesSection, type WikiIssueSelection } from './wiki/IssuesSection';
 import { DEFAULT_WIKI_PATH } from './graph/graphUtils';
+import {
+  KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH,
+  ResizableSidebarHandle,
+  useResizableSidebar,
+} from './knowledgeBasePanelLayout';
 
 interface KnowledgeBaseWikiTabProps {
   knowledgeBaseId: string;
@@ -32,6 +37,8 @@ export const KnowledgeBaseWikiTab: React.FC<KnowledgeBaseWikiTabProps> = ({ know
   const [error, setError] = React.useState<string | null>(null);
   const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
   const [selectedIssue, setSelectedIssue] = React.useState<WikiIssueSelection | null>(null);
+  const navSidebar = useResizableSidebar();
+  const navCollapsed = navSidebar.collapsed;
 
   const searchParams = React.useMemo(() => new URLSearchParams(location.search), [location.search]);
   const selectedPath = searchParams.get('path') || DEFAULT_WIKI_PATH;
@@ -77,6 +84,10 @@ export const KnowledgeBaseWikiTab: React.FC<KnowledgeBaseWikiTabProps> = ({ know
   const handleNavigate = React.useCallback((path: string) => {
     setUrlState({ path });
   }, [setUrlState]);
+
+  const toggleNavigation = React.useCallback(() => {
+    navSidebar.setCollapsed(!navSidebar.collapsed);
+  }, [navSidebar]);
 
   const issueCard = React.useMemo<WikiPagePreviewIssue | null>(() => {
     if (!selectedIssue) return null;
@@ -124,51 +135,88 @@ export const KnowledgeBaseWikiTab: React.FC<KnowledgeBaseWikiTabProps> = ({ know
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-80 flex-shrink-0 flex-col border-r bg-muted/20">
-        <div className="flex items-center justify-between gap-2 border-b bg-background px-3 py-2">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-            {t('knowledgeBase.detail.tabs.wiki')}
-          </div>
+    <div data-testid="wiki-panel-group" className="flex h-full min-h-0">
+      <div
+        data-testid="kb-wiki-navigation"
+        className={cn(
+          'relative flex min-h-0 shrink-0 flex-col border-r bg-muted/20 transition-[width] duration-200',
+        )}
+        style={{ width: navCollapsed ? KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH : navSidebar.width }}
+      >
+        <div className={cn(
+          'flex h-10 items-center border-b bg-card px-3',
+          navCollapsed ? 'justify-center' : 'justify-between gap-2',
+        )}>
+          {!navCollapsed ? (
+            <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <BookOpen className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate">{t('knowledgeBase.detail.tabs.wiki')}</span>
+            </div>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            title={navCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
+            aria-label={navCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
+            onClick={toggleNavigation}
+          >
+            <ChevronLeft className={cn('h-3.5 w-3.5 transition-transform', navCollapsed && 'rotate-180')} />
+          </Button>
         </div>
 
-        <ScrollArea className="min-h-0 flex-1">
-          <PageTree
-            groups={pages?.groups ?? []}
-            collapsed={collapsed}
-            selectedPath={selectedPath}
-            onToggle={(type) => setCollapsed((current) => {
-              const next = new Set(current);
-              if (next.has(type)) next.delete(type);
-              else next.add(type);
-              return next;
-            })}
-            onSelect={(path) => {
-              setSelectedIssue(null);
-              setUrlState({ path });
-            }}
-          />
-        </ScrollArea>
+        {navCollapsed ? (
+          <div className="flex flex-1 items-start justify-center pt-3">
+            <BookOpen className="h-4 w-4 text-primary" />
+          </div>
+        ) : (
+          <>
+            <ScrollArea className="min-h-0 flex-1">
+              <PageTree
+                groups={pages?.groups ?? []}
+                collapsed={collapsed}
+                selectedPath={selectedPath}
+                onToggle={(type) => setCollapsed((current) => {
+                  const next = new Set(current);
+                  if (next.has(type)) next.delete(type);
+                  else next.add(type);
+                  return next;
+                })}
+                onSelect={(path) => {
+                  setSelectedIssue(null);
+                  setUrlState({ path });
+                }}
+              />
+            </ScrollArea>
 
-        {!isEmpty ? (
-          <IssuesSection
-            kbId={knowledgeBaseId}
-            selectedIssue={selectedIssue}
-            onSelectIssue={(issue) => {
-              setSelectedIssue(issue);
-              setUrlState({ path: issue.path });
-            }}
-            onConverted={(path) => {
-              setSelectedIssue(null);
-              setUrlState({ path });
-              void loadPages();
-            }}
+            {!isEmpty ? (
+              <IssuesSection
+                kbId={knowledgeBaseId}
+                selectedIssue={selectedIssue}
+                onSelectIssue={(issue) => {
+                  setSelectedIssue(issue);
+                  setUrlState({ path: issue.path });
+                }}
+                onConverted={(path) => {
+                  setSelectedIssue(null);
+                  setUrlState({ path });
+                  void loadPages();
+                }}
+              />
+            ) : null}
+          </>
+        )}
+
+        {!navCollapsed ? (
+          <ResizableSidebarHandle
+            isResizing={navSidebar.isResizing}
+            onResizeStart={navSidebar.startResize}
           />
         ) : null}
-      </aside>
+      </div>
 
-      <main className="min-w-0 flex-1 overflow-auto">
+      <main data-testid="kb-wiki-preview" className="h-full min-w-0 flex-1 overflow-auto">
         {isEmpty ? (
           <EmptyWikiState
             kbId={knowledgeBaseId}

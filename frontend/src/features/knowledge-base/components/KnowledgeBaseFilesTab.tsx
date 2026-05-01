@@ -32,6 +32,12 @@ import { Button } from '@/shared/components/ui/button';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
+import {
+  KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH,
+  KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+  KNOWLEDGE_BASE_MAX_COLUMN_WIDTH,
+  KNOWLEDGE_BASE_MIN_COLUMN_WIDTH,
+} from './knowledgeBasePanelLayout';
 
 interface KnowledgeBaseFilesTabProps {
   knowledgeBaseId: string;
@@ -89,7 +95,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [draggingPath, setDraggingPath] = React.useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = React.useState<string | null>(null);
   const [isExternalDragActive, setIsExternalDragActive] = React.useState(false);
-  const [treeWidth, setTreeWidth] = React.useState(320);
+  const [treeWidth, setTreeWidth] = React.useState(KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH);
   const [treeCollapsed, setTreeCollapsed] = React.useState(false);
   const [isDragging, setIsDragging] = React.useState(false);
   const [showHiddenEntries, setShowHiddenEntries] = React.useState(false);
@@ -528,7 +534,10 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       }
 
       const deltaX = event.clientX - dragState.startX;
-      const nextWidth = Math.min(Math.max(dragState.startWidth + deltaX, 200), 480);
+      const nextWidth = Math.min(
+        Math.max(dragState.startWidth + deltaX, KNOWLEDGE_BASE_MIN_COLUMN_WIDTH),
+        KNOWLEDGE_BASE_MAX_COLUMN_WIDTH,
+      );
       setTreeWidth(nextWidth);
     };
 
@@ -560,29 +569,27 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       <div
         className={cn(
           'relative border-r transition-[width] duration-200',
-          treeCollapsed ? 'w-10' : 'shrink-0',
+          !treeCollapsed && 'shrink-0',
         )}
-        style={treeCollapsed ? undefined : { width: treeWidth }}
+        style={{ width: treeCollapsed ? KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH : treeWidth }}
       >
         <div
           className={cn(
-            'relative flex h-10 items-center border-b border-sidebar-border bg-card px-2',
+            'flex h-10 items-center border-b border-sidebar-border bg-card px-3',
             treeCollapsed ? 'justify-center' : 'justify-between',
           )}
         >
-          {treeCollapsed ? (
-            <Database className="h-4 w-4 text-sky-600" />
-          ) : (
+          {!treeCollapsed ? (
             <div className="flex items-center gap-2">
               <Database className="h-4 w-4 text-sky-600" />
               <span className="text-sm font-medium">{t('knowledgeBase.files.toolbarTitle')}</span>
               {readOnly && <Badge variant="outline">{t('knowledgeBase.files.readOnlyBadge')}</Badge>}
             </div>
-          )}
+          ) : null}
           <Button
             variant="ghost"
             size="icon"
-            className={cn('h-7 w-7', treeCollapsed && 'absolute right-1 top-1.5')}
+            className="h-7 w-7"
             onClick={() => setTreeCollapsed((value) => !value)}
             title={treeCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
             aria-label={treeCollapsed ? t('workspace.layout.expandSidebar') : t('workspace.layout.collapseSidebar')}
@@ -590,123 +597,124 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
             <ChevronLeft className={cn('h-3.5 w-3.5 transition-transform', treeCollapsed && 'rotate-180')} />
           </Button>
         </div>
-        <StandardFileTreeLayout
-          searchValue={manager.state.searchQuery}
-          onSearchChange={manager.state.setSearchQuery}
-          onSearchClear={manager.state.clearSearch}
-          showSearch={!treeCollapsed}
-          showToolbar={false}
-          contentClassName={treeCollapsed ? 'items-center justify-start overflow-hidden py-3' : undefined}
-        >
-          {treeCollapsed ? (
-            <div className="flex-1" />
-          ) : (
+        {treeCollapsed ? (
+          <div className="flex flex-1 items-start justify-center pt-3">
+            <Database className="h-4 w-4 text-sky-600" />
+          </div>
+        ) : (
+          <StandardFileTreeLayout
+            searchValue={manager.state.searchQuery}
+            onSearchChange={manager.state.setSearchQuery}
+            onSearchClear={manager.state.clearSearch}
+            showSearch
+            showToolbar={false}
+          >
             <FileTreePanel
-              state={manager.state}
-              onNodeClick={handleNodeClick}
-              onNodeDoubleClick={handleNodeDoubleClick}
-              onContextMenu={handleContextMenu}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOverNode}
-              onDragLeave={handleDragLeaveNode}
-              onDrop={handleDropOnNode}
-              onCreateFile={() => fileOps.openCreateFileDialog()}
-              onCreateFolder={() => fileOps.openCreateFolderDialog()}
-              onUpload={() => handleUpload(ROOT_PATH)}
-              onPaste={(files) => {
-                void uploadFilesToPath(files, ROOT_PATH);
-              }}
-              onRefresh={() => { void manager.loadTree(); }}
-              onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
-              enableSearch={false}
-              enableToolbar
-              enableMultiSelectBar={!readOnly}
-              enableDragDrop={!readOnly}
-              draggingPath={draggingPath}
-              dragOverPath={dragOverPath}
-              renderToolbar={() => (
-                <div className="flex w-full items-center justify-between gap-2">
-                  <div className="flex items-center gap-1">
-                    {!readOnly && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={handleToolbarCreateFile}
-                          disabled={manager.state.isLoading}
-                          title={t('knowledgeBase.files.actions.createFile')}
-                          aria-label={t('knowledgeBase.files.actions.createFile')}
-                        >
-                          <FilePlus className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={handleToolbarCreateFolder}
-                          disabled={manager.state.isLoading}
-                          title={t('knowledgeBase.files.actions.createFolder')}
-                          aria-label={t('knowledgeBase.files.actions.createFolder')}
-                        >
-                          <FolderPlus className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0"
-                          onClick={handleToolbarUpload}
-                          disabled={manager.state.isLoading}
-                          title={t('knowledgeBase.files.actions.upload')}
-                          aria-label={t('knowledgeBase.files.actions.upload')}
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                        </Button>
-                      </>
-                    )}
+                state={manager.state}
+                onNodeClick={handleNodeClick}
+                onNodeDoubleClick={handleNodeDoubleClick}
+                onContextMenu={handleContextMenu}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onDragOver={handleDragOverNode}
+                onDragLeave={handleDragLeaveNode}
+                onDrop={handleDropOnNode}
+                onCreateFile={() => fileOps.openCreateFileDialog()}
+                onCreateFolder={() => fileOps.openCreateFolderDialog()}
+                onUpload={() => handleUpload(ROOT_PATH)}
+                onPaste={(files) => {
+                  void uploadFilesToPath(files, ROOT_PATH);
+                }}
+                onRefresh={() => { void manager.loadTree(); }}
+                onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
+                enableSearch={false}
+                enableToolbar
+                enableMultiSelectBar={!readOnly}
+                enableDragDrop={!readOnly}
+                draggingPath={draggingPath}
+                dragOverPath={dragOverPath}
+                renderToolbar={() => (
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <div className="flex items-center gap-1">
+                      {!readOnly && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={handleToolbarCreateFile}
+                            disabled={manager.state.isLoading}
+                            title={t('knowledgeBase.files.actions.createFile')}
+                            aria-label={t('knowledgeBase.files.actions.createFile')}
+                          >
+                            <FilePlus className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={handleToolbarCreateFolder}
+                            disabled={manager.state.isLoading}
+                            title={t('knowledgeBase.files.actions.createFolder')}
+                            aria-label={t('knowledgeBase.files.actions.createFolder')}
+                          >
+                            <FolderPlus className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 w-7 p-0"
+                            onClick={handleToolbarUpload}
+                            disabled={manager.state.isLoading}
+                            title={t('knowledgeBase.files.actions.upload')}
+                            aria-label={t('knowledgeBase.files.actions.upload')}
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0"
+                        onClick={handleToggleHiddenEntries}
+                        disabled={manager.state.isLoading}
+                        title={t(
+                          showHiddenEntries
+                            ? 'knowledgeBase.files.actions.hidden.hideTooltip'
+                            : 'knowledgeBase.files.actions.hidden.showTooltip'
+                        )}
+                        aria-label={t(
+                          showHiddenEntries
+                            ? 'knowledgeBase.files.actions.hidden.hideLabel'
+                            : 'knowledgeBase.files.actions.hidden.showLabel'
+                        )}
+                      >
+                        {showHiddenEntries ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
                     <Button
                       size="sm"
                       variant="ghost"
                       className="h-7 w-7 p-0"
-                      onClick={handleToggleHiddenEntries}
+                      onClick={() => { void manager.loadTree(); }}
                       disabled={manager.state.isLoading}
-                      title={t(
-                        showHiddenEntries
-                          ? 'knowledgeBase.files.actions.hidden.hideTooltip'
-                          : 'knowledgeBase.files.actions.hidden.showTooltip'
-                      )}
-                      aria-label={t(
-                        showHiddenEntries
-                          ? 'knowledgeBase.files.actions.hidden.hideLabel'
-                          : 'knowledgeBase.files.actions.hidden.showLabel'
-                      )}
+                      title={t('knowledgeBase.files.actions.refresh')}
+                      aria-label={t('knowledgeBase.files.actions.refresh')}
                     >
-                      {showHiddenEntries ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      <RefreshCw className={cn('h-3.5 w-3.5', manager.state.isLoading && 'animate-spin')} />
                     </Button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 w-7 p-0"
-                    onClick={() => { void manager.loadTree(); }}
-                    disabled={manager.state.isLoading}
-                    title={t('knowledgeBase.files.actions.refresh')}
-                    aria-label={t('knowledgeBase.files.actions.refresh')}
-                  >
-                    <RefreshCw className={cn('h-3.5 w-3.5', manager.state.isLoading && 'animate-spin')} />
-                  </Button>
-                </div>
-              )}
-              className="flex-1"
-            />
-          )}
-          <FileTreeContextMenu
-            contextMenu={manager.state.contextMenu}
-            items={contextMenuItems}
-            onClose={manager.state.closeContextMenu}
-          />
-        </StandardFileTreeLayout>
+                )}
+                className="flex-1"
+              />
+              <FileTreeContextMenu
+                contextMenu={manager.state.contextMenu}
+                items={contextMenuItems}
+                onClose={manager.state.closeContextMenu}
+              />
+          </StandardFileTreeLayout>
+        )}
         {!treeCollapsed && (
           <div
             className={cn(

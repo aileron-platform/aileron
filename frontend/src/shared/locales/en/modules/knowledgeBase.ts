@@ -300,11 +300,11 @@ const knowledgeBase = {
       empty: 'Select a graph node to preview its wiki page.',
     },
     actions: {
+      openInWiki: 'Open in Wiki',
       fit: 'Fit to screen',
       zoomIn: 'Zoom in',
       zoomOut: 'Zoom out',
-      reset: 'Reset layout',
-      openInWiki: 'Open in Wiki',
+      resetLayout: 'Reset layout',
       hideNodes: 'Hide node list',
       showNodes: 'Show node list',
       hidePreview: 'Hide preview',

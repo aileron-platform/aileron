@@ -300,11 +300,11 @@ const knowledgeBase = {
       empty: '選取關聯圖節點後，可預覽 Wiki 頁面。',
     },
     actions: {
+      openInWiki: '在 Wiki 開啟',
       fit: '符合畫面',
       zoomIn: '放大',
       zoomOut: '縮小',
-      reset: '重設版面',
-      openInWiki: '在 Wiki 開啟',
+      resetLayout: '重設版面',
       hideNodes: '隱藏節點列表',
       showNodes: '顯示節點列表',
       hidePreview: '隱藏預覽',

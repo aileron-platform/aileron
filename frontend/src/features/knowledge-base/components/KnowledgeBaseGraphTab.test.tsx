@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -14,13 +14,6 @@ const apiMocks = vi.hoisted(() => ({
 }));
 const translateMock = vi.hoisted(() => vi.fn((key: string) => key));
 const sigmaEvents = vi.hoisted(() => ({ current: {} as SigmaEvents }));
-const panelDefaults = vi.hoisted(() => [] as Array<{
-  id?: string;
-  defaultSize?: number;
-  minSize?: number;
-  maxSize?: number;
-  collapsible?: boolean;
-}>);
 const cameraMock = vi.hoisted(() => ({
   reset: vi.fn(),
   zoomIn: vi.fn(),
@@ -55,45 +48,6 @@ vi.mock('@/shared/components/ui/scroll-area', () => ({
     <div className={className}>{children}</div>
   ),
 }));
-
-vi.mock('react-resizable-panels', async () => {
-  const ReactModule = await vi.importActual<typeof import('react')>('react');
-  return {
-    PanelGroup: ({ children, onLayout }: { children: React.ReactNode; onLayout?: (sizes: number[]) => void }) => (
-      <div data-testid="panel-group" onMouseUp={() => onLayout?.([20, 50, 30])}>{children}</div>
-    ),
-    Panel: ReactModule.forwardRef(({
-      children,
-      id,
-      defaultSize,
-      minSize,
-      maxSize,
-      collapsible,
-    }: {
-      children: React.ReactNode;
-      id?: string;
-      defaultSize?: number;
-      minSize?: number;
-      maxSize?: number;
-      collapsible?: boolean;
-    }, ref) => {
-      ReactModule.useImperativeHandle(ref, () => ({
-        collapse: vi.fn(),
-        expand: vi.fn(),
-        getId: () => id ?? '',
-        getSize: () => defaultSize ?? 0,
-        isCollapsed: () => false,
-        isExpanded: () => true,
-        resize: vi.fn(),
-      }));
-      panelDefaults.push({ id, defaultSize, minSize, maxSize, collapsible });
-      return <div data-testid={id} data-default-size={defaultSize}>{children}</div>;
-    }),
-    PanelResizeHandle: ({ onDoubleClick }: { onDoubleClick?: () => void }) => (
-      <div role="separator" onDoubleClick={onDoubleClick} />
-    ),
-  };
-});
 
 vi.mock('@/shared/components/wiki-page-preview', () => ({
   WikiPagePreview: ({ path, onNavigate }: {
@@ -148,7 +102,6 @@ describe('KnowledgeBaseGraphTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    panelDefaults.length = 0;
     sigmaEvents.current = {};
     translateMock.mockImplementation((key: string) => key);
     apiMocks.getKnowledgeBaseGraph.mockResolvedValue(graph);
@@ -161,7 +114,23 @@ describe('KnowledgeBaseGraphTab', () => {
     expect(screen.getByTestId('kb-graph-nodes')).toBeInTheDocument();
     expect(screen.getByTestId('kb-graph-canvas')).toBeInTheDocument();
     expect(screen.getByTestId('kb-graph-preview')).toBeInTheDocument();
+    expect(within(screen.getByTestId('kb-graph-canvas')).getByRole('textbox', {
+      name: 'knowledgeBase.graph.search.label',
+    })).toBeInTheDocument();
+    expect(within(screen.getByTestId('kb-graph-canvas')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.fit',
+    })).toBeInTheDocument();
     expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/overview.md');
+  });
+
+  it('fits the graph to the canvas by default', async () => {
+    renderGraphTab();
+    await screen.findAllByTestId('wiki-graph-canvas');
+
+    await waitFor(() => {
+      expect(cameraMock.reset).toHaveBeenCalled();
+    });
+    expect(cameraMock.gotoNode).not.toHaveBeenCalledWith('wiki/overview');
   });
 
   it('selects graph nodes and updates the preview URL state', async () => {
@@ -178,43 +147,74 @@ describe('KnowledgeBaseGraphTab', () => {
     });
   });
 
-  it('selects node list items and opens selected page in wiki', async () => {
+  it('selects node list items and updates graph selection', async () => {
     const user = userEvent.setup();
     renderGraphTab();
     await user.click(await screen.findByRole('button', { name: /Guide/ }));
-    expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/guide.md');
 
-    await user.click(screen.getAllByRole('button', { name: 'knowledgeBase.graph.actions.openInWiki' })[0]);
+    expect(screen.getByTestId('location')).toHaveTextContent('path=wiki%2Fguide.md');
+    expect(screen.getAllByTestId('wiki-preview')[0]).toHaveTextContent('wiki/guide.md');
+  });
+
+  it('opens the selected preview page in wiki from the preview header', async () => {
+    const user = userEvent.setup();
+    renderGraphTab();
+    await user.click(await screen.findByRole('button', { name: /Guide/ }));
+
+    await user.click(within(screen.getByTestId('kb-graph-preview')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.openInWiki',
+    }));
+
     expect(screen.getByTestId('location')).toHaveTextContent('/knowledge-bases/kb-1/wiki?path=wiki%2Fguide.md');
   });
 
-  it('restores persisted pane sizes and updates local storage when layout changes', async () => {
+  it('restores persisted pane sizes from local storage and persists changes', async () => {
     localStorage.setItem('knowledge-base-graph-layout:kb-1', JSON.stringify({
-      sizes: [25, 45, 30],
+      leftWidth: 300,
+      rightWidth: 360,
       leftCollapsed: false,
       rightCollapsed: false,
     }));
-
     renderGraphTab();
     await screen.findAllByTestId('wiki-graph-canvas');
 
-    expect(panelDefaults).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'kb-graph-nodes', defaultSize: 25 }),
-      expect.objectContaining({ id: 'kb-graph-preview', defaultSize: 30 }),
-    ]));
+    expect(screen.getByTestId('kb-graph-nodes')).toHaveStyle({ width: '300px' });
+    expect(screen.getByTestId('kb-graph-preview')).toHaveStyle({ width: '360px' });
 
-    await userEvent.click(screen.getByTestId('panel-group'));
-    expect(localStorage.getItem('knowledge-base-graph-layout:kb-1')).toContain('[20,50,30]');
+    await waitFor(() => {
+      const stored = localStorage.getItem('knowledge-base-graph-layout:kb-1');
+      expect(stored).toContain('"leftWidth":300');
+      expect(stored).toContain('"rightWidth":360');
+    });
   });
 
-  it('sets resize constraints on graph panes', async () => {
+  it('renders graph panes with the shared default column width', async () => {
     renderGraphTab();
     await screen.findAllByTestId('wiki-graph-canvas');
 
-    expect(panelDefaults).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'kb-graph-nodes', minSize: 16, maxSize: 35, collapsible: true }),
-      expect.objectContaining({ id: 'kb-graph-canvas', minSize: 30 }),
-      expect.objectContaining({ id: 'kb-graph-preview', minSize: 24, maxSize: 45, collapsible: true }),
-    ]));
+    expect(screen.getByTestId('kb-graph-nodes')).toHaveStyle({ width: '256px' });
+    expect(screen.getByTestId('kb-graph-preview')).toHaveStyle({ width: '256px' });
+    expect(screen.getByTestId('kb-graph-canvas')).toBeInTheDocument();
   });
+
+  it('places collapse controls in graph pane headers', async () => {
+    const user = userEvent.setup();
+    renderGraphTab();
+    await screen.findAllByTestId('wiki-graph-canvas');
+
+    await user.click(within(screen.getByTestId('kb-graph-nodes')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.hideNodes',
+    }));
+    expect(within(screen.getByTestId('kb-graph-nodes')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.showNodes',
+    })).toBeInTheDocument();
+
+    await user.click(within(screen.getByTestId('kb-graph-preview')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.hidePreview',
+    }));
+    expect(within(screen.getByTestId('kb-graph-preview')).getByRole('button', {
+      name: 'knowledgeBase.graph.actions.showPreview',
+    })).toBeInTheDocument();
+  });
+
 });

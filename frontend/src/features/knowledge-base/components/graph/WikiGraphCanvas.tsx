@@ -17,7 +17,6 @@ interface WikiGraphCanvasProps {
   nodes: KnowledgeBaseGraphNode[];
   edges: KnowledgeBaseGraphEdge[];
   selectedPath: string;
-  layoutVersion: number;
   onSelect: (path: string) => void;
   onControlsReady?: (controls: WikiGraphControls | null) => void;
 }
@@ -26,7 +25,6 @@ export const WikiGraphCanvas: React.FC<WikiGraphCanvasProps> = ({
   nodes,
   edges,
   selectedPath,
-  layoutVersion,
   onSelect,
   onControlsReady,
 }) => {
@@ -39,11 +37,11 @@ export const WikiGraphCanvas: React.FC<WikiGraphCanvasProps> = ({
           nodes={nodes}
           edges={edges}
           selectedNodeId={selectedNodeId}
-          layoutVersion={layoutVersion}
         />
         <GraphEvents nodes={nodes} onSelect={onSelect} />
         <GraphController
           selectedNodeId={selectedNodeId}
+          autoFitKey={`${nodes.length}:${edges.length}`}
           onControlsReady={onControlsReady}
         />
       </SigmaContainer>
@@ -55,8 +53,7 @@ const GraphLoader: React.FC<{
   nodes: KnowledgeBaseGraphNode[];
   edges: KnowledgeBaseGraphEdge[];
   selectedNodeId: string;
-  layoutVersion: number;
-}> = ({ nodes, edges, selectedNodeId, layoutVersion }) => {
+}> = ({ nodes, edges, selectedNodeId }) => {
   const loadGraph = useLoadGraph();
 
   React.useEffect(() => {
@@ -81,7 +78,7 @@ const GraphLoader: React.FC<{
       }
     });
     loadGraph(graph);
-  }, [edges, layoutVersion, loadGraph, nodes, selectedNodeId]);
+  }, [edges, loadGraph, nodes, selectedNodeId]);
 
   return null;
 };
@@ -107,9 +104,11 @@ const GraphEvents: React.FC<{
 
 const GraphController: React.FC<{
   selectedNodeId: string;
+  autoFitKey: string;
   onControlsReady?: (controls: WikiGraphControls | null) => void;
-}> = ({ selectedNodeId, onControlsReady }) => {
+}> = ({ selectedNodeId, autoFitKey, onControlsReady }) => {
   const { reset, zoomIn, zoomOut, gotoNode } = useCamera({ duration: 180 });
+  const skipFocusAfterFitRef = React.useRef<string | null>(null);
   const controls = React.useMemo<WikiGraphControls>(() => ({
     fit: reset,
     zoomIn,
@@ -125,7 +124,16 @@ const GraphController: React.FC<{
   }, [controls, onControlsReady]);
 
   React.useEffect(() => {
+    reset();
+    skipFocusAfterFitRef.current = selectedNodeId;
+  }, [autoFitKey, reset, selectedNodeId]);
+
+  React.useEffect(() => {
     if (selectedNodeId) {
+      if (skipFocusAfterFitRef.current === selectedNodeId) {
+        skipFocusAfterFitRef.current = null;
+        return;
+      }
       gotoNode(selectedNodeId);
     }
   }, [gotoNode, selectedNodeId]);

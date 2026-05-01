@@ -1,6 +1,5 @@
 import React from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
-import { Panel, PanelGroup, PanelResizeHandle, type ImperativePanelHandle } from 'react-resizable-panels';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
@@ -11,6 +10,12 @@ import { WikiGraphCanvas, type WikiGraphControls } from './WikiGraphCanvas';
 import { WikiGraphNodeList } from './WikiGraphNodeList';
 import { WikiGraphSelectionPanel } from './WikiGraphSelectionPanel';
 import { WikiGraphToolbar } from './WikiGraphToolbar';
+import {
+  KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH,
+  KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+  ResizableSidebarHandle,
+  useResizableSidebar,
+} from '../knowledgeBasePanelLayout';
 
 interface WikiGraphExplorerProps {
   knowledgeBaseId: string;
@@ -21,31 +26,36 @@ interface WikiGraphExplorerProps {
 }
 
 interface StoredGraphLayout {
-  sizes: number[];
+  leftWidth: number;
+  rightWidth: number;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
 }
 
-const DEFAULT_LAYOUT = [22, 46, 32];
 const STORAGE_PREFIX = 'knowledge-base-graph-layout';
 
-const loadStoredLayout = (knowledgeBaseId: string): StoredGraphLayout => {
+const loadStoredLayout = (knowledgeBaseId: string): StoredGraphLayout | null => {
   if (typeof window === 'undefined') {
-    return { sizes: DEFAULT_LAYOUT, leftCollapsed: false, rightCollapsed: false };
+    return null;
   }
   try {
     const stored = window.localStorage.getItem(`${STORAGE_PREFIX}:${knowledgeBaseId}`);
     if (!stored) {
-      return { sizes: DEFAULT_LAYOUT, leftCollapsed: false, rightCollapsed: false };
+      return null;
     }
     const parsed = JSON.parse(stored) as Partial<StoredGraphLayout>;
+    if (typeof parsed.leftWidth !== 'number' || typeof parsed.rightWidth !== 'number') {
+      return null;
+    }
+
     return {
-      sizes: Array.isArray(parsed.sizes) && parsed.sizes.length === 3 ? parsed.sizes : DEFAULT_LAYOUT,
+      leftWidth: parsed.leftWidth,
+      rightWidth: parsed.rightWidth,
       leftCollapsed: Boolean(parsed.leftCollapsed),
       rightCollapsed: Boolean(parsed.rightCollapsed),
     };
   } catch {
-    return { sizes: DEFAULT_LAYOUT, leftCollapsed: false, rightCollapsed: false };
+    return null;
   }
 };
 
@@ -92,13 +102,28 @@ export const WikiGraphExplorer: React.FC<WikiGraphExplorerProps> = ({
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [layoutVersion, setLayoutVersion] = React.useState(0);
   const [mobilePanel, setMobilePanel] = React.useState<'nodes' | 'preview' | null>(null);
   const [controls, setControls] = React.useState<WikiGraphControls | null>(null);
-  const [layout, setLayout] = React.useState<StoredGraphLayout>(() => loadStoredLayout(knowledgeBaseId));
   const isSmallScreen = useIsSmallGraphScreen();
-  const leftPanelRef = React.useRef<ImperativePanelHandle>(null);
-  const rightPanelRef = React.useRef<ImperativePanelHandle>(null);
+  const initialLayoutRef = React.useRef(loadStoredLayout(knowledgeBaseId));
+
+  const leftSidebar = useResizableSidebar({
+    initialWidth: initialLayoutRef.current?.leftWidth ?? KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+    initialCollapsed: initialLayoutRef.current?.leftCollapsed ?? false,
+  });
+  const rightSidebar = useResizableSidebar({
+    initialWidth: initialLayoutRef.current?.rightWidth ?? KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+    initialCollapsed: initialLayoutRef.current?.rightCollapsed ?? false,
+  });
+
+  React.useEffect(() => {
+    saveStoredLayout(knowledgeBaseId, {
+      leftWidth: leftSidebar.width,
+      rightWidth: rightSidebar.width,
+      leftCollapsed: leftSidebar.collapsed,
+      rightCollapsed: rightSidebar.collapsed,
+    });
+  }, [knowledgeBaseId, leftSidebar.collapsed, leftSidebar.width, rightSidebar.collapsed, rightSidebar.width]);
 
   const effectiveSelectedPath = React.useMemo(() => {
     if (selectedPath) return selectedPath;
@@ -126,65 +151,46 @@ export const WikiGraphExplorer: React.FC<WikiGraphExplorerProps> = ({
     void loadGraph();
   }, [loadGraph]);
 
-  React.useEffect(() => {
-    setLayout(loadStoredLayout(knowledgeBaseId));
-  }, [knowledgeBaseId]);
-
-  const persistLayout = React.useCallback((next: StoredGraphLayout) => {
-    setLayout(next);
-    saveStoredLayout(knowledgeBaseId, next);
-  }, [knowledgeBaseId]);
-
-  const handleLayout = React.useCallback((sizes: number[]) => {
-    persistLayout({ ...layout, sizes });
-  }, [layout, persistLayout]);
-
   const selectPath = React.useCallback((path: string) => {
     onSelectedPathChange(path);
     controls?.focusNode(graphNodeIdFromPath(path));
   }, [controls, onSelectedPathChange]);
 
   const toggleLeft = React.useCallback(() => {
-    const nextCollapsed = !layout.leftCollapsed;
-    if (nextCollapsed) leftPanelRef.current?.collapse();
-    else leftPanelRef.current?.expand(16);
-    persistLayout({ ...layout, leftCollapsed: nextCollapsed });
-  }, [layout, persistLayout]);
+    leftSidebar.setCollapsed(!leftSidebar.collapsed);
+  }, [leftSidebar]);
 
   const toggleRight = React.useCallback(() => {
-    const nextCollapsed = !layout.rightCollapsed;
-    if (nextCollapsed) rightPanelRef.current?.collapse();
-    else rightPanelRef.current?.expand(24);
-    persistLayout({ ...layout, rightCollapsed: nextCollapsed });
-  }, [layout, persistLayout]);
+    rightSidebar.setCollapsed(!rightSidebar.collapsed);
+  }, [rightSidebar]);
 
   const resetPanes = React.useCallback(() => {
-    leftPanelRef.current?.resize(DEFAULT_LAYOUT[0]);
-    rightPanelRef.current?.resize(DEFAULT_LAYOUT[2]);
-    persistLayout({ sizes: DEFAULT_LAYOUT, leftCollapsed: false, rightCollapsed: false });
-  }, [persistLayout]);
+    leftSidebar.setCollapsed(false);
+    leftSidebar.setWidth(KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH);
+    rightSidebar.setCollapsed(false);
+    rightSidebar.setWidth(KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH);
+  }, [leftSidebar, rightSidebar]);
 
-  const resetGraph = React.useCallback(() => {
-    setLayoutVersion((current) => current + 1);
-    controls?.reset();
-  }, [controls]);
-
-  const preview = (
+  const renderPreview = (collapsed = false, onToggleCollapse?: () => void) => (
     <WikiGraphSelectionPanel
       kbId={knowledgeBaseId}
       selectedPath={effectiveSelectedPath}
+      collapsed={collapsed}
       onNavigate={selectPath}
       onOpenInWiki={() => onOpenInWiki(effectiveSelectedPath)}
       onSourceOpen={onSourceOpen}
+      onToggleCollapse={onToggleCollapse}
     />
   );
 
-  const nodeList = (
+  const renderNodeList = (collapsed = false, onToggleCollapse?: () => void) => (
     <WikiGraphNodeList
       nodes={nodes}
       selectedPath={effectiveSelectedPath}
       searchTerm={searchTerm}
+      collapsed={collapsed}
       onSelect={selectPath}
+      onToggleCollapse={onToggleCollapse}
     />
   );
 
@@ -213,114 +219,106 @@ export const WikiGraphExplorer: React.FC<WikiGraphExplorerProps> = ({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-background">
-      <WikiGraphToolbar
-        searchTerm={searchTerm}
-        leftCollapsed={layout.leftCollapsed}
-        rightCollapsed={layout.rightCollapsed}
-        isLoading={isLoading}
-        hasSelection={Boolean(effectiveSelectedPath)}
-        onSearchTermChange={setSearchTerm}
-        onFit={() => controls?.fit()}
-        onZoomIn={() => controls?.zoomIn()}
-        onZoomOut={() => controls?.zoomOut()}
-        onReset={resetGraph}
-        onRefresh={() => void loadGraph()}
-        onOpenInWiki={() => onOpenInWiki(effectiveSelectedPath)}
-        onToggleLeft={toggleLeft}
-        onToggleRight={toggleRight}
-      />
-
       {!isSmallScreen ? (
-        <div className="min-h-0 flex-1">
-          <PanelGroup direction="horizontal" onLayout={handleLayout}>
-            <Panel
-              id="kb-graph-nodes"
-              ref={leftPanelRef}
-              order={1}
-              defaultSize={layout.sizes[0]}
-              minSize={16}
-              maxSize={35}
-              collapsible
-              collapsedSize={0}
-              onCollapse={() => persistLayout({ ...layout, leftCollapsed: true })}
-              onExpand={() => persistLayout({ ...layout, leftCollapsed: false })}
-            >
-              <aside className="h-full border-r bg-muted/20">{nodeList}</aside>
-            </Panel>
-            <GraphResizeHandle onReset={resetPanes} />
-            <Panel id="kb-graph-canvas" order={2} defaultSize={layout.sizes[1]} minSize={30}>
-              <main className="h-full min-h-0">
-                <WikiGraphCanvas
-                  nodes={nodes}
-                  edges={edges}
-                  selectedPath={effectiveSelectedPath}
-                  layoutVersion={layoutVersion}
-                  onSelect={selectPath}
-                  onControlsReady={setControls}
-                />
-              </main>
-            </Panel>
-            <GraphResizeHandle onReset={resetPanes} />
-            <Panel
-              id="kb-graph-preview"
-              ref={rightPanelRef}
-              order={3}
-              defaultSize={layout.sizes[2]}
-              minSize={24}
-              maxSize={45}
-              collapsible
-              collapsedSize={0}
-              onCollapse={() => persistLayout({ ...layout, rightCollapsed: true })}
-              onExpand={() => persistLayout({ ...layout, rightCollapsed: false })}
-            >
-              <aside className="h-full border-l">{preview}</aside>
-            </Panel>
-          </PanelGroup>
+        <div data-testid="panel-group" className="flex min-h-0 flex-1">
+          <aside
+            data-testid="kb-graph-nodes"
+            className="relative h-full shrink-0 border-r bg-muted/20"
+            style={{ width: leftSidebar.collapsed ? KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH : leftSidebar.width }}
+          >
+            {renderNodeList(leftSidebar.collapsed, toggleLeft)}
+            {!leftSidebar.collapsed ? (
+              <ResizableSidebarHandle
+                isResizing={leftSidebar.isResizing}
+                onResizeStart={leftSidebar.startResize}
+              />
+            ) : null}
+          </aside>
+          <main data-testid="kb-graph-canvas" className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+            <WikiGraphToolbar
+              searchTerm={searchTerm}
+              isLoading={isLoading}
+              onSearchTermChange={setSearchTerm}
+              onFit={() => controls?.fit()}
+              onZoomIn={() => controls?.zoomIn()}
+              onZoomOut={() => controls?.zoomOut()}
+              onResetLayout={resetPanes}
+              onRefresh={() => void loadGraph()}
+            />
+            <div className="min-h-0 flex-1">
+              <WikiGraphCanvas
+                nodes={nodes}
+                edges={edges}
+                selectedPath={effectiveSelectedPath}
+                onSelect={selectPath}
+                onControlsReady={setControls}
+              />
+            </div>
+          </main>
+          <aside
+            data-testid="kb-graph-preview"
+            className="relative h-full shrink-0 border-l"
+            style={{ width: rightSidebar.collapsed ? KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH : rightSidebar.width }}
+          >
+            {!rightSidebar.collapsed ? (
+              <ResizableSidebarHandle
+                side="left"
+                isResizing={rightSidebar.isResizing}
+                onResizeStart={rightSidebar.startResize}
+              />
+            ) : null}
+            {renderPreview(rightSidebar.collapsed, toggleRight)}
+          </aside>
         </div>
       ) : (
-        <div className="relative min-h-0 flex-1">
-          <WikiGraphCanvas
-            nodes={nodes}
-            edges={edges}
-            selectedPath={effectiveSelectedPath}
-            layoutVersion={layoutVersion}
-            onSelect={(path) => {
-              selectPath(path);
-              setMobilePanel('preview');
-            }}
-            onControlsReady={setControls}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <WikiGraphToolbar
+            searchTerm={searchTerm}
+            isLoading={isLoading}
+            onSearchTermChange={setSearchTerm}
+            onFit={() => controls?.fit()}
+            onZoomIn={() => controls?.zoomIn()}
+            onZoomOut={() => controls?.zoomOut()}
+            onResetLayout={resetPanes}
+            onRefresh={() => void loadGraph()}
           />
-          <div className="absolute bottom-3 left-3 right-3 flex gap-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => setMobilePanel('nodes')}>
-              {t('knowledgeBase.graph.nodes.title')}
-            </Button>
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => setMobilePanel('preview')}>
-              {t('knowledgeBase.graph.preview.title')}
-            </Button>
-          </div>
-          {mobilePanel ? (
-            <div className="absolute inset-x-2 bottom-2 top-14 rounded-md border bg-background shadow-lg">
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="flex justify-end border-b px-2 py-2">
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setMobilePanel(null)}>
-                    {t('knowledgeBase.graph.actions.closePanel')}
-                  </Button>
-                </div>
-                <div className={cn('min-h-0 flex-1', mobilePanel === 'preview' && 'overflow-hidden')}>
-                  {mobilePanel === 'nodes' ? nodeList : preview}
+          <div className="relative min-h-0 flex-1">
+            <WikiGraphCanvas
+              nodes={nodes}
+              edges={edges}
+              selectedPath={effectiveSelectedPath}
+              onSelect={(path) => {
+                selectPath(path);
+                setMobilePanel('preview');
+              }}
+              onControlsReady={setControls}
+            />
+            <div className="absolute bottom-3 left-3 right-3 flex gap-2">
+              <Button type="button" variant="secondary" className="flex-1" onClick={() => setMobilePanel('nodes')}>
+                {t('knowledgeBase.graph.nodes.title')}
+              </Button>
+              <Button type="button" variant="secondary" className="flex-1" onClick={() => setMobilePanel('preview')}>
+                {t('knowledgeBase.graph.preview.title')}
+              </Button>
+            </div>
+            {mobilePanel ? (
+              <div className="absolute inset-x-2 bottom-2 top-2 rounded-md border bg-background shadow-lg">
+                <div className="flex h-full min-h-0 flex-col">
+                  <div className="flex justify-end border-b px-2 py-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setMobilePanel(null)}>
+                      {t('knowledgeBase.graph.actions.closePanel')}
+                    </Button>
+                  </div>
+                  <div className={cn('min-h-0 flex-1', mobilePanel === 'preview' && 'overflow-hidden')}>
+                    {mobilePanel === 'nodes' ? renderNodeList() : renderPreview()}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-const GraphResizeHandle: React.FC<{ onReset: () => void }> = ({ onReset }) => (
-  <PanelResizeHandle
-    className="w-1 cursor-col-resize bg-border transition-colors hover:bg-primary/60 data-[resize-handle-active]:bg-primary"
-    onDoubleClick={onReset}
-  />
-);

@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '@/shared/utils/cn';
 
+const DEFAULT_SIDEBAR_WIDTH = 320;
+const MIN_SIDEBAR_WIDTH = 250;
+const MAX_SIDEBAR_WIDTH = 600;
+const DEFAULT_MODE_RAIL_WIDTH = 256;
+const MIN_MODE_RAIL_WIDTH = 220;
+const MAX_MODE_RAIL_WIDTH = 520;
+
 interface VersionControlLayoutProps {
   modeRail: React.ReactNode;
   sidebar: React.ReactNode;
@@ -18,8 +25,8 @@ export const VersionControlLayout: React.FC<VersionControlLayoutProps> = ({
   main,
   className,
 }) => {
-  const [modeRailWidth, setModeRailWidth] = useState(192);
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [modeRailWidth, setModeRailWidth] = useState(DEFAULT_MODE_RAIL_WIDTH);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
   const [dragStart, setDragStart] = useState({ x: 0, width: 0 });
 
@@ -41,9 +48,9 @@ export const VersionControlLayout: React.FC<VersionControlLayoutProps> = ({
     const handleMouseMove = (event: MouseEvent) => {
       const delta = event.clientX - dragStart.x;
       if (dragTarget === 'modeRail') {
-        setModeRailWidth(clamp(dragStart.width + delta, 144, 280));
+        setModeRailWidth(clamp(dragStart.width + delta, MIN_MODE_RAIL_WIDTH, MAX_MODE_RAIL_WIDTH));
       } else {
-        setSidebarWidth(clamp(dragStart.width + delta, 250, 600));
+        setSidebarWidth(clamp(dragStart.width + delta, MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH));
       }
     };
 

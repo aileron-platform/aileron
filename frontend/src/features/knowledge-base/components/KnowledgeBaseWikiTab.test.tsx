@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KnowledgeBaseWikiTab } from './KnowledgeBaseWikiTab';
@@ -123,6 +122,32 @@ describe('KnowledgeBaseWikiTab', () => {
     await user.click(screen.getByRole('button', { name: /Guide/ }));
     expect(screen.getByTestId('location')).toHaveTextContent('path=wiki%2Fguide.md');
     expect(screen.queryByTestId('wiki-graph-canvas')).not.toBeInTheDocument();
+  });
+
+  it('renders the wiki navigation column with the shared default width and a resize handle', async () => {
+    renderWikiTab();
+
+    await screen.findByText('Overview');
+
+    expect(screen.getByTestId('wiki-panel-group')).toBeInTheDocument();
+    const navigation = screen.getByTestId('kb-wiki-navigation');
+    expect(navigation).toHaveStyle({ width: '256px' });
+    expect(screen.getByTestId('kb-wiki-preview')).toBeInTheDocument();
+    expect(screen.getByRole('separator', { hidden: true })).toBeInTheDocument();
+  });
+
+  it('collapses and expands the wiki navigation column from the header', async () => {
+    const user = userEvent.setup();
+    renderWikiTab();
+
+    await screen.findByText('Overview');
+
+    await user.click(screen.getByRole('button', { name: 'workspace.layout.collapseSidebar' }));
+    expect(screen.queryByText('Overview')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'workspace.layout.expandSidebar' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'workspace.layout.expandSidebar' }));
+    expect(screen.getByText('Overview')).toBeInTheDocument();
   });
 
   it('runs ingest from the empty wiki onboarding flow and refreshes pages', async () => {
