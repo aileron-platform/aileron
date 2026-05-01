@@ -43,6 +43,8 @@ const sidebars: SidebarsConfig = {
         'features/claude-integration',
         'features/automation',
         'features/team-wiki-knowledge-base',
+        'features/knowledge-base',
+        'features/workspace-scripts',
       ],
     },
     {
