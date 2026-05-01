@@ -11,7 +11,7 @@ from app.config.settings import get_settings
 from app.database.session import get_db
 from app.utils.datetime_utils import utcnow
 
-from .service import HealthCheckService
+from .service import HealthCheckService, get_terminal_service_status
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ async def health_check(db: Session = Depends(get_db)) -> dict[str, object]:
     except Exception as e:
         # 如果資料庫連線失敗，仍然返回基本的健康狀態
         settings = get_settings()
-        terminal_status = HealthCheckService(db).get_terminal_service_status()
+        terminal_status = get_terminal_service_status()
         return {
             "status": "degraded",
             "service": "workspace-runtime",

@@ -16,8 +16,19 @@ from app.utils.datetime_utils import utcnow
 logger = logging.getLogger(__name__)
 
 
+def get_terminal_service_status() -> dict[str, object]:
+    """Report terminal-service readiness, avoiding confusion with main API health status."""
+    port = int(os.getenv("TERMINAL_PORT", "3004"))
+
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return {"status": "ready", "port": port}
+    except OSError:
+        return {"status": "starting", "port": port}
+
+
 class HealthCheckResult(TypedDict, total=False):
-    """健康檢查結果類型"""
+    """Health check result type"""
     status: Literal["healthy", "unhealthy", "degraded"]
     service: str
     workspace_id: str
@@ -49,15 +60,9 @@ class HealthCheckService:
             logger.warning(f"無法獲取容器 ID: {e}")
             return None
 
-    def get_terminal_service_status(self) -> dict[str, object]:
-        """回報 terminal-service readiness，避免與主 API 健康狀態混淆。"""
-        port = int(os.getenv("TERMINAL_PORT", "3004"))
-
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return {"status": "ready", "port": port}
-        except OSError:
-            return {"status": "starting", "port": port}
+    @staticmethod
+    def get_terminal_service_status() -> dict[str, object]:
+        return get_terminal_service_status()
 
     def check_and_update_workspace_status(self) -> HealthCheckResult:
         """
@@ -82,6 +87,7 @@ class HealthCheckService:
                     "workspace_id": workspace_id,
                     "error": "Workspace not found in database",
                     "timestamp": current_time.isoformat() + "Z",
+                    "terminal_service": self.get_terminal_service_status(),
                 }
 
             # 檢查並更新狀態
@@ -138,4 +144,4 @@ class HealthCheckService:
             }
 
 
-__all__ = ["HealthCheckService"]
+__all__ = ["HealthCheckService", "get_terminal_service_status"]
