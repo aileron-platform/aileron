@@ -58,18 +58,18 @@ def _write_source(service: KnowledgeBaseIngestService, kb_id: str, path: str, co
 
 @pytest.mark.unit
 def test_create_job_persists_queue_and_sources(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
 
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
 
     queue_path = ingest_service.storage_root / kb.id / ".aileron-kb/ingest-queue.json"
     queue = json.loads(queue_path.read_text(encoding="utf-8"))
     assert job.status == "queued"
-    assert job.source_paths == ["/raw/uploads/research.md"]
+    assert job.source_paths == ["/raw/sources/research.md"]
     assert queue[0]["id"] == job.id
     assert queue[0]["status"] == "queued"
     assert queue[0]["versionControlEnabled"] is False
@@ -78,11 +78,11 @@ def test_create_job_persists_queue_and_sources(ingest_service, kb):
 
 @pytest.mark.unit
 def test_create_job_skips_unchanged_source_after_successful_ingest(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     first = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
     output = json.dumps(
         {
@@ -105,12 +105,12 @@ def test_create_job_skips_unchanged_source_after_successful_ingest(ingest_servic
     second = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
 
     assert second.status == "skipped"
     assert second.source_paths == []
-    assert second.skipped_sources == ["/raw/uploads/research.md"]
+    assert second.skipped_sources == ["/raw/sources/research.md"]
 
 
 @pytest.mark.unit
@@ -141,11 +141,11 @@ def test_parse_generation_output_rejects_paths_outside_kb(ingest_service):
 
 @pytest.mark.unit
 def test_apply_generation_output_writes_updates_source_summary_and_status(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
     output = json.dumps(
         {
@@ -183,26 +183,26 @@ def test_apply_generation_output_writes_updates_source_summary_and_status(ingest
     )
     source_summaries = list((ingest_service.storage_root / kb.id / "wiki/sources").glob("research-*.md"))
     assert len(source_summaries) == 1
-    assert "/raw/uploads/research.md" in source_summaries[0].read_text(encoding="utf-8")
+    assert "/raw/sources/research.md" in source_summaries[0].read_text(encoding="utf-8")
     cache = json.loads((ingest_service.storage_root / kb.id / ".aileron-kb/ingest-cache.json").read_text(encoding="utf-8"))
-    assert cache["raw/uploads/research.md"]["ingestedAt"]
-    assert set(cache["raw/uploads/research.md"]) == {"sourceHash", "ingestedAt", "generatedFiles"}
+    assert cache["raw/sources/research.md"]["ingestedAt"]
+    assert set(cache["raw/sources/research.md"]) == {"sourceHash", "ingestedAt", "generatedFiles"}
     assert kb.last_index_status == "success"
     assert kb.last_index_error is None
 
 
 @pytest.mark.unit
 def test_git_blob_sha_matches_git_hash_object(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     root = ingest_service.storage_root / kb.id
     repo = Repo.init(root, initial_branch="main")
 
-    assert git_blob_sha(root / "raw/uploads/research.md") == repo.git.hash_object("raw/uploads/research.md")
+    assert git_blob_sha(root / "raw/sources/research.md") == repo.git.hash_object("raw/sources/research.md")
 
 
 @pytest.mark.unit
 def test_discover_candidates_uses_three_cache_rules(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     generated = ingest_service.storage_root / kb.id / "wiki/generated.md"
     generated.parent.mkdir(parents=True, exist_ok=True)
     generated.write_text("# Generated\n", encoding="utf-8")
@@ -211,8 +211,8 @@ def test_discover_candidates_uses_three_cache_rules(ingest_service, kb):
     cache_path.write_text(
         json.dumps(
             {
-                "raw/uploads/research.md": {
-                    "sourceHash": ingest_service._hash_file(ingest_service.storage_root / kb.id / "raw/uploads/research.md"),
+                "raw/sources/research.md": {
+                    "sourceHash": ingest_service._hash_file(ingest_service.storage_root / kb.id / "raw/sources/research.md"),
                     "ingestedAt": "2026-05-01T00:00:00+00:00",
                     "generatedFiles": ["wiki/generated.md"],
                 }
@@ -221,23 +221,23 @@ def test_discover_candidates_uses_three_cache_rules(ingest_service, kb):
         encoding="utf-8",
     )
 
-    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/sources/research.md"])
     assert candidates[0].skipped is True
 
     generated.unlink()
-    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/sources/research.md"])
     assert candidates[0].skipped is False
 
     generated.write_text("# Generated\n", encoding="utf-8")
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source changed\n")
-    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/uploads/research.md"])
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source changed\n")
+    candidates = ingest_service.discover_candidates(kb_id=kb.id, source_paths=["/raw/sources/research.md"])
     assert candidates[0].skipped is False
 
 
 @pytest.mark.unit
 def test_apply_generation_output_commits_changed_files_when_git_enabled(ingest_service, kb):
     kb.version_control_enabled = True
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     root = ingest_service.storage_root / kb.id
     repo = Repo.init(root, initial_branch="main")
     (root / ".gitignore").write_text(".aileron-kb/\n", encoding="utf-8")
@@ -246,7 +246,7 @@ def test_apply_generation_output_commits_changed_files_when_git_enabled(ingest_s
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
     output = json.dumps(
         {
@@ -282,11 +282,11 @@ def test_apply_generation_output_commits_changed_files_when_git_enabled(ingest_s
 @pytest.mark.unit
 def test_apply_generation_output_rolls_back_writes_on_commit_failure(ingest_service, kb):
     kb.version_control_enabled = True
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
     original_index = (ingest_service.storage_root / kb.id / "wiki/index.md").read_text(encoding="utf-8")
     output = json.dumps(
@@ -318,11 +318,11 @@ def test_apply_generation_output_rolls_back_writes_on_commit_failure(ingest_serv
 
 @pytest.mark.unit
 def test_fail_job_updates_status_and_error(ingest_service, kb):
-    _write_source(ingest_service, kb.id, "/raw/uploads/research.md", "# Source\n")
+    _write_source(ingest_service, kb.id, "/raw/sources/research.md", "# Source\n")
     job = ingest_service.create_job(
         user_id="owner-1",
         kb_id=kb.id,
-        source_paths=["/raw/uploads/research.md"],
+        source_paths=["/raw/sources/research.md"],
     )
 
     failed = ingest_service.fail_job(kb_id=kb.id, job_id=job.id, error="LLM_FAILED")

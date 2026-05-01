@@ -6,6 +6,7 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
 from app.db import models as db_models
 from app.services.knowledge_base_review_item_service import KnowledgeBaseReviewItemService
@@ -120,6 +121,40 @@ def test_convert_to_query_page(review_service, kb, tmp_path):
     assert query_file.is_file()
     assert result["status"] == "resolved"
     assert result["queryPage"] == "wiki/queries/open-question.md"
+
+
+@pytest.mark.unit
+def test_convert_to_query_page_escapes_frontmatter_title(review_service, kb, tmp_path):
+    _init_kb(review_service, kb.id)
+    review_service.wiki_service.storage_root = tmp_path
+
+    from app.services.knowledge_base_ingest_service import ParsedReviewBlock
+    review_service.append_from_ingest(
+        kb_id=kb.id,
+        review_blocks=[
+            ParsedReviewBlock(
+                type="suggestion",
+                page_path="wiki/x.md",
+                detail="confirm: ownership\nbefore publishing",
+            )
+        ],
+    )
+    items = review_service.list_items(user_id="owner-1", kb_id=kb.id)
+
+    review_service.convert_to_query(
+        user_id="owner-1",
+        kb_id=kb.id,
+        item_id=items[0]["id"],
+        title="Open: Question\nNext",
+        slug="open-question-next",
+    )
+
+    query_file = tmp_path / kb.id / "wiki" / "queries" / "open-question-next.md"
+    raw = query_file.read_text(encoding="utf-8")
+    frontmatter_raw = raw.split("---\n", 2)[1]
+    assert yaml.safe_load(frontmatter_raw)["title"] == "Open: Question\nNext"
+    assert "# Open: Question Next" in raw
+    assert "confirm: ownership before publishing" in raw
 
 
 @pytest.mark.unit

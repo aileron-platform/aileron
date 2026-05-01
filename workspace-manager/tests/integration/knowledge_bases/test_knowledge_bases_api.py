@@ -195,7 +195,7 @@ def test_knowledge_base_file_content_raw_supports_viewer_and_rejects_bad_paths(t
 
 
 @pytest.mark.integration
-def test_knowledge_base_source_api_uploads_normalizes_and_imports_web_clip(test_app, create_user, monkeypatch):
+def test_knowledge_base_source_api_uploads_sources_and_imports_web_clip(test_app, create_user, monkeypatch):
     client, _ = test_app
     owner = create_user(username="kb-source-owner")
     _authenticate_as(client, monkeypatch, owner)
@@ -207,7 +207,6 @@ def test_knowledge_base_source_api_uploads_normalizes_and_imports_web_clip(test_
 
     upload_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/sources",
-        data={"targetSubdir": "uploads", "normalize": "true"},
         files={"file": ("research.md", b"# Research\n\nBody\n", "text/markdown")},
     )
     clip_response = client.post(
@@ -218,23 +217,15 @@ def test_knowledge_base_source_api_uploads_normalizes_and_imports_web_clip(test_
             "assets": {"diagram.txt": "asset text"},
         },
     )
-    normalize_response = client.post(
-        f"/api/v1/knowledge-bases/{kb_id}/sources/normalize",
-        json={"sourcePath": clip_response.json()["path"]},
-    )
 
     assert upload_response.status_code == 200
     upload_payload = upload_response.json()
-    assert upload_payload["source"]["path"] == "/raw/uploads/research.md"
+    assert upload_payload["source"]["path"] == "/raw/sources/research.md"
     assert upload_payload["source"]["sourceHash"]
-    assert upload_payload["normalization"]["sourcePath"] == "/raw/uploads/research.md"
-    assert upload_payload["normalization"]["normalizedTextPath"].startswith("/normalized/text/research-")
+    assert "normalization" not in upload_payload
     assert clip_response.status_code == 200
-    assert clip_response.json()["path"] == "/raw/clipped/example-page.md"
+    assert clip_response.json()["path"] == "/raw/sources/example-page.md"
     assert clip_response.json()["assetPaths"] == ["/raw/assets/example-page/diagram.txt"]
-    assert normalize_response.status_code == 200
-    assert normalize_response.json()["sourcePath"] == "/raw/clipped/example-page.md"
-    assert normalize_response.json()["extractor"] == "text"
 
 
 @pytest.mark.integration
@@ -272,7 +263,6 @@ def test_knowledge_base_ingest_job_api_supports_list_get_retry_and_cancel(test_a
     kb_id = create_kb_response.json()["id"]
     upload_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/sources",
-        data={"targetSubdir": "uploads", "normalize": "true"},
         files={"file": ("paper.md", b"# Paper\n\nBody\n", "text/markdown")},
     )
     source_path = upload_response.json()["source"]["path"]
@@ -315,7 +305,6 @@ def test_knowledge_base_ingest_job_api_allows_viewer_reads_only(test_app, create
     kb_id = create_kb_response.json()["id"]
     upload_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/sources",
-        data={"targetSubdir": "uploads", "normalize": "false"},
         files={"file": ("notes.md", b"# Notes\n", "text/markdown")},
     )
     create_job_response = client.post(
@@ -361,7 +350,7 @@ def test_knowledge_base_query_api_returns_context_and_saves_answer(test_app, cre
                 "title: Python\n"
                 "type: concept\n"
                 "sources:\n"
-                "  - /raw/uploads/python.md\n"
+                "  - /raw/sources/python.md\n"
                 "---\n\n"
                 "# Python\n\n"
                 "Python packaging uses wheels and package indexes.\n"
@@ -435,7 +424,7 @@ def test_knowledge_base_query_api_allows_viewer_query_but_rejects_save(test_app,
 
 
 @pytest.mark.integration
-def test_knowledge_base_lint_api_runs_and_reads_reports(test_app, create_user, monkeypatch):
+def test_knowledge_base_lint_api_returns_inline_report(test_app, create_user, monkeypatch):
     client, _ = test_app
     owner = create_user(username="kb-lint-owner")
     _authenticate_as(client, monkeypatch, owner)
@@ -450,25 +439,16 @@ def test_knowledge_base_lint_api_runs_and_reads_reports(test_app, create_user, m
     )
 
     lint_response = client.post(f"/api/v1/knowledge-bases/{kb_id}/lint")
-    report_path = lint_response.json()["reportPath"]
-    list_response = client.get(f"/api/v1/knowledge-bases/{kb_id}/lint/reports")
-    read_response = client.get(
-        f"/api/v1/knowledge-bases/{kb_id}/lint/reports/content",
-        params={"path": report_path},
-    )
 
     assert lint_response.status_code == 200
     assert lint_response.json()["kbId"] == kb_id
-    assert report_path.startswith("/reports/lint/lint-")
+    assert "reportPath" not in lint_response.json()
     assert "broken_wikilink" in lint_response.json()["issueCounts"]
-    assert list_response.status_code == 200
-    assert list_response.json()["items"][0]["reportPath"] == report_path
-    assert read_response.status_code == 200
-    assert read_response.json()["reportPath"] == report_path
+    assert lint_response.json()["issues"][0]["path"] == "wiki/broken.md"
 
 
 @pytest.mark.integration
-def test_knowledge_base_lint_api_allows_viewer_report_reads_only(test_app, create_user, monkeypatch):
+def test_knowledge_base_lint_api_rejects_viewer_runs(test_app, create_user, monkeypatch):
     client, _ = test_app
     owner = create_user(username="kb-lint-owner-2")
     viewer = create_user(username="kb-lint-viewer")
@@ -478,22 +458,11 @@ def test_knowledge_base_lint_api_allows_viewer_report_reads_only(test_app, creat
         json={"name": "Viewer Lint Docs", "slug": "viewer-lint-docs"},
     )
     kb_id = create_kb_response.json()["id"]
-    lint_response = client.post(f"/api/v1/knowledge-bases/{kb_id}/lint")
-    report_path = lint_response.json()["reportPath"]
     client.post(f"/api/v1/knowledge-bases/{kb_id}/shares", json={"userId": viewer.id, "role": "viewer"})
 
     _authenticate_as(client, monkeypatch, viewer)
-    list_response = client.get(f"/api/v1/knowledge-bases/{kb_id}/lint/reports")
-    read_response = client.get(
-        f"/api/v1/knowledge-bases/{kb_id}/lint/reports/content",
-        params={"path": report_path},
-    )
     run_response = client.post(f"/api/v1/knowledge-bases/{kb_id}/lint")
 
-    assert list_response.status_code == 200
-    assert list_response.json()["items"][0]["reportPath"] == report_path
-    assert read_response.status_code == 200
-    assert read_response.json()["reportPath"] == report_path
     assert run_response.status_code == 403
     assert run_response.json()["detail"]["code"] == "KB_PERMISSION_DENIED"
 
@@ -559,7 +528,7 @@ def test_knowledge_base_git_api_supports_enable_changes_commit_and_history(test_
 
 
 @pytest.mark.integration
-def test_knowledge_base_git_api_supports_lfs_remote_branch_and_rollback_guards(test_app, create_user, monkeypatch):
+def test_knowledge_base_git_api_supports_lfs_remote_single_branch_and_rollback_guards(test_app, create_user, monkeypatch):
     client, _ = test_app
     owner = create_user(username="kb-git-manager")
     viewer = create_user(username="kb-git-viewer")
@@ -604,10 +573,9 @@ def test_knowledge_base_git_api_supports_lfs_remote_branch_and_rollback_guards(t
     assert remote_response.json()["success"] is True
     assert status_response.status_code == 200
     assert status_response.json()["remoteUrl"] == "https://example.com/team/wiki.git"
-    assert checkout_response.status_code == 200
-    assert checkout_response.json()["branch"] == "draft"
-    assert checkout_response.json()["created"] is True
-    assert {branch["name"] for branch in branches_response.json()["branches"]} >= {"main", "draft"}
+    assert checkout_response.status_code == 409
+    assert checkout_response.json()["detail"]["code"] == "KB_SINGLE_BRANCH_POLICY"
+    assert {branch["name"] for branch in branches_response.json()["branches"]} == {"main"}
     assert rollback_guard_response.status_code == 400
     assert rollback_guard_response.json()["detail"]["code"] == "KB_GIT_ROLLBACK_CONFIRMATION_REQUIRED"
     assert viewer_rollback_response.status_code == 403

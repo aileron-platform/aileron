@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
+import yaml
 from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
@@ -89,10 +90,17 @@ class KnowledgeBaseReviewItemService:
             )
 
         context = item.get("context", "")
+        frontmatter = yaml.safe_dump(
+            {"title": title, "type": "query", "sources": []},
+            allow_unicode=True,
+            sort_keys=False,
+        ).strip()
+        heading = self._single_line(title)
+        detail = self._single_line(str(item.get("detail", "")))
         content = (
-            f"---\ntitle: {title}\ntype: query\nsources: []\n---\n\n"
-            f"# {title}\n\n"
-            f"*Converted from review item: {item.get('detail', '')}*\n\n"
+            f"---\n{frontmatter}\n---\n\n"
+            f"# {heading}\n\n"
+            f"*Converted from review item: {detail}*\n\n"
         )
         if context:
             content += f"{context}\n\n"
@@ -261,3 +269,7 @@ class KnowledgeBaseReviewItemService:
         import re as _re
         slug = _re.sub(r"[^a-z0-9]+", "-", value.lower().strip()).strip("-")
         return slug[:96] or "query"
+
+    @staticmethod
+    def _single_line(value: str) -> str:
+        return " ".join(value.split())
