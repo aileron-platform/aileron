@@ -16,6 +16,9 @@ export interface KnowledgeBaseFileTreeDataAdapterOptions {
   includeHidden?: boolean;
 }
 
+const INITIAL_TREE_MAX_DEPTH = 5;
+const CHILDREN_TREE_MAX_DEPTH = 1;
+
 export const knowledgeBaseFileEndpoints = {
   getTree: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/tree`,
   getContent: (knowledgeBaseId: string) => `/knowledge-bases/${knowledgeBaseId}/files/content`,
@@ -36,13 +39,15 @@ export class KnowledgeBaseFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async getTree(): Promise<FileTreeNode[]> {
     const { knowledgeBaseId, includeHidden } = this.options;
-    const url = `${knowledgeBaseFileEndpoints.getTree(knowledgeBaseId)}?path=${encodeURIComponent('/')}&includeHidden=${String(includeHidden ?? false)}`;
+    const url = this.buildTreeUrl('/', INITIAL_TREE_MAX_DEPTH);
     const response = await apiClient.get<{ nodes?: FileTreeNode[] }>(url);
     return response.nodes ?? [];
   }
 
-  async getChildren(): Promise<FileTreeNode[]> {
-    return [];
+  async getChildren(path: string): Promise<FileTreeNode[]> {
+    const url = this.buildTreeUrl(path, CHILDREN_TREE_MAX_DEPTH);
+    const response = await apiClient.get<{ nodes?: FileTreeNode[] }>(url);
+    return response.nodes ?? [];
   }
 
   async getContent(path: string): Promise<string> {
@@ -137,6 +142,16 @@ export class KnowledgeBaseFileTreeDataAdapter implements FileTreeDataAdapter {
       destinationPath: targetPath,
       overwrite: false,
     });
+  }
+
+  private buildTreeUrl(path: string, maxDepth: number): string {
+    const { knowledgeBaseId, includeHidden } = this.options;
+    const params = new URLSearchParams({
+      path,
+      includeHidden: String(includeHidden ?? false),
+      maxDepth: String(maxDepth),
+    });
+    return `${knowledgeBaseFileEndpoints.getTree(knowledgeBaseId)}?${params.toString()}`;
   }
 }
 

@@ -38,6 +38,8 @@ from .exceptions import (
     PermissionDeniedException,
     FileTooLargeException,
     DirectoryNotEmptyException,
+    KnowledgeBasePathNotWritableError,
+    KnowledgeBaseRawRootCannotBeDeletedError,
 )
 
 __all__ = [
@@ -71,5 +73,6 @@ __all__ = [
     "PermissionDeniedException",
     "FileTooLargeException",
     "DirectoryNotEmptyException",
+    "KnowledgeBasePathNotWritableError",
+    "KnowledgeBaseRawRootCannotBeDeletedError",
 ]
-

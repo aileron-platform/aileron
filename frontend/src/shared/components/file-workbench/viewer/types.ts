@@ -58,6 +58,8 @@ export interface FileViewerWorkbenchProps {
   useViewportExpansion?: boolean;
   hideChromeWhenExpanded?: boolean;
   renderFocusToolbar?: (params: FileViewerWorkbenchFocusToolbarParams) => ReactNode;
+  isPathWritable?: (path: string) => boolean;
+  renderReadOnlyBadge?: (tab: FileViewerWorkbenchTab) => ReactNode;
   onTabsChange: (tabs: FileViewerWorkbenchTab[]) => void;
   onActiveTabChange: (tabId: string | null) => void;
 }

@@ -152,6 +152,8 @@ const knowledgeBase = {
   files: {
     toolbarTitle: 'Knowledge base files',
     readOnlyBadge: 'Read only',
+    readOnlyPathBadge: 'Read-only',
+    readOnlyPathBadgeTooltip: 'This file is maintained by the system',
     viewerBadge: 'Viewer',
     uploadSuccessTitle: 'Files uploaded',
     uploadSuccessDescription: '{{count}} file(s) processed.',
@@ -169,12 +171,17 @@ const knowledgeBase = {
     targetExists: 'Paste failed: destination already exists',
     moveFailed: 'Move failed',
     operationFailedTitle: 'File operation failed',
-    dropOverlay: 'Drop to upload into the knowledge base root',
+    dropOverlay: 'Drop to upload into raw/sources',
+    errors: {
+      pathNotWritable: 'Only files under raw/ can be edited',
+      rawRootCannotBeDeleted: 'raw/ root directory cannot be deleted',
+    },
     actions: {
       createFile: 'New text file',
       createFolder: 'Create folder',
       upload: 'Upload files',
       refresh: 'Refresh',
+      uploadParentPickerHint: 'New entries can only be created under raw/',
       hidden: {
         showLabel: 'Show hidden',
         hideLabel: 'Hide hidden',

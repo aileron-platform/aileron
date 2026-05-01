@@ -16,6 +16,8 @@ export interface DialogState {
     node?: FileTreeNode;
     nodes?: FileTreeNode[];
     currentName?: string;
+    parentPath?: string;
+    parentPathWasOverridden?: boolean;
   };
 }
 
@@ -25,6 +27,9 @@ export interface UseFileOperationsWithDialogOptions {
   onRename?: (oldPath: string, newName: string) => Promise<void>;
   onDelete?: (path: string, node?: FileTreeNode) => Promise<void>;
   onBatchDelete?: (paths: string[]) => Promise<void>;
+  isPathWritable?: (path: string) => boolean;
+  defaultWritableParent?: string;
+  onUnwriteableContextHint?: () => void;
 }
 
 export function useFileOperationsWithDialog(options: UseFileOperationsWithDialogOptions) {
@@ -33,6 +38,22 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
   const [dialogState, setDialogState] = useState<DialogState>({ type: null });
   const [isLoading, setIsLoading] = useState(false);
 
+  const getNodeParentPath = useCallback((node?: FileTreeNode) => {
+    if (!node) return '/';
+    if (node.type === 'directory') return node.path;
+    const lastSlashIndex = node.path.lastIndexOf('/');
+    return lastSlashIndex > 0 ? node.path.substring(0, lastSlashIndex) : '/';
+  }, []);
+
+  const resolveCreateParentPath = useCallback((node?: FileTreeNode) => {
+    const parentPath = getNodeParentPath(node);
+    const nodeWritable = node?.writable ?? options.isPathWritable?.(parentPath) ?? true;
+    if (!nodeWritable && options.defaultWritableParent) {
+      options.onUnwriteableContextHint?.();
+      return { parentPath: options.defaultWritableParent, parentPathWasOverridden: true };
+    }
+    return { parentPath, parentPathWasOverridden: false };
+  }, [getNodeParentPath, options]);
 
   const closeDialog = useCallback(() => {
     setDialogState({ type: null });
@@ -40,19 +61,21 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
 
 
   const openCreateFileDialog = useCallback((node?: FileTreeNode) => {
+    const { parentPath, parentPathWasOverridden } = resolveCreateParentPath(node);
     setDialogState({
       type: 'create-file',
-      data: { node }
+      data: { node, parentPath, parentPathWasOverridden }
     });
-  }, []);
+  }, [resolveCreateParentPath]);
 
 
   const openCreateFolderDialog = useCallback((node?: FileTreeNode) => {
+    const { parentPath, parentPathWasOverridden } = resolveCreateParentPath(node);
     setDialogState({
       type: 'create-folder',
-      data: { node }
+      data: { node, parentPath, parentPathWasOverridden }
     });
-  }, []);
+  }, [resolveCreateParentPath]);
 
 
   const openRenameDialog = useCallback((node: FileTreeNode) => {
@@ -85,11 +108,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
     setIsLoading(true);
     try {
 
-      const parentPath = dialogState.data?.node
-        ? (dialogState.data.node.type === 'directory'
-          ? dialogState.data.node.path
-          : dialogState.data.node.path.substring(0, dialogState.data.node.path.lastIndexOf('/')))
-        : '/';
+      const parentPath = dialogState.data?.parentPath ?? getNodeParentPath(dialogState.data?.node);
 
       await options.onCreateFile(name, parentPath);
       toast({
@@ -108,7 +127,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
     } finally {
       setIsLoading(false);
     }
-  }, [options, toast, t, dialogState]);
+  }, [options, toast, t, dialogState, getNodeParentPath]);
 
 
   const handleCreateFolder = useCallback(async (name: string) => {
@@ -117,11 +136,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
     setIsLoading(true);
     try {
 
-      const parentPath = dialogState.data?.node
-        ? (dialogState.data.node.type === 'directory'
-          ? dialogState.data.node.path
-          : dialogState.data.node.path.substring(0, dialogState.data.node.path.lastIndexOf('/')))
-        : '/';
+      const parentPath = dialogState.data?.parentPath ?? getNodeParentPath(dialogState.data?.node);
 
       await options.onCreateFolder(name, parentPath);
       toast({
@@ -140,7 +155,7 @@ export function useFileOperationsWithDialog(options: UseFileOperationsWithDialog
     } finally {
       setIsLoading(false);
     }
-  }, [options, toast, t, dialogState]);
+  }, [options, toast, t, dialogState, getNodeParentPath]);
 
 
   const handleRename = useCallback(async (newName: string) => {

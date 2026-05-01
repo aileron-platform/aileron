@@ -24,6 +24,8 @@ from app.core.file_management import (
     FileTooLargeException,
     FileTreeResponse,
     InvalidPathException,
+    KnowledgeBasePathNotWritableError,
+    KnowledgeBaseRawRootCannotBeDeletedError,
 )
 from app.db import models as db_models
 from app.models import FileUploadResponse, UploadedFileInfo
@@ -41,6 +43,7 @@ KB_PATH_TRAVERSAL_REASON = "Invalid path detected"
 KB_INVALID_FILE_TYPE_MESSAGE = "Unsupported file extension"
 KB_QUOTA_EXCEEDED_MESSAGE = "Knowledge base storage quota exceeded"
 KB_OWNER_QUOTA_EXCEEDED_MESSAGE = "User knowledge base total storage quota exceeded"
+KB_RAW_ROOT = "raw"
 
 
 class KnowledgeBaseFileService:
@@ -220,6 +223,8 @@ class KnowledgeBaseFileService:
     ) -> dict:
         kb, access = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
         self._ensure_write_access(access.access_role, path)
+        if self._normalize_path_for_writability(path) == KB_RAW_ROOT:
+            raise KnowledgeBaseRawRootCannotBeDeletedError(path)
         fs_path = self._resolve_path(kb.id, path)
         if not fs_path.exists():
             raise FileNotFoundException(path, self._scope(kb.id))
@@ -247,6 +252,7 @@ class KnowledgeBaseFileService:
     ) -> dict:
         kb, access = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
         self._ensure_write_access(access.access_role, source_path)
+        self._ensure_write_access(access.access_role, dest_path)
         source_fs_path = self._resolve_path(kb.id, source_path)
         dest_fs_path = self._resolve_path(kb.id, dest_path)
         if not source_fs_path.exists():
@@ -277,6 +283,7 @@ class KnowledgeBaseFileService:
         overwrite: bool = False,
     ) -> dict:
         kb, access = self.kb_service.get_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
+        self._ensure_write_access(access.access_role, source_path)
         self._ensure_write_access(access.access_role, dest_path)
         source_fs_path = self._resolve_path(kb.id, source_path)
         dest_fs_path = self._resolve_path(kb.id, dest_path)
@@ -445,6 +452,7 @@ class KnowledgeBaseFileService:
                 depth=current_depth,
                 children=[],
                 hasChildren=False,
+                writable=self._is_path_writable(rel_path),
                 extension=entry.suffix.lower() or None,
             )
             if entry.is_dir():
@@ -520,6 +528,15 @@ class KnowledgeBaseFileService:
     def _ensure_write_access(self, access_role: str, path: str) -> None:
         if access_role not in {"owner", "manager", "editor"}:
             raise KnowledgeBaseAccessDeniedError(f"Knowledge base does not have write permission: {path}")
+        if not self._is_path_writable(path):
+            raise KnowledgeBasePathNotWritableError(path)
+
+    def _is_path_writable(self, path: str) -> bool:
+        normalized = self._normalize_path_for_writability(path)
+        return normalized == KB_RAW_ROOT or normalized.startswith(f"{KB_RAW_ROOT}/")
+
+    def _normalize_path_for_writability(self, path: str) -> str:
+        return self._validate_path(path)
 
     def _update_kb_size(self, kb: db_models.KnowledgeBase, delta_bytes: int) -> None:
         kb.current_size_bytes = max(0, kb.current_size_bytes + delta_bytes)

@@ -272,6 +272,8 @@
   "knowledge_base.file.kb_quota_exceeded": "Knowledge base quota exceeded",
   "knowledge_base.file.owner_quota_exceeded": "User knowledge base quota exceeded",
   "knowledge_base.file.write_denied": "No write permission for knowledge base path: {path}",
+  "knowledge_base.file.path_not_writable": "Only files under raw/ can be edited",
+  "knowledge_base.file.raw_root_cannot_be_deleted": "raw/ root directory cannot be deleted",
   "knowledge_base.upload.too_many_files": "Too many uploaded files (max {max_files})",
   "knowledge_base.upload.success": "Uploaded files successfully ({succeeded}/{total})",
   "knowledge_base.git.version_control_disabled": "Knowledge base version control is disabled",

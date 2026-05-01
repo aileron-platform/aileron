@@ -272,6 +272,8 @@
   "knowledge_base.file.kb_quota_exceeded": "知識庫容量配額不足",
   "knowledge_base.file.owner_quota_exceeded": "使用者知識庫總容量配額不足",
   "knowledge_base.file.write_denied": "知識庫無寫入權限: {path}",
+  "knowledge_base.file.path_not_writable": "只有 raw/ 目錄底下可以編輯",
+  "knowledge_base.file.raw_root_cannot_be_deleted": "raw/ 根目錄不能刪除",
   "knowledge_base.upload.too_many_files": "上傳檔案數量超過限制（最多 {max_files} 個）",
   "knowledge_base.upload.success": "檔案上傳完成（{succeeded}/{total}）",
   "knowledge_base.git.version_control_disabled": "知識庫尚未啟用版本控制",

@@ -34,6 +34,8 @@ export interface FileTreeContextMenuConfig {
   hasClipboard?: boolean;
   
   isImageFile?: boolean;
+
+  isPathWritable?: (path: string) => boolean;
   
   features?: {
     open?: boolean;
@@ -83,6 +85,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
     selectedIds,
     hasClipboard = false,
     isImageFile = false,
+    isPathWritable,
     features = {},
     callbacks,
     t,
@@ -97,6 +100,8 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
     const isDirectory = node.type === 'directory';
     const multipleSelected = enableMultiSelect && selectedCount > 1;
     const isZipFile = !isDirectory && node.name.toLowerCase().endsWith('.zip');
+    const nodeWritable = node.writable ?? isPathWritable?.(node.path) ?? true;
+    const writeActionDisabled = !nodeWritable;
 
 
     const defaultFeatures = {
@@ -166,6 +171,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
           key: 'upload',
           label: t('common.fileTree.contextMenu.upload'),
           icon: Upload,
+          disabled: writeActionDisabled,
           onSelect: () => {
             callbacks.onClose();
             callbacks.onUpload();
@@ -179,6 +185,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
           key: 'create-folder',
           label: t('common.fileTree.contextMenu.createFolder'),
           icon: FolderPlus,
+          disabled: writeActionDisabled,
           onSelect: () => {
             callbacks.onClose();
             callbacks.onCreateFolder();
@@ -192,6 +199,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
           key: 'create-file',
           label: t('common.fileTree.contextMenu.createFile'),
           icon: FilePlus,
+          disabled: writeActionDisabled,
           onSelect: () => {
             callbacks.onClose();
             callbacks.onCreateFile();
@@ -248,6 +256,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
         key: 'copy',
         label: t('common.fileTree.contextMenu.copy'),
         icon: Copy,
+        disabled: writeActionDisabled,
         onSelect: () => {
           callbacks.onClose();
           callbacks.onCopy(node);
@@ -275,7 +284,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
         key: 'paste',
         label: t('common.fileTree.contextMenu.paste'),
         icon: ClipboardPaste,
-        disabled: !hasClipboard,
+        disabled: !hasClipboard || writeActionDisabled,
         onSelect: () => {
           callbacks.onClose();
           callbacks.onPaste();
@@ -290,6 +299,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
         key: 'rename',
         label: t('common.fileTree.contextMenu.rename'),
         icon: FileEdit,
+        disabled: writeActionDisabled,
         onSelect: () => {
           callbacks.onClose();
           callbacks.onRename(node);
@@ -307,6 +317,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
           : t('common.fileTree.contextMenu.delete'),
         icon: Trash2,
         variant: 'destructive' as const,
+        disabled: writeActionDisabled,
         onSelect: () => {
           callbacks.onClose();
           if (multipleSelected && callbacks.onBatchDelete && selectedIds) {
@@ -334,5 +345,5 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
     }
 
     return items;
-  }, [node, readOnly, enableMultiSelect, selectedCount, hasClipboard, isImageFile, features, callbacks, t]);
+  }, [node, readOnly, enableMultiSelect, selectedCount, selectedIds, hasClipboard, isImageFile, isPathWritable, features, callbacks, t]);
 }

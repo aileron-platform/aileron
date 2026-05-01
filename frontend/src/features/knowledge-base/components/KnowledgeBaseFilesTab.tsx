@@ -29,9 +29,11 @@ import { apiClient } from '@/shared/api/apiClient';
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
+import { isPathWritable } from '../utils/pathWritability';
 import {
   KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH,
   KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
@@ -45,6 +47,7 @@ interface KnowledgeBaseFilesTabProps {
 }
 
 const ROOT_PATH = '/';
+const DEFAULT_WRITABLE_PARENT = 'raw/sources';
 
 const joinPath = (parentPath: string, name: string): string => {
   if (!parentPath || parentPath === ROOT_PATH) {
@@ -101,6 +104,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   const [showHiddenEntries, setShowHiddenEntries] = React.useState(false);
   const [isWorkbenchExpanded, setIsWorkbenchExpanded] = React.useState(false);
   const [clipboardItem, setClipboardItem] = React.useState<{ path: string; type: 'file' | 'directory' } | null>(null);
+  const [showWritableParentHint, setShowWritableParentHint] = React.useState(false);
   const dragDepthRef = React.useRef(0);
   const dragStateRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -135,9 +139,11 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       return;
     }
 
+    const resolvedTargetPath = isPathWritable(targetPath) ? targetPath : DEFAULT_WRITABLE_PARENT;
+
     try {
       await manager.operations.uploadFiles({
-        targetPath,
+        targetPath: resolvedTargetPath,
         files,
       });
       await manager.loadTree();
@@ -150,10 +156,11 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     }
   }, [manager, readOnly, showErrorToast, t, toast]);
 
-  const handleUpload = React.useCallback((targetPath = ROOT_PATH) => {
+  const handleUpload = React.useCallback((targetPath = DEFAULT_WRITABLE_PARENT) => {
     if (readOnly) {
       return;
     }
+    const resolvedTargetPath = isPathWritable(targetPath) ? targetPath : DEFAULT_WRITABLE_PARENT;
 
     const input = document.createElement('input');
     input.type = 'file';
@@ -164,13 +171,13 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
         return;
       }
 
-      await uploadFilesToPath(Array.from(files), targetPath);
+      await uploadFilesToPath(Array.from(files), resolvedTargetPath);
     };
     input.click();
   }, [readOnly, uploadFilesToPath]);
 
   const handleSave = React.useCallback(async (path: string, content: string) => {
-    if (readOnly) {
+    if (readOnly || !isPathWritable(path)) {
       return;
     }
 
@@ -206,6 +213,9 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       await manager.batchDeleteAndCloseTabs(paths, true);
       manager.state.clearSelection();
     },
+    isPathWritable,
+    defaultWritableParent: DEFAULT_WRITABLE_PARENT,
+    onUnwriteableContextHint: () => setShowWritableParentHint(true),
   });
 
   const handleNodeClick = React.useCallback((node: FileTreeNode, modifier: SelectionModifier) => {
@@ -340,7 +350,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   }, [clipboardItem, knowledgeBaseId, manager, showErrorToast, t, toast]);
 
   const handleDragStart = React.useCallback((node: FileTreeNode) => {
-    if (readOnly) {
+    if (readOnly || !isPathWritable(node.path)) {
       return;
     }
     setDraggingPath(node.path);
@@ -352,7 +362,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   }, []);
 
   const handleDragOverNode = React.useCallback((node: FileTreeNode) => {
-    if (readOnly) {
+    if (readOnly || !isPathWritable(node.path)) {
       return;
     }
     setDragOverPath(node.path);
@@ -363,7 +373,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
   }, []);
 
   const handleDropOnNode = React.useCallback(async (node: FileTreeNode, event: React.DragEvent) => {
-    if (readOnly) {
+    if (readOnly || !isPathWritable(node.path)) {
       return;
     }
 
@@ -421,7 +431,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
 
     const files = Array.from(event.dataTransfer.files ?? []);
     if (files.length > 0) {
-      await uploadFilesToPath(files, ROOT_PATH);
+      await uploadFilesToPath(files, DEFAULT_WRITABLE_PARENT);
     }
   }, [readOnly, uploadFilesToPath]);
 
@@ -471,17 +481,18 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
     selectedCount: manager.state.selectedIds.size,
     selectedIds: manager.state.selectedIds,
     hasClipboard: !!clipboardItem,
+    isPathWritable,
     features: {
       open: true,
       view: true,
-      upload: !readOnly,
-      createFile: !readOnly,
-      createFolder: !readOnly,
-      copy: !readOnly,
+      upload: true,
+      createFile: true,
+      createFolder: true,
+      copy: true,
       copyPath: true,
-      paste: !readOnly,
-      rename: !readOnly,
-      delete: !readOnly,
+      paste: true,
+      rename: true,
+      delete: true,
       refresh: true,
     },
     callbacks: {
@@ -627,6 +638,7 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
                 }}
                 onRefresh={() => { void manager.loadTree(); }}
                 onBatchDelete={() => fileOps.openBatchDeleteDialog(selectedNodes)}
+                isPathWritable={isPathWritable}
                 enableSearch={false}
                 enableToolbar
                 enableMultiSelectBar={!readOnly}
@@ -752,6 +764,19 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
             isExpanded={isWorkbenchExpanded}
             onExpandedChange={setIsWorkbenchExpanded}
             hideChromeWhenExpanded
+            isPathWritable={isPathWritable}
+            renderReadOnlyBadge={() => (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                      {t('knowledgeBase.files.readOnlyPathBadge')}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('knowledgeBase.files.readOnlyPathBadgeTooltip')}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             renderFocusToolbar={({ actions, icon, metadata, subtitle, title }) => (
               <FileFocusToolbar
                 icon={icon}
@@ -780,14 +805,26 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
       <FileCreateDialog
         open={fileOps.dialogState.type === 'create-file'}
         type="file"
-        onClose={fileOps.closeDialog}
+        onClose={() => {
+          setShowWritableParentHint(false);
+          fileOps.closeDialog();
+        }}
         onConfirm={fileOps.handleCreateFile}
+        hint={showWritableParentHint || fileOps.dialogState.data?.parentPathWasOverridden
+          ? t('knowledgeBase.files.actions.uploadParentPickerHint')
+          : undefined}
       />
       <FileCreateDialog
         open={fileOps.dialogState.type === 'create-folder'}
         type="folder"
-        onClose={fileOps.closeDialog}
+        onClose={() => {
+          setShowWritableParentHint(false);
+          fileOps.closeDialog();
+        }}
         onConfirm={fileOps.handleCreateFolder}
+        hint={showWritableParentHint || fileOps.dialogState.data?.parentPathWasOverridden
+          ? t('knowledgeBase.files.actions.uploadParentPickerHint')
+          : undefined}
       />
       <FileRenameDialog
         open={fileOps.dialogState.type === 'rename'}

@@ -26,6 +26,7 @@ export interface FileCreateDialogProps {
   onClose: () => void;
   onConfirm: (name: string) => void;
   defaultValue?: string;
+  hint?: React.ReactNode;
 }
 
 export const FileCreateDialog: React.FC<FileCreateDialogProps> = ({
@@ -34,6 +35,7 @@ export const FileCreateDialog: React.FC<FileCreateDialogProps> = ({
   onClose,
   onConfirm,
   defaultValue = '',
+  hint,
 }) => {
   const { t } = useI18n();
   const [name, setName] = useState(defaultValue);
@@ -125,6 +127,9 @@ export const FileCreateDialog: React.FC<FileCreateDialogProps> = ({
                 {error}
               </p>
             )}
+            {hint ? (
+              <p className="text-xs text-muted-foreground">{hint}</p>
+            ) : null}
           </div>
         </div>
         <DialogFooter>
@@ -413,4 +418,3 @@ export const BatchDeleteDialog: React.FC<BatchDeleteDialogProps> = ({
     </Dialog>
   );
 };
-

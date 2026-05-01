@@ -49,6 +49,8 @@ export interface FileTreePanelProps {
 
   onBatchDelete?: (paths: string[]) => void;
 
+  isPathWritable?: (path: string) => boolean;
+
   enableSearch?: boolean;
 
   enableToolbar?: boolean;
@@ -94,6 +96,7 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
   onPaste,
   onRefresh,
   onBatchDelete,
+  isPathWritable,
   enableSearch = true,
   enableToolbar = true,
   enableMultiSelectBar = true,
@@ -146,6 +149,40 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
     };
   }, [handlePaste, onPaste]);
 
+  const resolveNodeWritable = useCallback((node: FileTreeNodeType) => (
+    node.writable ?? isPathWritable?.(node.path) ?? true
+  ), [isPathWritable]);
+
+  const handleNodeDragStart = useCallback((node: FileTreeNodeType, event: React.DragEvent) => {
+    if (!resolveNodeWritable(node)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    onDragStart?.(node, event);
+  }, [onDragStart, resolveNodeWritable]);
+
+  const handleNodeDragOver = useCallback((node: FileTreeNodeType, event: React.DragEvent) => {
+    if (!resolveNodeWritable(node)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'none';
+      onDragOver?.(node, event);
+      return;
+    }
+    onDragOver?.(node, event);
+  }, [onDragOver, resolveNodeWritable]);
+
+  const handleNodeDrop = useCallback((node: FileTreeNodeType, event: React.DragEvent) => {
+    if (!resolveNodeWritable(node)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    onDrop?.(node, event);
+  }, [onDrop, resolveNodeWritable]);
+
   const renderNode = useCallback(({ node, depth, state: nodeState }: {
     node: FileTreeNodeType;
     depth: number;
@@ -153,6 +190,7 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
   }) => {
     const isDragging = draggingPath === node.path;
     const isDropTarget = dragOverPath === node.path;
+    const isWritableDropTarget = resolveNodeWritable(node);
 
     const isChildrenLoading = loadingChildrenPaths?.has(node.path) ?? false;
 
@@ -177,16 +215,19 @@ export const FileTreePanel: React.FC<FileTreePanelProps> = ({
           }
         }}
         onContextMenu={onContextMenu}
-        onDragStart={onDragStart}
+        onDragStart={handleNodeDragStart}
         onDragEnd={onDragEnd}
-        onDragOver={onDragOver}
+        onDragOver={handleNodeDragOver}
         onDragLeave={onDragLeave}
-        onDrop={onDrop}
+        onDrop={handleNodeDrop}
         enableDragDrop={enableDragDrop}
-        className="text-foreground hover:bg-muted/40"
+        className={cn(
+          'text-foreground hover:bg-muted/40',
+          isDropTarget && !isWritableDropTarget && 'cursor-not-allowed opacity-60',
+        )}
       />
     );
-  }, [onNodeClick, onNodeDoubleClick, onContextMenu, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop, toggleNode, onExpandDirectory, loadingChildrenPaths, enableDragDrop, draggingPath, dragOverPath]);
+  }, [onNodeClick, onNodeDoubleClick, onContextMenu, handleNodeDragStart, onDragEnd, handleNodeDragOver, onDragLeave, handleNodeDrop, toggleNode, onExpandDirectory, loadingChildrenPaths, enableDragDrop, draggingPath, dragOverPath, resolveNodeWritable]);
 
   const nodesToRender = React.useMemo(() => {
     const nodes = state.isSearching ? state.filteredNodes : state.nodes;

@@ -18,6 +18,7 @@ class FileNode(BaseModel):
     depth: int = Field(default=0, description="Level in tree")
     children: List["FileNode"] = Field(default_factory=list, description="Child nodes")
     hasChildren: bool = Field(default=False, description="Has child nodes")
+    writable: bool = Field(default=True, description="Whether write operations are allowed for this node")
 
     # Optional extended columns
     extension: Optional[str] = Field(default=None, description="File extension")
@@ -185,4 +186,3 @@ class FileUploadResponse(BaseModel):
     succeeded: int = Field(description="Success count")
     failed: int = Field(description="Failed count")
     results: List[FileUploadResult] = Field(description="Upload results")
-

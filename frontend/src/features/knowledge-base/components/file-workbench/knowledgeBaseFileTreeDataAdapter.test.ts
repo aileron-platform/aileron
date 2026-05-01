@@ -22,7 +22,7 @@ describe('KnowledgeBaseFileTreeDataAdapter', () => {
     expect(knowledgeBaseFileEndpoints.copy('kb-1')).toBe('/knowledge-bases/kb-1/files/copy');
   });
 
-  it('loads the tree with hidden-entry visibility in the query string', async () => {
+  it('loads the initial tree with hidden-entry visibility and full depth in the query string', async () => {
     apiClientMock.get.mockResolvedValueOnce({ nodes: [] });
 
     const adapter = new KnowledgeBaseFileTreeDataAdapter({
@@ -31,7 +31,24 @@ describe('KnowledgeBaseFileTreeDataAdapter', () => {
     });
     await adapter.getTree();
 
-    expect(apiClientMock.get).toHaveBeenCalledWith('/knowledge-bases/kb-1/files/tree?path=%2F&includeHidden=true');
+    expect(apiClientMock.get).toHaveBeenCalledWith('/knowledge-bases/kb-1/files/tree?path=%2F&includeHidden=true&maxDepth=5');
+  });
+
+  it('loads directory children from the tree endpoint when a directory expands', async () => {
+    apiClientMock.get.mockResolvedValueOnce({
+      nodes: [{ id: '/raw/sources/file.md', name: 'file.md', path: '/raw/sources/file.md', type: 'file' }],
+    });
+
+    const adapter = new KnowledgeBaseFileTreeDataAdapter({
+      knowledgeBaseId: 'kb-1',
+      includeHidden: false,
+    });
+
+    await expect(adapter.getChildren('/raw/sources')).resolves.toHaveLength(1);
+
+    expect(apiClientMock.get).toHaveBeenCalledWith(
+      '/knowledge-bases/kb-1/files/tree?path=%2Fraw%2Fsources&includeHidden=false&maxDepth=1',
+    );
   });
 
   it('uses the current patch move request shape', async () => {

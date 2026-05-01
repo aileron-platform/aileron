@@ -5,6 +5,7 @@ export interface FileTreeNode {
   type: 'file' | 'directory';
   children?: FileTreeNode[];
   hasChildren?: boolean;
+  writable?: boolean;
   size?: number;
   extension?: string;
   scope?: 'project' | 'user' | 'plugin';

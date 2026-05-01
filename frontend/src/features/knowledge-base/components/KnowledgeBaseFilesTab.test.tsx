@@ -384,9 +384,9 @@ describe('KnowledgeBaseFilesTab', () => {
     await expect(props.adapter.readFile('/docs/readme.md')).resolves.toBe('fresh content');
     expect(mockManager.operations.readFile).toHaveBeenCalledWith('/docs/readme.md');
 
-    await props.adapter.saveFile('/docs/readme.md', 'next content');
-    expect(mockManager.operations.updateFile).toHaveBeenCalledWith('/docs/readme.md', 'next content');
-    expect(mockManager.editor.saveTab).toHaveBeenCalledWith('/docs/readme.md');
+    await props.adapter.saveFile('/raw/sources/readme.md', 'next content');
+    expect(mockManager.operations.updateFile).toHaveBeenCalledWith('/raw/sources/readme.md', 'next content');
+    expect(mockManager.editor.saveTab).toHaveBeenCalledWith('/raw/sources/readme.md');
 
     await props.adapter.readBlob('/assets/logo.png');
     expect(apiGetBlobMock).toHaveBeenCalledWith(

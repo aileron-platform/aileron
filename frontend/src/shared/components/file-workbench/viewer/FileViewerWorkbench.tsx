@@ -67,6 +67,8 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   useViewportExpansion = true,
   hideChromeWhenExpanded = false,
   renderFocusToolbar,
+  isPathWritable,
+  renderReadOnlyBadge,
   onTabsChange,
   onActiveTabChange,
 }) => {
@@ -85,7 +87,11 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const effectiveExpanded = isExpanded ?? uncontrolledExpanded;
   const hideChrome = effectiveExpanded && hideChromeWhenExpanded;
-  const canMutate = !readOnly && capabilities.canEdit !== false;
+  const isTabWritable = useCallback((tab: FileViewerWorkbenchTab | null) => (
+    tab ? (isPathWritable?.(tab.path) ?? true) : true
+  ), [isPathWritable]);
+  const activeTabWritable = isTabWritable(activeTab);
+  const canMutate = !readOnly && capabilities.canEdit !== false && activeTabWritable;
   const canSave = canMutate && capabilities.canSave !== false && Boolean(adapter.saveFile);
   const canCloseTabs = capabilities.canCloseTabs !== false;
 
@@ -199,7 +205,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   };
 
   const saveTab = async (tab: FileViewerWorkbenchTab) => {
-    if (!canSave || !adapter.saveFile) return;
+    if (!adapter.saveFile || readOnly || capabilities.canEdit === false || capabilities.canSave === false || !isTabWritable(tab)) return;
     await adapter.saveFile(tab.path, tab.content);
     updateTab(tab.id, {
       originalContent: tab.content,
@@ -215,11 +221,11 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   };
 
   const saveAllTabs = async () => {
-    if (!canSave || !adapter.saveFile) return;
-    const modifiedTabs = tabs.filter((tab) => tab.isModified);
+    if (!adapter.saveFile || readOnly || capabilities.canEdit === false || capabilities.canSave === false) return;
+    const modifiedTabs = tabs.filter((tab) => tab.isModified && isTabWritable(tab));
     await Promise.all(modifiedTabs.map((tab) => adapter.saveFile?.(tab.path, tab.content)));
     onTabsChange(tabs.map((tab) => (
-      tab.isModified
+      tab.isModified && isTabWritable(tab)
         ? { ...tab, originalContent: tab.content, isModified: false }
         : tab
     )));
@@ -476,6 +482,9 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
                   <div className="flex h-full min-w-0 items-center px-2.5">
                     <span className="mr-1.5 shrink-0">{getFileIcon(tab.name)}</span>
                     <span className="max-w-28 truncate text-sm" title={tab.path}>{tab.name}</span>
+                    {!isTabWritable(tab) && renderReadOnlyBadge ? (
+                      <span className="ml-1.5 shrink-0">{renderReadOnlyBadge(tab)}</span>
+                    ) : null}
                     {tab.isModified && (
                       <span
                         className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
@@ -551,7 +560,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
               void saveTab(contextMenuTab);
               closeTabContextMenu();
             }}
-            disabled={!canSave || !contextMenuTab.isModified}
+            disabled={!isTabWritable(contextMenuTab) || readOnly || capabilities.canEdit === false || capabilities.canSave === false || !adapter.saveFile || !contextMenuTab.isModified}
           >
             <Save className="mr-2 h-4 w-4" />
             {t('shared.fileViewer.tabContextMenu.save')}
@@ -669,7 +678,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
                   void saveAllTabs();
                   closeToolbarMenus();
                 }}
-                disabled={!tabs.some((tab) => tab.isModified)}
+                disabled={!tabs.some((tab) => tab.isModified && isTabWritable(tab))}
               >
                 <Save className="mr-2 h-3.5 w-3.5" />
                 {t('shared.fileViewer.toolbar.saveAll')}
@@ -695,7 +704,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
                   revertAllTabs();
                   closeToolbarMenus();
                 }}
-                disabled={!tabs.some((tab) => tab.isModified)}
+                disabled={!tabs.some((tab) => tab.isModified && isTabWritable(tab))}
               >
                 <RotateCcw className="mr-2 h-3.5 w-3.5" />
                 {t('shared.fileViewer.toolbar.revertAll')}

@@ -142,4 +142,75 @@ describe('useFileTreeContextMenu', () => {
 
     expect(textResult.current.some(item => item.key === 'extract-archive')).toBe(false);
   });
+
+  it('keeps write actions enabled by default and disables them when the writable rule rejects the node', () => {
+    const callbacks = {
+      onUpload: vi.fn(),
+      onCreateFile: vi.fn(),
+      onCreateFolder: vi.fn(),
+      onCopy: vi.fn(),
+      onPaste: vi.fn(),
+      onRename: vi.fn(),
+      onDelete: vi.fn(),
+      onClose: vi.fn(),
+    };
+
+    const { result: defaultResult } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: 'b/x.md',
+          name: 'x.md',
+          path: 'b/x.md',
+          type: 'directory',
+        },
+        hasClipboard: true,
+        callbacks,
+        t,
+      })
+    );
+
+    expect(defaultResult.current.filter(item => item.disabled).map(item => item.key)).toEqual([]);
+
+    const { result: rejectedResult } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: 'b/x.md',
+          name: 'x.md',
+          path: 'b/x.md',
+          type: 'directory',
+        },
+        hasClipboard: true,
+        isPathWritable: path => path.startsWith('a/'),
+        callbacks,
+        t,
+      })
+    );
+
+    expect(rejectedResult.current.filter(item => item.disabled).map(item => item.key)).toEqual([
+      'upload',
+      'create-folder',
+      'create-file',
+      'copy',
+      'paste',
+      'rename',
+      'delete',
+    ]);
+
+    const { result: acceptedResult } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: 'a/x.md',
+          name: 'x.md',
+          path: 'a/x.md',
+          type: 'directory',
+        },
+        hasClipboard: true,
+        isPathWritable: path => path.startsWith('a/'),
+        callbacks,
+        t,
+      })
+    );
+
+    expect(acceptedResult.current.filter(item => item.disabled).map(item => item.key)).toEqual([]);
+  });
 });

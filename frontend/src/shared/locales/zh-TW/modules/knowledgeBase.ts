@@ -152,6 +152,8 @@ const knowledgeBase = {
   files: {
     toolbarTitle: '知識庫檔案',
     readOnlyBadge: '唯讀',
+    readOnlyPathBadge: '唯讀',
+    readOnlyPathBadgeTooltip: '此檔由系統自動維護',
     viewerBadge: '檢視者',
     uploadSuccessTitle: '檔案已上傳',
     uploadSuccessDescription: '已處理 {{count}} 個檔案。',
@@ -169,12 +171,17 @@ const knowledgeBase = {
     targetExists: '貼上失敗：目標已存在',
     moveFailed: '移動失敗',
     operationFailedTitle: '檔案操作失敗',
-    dropOverlay: '放開以上傳到知識庫根目錄',
+    dropOverlay: '放開以上傳到 raw/sources',
+    errors: {
+      pathNotWritable: '只有 raw/ 目錄底下可以編輯',
+      rawRootCannotBeDeleted: 'raw/ 根目錄不能刪除',
+    },
     actions: {
       createFile: '新增文字檔',
       createFolder: '建立資料夾',
       upload: '上傳檔案',
       refresh: '重新整理',
+      uploadParentPickerHint: '新檔案只能建立於 raw/ 目錄底下',
       hidden: {
         showLabel: '顯示隱藏檔',
         hideLabel: '隱藏隱藏檔',

@@ -234,6 +234,7 @@ _KB_ERROR_DESCRIPTIONS = {
     404: "Specified knowledge base, share, or attachment does not exist, or KB is tombstoned. `detail.message` will be localized according to request language.",
     409: "Knowledge base status conflict, such as quota exceeded, duplicate attachment, alias conflict, or KB still mounted. `detail.message` will be localized according to request language.",
     413: "Single uploaded or written file exceeds `KB_SINGLE_FILE_SIZE_LIMIT`. `detail.message` will be localized according to request language.",
+    422: "Knowledge base file path is syntactically valid but cannot be written by the file API. `detail.message` will be localized according to request language.",
 }
 
 
@@ -354,6 +355,10 @@ def _translate_kb_message(translate, *, code: str, fallback_message: str, detail
         return translate("knowledge_base.file.kb_quota_exceeded")
     if code == "USER_KB_QUOTA_EXCEEDED":
         return translate("knowledge_base.file.owner_quota_exceeded")
+    if code == "PATH_NOT_WRITABLE":
+        return translate("knowledge_base.file.path_not_writable")
+    if code == "RAW_ROOT_CANNOT_BE_DELETED":
+        return translate("knowledge_base.file.raw_root_cannot_be_deleted")
     if code == "KB_VERSION_CONTROL_DISABLED":
         return translate("knowledge_base.git.version_control_disabled")
     if code == "GIT_REPO_NOT_FOUND":
@@ -699,7 +704,7 @@ def get_knowledge_base_file_content(
 @router.put(
     "/{kb_id}/files/content",
     summary="Write knowledge base FileContent",
-    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 422, 500),
 )
 def put_knowledge_base_file_content(
     kb_id: str,
@@ -723,7 +728,7 @@ def put_knowledge_base_file_content(
     "/{kb_id}/files",
     response_model=FileUploadResponse | dict,
     summary="Create folder or upload files to knowledge base",
-    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 422, 500),
 )
 async def post_knowledge_base_files(
     kb_id: str,
@@ -759,7 +764,7 @@ async def post_knowledge_base_files(
 @router.patch(
     "/{kb_id}/files",
     summary="Move or rename knowledge base file",
-    responses=_build_kb_responses(400, 401, 403, 404, 409, 500),
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 422, 500),
 )
 def patch_knowledge_base_files(
     kb_id: str,
@@ -783,7 +788,7 @@ def patch_knowledge_base_files(
 @router.post(
     "/{kb_id}/files/copy",
     summary="Copy knowledge base file or folder",
-    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 500),
+    responses=_build_kb_responses(400, 401, 403, 404, 409, 413, 422, 500),
 )
 def copy_knowledge_base_files(
     kb_id: str,
@@ -809,7 +814,7 @@ def copy_knowledge_base_files(
 @router.delete(
     "/{kb_id}/files",
     summary="Delete knowledge base file or folder",
-    responses=_build_kb_responses(400, 401, 403, 404, 500),
+    responses=_build_kb_responses(400, 401, 403, 404, 422, 500),
 )
 def delete_knowledge_base_files(
     kb_id: str,

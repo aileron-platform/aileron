@@ -15,6 +15,8 @@ class FileErrorCode:
     CONTENT_CONFLICT = "CONTENT_CONFLICT"
     DIRECTORY_NOT_EMPTY = "DIRECTORY_NOT_EMPTY"
     INVALID_FILE_TYPE = "INVALID_FILE_TYPE"
+    PATH_NOT_WRITABLE = "PATH_NOT_WRITABLE"
+    RAW_ROOT_CANNOT_BE_DELETED = "RAW_ROOT_CANNOT_BE_DELETED"
 
 
 class FileManagementException(Exception):
@@ -192,3 +194,30 @@ class InvalidFileTypeException(FileManagementException):
             400
         )
 
+
+class KnowledgeBasePathNotWritableError(FileManagementException):
+    """Knowledge base path is not writable through the file API"""
+
+    status_code = 422
+
+    def __init__(self, path: str):
+        super().__init__(
+            FileErrorCode.PATH_NOT_WRITABLE,
+            f"Knowledge base path is not writable: {path}",
+            {"path": path},
+            422
+        )
+
+
+class KnowledgeBaseRawRootCannotBeDeletedError(FileManagementException):
+    """Knowledge base raw root cannot be deleted through the file API"""
+
+    status_code = 422
+
+    def __init__(self, path: str):
+        super().__init__(
+            FileErrorCode.RAW_ROOT_CANNOT_BE_DELETED,
+            f"Knowledge base raw root cannot be deleted: {path}",
+            {"path": path},
+            422
+        )
