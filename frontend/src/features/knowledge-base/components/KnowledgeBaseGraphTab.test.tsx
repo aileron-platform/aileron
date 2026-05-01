@@ -188,12 +188,12 @@ describe('KnowledgeBaseGraphTab', () => {
     });
   });
 
-  it('renders graph panes with the shared default column width', async () => {
+  it('renders graph panes with the shared default column widths', async () => {
     renderGraphTab();
     await screen.findAllByTestId('wiki-graph-canvas');
 
     expect(screen.getByTestId('kb-graph-nodes')).toHaveStyle({ width: '256px' });
-    expect(screen.getByTestId('kb-graph-preview')).toHaveStyle({ width: '256px' });
+    expect(screen.getByTestId('kb-graph-preview')).toHaveStyle({ width: '400px' });
     expect(screen.getByTestId('kb-graph-canvas')).toBeInTheDocument();
   });
 

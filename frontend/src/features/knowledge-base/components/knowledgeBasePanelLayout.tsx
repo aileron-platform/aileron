@@ -2,14 +2,16 @@ import React from 'react';
 
 export const KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH = 64;
 export const KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH = 256;
+export const KNOWLEDGE_BASE_PREVIEW_COLUMN_WIDTH = 400;
 export const KNOWLEDGE_BASE_MIN_COLUMN_WIDTH = 220;
-export const KNOWLEDGE_BASE_MAX_COLUMN_WIDTH = 520;
+export const KNOWLEDGE_BASE_MAX_COLUMN_WIDTH = 600;
 
 interface UseResizableSidebarOptions {
   initialWidth?: number;
   initialCollapsed?: boolean;
   minWidth?: number;
   maxWidth?: number;
+  resizeFrom?: 'left' | 'right';
   onWidthChange?: (width: number) => void;
 }
 
@@ -30,8 +32,10 @@ export const useResizableSidebar = (
     initialCollapsed = false,
     minWidth = KNOWLEDGE_BASE_MIN_COLUMN_WIDTH,
     maxWidth = KNOWLEDGE_BASE_MAX_COLUMN_WIDTH,
+    resizeFrom = 'right',
     onWidthChange,
   } = options;
+  const sign = resizeFrom === 'left' ? -1 : 1;
 
   const [width, setWidth] = React.useState(initialWidth);
   const [collapsed, setCollapsed] = React.useState(initialCollapsed);
@@ -59,7 +63,7 @@ export const useResizableSidebar = (
       }
 
       const delta = event.clientX - dragState.startX;
-      const nextWidth = Math.min(Math.max(dragState.startWidth + delta, minWidth), maxWidth);
+      const nextWidth = Math.min(Math.max(dragState.startWidth + sign * delta, minWidth), maxWidth);
       setWidth(nextWidth);
       onWidthChangeRef.current?.(nextWidth);
     };
@@ -79,7 +83,7 @@ export const useResizableSidebar = (
       dragStateRef.current = null;
       document.body.classList.remove('select-none', 'cursor-col-resize');
     };
-  }, [isResizing, maxWidth, minWidth]);
+  }, [isResizing, maxWidth, minWidth, sign]);
 
   return {
     width,

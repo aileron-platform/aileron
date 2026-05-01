@@ -13,6 +13,7 @@ import { WikiGraphToolbar } from './WikiGraphToolbar';
 import {
   KNOWLEDGE_BASE_COLLAPSED_COLUMN_WIDTH,
   KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+  KNOWLEDGE_BASE_PREVIEW_COLUMN_WIDTH,
   ResizableSidebarHandle,
   useResizableSidebar,
 } from '../knowledgeBasePanelLayout';
@@ -112,8 +113,9 @@ export const WikiGraphExplorer: React.FC<WikiGraphExplorerProps> = ({
     initialCollapsed: initialLayoutRef.current?.leftCollapsed ?? false,
   });
   const rightSidebar = useResizableSidebar({
-    initialWidth: initialLayoutRef.current?.rightWidth ?? KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH,
+    initialWidth: initialLayoutRef.current?.rightWidth ?? KNOWLEDGE_BASE_PREVIEW_COLUMN_WIDTH,
     initialCollapsed: initialLayoutRef.current?.rightCollapsed ?? false,
+    resizeFrom: 'left',
   });
 
   React.useEffect(() => {
@@ -168,7 +170,7 @@ export const WikiGraphExplorer: React.FC<WikiGraphExplorerProps> = ({
     leftSidebar.setCollapsed(false);
     leftSidebar.setWidth(KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH);
     rightSidebar.setCollapsed(false);
-    rightSidebar.setWidth(KNOWLEDGE_BASE_DEFAULT_COLUMN_WIDTH);
+    rightSidebar.setWidth(KNOWLEDGE_BASE_PREVIEW_COLUMN_WIDTH);
   }, [leftSidebar, rightSidebar]);
 
   const renderPreview = (collapsed = false, onToggleCollapse?: () => void) => (
