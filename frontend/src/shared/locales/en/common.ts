@@ -307,6 +307,18 @@ const common = {
       preview: 'Preview',
       backToEdit: 'Back to edit',
     },
+    toolbar: {
+      bold: 'Bold',
+      italic: 'Italic',
+      link: 'Link',
+      code: 'Code',
+      image: 'Image',
+      unorderedList: 'Bulleted list',
+      orderedList: 'Numbered list',
+      quote: 'Quote',
+      undo: 'Undo',
+      redo: 'Redo',
+    },
     charCount: 'Characters: {{count}}',
     placeholders: {
       quote: 'Quote content',

@@ -306,6 +306,18 @@ const common = {
       preview: '預覽',
       backToEdit: '返回編輯',
     },
+    toolbar: {
+      bold: '粗體',
+      italic: '斜體',
+      link: '連結',
+      code: '程式碼',
+      image: '圖片',
+      unorderedList: '項目列表',
+      orderedList: '編號列表',
+      quote: '引用',
+      undo: '復原',
+      redo: '重做',
+    },
     charCount: '字元數：{{count}}',
     placeholders: {
       quote: '引用內容',

@@ -17,6 +17,11 @@ import { Button } from '@/shared/components/ui/button';
 import { cn } from '@/shared/utils/cn';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useI18n } from '@/shared/hooks/useI18n';
+import {
+  applyMarkdownKeyCommand,
+  applyMarkdownToolbarCommand,
+  type MarkdownToolbarCommand,
+} from './markdownEditorCommands';
 
 export interface MarkdownEditorProps {
   value: string;
@@ -134,62 +139,15 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     [commitHistory, isPreview, onChange, value]
   );
 
-  const resolveSelection = (text: string, start: number, end: number, placeholder: string) =>
-    start === end ? placeholder : text.slice(start, end);
-
-  const wrapSelection = (prefix: string, suffix: string, placeholder: string) => {
+  const applyToolbarCommand = (command: MarkdownToolbarCommand, placeholder: string) => {
     applyEdit((text, selectionStart, selectionEnd) => {
-      const selectedText = resolveSelection(text, selectionStart, selectionEnd, placeholder);
-      const nextText =
-        text.slice(0, selectionStart) +
-        `${prefix}${selectedText}${suffix}` +
-        text.slice(selectionEnd);
-      const cursorStart = selectionStart + prefix.length;
-      const cursorEnd = cursorStart + selectedText.length;
-      return {
-        value: nextText,
-        selectionStart: cursorStart,
-        selectionEnd: cursorEnd,
-      };
-    });
-  };
-
-  const applyList = (marker: (index: number) => string, placeholder: string) => {
-    applyEdit((text, selectionStart, selectionEnd) => {
-      const hasSelection = selectionStart !== selectionEnd;
-      const source = hasSelection ? text.slice(selectionStart, selectionEnd) : placeholder;
-      const lines = source.split('\n');
-      const formatted = lines
-        .map((line, index) => `${marker(index)}${line.trim() || placeholder}`)
-        .join('\n');
-      const nextText = text.slice(0, selectionStart) + formatted + text.slice(selectionEnd);
-      const cursorStart = selectionStart;
-      const cursorEnd = selectionStart + formatted.length;
-      return {
-        value: nextText,
-        selectionStart: cursorStart,
-        selectionEnd: cursorEnd,
-      };
-    });
-  };
-
-  const applyQuote = () => {
-    applyEdit((text, selectionStart, selectionEnd) => {
-      const hasSelection = selectionStart !== selectionEnd;
-      const defaultQuote = t('common.markdownEditor.placeholders.quote');
-      const raw = hasSelection ? text.slice(selectionStart, selectionEnd) : defaultQuote;
-      const formatted = raw
-        .split('\n')
-        .map((line) => `> ${line.trim() || defaultQuote}`)
-        .join('\n');
-      const nextText = text.slice(0, selectionStart) + formatted + text.slice(selectionEnd);
-      const cursorStart = selectionStart;
-      const cursorEnd = selectionStart + formatted.length;
-      return {
-        value: nextText,
-        selectionStart: cursorStart,
-        selectionEnd: cursorEnd,
-      };
+      return applyMarkdownToolbarCommand({
+        text,
+        selectionStart,
+        selectionEnd,
+        command,
+        placeholder,
+      });
     });
   };
 
@@ -273,10 +231,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.bold')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                wrapSelection('**', '**', t('common.markdownEditor.placeholders.bold'));
+                applyToolbarCommand('bold', t('common.markdownEditor.placeholders.bold'));
               }}
             >
               <Bold className="h-3.5 w-3.5" />
@@ -285,10 +244,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.italic')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                wrapSelection('*', '*', t('common.markdownEditor.placeholders.italic'));
+                applyToolbarCommand('italic', t('common.markdownEditor.placeholders.italic'));
               }}
             >
               <Italic className="h-3.5 w-3.5" />
@@ -297,10 +257,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.link')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                wrapSelection('[', '](https://example.com)', t('common.markdownEditor.placeholders.link'));
+                applyToolbarCommand('link', t('common.markdownEditor.placeholders.link'));
               }}
             >
               <Link className="h-3.5 w-3.5" />
@@ -309,10 +270,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.code')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                wrapSelection('```\n', '\n```', t('common.markdownEditor.placeholders.code'));
+                applyToolbarCommand('code', t('common.markdownEditor.placeholders.code'));
               }}
             >
               <Code className="h-3.5 w-3.5" />
@@ -321,17 +283,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.image')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                applyEdit((text, start, end) => {
-                  const selectedText = resolveSelection(text, start, end, t('common.markdownEditor.placeholders.description'));
-                  const template = `![${selectedText}](https://image.url)`;
-                  const nextText = text.slice(0, start) + template + text.slice(end);
-                  const cursorStart = start + 2;
-                  const cursorEnd = start + 2 + selectedText.length;
-                  return { value: nextText, selectionStart: cursorStart, selectionEnd: cursorEnd };
-                });
+                applyToolbarCommand('image', t('common.markdownEditor.placeholders.description'));
               }}
             >
               <Image className="h-3.5 w-3.5" />
@@ -340,10 +296,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.unorderedList')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                applyList(() => '- ', t('common.markdownEditor.placeholders.listItem'));
+                applyToolbarCommand('unorderedList', t('common.markdownEditor.placeholders.listItem'));
               }}
             >
               <List className="h-3.5 w-3.5" />
@@ -352,10 +309,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.orderedList')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                applyList((index) => `${index + 1}. `, t('common.markdownEditor.placeholders.listItem'));
+                applyToolbarCommand('orderedList', t('common.markdownEditor.placeholders.listItem'));
               }}
             >
               <ListOrdered className="h-3.5 w-3.5" />
@@ -364,10 +322,11 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.quote')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                applyQuote();
+                applyToolbarCommand('quote', t('common.markdownEditor.placeholders.quote'));
               }}
             >
               <Quote className="h-3.5 w-3.5" />
@@ -376,6 +335,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.undo')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -389,6 +349,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground"
+              aria-label={t('common.markdownEditor.toolbar.redo')}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -434,6 +395,31 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
                 commitHistory(nextValue);
               }
               onChange(nextValue);
+            }}
+            onKeyDown={(event) => {
+              const result = applyMarkdownKeyCommand(
+                value,
+                event.currentTarget.selectionStart ?? 0,
+                event.currentTarget.selectionEnd ?? event.currentTarget.selectionStart ?? 0,
+                event.nativeEvent
+              );
+              if (!result) {
+                return;
+              }
+
+              event.preventDefault();
+              event.stopPropagation();
+              commitHistory(result.value);
+              onChange(result.value);
+
+              requestAnimationFrame(() => {
+                const target = textareaRef.current;
+                if (!target) {
+                  return;
+                }
+                target.focus();
+                target.setSelectionRange(result.selectionStart, result.selectionEnd);
+              });
             }}
             placeholder={resolvedPlaceholder}
             className={cn(
