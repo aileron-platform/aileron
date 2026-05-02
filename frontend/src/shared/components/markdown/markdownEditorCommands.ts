@@ -41,12 +41,20 @@ const applySurroundingCommand = (
 ): MarkdownEditResult => {
   const hasSelection = selectionStart !== selectionEnd;
   const selectedText = getSelectedText(text, selectionStart, selectionEnd, placeholder);
+  const isExactWrapped =
+    selectedText.startsWith(prefix) &&
+    selectedText.endsWith(suffix) &&
+    selectedText.length >= prefix.length + suffix.length;
+  const isAmbiguousSingleAsteriskWrapper =
+    prefix === '*' &&
+    suffix === '*' &&
+    selectedText.startsWith('**') &&
+    selectedText.endsWith('**');
 
   if (
     hasSelection &&
-    selectedText.startsWith(prefix) &&
-    selectedText.endsWith(suffix) &&
-    selectedText.length >= prefix.length + suffix.length
+    isExactWrapped &&
+    !isAmbiguousSingleAsteriskWrapper
   ) {
     const unwrapped = selectedText.slice(prefix.length, selectedText.length - suffix.length);
     return {
@@ -282,7 +290,10 @@ const continueListLine = (
   }
 
   const lineStart = text.lastIndexOf('\n', selectionStart - 1) + 1;
+  const lineEnd = text.indexOf('\n', selectionStart);
+  const normalizedLineEnd = lineEnd === -1 ? text.length : lineEnd;
   const currentLine = text.slice(lineStart, selectionStart);
+  const fullLine = text.slice(lineStart, normalizedLineEnd);
   const unordered = /^(\s*)([-+*])\s(.*)$/.exec(currentLine);
   const ordered = /^(\s*)(\d+)([.)])\s(.*)$/.exec(currentLine);
 
@@ -290,7 +301,7 @@ const continueListLine = (
     return null;
   }
 
-  const content = unordered?.[3] ?? ordered?.[4] ?? '';
+  const content = fullLine.replace(/^(\s*)(?:[-+*]|\d+[.)])\s/, '');
   if (!content.trim()) {
     return {
       value: text.slice(0, lineStart) + text.slice(selectionEnd),

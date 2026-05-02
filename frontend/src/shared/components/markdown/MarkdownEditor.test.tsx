@@ -69,6 +69,15 @@ describe('MarkdownEditor commands', () => {
     await waitFor(() => expect(textarea).toHaveValue('alpha'));
   });
 
+  it('does not treat bold markers as italic markers', async () => {
+    const { textarea } = setup('**alpha**');
+    selectRange(textarea, 0, textarea.value.length);
+
+    clickToolbar('common.markdownEditor.toolbar.italic');
+
+    await waitFor(() => expect(textarea).toHaveValue('***alpha***'));
+  });
+
   it('wraps and unwraps selected text with link syntax', async () => {
     const { textarea } = setup('alpha');
     selectRange(textarea, 0, textarea.value.length);
@@ -186,6 +195,15 @@ describe('MarkdownEditor commands', () => {
     await waitFor(() => expect(textarea).toHaveValue('- alpha\n'));
   });
 
+  it('preserves unordered list content after the cursor when pressing Enter after the marker', async () => {
+    const { textarea } = setup('- alpha');
+    selectRange(textarea, 2, 2);
+
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter', keyCode: 13 });
+
+    await waitFor(() => expect(textarea).toHaveValue('- \n- alpha'));
+  });
+
   it('continues ordered lists with incremented numbering', async () => {
     const { textarea } = setup('1. alpha');
     selectRange(textarea, textarea.value.length, textarea.value.length);
@@ -193,6 +211,15 @@ describe('MarkdownEditor commands', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter', keyCode: 13 });
 
     await waitFor(() => expect(textarea).toHaveValue('1. alpha\n2. '));
+  });
+
+  it('preserves ordered list content after the cursor when pressing Enter after the marker', async () => {
+    const { textarea } = setup('1. alpha');
+    selectRange(textarea, 3, 3);
+
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter', keyCode: 13 });
+
+    await waitFor(() => expect(textarea).toHaveValue('1. \n2. alpha'));
   });
 
   it('indents and outdents selected list lines with Tab and Shift+Tab', async () => {
