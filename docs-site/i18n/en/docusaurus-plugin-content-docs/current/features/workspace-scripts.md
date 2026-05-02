@@ -16,10 +16,8 @@ Workspace scripts keep helper scripts, initialization files, and team runbooks s
 | Stop the stack | `python scripts/dev/docker/ops.py down` |
 | Clean workspace resources | `python scripts/dev/docker/ops.py cleanup-workspaces` |
 | Full cleanup | `python scripts/dev/docker/ops.py cleanup` |
-| macOS / Linux legacy cleanup wrappers | `./scripts/dev/docker/cleanup.sh`, `./scripts/dev/docker/cleanup-workspaces.sh` |
-| Windows PowerShell legacy cleanup wrappers | `.\scripts\dev\docker\cleanup.ps1`, `.\scripts\dev\docker\cleanup-workspaces.ps1` |
 
-`ops.py` is the primary cross-platform host-side CLI. The `.sh` and `.ps1` wrappers remain available for cleanup workflows.
+`ops.py` is the primary cross-platform host-side CLI for all startup, shutdown, and cleanup workflows.
 
 ## Runtime Startup Script
 

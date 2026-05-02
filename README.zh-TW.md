@@ -185,16 +185,6 @@ macOS / Linux：
 python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
-若偏好平台對應 wrapper，也可使用：
-
-```powershell
-.\scripts\dev\docker\cleanup-workspaces.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup-workspaces.sh
-```
-
 #### 完整清理
 
 停止 stack、移除平台 volumes 與本機產生資料，將開發環境重置為乾淨狀態。
@@ -209,16 +199,6 @@ macOS / Linux：
 
 ```bash
 python scripts/dev/docker/ops.py cleanup
-```
-
-若偏好平台對應 wrapper，也可使用：
-
-```powershell
-.\scripts\dev\docker\cleanup.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup.sh
 ```
 
 > `cleanup` 屬於破壞性操作，會移除 Docker volumes 與持久化平台資料，包含 PostgreSQL 資料。
@@ -339,10 +319,6 @@ helm upgrade --install aileron ./helm/aileron \
 > `python scripts/dev/docker/ops.py` 是正式的跨平台 CLI 入口，適用於啟動、停止、清理與測試操作。
 >
 > 日常重置 workspace 請優先使用 `cleanup-workspaces`；只有需要刪除持久化資料與 volumes 時才使用 `cleanup`。
->
-> macOS / Linux 的 legacy wrapper：`./scripts/dev/docker/cleanup.sh`、`./scripts/dev/docker/cleanup-workspaces.sh`
->
-> Windows PowerShell 的 legacy wrapper：`.\scripts\dev\docker\cleanup.ps1`、`.\scripts\dev\docker\cleanup-workspaces.ps1`
 
 ---
 

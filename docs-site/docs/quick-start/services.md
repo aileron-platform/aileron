@@ -54,8 +54,8 @@ password: admin
 
 ```bash
 # 執行 runtime 整合測試
-./scripts/test/run-all-tests.sh runtime
+python3 scripts/dev/docker/ops.py test runtime
 
 # 執行 manager 整合測試
-./scripts/test/run-all-tests.sh manager
+python3 scripts/dev/docker/ops.py test manager
 ```

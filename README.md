@@ -211,16 +211,6 @@ macOS / Linux:
 python scripts/dev/docker/ops.py cleanup-workspaces
 ```
 
-Legacy wrapper scripts remain available if you prefer shell-specific entrypoints:
-
-```powershell
-.\scripts\dev\docker\cleanup-workspaces.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup-workspaces.sh
-```
-
 #### Full Cleanup
 
 Stops the stack, removes platform volumes and generated local data, and resets the local environment.
@@ -235,16 +225,6 @@ macOS / Linux:
 
 ```bash
 python scripts/dev/docker/ops.py cleanup
-```
-
-Legacy wrapper scripts remain available here as well:
-
-```powershell
-.\scripts\dev\docker\cleanup.ps1
-```
-
-```bash
-./scripts/dev/docker/cleanup.sh
 ```
 
 > `cleanup` is destructive. It removes Docker volumes and persisted platform data, including PostgreSQL data.
@@ -367,10 +347,6 @@ To expose the platform through public domains, configure:
 > `python scripts/dev/docker/ops.py` is the primary cross-platform CLI for startup, shutdown, cleanup, and test execution.
 >
 > Use `cleanup-workspaces` for routine workspace cleanup. Use `cleanup` only when you need to delete persisted platform data and volumes.
->
-> On macOS / Linux, the legacy wrappers remain available: `./scripts/dev/docker/cleanup.sh` and `./scripts/dev/docker/cleanup-workspaces.sh`.
->
-> On Windows PowerShell, the legacy wrappers remain available: `.\scripts\dev\docker\cleanup.ps1` and `.\scripts\dev\docker\cleanup-workspaces.ps1`.
 
 ---
 

@@ -16,10 +16,8 @@ Workspace scripts 用來把範本提供的輔助腳本、初始化腳本與團�
 | 停止 stack | `python scripts/dev/docker/ops.py down` |
 | 清理 workspace 資源 | `python scripts/dev/docker/ops.py cleanup-workspaces` |
 | 完整清理 | `python scripts/dev/docker/ops.py cleanup` |
-| macOS / Linux legacy cleanup wrapper | `./scripts/dev/docker/cleanup.sh`、`./scripts/dev/docker/cleanup-workspaces.sh` |
-| Windows PowerShell legacy cleanup wrapper | `.\scripts\dev\docker\cleanup.ps1`、`.\scripts\dev\docker\cleanup-workspaces.ps1` |
 
-`ops.py` 是目前正式的跨平台 host-side CLI。`.sh` 與 `.ps1` wrapper 仍可用於清理情境，但文件中的主要流程以 `ops.py` 為準。
+`ops.py` 是目前正式的跨平台 host-side CLI，所有啟動、停止與清理流程都以 `ops.py` 為準。
 
 ## Runtime 啟動腳本
 
