@@ -28,20 +28,18 @@ from app.modules.agent_session.services.tools.base.message_builder import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_COMMANDS = {
-    ToolType.CODEX.value: "codex",
     ToolType.GEMINI.value: "gemini",
     ToolType.OPENCODE.value: "opencode",
 }
 
 DEFAULT_ARGS = {
-    ToolType.CODEX.value: [],
     ToolType.GEMINI.value: ["--experimental-acp"],
     ToolType.OPENCODE.value: [],
 }
 
 
 class AcpTool(ITool):
-    """ACP tool for codex/gemini/opencode.
+    """ACP tool for gemini/opencode.
 
     Stateless: does not hold DB session, each DB operation uses short-lived session
     (via async_session_scope), avoiding connection pool occupation during long-running tasks.

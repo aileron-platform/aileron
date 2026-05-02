@@ -236,6 +236,33 @@ class AgentSessionRepository(BaseRepository[AgentSessionModel]):
             },
         )
 
+    async def clear_sdk_session_id(self, session_id: str) -> None:
+        """Remove SDK session id from session data while preserving other fields."""
+        session = await self.find_by_id(session_id)
+        if not session:
+            logger.warning("Session not found when clearing sdk_session_id: %s", session_id[:8])
+            return
+
+        if not session.data:
+            return
+
+        try:
+            data = json.loads(session.data)
+        except (TypeError, json.JSONDecodeError):
+            return
+
+        if not isinstance(data, dict) or "sdk_session_id" not in data:
+            return
+
+        data.pop("sdk_session_id", None)
+        await self.update(
+            session_id,
+            {
+                "data": json.dumps(data, ensure_ascii=False),
+                "updated_at": utcnow(),
+            },
+        )
+
     async def update_context_usage(
         self,
         session_id: str,

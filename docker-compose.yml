@@ -288,6 +288,7 @@ services:
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
       - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}/default_workspace:/home/developer/.claude  # Claude session 持久化
+      - ./data/codex-sessions:/home/developer/.codex-sessions  # Codex session persistence
     networks:
       - aileron-network-dev
     depends_on:

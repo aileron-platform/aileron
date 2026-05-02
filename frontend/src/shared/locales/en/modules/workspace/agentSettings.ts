@@ -98,6 +98,11 @@ const agentSettings = {
   },
   codex: {
     agentsMd: 'AGENTS.md',
+    runtime: {
+      title: 'Session permissions are active',
+      description: 'Codex now runs through the Python SDK with per-session permission controls.',
+      body: 'Sandbox, approval, and network access are configured from the chat composer before a Codex turn starts.',
+    },
   },
   common: {
     loading: 'Loading...',

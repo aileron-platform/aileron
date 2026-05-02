@@ -57,3 +57,36 @@ async def test_set_sdk_session_id_unknown_session_is_noop(caplog: pytest.LogCapt
 
     repo.update.assert_not_awaited()
     assert "session-" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_clear_sdk_session_id_preserves_other_fields() -> None:
+    repo = _make_repo()
+    repo.find_by_id = AsyncMock(
+        return_value=SimpleNamespace(data='{"sdk_session_id":"x","message_count":7}')
+    )
+
+    await repo.clear_sdk_session_id("session-12345678")
+
+    payload = repo.update.await_args.args[1]
+    assert json.loads(payload["data"]) == {"message_count": 7}
+
+
+@pytest.mark.asyncio
+async def test_clear_sdk_session_id_missing_key_is_noop() -> None:
+    repo = _make_repo()
+    repo.find_by_id = AsyncMock(return_value=SimpleNamespace(data='{"message_count":7}'))
+
+    await repo.clear_sdk_session_id("session-12345678")
+
+    repo.update.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_clear_sdk_session_id_invalid_json_is_noop() -> None:
+    repo = _make_repo()
+    repo.find_by_id = AsyncMock(return_value=SimpleNamespace(data="{bad"))
+
+    await repo.clear_sdk_session_id("session-12345678")
+
+    repo.update.assert_not_awaited()

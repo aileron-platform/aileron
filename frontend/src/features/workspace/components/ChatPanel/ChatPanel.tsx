@@ -33,10 +33,16 @@ import {
   PermissionScope,
   isPermissionMode,
   type PermissionMode,
+  type PermissionConfig,
+  type CodexPermissionConfig,
   type ToolDecisionOption,
   type ToolDecisionType,
   type ToolDecisionOutcome,
 } from './agentSessionTypes';
+import {
+  DEFAULT_CODEX_PERMISSION_CONFIG,
+  isCodexPermissionConfig,
+} from './CodexPermissionSelector';
 import type { AgentMessage } from './agentSessionTypes';
 import type { AskUserQuestionSubmitHandler } from './AgentContentBlockRenderer';
 import type { SlashCommandItem } from '@/shared/types/slashCommands';
@@ -98,10 +104,31 @@ export const ChatPanel: React.FC = () => {
     }
     return 'bypassPermissions';
   });
+  const [codexPermissionConfig, setCodexPermissionConfig] = useState<CodexPermissionConfig>(() => {
+    try {
+      const saved = localStorage.getItem('chatCodexPermissionConfig');
+      const parsed = saved ? JSON.parse(saved) : null;
+      if (isCodexPermissionConfig(parsed)) {
+        return parsed;
+      }
+    } catch (error) {
+      logger.error('Failed to load Codex permission config from localStorage', { error });
+    }
+    return DEFAULT_CODEX_PERMISSION_CONFIG;
+  });
 
   const cliType = workspaceRuntime.cliType || 'claude-code';
   const agentType = normalizeAgentType(workspaceRuntime.cliType);
   const agentConfig = useMemo(() => getAgentToolConfig(agentType), [agentType]);
+  const effectivePermissionConfig = useMemo<PermissionConfig>(() => {
+    if (agentType === 'codex') {
+      return {
+        mode: 'default',
+        codex: codexPermissionConfig,
+      };
+    }
+    return { mode: permissionMode };
+  }, [agentType, codexPermissionConfig, permissionMode]);
   const {
     actions: openSpecActions,
     ensureLoaded: ensureOpenSpecLoaded,
@@ -301,7 +328,7 @@ export const ChatPanel: React.FC = () => {
 
     try {
       setIsSendingMessage(true);
-      await sendMessage(fullMessage, undefined, { mode: permissionMode });
+      await sendMessage(fullMessage, undefined, effectivePermissionConfig);
       uiActions.resetDraftMessage();
       if (uiState.pendingUploads.length > 0) uiActions.clearUploads();
       if (uiState.codeReferences.length > 0) uiActions.clearCodeReferences();
@@ -320,6 +347,7 @@ export const ChatPanel: React.FC = () => {
     uiState.codeReferences,
     uiState.draftMessage,
     uiState.pendingUploads.length,
+    effectivePermissionConfig,
     permissionMode,
     toast,
   ]);
@@ -365,7 +393,7 @@ export const ChatPanel: React.FC = () => {
 
   const handleNewSession = useCallback(async () => {
     try {
-      await createSession(undefined, { mode: permissionMode });
+      await createSession(undefined, effectivePermissionConfig);
     } catch (error) {
       toast({
         title: 'Error Creating Session',
@@ -373,7 +401,7 @@ export const ChatPanel: React.FC = () => {
         variant: 'destructive',
       });
     }
-  }, [createSession, permissionMode, toast]);
+  }, [createSession, effectivePermissionConfig, toast]);
 
   const handleClear = useCallback(async () => {
     if (agentState.currentSessionId) {
@@ -582,6 +610,14 @@ export const ChatPanel: React.FC = () => {
     }
   }, [permissionMode]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('chatCodexPermissionConfig', JSON.stringify(codexPermissionConfig));
+    } catch (error) {
+      logger.error('Failed to save Codex permission config to localStorage', { error });
+    }
+  }, [codexPermissionConfig]);
+
   const loadSlashCommands = useCallback(async () => {
     if (!workspaceRuntime.workspaceId || !workspaceRuntime.runtimeBaseUrl) {
       setSlashCommands([]);
@@ -664,7 +700,7 @@ export const ChatPanel: React.FC = () => {
       const detail = (event as CustomEvent<ChatDraftEventDetail>).detail;
       if (!detail?.content) return;
       openPanel();
-      sendMessage(detail.content, undefined, { mode: permissionMode }).catch(err => {
+      sendMessage(detail.content, undefined, effectivePermissionConfig).catch(err => {
         logger.error('Failed to send form answers', { error: err });
       });
     };
@@ -674,7 +710,7 @@ export const ChatPanel: React.FC = () => {
       window.removeEventListener(WORKSPACE_CHAT_INSERT_DRAFT_EVENT, handleInsertDraft);
       window.removeEventListener(WORKSPACE_CHAT_SEND_DRAFT_EVENT, handleSendDraft);
     };
-  }, [dispatch, uiActions, uiState.draftMessage, workspaceState.rightChatCollapsed, sendMessage, permissionMode]);
+  }, [dispatch, uiActions, uiState.draftMessage, workspaceState.rightChatCollapsed, sendMessage, effectivePermissionConfig]);
 
   const hasActiveConversation = agentState.messages.length > 0 || !!agentState.activeTask;
 
@@ -779,6 +815,7 @@ export const ChatPanel: React.FC = () => {
             codeReferences={uiState.codeReferences}
             cliType={cliType}
             permissionMode={permissionMode}
+            codexPermissionConfig={codexPermissionConfig}
             onChange={handleDraftChange}
             onSend={handleSend}
             onAbort={handleAbort}
@@ -789,6 +826,7 @@ export const ChatPanel: React.FC = () => {
             onRemoveAttachment={uiActions.removeUpload}
             onRemoveCodeReference={uiActions.removeCodeReference}
             onPermissionModeChange={handlePermissionModeChange}
+            onCodexPermissionConfigChange={setCodexPermissionConfig}
             t={t}
           />
         </>

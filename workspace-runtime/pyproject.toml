@@ -66,6 +66,7 @@ dependencies = [
     # TOML 支援（Codex CLI 設定檔）
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0",
+    "openai-codex-app-server-sdk==0.116.0a1",
 ]
 
 [project.optional-dependencies]
@@ -121,6 +122,9 @@ dev-dependencies = [
     "asyncpg>=0.30.0",
     "pytest-mock>=3.15.1",
 ]
+
+[tool.uv.sources]
+openai-codex-app-server-sdk = { path = "vendor/codex_app_server" }
 
 [tool.black]
 line-length = 88

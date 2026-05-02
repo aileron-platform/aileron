@@ -69,6 +69,45 @@ const chat = {
       dontAsk: '允許所有操作且不詢問 - 跳過所有權限提示',
       auto: '自動模式 - 由 CLI 自動決定適合的權限模式',
     },
+    codexPermission: {
+      label: 'Codex 權限',
+      sandbox: {
+        label: 'Sandbox',
+        description: '控制 Codex 可取得的檔案系統存取範圍。',
+        strict: {
+          label: '唯讀',
+          description: 'Codex 可以檢查檔案，但不能寫入工作區。',
+        },
+        relaxed: {
+          label: '工作區寫入',
+          description: 'Codex 可以編輯工作區檔案，受保護路徑仍會封鎖。',
+        },
+        off: {
+          label: '完整存取',
+          description: 'Codex 可在沒有 sandbox 限制下存取檔案系統。',
+        },
+      },
+      approval: {
+        label: '批准',
+        description: '控制 Codex 在執行指令或變更檔案前何時詢問。',
+        manual: {
+          label: '每次詢問',
+          description: '每次執行指令或變更檔案前都要求批准。',
+        },
+        suggest: {
+          label: '需要時詢問',
+          description: '由 Codex 判斷哪些操作需要批准。',
+        },
+        auto: {
+          label: '自動批准',
+          description: '允許 Codex 操作，不顯示批准提示。',
+        },
+      },
+      network: {
+        label: '網路存取',
+        description: '允許 Codex 在 sandbox turn 中存取網路。',
+      },
+    },
   },
   dialogs: {
     fileChooser: {
@@ -303,6 +342,7 @@ const chat = {
   errors: {
     authenticationFailed: 'AI 供應商認證失敗，請檢查 API 認證資訊後再試一次。',
     executionFailed: '助理無法完成這次請求，請稍後再試。',
+    codexExecutionFailed: 'Codex 無法完成這次請求，請檢查權限設定後再試一次。',
     systemCompleteFallback: '任務已停止：{{reason}}',
   },
   queue: {

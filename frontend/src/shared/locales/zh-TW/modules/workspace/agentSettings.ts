@@ -98,6 +98,11 @@ const agentSettings = {
   },
   codex: {
     agentsMd: 'AGENTS.md',
+    runtime: {
+      title: '會話權限已啟用',
+      description: 'Codex 現在會透過 Python SDK 執行，並使用每個會話各自的權限控制。',
+      body: 'Sandbox、批准政策與網路存取會在 Codex turn 開始前從聊天輸入區設定。',
+    },
   },
   common: {
     loading: '載入中...',

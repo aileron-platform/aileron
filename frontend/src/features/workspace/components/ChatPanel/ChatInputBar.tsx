@@ -7,6 +7,8 @@ import { getFileIcon } from '@/shared/utils/fileIconUtils';
 import { formatFileSize } from '@/shared/utils/fileTypeUtils';
 import { PermissionModeSelector, type PermissionMode } from './PermissionModeSelector';
 import { normalizeAgentType } from '../../features/agent-settings/utils';
+import { CodexPermissionSelector } from './CodexPermissionSelector';
+import type { CodexPermissionConfig } from './agentSessionTypes';
 
 export interface ChatInputBarProps {
   value: string;
@@ -17,6 +19,7 @@ export interface ChatInputBarProps {
   codeReferences: ChatCodeReference[];
   cliType?: string;
   permissionMode?: PermissionMode;
+  codexPermissionConfig?: CodexPermissionConfig;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
   onAbort: () => void;
@@ -27,6 +30,7 @@ export interface ChatInputBarProps {
   onRemoveAttachment: (id: string) => void;
   onRemoveCodeReference: (id: string) => void;
   onPermissionModeChange?: (mode: PermissionMode) => void;
+  onCodexPermissionConfigChange?: (config: CodexPermissionConfig) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -39,6 +43,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   codeReferences,
   cliType,
   permissionMode = 'bypassPermissions',
+  codexPermissionConfig,
   onChange,
   onSend,
   onAbort,
@@ -49,13 +54,16 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onRemoveAttachment,
   onRemoveCodeReference,
   onPermissionModeChange,
+  onCodexPermissionConfigChange,
   t,
 }) => {
   const hasMessage = value.trim().length > 0;
   const hasAttachments = attachments.length > 0;
   const hasReferences = codeReferences.length > 0;
   const canSend = (hasMessage || hasAttachments || hasReferences) && isConnected && !isAborting;
-  const showPermissionMode = normalizeAgentType(cliType) === 'claude';
+  const normalizedAgentType = normalizeAgentType(cliType);
+  const showPermissionMode = normalizedAgentType === 'claude';
+  const showCodexPermission = normalizedAgentType === 'codex';
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -183,6 +191,13 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 <PermissionModeSelector
                   value={permissionMode}
                   onChange={onPermissionModeChange}
+                  t={t}
+                />
+              )}
+              {showCodexPermission && codexPermissionConfig && onCodexPermissionConfigChange && (
+                <CodexPermissionSelector
+                  value={codexPermissionConfig}
+                  onChange={onCodexPermissionConfigChange}
                   t={t}
                 />
               )}

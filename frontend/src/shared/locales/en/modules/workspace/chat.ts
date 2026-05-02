@@ -69,6 +69,45 @@ const chat = {
       dontAsk: 'Allow all operations without asking - skips all permission prompts',
       auto: 'Auto Mode - CLI automatically determines the appropriate permission mode',
     },
+    codexPermission: {
+      label: 'Codex permissions',
+      sandbox: {
+        label: 'Sandbox',
+        description: 'Controls how much filesystem access Codex receives.',
+        strict: {
+          label: 'Read only',
+          description: 'Codex can inspect files but cannot write to the workspace.',
+        },
+        relaxed: {
+          label: 'Workspace write',
+          description: 'Codex can edit workspace files while protected paths stay blocked.',
+        },
+        off: {
+          label: 'Full access',
+          description: 'Codex can access the filesystem without sandbox restrictions.',
+        },
+      },
+      approval: {
+        label: 'Approval',
+        description: 'Controls when Codex asks before running commands or changing files.',
+        manual: {
+          label: 'Ask every time',
+          description: 'Prompt before every command execution or file change.',
+        },
+        suggest: {
+          label: 'Ask on request',
+          description: 'Let Codex decide when an action needs approval.',
+        },
+        auto: {
+          label: 'Auto approve',
+          description: 'Allow Codex actions without approval prompts.',
+        },
+      },
+      network: {
+        label: 'Network access',
+        description: 'Allow Codex sandboxed turns to access the network.',
+      },
+    },
   },
   dialogs: {
     fileChooser: {
@@ -303,6 +342,7 @@ const chat = {
   errors: {
     authenticationFailed: 'AI provider authentication failed. Please check the API credentials and try again.',
     executionFailed: 'The assistant could not complete this request. Please try again.',
+    codexExecutionFailed: 'Codex could not complete this request. Please check permissions and try again.',
     systemCompleteFallback: 'The task stopped: {{reason}}',
   },
   queue: {

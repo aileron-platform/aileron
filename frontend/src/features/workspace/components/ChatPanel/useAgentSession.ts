@@ -1364,20 +1364,32 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const sendMessage = useCallback(
     async (prompt: string, options?: Partial<PromptRequest>, permissionConfig?: PermissionConfig) => {
       let sessionId = state.currentSessionId;
+      let createdSessionForPrompt = false;
+      const resolvedPermissionConfig = permissionConfig && isPermissionMode(permissionConfig.mode)
+        ? permissionConfig
+        : undefined;
 
       if (!sessionId) {
-        const session = await createSession(undefined, permissionConfig);
+        const session = await createSession(undefined, resolvedPermissionConfig);
         sessionId = session.session_id;
+        createdSessionForPrompt = true;
       }
 
       try {
+        if (sessionId && resolvedPermissionConfig && !createdSessionForPrompt) {
+          const updatedSession = await agentApi.sessions.updateSession(runtimeBaseUrl, sessionId, {
+            permission_config: resolvedPermissionConfig,
+          });
+          upsertRealtimeSession(updatedSession);
+        }
+
         const response = await agentApi.sessions.executePrompt(
           runtimeBaseUrl,
           sessionId,
           {
             prompt,
             stream: true,
-            permission_mode: permissionConfig?.mode,
+            permission_mode: resolvedPermissionConfig?.mode,
             ...options,
           }
         );
@@ -1387,7 +1399,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         throw error;
       }
     },
-    [runtimeBaseUrl, state.currentSessionId, createSession]
+    [runtimeBaseUrl, state.currentSessionId, createSession, upsertRealtimeSession]
   );
 
   const stopTask = useCallback(async () => {

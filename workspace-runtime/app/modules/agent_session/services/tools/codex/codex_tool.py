@@ -1,0 +1,577 @@
+"""Codex tool implementation backed by the Python app-server SDK."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import Any, Optional
+
+from codex_app_server.generated.v2_all import CommandExecutionStatus, PatchApplyStatus
+
+from app.database import async_session_scope
+from app.modules.agent_session.domain.enums import PermissionMode
+from app.modules.agent_session.domain.value_objects import CodexPermissionConfig
+from app.modules.agent_session.repositories.agent_session_repository import (
+    AgentSessionRepository,
+)
+from app.modules.agent_session.repositories.message_repository import MessageRepository
+from app.modules.agent_session.services.message_service import MessageService
+from app.modules.agent_session.services.tool_decision_manager import (
+    global_tool_decision_manager,
+)
+from app.modules.agent_session.services.tools.base.message_builder import (
+    _build_message_dict,
+    create_assistant_message,
+    create_tool_result_message,
+    create_user_message,
+)
+from app.modules.agent_session.services.tools.base.streaming_callbacks import (
+    StreamingCallbacks,
+)
+from app.modules.agent_session.services.tools.base.tool_interface import ITool
+from app.modules.agent_session.services.tools.base.types import TaskResult, ToolExecutionError
+
+from .approval_handler import CodexApprovalHandler
+from .client_manager import CodexClientManager, get_codex_client_manager
+from .notification_mapper import (
+    CommandOutputDelta,
+    CommandToolEnd,
+    CommandToolStart,
+    FileChangeEnd,
+    FileChangeOutputDelta,
+    FileChangePatchUpdated,
+    FileChangeStart,
+    IgnoredEvent,
+    PlanDelta,
+    StreamError,
+    TextDelta,
+    TextFinal,
+    ThinkingDelta,
+    ThinkingEnd,
+    ThinkingPart,
+    TokenUsageEvent,
+    NotificationMapper,
+)
+from .permission_mapper import to_thread_start_kwargs, to_turn_kwargs
+
+logger = logging.getLogger(__name__)
+
+
+class CodexExecutionError(ToolExecutionError):
+    """Codex execution failed."""
+
+    error_code = "CODEX_EXECUTION_FAILED"
+    message_key = "workspace.chat.errors.codexExecutionFailed"
+
+
+class CodexTool(ITool):
+    """ITool implementation for Codex SDK execution."""
+
+    def __init__(
+        self,
+        client_manager: CodexClientManager | None = None,
+        message_service_factory=MessageService,
+    ) -> None:
+        self._manager = client_manager or get_codex_client_manager()
+        self._message_service_factory = message_service_factory
+
+    async def execute_task(
+        self,
+        session_id: str,
+        prompt: str,
+        task_id: Optional[str] = None,
+        permission_mode: Optional[PermissionMode] = None,
+        streaming_callbacks: Optional[StreamingCallbacks] = None,
+    ) -> TaskResult:
+        session, cfg, cwd = await self._load_session_context(session_id)
+
+        state = await self._manager.get_or_create(
+            session_id=session_id,
+            cwd=cwd,
+            sdk_session_id=session.sdk_session_id,
+            permission_config=cfg,
+        )
+        if state.active_turn is not None:
+            raise CodexExecutionError()
+
+        emit_event = (
+            streaming_callbacks.emit_event
+            if streaming_callbacks and hasattr(streaming_callbacks, "emit_event")
+            else self._noop_emit_event
+        )
+        loop = asyncio.get_running_loop()
+        handler = CodexApprovalHandler(
+            session_id=session_id,
+            task_id=task_id or "",
+            emit_event=emit_event,
+            loop=loop,
+        )
+
+        text_message_ids: dict[str, str] = {}
+        command_output_buffers: dict[str, list[str]] = {}
+        file_patch_snapshots: dict[str, list[Any]] = {}
+        thinking_message_ids: dict[str, str] = {}
+        open_thinking_ids: set[str] = set()
+        assistant_message_ids: list[str] = []
+        token_usage: dict[str, Any] | None = None
+        raw_events: dict[str, Any] = {}
+        mapper = NotificationMapper()
+
+        user_message = await self._persist_user_message(session_id, prompt, task_id)
+        if streaming_callbacks:
+            await streaming_callbacks.on_message_created(user_message)
+
+        state.dispatcher.set_current(handler)
+        global_tool_decision_manager.register_hooks(session_id, handler)
+
+        try:
+            if state.thread is None:
+                state.thread = await state.codex.thread_start(
+                    **to_thread_start_kwargs(cfg, cwd)
+                )
+                await self._save_sdk_session_id(session_id, state.thread.id)
+
+            handle = await state.thread.turn(prompt, **to_turn_kwargs(cfg, cwd))
+            state.active_turn = handle
+
+            async for notification in handle.stream():
+                event = mapper.dispatch(notification.method, notification.payload)
+
+                if isinstance(event, TextDelta):
+                    message_id = await self._ensure_text_message(
+                        session_id,
+                        task_id,
+                        event.item_id,
+                        text_message_ids,
+                        assistant_message_ids,
+                        streaming_callbacks,
+                    )
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_stream_chunk(message_id, event.delta)
+
+                elif isinstance(event, TextFinal):
+                    await self._finalize_text_message(
+                        session_id,
+                        task_id,
+                        event,
+                        text_message_ids,
+                        assistant_message_ids,
+                        streaming_callbacks,
+                    )
+
+                elif isinstance(event, CommandToolStart):
+                    command_output_buffers[event.item_id] = []
+                    message = await self._persist_tool_use_message(
+                        session_id=session_id,
+                        task_id=task_id,
+                        tool_use_id=event.item_id,
+                        name="shell",
+                        tool_input={"command": event.command, "cwd": event.cwd},
+                    )
+                    assistant_message_ids.append(message["message_id"])
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_message_created(message)
+
+                elif isinstance(event, CommandOutputDelta):
+                    command_output_buffers.setdefault(event.item_id, []).append(event.delta)
+
+                elif isinstance(event, CommandToolEnd):
+                    content = event.aggregated_output or "".join(
+                        command_output_buffers.get(event.item_id, [])
+                    )
+                    message = await self._persist_tool_result_message(
+                        session_id=session_id,
+                        task_id=task_id,
+                        tool_use_id=event.item_id,
+                        content=content,
+                        is_error=event.status != CommandExecutionStatus.completed,
+                    )
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_message_created(message)
+
+                elif isinstance(event, FileChangeStart):
+                    file_patch_snapshots[event.item_id] = event.changes
+                    message = await self._persist_file_change_use_message(
+                        session_id=session_id,
+                        task_id=task_id,
+                        item_id=event.item_id,
+                        changes=event.changes,
+                    )
+                    assistant_message_ids.append(message["message_id"])
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_message_created(message)
+
+                elif isinstance(event, FileChangeOutputDelta):
+                    raw_events.setdefault("file_output", {}).setdefault(
+                        event.item_id,
+                        [],
+                    ).append(event.delta)
+
+                elif isinstance(event, FileChangePatchUpdated):
+                    file_patch_snapshots[event.item_id] = event.changes
+
+                elif isinstance(event, FileChangeEnd):
+                    changes = event.changes or file_patch_snapshots.get(event.item_id, [])
+                    message = await self._persist_file_change_result_message(
+                        session_id=session_id,
+                        task_id=task_id,
+                        item_id=event.item_id,
+                        changes=changes,
+                        status=event.status,
+                    )
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_message_created(message)
+
+                elif isinstance(event, ThinkingDelta):
+                    message_id = thinking_message_ids.setdefault(
+                        event.item_id,
+                        f"codex-thinking:{event.item_id}",
+                    )
+                    if streaming_callbacks and message_id not in open_thinking_ids:
+                        open_thinking_ids.add(message_id)
+                        await streaming_callbacks.on_thinking_start(message_id)
+                    if streaming_callbacks:
+                        await streaming_callbacks.on_thinking_chunk(message_id, event.delta)
+
+                elif isinstance(event, ThinkingPart):
+                    raw_events.setdefault("thinking_parts", {})[event.item_id] = event.text
+
+                elif isinstance(event, ThinkingEnd):
+                    await self._close_thinking(
+                        event.item_id,
+                        thinking_message_ids,
+                        open_thinking_ids,
+                        streaming_callbacks,
+                    )
+
+                elif isinstance(event, PlanDelta):
+                    raw_events["plan"] = event.delta
+
+                elif isinstance(event, TokenUsageEvent):
+                    token_usage = event.token_usage
+
+                elif isinstance(event, StreamError):
+                    logger.error("Codex stream error: %s", event.message)
+                    raise CodexExecutionError()
+
+                elif isinstance(event, IgnoredEvent):
+                    continue
+
+            await self._close_all_thinking(
+                thinking_message_ids,
+                open_thinking_ids,
+                streaming_callbacks,
+            )
+
+        finally:
+            state.dispatcher.set_current(None)
+            state.active_turn = None
+            global_tool_decision_manager.unregister_hooks(session_id)
+
+        raw_sdk_response = {
+            "type": "codex",
+            "token_usage": token_usage,
+            **raw_events,
+        }
+        context_window = self._context_window(token_usage)
+        context_window_limit = (
+            token_usage.get("model_context_window") if token_usage else None
+        )
+
+        return TaskResult(
+            user_message_id=user_message["message_id"],
+            assistant_message_ids=assistant_message_ids,
+            raw_sdk_response=raw_sdk_response,
+            context_window=context_window,
+            context_window_limit=context_window_limit,
+        )
+
+    async def stop_task(
+        self,
+        session_id: str,
+        task_id: Optional[str] = None,
+    ) -> dict:
+        state = await self._manager.get_state(session_id)
+        if state and state.active_turn:
+            try:
+                await state.active_turn.interrupt()
+            except Exception as exc:
+                logger.warning("Codex turn interrupt failed session=%s: %s", session_id[:8], exc)
+        return {"status": "stopped"}
+
+    async def _load_session_context(
+        self,
+        session_id: str,
+    ) -> tuple[Any, CodexPermissionConfig | None, str]:
+        async with async_session_scope() as db:
+            repo = AgentSessionRepository(db)
+            model = await repo.find_by_id(session_id)
+            if not model:
+                raise CodexExecutionError()
+            session = repo.to_entity(model)
+        cfg = session.permission_config.codex if session.permission_config else None
+        cwd = session.custom_context.get("workspace_path") or "/workspace"
+        return session, cfg, cwd
+
+    async def _persist_user_message(
+        self,
+        session_id: str,
+        prompt: str,
+        task_id: str | None,
+    ) -> dict[str, Any]:
+        async with async_session_scope() as db:
+            service = self._message_service_factory(db)
+            return await create_user_message(
+                session_id=session_id,
+                prompt=prompt,
+                task_id=task_id,
+                index=0,
+                message_service=service,
+                source="codex-sdk",
+            )
+
+    async def _save_sdk_session_id(self, session_id: str, thread_id: str) -> None:
+        async with async_session_scope() as db:
+            repo = AgentSessionRepository(db)
+            await repo.set_sdk_session_id(session_id, thread_id)
+
+    async def _ensure_text_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        item_id: str,
+        text_message_ids: dict[str, str],
+        assistant_message_ids: list[str],
+        streaming_callbacks: StreamingCallbacks | None,
+    ) -> str:
+        existing = text_message_ids.get(item_id)
+        if existing:
+            return existing
+
+        async with async_session_scope() as db:
+            service = MessageService(db)
+            message = await create_assistant_message(
+                session_id=session_id,
+                content=[{"type": "text", "text": ""}],
+                task_id=task_id,
+                index=0,
+                message_service=service,
+                source="codex-sdk",
+            )
+        message_id = message["message_id"]
+        text_message_ids[item_id] = message_id
+        assistant_message_ids.append(message_id)
+        if streaming_callbacks:
+            await streaming_callbacks.on_stream_start(message_id)
+        return message_id
+
+    async def _finalize_text_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        event: TextFinal,
+        text_message_ids: dict[str, str],
+        assistant_message_ids: list[str],
+        streaming_callbacks: StreamingCallbacks | None,
+    ) -> None:
+        message_id = text_message_ids.get(event.item_id)
+        if not message_id:
+            async with async_session_scope() as db:
+                service = self._message_service_factory(db)
+                message = await create_assistant_message(
+                    session_id=session_id,
+                    content=[{"type": "text", "text": event.text}],
+                    task_id=task_id,
+                    index=0,
+                    message_service=service,
+                    source="codex-sdk",
+                )
+            assistant_message_ids.append(message["message_id"])
+            if streaming_callbacks:
+                await streaming_callbacks.on_message_created(message)
+            return
+
+        message = await self._update_message_content(
+            message_id,
+            [{"type": "text", "text": event.text}],
+        )
+        if streaming_callbacks:
+            await streaming_callbacks.on_stream_end(message_id)
+            if message:
+                await streaming_callbacks.on_message_created(message)
+
+    async def _update_message_content(
+        self,
+        message_id: str,
+        content: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        async with async_session_scope() as db:
+            repo = MessageRepository(db)
+            model = await repo.find_by_id(message_id)
+            if not model:
+                return None
+            try:
+                data = json.loads(model.data) if model.data else {}
+            except (TypeError, json.JSONDecodeError):
+                data = {}
+            data["content"] = content
+            updated = await repo.update(
+                message_id,
+                {"data": json.dumps(data, ensure_ascii=False)},
+            )
+            if not updated:
+                return None
+            return _build_message_dict(repo.to_entity(updated))
+
+    async def _persist_tool_use_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        tool_use_id: str,
+        name: str,
+        tool_input: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._persist_assistant_blocks(
+            session_id,
+            task_id,
+            [{"type": "tool_use", "id": tool_use_id, "name": name, "input": tool_input}],
+        )
+
+    async def _persist_file_change_use_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        item_id: str,
+        changes: list[Any],
+    ) -> dict[str, Any]:
+        blocks = [
+            {
+                "type": "tool_use",
+                "id": f"{item_id}:{idx}",
+                "name": "write_file",
+                "input": {"path": change.path},
+            }
+            for idx, change in enumerate(changes)
+        ]
+        return await self._persist_assistant_blocks(session_id, task_id, blocks)
+
+    async def _persist_assistant_blocks(
+        self,
+        session_id: str,
+        task_id: str | None,
+        blocks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        async with async_session_scope() as db:
+            service = self._message_service_factory(db)
+            return await create_assistant_message(
+                session_id=session_id,
+                content=blocks,
+                task_id=task_id,
+                index=0,
+                message_service=service,
+                source="codex-sdk",
+                tool_uses=[
+                    {"id": b["id"], "name": b["name"], "input": b["input"]}
+                    for b in blocks
+                    if b.get("type") == "tool_use"
+                ],
+            )
+
+    async def _persist_tool_result_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        tool_use_id: str,
+        content: Any,
+        is_error: bool,
+    ) -> dict[str, Any]:
+        async with async_session_scope() as db:
+            service = self._message_service_factory(db)
+            return await create_tool_result_message(
+                session_id=session_id,
+                content=[
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": content,
+                        "is_error": is_error,
+                    }
+                ],
+                task_id=task_id,
+                index=0,
+                message_service=service,
+                source="codex-sdk",
+            )
+
+    async def _persist_file_change_result_message(
+        self,
+        session_id: str,
+        task_id: str | None,
+        item_id: str,
+        changes: list[Any],
+        status: PatchApplyStatus,
+    ) -> dict[str, Any]:
+        blocks = [
+            {
+                "type": "tool_result",
+                "tool_use_id": f"{item_id}:{idx}",
+                "is_error": status != PatchApplyStatus.completed,
+                "content": {
+                    "content": [
+                        {
+                            "type": "diff",
+                            "path": change.path,
+                            "newText": change.diff,
+                        }
+                    ],
+                    "status": status.value,
+                },
+            }
+            for idx, change in enumerate(changes)
+        ]
+        async with async_session_scope() as db:
+            service = self._message_service_factory(db)
+            return await create_tool_result_message(
+                session_id=session_id,
+                content=blocks,
+                task_id=task_id,
+                index=0,
+                message_service=service,
+                source="codex-sdk",
+            )
+
+    async def _close_thinking(
+        self,
+        item_id: str,
+        thinking_message_ids: dict[str, str],
+        open_thinking_ids: set[str],
+        streaming_callbacks: StreamingCallbacks | None,
+    ) -> None:
+        message_id = thinking_message_ids.get(item_id)
+        if streaming_callbacks and message_id in open_thinking_ids:
+            open_thinking_ids.remove(message_id)
+            await streaming_callbacks.on_thinking_end(message_id)
+
+    async def _close_all_thinking(
+        self,
+        thinking_message_ids: dict[str, str],
+        open_thinking_ids: set[str],
+        streaming_callbacks: StreamingCallbacks | None,
+    ) -> None:
+        if not streaming_callbacks:
+            return
+        for message_id in list(open_thinking_ids):
+            await streaming_callbacks.on_thinking_end(message_id)
+            open_thinking_ids.remove(message_id)
+
+    @staticmethod
+    def _context_window(token_usage: dict[str, Any] | None) -> int | None:
+        if not token_usage:
+            return None
+        total = token_usage.get("total") or {}
+        return total.get("total_tokens")
+
+    @staticmethod
+    def _noop_emit_event(event_name: str, data: dict[str, Any]) -> None:
+        logger.debug("Dropping Codex event without streaming callback: %s", event_name)

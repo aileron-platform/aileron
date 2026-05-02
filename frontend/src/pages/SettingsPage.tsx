@@ -1005,12 +1005,19 @@ export const SettingsPage: React.FC = () => {
                         <Bot className="h-5 w-5" />
                         {t('pages.settings.tabs.codex')}
                       </CardTitle>
-                      <CardDescription>{t('workspace.agentSettings.common.comingSoon.description', { feature: t('pages.settings.tabs.codex'), toolName: 'Codex' })}</CardDescription>
+                      <CardDescription>{t('workspace.agentSettings.codex.runtime.description')}</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-                        <Construction className="h-12 w-12 text-muted-foreground/50" />
-                        <p className="text-sm text-muted-foreground">{t('workspace.agentSettings.common.comingSoon.title')}</p>
+                    <CardContent className="space-y-4">
+                      <div className="rounded-lg border border-border bg-muted/30 p-4">
+                        <div className="flex items-start gap-3">
+                          <Shield className="mt-0.5 h-5 w-5 text-primary" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium">{t('workspace.agentSettings.codex.runtime.title')}</p>
+                            <p className="text-sm leading-relaxed text-muted-foreground">
+                              {t('workspace.agentSettings.codex.runtime.body')}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

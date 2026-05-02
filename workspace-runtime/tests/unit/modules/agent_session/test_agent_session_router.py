@@ -9,8 +9,20 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from app.modules.agent_session.domain.enums import MessageStatus, PermissionMode, ToolDecisionOutcome, ToolDecisionType
+from app.modules.agent_session.domain.entities import AgentSession
+from app.modules.agent_session.domain.enums import (
+    AgenticTool,
+    AgentSessionStatus,
+    CodexApprovalPolicy,
+    CodexSandboxMode,
+    MessageStatus,
+    PermissionMode,
+    ToolDecisionOutcome,
+    ToolDecisionType,
+)
+from app.modules.agent_session.domain.value_objects import CodexPermissionConfig, PermissionConfig
 from app.modules.agent_session.schemas.agent_session import (
+    AgentSessionResponse,
     AgentSessionCreate,
     AgentSessionUpdate,
     PromptRequest,
@@ -22,6 +34,33 @@ from app.modules.agent_session.services.agent_session_service import AgentSessio
 from app.modules.version_control.utils import VersionControlError
 
 router_module = importlib.import_module("app.modules.agent_session.routers.agent_session_router")
+
+
+def test_agent_session_response_serializes_codex_permission_config() -> None:
+    session = AgentSession(
+        id="session-1",
+        created_at=datetime.now(timezone.utc),
+        status=AgentSessionStatus.IDLE,
+        agentic_tool=AgenticTool.CODEX,
+        workspace_id="ws-1",
+        permission_config=PermissionConfig(
+            mode=PermissionMode.DEFAULT,
+            codex=CodexPermissionConfig(
+                sandbox_mode=CodexSandboxMode.RELAXED,
+                approval_policy=CodexApprovalPolicy.SUGGEST,
+                network_access=True,
+            ),
+        ),
+    )
+
+    response = AgentSessionResponse.from_entity(session)
+
+    assert response.permission_config is not None
+    assert response.permission_config.codex == {
+        "sandboxMode": "relaxed",
+        "approvalPolicy": "suggest",
+        "networkAccess": True,
+    }
 
 
 @pytest.mark.asyncio

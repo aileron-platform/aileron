@@ -30,6 +30,10 @@ from app.modules.agent_session.services.tools.claude.claude_tool import ClaudeTo
 from app.modules.agent_session.services.tools.claude.tool_manager import get_claude_tool_manager
 from app.modules.agent_session.services.tools.acp.tool_manager import get_acp_tool_manager
 from app.modules.agent_session.services.tools.base.types import ToolType
+from app.modules.agent_session.services.tools.codex import (
+    CodexTool,
+    get_codex_client_manager,
+)
 from app.modules.agent_session.websocket.events import EventEmitter, EventType, WebSocketEvent, get_event_emitter
 
 logger = logging.getLogger(__name__)
@@ -307,7 +311,7 @@ class ExecutionService:
         # Tool registry (future multi-SDK support)
         self.tools: dict[str, ITool] = {
             "claude-code": self.claude_tool,
-            "codex": acp_tool_manager.get_tool(tool_type=ToolType.CODEX),
+            "codex": CodexTool(get_codex_client_manager()),
             "gemini": acp_tool_manager.get_tool(tool_type=ToolType.GEMINI),
             "opencode": acp_tool_manager.get_tool(tool_type=ToolType.OPENCODE),
         }
@@ -1053,9 +1057,12 @@ class ExecutionService:
                 return input_tokens + output_tokens
 
             elif sdk_type == "codex":
+                token_usage = raw_sdk_response.get("token_usage") or {}
+                total = token_usage.get("total") or {}
+                if "total_tokens" in total:
+                    return total.get("total_tokens", 0)
                 turn = response.get("turn", {})
                 usage = turn.get("usage", {})
-                # Codex may provide total_tokens directly
                 if "total_tokens" in usage:
                     return usage["total_tokens"]
                 return usage.get("input_tokens", 0) + usage.get("output_tokens", 0)

@@ -168,6 +168,7 @@ ENV OPENSPEC_INIT_TOOLS="claude,codex,opencode,gemini"
 FROM base AS development
 
 COPY --chown=developer:developer workspace-runtime/pyproject.toml workspace-runtime/uv.lock* ./
+COPY --chown=developer:developer workspace-runtime/vendor/ ./vendor/
 
 USER developer
 RUN uv sync --dev
@@ -198,6 +199,7 @@ CMD ["/start_services.sh"]
 FROM base AS production
 
 COPY --chown=developer:developer workspace-runtime/pyproject.toml workspace-runtime/uv.lock* ./
+COPY --chown=developer:developer workspace-runtime/vendor/ ./vendor/
 
 USER developer
 RUN uv sync --no-dev

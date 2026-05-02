@@ -107,8 +107,18 @@ export const isPermissionMode = (value: unknown): value is PermissionMode =>
   typeof value === 'string' && PERMISSION_MODES.includes(value as PermissionMode);
 
 /** Permission Config for session creation */
+export type CodexSandboxMode = 'strict' | 'relaxed' | 'off';
+export type CodexApprovalPolicy = 'manual' | 'suggest' | 'auto';
+
+export interface CodexPermissionConfig {
+  sandboxMode: CodexSandboxMode;
+  approvalPolicy: CodexApprovalPolicy;
+  networkAccess: boolean;
+}
+
 export interface PermissionConfig {
   mode: PermissionMode;
+  codex?: CodexPermissionConfig;
 }
 
 // ============================================================================
@@ -252,6 +262,7 @@ export interface SessionUpdateRequest {
   status?: SessionStatus;
   model?: string | null;
   title?: string | null;
+  permission_config?: PermissionConfig | null;
 }
 
 export interface SessionListResponse {

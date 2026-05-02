@@ -231,7 +231,7 @@ class AgentSessionResponse(BaseModel):
         if entity.permission_config:
             permission_config = PermissionConfigResponse(
                 mode=entity.permission_config.mode.value,
-                codex=entity.permission_config.codex.__dict__ if entity.permission_config.codex else None,
+                codex=entity.permission_config.to_dict().get("codex"),
             )
 
         # Create model_settings
