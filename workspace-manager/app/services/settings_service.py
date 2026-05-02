@@ -20,6 +20,9 @@ from app.models import (
     ClaudeCodeSettings,
     ClaudeModelInfo,
     ClaudeProviderInfo,
+    CodexAccountInfo,
+    CodexAuthFlow,
+    CodexSettings,
     GeneralSettings,
     GitSettings,
     SSHSettings,
@@ -182,6 +185,27 @@ class SettingsService:
             # Mark JSONB column as modified
             flag_modified(settings, "additional_settings")
 
+        if "codex" in data and isinstance(data["codex"], dict):
+            codex_data = data["codex"]
+            additional_settings = settings.additional_settings or {}
+            codex_additional = additional_settings.get("codex", {})
+
+            for key in (
+                "loginStatus",
+                "account",
+                "model",
+                "environmentVariables",
+                "authFlow",
+                "lastSyncedAt",
+                "lastSyncError",
+            ):
+                if key in codex_data:
+                    codex_additional[key] = codex_data[key]
+
+            additional_settings["codex"] = codex_additional
+            settings.additional_settings = additional_settings
+            flag_modified(settings, "additional_settings")
+
         if "git" in data and isinstance(data["git"], dict):
             git_data = data["git"]
             if "userName" in git_data:
@@ -249,6 +273,51 @@ class SettingsService:
             if has_changes:
                 changes["claudeCode"] = claude_changes
 
+        if "codex" in new_data:
+            codex_data = new_data["codex"]
+            old_codex = old_settings.codex
+            has_changes = False
+            codex_changes = {}
+
+            for key, old_value in (
+                ("loginStatus", old_codex.login_status),
+                ("model", old_codex.model),
+            ):
+                if key in codex_data and codex_data.get(key) != old_value:
+                    has_changes = True
+                    codex_changes[key] = codex_data.get(key)
+
+            if "account" in codex_data:
+                old_account = (
+                    old_codex.account.model_dump(by_alias=True)
+                    if old_codex.account
+                    else None
+                )
+                if codex_data.get("account") != old_account:
+                    has_changes = True
+                    codex_changes["account"] = codex_data.get("account")
+
+            if "authFlow" in codex_data:
+                old_auth_flow = (
+                    old_codex.auth_flow.model_dump(by_alias=True)
+                    if old_codex.auth_flow
+                    else None
+                )
+                if codex_data.get("authFlow") != old_auth_flow:
+                    has_changes = True
+                    codex_changes["authFlow"] = codex_data.get("authFlow")
+
+            new_env_vars = codex_data.get("environmentVariables", [])
+            if "environmentVariables" in codex_data and self._env_vars_changed(
+                old_codex.environment_variables,
+                new_env_vars,
+            ):
+                has_changes = True
+                codex_changes["environmentVariables"] = new_env_vars
+
+            if has_changes:
+                changes["codex"] = codex_changes
+
         # Detect Git settings changes
         if "git" in new_data:
             git_data = new_data["git"]
@@ -310,6 +379,7 @@ class SettingsService:
         # Read new ClaudeCodeSettings from additional_settings
         additional_settings = settings.additional_settings or {}
         claude_additional = additional_settings.get("claudeCode", {})
+        codex_additional = additional_settings.get("codex", {})
 
         # Handle oauthAccount
         oauth_account = None
@@ -340,6 +410,26 @@ class SettingsService:
             environment_variables=claude_additional.get("environmentVariables", []),
         )
 
+        codex_account = None
+        codex_account_data = codex_additional.get("account")
+        if codex_account_data:
+            codex_account = CodexAccountInfo(**codex_account_data)
+
+        codex_auth_flow = None
+        codex_auth_flow_data = codex_additional.get("authFlow")
+        if codex_auth_flow_data:
+            codex_auth_flow = CodexAuthFlow(**codex_auth_flow_data)
+
+        codex_model = CodexSettings(
+            login_status=codex_additional.get("loginStatus", "notConnected"),
+            account=codex_account,
+            model=codex_additional.get("model") or "gpt-5.3-codex",
+            environment_variables=codex_additional.get("environmentVariables", []),
+            auth_flow=codex_auth_flow,
+            last_synced_at=codex_additional.get("lastSyncedAt"),
+            last_sync_error=codex_additional.get("lastSyncError"),
+        )
+
         git_model = GitSettings(
             user_name=settings.git_user_name,
             user_email=settings.git_user_email,
@@ -350,6 +440,7 @@ class SettingsService:
             general=general_model,
             ssh=ssh_model,
             claude_code=claude_model,
+            codex=codex_model,
             git=git_model,
         )
 

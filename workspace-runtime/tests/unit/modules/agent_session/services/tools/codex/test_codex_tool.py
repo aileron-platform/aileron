@@ -20,10 +20,12 @@ from codex_app_server.generated.v2_all import (
 
 import app.modules.agent_session.services.tools.codex.codex_tool as module
 from app.modules.agent_session.services.tools.codex.client_manager import (
+    CodexAuthenticationRequiredError,
     CodexSessionApprovalDispatcher,
     SessionState,
 )
 from app.modules.agent_session.services.tools.codex.codex_tool import (
+    CodexAuthenticationError,
     CodexExecutionError,
     CodexTool,
 )
@@ -89,6 +91,11 @@ class FakeManager:
         return self.state
 
 
+class FailingAuthManager:
+    async def get_or_create(self, *_args, **_kwargs):
+        raise CodexAuthenticationRequiredError("not logged in")
+
+
 def _notification(method: str, payload):
     return SimpleNamespace(method=method, payload=payload)
 
@@ -128,6 +135,22 @@ async def test_execute_task_rejects_same_session_active_turn(monkeypatch) -> Non
 
     with pytest.raises(CodexExecutionError):
         await tool.execute_task("session-1", "prompt")
+
+
+@pytest.mark.asyncio
+async def test_execute_task_maps_authentication_required_to_i18n_error(monkeypatch) -> None:
+    tool = CodexTool(FailingAuthManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+
+    with pytest.raises(CodexAuthenticationError) as exc_info:
+        await tool.execute_task("session-1", "prompt")
+
+    assert exc_info.value.error_code == "CODEX_AUTHENTICATION_FAILED"
+    assert exc_info.value.message_key == "workspace.chat.errors.codexAuthenticationFailed"
 
 
 @pytest.mark.asyncio

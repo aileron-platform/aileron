@@ -74,6 +74,11 @@ class ClaudeCodeEnvironmentVariable(CamelModel):
     value: str
 
 
+class CodexEnvironmentVariable(CamelModel):
+    key: str
+    value: str
+
+
 class OAuthAccountInfo(CamelModel):
     """OAuth account information"""
     account_uuid: Optional[str] = Field(None, alias="accountUuid")
@@ -117,6 +122,32 @@ class ClaudeCodeSettings(CamelModel):
     )
 
 
+class CodexAccountInfo(CamelModel):
+    account_id: Optional[str] = Field(None, alias="accountId")
+    email: Optional[str] = None
+    plan_type: Optional[str] = Field(None, alias="planType")
+
+
+class CodexAuthFlow(CamelModel):
+    login_id: Optional[str] = Field(None, alias="loginId")
+    auth_url: Optional[str] = Field(None, alias="authUrl")
+    verification_url: Optional[str] = Field(None, alias="verificationUrl")
+    user_code: Optional[str] = Field(None, alias="userCode")
+    expires_at: Optional[int] = Field(None, alias="expiresAt")
+
+
+class CodexSettings(CamelModel):
+    login_status: str = Field("notConnected", alias="loginStatus")
+    account: Optional[CodexAccountInfo] = None
+    model: str = "gpt-5.3-codex"
+    environment_variables: list[CodexEnvironmentVariable] = Field(
+        default_factory=list, alias="environmentVariables"
+    )
+    auth_flow: Optional[CodexAuthFlow] = Field(None, alias="authFlow")
+    last_synced_at: Optional[int] = Field(None, alias="lastSyncedAt")
+    last_sync_error: Optional[str] = Field(None, alias="lastSyncError")
+
+
 class GitSettings(CamelModel):
     user_name: Optional[str] = Field(None, alias="userName")
     user_email: Optional[str] = Field(None, alias="userEmail")
@@ -127,6 +158,7 @@ class UserSettings(CamelModel):
     general: GeneralSettings = Field(default_factory=GeneralSettings)
     ssh: SSHSettings = Field(default_factory=SSHSettings)
     claude_code: ClaudeCodeSettings = Field(default_factory=ClaudeCodeSettings, alias="claudeCode")
+    codex: CodexSettings = Field(default_factory=CodexSettings)
     git: GitSettings = Field(default_factory=GitSettings)
 
 
@@ -142,6 +174,7 @@ class UserSettingsUpdate(CamelModel):
     general: Optional[GeneralSettings] = None
     ssh: Optional[SSHSettings] = None
     claude_code: Optional[ClaudeCodeSettings] = Field(None, alias="claudeCode")
+    codex: Optional[CodexSettings] = None
     git: Optional[GitSettings] = None
 
 

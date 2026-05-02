@@ -38,6 +38,7 @@ class SyncService:
         results = {
             "ssh": {"success": False, "message": ""},
             "claude_code": {"success": False, "message": ""},
+            "codex": {"success": False, "message": ""},
             "git": {"success": False, "message": ""},
         }
         
@@ -101,10 +102,12 @@ class SyncService:
                     "environmentVariables": claude_settings.get("environmentVariables", []),
                 }
 
-                # Debug: Record transmitted data
-                logger.info(f"Claude Code sync payload: {claude_payload}")
-                logger.info(f"Additional settings: {additional_settings}")
-                logger.info(f"Claude settings from additional_settings: {claude_settings}")
+                logger.info(
+                    "Claude Code sync payload prepared: auth_method=%s model=%s env_count=%s",
+                    auth_method,
+                    model,
+                    len(claude_payload["environmentVariables"]),
+                )
                 logger.info(f"Request URL: {base_url}/api/v1/internal/settings/claude-code")
 
                 response = await client.post(
@@ -139,8 +142,51 @@ class SyncService:
             except Exception as e:
                 logger.error(f"Claude Code settings sync failed: {e}")
                 results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
+
+            # 3. Sync Codex settings
+            try:
+                logger.info(f"Sync Codex settings to workspace {workspace.id}")
+
+                additional_settings = settings.additional_settings or {}
+                codex_settings = additional_settings.get("codex", {})
+
+                codex_payload = {
+                    "loginStatus": codex_settings.get("loginStatus", "notConnected"),
+                    "account": codex_settings.get("account"),
+                    "model": codex_settings.get("model", "gpt-5.3-codex"),
+                    "authFlow": codex_settings.get("authFlow"),
+                    "environmentVariables": codex_settings.get("environmentVariables", []),
+                    "clearAuth": codex_settings.get("loginStatus") == "notConnected",
+                }
+
+                logger.info(
+                    "Codex sync payload prepared: login_status=%s model=%s env_count=%s",
+                    codex_payload["loginStatus"],
+                    codex_payload["model"],
+                    len(codex_payload["environmentVariables"]),
+                )
+                response = await client.post(
+                    f"{base_url}/api/v1/internal/settings/codex",
+                    json=codex_payload,
+                )
+                response.raise_for_status()
+                results["codex"]["success"] = True
+                results["codex"]["message"] = i18n.translate("sync.codex.success", language=language)
+                logger.info(f"Codex settings sync succeeded: {workspace.id}")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Codex HTTP Error: {e.response.status_code} - {e.response.text}")
+                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+            except httpx.TimeoutException as e:
+                logger.error(f"Codex request timeout: {e}")
+                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+            except httpx.ConnectError as e:
+                logger.error(f"Codex connection error: {e}")
+                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+            except Exception as e:
+                logger.error(f"Codex settings sync failed: {e}")
+                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
             
-            # 3. Sync Git settings
+            # 4. Sync Git settings
             if settings.git_user_name and settings.git_user_email:
                 try:
                     logger.info(f"Sync Git settings to workspace {workspace.id}")

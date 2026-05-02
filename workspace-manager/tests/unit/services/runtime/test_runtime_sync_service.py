@@ -86,6 +86,24 @@ def claude_code_changes():
 
 
 @pytest.fixture
+def codex_changes():
+    """Codex Settings Changes"""
+    return {
+        "loginStatus": "connected",
+        "account": {
+            "accountId": "codex-account-1",
+            "email": "codex@example.com",
+            "planType": "pro",
+        },
+        "model": "gpt-5.3-codex",
+        "environmentVariables": [
+            {"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"},
+        ],
+        "authFlow": None,
+    }
+
+
+@pytest.fixture
 def git_changes():
     """Git Settings Changes"""
     return {
@@ -351,6 +369,88 @@ class TestClaudeCodeSynchronization:
                 await sync_service._sync_claude_code(
                     "http://localhost:8080",
                     claude_code_changes,
+                    "workspace-123"
+                )
+
+
+# ============================================================================
+# RuntimeSyncService Tests - Codex Sync
+# ============================================================================
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestCodexSynchronization:
+    """Codex Settings synchronization tests"""
+
+    async def test_sync_codex_success(self, sync_service, codex_changes):
+        """Test: successfully sync Codex settings"""
+        # Arrange
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "message": "Codex updated"}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            # Act
+            result = await sync_service._sync_codex(
+                "http://localhost:8080",
+                codex_changes,
+                "workspace-123"
+            )
+
+        # Assert
+        assert result["type"] == "codex"
+        assert result["success"] is True
+        call_kwargs = mock_client.post.call_args[1]
+        assert call_kwargs["json"]["loginStatus"] == "connected"
+        assert call_kwargs["json"]["model"] == "gpt-5.3-codex"
+        assert call_kwargs["json"]["environmentVariables"][0]["key"] == "OPENAI_BASE_URL"
+        assert call_kwargs["json"]["clearAuth"] is False
+        assert "authTokens" not in call_kwargs["json"]
+
+    async def test_sync_codex_clear_auth_when_not_connected(self, sync_service):
+        """Test: Codex logout state clears runtime auth"""
+        # Arrange
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post.return_value = mock_response
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            # Act
+            result = await sync_service._sync_codex(
+                "http://localhost:8080",
+                {"loginStatus": "notConnected", "environmentVariables": []},
+                "workspace-123",
+            )
+
+        # Assert
+        assert result["success"] is True
+        call_kwargs = mock_client.post.call_args[1]
+        assert call_kwargs["json"]["clearAuth"] is True
+
+    async def test_sync_codex_timeout(self, sync_service, codex_changes):
+        """Test: Codex sync timeout"""
+        # Arrange
+        mock_client = AsyncMock()
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+        mock_client.post.side_effect = httpx.TimeoutException("Request timeout")
+
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            # Act & Assert
+            with pytest.raises(Exception, match="Codex sync failed"):
+                await sync_service._sync_codex(
+                    "http://localhost:8080",
+                    codex_changes,
                     "workspace-123"
                 )
 
@@ -644,7 +744,7 @@ class TestBatchSettingsSynchronization:
 
     async def test_sync_settings_to_runtimes_multiple_settings(
         self, sync_service, mock_db_session, sample_workspace,
-        ssh_changes, claude_code_changes, git_changes
+        ssh_changes, claude_code_changes, codex_changes, git_changes
     ):
         """Test: Sync Multiple Types of Settings"""
         # Arrange
@@ -664,6 +764,7 @@ class TestBatchSettingsSynchronization:
         changes = {
             "ssh": ssh_changes,
             "claudeCode": claude_code_changes,
+            "codex": codex_changes,
             "git": git_changes,
         }
 
@@ -674,8 +775,8 @@ class TestBatchSettingsSynchronization:
         # Assert
         assert result["success"] is True
         assert result["synced_runtimes"] == 1
-        assert result["total_tasks"] == 3  # 3 types of settings
-        assert result["success_count"] == 3
+        assert result["total_tasks"] == 4
+        assert result["success_count"] == 4
         assert result["error_count"] == 0
 
     async def test_sync_settings_to_runtimes_partial_failure(

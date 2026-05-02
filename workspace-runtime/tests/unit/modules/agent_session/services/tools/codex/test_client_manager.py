@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.modules.agent_session.services.tools.codex.client_manager import (
+    CodexAuthenticationRequiredError,
     CodexClientManager,
     CodexSessionApprovalDispatcher,
 )
@@ -44,6 +45,7 @@ async def test_get_or_create_constructs_config_and_resumes(monkeypatch) -> None:
     monkeypatch.setattr(module, "AsyncCodex", FakeCodex)
     monkeypatch.setattr(module, "assert_sdk_structure", lambda: None)
     monkeypatch.setattr(manager, "_log_server_version", AsyncMock())
+    monkeypatch.setattr(manager, "_ensure_codex_auth", AsyncMock())
 
     state = await manager.get_or_create("session-1", "/workspace", sdk_session_id="sdk-1")
 
@@ -51,7 +53,8 @@ async def test_get_or_create_constructs_config_and_resumes(monkeypatch) -> None:
     assert created_configs[0].codex_bin == "/home/developer/.npm-global/bin/codex"
     assert created_configs[0].cwd == "/workspace"
     assert created_configs[0].env == {
-        "CODEX_HOME": "/home/developer/.codex-sessions/session-1"
+        "CODEX_HOME": "/home/developer/.codex",
+        "AILERON_CODEX_SESSION_STATE_DIR": "/home/developer/.codex-sessions/session-1",
     }
     assert state.codex._client._sync._approval_handler is state.dispatcher
 
@@ -78,6 +81,7 @@ async def test_get_or_create_clears_stale_sdk_session_id(monkeypatch) -> None:
     monkeypatch.setattr(module, "AsyncCodex", FakeCodex)
     monkeypatch.setattr(module, "assert_sdk_structure", lambda: None)
     monkeypatch.setattr(manager, "_log_server_version", AsyncMock())
+    monkeypatch.setattr(manager, "_ensure_codex_auth", AsyncMock())
     monkeypatch.setattr(manager, "_clear_persisted_thread_id", fake_clear)
 
     state = await manager.get_or_create("session-1", "/workspace", sdk_session_id="stale")
@@ -105,6 +109,7 @@ async def test_concurrent_distinct_session_init_does_not_block(monkeypatch) -> N
     monkeypatch.setattr(module, "AsyncCodex", FakeCodex)
     monkeypatch.setattr(module, "assert_sdk_structure", lambda: None)
     monkeypatch.setattr(manager, "_log_server_version", AsyncMock())
+    monkeypatch.setattr(manager, "_ensure_codex_auth", AsyncMock())
 
     slow = asyncio.create_task(manager.get_or_create("session-a", "/workspace", "slow"))
     await asyncio.sleep(0)
@@ -114,3 +119,99 @@ async def test_concurrent_distinct_session_init_does_not_block(monkeypatch) -> N
     )
     assert fast.thread.id == "fast"
     await slow
+
+
+@pytest.mark.asyncio
+async def test_ensure_codex_auth_uses_existing_account(monkeypatch) -> None:
+    manager = CodexClientManager()
+    codex = SimpleNamespace()
+    monkeypatch.setattr(
+        manager,
+        "_read_account",
+        AsyncMock(return_value=SimpleNamespace(account=SimpleNamespace(root=object()))),
+    )
+    monkeypatch.setattr(manager, "_load_fallback_token_payload", lambda: None)
+
+    await manager._ensure_codex_auth(codex)
+
+    manager._read_account.assert_awaited_once_with(codex)
+
+
+@pytest.mark.asyncio
+async def test_ensure_codex_auth_injects_fallback_tokens(monkeypatch) -> None:
+    manager = CodexClientManager()
+    requests = []
+    async def fake_request(method, params, **_kwargs):
+        requests.append((method, params))
+
+    codex = SimpleNamespace(
+        _client=SimpleNamespace(
+            request=AsyncMock(side_effect=fake_request)
+        )
+    )
+    monkeypatch.setattr(
+        manager,
+        "_read_account",
+        AsyncMock(side_effect=[
+            SimpleNamespace(account=None),
+            SimpleNamespace(account=SimpleNamespace(root=object())),
+        ]),
+    )
+    monkeypatch.setattr(
+        manager,
+        "_load_fallback_token_payload",
+        lambda: {
+            "type": "chatgptAuthTokens",
+            "accessToken": "token",
+            "chatgptAccountId": "acct",
+            "chatgptPlanType": "plus",
+        },
+    )
+
+    assert await manager._ensure_codex_auth(codex) is True
+
+    assert requests == [
+        (
+            "account/login/start",
+            {
+                "type": "chatgptAuthTokens",
+                "accessToken": "token",
+                "chatgptAccountId": "acct",
+                "chatgptPlanType": "plus",
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ensure_codex_auth_returns_false_without_persisted_login(monkeypatch) -> None:
+    manager = CodexClientManager()
+    codex = SimpleNamespace()
+    monkeypatch.setattr(
+        manager,
+        "_read_account",
+        AsyncMock(return_value=SimpleNamespace(account=None)),
+    )
+    monkeypatch.setattr(manager, "_load_fallback_token_payload", lambda: None)
+
+    assert await manager._ensure_codex_auth(codex) is False
+
+
+@pytest.mark.asyncio
+async def test_get_or_create_raises_authentication_required_without_login(monkeypatch) -> None:
+    import app.modules.agent_session.services.tools.codex.client_manager as module
+
+    class FakeCodex:
+        def __init__(self, config):
+            self.config = config
+            self._client = SimpleNamespace(_sync=SimpleNamespace(_approval_handler=None))
+            self.close = AsyncMock()
+
+    manager = CodexClientManager()
+    monkeypatch.setattr(module, "AsyncCodex", FakeCodex)
+    monkeypatch.setattr(module, "assert_sdk_structure", lambda: None)
+    monkeypatch.setattr(manager, "_log_server_version", AsyncMock())
+    monkeypatch.setattr(manager, "_ensure_codex_auth", AsyncMock(return_value=False))
+
+    with pytest.raises(CodexAuthenticationRequiredError):
+        await manager.get_or_create("session-1", "/workspace")

@@ -1300,6 +1300,16 @@ func runtimeVolumeMounts(workspace *workspacev1alpha1.Workspace) []corev1.Volume
 			Name:      "workspace-data",
 			MountPath: workspaceMountPath(workspace),
 		},
+		{
+			Name:      "workspace-data",
+			MountPath: "/home/developer/.codex",
+			SubPath:   ".system/codex-auth",
+		},
+		{
+			Name:      "workspace-data",
+			MountPath: "/home/developer/.codex-sessions",
+			SubPath:   ".system/codex-sessions",
+		},
 	}
 	for _, attachment := range workspace.Spec.KnowledgeBases {
 		if attachment.KBID == "" || attachment.MountAlias == "" {

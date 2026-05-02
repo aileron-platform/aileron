@@ -59,6 +59,11 @@ export interface ClaudeCodeEnvironmentVariable {
   value: string;
 }
 
+export interface CodexEnvironmentVariable {
+  key: string;
+  value: string;
+}
+
 export interface OAuthAccountInfo {
   accountUuid?: string;
   emailAddress?: string;
@@ -92,6 +97,32 @@ export interface UserSettingsClaudeCode {
   environmentVariables: ClaudeCodeEnvironmentVariable[];
 }
 
+export type CodexLoginStatus = 'notConnected' | 'pending' | 'connected' | 'needsRelogin' | 'error';
+
+export interface CodexAccountInfo {
+  accountId?: string | null;
+  email?: string | null;
+  planType?: string | null;
+}
+
+export interface CodexAuthFlow {
+  loginId?: string | null;
+  authUrl?: string | null;
+  verificationUrl?: string | null;
+  userCode?: string | null;
+  expiresAt?: number | null;
+}
+
+export interface UserSettingsCodex {
+  loginStatus: CodexLoginStatus;
+  account?: CodexAccountInfo | null;
+  model: string;
+  environmentVariables: CodexEnvironmentVariable[];
+  authFlow?: CodexAuthFlow | null;
+  lastSyncedAt?: number | null;
+  lastSyncError?: string | null;
+}
+
 export interface UserSettingsGit {
   userName: string | null;
   userEmail: string | null;
@@ -102,6 +133,7 @@ export interface UserSettings {
   general: UserSettingsGeneral;
   ssh: UserSettingsSSH;
   claudeCode: UserSettingsClaudeCode;
+  codex: UserSettingsCodex;
   git: UserSettingsGit;
 }
 

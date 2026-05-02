@@ -342,6 +342,7 @@ const chat = {
   errors: {
     authenticationFailed: 'AI 供應商認證失敗，請檢查 API 認證資訊後再試一次。',
     executionFailed: '助理無法完成這次請求，請稍後再試。',
+    codexAuthenticationFailed: 'Codex 尚未登入。請先在設定連接 Codex、同步 workspace 後再試一次。',
     codexExecutionFailed: 'Codex 無法完成這次請求，請檢查權限設定後再試一次。',
     systemCompleteFallback: '任務已停止：{{reason}}',
   },

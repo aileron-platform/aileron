@@ -84,6 +84,61 @@ class ClaudeCodeRequest(BaseModel):
         populate_by_name = True
 
 
+class CodexAccountInfo(BaseModel):
+    """Codex account summary."""
+    account_id: Optional[str] = Field(None, alias="accountId")
+    email: Optional[str] = None
+    plan_type: Optional[str] = Field(None, alias="planType")
+
+    class Config:
+        populate_by_name = True
+
+
+class CodexAuthFlow(BaseModel):
+    """Codex login flow metadata."""
+    login_id: Optional[str] = Field(None, alias="loginId")
+    auth_url: Optional[str] = Field(None, alias="authUrl")
+    verification_url: Optional[str] = Field(None, alias="verificationUrl")
+    user_code: Optional[str] = Field(None, alias="userCode")
+    expires_at: Optional[int] = Field(None, alias="expiresAt")
+
+    class Config:
+        populate_by_name = True
+
+
+class CodexAuthTokens(BaseModel):
+    """Codex external auth tokens used only for runtime-side fallback."""
+    access_token: Optional[str] = Field(None, alias="accessToken")
+    refresh_token: Optional[str] = Field(None, alias="refreshToken")
+    id_token: Optional[str] = Field(None, alias="idToken")
+    expires_at: Optional[int] = Field(None, alias="expiresAt")
+
+    class Config:
+        populate_by_name = True
+
+
+class CodexSettingsRequest(BaseModel):
+    """Codex configuration request."""
+    login_status: Optional[str] = Field(None, alias="loginStatus")
+    account: Optional[CodexAccountInfo] = None
+    model: Optional[str] = None
+    environment_variables: List[EnvironmentVariable] = Field(
+        default_factory=list,
+        alias="environmentVariables",
+        description="Codex environment variable list",
+    )
+    auth_flow: Optional[CodexAuthFlow] = Field(None, alias="authFlow")
+    auth_tokens: Optional[CodexAuthTokens] = Field(
+        None,
+        alias="authTokens",
+        description="Optional runtime-only token bootstrap payload",
+    )
+    clear_auth: bool = Field(False, alias="clearAuth")
+
+    class Config:
+        populate_by_name = True
+
+
 class GitSettingsRequest(BaseModel):
     """Git configuration request"""
     user_name: str = Field(..., alias="userName", description="Git user name")
@@ -129,6 +184,10 @@ __all__ = [
     "EnvironmentVariable",
     "SSHKeysRequest",
     "ClaudeCodeRequest",
+    "CodexAccountInfo",
+    "CodexAuthFlow",
+    "CodexAuthTokens",
+    "CodexSettingsRequest",
     "GitSettingsRequest",
     "FirewallConfigRequest",
     "InternalApiResponse",

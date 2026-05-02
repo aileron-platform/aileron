@@ -12,6 +12,7 @@ from app.modules.internal.service import InternalService
 from app.modules.internal.models import (
     SSHKeysRequest,
     ClaudeCodeRequest,
+    CodexSettingsRequest,
     GitSettingsRequest,
     FirewallConfigRequest,
     EnvironmentVariable,
@@ -29,6 +30,8 @@ def internal_service(tmp_path):
             service.home_dir = tmp_path
             service.ssh_dir = tmp_path / ".ssh"
             service.claude_dir = tmp_path / ".claude"
+            service.codex_auth_dir = tmp_path / ".codex"
+            service.codex_sessions_dir = tmp_path / ".codex-sessions"
             return service
 
 
@@ -39,6 +42,8 @@ def tmp_paths(tmp_path):
         "home": tmp_path,
         "ssh": tmp_path / ".ssh",
         "claude": tmp_path / ".claude",
+        "codex": tmp_path / ".codex",
+        "codex_sessions": tmp_path / ".codex-sessions",
     }
 
 
@@ -257,6 +262,76 @@ class TestSetupClaudeCode:
         claude_json = json.loads((tmp_paths["home"] / ".claude.json").read_text())
         assert "oauthAccount" in claude_json
         assert claude_json["oauthAccount"]["emailAddress"] == "test@example.com"
+
+
+class TestSetupCodex:
+    """Test setting up Codex."""
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_writes_env_block(self, internal_service, tmp_paths):
+        """Test Codex environment variables are written to managed shell block."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        request = CodexSettingsRequest(
+            login_status="notConnected",
+            model="gpt-5.3-codex",
+            environment_variables=[
+                EnvironmentVariable(key="OPENAI_BASE_URL", value="https://example.test"),
+            ],
+        )
+
+        result = await internal_service.setup_codex(request)
+
+        assert result["codex_home"] == str(tmp_paths["codex"])
+        assert result["environment_variables_set"] == ["OPENAI_BASE_URL"]
+        bashrc = (tmp_paths["home"] / ".bashrc").read_text()
+        assert "# Aileron - Codex Environment Variables - START" in bashrc
+        assert 'export OPENAI_BASE_URL="https://example.test"' in bashrc
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_rejects_codex_home_override(self, internal_service, tmp_paths):
+        """Test CODEX_HOME is system-managed and cannot be overridden."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        request = CodexSettingsRequest(
+            environment_variables=[
+                EnvironmentVariable(key="CODEX_HOME", value="/tmp/override"),
+            ],
+        )
+
+        with pytest.raises(ValueError):
+            await internal_service.setup_codex(request)
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_clears_auth_but_preserves_env(self, internal_service, tmp_paths):
+        """Test logout clears auth without deleting Codex env settings."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        tmp_paths["codex"].mkdir(parents=True)
+        (tmp_paths["codex"] / "auth.json").write_text("{}")
+
+        request = CodexSettingsRequest(
+            clear_auth=True,
+            environment_variables=[
+                EnvironmentVariable(key="OPENAI_BASE_URL", value="https://example.test"),
+            ],
+        )
+
+        result = await internal_service.setup_codex(request)
+
+        assert result["has_cli_auth"] is False
+        assert not (tmp_paths["codex"] / "auth.json").exists()
+        assert "OPENAI_BASE_URL" in (tmp_paths["home"] / ".bashrc").read_text()
+
+    def test_check_codex_status_reports_success_for_auth(self, internal_service, tmp_paths):
+        """Test setup status reports Codex auth."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        tmp_paths["codex"].mkdir(parents=True)
+        (tmp_paths["codex"] / "auth.json").write_text("{}")
+
+        status = internal_service._check_codex_status()
+
+        assert status["status"] == "success"
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_api_key(self, internal_service, tmp_paths):

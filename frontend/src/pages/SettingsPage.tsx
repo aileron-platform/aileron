@@ -39,6 +39,7 @@ import type {
   UserSettingsGeneral,
   UserSettingsSSH,
   UserSettingsClaudeCode,
+  UserSettingsCodex,
   UserSettingsGit,
   UserSettingsResponse,
 } from '@/shared/types/user';
@@ -59,10 +60,12 @@ export const SettingsPage: React.FC = () => {
   const [generalSettings, setGeneralSettings] = useState<UserSettingsGeneral | null>(null);
   const [sshKeys, setSshKeys] = useState<UserSettingsSSH | null>(null);
   const [claudeCodeSettings, setClaudeCodeSettings] = useState<UserSettingsClaudeCode | null>(null);
+  const [codexSettings, setCodexSettings] = useState<UserSettingsCodex | null>(null);
   const [gitSettings, setGitSettings] = useState<UserSettingsGit | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCodexAuthLoading, setIsCodexAuthLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAuthCodeInput, setShowAuthCodeInput] = useState(false);
@@ -87,6 +90,13 @@ export const SettingsPage: React.FC = () => {
         ...cloneDeep(snapshot.claudeCode)
       };
       setClaudeCodeSettings(claudeCodeWithDefaults);
+
+      setCodexSettings({
+        loginStatus: 'notConnected',
+        model: 'gpt-5.3-codex',
+        environmentVariables: [],
+        ...cloneDeep(snapshot.codex),
+      });
 
       setGitSettings(cloneDeep(snapshot.git));
       setShowPrivateKey(false);
@@ -135,7 +145,7 @@ export const SettingsPage: React.FC = () => {
       });
       return;
     }
-    if (!generalSettings || !sshKeys || !claudeCodeSettings || !gitSettings) {
+    if (!generalSettings || !sshKeys || !claudeCodeSettings || !codexSettings || !gitSettings) {
       return;
     }
     setIsSaving(true);
@@ -161,6 +171,15 @@ export const SettingsPage: React.FC = () => {
           environmentVariables: claudeCodeSettings.environmentVariables,
           selectedProvider: claudeCodeSettings.selectedProvider,
           availableProviders: claudeCodeSettings.availableProviders,
+        },
+        codex: {
+          loginStatus: codexSettings.loginStatus,
+          account: codexSettings.account,
+          model: codexSettings.model,
+          environmentVariables: codexSettings.environmentVariables,
+          authFlow: codexSettings.authFlow,
+          lastSyncedAt: codexSettings.lastSyncedAt,
+          lastSyncError: codexSettings.lastSyncError,
         },
         git: {
           userName: gitSettings.userName,
@@ -216,6 +235,7 @@ export const SettingsPage: React.FC = () => {
         const statusList = [
           workspace.details.ssh.success,
           workspace.details.claude_code.success,
+          workspace.details.codex?.success ?? true,
           workspace.details.git.success,
         ];
 
@@ -518,7 +538,115 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const hasSettings = Boolean(generalSettings && sshKeys && claudeCodeSettings && gitSettings);
+  const handleCodexSignIn = async () => {
+    if (!userId) {
+      return;
+    }
+    const authWindow = window.open('about:blank', '_blank');
+    setIsCodexAuthLoading(true);
+    try {
+      const response = await apiClient.post<{ success: boolean; codex: UserSettingsCodex }>(
+        `/users/${userId}/settings/codex/login/start`,
+        {},
+      );
+      setCodexSettings(response.codex);
+      setNeedsSync(true);
+
+      const verificationUrl = response.codex.authFlow?.verificationUrl;
+      if (verificationUrl) {
+        if (authWindow) {
+          authWindow.opener = null;
+          authWindow.location.href = verificationUrl;
+          toast({
+            title: t('pages.settings.sections.codex.login.window.openedTitle'),
+            description: t('pages.settings.sections.codex.login.window.openedDescription'),
+          });
+        } else {
+          const openedWindow = window.open(verificationUrl, '_blank', 'noopener,noreferrer');
+          if (!openedWindow) {
+            toast({
+              title: t('pages.settings.sections.codex.login.window.blockedTitle'),
+              description: t('pages.settings.sections.codex.login.window.blockedDescription'),
+              variant: 'destructive',
+            });
+          }
+        }
+      } else {
+        authWindow?.close();
+      }
+    } catch (err) {
+      authWindow?.close();
+      logger.error('codex login start failed', { error: err });
+      toast({
+        title: t('pages.settings.sections.codex.login.errors.startFailedTitle'),
+        description: t('pages.settings.sections.codex.login.errors.startFailedDescription'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCodexAuthLoading(false);
+    }
+  };
+
+  const handleCodexRefreshStatus = async () => {
+    if (!userId) {
+      return;
+    }
+    setIsCodexAuthLoading(true);
+    try {
+      const response = await apiClient.get<{ success: boolean; codex: UserSettingsCodex }>(
+        `/users/${userId}/settings/codex/login/status`,
+      );
+      setCodexSettings(response.codex);
+    } catch (err) {
+      logger.error('codex login status failed', { error: err });
+    } finally {
+      setIsCodexAuthLoading(false);
+    }
+  };
+
+  const handleCodexLogout = async () => {
+    if (!userId) {
+      return;
+    }
+    setIsCodexAuthLoading(true);
+    try {
+      const response = await apiClient.post<{ success: boolean; codex: UserSettingsCodex }>(
+        `/users/${userId}/settings/codex/logout`,
+        {},
+      );
+      setCodexSettings(response.codex);
+      setNeedsSync(true);
+    } catch (err) {
+      logger.error('codex logout failed', { error: err });
+      toast({
+        title: t('pages.settings.sections.codex.login.errors.logoutFailedTitle'),
+        description: t('pages.settings.sections.codex.login.errors.logoutFailedDescription'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCodexAuthLoading(false);
+    }
+  };
+
+  const handleCodexCancelLogin = async () => {
+    if (!userId) {
+      return;
+    }
+    setIsCodexAuthLoading(true);
+    try {
+      const response = await apiClient.post<{ success: boolean; codex: UserSettingsCodex }>(
+        `/users/${userId}/settings/codex/login/cancel`,
+        {},
+      );
+      setCodexSettings(response.codex);
+    } catch (err) {
+      logger.error('codex login cancel failed', { error: err });
+    } finally {
+      setIsCodexAuthLoading(false);
+    }
+  };
+
+  const hasSettings = Boolean(generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -563,7 +691,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {hasSettings && generalSettings && sshKeys && claudeCodeSettings && gitSettings && (
+          {hasSettings && generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings && (
             <Tabs defaultValue="general" className="w-full flex-1 flex flex-col min-h-0">
               <TabsList className="flex w-full overflow-x-auto flex-shrink-0">
                 <TabsTrigger value="general">{t('pages.settings.tabs.general')}</TabsTrigger>
@@ -1005,20 +1133,94 @@ export const SettingsPage: React.FC = () => {
                         <Bot className="h-5 w-5" />
                         {t('pages.settings.tabs.codex')}
                       </CardTitle>
-                      <CardDescription>{t('workspace.agentSettings.codex.runtime.description')}</CardDescription>
+                      <CardDescription>{t('pages.settings.sections.codex.description')}</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="rounded-lg border border-border bg-muted/30 p-4">
-                        <div className="flex items-start gap-3">
-                          <Shield className="mt-0.5 h-5 w-5 text-primary" />
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium">{t('workspace.agentSettings.codex.runtime.title')}</p>
-                            <p className="text-sm leading-relaxed text-muted-foreground">
-                              {t('workspace.agentSettings.codex.runtime.body')}
-                            </p>
+                    <CardContent className="space-y-6">
+                      <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-muted/30 p-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="text-lg font-semibold">{t('pages.settings.sections.codex.login.title')}</h3>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                              <span className="h-2 w-2 rounded-full bg-primary"></span>
+                              {t(`pages.settings.sections.codex.login.status.${codexSettings.loginStatus}`)}
+                            </span>
                           </div>
+                          {codexSettings.account?.email ? (
+                            <p className="text-sm text-muted-foreground">
+                              {t('pages.settings.sections.codex.login.account')}: <span className="font-mono text-foreground">{codexSettings.account.email}</span>
+                            </p>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              {t('pages.settings.sections.codex.login.notConnectedDescription')}
+                            </p>
+                          )}
+                          {codexSettings.authFlow?.verificationUrl && (
+                            <div className="space-y-1 text-sm text-muted-foreground">
+                              <p>
+                                {t('pages.settings.sections.codex.login.deviceCode', {
+                                  code: codexSettings.authFlow.userCode || '',
+                                })}
+                              </p>
+                              <a
+                                href={codexSettings.authFlow.verificationUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex font-medium text-primary underline-offset-4 hover:underline"
+                              >
+                                {t('pages.settings.sections.codex.login.openVerificationLink')}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          {codexSettings.loginStatus === 'pending' ? (
+                            <>
+                              <Button variant="outline" onClick={handleCodexRefreshStatus} disabled={isCodexAuthLoading}>
+                                {t('pages.settings.sections.codex.login.refreshButton')}
+                              </Button>
+                              <Button variant="outline" onClick={handleCodexCancelLogin} disabled={isCodexAuthLoading}>
+                                {t('pages.settings.sections.codex.login.cancelButton')}
+                              </Button>
+                            </>
+                          ) : codexSettings.loginStatus === 'connected' ? (
+                            <Button variant="outline" onClick={handleCodexLogout} disabled={isCodexAuthLoading}>
+                              {t('pages.settings.sections.codex.login.logoutButton')}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              onClick={handleCodexSignIn}
+                              disabled={isCodexAuthLoading}
+                            >
+                              {t('pages.settings.sections.codex.login.signInButton')}
+                            </Button>
+                          )}
                         </div>
                       </div>
+
+                      <div className="space-y-2">
+                        <Label>{t('pages.settings.sections.codex.model.label')}</Label>
+                        <Input
+                          placeholder={t('pages.settings.sections.codex.model.placeholder')}
+                          value={codexSettings.model || ''}
+                          onChange={(e) =>
+                            setCodexSettings(prev => (prev ? { ...prev, model: e.target.value } : prev))
+                          }
+                          className="font-mono"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          {t('pages.settings.sections.codex.model.help')}
+                        </p>
+                      </div>
+
+                      <EnvironmentVariables
+                        value={codexSettings.environmentVariables || []}
+                        onChange={(variables) =>
+                          setCodexSettings(prev => (prev ? { ...prev, environmentVariables: variables } : prev))
+                        }
+                        title={t('pages.settings.sections.codex.environmentVariables.title')}
+                        description={t('pages.settings.sections.codex.environmentVariables.description')}
+                      />
                     </CardContent>
                   </Card>
                 </div>

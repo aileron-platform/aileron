@@ -12,6 +12,7 @@ export interface SyncWorkspaceResult {
   details?: {
     ssh: { success: boolean; message: string };
     claude_code: { success: boolean; message: string };
+    codex?: { success: boolean; message: string };
     git: { success: boolean; message: string };
   };
   error?: string;
@@ -48,4 +49,3 @@ export class SyncApiService {
 }
 
 export default SyncApiService;
-

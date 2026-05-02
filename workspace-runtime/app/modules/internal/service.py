@@ -9,6 +9,14 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from codex_app_server import AsyncCodex
+from codex_app_server.client import AppServerConfig
+from codex_app_server.generated.v2_all import (
+    CancelLoginAccountResponse,
+    GetAccountResponse,
+    LoginAccountResponse,
+    LogoutAccountResponse,
+)
 from jinja2 import Template
 
 from app.config.settings import get_settings
@@ -18,9 +26,19 @@ from app.modules.claude_code.settings import (
     SettingsService,
 )
 
-from .models import ClaudeCodeRequest, FirewallConfigRequest, GitSettingsRequest, SSHKeysRequest
+from .models import (
+    ClaudeCodeRequest,
+    CodexSettingsRequest,
+    EnvironmentVariable,
+    FirewallConfigRequest,
+    GitSettingsRequest,
+    SSHKeysRequest,
+)
 
 logger = logging.getLogger(__name__)
+
+CODEX_BIN = "/home/developer/.npm-global/bin/codex"
+_codex_login_sessions: dict[str, AsyncCodex] = {}
 
 
 class InternalService:
@@ -30,9 +48,14 @@ class InternalService:
         self.home_dir = Path("/home/developer")
         self.ssh_dir = self.home_dir / ".ssh"
         self.claude_dir = self.home_dir / ".claude"
+        self.codex_auth_dir = self.home_dir / ".codex"
+        self.codex_sessions_dir = self.home_dir / ".codex-sessions"
         self._credentials_filename = ".credentials.json"
         self._env_keys_env = "CLAUDE_CODE_SYNCED_KEYS"
         self._auth_method_env = "CLAUDE_CODE_AUTH_METHOD"
+        self._codex_env_keys_env = "CODEX_SYNCED_KEYS"
+        self._codex_login_status_env = "CODEX_LOGIN_STATUS"
+        self._codex_model_env = "CODEX_MODEL"
         runtime_settings = get_settings()
         self._workspace_id = runtime_settings.WORKSPACE_ID
         self._claude_settings_service = SettingsService()
@@ -113,6 +136,171 @@ class InternalService:
         except Exception as e:
             logger.error(f"SSH Keys setup failed: {e}")
             raise
+
+    async def setup_codex(self, request: CodexSettingsRequest) -> Dict[str, str | list[str] | bool]:
+        """Setup Codex CLI auth state and environment variables."""
+        try:
+            logger.info(
+                "Starting Codex setup: login_status=%s clear_auth=%s has_tokens=%s env_count=%s",
+                request.login_status,
+                request.clear_auth,
+                bool(request.auth_tokens and request.auth_tokens.access_token),
+                len(request.environment_variables),
+            )
+
+            self.codex_auth_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            self.codex_sessions_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+            self.codex_auth_dir.chmod(0o700)
+            self.codex_sessions_dir.chmod(0o700)
+
+            if request.clear_auth:
+                self._clear_codex_auth_state()
+            elif request.auth_tokens and request.auth_tokens.access_token:
+                self._write_codex_auth_state(request)
+
+            synced_keys = self._sync_codex_environment_variables(
+                request.environment_variables
+            )
+
+            if request.login_status:
+                os.environ[self._codex_login_status_env] = request.login_status
+            elif (self.codex_auth_dir / "auth.json").is_file():
+                os.environ[self._codex_login_status_env] = "connected"
+            else:
+                os.environ.pop(self._codex_login_status_env, None)
+
+            if request.model:
+                os.environ[self._codex_model_env] = request.model
+            else:
+                os.environ.pop(self._codex_model_env, None)
+
+            if synced_keys:
+                os.environ[self._codex_env_keys_env] = ",".join(synced_keys)
+            else:
+                os.environ.pop(self._codex_env_keys_env, None)
+
+            auth_path = self.codex_auth_dir / "auth.json"
+            logger.info("Codex setup completed, auth_present=%s env_count=%s", auth_path.is_file(), len(synced_keys))
+            return {
+                "codex_home": str(self.codex_auth_dir),
+                "session_state_dir": str(self.codex_sessions_dir),
+                "has_cli_auth": auth_path.is_file(),
+                "environment_variables_set": synced_keys,
+                "model": request.model or "",
+            }
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error("Codex setup failed: %s", e)
+            raise
+
+    async def start_codex_login(self) -> Dict[str, str]:
+        """Start a Codex-native ChatGPT device-code login flow."""
+        self.codex_auth_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        codex = AsyncCodex(
+            config=AppServerConfig(
+                codex_bin=CODEX_BIN,
+                cwd="/workspace",
+                env={"CODEX_HOME": str(self.codex_auth_dir)},
+            )
+        )
+        try:
+            await codex._ensure_initialized()
+            response = await codex._client.request(
+                "account/login/start",
+                {"type": "chatgptDeviceCode"},
+                response_model=LoginAccountResponse,
+            )
+            login = response.root
+            login_id = getattr(login, "login_id", None)
+            if not login_id:
+                raise RuntimeError("Codex login response did not include loginId")
+            _codex_login_sessions[login_id] = codex
+            logger.info("Codex login flow started")
+            return {
+                "loginId": login_id,
+                "verificationUrl": getattr(login, "verification_url", ""),
+                "userCode": getattr(login, "user_code", ""),
+                "type": getattr(login, "type", "chatgptDeviceCode"),
+            }
+        except Exception:
+            await codex.close()
+            raise
+
+    async def get_codex_login_status(self) -> Dict[str, object]:
+        """Read Codex account status from the managed auth home."""
+        codex = AsyncCodex(
+            config=AppServerConfig(
+                codex_bin=CODEX_BIN,
+                cwd="/workspace",
+                env={"CODEX_HOME": str(self.codex_auth_dir)},
+            )
+        )
+        try:
+            await codex._ensure_initialized()
+            response = await codex._client.request(
+                "account/read",
+                {"refreshToken": True},
+                response_model=GetAccountResponse,
+            )
+            account = response.account.root if response.account else None
+            if account is None:
+                return {"loginStatus": "notConnected", "account": None}
+            account_type = getattr(account, "type", None)
+            if account_type != "chatgpt":
+                return {"loginStatus": "connected", "account": {"type": account_type}}
+            return {
+                "loginStatus": "connected",
+                "account": {
+                    "email": getattr(account, "email", None),
+                    "planType": getattr(getattr(account, "plan_type", None), "value", None),
+                },
+            }
+        finally:
+            await codex.close()
+
+    async def cancel_codex_login(self, login_id: str) -> Dict[str, str]:
+        """Cancel a pending Codex login flow."""
+        codex = _codex_login_sessions.pop(login_id, None)
+        if not codex:
+            return {"status": "notFound"}
+        try:
+            response = await codex._client.request(
+                "account/login/cancel",
+                {"loginId": login_id},
+                response_model=CancelLoginAccountResponse,
+            )
+            return {"status": response.status.value}
+        finally:
+            await codex.close()
+
+    async def logout_codex(self) -> Dict[str, str]:
+        """Logout Codex and clear persisted CLI auth state."""
+        for login_id, codex in list(_codex_login_sessions.items()):
+            _codex_login_sessions.pop(login_id, None)
+            await codex.close()
+
+        codex = AsyncCodex(
+            config=AppServerConfig(
+                codex_bin=CODEX_BIN,
+                cwd="/workspace",
+                env={"CODEX_HOME": str(self.codex_auth_dir)},
+            )
+        )
+        try:
+            await codex._ensure_initialized()
+            await codex._client.request(
+                "account/logout",
+                None,
+                response_model=LogoutAccountResponse,
+            )
+        except Exception as exc:
+            logger.info("Codex app-server logout returned non-fatal error: %s", exc)
+        finally:
+            await codex.close()
+        self._clear_codex_auth_state()
+        return {"status": "loggedOut"}
 
     async def setup_claude_code(self, request: ClaudeCodeRequest) -> Dict[str, str]:
         """Setup Claude Code"""
@@ -351,6 +539,108 @@ class InternalService:
         claude_json_data.pop("oauthAccount", None)
         claude_json_path.write_text(json.dumps(claude_json_data, indent=2))
 
+    def _write_codex_auth_state(self, request: CodexSettingsRequest) -> None:
+        """Write Codex CLI auth state using the current CLI-readable format."""
+        if not request.auth_tokens or not request.auth_tokens.access_token:
+            return
+
+        auth_path = self.codex_auth_dir / "auth.json"
+        auth_data = {
+            "auth_mode": "chatgpt",
+            "tokens": {
+                "access_token": request.auth_tokens.access_token,
+                "refresh_token": request.auth_tokens.refresh_token,
+                "id_token": request.auth_tokens.id_token,
+            },
+        }
+
+        if request.auth_tokens.expires_at is not None:
+            auth_data["tokens"]["expires_at"] = request.auth_tokens.expires_at
+        if request.account:
+            auth_data["chatgpt_account_id"] = request.account.account_id
+            auth_data["chatgpt_plan_type"] = request.account.plan_type
+
+        auth_path.write_text(json.dumps(auth_data, indent=2))
+        auth_path.chmod(0o600)
+
+    def _clear_codex_auth_state(self) -> None:
+        """Remove Codex CLI auth state while preserving settings such as env vars."""
+        auth_path = self.codex_auth_dir / "auth.json"
+        if auth_path.exists():
+            auth_path.unlink()
+        os.environ[self._codex_login_status_env] = "notConnected"
+
+    def _sync_codex_environment_variables(
+        self,
+        environment_variables: List[EnvironmentVariable],
+    ) -> List[str]:
+        """Write managed Codex environment variables into the shell profile."""
+        managed_keys = {"CODEX_HOME"}
+        invalid_keys = [
+            env_var.key
+            for env_var in environment_variables
+            if env_var.key and env_var.key.strip().upper() in managed_keys
+        ]
+        if invalid_keys:
+            raise ValueError("CODEX_HOME is managed by the system and cannot be overridden")
+
+        return self._write_managed_env_block(
+            environment_variables,
+            "# Aileron - Codex Environment Variables - START\n",
+            "# Aileron - Codex Environment Variables - END\n",
+        )
+
+    def _write_managed_env_block(
+        self,
+        environment_variables: List[EnvironmentVariable],
+        marker_start: str,
+        marker_end: str,
+    ) -> List[str]:
+        """Replace a managed shell profile environment variable block."""
+        bashrc_path = self.home_dir / ".bashrc"
+        existing_lines = []
+        if bashrc_path.exists():
+            existing_lines = bashrc_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+        filtered_lines = []
+        skip = False
+        for line in existing_lines:
+            if line == marker_start:
+                skip = True
+                continue
+            if line == marker_end:
+                skip = False
+                continue
+            if not skip:
+                filtered_lines.append(line)
+
+        synced_keys: List[str] = []
+        new_env_lines = []
+        valid_vars = [
+            env_var
+            for env_var in environment_variables
+            if env_var.key and env_var.key.strip() and env_var.value
+        ]
+        if valid_vars:
+            new_env_lines.append(marker_start)
+            for env_var in valid_vars:
+                escaped_value = (
+                    env_var.value
+                    .replace("\\", "\\\\")
+                    .replace('"', '\\"')
+                    .replace("$", "\\$")
+                    .replace("`", "\\`")
+                )
+                key = env_var.key.strip()
+                new_env_lines.append(f'export {key}="{escaped_value}"\n')
+                synced_keys.append(key)
+                os.environ[key] = env_var.value
+                logger.debug("Managed environment variable set: %s", key)
+            new_env_lines.append(marker_end)
+
+        bashrc_path.write_text("".join(filtered_lines + new_env_lines), encoding="utf-8")
+        return synced_keys
+
     async def setup_git_settings(self, request: GitSettingsRequest) -> Dict[str, str]:
         """Setup Git global settings"""
         try:
@@ -410,6 +700,7 @@ class InternalService:
         return {
             "ssh": self._check_ssh_status(),
             "claudeCode": self._check_claude_status(),
+            "codex": self._check_codex_status(),
             "git": self._check_git_status(),
         }
 
@@ -501,6 +792,43 @@ class InternalService:
             return {"status": "pending", "message": "Claude Code settings not yet synced"}
         except Exception as exc:
             logger.error(f"Failed to check Claude Code status: {exc}")
+            return {"status": "failed", "message": f"Check failed: {exc}"}
+
+    def _check_codex_status(self) -> Dict[str, str]:
+        try:
+            auth_path = self.codex_auth_dir / "auth.json"
+            recorded_login_status = os.environ.get(self._codex_login_status_env)
+            recorded_env_keys = [
+                key.strip()
+                for key in (os.environ.get(self._codex_env_keys_env) or "").split(",")
+                if key.strip()
+            ]
+
+            missing_keys = [key for key in recorded_env_keys if not os.environ.get(key)]
+            if missing_keys:
+                return {
+                    "status": "failed",
+                    "message": f"Missing required Codex environment variables: {', '.join(missing_keys)}",
+                }
+
+            if auth_path.is_file() and auth_path.stat().st_size > 0:
+                return {"status": "success", "message": "Codex CLI login synced"}
+
+            if recorded_login_status in {"connected", "needsRelogin", "error"}:
+                return {
+                    "status": "pending",
+                    "message": "Codex CLI login requires re-login",
+                }
+
+            if recorded_env_keys:
+                return {
+                    "status": "success",
+                    "message": "Codex environment variables synced",
+                }
+
+            return {"status": "pending", "message": "Codex settings not yet synced"}
+        except Exception as exc:
+            logger.error("Failed to check Codex status: %s", exc)
             return {"status": "failed", "message": f"Check failed: {exc}"}
 
     def _check_git_status(self) -> Dict[str, str]:

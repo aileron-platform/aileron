@@ -49,6 +49,11 @@ class RuntimeSyncService:
                     self._sync_claude_code(runtime["url"], changes["claudeCode"], runtime["workspace_id"])
                 )
 
+            if "codex" in changes:
+                runtime_tasks.append(
+                    self._sync_codex(runtime["url"], changes["codex"], runtime["workspace_id"])
+                )
+
             if "git" in changes:
                 runtime_tasks.append(
                     self._sync_git_settings(runtime["url"], changes["git"], runtime["workspace_id"])
@@ -201,6 +206,39 @@ class RuntimeSyncService:
         except Exception as e:
             logger.error(f"Claude Code sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Claude Code sync failed for {workspace_id}: {e}")
+
+    async def _sync_codex(self, runtime_url: str, codex_data: dict, workspace_id: str) -> Dict[str, any]:
+        """Sync Codex settings to specified runtime"""
+        url = f"{runtime_url}/internal/settings/codex"
+        headers = {"Authorization": f"Bearer {self.internal_api_token}"}
+
+        payload = {
+            "loginStatus": codex_data.get("loginStatus"),
+            "account": codex_data.get("account"),
+            "model": codex_data.get("model"),
+            "authFlow": codex_data.get("authFlow"),
+            "environmentVariables": codex_data.get("environmentVariables", []),
+            "clearAuth": codex_data.get("loginStatus") == "notConnected",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                result = response.json()
+
+            logger.info(f"Codex sync succeeded - workspace: {workspace_id}")
+            return {
+                "type": "codex",
+                "workspace_id": workspace_id,
+                "runtime_url": runtime_url,
+                "success": True,
+                "response": result
+            }
+
+        except Exception as e:
+            logger.error(f"Codex sync failed - workspace: {workspace_id}, error: {e}")
+            raise Exception(f"Codex sync failed for {workspace_id}: {e}")
 
     async def _sync_git_settings(self, runtime_url: str, git_data: dict, workspace_id: str) -> Dict[str, any]:
         """Sync Git settings to specified runtime"""

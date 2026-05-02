@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from codex_app_server import AsyncCodex, AsyncThread, AsyncTurnHandle
 from codex_app_server._version import __version__ as SDK_VERSION
 from codex_app_server.client import AppServerConfig
+from codex_app_server.generated.v2_all import GetAccountResponse, LoginAccountResponse
 
 from app.database import async_session_scope
 from app.modules.agent_session.repositories.agent_session_repository import (
@@ -23,7 +26,12 @@ from .sdk_compat import assert_sdk_structure
 logger = logging.getLogger(__name__)
 
 CODEX_BIN = "/home/developer/.npm-global/bin/codex"
-CODEX_HOME_ROOT = "/home/developer/.codex-sessions"
+CODEX_HOME = "/home/developer/.codex"
+CODEX_SESSION_STATE_ROOT = "/home/developer/.codex-sessions"
+
+
+class CodexAuthenticationRequiredError(RuntimeError):
+    """Codex authentication is required before starting a session."""
 
 
 class CodexSessionApprovalDispatcher:
@@ -86,7 +94,10 @@ class CodexClientManager:
             config = AppServerConfig(
                 codex_bin=CODEX_BIN,
                 cwd=cwd,
-                env={"CODEX_HOME": f"{CODEX_HOME_ROOT}/{session_id}"},
+                env={
+                    "CODEX_HOME": CODEX_HOME,
+                    "AILERON_CODEX_SESSION_STATE_DIR": f"{CODEX_SESSION_STATE_ROOT}/{session_id}",
+                },
             )
             codex = AsyncCodex(config=config)
             codex._client._sync._approval_handler = dispatcher
@@ -109,6 +120,9 @@ class CodexClientManager:
                     await self._clear_persisted_thread_id(session_id)
 
             await self._log_server_version(codex)
+            if not await self._ensure_codex_auth(codex):
+                await codex.close()
+                raise CodexAuthenticationRequiredError("Codex CLI login is not available")
 
             async with self._map_lock:
                 self._sessions[session_id] = state
@@ -128,6 +142,67 @@ class CodexClientManager:
         except Exception:
             await codex.close()
             raise
+
+    async def _ensure_codex_auth(self, codex: AsyncCodex) -> bool:
+        """Verify app-server can see the persisted CLI login or apply fallback tokens."""
+        account = await self._read_account(codex)
+        if account.account is not None:
+            logger.info("Codex account available from persisted CLI login")
+            return True
+
+        token_payload = self._load_fallback_token_payload()
+        if not token_payload:
+            logger.info("Codex account not connected and no fallback tokens are configured")
+            return False
+
+        try:
+            await codex._client.request(
+                "account/login/start",
+                token_payload,
+                response_model=LoginAccountResponse,
+            )
+        except Exception as exc:
+            logger.warning("Codex fallback token login failed: %s", exc)
+            return False
+
+        account = await self._read_account(codex)
+        if account.account is None:
+            logger.warning("Codex fallback token login did not produce an account")
+            return False
+
+        logger.info("Codex account available after fallback token login")
+        return True
+
+    async def _read_account(self, codex: AsyncCodex) -> GetAccountResponse:
+        await codex._ensure_initialized()
+        return await codex._client.request(
+            "account/read",
+            {"refreshToken": True},
+            response_model=GetAccountResponse,
+        )
+
+    def _load_fallback_token_payload(self) -> dict[str, Any] | None:
+        auth_path = Path(CODEX_HOME) / "auth.json"
+        if not auth_path.is_file():
+            return None
+
+        try:
+            auth_data = json.loads(auth_path.read_text())
+        except Exception as exc:
+            logger.warning("Failed to read Codex auth fallback file: %s", exc)
+            return None
+
+        tokens = auth_data.get("tokens") if isinstance(auth_data, dict) else None
+        access_token = tokens.get("access_token") if isinstance(tokens, dict) else None
+        if not access_token:
+            return None
+
+        return {
+            "type": "chatgptAuthTokens",
+            "accessToken": access_token,
+            "chatgptAccountId": auth_data.get("chatgpt_account_id") or "default",
+            "chatgptPlanType": auth_data.get("chatgpt_plan_type"),
+        }
 
     async def _clear_persisted_thread_id(self, session_id: str) -> None:
         async with async_session_scope() as db:

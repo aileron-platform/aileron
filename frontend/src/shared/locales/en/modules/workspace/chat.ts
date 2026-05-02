@@ -342,6 +342,7 @@ const chat = {
   errors: {
     authenticationFailed: 'AI provider authentication failed. Please check the API credentials and try again.',
     executionFailed: 'The assistant could not complete this request. Please try again.',
+    codexAuthenticationFailed: 'Codex is not signed in. Connect Codex in Settings, sync the workspace, and try again.',
     codexExecutionFailed: 'Codex could not complete this request. Please check permissions and try again.',
     systemCompleteFallback: 'The task stopped: {{reason}}',
   },

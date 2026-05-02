@@ -14,6 +14,7 @@ from .dependencies import (
 )
 from .models import (
     ClaudeCodeRequest,
+    CodexSettingsRequest,
     FirewallConfigRequest,
     GitSettingsRequest,
     InternalApiResponse,
@@ -118,6 +119,128 @@ async def sync_claude_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Claude Code setup failed: {str(e)}"
         )
+
+
+@router.post(
+    "/settings/codex",
+    response_model=InternalApiResponse,
+    summary="Sync Codex settings",
+    description="Configure Codex CLI auth state and environment variables"
+)
+async def sync_codex(
+    request: CodexSettingsRequest,
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Sync Codex settings to workspace-runtime"""
+    try:
+        logger.info(
+            "Received Codex sync request: login_status=%s clear_auth=%s env_count=%s",
+            request.login_status,
+            request.clear_auth,
+            len(request.environment_variables),
+        )
+
+        details = await service.setup_codex(request)
+
+        logger.info("Codex sync successful")
+        return InternalApiResponse(
+            success=True,
+            message="Codex configuration completed successfully",
+            details=details
+        )
+
+    except ValueError as e:
+        logger.warning("Codex sync validation failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error("Codex sync failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Codex setup failed: {str(e)}"
+        )
+
+
+@router.post(
+    "/settings/codex/login/start",
+    response_model=InternalApiResponse,
+    summary="Start Codex login",
+    description="Start a Codex ChatGPT device-code login flow"
+)
+async def start_codex_login(
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Start Codex login in workspace-runtime."""
+    try:
+        details = await service.start_codex_login()
+        return InternalApiResponse(
+            success=True,
+            message="Codex login started",
+            details=details,
+        )
+    except Exception as e:
+        logger.error("Failed to start Codex login: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start Codex login: {str(e)}",
+        )
+
+
+@router.get(
+    "/settings/codex/login/status",
+    response_model=InternalApiResponse,
+    summary="Get Codex login status",
+    description="Read Codex account status from the managed CLI auth home"
+)
+async def get_codex_login_status(
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Get Codex login status."""
+    details = await service.get_codex_login_status()
+    return InternalApiResponse(
+        success=True,
+        message="Codex login status fetched",
+        details=details,
+    )
+
+
+@router.post(
+    "/settings/codex/login/cancel/{login_id}",
+    response_model=InternalApiResponse,
+    summary="Cancel Codex login",
+    description="Cancel a pending Codex login flow"
+)
+async def cancel_codex_login(
+    login_id: str,
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Cancel Codex login."""
+    details = await service.cancel_codex_login(login_id)
+    return InternalApiResponse(
+        success=True,
+        message="Codex login canceled",
+        details=details,
+    )
+
+
+@router.post(
+    "/settings/codex/logout",
+    response_model=InternalApiResponse,
+    summary="Logout Codex",
+    description="Logout Codex and clear managed CLI auth state"
+)
+async def logout_codex(
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Logout Codex."""
+    details = await service.logout_codex()
+    return InternalApiResponse(
+        success=True,
+        message="Codex logged out",
+        details=details,
+    )
 
 
 @router.post(

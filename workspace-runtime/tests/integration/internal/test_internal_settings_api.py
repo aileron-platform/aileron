@@ -18,6 +18,8 @@ class InternalServiceStub:
         self.firewall_response: Dict[str, Any] = {"status": "ok"}
         self.claude_code_response: Dict[str, Any] = {}
         self.claude_code_error: Exception | None = None
+        self.codex_response: Dict[str, Any] = {}
+        self.codex_error: Exception | None = None
         self.git_response: Dict[str, Any] = {}
         self.git_error: Exception | None = None
         self.setup_status: Dict[str, Any] = {}
@@ -37,6 +39,11 @@ class InternalServiceStub:
         if self.claude_code_error:
             raise self.claude_code_error
         return self.claude_code_response
+
+    async def setup_codex(self, request):  # pragma: no cover - parameter for type only
+        if self.codex_error:
+            raise self.codex_error
+        return self.codex_response
 
     async def setup_git_settings(self, request):  # pragma: no cover - parameter for type only
         if self.git_error:
@@ -189,6 +196,50 @@ def test_in_011_sync_claude_code_failure(client):
 
     assert response.status_code == 500
     assert "Claude Code setup failed" in response.json()["detail"]
+
+
+def test_in_016_sync_codex_success(client):
+    """Test Codex settings sync success"""
+    service = InternalServiceStub()
+    service.codex_response = {
+        "codexHome": "/home/developer/.codex",
+        "hasCliAuth": True,
+    }
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/codex",
+            json={
+                "loginStatus": "connected",
+                "model": "gpt-5.3-codex",
+                "environmentVariables": [{"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"}],
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["details"] == service.codex_response
+
+
+def test_in_017_sync_codex_rejects_managed_codex_home(client):
+    """Test Codex managed CODEX_HOME validation"""
+    service = InternalServiceStub()
+    service.codex_error = ValueError("CODEX_HOME is managed by the system and cannot be overridden")
+
+    with override_dependency(verify_internal_token, _allow_internal_token), override_dependency(get_internal_service, lambda: service):
+        response = client.post(
+            "/api/v1/internal/settings/codex",
+            json={
+                "loginStatus": "notConnected",
+                "environmentVariables": [{"key": "CODEX_HOME", "value": "/tmp/override"}],
+            },
+            headers={"Authorization": "Bearer test-token"},
+        )
+
+    assert response.status_code == 422
+    assert "CODEX_HOME is managed" in response.json()["detail"]
 
 
 def test_in_012_sync_git_settings_success(client):

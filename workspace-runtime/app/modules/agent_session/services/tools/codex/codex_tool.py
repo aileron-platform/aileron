@@ -33,7 +33,11 @@ from app.modules.agent_session.services.tools.base.tool_interface import ITool
 from app.modules.agent_session.services.tools.base.types import TaskResult, ToolExecutionError
 
 from .approval_handler import CodexApprovalHandler
-from .client_manager import CodexClientManager, get_codex_client_manager
+from .client_manager import (
+    CodexAuthenticationRequiredError,
+    CodexClientManager,
+    get_codex_client_manager,
+)
 from .notification_mapper import (
     CommandOutputDelta,
     CommandToolEnd,
@@ -65,6 +69,13 @@ class CodexExecutionError(ToolExecutionError):
     message_key = "workspace.chat.errors.codexExecutionFailed"
 
 
+class CodexAuthenticationError(ToolExecutionError):
+    """Codex authentication is required."""
+
+    error_code = "CODEX_AUTHENTICATION_FAILED"
+    message_key = "workspace.chat.errors.codexAuthenticationFailed"
+
+
 class CodexTool(ITool):
     """ITool implementation for Codex SDK execution."""
 
@@ -86,12 +97,15 @@ class CodexTool(ITool):
     ) -> TaskResult:
         session, cfg, cwd = await self._load_session_context(session_id)
 
-        state = await self._manager.get_or_create(
-            session_id=session_id,
-            cwd=cwd,
-            sdk_session_id=session.sdk_session_id,
-            permission_config=cfg,
-        )
+        try:
+            state = await self._manager.get_or_create(
+                session_id=session_id,
+                cwd=cwd,
+                sdk_session_id=session.sdk_session_id,
+                permission_config=cfg,
+            )
+        except CodexAuthenticationRequiredError as exc:
+            raise CodexAuthenticationError() from exc
         if state.active_turn is not None:
             raise CodexExecutionError()
 

@@ -34,6 +34,13 @@ def mock_settings():
             "apiKey": "test_api_key",
             "model": "claude-3-5-sonnet-20241022",
             "environmentVariables": []
+        },
+        "codex": {
+            "loginStatus": "connected",
+            "model": "gpt-5.3-codex",
+            "environmentVariables": [
+                {"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"}
+            ],
         }
     }
     return settings
@@ -71,8 +78,9 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is True
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
-            assert mock_client.post.call_count == 3  # SSH, Claude Code, Git
+            assert mock_client.post.call_count == 4
 
     @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_no_ssh_keys(
@@ -97,6 +105,7 @@ class TestSyncService:
             assert result["ssh"]["success"] is False
             assert "No SSH keys need to sync" in result["ssh"]["message"]
             assert result["claude_code"]["success"] is True
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
 
     @pytest.mark.asyncio
@@ -121,6 +130,7 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is True
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is False
             assert "No Git settings need to sync" in result["git"]["message"]
 
@@ -148,6 +158,7 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is False
             assert result["claude_code"]["success"] is True
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
 
     @pytest.mark.asyncio
@@ -175,6 +186,7 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is False
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
 
     @pytest.mark.asyncio
@@ -201,6 +213,7 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is False
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
 
     @pytest.mark.asyncio
@@ -227,6 +240,7 @@ class TestSyncService:
 
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is False
+            assert result["codex"]["success"] is True
             assert result["git"]["success"] is True
 
     @pytest.mark.asyncio

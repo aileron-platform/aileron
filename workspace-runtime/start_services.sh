@@ -82,8 +82,9 @@ echo ""
 # 5. Configure directory permissions
 # ============================================================================
 echo "📁 Configuring workspace directory permissions..."
-mkdir -p /home/developer/.codex-sessions
+mkdir -p /home/developer/.codex /home/developer/.codex-sessions
 chown -R developer:developer /workspace /workspace-runtime /workspace-terminal 2>/dev/null || true
+chown -R developer:developer /home/developer/.codex 2>/dev/null || true
 chown -R developer:developer /home/developer/.codex-sessions 2>/dev/null || true
 # Bind mounts can remove +x from host scripts, overriding Dockerfile chmod; restore it here.
 chmod +x /workspace-runtime/scripts/*.sh 2>/dev/null || true

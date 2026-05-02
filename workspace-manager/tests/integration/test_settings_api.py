@@ -26,8 +26,10 @@ class TestSettingsAPI:
         data = response.json()
         assert "data" in data
         settings_data = data["data"]
-        for field in ["general", "claudeCode"]:
+        for field in ["general", "claudeCode", "codex"]:
             assert field in settings_data
+        assert settings_data["codex"]["loginStatus"] == "notConnected"
+        assert settings_data["codex"]["model"] == "gpt-5.3-codex"
 
     @pytest.mark.integration
     def test_settings_002_update_user_settings(self, authenticated_client):
@@ -45,6 +47,18 @@ class TestSettingsAPI:
                 "model": "claude-3-7-sonnet-20250219",
                 "selectedProvider": "anthropic",
             },
+            "codex": {
+                "loginStatus": "connected",
+                "account": {
+                    "accountId": "codex-account-1",
+                    "email": "codex@example.com",
+                    "planType": "pro",
+                },
+                "model": "gpt-5.3-codex",
+                "environmentVariables": [
+                    {"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"}
+                ],
+            },
             "git": {
                 "userName": "Test User",
                 "userEmail": user.email,
@@ -60,6 +74,9 @@ class TestSettingsAPI:
         assert settings_data["general"]["theme"] == "dark"
         assert settings_data["claudeCode"]["model"] == "claude-3-7-sonnet-20250219"
         assert settings_data["claudeCode"]["selectedProvider"] == "anthropic"
+        assert settings_data["codex"]["loginStatus"] == "connected"
+        assert settings_data["codex"]["account"]["email"] == "codex@example.com"
+        assert settings_data["codex"]["environmentVariables"][0]["key"] == "OPENAI_BASE_URL"
         assert settings_data["git"]["userName"] == "Test User"
 
     @pytest.mark.integration

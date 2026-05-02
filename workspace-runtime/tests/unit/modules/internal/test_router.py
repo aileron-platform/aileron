@@ -5,9 +5,17 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 
-from app.modules.internal.models import ClaudeCodeRequest, FirewallConfigRequest, GitSettingsRequest, SSHKeysRequest
+from app.modules.internal.models import (
+    ClaudeCodeRequest,
+    CodexSettingsRequest,
+    FirewallConfigRequest,
+    GitSettingsRequest,
+    SSHKeysRequest,
+)
 from app.modules.internal.router import (
+    cancel_codex_login,
     get_workspace_setup_status,
+    get_codex_login_status,
     install_claude_md,
     install_hooks,
     install_mcp_servers,
@@ -17,6 +25,9 @@ from app.modules.internal.router import (
     install_subagents,
     install_template,
     internal_health_check,
+    logout_codex,
+    start_codex_login,
+    sync_codex,
     sync_claude_code,
     sync_firewall_settings,
     sync_git_settings,
@@ -45,12 +56,22 @@ async def test_internal_basic_routes_success() -> None:
     service = AsyncMock()
     service.setup_ssh_keys.return_value = {"ok": True}
     service.setup_claude_code.return_value = {"ok": True}
+    service.setup_codex.return_value = {"ok": True}
+    service.start_codex_login.return_value = {"loginId": "login-1"}
+    service.get_codex_login_status.return_value = {"loginStatus": "notConnected"}
+    service.cancel_codex_login.return_value = {"status": "canceled"}
+    service.logout_codex.return_value = {"status": "loggedOut"}
     service.setup_git_settings.return_value = {"ok": True}
     service.apply_firewall_settings.return_value = {"status": "success"}
     service.get_setup_status.return_value = {"ssh": {"status": "success", "message": "ok"}}
 
     assert (await sync_ssh_keys(SSHKeysRequest(private_key="k", public_key="p"), service)).success is True
     assert (await sync_claude_code(ClaudeCodeRequest(auth_method="api_key"), service)).success is True
+    assert (await sync_codex(CodexSettingsRequest(model="gpt-5.3-codex"), service)).success is True
+    assert (await start_codex_login(service)).success is True
+    assert (await get_codex_login_status(service)).success is True
+    assert (await cancel_codex_login("login-1", service)).success is True
+    assert (await logout_codex(service)).success is True
     assert (await sync_git_settings(GitSettingsRequest(user_name="u", user_email="e@example.com"), service)).success is True
     assert (
         await sync_firewall_settings(
@@ -72,6 +93,10 @@ async def test_internal_basic_routes_error_mapping() -> None:
     service.setup_claude_code.side_effect = RuntimeError("cc failed")
     with pytest.raises(HTTPException):
         await sync_claude_code(ClaudeCodeRequest(auth_method="api_key"), service)
+
+    service.setup_codex.side_effect = RuntimeError("codex failed")
+    with pytest.raises(HTTPException):
+        await sync_codex(CodexSettingsRequest(model="gpt-5.3-codex"), service)
 
     service.setup_git_settings.side_effect = RuntimeError("git failed")
     with pytest.raises(HTTPException):
