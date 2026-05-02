@@ -1,6 +1,10 @@
 import type { NekoClient } from './nekoClient';
 
 export function attachInputHandlers(video: HTMLVideoElement, client: NekoClient): () => void {
+  let capturesKeyboard = false;
+  let composing = false;
+  const inputSurface = createInputSurface(video);
+
   const handleMouseMove = (event: MouseEvent) => {
     const { width, height } = client.getScreenResolution();
     const { x, y } = resolveRelativePosition(video, event.clientX, event.clientY, width, height);
@@ -8,11 +12,20 @@ export function attachInputHandlers(video: HTMLVideoElement, client: NekoClient)
   };
 
   const handleMouseDown = (event: MouseEvent) => {
+    capturesKeyboard = true;
+    focusInputSurface(inputSurface);
+    sendMousePosition(video, client, event.clientX, event.clientY);
     client.sendMouseButton(event.button, true);
   };
 
   const handleMouseUp = (event: MouseEvent) => {
+    sendMousePosition(video, client, event.clientX, event.clientY);
     client.sendMouseButton(event.button, false);
+  };
+
+  const handleTouchStart = () => {
+    capturesKeyboard = true;
+    focusInputSurface(inputSurface);
   };
 
   const handleWheel = (event: WheelEvent) => {
@@ -21,8 +34,16 @@ export function attachInputHandlers(video: HTMLVideoElement, client: NekoClient)
   };
 
   const handleKeyDown = (event: KeyboardEvent) => {
-    // 當 focus 在 video 身上時攔截鍵盤輸入，避免觸發瀏覽器快捷鍵
+    if (!capturesKeyboard) {
+      return;
+    }
+    if (event.isComposing || isCompositionKey(event.key)) {
+      return;
+    }
+
+    // Intercept keyboard input while the stream owns focus.
     event.preventDefault();
+    event.stopPropagation();
     const keysym = browserKeyToX11Keysym(event.key, event.code);
     if (keysym !== 0) {
       client.sendKey(keysym, true);
@@ -30,32 +51,82 @@ export function attachInputHandlers(video: HTMLVideoElement, client: NekoClient)
   };
 
   const handleKeyUp = (event: KeyboardEvent) => {
+    if (!capturesKeyboard) {
+      return;
+    }
+    if (event.isComposing || isCompositionKey(event.key)) {
+      return;
+    }
+
     event.preventDefault();
+    event.stopPropagation();
     const keysym = browserKeyToX11Keysym(event.key, event.code);
     if (keysym !== 0) {
       client.sendKey(keysym, false);
     }
   };
 
-  // video 需要 tabIndex 才能接收鍵盤事件
-  if (video.tabIndex < 0) {
-    video.tabIndex = 0;
-  }
+  const handleDocumentMouseDown = (event: MouseEvent) => {
+    if (event.target instanceof Node && inputSurface.contains(event.target)) {
+      return;
+    }
 
-  video.addEventListener('mousemove', handleMouseMove);
-  video.addEventListener('mousedown', handleMouseDown);
-  video.addEventListener('mouseup', handleMouseUp);
-  video.addEventListener('wheel', handleWheel, { passive: false });
-  video.addEventListener('keydown', handleKeyDown);
-  video.addEventListener('keyup', handleKeyUp);
+    capturesKeyboard = false;
+  };
+
+  const handleCompositionStart = () => {
+    composing = true;
+    inputSurface.value = '';
+  };
+
+  const handleCompositionEnd = (event: CompositionEvent) => {
+    composing = false;
+    const text = event.data || inputSurface.value;
+    inputSurface.value = '';
+    client.sendText(text);
+  };
+
+  const handleInput = (event: InputEvent) => {
+    if (composing) {
+      return;
+    }
+
+    const text = inputSurface.value;
+    inputSurface.value = '';
+    if (!text || event.inputType === 'deleteContentBackward') {
+      return;
+    }
+
+    if (event.inputType === 'insertFromPaste' || containsNonAscii(text)) {
+      client.sendText(text);
+    }
+  };
+
+  inputSurface.addEventListener('mousemove', handleMouseMove);
+  inputSurface.addEventListener('mousedown', handleMouseDown);
+  inputSurface.addEventListener('mouseup', handleMouseUp);
+  inputSurface.addEventListener('touchstart', handleTouchStart, { passive: true });
+  inputSurface.addEventListener('wheel', handleWheel, { passive: false });
+  inputSurface.addEventListener('compositionstart', handleCompositionStart);
+  inputSurface.addEventListener('compositionend', handleCompositionEnd);
+  inputSurface.addEventListener('input', handleInput);
+  window.addEventListener('keydown', handleKeyDown, true);
+  window.addEventListener('keyup', handleKeyUp, true);
+  document.addEventListener('mousedown', handleDocumentMouseDown, true);
 
   return () => {
-    video.removeEventListener('mousemove', handleMouseMove);
-    video.removeEventListener('mousedown', handleMouseDown);
-    video.removeEventListener('mouseup', handleMouseUp);
-    video.removeEventListener('wheel', handleWheel);
-    video.removeEventListener('keydown', handleKeyDown);
-    video.removeEventListener('keyup', handleKeyUp);
+    inputSurface.removeEventListener('mousemove', handleMouseMove);
+    inputSurface.removeEventListener('mousedown', handleMouseDown);
+    inputSurface.removeEventListener('mouseup', handleMouseUp);
+    inputSurface.removeEventListener('touchstart', handleTouchStart);
+    inputSurface.removeEventListener('wheel', handleWheel);
+    inputSurface.removeEventListener('compositionstart', handleCompositionStart);
+    inputSurface.removeEventListener('compositionend', handleCompositionEnd);
+    inputSurface.removeEventListener('input', handleInput);
+    window.removeEventListener('keydown', handleKeyDown, true);
+    window.removeEventListener('keyup', handleKeyUp, true);
+    document.removeEventListener('mousedown', handleDocumentMouseDown, true);
+    inputSurface.remove();
   };
 }
 
@@ -76,7 +147,57 @@ function resolveRelativePosition(
   };
 }
 
-// Browser KeyboardEvent.key → X11 keysym
+function sendMousePosition(video: HTMLVideoElement, client: NekoClient, clientX: number, clientY: number): void {
+  const { width, height } = client.getScreenResolution();
+  const { x, y } = resolveRelativePosition(video, clientX, clientY, width, height);
+  client.sendMouseMove(x, y);
+}
+
+function createInputSurface(video: HTMLVideoElement): HTMLTextAreaElement {
+  const inputSurface = document.createElement('textarea');
+  inputSurface.setAttribute('aria-hidden', 'true');
+  inputSurface.setAttribute('autocomplete', 'off');
+  inputSurface.setAttribute('autocorrect', 'off');
+  inputSurface.setAttribute('autocapitalize', 'off');
+  inputSurface.setAttribute('spellcheck', 'false');
+  inputSurface.tabIndex = 0;
+  Object.assign(inputSurface.style, {
+    position: 'absolute',
+    inset: '0',
+    width: '100%',
+    height: '100%',
+    border: '0',
+    outline: '0',
+    resize: 'none',
+    color: 'transparent',
+    caretColor: 'transparent',
+    background: 'transparent',
+    opacity: '0.01',
+    zIndex: '1',
+  });
+
+  const parent = video.parentElement ?? document.body;
+  parent.append(inputSurface);
+  return inputSurface;
+}
+
+function focusInputSurface(inputSurface: HTMLTextAreaElement): void {
+  if (document.activeElement === inputSurface) {
+    return;
+  }
+
+  inputSurface.focus({ preventScroll: true });
+}
+
+function isCompositionKey(key: string): boolean {
+  return key === 'Process' || key === 'Unidentified' || key === 'Dead' || key === 'Compose';
+}
+
+function containsNonAscii(text: string): boolean {
+  return /[^\x00-\x7F]/.test(text);
+}
+
+// Browser KeyboardEvent.key to X11 keysym.
 function browserKeyToX11Keysym(key: string, _code: string): number {
   const SPECIAL: Record<string, number> = {
     Escape:      0xff1b,
@@ -108,14 +229,14 @@ function browserKeyToX11Keysym(key: string, _code: string): number {
     return SPECIAL[key];
   }
 
-  // 可印字元直接使用 Unicode codepoint（X11 keysym for BMP = 0x01000000 | codepoint）
+  // Printable characters use Unicode code points directly.
   if (key.length === 1) {
     const cp = key.codePointAt(0) ?? 0;
-    // ASCII 範圍直接對應
+    // ASCII maps directly to X11 keysyms.
     if (cp >= 0x20 && cp <= 0x7e) {
       return cp;
     }
-    // BMP 以上使用 X11 keysym Unicode 規範
+    // Non-ASCII printable keys follow the X11 Unicode keysym encoding.
     return 0x01000000 | cp;
   }
 

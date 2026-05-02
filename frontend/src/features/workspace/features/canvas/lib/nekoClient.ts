@@ -84,11 +84,11 @@ export class NekoClient {
   }
 
   on(_event: string, _handler: (...args: unknown[]) => void): void {
-    // 保留介面相容，現階段不需要額外事件匯流排。
+    // Keep this compatibility surface until callers no longer expect an event bus.
   }
 
   off(_event: string, _handler: (...args: unknown[]) => void): void {
-    // 保留介面相容，現階段不需要額外事件匯流排。
+    // Keep this compatibility surface until callers no longer expect an event bus.
   }
 
   sendMouseMove(x: number, y: number): void {
@@ -96,8 +96,7 @@ export class NekoClient {
   }
 
   sendMouseButton(button: number, pressed: boolean): void {
-    // browser event.button 是 0-based (0=left,1=middle,2=right)
-    // neko/X11 button number 是 1-based (Button1=1,Button2=2,Button3=3)
+    // Browser event.button is 0-based; Neko/X11 button numbers are 1-based.
     this.sendDataMessage(pressed ? 'mousedown' : 'mouseup', { key: button + 1 });
   }
 
@@ -109,8 +108,20 @@ export class NekoClient {
     this.sendDataMessage(pressed ? 'mousedown' : 'mouseup', { key: keysym });
   }
 
+  sendText(text: string): void {
+    for (const char of text) {
+      const keysym = characterToX11Keysym(char);
+      if (keysym === 0) {
+        continue;
+      }
+
+      this.sendKey(keysym, true);
+      this.sendKey(keysym, false);
+    }
+  }
+
   private readonly handleOpen = (): void => {
-    // Neko v3 以 query 參數完成登入，open 之後等待 signal/provide。
+    // Neko v3 authenticates through query parameters, then sends signal/provide.
   };
 
   private readonly handleMessage = async (event: MessageEvent): Promise<void> => {
@@ -182,7 +193,7 @@ export class NekoClient {
     );
     this.peerConnection = peerConnection;
     this.mediaStream = new MediaStream();
-    // 先把在 signal/provide 之前到達的 candidate 存下來，再重置
+    // Keep candidates that arrived before signal/provide, then reset the queue.
     const priorPendingCandidates = this.pendingCandidates;
     this.pendingCandidates = [];
 
@@ -201,8 +212,7 @@ export class NekoClient {
         return;
       }
 
-      // 過濾掉 mDNS (.local) candidate：pion (neko) 在 Docker 容器裡無法
-      // 透過 multicast 解析 .local hostname，會導致 ICE 中斷。
+      // Filter mDNS candidates because Pion in Docker cannot resolve .local hostnames.
       if (iceEvent.candidate.candidate.includes('.local')) {
         return;
       }
@@ -225,7 +235,7 @@ export class NekoClient {
       }
     });
 
-    // neko v3 官方 client 由 answerer（前端）createDataChannel，server 透過 ondatachannel 接收
+    // The Neko v3 answerer creates the data channel; the server receives it via ondatachannel.
     this.dataChannel = peerConnection.createDataChannel('data');
     this.dataChannel.onopen = () => {
       console.debug('[neko] data channel open, readyState=', this.dataChannel?.readyState);
@@ -243,11 +253,11 @@ export class NekoClient {
       sdp: message.sdp,
     });
 
-    // 加入 signal/provide 之前就已到達的 candidate（trickle ICE 早到情況）
+    // Add candidates that arrived before signal/provide.
     for (const candidate of priorPendingCandidates) {
       await peerConnection.addIceCandidate(candidate);
     }
-    // 加入在 setRemoteDescription 期間又到的 candidate
+    // Add candidates that arrived while setting the remote description.
     for (const candidate of this.pendingCandidates) {
       await peerConnection.addIceCandidate(candidate);
     }
@@ -363,15 +373,15 @@ export class NekoClient {
     this.setConnectionState('failed');
   }
 
-  private startHeartbeat(intervalMs: number): void {
+  private startHeartbeat(intervalSeconds: number): void {
     this.stopHeartbeat();
-    if (!intervalMs || intervalMs <= 0) {
+    if (!intervalSeconds || intervalSeconds <= 0) {
       return;
     }
 
     this.heartbeatTimer = setInterval(() => {
       this.sendJson({ event: NEKO_EVENT.clientHeartbeat });
-    }, intervalMs);
+    }, intervalSeconds * 1000);
   }
 
   private stopHeartbeat(): void {
@@ -412,4 +422,15 @@ function clampToInt16(value: number): number {
     return 0;
   }
   return Math.max(-32768, Math.min(32767, Math.round(value)));
+}
+
+function characterToX11Keysym(char: string): number {
+  const cp = char.codePointAt(0) ?? 0;
+  if (cp === 0) {
+    return 0;
+  }
+  if (cp >= 0x20 && cp <= 0x7e) {
+    return cp;
+  }
+  return 0x01000000 | cp;
 }
