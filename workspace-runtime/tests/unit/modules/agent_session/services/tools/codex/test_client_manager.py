@@ -32,6 +32,9 @@ def test_dispatcher_fallback_and_switching() -> None:
 async def test_get_or_create_constructs_config_and_resumes(monkeypatch) -> None:
     import app.modules.agent_session.services.tools.codex.client_manager as module
 
+    monkeypatch.delenv("CODEX_SYNCED_KEYS", raising=False)
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("CODEX_MODEL", raising=False)
     created_configs = []
 
     class FakeCodex:
@@ -195,6 +198,38 @@ async def test_ensure_codex_auth_returns_false_without_persisted_login(monkeypat
     monkeypatch.setattr(manager, "_load_fallback_token_payload", lambda: None)
 
     assert await manager._ensure_codex_auth(codex) is False
+
+
+@pytest.mark.asyncio
+async def test_ensure_codex_auth_accepts_synced_api_key(monkeypatch) -> None:
+    manager = CodexClientManager()
+    codex = SimpleNamespace()
+    read_account = AsyncMock()
+    monkeypatch.setenv("CODEX_AUTH_METHOD", "apikey")
+    monkeypatch.setenv("CODEX_SYNCED_KEYS", "OPENAI_API_KEY")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(manager, "_read_account", read_account)
+
+    assert await manager._ensure_codex_auth(codex) is True
+    read_account.assert_not_awaited()
+
+
+def test_build_codex_env_includes_synced_environment_variables(monkeypatch) -> None:
+    manager = CodexClientManager()
+    monkeypatch.setenv("CODEX_SYNCED_KEYS", "OPENAI_API_KEY,OPENAI_BASE_URL")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.example.test")
+    monkeypatch.setenv("CODEX_MODEL", "gpt-5.3-codex")
+
+    env = manager._build_codex_env("session-1")
+
+    assert env == {
+        "CODEX_HOME": "/home/developer/.codex",
+        "AILERON_CODEX_SESSION_STATE_DIR": "/home/developer/.codex-sessions/session-1",
+        "OPENAI_API_KEY": "test-key",
+        "OPENAI_BASE_URL": "https://api.example.test",
+        "CODEX_MODEL": "gpt-5.3-codex",
+    }
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pytest
 import subprocess
 from pathlib import Path
@@ -273,6 +274,7 @@ class TestSetupCodex:
         internal_service.codex_auth_dir = tmp_paths["codex"]
         internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
         request = CodexSettingsRequest(
+            auth_method="apikey",
             login_status="notConnected",
             model="gpt-5.3-codex",
             environment_variables=[
@@ -284,6 +286,7 @@ class TestSetupCodex:
 
         assert result["codex_home"] == str(tmp_paths["codex"])
         assert result["environment_variables_set"] == ["OPENAI_BASE_URL"]
+        assert os.environ["CODEX_AUTH_METHOD"] == "apikey"
         bashrc = (tmp_paths["home"] / ".bashrc").read_text()
         assert "# Aileron - Codex Environment Variables - START" in bashrc
         assert 'export OPENAI_BASE_URL="https://example.test"' in bashrc

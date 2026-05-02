@@ -73,6 +73,7 @@ const settingsResponse = {
       availableProviders: [],
     },
     codex: {
+      authMethod: 'subscription',
       loginStatus: 'pending',
       account: null,
       model: 'gpt-5.3-codex',
@@ -95,6 +96,7 @@ const notConnectedSettingsResponse = {
   data: {
     ...settingsResponse.data,
     codex: {
+      authMethod: 'subscription',
       loginStatus: 'notConnected',
       account: null,
       model: 'gpt-5.3-codex',
@@ -157,6 +159,22 @@ describe('SettingsPage Codex tab', () => {
 
   it('refreshes Codex login status through the manager API', async () => {
     const user = userEvent.setup();
+    vi.mocked(apiClient.get)
+      .mockResolvedValueOnce(settingsResponse)
+      .mockResolvedValueOnce({
+        success: true,
+        codex: {
+          loginStatus: 'pending',
+          account: null,
+          model: 'gpt-5.3-codex',
+          environmentVariables: [],
+          authFlow: {
+            loginId: 'login-123',
+            verificationUrl: 'https://auth.openai.com/device',
+            userCode: 'ABCD-EFGH',
+          },
+        },
+      });
     render(<SettingsPage />);
 
     await waitFor(() => {
@@ -171,6 +189,7 @@ describe('SettingsPage Codex tab', () => {
     await waitFor(() => {
       expect(apiClient.get).toHaveBeenCalledWith('/users/user-123/settings/codex/login/status');
     });
+    expect(screen.getByText('pages.settings.sections.codex.login.title')).toBeInTheDocument();
   });
 
   it('opens the Codex verification page after starting sign in', async () => {

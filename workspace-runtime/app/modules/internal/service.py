@@ -54,6 +54,7 @@ class InternalService:
         self._env_keys_env = "CLAUDE_CODE_SYNCED_KEYS"
         self._auth_method_env = "CLAUDE_CODE_AUTH_METHOD"
         self._codex_env_keys_env = "CODEX_SYNCED_KEYS"
+        self._codex_auth_method_env = "CODEX_AUTH_METHOD"
         self._codex_login_status_env = "CODEX_LOGIN_STATUS"
         self._codex_model_env = "CODEX_MODEL"
         runtime_settings = get_settings()
@@ -168,6 +169,11 @@ class InternalService:
                 os.environ[self._codex_login_status_env] = "connected"
             else:
                 os.environ.pop(self._codex_login_status_env, None)
+
+            if request.auth_method:
+                os.environ[self._codex_auth_method_env] = request.auth_method
+            else:
+                os.environ.pop(self._codex_auth_method_env, None)
 
             if request.model:
                 os.environ[self._codex_model_env] = request.model

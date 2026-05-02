@@ -137,6 +137,7 @@ class CodexAuthFlow(CamelModel):
 
 
 class CodexSettings(CamelModel):
+    auth_method: str = Field("subscription", alias="authMethod")
     login_status: str = Field("notConnected", alias="loginStatus")
     account: Optional[CodexAccountInfo] = None
     model: str = "gpt-5.3-codex"

@@ -191,6 +191,7 @@ class SettingsService:
             codex_additional = additional_settings.get("codex", {})
 
             for key in (
+                "authMethod",
                 "loginStatus",
                 "account",
                 "model",
@@ -280,6 +281,7 @@ class SettingsService:
             codex_changes = {}
 
             for key, old_value in (
+                ("authMethod", old_codex.auth_method),
                 ("loginStatus", old_codex.login_status),
                 ("model", old_codex.model),
             ):
@@ -421,6 +423,7 @@ class SettingsService:
             codex_auth_flow = CodexAuthFlow(**codex_auth_flow_data)
 
         codex_model = CodexSettings(
+            auth_method=codex_additional.get("authMethod", "subscription"),
             login_status=codex_additional.get("loginStatus", "notConnected"),
             account=codex_account,
             model=codex_additional.get("model") or "gpt-5.3-codex",

@@ -274,6 +274,14 @@ const pages = {
       codex: {
         title: 'Codex settings',
         description: 'Configure ChatGPT subscription login, model, and runtime environment variables for Codex.',
+        authMethod: {
+          label: 'Authentication method',
+          description: 'Select the Codex authentication method',
+          options: {
+            subscription: 'Subscription',
+            apikey: 'API Key',
+          },
+        },
         login: {
           title: 'ChatGPT subscription',
           account: 'Account',
@@ -311,7 +319,7 @@ const pages = {
         },
         environmentVariables: {
           title: 'Codex environment variables',
-          description: 'These variables are written to workspace runtime containers and applied to new workspaces.',
+          description: 'API Key mode writes these variables to workspace runtime containers and applies them to new workspaces.',
         },
       },
       git: {

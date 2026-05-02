@@ -274,6 +274,14 @@ const pages = {
       codex: {
         title: 'Codex 設定',
         description: '設定 Codex 的 ChatGPT 訂閱登入、模型與 runtime container 環境變數。',
+        authMethod: {
+          label: '認證方式',
+          description: '選擇 Codex 的認證方式',
+          options: {
+            subscription: 'Subscription',
+            apikey: 'API Key',
+          },
+        },
         login: {
           title: 'ChatGPT 訂閱',
           account: '帳號',
@@ -311,7 +319,7 @@ const pages = {
         },
         environmentVariables: {
           title: 'Codex 環境變數',
-          description: '這些變數會寫入 workspace runtime container，並套用到新 workspace。',
+          description: 'API Key 模式會將這些變數寫入 workspace runtime container，並套用到新 workspace。',
         },
       },
       git: {

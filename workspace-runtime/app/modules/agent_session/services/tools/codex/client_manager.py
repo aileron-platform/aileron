@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,8 @@ logger = logging.getLogger(__name__)
 CODEX_BIN = "/home/developer/.npm-global/bin/codex"
 CODEX_HOME = "/home/developer/.codex"
 CODEX_SESSION_STATE_ROOT = "/home/developer/.codex-sessions"
+CODEX_AUTH_METHOD_ENV = "CODEX_AUTH_METHOD"
+CODEX_SYNCED_KEYS_ENV = "CODEX_SYNCED_KEYS"
 
 
 class CodexAuthenticationRequiredError(RuntimeError):
@@ -94,10 +97,7 @@ class CodexClientManager:
             config = AppServerConfig(
                 codex_bin=CODEX_BIN,
                 cwd=cwd,
-                env={
-                    "CODEX_HOME": CODEX_HOME,
-                    "AILERON_CODEX_SESSION_STATE_DIR": f"{CODEX_SESSION_STATE_ROOT}/{session_id}",
-                },
+                env=self._build_codex_env(session_id),
             )
             codex = AsyncCodex(config=config)
             codex._client._sync._approval_handler = dispatcher
@@ -145,6 +145,12 @@ class CodexClientManager:
 
     async def _ensure_codex_auth(self, codex: AsyncCodex) -> bool:
         """Verify app-server can see the persisted CLI login or apply fallback tokens."""
+        if os.environ.get(CODEX_AUTH_METHOD_ENV) == "apikey":
+            synced_keys = self._synced_codex_env_keys()
+            if any(os.environ.get(key) for key in synced_keys):
+                logger.info("Codex API key authentication configured with synced environment variables")
+                return True
+
         account = await self._read_account(codex)
         if account.account is not None:
             logger.info("Codex account available from persisted CLI login")
@@ -203,6 +209,27 @@ class CodexClientManager:
             "chatgptAccountId": auth_data.get("chatgpt_account_id") or "default",
             "chatgptPlanType": auth_data.get("chatgpt_plan_type"),
         }
+
+    def _build_codex_env(self, session_id: str) -> dict[str, str]:
+        env = {
+            "CODEX_HOME": CODEX_HOME,
+            "AILERON_CODEX_SESSION_STATE_DIR": f"{CODEX_SESSION_STATE_ROOT}/{session_id}",
+        }
+        for key in self._synced_codex_env_keys():
+            value = os.environ.get(key)
+            if value is not None:
+                env[key] = value
+        model = os.environ.get("CODEX_MODEL")
+        if model:
+            env["CODEX_MODEL"] = model
+        return env
+
+    def _synced_codex_env_keys(self) -> list[str]:
+        return [
+            key.strip()
+            for key in os.environ.get(CODEX_SYNCED_KEYS_ENV, "").split(",")
+            if key.strip()
+        ]
 
     async def _clear_persisted_thread_id(self, session_id: str) -> None:
         async with async_session_scope() as db:

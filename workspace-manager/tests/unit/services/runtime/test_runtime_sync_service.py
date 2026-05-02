@@ -89,6 +89,7 @@ def claude_code_changes():
 def codex_changes():
     """Codex Settings Changes"""
     return {
+        "authMethod": "subscription",
         "loginStatus": "connected",
         "account": {
             "accountId": "codex-account-1",
@@ -407,6 +408,7 @@ class TestCodexSynchronization:
         assert result["success"] is True
         call_kwargs = mock_client.post.call_args[1]
         assert call_kwargs["json"]["loginStatus"] == "connected"
+        assert call_kwargs["json"]["authMethod"] == "subscription"
         assert call_kwargs["json"]["model"] == "gpt-5.3-codex"
         assert call_kwargs["json"]["environmentVariables"][0]["key"] == "OPENAI_BASE_URL"
         assert call_kwargs["json"]["clearAuth"] is False

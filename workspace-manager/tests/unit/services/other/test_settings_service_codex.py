@@ -18,6 +18,7 @@ def test_detect_setting_changes_includes_codex_model_and_env_vars():
     service = SettingsService(MagicMock())
     old_settings = UserSettings(
         codex=CodexSettings(
+            auth_method="subscription",
             login_status="connected",
             account=CodexAccountInfo(
                 account_id="codex-account-1",
@@ -35,6 +36,7 @@ def test_detect_setting_changes_includes_codex_model_and_env_vars():
         old_settings,
         {
             "codex": {
+                "authMethod": "apikey",
                 "loginStatus": "connected",
                 "account": {
                     "accountId": "codex-account-1",
@@ -54,6 +56,7 @@ def test_detect_setting_changes_includes_codex_model_and_env_vars():
 
     assert changes == {
         "codex": {
+            "authMethod": "apikey",
             "model": "gpt-5.3-codex",
             "environmentVariables": [
                 {
@@ -70,6 +73,7 @@ def test_detect_setting_changes_ignores_unchanged_codex_settings():
     service = SettingsService(MagicMock())
     old_settings = UserSettings(
         codex=CodexSettings(
+            auth_method="apikey",
             login_status="connected",
             model="gpt-5.3-codex",
             environment_variables=[
@@ -82,6 +86,7 @@ def test_detect_setting_changes_ignores_unchanged_codex_settings():
         old_settings,
         {
             "codex": {
+                "authMethod": "apikey",
                 "loginStatus": "connected",
                 "model": "gpt-5.3-codex",
                 "environmentVariables": [

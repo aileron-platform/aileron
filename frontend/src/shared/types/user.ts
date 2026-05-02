@@ -114,6 +114,7 @@ export interface CodexAuthFlow {
 }
 
 export interface UserSettingsCodex {
+  authMethod: 'subscription' | 'apikey';
   loginStatus: CodexLoginStatus;
   account?: CodexAccountInfo | null;
   model: string;

@@ -119,6 +119,11 @@ class CodexAuthTokens(BaseModel):
 
 class CodexSettingsRequest(BaseModel):
     """Codex configuration request."""
+    auth_method: Optional[str] = Field(
+        None,
+        alias="authMethod",
+        description="Authentication method (subscription or apikey)",
+    )
     login_status: Optional[str] = Field(None, alias="loginStatus")
     account: Optional[CodexAccountInfo] = None
     model: Optional[str] = None

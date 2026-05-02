@@ -213,6 +213,7 @@ class RuntimeSyncService:
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
         payload = {
+            "authMethod": codex_data.get("authMethod"),
             "loginStatus": codex_data.get("loginStatus"),
             "account": codex_data.get("account"),
             "model": codex_data.get("model"),
