@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ClaudeToolWidget, { ClaudeToolType, ToolResultBlock, PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
 import { Card } from '@/shared/components/ui/card';
+import { QuestionFormView } from '@/features/workspace/components/ChatPanel/QuestionFormView';
+import type { QuestionForm } from '@/features/workspace/components/ChatPanel/question-form';
 
 /**
  * ClaudeToolWidgetDemo
@@ -785,9 +787,148 @@ nothing to commit, working tree clean`}
           />
         </div>
       </section>
+      {/* Question Form Demo */}
+      <QuestionFormDemoSection />
       </div>
     </div>
   );
 };
+
+const DEMO_FORM: QuestionForm = {
+  id: 'discovery',
+  title: '告訴我你的專案需求',
+  questions: [
+    {
+      id: 'type',
+      label: '頁面類型',
+      type: 'radio',
+      options: ['Landing Page', 'Dashboard', 'E-commerce', 'Portfolio', '其他'],
+      required: true,
+    },
+    {
+      id: 'framework',
+      label: '技術框架',
+      type: 'select',
+      options: ['HTML / CSS / JS', 'Next.js 15'],
+      required: true,
+    },
+    {
+      id: 'features',
+      label: '需要哪些功能？',
+      type: 'checkbox',
+      options: ['動畫效果', '深色模式', '響應式', '表單互動', '資料圖表'],
+    },
+    {
+      id: 'desc',
+      label: '描述你的需求',
+      type: 'textarea',
+      placeholder: '例如：電商首頁，主色調橘黃，產品卡片需要 hover 動畫...',
+      required: true,
+    },
+    {
+      id: 'name',
+      label: '專案名稱',
+      type: 'text',
+      placeholder: 'My Awesome Page',
+    },
+    {
+      id: 'style',
+      label: '視覺方向',
+      type: 'direction-cards',
+      required: true,
+      cards: [
+        {
+          id: 'minimal',
+          label: 'Minimal — 乾淨 / 克制',
+          mood: '大量留白、嚴謹的字型層次，拒絕視覺噪音。每個元素都有存在的理由。',
+          palette: ['#FFFFFF', '#F5F5F5', '#1A1A1A', '#0066FF', '#E8E8E8'],
+          displayFont: 'Inter, sans-serif',
+          bodyFont: 'Inter, sans-serif',
+        },
+        {
+          id: 'bold',
+          label: 'Bold — 表達 / 高對比',
+          mood: '強烈色塊、超大字型、充滿張力的版面配置。看一眼就忘不了。',
+          palette: ['#FF3300', '#000000', '#FFFFFF', '#FFCC00', '#1A1A1A'],
+          displayFont: "'Bebas Neue', Impact, sans-serif",
+          bodyFont: 'Inter, sans-serif',
+        },
+        {
+          id: 'editorial',
+          label: 'Editorial — 雜誌 / 深度',
+          mood: '襯線字體搭配精心排版，呼應高品質印刷品的質感與可讀性。',
+          palette: ['#F8F4EF', '#2C1810', '#8B4513', '#D4A853', '#F0E6D3'],
+          displayFont: "'Playfair Display', Georgia, serif",
+          bodyFont: "'Lora', Georgia, serif",
+        },
+        {
+          id: 'glassmorphism',
+          label: 'Glass — 半透明 / 現代',
+          mood: '磨砂玻璃效果、漸層背景、柔和光線。科技感與優雅並存。',
+          palette: ['#667EEA', '#764BA2', '#FFFFFF', 'rgba(255,255,255,0.2)', '#F093FB'],
+          displayFont: 'Inter, sans-serif',
+          bodyFont: 'Inter, sans-serif',
+        },
+      ],
+    },
+  ],
+};
+
+function QuestionFormDemoSection() {
+  const [submitted, setSubmitted] = useState<Record<string, string | string[]> | null>(null);
+
+  return (
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold text-gray-800 border-b pb-2">
+        Question Form — Web Canvas 發現表單
+      </h2>
+      <p className="text-sm text-gray-500">
+        展示 <code>&lt;question-form&gt;</code> 的六種欄位類型：radio、select、checkbox、textarea、text、direction-cards。
+        送出後自動鎖定成 answered 狀態。
+      </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Interactive */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-600">互動狀態（interactive）</h3>
+          <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <QuestionFormView
+              form={DEMO_FORM}
+              interactive={submitted === null}
+              submittedAnswers={submitted ?? undefined}
+              onSubmit={(_text, answers) => setSubmitted(answers)}
+            />
+          </div>
+          {submitted && (
+            <button
+              className="text-xs text-blue-600 underline"
+              onClick={() => setSubmitted(null)}
+            >
+              重置（回到互動狀態）
+            </button>
+          )}
+        </div>
+
+        {/* Locked — 模擬歷史訊息 */}
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-gray-600">鎖定狀態（歷史訊息）</h3>
+          <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+            <QuestionFormView
+              form={DEMO_FORM}
+              interactive={false}
+              submittedAnswers={{
+                '頁面類型': 'Landing Page',
+                '技術框架': 'Next.js 15',
+                '需要哪些功能？': ['動畫效果', '響應式'],
+                '描述你的需求': '電商首頁，主色調橘黃，產品卡片需要 hover 動畫',
+                '視覺方向': 'editorial',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default ClaudeToolWidgetDemo;

@@ -481,6 +481,11 @@ const chat = {
       answerSubmitted: 'Answer submitted',
     },
   },
+  questionForm: {
+    submit: 'Submit',
+    answered: 'Answered',
+    required: 'Required',
+  },
 };
 
 export default chat;

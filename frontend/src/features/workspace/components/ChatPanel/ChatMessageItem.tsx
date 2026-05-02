@@ -102,11 +102,23 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
     (message.task_id ? message.task_id === activeTaskId : isLastAssistant)
   );
 
+  const hasQuestionForm = useMemo(
+    () =>
+      message.content_blocks?.some(
+        block =>
+          block.type === 'text' &&
+          typeof (block as any).text === 'string' &&
+          (block as any).text.includes('<question-form'),
+      ) ?? false,
+    [message.content_blocks],
+  );
+
   const canPreview =
     message.role === 'assistant' &&
     message.session_id !== 'temp' &&
     isLastAssistant &&
     !isMessageLifecycleActive &&
+    !hasQuestionForm &&
     onOpenPreview &&
     (
       message.content_blocks?.some(
@@ -134,6 +146,7 @@ export const ChatMessageItem: React.FC<ChatMessageItemProps> = ({
         onAcpDecision={onAcpDecision}
         onAskUserQuestionSubmit={onAskUserQuestionSubmit}
         activeTaskId={activeTaskId}
+        isLastMessage={isLastAssistant}
       />
       {canPreview && (
         <div className="flex justify-center py-1">

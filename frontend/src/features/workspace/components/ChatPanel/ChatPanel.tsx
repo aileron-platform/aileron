@@ -45,6 +45,7 @@ import { normalizeAgentType, getAgentToolConfig } from '../../features/agent-set
 import { useOpenSpecWorkspace } from '../../features/openspec/OpenSpecWorkspaceContext';
 import { buildSessionResultPreviewPayload } from './previewPayload';
 import { getEventDispatcher } from './agentSessionEvents';
+import { syncCanvas } from '../../services/workspaceRuntimeApi';
 
 // ============================================================================
 // ChatPanel Component
@@ -424,10 +425,26 @@ export const ChatPanel: React.FC = () => {
 
   const handleOpenMessagePreview = useCallback(
     (message: AgentMessage) => {
-      const previewPayload = buildSessionResultPreviewPayload(message, agentState.tasks);
-      if (!previewPayload) {
+      const messageText = message.content_blocks
+        ?.filter(b => b.type === 'text')
+        .map(b => (b as any).text as string)
+        .join('\n') ?? '';
+
+      if (/<artifact[^>]*type="web-canvas"/.test(messageText)) {
+        dispatch({ type: 'SET_CANVAS_SUB_VIEW', payload: 'web-canvas' });
+        dispatch({ type: 'SET_CURRENT_FEATURE', payload: 'canvas' });
+        dispatch({ type: 'ENSURE_NAVIGATION_ITEM_EXPANDED', payload: 'canvas' });
+        navigate('/workspaces/canvas/web-canvas');
+        if (workspaceRuntime.runtimeBaseUrl && workspaceRuntime.workspaceId) {
+          syncCanvas(workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId).catch(err => {
+            logger.error('Canvas sync failed from artifact preview', { error: err });
+          });
+        }
         return;
       }
+
+      const previewPayload = buildSessionResultPreviewPayload(message, agentState.tasks);
+      if (!previewPayload) return;
 
       dispatch({ type: 'SET_CANVAS_SESSION_RESULT', payload: previewPayload });
       dispatch({ type: 'SET_CANVAS_SUB_VIEW', payload: 'session-result' });
@@ -435,7 +452,7 @@ export const ChatPanel: React.FC = () => {
       dispatch({ type: 'ENSURE_NAVIGATION_ITEM_EXPANDED', payload: 'canvas' });
       navigate('/workspaces/canvas/session-result');
     },
-    [dispatch, navigate, agentState.tasks]
+    [dispatch, navigate, agentState.tasks, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]
   );
 
   const typingIndicator = useMemo(() => <TypingIndicator t={t} />, [t]);
@@ -644,7 +661,12 @@ export const ChatPanel: React.FC = () => {
       applyDraft((event as CustomEvent<ChatDraftEventDetail>).detail);
     };
     const handleSendDraft = (event: Event) => {
-      applyDraft((event as CustomEvent<ChatDraftEventDetail>).detail);
+      const detail = (event as CustomEvent<ChatDraftEventDetail>).detail;
+      if (!detail?.content) return;
+      openPanel();
+      sendMessage(detail.content, undefined, { mode: permissionMode }).catch(err => {
+        logger.error('Failed to send form answers', { error: err });
+      });
     };
     window.addEventListener(WORKSPACE_CHAT_INSERT_DRAFT_EVENT, handleInsertDraft);
     window.addEventListener(WORKSPACE_CHAT_SEND_DRAFT_EVENT, handleSendDraft);
@@ -652,7 +674,7 @@ export const ChatPanel: React.FC = () => {
       window.removeEventListener(WORKSPACE_CHAT_INSERT_DRAFT_EVENT, handleInsertDraft);
       window.removeEventListener(WORKSPACE_CHAT_SEND_DRAFT_EVENT, handleSendDraft);
     };
-  }, [dispatch, uiActions, uiState.draftMessage, workspaceState.rightChatCollapsed]);
+  }, [dispatch, uiActions, uiState.draftMessage, workspaceState.rightChatCollapsed, sendMessage, permissionMode]);
 
   const hasActiveConversation = agentState.messages.length > 0 || !!agentState.activeTask;
 

@@ -8,7 +8,7 @@ import { sharedComponents } from './markdownComponents';
 import { parseFrontmatterSegments, preprocessMarkdown, type FrontmatterValue } from './markdownPreprocess';
 import { remarkLineBreakTag } from './remarkLineBreakTag';
 
-export type MarkdownVariant = 'default' | 'compact' | 'chat';
+export type MarkdownVariant = 'default' | 'compact' | 'chat' | 'detailed' | 'editor';
 
 export interface MarkdownContentProps {
   content: string;
@@ -69,9 +69,11 @@ const FrontmatterCard: React.FC<{ data: Record<string, FrontmatterValue> }> = ({
 const PROSE_BASE = 'prose prose-sm max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none';
 
 const variantClass: Record<MarkdownVariant, string> = {
-  default: `${PROSE_BASE} prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:text-xs`,
-  compact: `${PROSE_BASE} prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-code:text-xs`,
-  chat:    `${PROSE_BASE} prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 prose-code:text-xs`,
+  default:  `${PROSE_BASE} prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:text-xs`,
+  compact:  `${PROSE_BASE} prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1 prose-code:text-xs`,
+  chat:     `${PROSE_BASE} prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-2 prose-code:text-xs`,
+  detailed: `${PROSE_BASE} prose-base prose-p:my-3 prose-headings:my-4 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-pre:my-4 prose-code:text-sm`,
+  editor:   `${PROSE_BASE} prose-p:my-2 prose-headings:my-3 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-pre:my-2 prose-code:text-xs`,
 };
 
 export const MarkdownContent: React.FC<MarkdownContentProps> = ({

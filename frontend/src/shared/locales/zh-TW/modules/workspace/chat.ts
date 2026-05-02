@@ -481,6 +481,11 @@ const chat = {
       answerSubmitted: '已提交回答',
     },
   },
+  questionForm: {
+    submit: '提交',
+    answered: '已回答',
+    required: '必填',
+  },
 };
 
 export default chat;

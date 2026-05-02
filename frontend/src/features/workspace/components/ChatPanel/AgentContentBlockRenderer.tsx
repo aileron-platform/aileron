@@ -5,7 +5,7 @@
  * 呈現風格：使用者訊息靠右，助手訊息靠左（無卡片包裝）
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import ClaudeToolWidget, { ClaudeToolType, PermissionScope } from '@/features/agent-tools/components/ClaudeToolWidget';
 import AcpToolWidget from '@/features/agent-tools/components/AcpToolWidget';
 import AcpDecisionWidget from '@/features/agent-tools/components/AcpDecisionWidget';
@@ -15,6 +15,8 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { AgentMessage, ContentBlock, ToolUseBlock, ToolResultBlock, ThinkingBlock, SystemBlock, SystemCompleteBlock, SystemStatusBlock, AgenticTool, PermissionRequest, UserInputRequest, ToolDecisionType, ToolDecisionOutcome } from './agentSessionTypes';
 import { resolveAcpToolWidgetTypeWithKind } from './agentSessionTypes';
+import { splitOnQuestionForms, parseSubmittedAnswers } from './question-form';
+import { QuestionFormView } from './QuestionFormView';
 
 const logger = createLogger('AgentContentBlockRenderer');
 
@@ -51,6 +53,8 @@ interface AgentContentBlockRendererProps {
   onAskUserQuestionSubmit?: AskUserQuestionSubmitHandler;
   /** 當前活躍任務的 ID（用於區分即時和歷史訊息） */
   activeTaskId?: string | null;
+  /** 是否為最新一則 assistant 訊息（控制 question-form 可互動性） */
+  isLastMessage?: boolean;
 }
 
 /**
@@ -102,9 +106,12 @@ function parseToolResultContent(content: unknown): string {
 /**
  * 文字區塊渲染 - 使用 MarkdownRenderer 組件（與對話預覽一致）
  */
+const ARTIFACT_TAG_RE = /<artifact\b[^>]*\/?>(\s*<\/artifact>)?/gi;
+
 const TextBlockRenderer: React.FC<{ block: ContentBlock }> = ({ block }) => {
   if (block.type !== 'text') return null;
-  const textContent = (block as any).text || '';
+  const textContent = ((block as any).text || '').replace(ARTIFACT_TAG_RE, '').trim();
+  if (!textContent) return null;
   return (
     <div className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <MarkdownRenderer content={textContent} />
@@ -458,8 +465,10 @@ const AssistantMessageRenderer: React.FC<{
   pendingUserInput?: UserInputRequest | null;
   onAskUserQuestionSubmit?: AskUserQuestionSubmitHandler;
   activeTaskId?: string | null;
-}> = ({ message, allMessages, agentTool, onApprove, onDeny, pendingUserInput, onAskUserQuestionSubmit, activeTaskId }) => {
+  isLastMessage?: boolean;
+}> = ({ message, allMessages, agentTool, onApprove, onDeny, pendingUserInput, onAskUserQuestionSubmit, activeTaskId, isLastMessage }) => {
   const { t } = useI18n();
+  const [locallySubmittedForms, setLocallySubmittedForms] = useState<Set<string>>(() => new Set());
   const blocks = message.content_blocks || [];
   const isMessageActive =
     message.session_id === 'temp' ||
@@ -498,11 +507,51 @@ const AssistantMessageRenderer: React.FC<{
 
   if (renderableBlocks.length === 0) return null;
 
+  const msgIdx = allMessages.findIndex(m => m.message_id === message.message_id);
+  const nextUserMessage = msgIdx !== -1
+    ? allMessages.slice(msgIdx + 1).find(m => m.role === 'user')
+    : undefined;
+  const nextUserText = nextUserMessage?.content_blocks
+    ?.filter(b => b.type === 'text')
+    .map(b => (b as any).text as string)
+    .join('\n') ?? null;
+
   return (
     <div className="px-2 py-1 space-y-2">
       {renderableBlocks.map((block, idx) => {
         if (block.type === 'text') {
-          return <TextBlockRenderer key={idx} block={block} />;
+          const textContent: string = (block as any).text ?? '';
+          const segments = splitOnQuestionForms(textContent);
+          if (segments.length === 1 && segments[0].kind === 'text') {
+            return <TextBlockRenderer key={idx} block={block} />;
+          }
+          return (
+            <React.Fragment key={idx}>
+              {segments.map((seg, si) => {
+                if (seg.kind === 'text') {
+                  return seg.content.trim() ? (
+                    <div key={si} className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+                      <MarkdownRenderer content={seg.content} />
+                    </div>
+                  ) : null;
+                }
+                const form = seg.form;
+                const submittedAnswers = parseSubmittedAnswers(form.id, nextUserText);
+                const interactive = !!isLastMessage && submittedAnswers === null && !locallySubmittedForms.has(form.id);
+                return (
+                  <QuestionFormView
+                    key={si}
+                    form={form}
+                    interactive={interactive}
+                    submittedAnswers={submittedAnswers ?? undefined}
+                    onSubmit={() => {
+                      setLocallySubmittedForms(prev => new Set(prev).add(form.id));
+                    }}
+                  />
+                );
+              })}
+            </React.Fragment>
+          );
         }
         if (block.type === 'thinking') {
           return <ThinkingBlockRenderer key={idx} block={block} isMessageActive={isMessageActive} />;
@@ -634,6 +683,7 @@ export const AgentContentBlockRenderer: React.FC<AgentContentBlockRendererProps>
   onAcpDecision,
   onAskUserQuestionSubmit,
   activeTaskId,
+  isLastMessage,
 }) => {
   const isUser = message.role === 'user';
   const isPermissionRequest = message.type === 'permission_request';
@@ -667,6 +717,7 @@ export const AgentContentBlockRenderer: React.FC<AgentContentBlockRendererProps>
       pendingUserInput={pendingUserInput}
       onAskUserQuestionSubmit={onAskUserQuestionSubmit}
       activeTaskId={activeTaskId}
+      isLastMessage={isLastMessage}
     />
   );
 };
