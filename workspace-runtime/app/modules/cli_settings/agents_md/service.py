@@ -21,6 +21,7 @@ from .models import (
 class AgentsMdTool(str, Enum):
     """Supported CLI tools"""
 
+    CLAUDE = "claude"
     GEMINI = "gemini"
     OPENCODE = "opencode"
     CODEX = "codex"
@@ -32,28 +33,44 @@ class AgentsMdToolConfig:
     file_name: str
     user_root: Path
     endpoint_name: str
+    project_subdir: str | None = None
+    api_prefix: str = ""
 
 
 def _tool_configs() -> dict[AgentsMdTool, AgentsMdToolConfig]:
     home = Path.home()
     return {
+        AgentsMdTool.CLAUDE: AgentsMdToolConfig(
+            tool=AgentsMdTool.CLAUDE,
+            file_name="CLAUDE.md",
+            user_root=home / ".claude",
+            endpoint_name="claude-md",
+            project_subdir=None,
+            api_prefix="claude-code",
+        ),
         AgentsMdTool.GEMINI: AgentsMdToolConfig(
             tool=AgentsMdTool.GEMINI,
             file_name="GEMINI.md",
             user_root=home / ".gemini",
             endpoint_name="gemini-md",
+            project_subdir=None,
+            api_prefix=AgentsMdTool.GEMINI.value,
         ),
         AgentsMdTool.OPENCODE: AgentsMdToolConfig(
             tool=AgentsMdTool.OPENCODE,
             file_name="AGENTS.md",
             user_root=home / ".config" / "opencode",
             endpoint_name="agents-md",
+            project_subdir=None,
+            api_prefix=AgentsMdTool.OPENCODE.value,
         ),
         AgentsMdTool.CODEX: AgentsMdToolConfig(
             tool=AgentsMdTool.CODEX,
             file_name="AGENTS.md",
             user_root=home / ".codex",
             endpoint_name="agents-md",
+            project_subdir=None,
+            api_prefix=AgentsMdTool.CODEX.value,
         ),
     }
 
@@ -104,6 +121,8 @@ class AgentsMdService:
     def _resolve_path(self, workspace_id: str, scope: AgentsMdScope) -> Path:
         if scope == AgentsMdScope.PROJECT:
             project_root = Path(get_workspace_path())
+            if self._config.project_subdir:
+                project_root = project_root / self._config.project_subdir
             return project_root / self._config.file_name
         if scope == AgentsMdScope.USER:
             return self._config.user_root / self._config.file_name

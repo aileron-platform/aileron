@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import shutil
 import time
 from typing import Any, Dict, Optional
 
@@ -12,18 +10,20 @@ from acp.helpers import text_block
 from acp.schema import PromptResponse
 
 from app.database import async_session_scope
-from app.utils.datetime_utils import utcnow
 from app.modules.agent_session.domain.enums import PermissionMode
 from app.modules.agent_session.repositories.agent_session_repository import AgentSessionRepository
 from app.modules.agent_session.repositories.message_repository import MessageRepository
 from app.modules.agent_session.services.message_service import MessageService
 from app.modules.agent_session.services.tools.base.streaming_callbacks import StreamingCallbacks
 from app.modules.agent_session.services.tools.base.tool_interface import ITool
-from app.modules.agent_session.services.tools.base.types import TaskResult, ToolCapabilities, ToolType
+from app.modules.agent_session.services.tools.base.types import TaskResult, ToolType
 from app.modules.file_system.workspace_service import WorkspaceDataService
 
 from .connection_manager import AcpConnectionManager
-from .message_builder import create_assistant_message, create_user_message
+from app.modules.agent_session.services.tools.base.message_builder import (
+    create_assistant_message,
+    create_user_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,32 +57,6 @@ class AcpTool(ITool):
         self.workspace_service = workspace_service or WorkspaceDataService()
         self.connection_manager = connection_manager or AcpConnectionManager()
 
-    @property
-    def tool_type(self) -> ToolType:
-        return self._tool_type
-
-    @property
-    def name(self) -> str:
-        return self._tool_type.value
-
-    def get_capabilities(self) -> ToolCapabilities:
-        return ToolCapabilities(
-            streaming=True,
-            thinking=True,
-            multimodal=False,
-            max_context_window=200000,
-            prompt_caching=False,
-            local_execution=True,
-            built_in_tools=["file_operations", "terminal", "permission"],
-            supports_session_import=False,
-            supports_session_create=True,
-            supports_live_execution=True,
-        )
-
-    async def check_installed(self) -> bool:
-        command = DEFAULT_COMMANDS.get(self._tool_type.value, self._tool_type.value)
-        return shutil.which(command) is not None
-
     async def execute_task(
         self,
         session_id: str,
@@ -111,6 +85,7 @@ class AcpTool(ITool):
                 task_id=task_id,
                 index=next_index,
                 message_service=message_service,
+                source="acp",
             )
             # Session auto-commits when context ends
 
@@ -229,6 +204,7 @@ class AcpTool(ITool):
                 task_id=task_id,
                 index=next_index,
                 message_service=message_service,
+                source="acp",
                 metadata={
                     "model": None,
                     "stop_reason": response.stop_reason if response else None,
@@ -299,18 +275,4 @@ class AcpTool(ITool):
     async def _persist_sdk_session_id(self, session_id: str, sdk_session_id: str) -> None:
         async with async_session_scope() as db:
             session_repo = AgentSessionRepository(db)
-            model = await session_repo.find_by_id(session_id)
-            if not model:
-                return
-            data = {}
-            if model.data:
-                try:
-                    data = json.loads(model.data)
-                except (TypeError, json.JSONDecodeError):
-                    data = {}
-            data["sdk_session_id"] = sdk_session_id
-            update_payload = {
-                "data": json.dumps(data, ensure_ascii=False),
-                "updated_at": utcnow(),
-            }
-            await session_repo.update(session_id, update_payload)
+            await session_repo.set_sdk_session_id(session_id, sdk_session_id)

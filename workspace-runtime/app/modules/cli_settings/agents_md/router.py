@@ -14,7 +14,7 @@ from .service import AgentsMdService, AgentsMdTool, get_agents_md_config
 def create_agents_md_router(tool: AgentsMdTool) -> APIRouter:
     config = get_agents_md_config(tool)
     router = APIRouter(
-        prefix=f"/{tool.value}",
+        prefix=f"/{config.api_prefix}",
         tags=[f"{tool.value} - Agents MD"],
     )
 

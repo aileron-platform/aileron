@@ -453,25 +453,14 @@ async def test_prompt_session_streaming_raises_timeout_when_processor_times_out(
 
 
 @pytest.mark.asyncio
-async def test_set_permission_mode_and_cleanup_client_cover_success_and_failures() -> None:
+async def test_cleanup_client_cover_success_and_failures() -> None:
     service = prompt_module.ClaudePromptService()
 
-    assert await service.set_permission_mode("missing", "default") is False
-
-    service.active_clients["no-method"] = SimpleNamespace()
-    assert await service.set_permission_mode("no-method", "default") is False
-
     ok_client = FakeClient()
-    fail_client = FakeClient(set_mode_error=RuntimeError("boom"))
     cleanup_fail_client = FakeClient()
     cleanup_fail_client.disconnect = AsyncMock(side_effect=RuntimeError("disconnect failed"))
     service.active_clients["ok"] = ok_client
-    service.active_clients["fail"] = fail_client
     service.active_clients["cleanup-fail"] = cleanup_fail_client
-
-    assert await service.set_permission_mode("ok", "acceptEdits") is True
-    assert ok_client.mode_calls == ["acceptEdits"]
-    assert await service.set_permission_mode("fail", "plan") is False
 
     await service.cleanup_client("ok")
     await service.cleanup_client("cleanup-fail")

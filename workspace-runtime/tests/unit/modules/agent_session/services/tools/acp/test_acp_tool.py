@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -35,6 +34,7 @@ def _make_session_repo() -> SimpleNamespace:
         find_by_id=AsyncMock(),
         to_entity=lambda model: model,
         update=AsyncMock(),
+        set_sdk_session_id=AsyncMock(),
     )
 
 
@@ -204,34 +204,16 @@ async def test_ensure_sdk_session_and_persist_behaviors(monkeypatch: pytest.Monk
     connection.sdk_session_id = "cached-sdk"
     assert await tool._ensure_sdk_session(connection, "session-1", None, "/workspace") == "cached-sdk"
 
-    session_repo.find_by_id = AsyncMock(return_value=SimpleNamespace(data='{"x":1}'))
     await tool._persist_sdk_session_id("session-1", "sdk-1")
-    payload = session_repo.update.await_args.args[1]
-    assert json.loads(payload["data"])["sdk_session_id"] == "sdk-1"
-    assert isinstance(payload["updated_at"], datetime)
-
-    session_repo.find_by_id = AsyncMock(return_value=SimpleNamespace(data="{bad"))
-    await tool._persist_sdk_session_id("session-1", "sdk-2")
-    assert json.loads(session_repo.update.await_args.args[1]["data"]) == {"sdk_session_id": "sdk-2"}
-
-    session_repo.find_by_id = AsyncMock(return_value=None)
-    session_repo.update.reset_mock()
-    await tool._persist_sdk_session_id("missing", "sdk-3")
-    session_repo.update.assert_not_awaited()
+    session_repo.set_sdk_session_id.assert_awaited_once_with("session-1", "sdk-1")
 
 
 @pytest.mark.asyncio
-async def test_stop_task_check_installed_and_properties(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_stop_task() -> None:
     tool, _, connection_manager = _make_tool()
     connection = SimpleNamespace(connection=SimpleNamespace(cancel=AsyncMock()), sdk_session_id="sdk-1")
     connection_manager.get_existing = lambda session_id: connection
 
-    monkeypatch.setattr(tool_module.shutil, "which", lambda command: "/usr/bin/codex" if command == "codex" else None)
-
-    assert tool.tool_type == ToolType.CODEX
-    assert tool.name == "codex"
-    assert tool.get_capabilities().supports_session_create is True
-    assert await tool.check_installed() is True
     assert await tool.stop_task("session-1") == {"success": True}
     connection.connection.cancel.assert_awaited_once_with(session_id="sdk-1")
 

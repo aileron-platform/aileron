@@ -31,7 +31,7 @@ from app.modules.internal.template_install_models import (
 from app.modules.claude_code.common import DocumentScope
 from app.modules.claude_code.mcp.models import McpImportResponse
 from app.modules.claude_code.hooks.models import HookImportResponse
-from app.modules.claude_code.claude_md.models import ClaudeMdScope
+from app.modules.cli_settings.agents_md.models import AgentsMdScope
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def mock_services():
     return {
         "mcp_service": MagicMock(),
         "hook_service": MagicMock(),
-        "claude_md_service": MagicMock(),
+        "agents_md_service": MagicMock(),
     }
 
 
@@ -70,7 +70,7 @@ def service(temp_dirs, mock_services):
         service = TemplateInstallService(
             mcp_service=mock_services["mcp_service"],
             hook_service=mock_services["hook_service"],
-            claude_md_service=mock_services["claude_md_service"],
+            agents_md_service=mock_services["agents_md_service"],
         )
         # Override directories to use temp dirs
         service.claude_dir = temp_dirs["claude_dir"]
@@ -88,7 +88,7 @@ class TestServiceInitialization:
 
             assert service.mcp_service == mock_services["mcp_service"]
             assert service.hook_service == mock_services["hook_service"]
-            assert service.claude_md_service == mock_services["claude_md_service"]
+            assert service.agents_md_service == mock_services["agents_md_service"]
 
     def test_init_with_default_services(self, temp_dirs):
         """Test initialization with default services"""
@@ -97,7 +97,7 @@ class TestServiceInitialization:
 
             assert service.mcp_service is not None
             assert service.hook_service is not None
-            assert service.claude_md_service is not None
+            assert service.agents_md_service is not None
 
     def test_init_creates_directories(self, temp_dirs):
         """Test that initialization creates required directories"""
@@ -442,19 +442,19 @@ class TestClaudeMdInstallation:
         success = await service.install_claude_md("workspace-1", request)
 
         assert success is True
-        mock_services["claude_md_service"].update_document.assert_called_once()
+        mock_services["agents_md_service"].update_document.assert_called_once()
 
         # Verify the call arguments
-        call_args = mock_services["claude_md_service"].update_document.call_args
+        call_args = mock_services["agents_md_service"].update_document.call_args
         assert call_args[0][0] == "workspace-1"
         update_request = call_args[0][1]
-        assert update_request.scope == ClaudeMdScope.USER
+        assert update_request.scope == AgentsMdScope.PROJECT
         assert update_request.content == "# Project Instructions\n\nTest content."
 
     @pytest.mark.asyncio
     async def test_install_claude_md_handles_error(self, service, mock_services):
         """Test Claude.md installation handles errors"""
-        mock_services["claude_md_service"].update_document.side_effect = Exception(
+        mock_services["agents_md_service"].update_document.side_effect = Exception(
             "Service error"
         )
 
@@ -682,6 +682,25 @@ class TestSkillsInstallation:
     """Test skills installation"""
 
     @pytest.mark.asyncio
+    async def test_install_claude_code_skills_to_project_scope(self, service):
+        """Test installing Claude Code skills into the Claude project skills directory."""
+        request = SkillsInstallRequest(
+            cliType="claude-code",
+            skills=[SkillFileItem(path="review/SKILL.md", content="# Claude Skill")],
+        )
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(service.scripts_base_dir.parent / "workspace")):
+            success, results, target_path, total_size = await service.install_skills(
+                "workspace-1", request
+            )
+
+        assert success is True
+        assert results.created == ["review/SKILL.md"]
+        assert target_path.endswith("/workspace/.claude/skills")
+        assert total_size == len("# Claude Skill".encode("utf-8"))
+        assert (Path(target_path) / "review" / "SKILL.md").read_text() == "# Claude Skill"
+
+    @pytest.mark.asyncio
     async def test_install_codex_skills_to_project_scope(self, service):
         """Test installing Codex skills into the Codex project skills directory"""
         request = SkillsInstallRequest(
@@ -706,6 +725,28 @@ class TestSkillsInstallation:
         skill_file = Path(target_path) / "openspec-ff-change" / "SKILL.md"
         assert skill_file.exists()
         assert skill_file.read_text() == "# Skill"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("cli_type", "expected_dir"),
+        [
+            ("gemini", ".gemini/skills"),
+            ("opencode", ".opencode/skills"),
+        ],
+    )
+    async def test_install_non_claude_skills_to_existing_paths(self, service, cli_type, expected_dir):
+        """Test non-Claude skill installation still uses cli_settings config."""
+        request = SkillsInstallRequest(
+            cliType=cli_type,
+            skills=[SkillFileItem(path="demo/SKILL.md", content="# Skill")],
+        )
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(service.scripts_base_dir.parent / "workspace")):
+            success, results, target_path, _ = await service.install_skills("workspace-1", request)
+
+        assert success is True
+        assert results.created == ["demo/SKILL.md"]
+        assert target_path.endswith(f"/workspace/{expected_dir}")
 
     @pytest.mark.asyncio
     async def test_install_skills_rejects_path_traversal(self, service):

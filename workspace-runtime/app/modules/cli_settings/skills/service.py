@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 import yaml
 
@@ -29,10 +29,9 @@ class CliSkillService(BaseFileService):
     Supported scopes:
     - project: Project level
     - user: User level
-    - plugin: Plugin level (Claude only, read-only)
     """
 
-    VALID_SCOPES = {SkillScope.PROJECT, SkillScope.USER, SkillScope.PLUGIN}
+    VALID_SCOPES = {SkillScope.PROJECT, SkillScope.USER}
 
     def __init__(self, config: SkillToolConfig, workspace_id: str):
         # No need for root_path, use scope to resolve paths
@@ -44,7 +43,6 @@ class CliSkillService(BaseFileService):
         """Get skills root directory for specified scope"""
         if scope == SkillScope.USER:
             return self._config.user_root
-        # PROJECT (and PLUGIN for claude handled separately)
         workspace_root = Path(get_workspace_path())
         return workspace_root / self._config.project_dot_dir / self._config.skill_dir_name
 
@@ -62,38 +60,7 @@ class CliSkillService(BaseFileService):
     def validate_scope(self, scope: Optional[str]) -> bool:
         if not scope:
             return True
-        if scope == SkillScope.PLUGIN:
-            return self._config.supports_plugin
         return scope in self.VALID_SCOPES
 
     def is_readonly_scope(self, scope: Optional[str]) -> bool:
-        return scope == SkillScope.PLUGIN
-
-    # --- Plugin Skills (Claude only) ---
-
-    def get_plugin_skills(self) -> List[Dict]:
-        """Get all plugin Skills (Claude only)"""
-        if not self._config.supports_plugin:
-            return []
-
-        from app.modules.claude_code.plugins.loader import get_plugin_loader
-        from app.modules.claude_code.settings.service import SettingsService
-
-        plugin_skills = []
-        try:
-            settings_service = SettingsService()
-            loader = get_plugin_loader(settings_service)
-            skills = loader.load_plugin_skills(self._workspace_id)
-
-            for skill in skills:
-                plugin_skills.append({
-                    "pluginId": f"{skill.plugin_name}@{skill.marketplace_name}",
-                    "pluginName": skill.plugin_name,
-                    "marketplaceName": skill.marketplace_name,
-                    "skillName": skill.skill_name,
-                    "skillPath": skill.directory_path,
-                })
-        except Exception:
-            logger.warning("Failed to load plugin skills", exc_info=True)
-
-        return plugin_skills
+        return False

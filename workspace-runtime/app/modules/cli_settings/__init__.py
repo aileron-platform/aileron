@@ -13,6 +13,7 @@ from .slash_commands import SlashCommandTool, create_slash_commands_router
 router = APIRouter(prefix="/workspaces/{workspace_id}")
 
 # Agents MD routes
+router.include_router(create_agents_md_router(AgentsMdTool.CLAUDE))
 router.include_router(create_agents_md_router(AgentsMdTool.GEMINI))
 router.include_router(create_agents_md_router(AgentsMdTool.OPENCODE))
 router.include_router(create_agents_md_router(AgentsMdTool.CODEX))
@@ -26,7 +27,6 @@ router.include_router(create_mcp_router(McpTool.CODEX))
 router.include_router(create_hooks_router(HookTool.GEMINI))
 
 # Skills routes
-router.include_router(create_skills_router(SkillTool.CLAUDE))
 router.include_router(create_skills_router(SkillTool.GEMINI))
 router.include_router(create_skills_router(SkillTool.OPENCODE))
 router.include_router(create_skills_router(SkillTool.CODEX))

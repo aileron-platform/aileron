@@ -13,27 +13,13 @@ from app.modules.agent_session.services.message_service import MessageService
 from app.modules.agent_session.services.execution_service import ExecutionService
 from app.modules.agent_session.repositories.sqlalchemy_models import Base as AgentSessionBase
 from app.modules.agent_session.services.tools.base.tool_interface import ITool
-from app.modules.agent_session.services.tools.base.types import TaskResult, ToolCapabilities, ToolType
+from app.modules.agent_session.services.tools.base.types import TaskResult
 
 
 class FakeQueueFlowTool(ITool):
     def __init__(self) -> None:
         self.first_started = Event()
         self.first_release = Event()
-
-    @property
-    def tool_type(self) -> ToolType:
-        return ToolType.CLAUDE_CODE
-
-    @property
-    def name(self) -> str:
-        return "fake-queue-flow"
-
-    def get_capabilities(self) -> ToolCapabilities:
-        return ToolCapabilities(streaming=True)
-
-    async def check_installed(self) -> bool:
-        return True
 
     async def execute_task(
         self,
@@ -71,6 +57,9 @@ class FakeQueueFlowTool(ITool):
                 },
             },
         )
+
+    async def stop_task(self, session_id: str, task_id: str | None = None) -> dict:
+        return {"success": True}
 
 
 def wait_until(predicate, timeout: float = 5.0, interval: float = 0.05) -> bool:

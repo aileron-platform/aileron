@@ -145,12 +145,6 @@ async def list_messages(
     )
 
 
-@router.delete(
-    "/{session_id}/messages/{message_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete message",
-    description="Delete message.",
-)
 async def delete_message(
     session_id: str,
     message_id: str,

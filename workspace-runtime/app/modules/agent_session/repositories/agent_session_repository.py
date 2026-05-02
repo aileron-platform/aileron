@@ -213,6 +213,29 @@ class AgentSessionRepository(BaseRepository[AgentSessionModel]):
         # Serialize and update (dict -> JSON string)
         return await self.update(session_id, {"data": json.dumps(data, ensure_ascii=False)})
 
+    async def set_sdk_session_id(self, session_id: str, sdk_session_id: str) -> None:
+        """Persist the SDK session id inside the session data JSON."""
+        session = await self.find_by_id(session_id)
+        if not session:
+            logger.warning("Session not found when saving sdk_session_id: %s", session_id[:8])
+            return
+
+        data = {}
+        if session.data:
+            try:
+                data = json.loads(session.data)
+            except (TypeError, json.JSONDecodeError):
+                data = {}
+        data["sdk_session_id"] = sdk_session_id
+
+        await self.update(
+            session_id,
+            {
+                "data": json.dumps(data, ensure_ascii=False),
+                "updated_at": utcnow(),
+            },
+        )
+
     async def update_context_usage(
         self,
         session_id: str,

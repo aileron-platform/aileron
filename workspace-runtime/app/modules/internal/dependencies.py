@@ -11,7 +11,11 @@ from fastapi import Depends, Header, HTTPException, status
 from app.config.settings import get_settings
 from app.modules.claude_code.mcp import McpService
 from app.modules.claude_code.hooks import HookService
-from app.modules.claude_code.claude_md import ClaudeMdService
+from app.modules.cli_settings.agents_md.service import (
+    AgentsMdService,
+    AgentsMdTool,
+    get_agents_md_config,
+)
 from .service import InternalService
 from .template_install_service import TemplateInstallService
 
@@ -57,9 +61,9 @@ def get_hook_service() -> HookService:
 
 
 @lru_cache()
-def get_claude_md_service() -> ClaudeMdService:
-    """Get singleton Claude.md service"""
-    return ClaudeMdService()
+def get_agents_md_service() -> AgentsMdService:
+    """Get singleton CLAUDE.md service."""
+    return AgentsMdService(get_agents_md_config(AgentsMdTool.CLAUDE))
 
 
 def get_internal_service() -> InternalService:
@@ -70,13 +74,13 @@ def get_internal_service() -> InternalService:
 def get_template_install_service(
     mcp_service: McpService = Depends(get_mcp_service),
     hook_service: HookService = Depends(get_hook_service),
-    claude_md_service: ClaudeMdService = Depends(get_claude_md_service),
+    agents_md_service: AgentsMdService = Depends(get_agents_md_service),
 ) -> TemplateInstallService:
     """Get Template Install Service instance (inject dependencies)"""
     return TemplateInstallService(
         mcp_service=mcp_service,
         hook_service=hook_service,
-        claude_md_service=claude_md_service,
+        agents_md_service=agents_md_service,
     )
 
 
@@ -86,5 +90,5 @@ __all__ = [
     "get_template_install_service",
     "get_mcp_service",
     "get_hook_service",
-    "get_claude_md_service",
+    "get_agents_md_service",
 ]

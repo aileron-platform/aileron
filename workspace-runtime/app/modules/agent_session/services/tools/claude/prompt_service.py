@@ -278,50 +278,6 @@ class ClaudePromptService:
             # Instead, claude_tool.py calls cleanup_client() outside generator
             pass
 
-    async def set_permission_mode(self, session_id: str, mode: str) -> bool:
-        """
-        Dynamically change permission mode for an active session.
-
-        Per SDK spec, permission mode can be changed mid-streaming via
-        set_permission_mode(). This method delegates to the active SDK client.
-
-        Args:
-            session_id: Session ID
-            mode: New permission mode ('default', 'acceptEdits', 'bypassPermissions', 'plan')
-
-        Returns:
-            True if mode was changed, False if no active client found or not supported
-        """
-        client = self.active_clients.get(session_id)
-        if not client:
-            logger.warning(
-                "Cannot set permission mode: no active client for session %s",
-                session_id[:8],
-            )
-            return False
-
-        set_mode_fn = getattr(client, 'set_permission_mode', None)
-        if not callable(set_mode_fn):
-            logger.warning(
-                "SDK client does not support set_permission_mode for session %s",
-                session_id[:8],
-            )
-            return False
-
-        try:
-            await set_mode_fn(mode)
-            logger.info(
-                "Permission mode changed to '%s' for session %s",
-                mode, session_id[:8],
-            )
-            return True
-        except Exception as e:
-            logger.error(
-                "Failed to set permission mode for session %s: %s",
-                session_id[:8], str(e),
-            )
-            return False
-
     async def cleanup_client(self, session_id: str) -> None:
         """
         Clean up session-related SDK client and processes.

@@ -297,26 +297,19 @@ class ExecutionService:
         # Get event emitter
         self.emitter = get_event_emitter()
 
-        # API key (from environment variable)
-        import os
-        self.api_key = os.getenv("ANTHROPIC_API_KEY")
-
         # Use global ClaudeToolManager / AcpToolManager for stateless tools
         # These tools don't hold DB sessions, can be safely shared across all ExecutionService instances
         tool_manager = get_claude_tool_manager()
         self.claude_tool = tool_manager.get_tool()
 
         acp_tool_manager = get_acp_tool_manager()
-        self.acp_codex_tool = acp_tool_manager.get_tool(tool_type=ToolType.CODEX)
-        self.acp_gemini_tool = acp_tool_manager.get_tool(tool_type=ToolType.GEMINI)
-        self.acp_opencode_tool = acp_tool_manager.get_tool(tool_type=ToolType.OPENCODE)
 
         # Tool registry (future multi-SDK support)
         self.tools: dict[str, ITool] = {
             "claude-code": self.claude_tool,
-            "codex": self.acp_codex_tool,
-            "gemini": self.acp_gemini_tool,
-            "opencode": self.acp_opencode_tool,
+            "codex": acp_tool_manager.get_tool(tool_type=ToolType.CODEX),
+            "gemini": acp_tool_manager.get_tool(tool_type=ToolType.GEMINI),
+            "opencode": acp_tool_manager.get_tool(tool_type=ToolType.OPENCODE),
         }
 
         # Track active executions

@@ -5,7 +5,6 @@ from .tool_interface import ITool
 from .types import (
     ProcessedEvent,
     TaskResult,
-    ToolCapabilities,
     ToolType,
 )
 
@@ -14,7 +13,5 @@ __all__ = [
     "ProcessedEvent",
     "StreamingCallbacks",
     "TaskResult",
-    "ToolCapabilities",
     "ToolType",
 ]
-

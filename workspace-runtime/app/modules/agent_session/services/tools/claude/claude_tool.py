@@ -44,37 +44,19 @@ from app.modules.agent_session.services.tools.base.types import (
     ThinkingCompleteEvent,
     ThinkingPartialEvent,
     ToolAuthenticationError,
-    ToolCapabilities,
-    ToolType,
     TokenUsage,
 )
-from .message_builder import create_assistant_message, create_user_message, create_tool_result_message, create_system_message
+from app.modules.agent_session.services.tools.base.message_builder import (
+    create_assistant_message,
+    create_system_message,
+    create_tool_result_message,
+    create_user_message,
+)
 from .prompt_service import ClaudePromptService
 from .permission_hooks import PermissionHooks
 from app.modules.agent_session.services.tool_decision_manager import (
     global_tool_decision_manager,
 )
-
-
-def _build_message_dict(msg_entity) -> Dict[str, Any]:
-    """Convert message entity to dict format expected by frontend."""
-    content_blocks: list = []
-    if isinstance(msg_entity.content, str):
-        content_blocks = [{"type": "text", "text": msg_entity.content}]
-    elif isinstance(msg_entity.content, list):
-        content_blocks = msg_entity.content
-
-    return {
-        "message_id": msg_entity.id,
-        "session_id": msg_entity.session_id,
-        "task_id": msg_entity.task_id,
-        "type": msg_entity.type.value if hasattr(msg_entity.type, "value") else msg_entity.type,
-        "role": msg_entity.role.value if hasattr(msg_entity.role, "value") else msg_entity.role,
-        "index": msg_entity.index,
-        "content_blocks": content_blocks,
-        "metadata": msg_entity.metadata,
-        "created_at": msg_entity.created_at.isoformat() if msg_entity.created_at else None,
-    }
 
 
 def _is_authentication_retry_event(content: list[dict[str, Any]]) -> bool:
@@ -124,44 +106,100 @@ class ClaudeTool(ITool):
 
         # Track abort event for each session (for task cancellation)
         self.abort_events: dict[str, asyncio.Event] = {}
-    
-    @property
-    def tool_type(self) -> ToolType:
-        return ToolType.CLAUDE_CODE
 
-    @property
-    def name(self) -> str:
-        return "Claude Code"
-    
-    def get_capabilities(self) -> ToolCapabilities:
-        """Get tool capabilities."""
-        return ToolCapabilities(
-            # Basic capabilities
-            streaming=True,
-            thinking=True,
-            multimodal=False,
-            max_context_window=200000,
-            prompt_caching=True,
-            local_execution=True,
-            built_in_tools=["file_operations", "git", "shell"],
-            # Advanced capabilities
-            supports_session_import=False,  # Waiting for SDK
-            supports_session_create=False,  # Waiting for SDK
-            supports_live_execution=True,  # ✅ Supported
-            supports_session_fork=False,
-            supports_child_spawn=False,
-            supports_git_state=False,
-        )
-    
-    async def check_installed(self) -> bool:
-        """Check if installed."""
-        # Claude Agent SDK is a Python package, importable means installed
-        try:
-            import claude_agent_sdk
-            return True
-        except ImportError:
-            return False
-    
+    async def _persist_and_notify_message(
+        self,
+        session_id: str,
+        content: list[dict[str, Any]],
+        role: MessageRole,
+        task_id: Optional[str],
+        index: int,
+        streaming_callbacks: Optional[StreamingCallbacks],
+        resolved_model: Optional[str] = None,
+        tool_uses: Optional[list[dict[str, Any]]] = None,
+        parent_tool_use_id: Optional[str] = None,
+        token_usage: Optional[TokenUsage] = None,
+    ) -> str:
+        """Persist one Claude SDK message and notify the frontend."""
+        async with async_session_scope() as db:
+            message_service = MessageService(db)
+            if role == MessageRole.ASSISTANT:
+                message = await create_assistant_message(
+                    session_id=session_id,
+                    content=content,
+                    tool_uses=tool_uses,
+                    task_id=task_id,
+                    index=index,
+                    resolved_model=resolved_model,
+                    message_service=message_service,
+                    source="claude-sdk",
+                    parent_tool_use_id=parent_tool_use_id,
+                    token_usage=token_usage,
+                )
+            elif role == MessageRole.USER:
+                message = await create_tool_result_message(
+                    session_id=session_id,
+                    content=content,
+                    task_id=task_id,
+                    index=index,
+                    message_service=message_service,
+                    source="claude-sdk",
+                )
+            elif role == MessageRole.SYSTEM:
+                message = await create_system_message(
+                    session_id=session_id,
+                    content=content,
+                    task_id=task_id,
+                    index=index,
+                    resolved_model=resolved_model,
+                    message_service=message_service,
+                    source="claude-sdk",
+                )
+            else:
+                raise ValueError(f"Unsupported Claude SDK message role: {role}")
+
+        if streaming_callbacks:
+            await streaming_callbacks.on_message_created(message)
+
+        return message["message_id"]
+
+    async def _update_last_message_token_usage(
+        self,
+        message_id: str,
+        token_usage: TokenUsage,
+    ) -> None:
+        """Update token metadata on the latest persisted assistant message."""
+        async with async_session_scope() as db:
+            message_repo = MessageRepository(db)
+            existing_model = await message_repo.find_by_id(message_id)
+            if not existing_model:
+                return
+
+            try:
+                data = json.loads(existing_model.data) if existing_model.data else {}
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.error(
+                    "Failed to deserialize message data when updating token metadata",
+                    extra={
+                        "error": str(e),
+                        "message_id": message_id,
+                    },
+                )
+                data = {}
+
+            metadata = data.get("metadata", {}) or {}
+            metadata["tokens"] = {
+                "input": token_usage.input,
+                "output": token_usage.output,
+            }
+            if token_usage.cache_read is not None:
+                metadata["tokens"]["cache_read"] = token_usage.cache_read
+            if token_usage.cache_creation is not None:
+                metadata["tokens"]["cache_creation"] = token_usage.cache_creation
+
+            data["metadata"] = metadata
+            await message_repo.update(message_id, {"data": json.dumps(data, ensure_ascii=False)})
+
     async def execute_task(
         self,
         session_id: str,
@@ -200,6 +238,7 @@ class ClaudeTool(ITool):
                 task_id=task_id,
                 index=next_index,
                 message_service=message_service,
+                source="claude-sdk",
             )
             # Session commits automatically when context exits
 
@@ -300,66 +339,19 @@ class ClaudeTool(ITool):
                 sdk_session_id = raw_sdk_response.get("session_id") if raw_sdk_response else None
                 if sdk_session_id and not captured_agent_session_id:
                     captured_agent_session_id = sdk_session_id
-                    # Save to session entity (for resume parameter in next conversation)
                     async with async_session_scope() as db:
                         session_repo = AgentSessionRepository(db)
-                        session_model = await session_repo.find_by_id(session_id)
-                        if session_model:
-                            # Deserialize data (JSON string -> dict)
-                            try:
-                                data = json.loads(session_model.data) if session_model.data else {}
-                            except (json.JSONDecodeError, TypeError) as e:
-                                logger.error(
-                                    "Failed to deserialize session data when saving sdk_session_id",
-                                    extra={
-                                        "error": str(e),
-                                        "session_id": session_id,
-                                    }
-                                )
-                                data = {}
-                            data["sdk_session_id"] = sdk_session_id
-                            # Serialize and update (dict -> JSON string)
-                            await session_repo.update(session_id, {"data": json.dumps(data, ensure_ascii=False)})
+                        await session_repo.set_sdk_session_id(session_id, sdk_session_id)
 
                 if event.token_usage:
                     token_usage = event.token_usage
 
                     # Update last assistant message's metadata (if exists)
                     if assistant_message_ids:
-                        last_message_id = assistant_message_ids[-1]
-                        async with async_session_scope() as db:
-                            message_repo = MessageRepository(db)
-                            existing_model = await message_repo.find_by_id(last_message_id)
-                            if existing_model:
-                                # Deserialize data (JSON string -> dict)
-                                try:
-                                    data = json.loads(existing_model.data) if existing_model.data else {}
-                                except (json.JSONDecodeError, TypeError) as e:
-                                    logger.error(
-                                        "Failed to deserialize message data when updating token metadata",
-                                        extra={
-                                            "error": str(e),
-                                            "message_id": last_message_id,
-                                        }
-                                    )
-                                    data = {}
-                                metadata = data.get("metadata", {}) or {}
-                                metadata["tokens"] = {
-                                    "input": token_usage.input,
-                                    "output": token_usage.output,
-                                }
-                                if token_usage.cache_read is not None:
-                                    metadata["tokens"]["cache_read"] = token_usage.cache_read
-                                if token_usage.cache_creation is not None:
-                                    metadata["tokens"]["cache_creation"] = token_usage.cache_creation
-
-                                data["metadata"] = metadata
-
-                                # Serialize and update message (dict -> JSON string)
-                                await message_repo.update(
-                                    last_message_id,
-                                    {"data": json.dumps(data, ensure_ascii=False)},
-                                )
+                        await self._update_last_message_token_usage(
+                            assistant_message_ids[-1],
+                            token_usage,
+                        )
 
                 if event.duration_ms:
                     duration_ms = event.duration_ms
@@ -424,33 +416,18 @@ class ClaudeTool(ITool):
 
                 # Create message
                 if event.role == MessageRole.ASSISTANT:
-                    # Create message in short-lived session and prepare notification dict
-                    msg_dict: Optional[Dict[str, Any]] = None
-                    async with async_session_scope() as db:
-                        message_repo = MessageRepository(db)
-                        message_service = MessageService(db)
-                        actual_message_id = await create_assistant_message(
-                            session_id=session_id,
-                            message_id=str(uuid4()),  # Not used, generated by MessageService
-                            content=event.content,
-                            tool_uses=event.tool_uses,
-                            task_id=task_id,
-                            index=next_index,
-                            resolved_model=resolved_model,
-                            message_service=message_service,
-                            parent_tool_use_id=event.parent_tool_use_id,
-                            token_usage=token_usage,
-                        )
-                        if streaming_callbacks:
-                            msg_model = await message_repo.find_by_id(actual_message_id)
-                            if msg_model:
-                                msg_entity = message_repo.to_entity(msg_model)
-                                msg_dict = _build_message_dict(msg_entity)
-
-                    # Notify frontend (after session ends)
-                    if msg_dict and streaming_callbacks:
-                        await streaming_callbacks.on_message_created(msg_dict)
-
+                    actual_message_id = await self._persist_and_notify_message(
+                        session_id=session_id,
+                        content=event.content,
+                        role=MessageRole.ASSISTANT,
+                        task_id=task_id,
+                        index=next_index,
+                        streaming_callbacks=streaming_callbacks,
+                        resolved_model=resolved_model,
+                        tool_uses=event.tool_uses,
+                        parent_tool_use_id=event.parent_tool_use_id,
+                        token_usage=token_usage,
+                    )
                     next_index += 1
                     assistant_message_ids.append(actual_message_id)
 
@@ -462,75 +439,35 @@ class ClaudeTool(ITool):
                         for block in event.content
                     )
                     if has_tool_result:
-                        msg_dict = None
-                        async with async_session_scope() as db:
-                            message_repo = MessageRepository(db)
-                            message_service = MessageService(db)
-                            # Create tool_result message
-                            actual_message_id = await create_tool_result_message(
-                                session_id=session_id,
-                                content=event.content,
-                                task_id=task_id,
-                                index=next_index,
-                                message_service=message_service,
-                            )
-                            if streaming_callbacks:
-                                msg_model = await message_repo.find_by_id(actual_message_id)
-                                if msg_model:
-                                    msg_entity = message_repo.to_entity(msg_model)
-                                    msg_dict = _build_message_dict(msg_entity)
-
-                        # Notify frontend
-                        if msg_dict and streaming_callbacks:
-                            await streaming_callbacks.on_message_created(msg_dict)
-
+                        await self._persist_and_notify_message(
+                            session_id=session_id,
+                            content=event.content,
+                            role=MessageRole.USER,
+                            task_id=task_id,
+                            index=next_index,
+                            streaming_callbacks=streaming_callbacks,
+                        )
                         next_index += 1
 
                 elif event.role == MessageRole.SYSTEM:
                     # Handle system messages (e.g., init)
-                    msg_dict = None
                     actual_system_message_id: Optional[str] = None
                     try:
-                        async with async_session_scope() as db:
-                            message_repo = MessageRepository(db)
-                            message_service = MessageService(db)
-                            # Save system message to database
-                            actual_system_message_id = await create_system_message(
-                                session_id=session_id,
-                                content=event.content,
-                                task_id=task_id,
-                                index=next_index,
-                                resolved_model=resolved_model,
-                                message_service=message_service,
-                            )
-                            if streaming_callbacks:
-                                msg_model = await message_repo.find_by_id(actual_system_message_id)
-                                if msg_model:
-                                    msg_entity = message_repo.to_entity(msg_model)
-                                    msg_dict = _build_message_dict(msg_entity)
+                        actual_system_message_id = await self._persist_and_notify_message(
+                            session_id=session_id,
+                            content=event.content,
+                            role=MessageRole.SYSTEM,
+                            task_id=task_id,
+                            index=next_index,
+                            streaming_callbacks=streaming_callbacks,
+                            resolved_model=resolved_model,
+                        )
                     except Exception as e:
                         logger.error(
                             "Failed to create/commit system message: session_id=%s, task_id=%s, error=%s",
                             session_id[:8], task_id, str(e), exc_info=True
                         )
                         raise  # Re-raise to ensure the error propagates
-
-                    # Notify frontend
-                    if streaming_callbacks:
-                        try:
-                            if msg_dict:
-                                await streaming_callbacks.on_message_created(msg_dict)
-                            else:
-                                logger.warning(
-                                    "System message created but not found for notification: message_id=%s, session_id=%s",
-                                    actual_system_message_id, session_id[:8]
-                                )
-                        except Exception as e:
-                            logger.error(
-                                "Failed to notify frontend of system message: message_id=%s, session_id=%s, error=%s",
-                                actual_system_message_id, session_id[:8], str(e), exc_info=True
-                            )
-                            # Continue execution - notification failure shouldn't stop task
 
                     next_index += 1
 
@@ -600,22 +537,6 @@ class ClaudeTool(ITool):
                 return {"success": True, "warning": str(e)}
 
         return {"success": True, "warning": "No active client found, but abort_event set"}
-
-    async def set_permission_mode(self, session_id: str, mode: str) -> bool:
-        """
-        Dynamically change permission mode for an active session.
-
-        Delegates to prompt_service which holds the active SDK client.
-        Per SDK spec, mode can be: 'default', 'acceptEdits', 'bypassPermissions', 'plan'.
-
-        Args:
-            session_id: Session ID
-            mode: New permission mode
-
-        Returns:
-            True if mode was changed successfully
-        """
-        return await self.prompt_service.set_permission_mode(session_id, mode)
 
     @classmethod
     def resolve_permission_decision(cls, session_id: str, decision: Dict[str, Any]) -> bool:

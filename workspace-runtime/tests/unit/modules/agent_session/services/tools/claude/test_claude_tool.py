@@ -93,6 +93,7 @@ def _make_session_repo() -> SimpleNamespace:
     return SimpleNamespace(
         find_by_id=AsyncMock(),
         update=AsyncMock(),
+        set_sdk_session_id=AsyncMock(),
         to_entity=lambda model: model,
     )
 
@@ -162,9 +163,9 @@ async def test_execute_task_orchestrates_streaming_messages_and_updates_metadata
         "create_user_message",
         AsyncMock(return_value={"message_id": "user-1", "role": "user", "content_blocks": [{"type": "text", "text": "hi"}]}),
     )
-    monkeypatch.setattr(tool_module, "create_assistant_message", AsyncMock(return_value="assistant-1"))
-    monkeypatch.setattr(tool_module, "create_tool_result_message", AsyncMock(return_value="tool-result-1"))
-    monkeypatch.setattr(tool_module, "create_system_message", AsyncMock(return_value="system-1"))
+    monkeypatch.setattr(tool_module, "create_assistant_message", AsyncMock(return_value={"message_id": "assistant-1"}))
+    monkeypatch.setattr(tool_module, "create_tool_result_message", AsyncMock(return_value={"message_id": "tool-result-1"}))
+    monkeypatch.setattr(tool_module, "create_system_message", AsyncMock(return_value={"message_id": "system-1"}))
 
     message_models = {
         "assistant-1": make_message_model(
@@ -237,8 +238,7 @@ async def test_execute_task_orchestrates_streaming_messages_and_updates_metadata
     assert callbacks.stream_chunks[0][1] == "hello"
     assert len(callbacks.thinking_started) == 1
     assert len(callbacks.thinking_ended) >= 1
-    session_repo.update.assert_awaited_once()
-    assert "sdk_session_id" in session_repo.update.await_args.args[1]["data"]
+    session_repo.set_sdk_session_id.assert_awaited_once_with("session-1", "sdk-1")
     message_repo.update.assert_awaited_once()
     assert '"cache_creation": 2' in message_repo.update.await_args.args[1]["data"]
     assert "session-1" not in tool.abort_events
@@ -324,15 +324,8 @@ async def test_execute_task_converts_auth_retry_without_response_to_error(
 
 
 @pytest.mark.asyncio
-async def test_stop_task_set_permission_mode_and_basic_properties() -> None:
+async def test_stop_task() -> None:
     tool = tool_module.ClaudeTool(api_key="key")
-    tool.prompt_service.set_permission_mode = AsyncMock(return_value=True)
-
-    assert tool.tool_type == ToolType.CLAUDE_CODE
-    assert tool.name == "Claude Code"
-    capabilities = tool.get_capabilities()
-    assert capabilities.streaming is True
-    assert capabilities.thinking is True
 
     tool.abort_events["session-1"] = AsyncMock()
     tool.abort_events["session-1"].set = lambda: setattr(tool.abort_events["session-1"], "was_set", True)
@@ -349,11 +342,3 @@ async def test_stop_task_set_permission_mode_and_basic_properties() -> None:
     assert stopped == {"success": True}
     assert warning["success"] is True and "No active client" in warning["warning"]
     assert with_warning == {"success": True, "warning": "boom"}
-    assert await tool.set_permission_mode("session-1", "plan") is True
-    tool.prompt_service.set_permission_mode.assert_awaited_once_with("session-1", "plan")
-
-
-@pytest.mark.asyncio
-async def test_check_installed_returns_true() -> None:
-    tool = tool_module.ClaudeTool(api_key="key")
-    assert await tool.check_installed() is True

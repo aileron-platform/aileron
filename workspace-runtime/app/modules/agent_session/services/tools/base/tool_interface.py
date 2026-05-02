@@ -10,7 +10,7 @@ from typing import Optional
 from app.modules.agent_session.domain.enums import PermissionMode
 
 from .streaming_callbacks import StreamingCallbacks
-from .types import TaskResult, ToolCapabilities, ToolType
+from .types import TaskResult
 
 
 class ITool(ABC):
@@ -20,38 +20,7 @@ class ITool(ABC):
     Unified interface for all SDK Tools.
     """
     
-    @property
     @abstractmethod
-    def tool_type(self) -> ToolType:
-        """Tool type identifier."""
-        ...
-    
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Human-readable Tool name."""
-        ...
-    
-    @abstractmethod
-    def get_capabilities(self) -> ToolCapabilities:
-        """
-        Get Tool capability flags.
-        
-        Returns:
-            ToolCapabilities: Capability flags
-        """
-        ...
-    
-    @abstractmethod
-    async def check_installed(self) -> bool:
-        """
-        Check if Tool is installed and accessible.
-        
-        Returns:
-            bool: Whether installed
-        """
-        ...
-    
     async def execute_task(
         self,
         session_id: str,
@@ -97,6 +66,7 @@ class ITool(ABC):
         """
         raise NotImplementedError("execute_task not implemented")
     
+    @abstractmethod
     async def stop_task(
         self,
         session_id: str,
@@ -119,4 +89,3 @@ class ITool(ABC):
             dict: Success status and partial results (if any)
         """
         raise NotImplementedError("stop_task not implemented")
-

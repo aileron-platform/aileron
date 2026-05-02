@@ -40,33 +40,6 @@ class ToolAuthenticationError(ToolExecutionError):
 
 
 @dataclass
-class ToolCapabilities:
-    """Tool capability flags."""
-
-    # Basic capabilities (corresponds to ToolCapabilityResponse schema)
-    streaming: bool = True
-    thinking: bool = False
-    multimodal: bool = False
-    max_context_window: int = 200000
-    prompt_caching: bool = False
-    local_execution: bool = False
-    built_in_tools: list[str] = None
-
-    # Advanced capabilities (internal use)
-    supports_session_import: bool = False
-    supports_session_create: bool = False
-    supports_live_execution: bool = False
-    supports_session_fork: bool = False
-    supports_child_spawn: bool = False
-    supports_git_state: bool = False
-
-    def __post_init__(self):
-        """Post-initialization processing."""
-        if self.built_in_tools is None:
-            self.built_in_tools = []
-
-
-@dataclass
 class TokenUsage:
     """Token usage."""
 

@@ -19,8 +19,6 @@ from app.modules.file_system import (
     BatchOperationResponse,
     FileManagementException,
 )
-from app.modules.claude_code.file_collections.models import PluginSkillInfo
-
 from .config import SkillTool
 from .dependencies import make_skill_service_dependency
 from .service import CliSkillService
@@ -281,23 +279,5 @@ def create_skills_router(tool: SkillTool) -> APIRouter:
             raise HTTPException(status_code=e.status_code, detail=e.to_dict())
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-
-    # ----- PLUGIN SKILLS (Claude only) -------------------------------------
-
-    if config.supports_plugin:
-
-        @router.get(
-            "/plugins",
-            response_model=List[PluginSkillInfo],
-            summary="Get plugin skills",
-            responses=build_responses(401, 500),
-        )
-        async def get_plugin_skills(
-            service: CliSkillService = Depends(get_service),
-        ):
-            try:
-                return service.get_plugin_skills()
-            except Exception:
-                return []
 
     return router

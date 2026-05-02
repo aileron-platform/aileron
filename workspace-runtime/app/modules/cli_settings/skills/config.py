@@ -14,7 +14,6 @@ from typing import Dict
 class SkillTool(str, Enum):
     """CLI tools that support skills"""
 
-    CLAUDE = "claude"
     GEMINI = "gemini"
     CODEX = "codex"
     OPENCODE = "opencode"
@@ -25,7 +24,7 @@ class SkillScope(str, Enum):
 
     PROJECT = "project"
     USER = "user"
-    PLUGIN = "plugin"  # Claude only
+    PLUGIN = "plugin"
 
 
 @dataclass(frozen=True)
@@ -43,14 +42,6 @@ class SkillToolConfig:
 def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:
     home = Path.home()
     return {
-        SkillTool.CLAUDE: SkillToolConfig(
-            tool=SkillTool.CLAUDE,
-            project_dot_dir=".claude",
-            skill_dir_name="skills",
-            user_root=home / ".claude" / "skills",
-            supports_plugin=True,
-            api_prefix="claude-code",
-        ),
         SkillTool.GEMINI: SkillToolConfig(
             tool=SkillTool.GEMINI,
             project_dot_dir=".gemini",

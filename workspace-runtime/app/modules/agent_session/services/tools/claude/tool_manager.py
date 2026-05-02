@@ -57,13 +57,6 @@ class ClaudeToolManager:
         self._tool = None
 
 
-# Global instance
-_claude_tool_manager: Optional[ClaudeToolManager] = None
-
-
 def get_claude_tool_manager() -> ClaudeToolManager:
     """Get global ClaudeToolManager instance."""
-    global _claude_tool_manager
-    if _claude_tool_manager is None:
-        _claude_tool_manager = ClaudeToolManager()
-    return _claude_tool_manager
+    return ClaudeToolManager()

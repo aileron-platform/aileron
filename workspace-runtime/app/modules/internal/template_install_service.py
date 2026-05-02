@@ -19,10 +19,11 @@ from app.modules.claude_code.hooks.models import (
     HookRule,
     HookAction,
 )
-from app.modules.claude_code.claude_md import ClaudeMdService
-from app.modules.claude_code.claude_md.models import (
-    ClaudeMdScope,
-    ClaudeMdUpdateRequest,
+from app.modules.cli_settings.agents_md.models import AgentsMdScope, AgentsMdUpdateRequest
+from app.modules.cli_settings.agents_md.service import (
+    AgentsMdService,
+    AgentsMdTool,
+    get_agents_md_config,
 )
 from app.modules.cli_settings.hooks.config import CliHookScope, HookTool, get_hook_tool_config
 from app.modules.cli_settings.hooks.models import (
@@ -91,12 +92,14 @@ class TemplateInstallService:
         self,
         mcp_service: McpService | None = None,
         hook_service: HookService | None = None,
-        claude_md_service: ClaudeMdService | None = None,
+        agents_md_service: AgentsMdService | None = None,
     ):
         # Inject Claude Code services (for MCP, Hooks, Claude.md)
         self.mcp_service = mcp_service or McpService()
         self.hook_service = hook_service or HookService()
-        self.claude_md_service = claude_md_service or ClaudeMdService()
+        self.agents_md_service = agents_md_service or AgentsMdService(
+            get_agents_md_config(AgentsMdTool.CLAUDE)
+        )
 
         # Use environment variables or default paths (for Slash Commands, Subagents)
         self.home_dir = Path(os.environ.get("HOME", "/home/developer"))
@@ -325,17 +328,16 @@ class TemplateInstallService:
     async def install_claude_md(
         self, workspace_id: str, request: ClaudeMdInstallRequest
     ) -> bool:
-        """Install Claude.md to user scope - use ClaudeMdService"""
+        """Install CLAUDE.md to project scope."""
         try:
-            # Use ClaudeMdService's update_document method
-            update_request = ClaudeMdUpdateRequest(
-                scope=ClaudeMdScope.USER,
+            update_request = AgentsMdUpdateRequest(
+                scope=AgentsMdScope.PROJECT,
                 content=request.content,
             )
 
-            self.claude_md_service.update_document(workspace_id, update_request)
+            self.agents_md_service.update_document(workspace_id, update_request)
 
-            logger.info("Installed Claude.md to user scope")
+            logger.info("Installed CLAUDE.md to project scope")
             return True
 
         except Exception as e:
@@ -528,9 +530,12 @@ class TemplateInstallService:
         total_size = 0
 
         cli_type = (request.cliType or "claude-code").strip().lower()
-        tool = self._resolve_skill_tool(cli_type)
-        config = get_skill_config(tool)
-        target_dir = Path(get_workspace_path()) / config.project_dot_dir / config.skill_dir_name
+        if cli_type == "claude-code":
+            target_dir = Path(get_workspace_path()) / ".claude" / "skills"
+        else:
+            tool = self._resolve_skill_tool(cli_type)
+            config = get_skill_config(tool)
+            target_dir = Path(get_workspace_path()) / config.project_dot_dir / config.skill_dir_name
         target_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
         for skill in request.skills:
@@ -687,8 +692,6 @@ class TemplateInstallService:
     @staticmethod
     def _resolve_skill_tool(cli_type: str) -> SkillTool:
         normalized = cli_type.strip().lower()
-        if normalized == "claude-code":
-            return SkillTool.CLAUDE
         if normalized == "codex":
             return SkillTool.CODEX
         if normalized == "gemini":
