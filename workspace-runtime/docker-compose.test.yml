@@ -97,6 +97,7 @@ services:
       - ./tests:/app/tests:rw
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./uv.lock:/app/uv.lock:ro
+      - ./vendor:/app/vendor:ro
       - ./README.md:/app/README.md:ro
       # Test result output
       - ./test-results:/app/test-results:rw
