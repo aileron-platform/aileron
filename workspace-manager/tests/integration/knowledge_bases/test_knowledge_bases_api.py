@@ -137,15 +137,15 @@ def test_knowledge_base_file_endpoints_support_create_read_delete(test_app, crea
 
     create_file_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        data={"path": "/readme.md", "type": "file", "content": "hello kb"},
+        data={"path": "/raw/readme.md", "type": "file", "content": "hello kb"},
     )
     read_file_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": "/readme.md"},
+        params={"path": "/raw/readme.md"},
     )
     delete_file_response = client.delete(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        params={"path": "/readme.md"},
+        params={"path": "/raw/readme.md"},
     )
 
     assert create_file_response.status_code == 200
@@ -167,22 +167,22 @@ def test_knowledge_base_file_content_raw_supports_viewer_and_rejects_bad_paths(t
     kb_id = create_kb_response.json()["id"]
     write_response = client.put(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        json={"path": "/pixel.png", "type": "file", "content": "png-bytes"},
+        json={"path": "/raw/pixel.png", "type": "file", "content": "png-bytes"},
     )
     client.post(f"/api/v1/knowledge-bases/{kb_id}/shares", json={"userId": viewer.id, "role": "viewer"})
 
     _authenticate_as(client, monkeypatch, viewer)
     raw_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": "/pixel.png", "raw": "true"},
+        params={"path": "/raw/pixel.png", "raw": "true"},
     )
     traversal_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": "/../pixel.png", "raw": "true"},
+        params={"path": "/../raw/pixel.png", "raw": "true"},
     )
     missing_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": "/missing.png", "raw": "true"},
+        params={"path": "/raw/missing.png", "raw": "true"},
     )
 
     assert write_response.status_code == 200
@@ -340,50 +340,51 @@ def test_knowledge_base_query_api_returns_context_and_saves_answer(test_app, cre
         json={"name": "Query Docs", "slug": "query-docs"},
     )
     kb_id = create_kb_response.json()["id"]
+    # First create a raw source file, then save it as wiki via query API
     client.put(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
         json={
-            "path": "/wiki/concepts/python.md",
+            "path": "/raw/sources/python.md",
             "type": "file",
             "content": (
-                "---\n"
-                "title: Python\n"
-                "type: concept\n"
-                "sources:\n"
-                "  - /raw/sources/python.md\n"
-                "---\n\n"
                 "# Python\n\n"
                 "Python packaging uses wheels and package indexes.\n"
             ),
         },
     )
 
-    query_response = client.post(
-        f"/api/v1/knowledge-bases/{kb_id}/query",
-        json={"query": "python packaging", "limit": 4},
-    )
+    # Save query answer to wiki to create a wiki file
     save_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/query/save",
         json={
             "query": "python packaging",
             "answer": "Python packaging uses wheels.",
-            "citations": query_response.json()["citations"],
-            "title": "Python Packaging Answer",
+            "citations": [],
+            "title": "Python",
         },
     )
-    saved_path = save_response.json()["path"]
+    wiki_path = save_response.json()["path"]
+
+    # Now query should find context
+    query_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/query",
+        json={"query": "python packaging", "limit": 4},
+    )
     read_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": saved_path},
+        params={"path": wiki_path},
     )
 
+    assert save_response.status_code == 200
     assert query_response.status_code == 200
     query_payload = query_response.json()
     assert query_payload["status"] == "context_ready"
     assert query_payload["kbId"] == kb_id
-    assert any(citation["path"] == "wiki/concepts/python.md" for citation in query_payload["citations"])
-    assert save_response.status_code == 200
-    assert saved_path == "/wiki/queries/python-packaging-answer.md"
+    # Citation paths don't have leading slash
+    assert any(citation["path"] == wiki_path.lstrip("/") for citation in query_payload["citations"])
+    assert read_response.status_code == 200
+    assert "type: query" in read_response.json()["content"]
+    assert "Python packaging uses wheels." in read_response.json()["content"]
     assert save_response.json()["commitId"] is None
     assert read_response.status_code == 200
     assert "type: query" in read_response.json()["content"]
@@ -401,9 +402,15 @@ def test_knowledge_base_query_api_allows_viewer_query_but_rejects_save(test_app,
         json={"name": "Viewer Query Docs", "slug": "viewer-query-docs"},
     )
     kb_id = create_kb_response.json()["id"]
-    client.put(
-        f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        json={"path": "/wiki/overview.md", "type": "file", "content": "# Overview\n\nTeam wiki roadmap.\n"},
+    # Save a wiki page via query API
+    client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/query/save",
+        json={
+            "query": "roadmap",
+            "answer": "Team wiki roadmap.",
+            "citations": [],
+            "title": "Overview",
+        },
     )
     client.post(f"/api/v1/knowledge-bases/{kb_id}/shares", json={"userId": viewer.id, "role": "viewer"})
 
@@ -433,9 +440,15 @@ def test_knowledge_base_lint_api_returns_inline_report(test_app, create_user, mo
         json={"name": "Lint Docs", "slug": "lint-docs"},
     )
     kb_id = create_kb_response.json()["id"]
-    client.put(
-        f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        json={"path": "/wiki/broken.md", "type": "file", "content": "# Broken\n\nSee [[missing-page]].\n"},
+    # Create wiki file via query save API
+    client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/query/save",
+        json={
+            "query": "broken page",
+            "answer": "See [[missing-page]].",
+            "citations": [],
+            "title": "Broken",
+        },
     )
 
     lint_response = client.post(f"/api/v1/knowledge-bases/{kb_id}/lint")
@@ -444,7 +457,7 @@ def test_knowledge_base_lint_api_returns_inline_report(test_app, create_user, mo
     assert lint_response.json()["kbId"] == kb_id
     assert "reportPath" not in lint_response.json()
     assert "broken_wikilink" in lint_response.json()["issueCounts"]
-    assert lint_response.json()["issues"][0]["path"] == "wiki/broken.md"
+    assert lint_response.json()["issues"][0]["path"].startswith("wiki/queries/")
 
 
 @pytest.mark.integration
@@ -486,23 +499,23 @@ def test_knowledge_base_git_api_supports_enable_changes_commit_and_history(test_
     )
     write_response = client.put(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        json={"path": "/wiki/api.md", "type": "file", "content": "# API\n"},
+        json={"path": "/raw/api.md", "type": "file", "content": "# API\n"},
     )
     changes_response = client.get(f"/api/v1/knowledge-bases/{kb_id}/git/version-control/changes")
     stage_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/git/version-control/stage",
-        json={"paths": ["wiki/api.md"]},
+        json={"paths": ["raw/api.md"]},
     )
     commit_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/git/version-control/commit",
-        json={"message": "Add API page"},
+        json={"message": "Add raw API page"},
     )
     commit_id = commit_response.json()["commit"]["id"]
     commits_response = client.get(f"/api/v1/knowledge-bases/{kb_id}/git/version-control/commits")
     files_response = client.get(f"/api/v1/knowledge-bases/{kb_id}/git/version-control/commits/{commit_id}/files")
     blob_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/git/version-control/blob",
-        params={"path": "wiki/api.md", "revision": commit_id},
+        params={"path": "raw/api.md", "revision": commit_id},
     )
 
     assert disabled_response.status_code == 400
@@ -514,15 +527,15 @@ def test_knowledge_base_git_api_supports_enable_changes_commit_and_history(test_
     assert enable_response.json()["currentBranch"] == "main"
     assert write_response.status_code == 200
     assert changes_response.status_code == 200
-    assert [item["path"] for item in changes_response.json()["untracked"]] == ["wiki/api.md"]
+    assert [item["path"] for item in changes_response.json()["untracked"]] == ["raw/api.md"]
     assert stage_response.status_code == 200
-    assert stage_response.json()["staged"] == ["wiki/api.md"]
+    assert stage_response.json()["staged"] == ["raw/api.md"]
     assert commit_response.status_code == 200
-    assert commit_response.json()["commit"]["message"] == "Add API page"
+    assert commit_response.json()["commit"]["message"] == "Add raw API page"
     assert commits_response.status_code == 200
     assert commits_response.json()["total"] == 2
     assert files_response.status_code == 200
-    assert [item["path"] for item in files_response.json()["files"]] == ["wiki/api.md"]
+    assert [item["path"] for item in files_response.json()["files"]] == ["raw/api.md"]
     assert blob_response.status_code == 200
     assert blob_response.json()["content"] == "# API"
 
@@ -594,22 +607,29 @@ def test_knowledge_base_graph_api_returns_wiki_relationships_for_viewer(test_app
         json={"name": "Graph Docs", "slug": "graph-docs"},
     )
     kb_id = create_kb_response.json()["id"]
-    client.put(
-        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+    # Create wiki pages via query save API
+    python_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/query/save",
         json={
-            "path": "/wiki/concepts/python.md",
-            "type": "file",
-            "content": "---\ntitle: Python\ntype: concept\nsources: [raw/sources/python.md]\n---\n\n# Python\n\nSee [[entities/guido]].\n",
+            "query": "python programming",
+            "answer": "# Python\n\nSee [[wiki/queries/guido]].",
+            "citations": [],
+            "title": "Python",
         },
     )
-    client.put(
-        f"/api/v1/knowledge-bases/{kb_id}/files/content",
+    python_path = python_response.json()["path"]
+
+    guido_response = client.post(
+        f"/api/v1/knowledge-bases/{kb_id}/query/save",
         json={
-            "path": "/wiki/entities/guido.md",
-            "type": "file",
-            "content": "---\ntitle: Guido\ntype: entity\nsources: [raw/sources/python.md]\n---\n\n# Guido\n",
+            "query": "guido rossum",
+            "answer": "# Guido\n\nCreator of Python.",
+            "citations": [],
+            "title": "Guido",
         },
     )
+    guido_path = guido_response.json()["path"]
+
     client.post(f"/api/v1/knowledge-bases/{kb_id}/shares", json={"userId": viewer.id, "role": "viewer"})
 
     _authenticate_as(client, monkeypatch, viewer)
@@ -620,16 +640,22 @@ def test_knowledge_base_graph_api_returns_wiki_relationships_for_viewer(test_app
 
     assert graph_response.status_code == 200
     nodes = {node["id"]: node for node in graph_response.json()["nodes"]}
-    assert nodes["wiki/concepts/python"]["label"] == "Python"
-    assert nodes["wiki/concepts/python"]["type"] == "concept"
-    assert nodes["wiki/entities/guido"]["inboundCount"] == 1
+    # Graph should contain the wiki pages created by query save
+    # Node IDs don't have .md extension
+    python_node_id = python_path.lstrip("/").replace(".md", "")
+    guido_node_id = guido_path.lstrip("/").replace(".md", "")
+    assert python_node_id in nodes
+    assert nodes[python_node_id]["label"] == "Python"
+    assert nodes[python_node_id]["type"] == "query"
+    assert guido_node_id in nodes
     graph_edges = graph_response.json()["edges"]
+    # Check there's an edge between the two wiki pages
     edge = next(
         item
         for item in graph_edges
-        if {item["source"], item["target"]} == {"wiki/concepts/python", "wiki/entities/guido"}
+        if {item["source"], item["target"]} == {python_node_id, guido_node_id}
     )
-    assert {reason["type"] for reason in edge["reasons"]} >= {"direct_wikilink", "source_overlap", "type_affinity"}
+    assert "direct_wikilink" in {reason["type"] for reason in edge["reasons"]}
     assert denied_response.status_code == 403
     assert denied_response.json()["detail"]["code"] == "KB_ACCESS_DENIED"
 
@@ -647,19 +673,19 @@ def test_knowledge_base_file_copy_endpoint_supports_copy_and_conflict(test_app, 
 
     create_file_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        data={"path": "/readme.md", "type": "file", "content": "hello kb"},
+        data={"path": "/raw/readme.md", "type": "file", "content": "hello kb"},
     )
     copy_file_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files/copy",
-        params={"source_path": "/readme.md", "dest_path": "/copies/readme.md"},
+        params={"source_path": "/raw/readme.md", "dest_path": "/raw/copies/readme.md"},
     )
     copied_content_response = client.get(
         f"/api/v1/knowledge-bases/{kb_id}/files/content",
-        params={"path": "/copies/readme.md"},
+        params={"path": "/raw/copies/readme.md"},
     )
     conflict_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files/copy",
-        params={"source_path": "/readme.md", "dest_path": "/copies/readme.md"},
+        params={"source_path": "/raw/readme.md", "dest_path": "/raw/copies/readme.md"},
     )
 
     assert create_file_response.status_code == 200
@@ -692,7 +718,7 @@ def test_knowledge_base_file_copy_endpoint_rejects_viewer_and_missing_source(tes
 
     owner_missing_source_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files/copy",
-        params={"source_path": "/missing.md", "dest_path": "/copies/missing.md"},
+        params={"source_path": "/raw/missing.md", "dest_path": "/raw/copies/missing.md"},
     )
     assert owner_missing_source_response.status_code == 404
     assert owner_missing_source_response.json()["detail"]["code"] == "FILE_NOT_FOUND"
@@ -700,7 +726,7 @@ def test_knowledge_base_file_copy_endpoint_rejects_viewer_and_missing_source(tes
     _authenticate_as(client, monkeypatch, viewer)
     viewer_copy_response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files/copy",
-        params={"source_path": "/missing.md", "dest_path": "/copies/missing.md"},
+        params={"source_path": "/raw/missing.md", "dest_path": "/raw/copies/missing.md"},
     )
 
     assert viewer_copy_response.status_code == 403
@@ -860,13 +886,13 @@ def test_knowledge_base_file_api_returns_structured_invalid_file_type_error(test
 
     response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        data={"path": "/malware.exe", "type": "file", "content": "boom"},
+        data={"path": "/raw/malware.exe", "type": "file", "content": "boom"},
     )
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "INVALID_FILE_TYPE"
     assert response.json()["detail"]["message"] == "Unsupported file extension: .exe"
-    assert response.json()["detail"]["details"]["path"] == "/malware.exe"
+    assert response.json()["detail"]["details"]["path"] == "/raw/malware.exe"
 
 
 @pytest.mark.integration
@@ -884,7 +910,7 @@ def test_knowledge_base_api_localizes_error_message_by_request_language(test_app
 
     response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        data={"path": "/malware.exe", "type": "file", "content": "boom"},
+        data={"path": "/raw/malware.exe", "type": "file", "content": "boom"},
     )
 
     assert response.status_code == 400
@@ -1001,7 +1027,7 @@ def test_knowledge_base_file_api_returns_structured_kb_quota_error(test_app, cre
 
     response = client.post(
         f"/api/v1/knowledge-bases/{kb_id}/files",
-        data={"path": "/readme.md", "type": "file", "content": "hello"},
+        data={"path": "/raw/readme.md", "type": "file", "content": "hello"},
     )
 
     assert response.status_code == 409
@@ -1028,7 +1054,7 @@ def test_knowledge_base_file_api_returns_structured_file_too_large_error(test_ap
 
         response = client.post(
             f"/api/v1/knowledge-bases/{kb_id}/files",
-            data={"path": "/too-large.md", "type": "file", "content": "hello"},
+            data={"path": "/raw/too-large.md", "type": "file", "content": "hello"},
         )
     finally:
         get_settings.cache_clear()

@@ -144,7 +144,7 @@ def test_runtime_provision_mounts_and_detaches_knowledge_base(
         file_service.create_entry(
             user_id=owner_id,
             kb_id=kb.id,
-            path="/readme.md",
+            path="/raw/readme.md",
             entry_type="file",
             content="hello kb",
         )
@@ -186,7 +186,7 @@ def test_runtime_provision_mounts_and_detaches_knowledge_base(
     kb_mounts = {volume.target: volume for volume in first_runtime_context.volumes if volume.target.startswith("/knowledge/")}
     assert "/knowledge/runtime-docs" in kb_mounts
     assert kb_mounts["/knowledge/runtime-docs"].read_only is False
-    assert (Path(kb_mounts["/knowledge/runtime-docs"].source) / "readme.md").read_text(encoding="utf-8") == "hello kb"
+    assert (Path(kb_mounts["/knowledge/runtime-docs"].source) / "raw/readme.md").read_text(encoding="utf-8") == "hello kb"
 
     with session_factory() as session:
         attachment_service = KnowledgeBaseAttachmentService(session)
