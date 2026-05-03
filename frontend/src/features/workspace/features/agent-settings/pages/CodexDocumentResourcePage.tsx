@@ -231,9 +231,8 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
     if (resource === 'subagents') {
       const response = await api.saveCodexSubagent(runtimeBaseUrl || '', workspaceId || '', {
         layer: scope,
-        path: (document.metadata?.relativePath as string | undefined) ?? null,
-        content: document.metadata?.rawMode ? document.content : null,
-        definition: document.metadata?.rawMode ? null : document.metadata?.definition as CodexSubagentDefinition | null,
+        path: (document.metadata?.fileName as string | undefined) ?? document.title,
+        content: document.content,
       });
       await refresh();
       return mapSubagentToDocument(response);
@@ -258,9 +257,11 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
     if (resource === 'subagents') {
       const response = await api.saveCodexSubagent(runtimeBaseUrl || '', workspaceId || '', {
         layer: scope,
-        path: (document.metadata?.relativePath as string | undefined) ?? null,
-        content: document.metadata?.rawMode ? document.content : null,
-        definition: document.metadata?.rawMode ? null : document.metadata?.definition as CodexSubagentDefinition | null,
+        path: (document.metadata?.fileName as string | undefined) ?? document.title,
+        previousPath: (document.metadata?.previousFileName as string | undefined)
+          ?? (document.metadata?.relativePath as string | undefined)
+          ?? null,
+        content: document.content,
       });
       await refresh();
       return mapSubagentToDocument(response);

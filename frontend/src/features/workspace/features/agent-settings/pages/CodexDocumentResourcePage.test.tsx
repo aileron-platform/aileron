@@ -263,37 +263,21 @@ describe('CodexDocumentResourcePage', () => {
     );
   });
 
-  it('creates a structured Codex subagent definition with optional fields', async () => {
+  it('creates a Codex subagent from TOML source content', async () => {
     const user = userEvent.setup();
     render(<CodexDocumentResourcePage resource="subagents" />);
 
     await user.click(await screen.findByText('workspace.agentSettings.codex.subagents.actions.create'));
     await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.name.label'),
-      'reviewer',
+      screen.getByPlaceholderText('workspace.agentSettings.codex.subagents.dialog.fields.fileName.placeholders.toml'),
+      'reviewer.toml',
     );
     await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.description.label'),
-      'Reviews code',
+      screen.getByPlaceholderText('workspace.agentSettings.codex.subagents.dialog.fields.content.placeholders.toml'),
+      'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "Review code."',
     );
-    await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.developerInstructions.label'),
-      'Review code.',
-    );
-    await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.nicknameCandidates.label'),
-      'Atlas\nDelta',
-    );
-    await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.model.label'),
-      'gpt-5.4',
-    );
-    expect(screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.modelReasoningEffort.label')).toHaveTextContent(
-      'workspace.agentSettings.codex.subagents.dialog.fields.modelReasoningEffort.options.medium.label',
-    );
-    expect(screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.sandboxMode.label')).toHaveTextContent(
-      'workspace.agentSettings.codex.subagents.dialog.fields.sandboxMode.options.workspace-write.label',
-    );
+    expect(screen.queryByText('workspace.agentSettings.codex.subagents.dialog.tabs.raw')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.name.label')).not.toBeInTheDocument();
     await user.click(screen.getByText('workspace.agentSettings.codex.subagents.dialog.actions.create'));
 
     await waitFor(() => expect(apiMock.saveCodexSubagent).toHaveBeenCalledWith(
@@ -301,47 +285,25 @@ describe('CodexDocumentResourcePage', () => {
       'ws-1',
       {
         layer: 'project',
-        path: null,
-        content: null,
-        definition: {
-          name: 'reviewer',
-          description: 'Reviews code',
-          developer_instructions: 'Review code.',
-          nickname_candidates: ['Atlas', 'Delta'],
-          model: 'gpt-5.4',
-          model_reasoning_effort: 'medium',
-          sandbox_mode: 'workspace-write',
-        },
+        path: 'reviewer.toml',
+        content: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "Review code."',
       },
     ));
   });
 
-  it('validates raw TOML mode and submits raw content without structured fields', { timeout: 10000 }, async () => {
+  it('validates Codex TOML source content before submit', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     render(<CodexDocumentResourcePage resource="subagents" />);
 
     await user.click(await screen.findByText('workspace.agentSettings.codex.subagents.actions.create'));
-    await user.click(screen.getByText('workspace.agentSettings.codex.subagents.dialog.tabs.raw'));
+    await user.type(
+      screen.getByPlaceholderText('workspace.agentSettings.codex.subagents.dialog.fields.fileName.placeholders.toml'),
+      'reviewer.toml',
+    );
     await user.click(screen.getByText('workspace.agentSettings.codex.subagents.dialog.actions.create'));
 
-    expect(screen.getByText('workspace.agentSettings.codex.subagents.dialog.validation.rawContent')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.codex.subagents.dialog.validation.content')).toBeInTheDocument();
     expect(apiMock.saveCodexSubagent).not.toHaveBeenCalled();
-
-    await user.type(
-      screen.getByLabelText('workspace.agentSettings.codex.subagents.dialog.fields.rawContent.label'),
-      'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "Review code."\nunknown_field = true',
-    );
-    await user.click(screen.getByText('workspace.agentSettings.codex.subagents.dialog.actions.create'));
-
-    await waitFor(() => expect(apiMock.saveCodexSubagent).toHaveBeenCalledWith(
-      'http://runtime.test',
-      'ws-1',
-      {
-        layer: 'project',
-        path: null,
-        content: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = "Review code."\nunknown_field = true',
-        definition: null,
-      },
-    ));
   });
+});
 });

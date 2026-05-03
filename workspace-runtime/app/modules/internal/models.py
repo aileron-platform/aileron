@@ -144,6 +144,22 @@ class CodexSettingsRequest(BaseModel):
         populate_by_name = True
 
 
+class GeminiRequest(BaseModel):
+    """Gemini configuration request"""
+    auth_method: Optional[str] = Field(None, alias="authMethod")
+    access_token: Optional[str] = Field(None, alias="accessToken")
+    refresh_token: Optional[str] = Field(None, alias="refreshToken")
+    id_token: Optional[str] = Field(None, alias="idToken")
+    expires_at: Optional[int] = Field(None, alias="expiresAt")
+    scope: Optional[str] = None
+    environment_variables: List[EnvironmentVariable] = Field(
+        default_factory=list, alias="environmentVariables"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
 class GitSettingsRequest(BaseModel):
     """Git configuration request"""
     user_name: str = Field(..., alias="userName", description="Git user name")
@@ -193,6 +209,7 @@ __all__ = [
     "CodexAuthFlow",
     "CodexAuthTokens",
     "CodexSettingsRequest",
+    "GeminiRequest",
     "GitSettingsRequest",
     "FirewallConfigRequest",
     "InternalApiResponse",

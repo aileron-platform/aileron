@@ -12,10 +12,12 @@ from app.modules.claude_code.common import (
     DocumentNotFoundError,
     DocumentScope,
     DuplicateDocumentError,
+    InvalidDocumentFileNameError,
     MarkdownDocumentRecord,
     ScopedMarkdownRepository,
     format_file_size,
     iter_requested_scopes,
+    parse_front_matter,
 )
 
 from .config import SubagentToolConfig
@@ -102,18 +104,20 @@ class SubagentService:
         scope: DocumentScope,
         payload: SubagentCreateRequest,
     ) -> SubagentDocumentResponse:
+        self._validate_markdown_subagent_content(payload.content)
         try:
             record = self._repository.create_record(workspace_id, scope, payload.file_name, payload.content)
+        except InvalidDocumentFileNameError as error:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_SUBAGENT_PATH", "target": "fileName", "message": str(error)},
+            ) from error
         except DuplicateDocumentError as error:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 detail={"error": "DUPLICATE_FILE_NAME", "message": str(error)},
             ) from error
-        summary = self._to_summary(
-            record,
-            fallback_name=payload.name,
-            fallback_description=payload.description,
-        )
+        summary = self._to_summary(record)
         detail = SubagentDocument(**summary.model_dump(), content=record.content)
         return SubagentDocumentResponse(workspaceId=workspace_id, scope=scope, document=detail)
 
@@ -124,8 +128,25 @@ class SubagentService:
         file_name: str,
         payload: SubagentUpdateRequest,
     ) -> SubagentDocumentResponse:
+        self._validate_markdown_subagent_content(payload.content)
         try:
-            record = self._repository.update_record(workspace_id, scope, file_name, payload.content)
+            if payload.file_name and payload.file_name != file_name:
+                existing = self._repository.get_record(workspace_id, scope, file_name)
+                created = self._repository.create_record(workspace_id, scope, payload.file_name, payload.content)
+                self._repository.delete_record(workspace_id, scope, existing.file_name)
+                record = created
+            else:
+                record = self._repository.update_record(workspace_id, scope, file_name, payload.content)
+        except InvalidDocumentFileNameError as error:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_SUBAGENT_PATH", "target": "fileName", "message": str(error)},
+            ) from error
+        except DuplicateDocumentError as error:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                detail={"error": "DUPLICATE_FILE_NAME", "message": str(error)},
+            ) from error
         except AmbiguousDocumentError as error:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -136,11 +157,7 @@ class SubagentService:
                 status.HTTP_404_NOT_FOUND,
                 detail={"error": "404_NOT_FOUND", "message": str(error)},
             ) from error
-        summary = self._to_summary(
-            record,
-            fallback_name=payload.name,
-            fallback_description=payload.description,
-        )
+        summary = self._to_summary(record)
         detail = SubagentDocument(**summary.model_dump(), content=record.content)
         return SubagentDocumentResponse(workspaceId=workspace_id, scope=scope, document=detail)
 
@@ -248,3 +265,17 @@ class SubagentService:
             scope=record.scope,
             size=record.size_label,
         )
+
+    @staticmethod
+    def _validate_markdown_subagent_content(content: str) -> None:
+        metadata, _body = parse_front_matter(content)
+        missing = [
+            key
+            for key in ("name", "description")
+            if not isinstance(metadata.get(key), str) or not metadata.get(key, "").strip()
+        ]
+        if missing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "MISSING_SUBAGENT_FIELD", "target": "content", "fields": missing},
+            )

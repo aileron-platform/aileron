@@ -34,6 +34,8 @@ import type { SupportedLanguage } from '@/app/providers/I18nProvider';
 import { apiClient } from '@/shared/api/apiClient';
 import { OAuthService } from '@/shared/services/oauthService';
 import { OAuthApiService } from '@/shared/services/oauthApiService';
+import { GeminiOAuthService } from '@/shared/services/geminiOauthService';
+import { GeminiOAuthApiService } from '@/shared/services/geminiOauthApiService';
 import type {
   UserSettings,
   UserSettingsGeneral,
@@ -41,6 +43,7 @@ import type {
   UserSettingsClaudeCode,
   UserSettingsCodex,
   UserSettingsGit,
+  UserSettingsGemini,
   UserSettingsResponse,
 } from '@/shared/types/user';
 
@@ -76,6 +79,7 @@ export const SettingsPage: React.FC = () => {
   const [claudeCodeSettings, setClaudeCodeSettings] = useState<UserSettingsClaudeCode | null>(null);
   const [codexSettings, setCodexSettings] = useState<UserSettingsCodex | null>(null);
   const [gitSettings, setGitSettings] = useState<UserSettingsGit | null>(null);
+  const [geminiSettings, setGeminiSettings] = useState<UserSettingsGemini | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -86,9 +90,13 @@ export const SettingsPage: React.FC = () => {
   const [isExchangingCode, setIsExchangingCode] = useState(false);
   const [tempAuthCode, setTempAuthCode] = useState('');
   const [needsSync, setNeedsSync] = useState(false);
+  const [showGeminiAuthCodeInput, setShowGeminiAuthCodeInput] = useState(false);
+  const [isGeminiExchangingCode, setIsGeminiExchangingCode] = useState(false);
+  const [tempGeminiAuthCode, setTempGeminiAuthCode] = useState('');
 
   const initialSettingsRef = useRef<UserSettings | null>(null);
   const oauthVerifierRef = useRef<string | null>(null);
+  const geminiOauthVerifierRef = useRef<string | null>(null);
 
   const syncFromSnapshot = useCallback(
     (snapshot: UserSettings) => {
@@ -108,6 +116,13 @@ export const SettingsPage: React.FC = () => {
       setCodexSettings(normalizeCodexSettings(cloneDeep(snapshot.codex)));
 
       setGitSettings(cloneDeep(snapshot.git));
+
+      const geminiWithDefaults: UserSettingsGemini = {
+        authMethod: 'subscription',
+        environmentVariables: [],
+        ...cloneDeep(snapshot.gemini),
+      };
+      setGeminiSettings(geminiWithDefaults);
       setShowPrivateKey(false);
       dispatch({ type: 'SET_THEME', payload: snapshot.general.theme });
       dispatch({ type: 'SET_LANGUAGE', payload: snapshot.general.language });
@@ -154,7 +169,7 @@ export const SettingsPage: React.FC = () => {
       });
       return;
     }
-    if (!generalSettings || !sshKeys || !claudeCodeSettings || !codexSettings || !gitSettings) {
+    if (!generalSettings || !sshKeys || !claudeCodeSettings || !codexSettings || !gitSettings || !geminiSettings) {
       return;
     }
     setIsSaving(true);
@@ -195,6 +210,16 @@ export const SettingsPage: React.FC = () => {
           userName: gitSettings.userName,
           userEmail: gitSettings.userEmail,
           signingKey: gitSettings.signingKey,
+        },
+        gemini: {
+          authMethod: geminiSettings.authMethod,
+          accessToken: geminiSettings.accessToken,
+          refreshToken: geminiSettings.refreshToken,
+          idToken: geminiSettings.idToken,
+          expiresAt: geminiSettings.expiresAt,
+          scope: geminiSettings.scope,
+          account: geminiSettings.account,
+          environmentVariables: geminiSettings.environmentVariables,
         },
       });
 
@@ -548,6 +573,139 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleGeminiOAuth = async () => {
+    try {
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.oauthWindow.openingTitle'),
+        description: t('pages.settings.sections.gemini.subscription.oauthWindow.openingDescription'),
+      });
+      const { verifier } = await GeminiOAuthService.openAuthWindow();
+      geminiOauthVerifierRef.current = verifier;
+      setShowGeminiAuthCodeInput(true);
+      setTempGeminiAuthCode('');
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.oauthWindow.openedTitle'),
+        description: t('pages.settings.sections.gemini.subscription.oauthWindow.openedDescription'),
+      });
+    } catch (error) {
+      logger.error('Opening Gemini OAuth window failed', { error });
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.oauthWindow.failedTitle'),
+        description:
+          error instanceof Error && error.message === 'gemini_oauth.client_not_configured'
+            ? t('pages.settings.sections.gemini.subscription.oauthWindow.clientNotConfigured')
+            : t('pages.settings.sections.gemini.subscription.oauthWindow.failedDescription'),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCancelGeminiAuth = () => {
+    setShowGeminiAuthCodeInput(false);
+    setTempGeminiAuthCode('');
+    geminiOauthVerifierRef.current = null;
+    GeminiOAuthService.clearVerifier();
+  };
+
+  const handleSaveGeminiAuthCode = async () => {
+    if (!tempGeminiAuthCode.trim() || !geminiOauthVerifierRef.current) {
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.errors.emptyCode'),
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!userId) {
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.errors.loginRequired'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsGeminiExchangingCode(true);
+    toast({
+      title: t('pages.settings.sections.gemini.subscription.verifying'),
+      description: t('pages.settings.sections.gemini.subscription.pleaseWait'),
+    });
+
+    try {
+      const result = await GeminiOAuthApiService.authenticate(
+        tempGeminiAuthCode.trim(),
+        geminiOauthVerifierRef.current,
+      );
+
+      setGeminiSettings(prev => prev ? {
+        ...prev,
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token ?? undefined,
+        idToken: result.id_token ?? undefined,
+        expiresAt: result.expires_at,
+        scope: result.scope,
+        account: result.email ? { email: result.email, name: result.name ?? undefined } : undefined,
+      } : prev);
+
+      setShowGeminiAuthCodeInput(false);
+      setTempGeminiAuthCode('');
+      geminiOauthVerifierRef.current = null;
+      GeminiOAuthService.clearVerifier();
+
+      if (result.needs_sync) {
+        setNeedsSync(true);
+      }
+
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.success.title'),
+        description: result.needs_sync
+          ? t('pages.settings.sections.gemini.subscription.success.syncDescription')
+          : t('pages.settings.sections.gemini.subscription.success.description'),
+      });
+    } catch (error) {
+      logger.error('Gemini OAuth authentication failed', { error });
+      const errorMessage = error instanceof Error ? error.message : '';
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.errors.authFailed'),
+        description: errorMessage || t('pages.settings.sections.gemini.subscription.errors.unknown'),
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeminiExchangingCode(false);
+    }
+  };
+
+  const handleDisconnectGemini = async () => {
+    if (!userId) {
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.disconnect.loginRequiredTitle'),
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      await GeminiOAuthApiService.disconnect();
+      setGeminiSettings(prev => prev ? {
+        ...prev,
+        accessToken: undefined,
+        refreshToken: undefined,
+        idToken: undefined,
+        expiresAt: undefined,
+        scope: undefined,
+        account: undefined,
+      } : prev);
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.disconnect.successTitle'),
+        description: t('pages.settings.sections.gemini.subscription.disconnect.successDescription'),
+      });
+    } catch (error) {
+      logger.error('Gemini disconnect failed', { error });
+      toast({
+        title: t('pages.settings.sections.gemini.subscription.disconnect.failedTitle'),
+        description: error instanceof Error ? error.message : t('pages.settings.sections.gemini.subscription.disconnect.failedDescription'),
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCodexSignIn = async () => {
     if (!userId) {
       return;
@@ -656,7 +814,7 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const hasSettings = Boolean(generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings);
+  const hasSettings = Boolean(generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings && geminiSettings);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -701,7 +859,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           )}
 
-          {hasSettings && generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings && (
+          {hasSettings && generalSettings && sshKeys && claudeCodeSettings && codexSettings && gitSettings && geminiSettings && (
             <Tabs defaultValue="general" className="w-full flex-1 flex flex-col min-h-0">
               <TabsList className="flex w-full overflow-x-auto flex-shrink-0">
                 <TabsTrigger value="general">{t('pages.settings.tabs.general')}</TabsTrigger>
@@ -1099,15 +1257,154 @@ export const SettingsPage: React.FC = () => {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Sparkles className="h-5 w-5" />
-                        {t('pages.settings.tabs.gemini')}
+                        {t('pages.settings.sections.gemini.title')}
                       </CardTitle>
-                      <CardDescription>{t('workspace.agentSettings.common.comingSoon.description', { feature: t('pages.settings.tabs.gemini'), toolName: 'Gemini' })}</CardDescription>
+                      <CardDescription>{t('pages.settings.sections.gemini.description')}</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-                        <Construction className="h-12 w-12 text-muted-foreground/50" />
-                        <p className="text-sm text-muted-foreground">{t('workspace.agentSettings.common.comingSoon.title')}</p>
+                    <CardContent className="space-y-6">
+                      {/* 認證方式下拉選單 */}
+                      <div className="space-y-2">
+                        <Label>{t('pages.settings.sections.gemini.authMethod.label')}</Label>
+                        <Select
+                          value={geminiSettings.authMethod || 'subscription'}
+                          onValueChange={(value) =>
+                            setGeminiSettings(prev => (prev ? { ...prev, authMethod: value as 'subscription' | 'apikey' } : prev))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('pages.settings.sections.gemini.authMethod.description')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="subscription">{t('pages.settings.sections.gemini.authMethod.options.subscription')}</SelectItem>
+                            <SelectItem value="apikey">{t('pages.settings.sections.gemini.authMethod.options.apikey')}</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
+
+                      <Separator />
+
+                      {/* Subscription 認證 */}
+                      {geminiSettings.authMethod === 'subscription' && (
+                        <div className="space-y-4">
+                          {/* 已連接狀態 */}
+                          {geminiSettings.accessToken && !showGeminiAuthCodeInput && (
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary-foreground">
+                                  <span className="h-2 w-2 rounded-full bg-primary"></span>
+                                  {t('pages.settings.sections.gemini.subscription.status.connected')}
+                                </span>
+                              </div>
+                              <div className="space-y-2">
+                                <p className="text-sm text-muted-foreground">
+                                  {t('pages.settings.sections.gemini.subscription.account')}: <span className="font-mono text-foreground">
+                                    {geminiSettings.account?.email || 'N/A'}
+                                    {geminiSettings.account?.name && (
+                                      <span className="ml-2 font-sans text-muted-foreground">({geminiSettings.account.name})</span>
+                                    )}
+                                  </span>
+                                </p>
+                                {geminiSettings.expiresAt && (
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.gemini.subscription.expiresAt')}: <span className="font-mono text-foreground">{new Date(geminiSettings.expiresAt).toLocaleString()}</span>
+                                  </p>
+                                )}
+                                <p className="text-sm text-muted-foreground">
+                                  {t('pages.settings.sections.gemini.subscription.description')}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleDisconnectGemini}
+                                className="text-muted-foreground hover:text-foreground"
+                              >
+                                {t('pages.settings.sections.gemini.subscription.disconnectButton')}
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* 未連接狀態 - 步驟1 */}
+                          {!geminiSettings.accessToken && !showGeminiAuthCodeInput && (
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                  {t('pages.settings.sections.gemini.subscription.status.notConnected')}
+                                </span>
+                              </div>
+                              <Button
+                                type="button"
+                                onClick={handleGeminiOAuth}
+                                className="w-fit"
+                              >
+                                {t('pages.settings.sections.gemini.subscription.connectButton')}
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* 輸入授權碼 - 步驟2 */}
+                          {showGeminiAuthCodeInput && (
+                            <div className="space-y-4">
+                              <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                  {t('pages.settings.sections.gemini.subscription.status.notConnected')}
+                                </span>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {t('pages.settings.sections.gemini.subscription.authCodeHint')}
+                              </p>
+                              <Input
+                                placeholder={t('pages.settings.sections.gemini.subscription.authCodePlaceholder')}
+                                value={tempGeminiAuthCode}
+                                onChange={(e) => setTempGeminiAuthCode(e.target.value)}
+                                className="font-mono"
+                                disabled={isGeminiExchangingCode}
+                              />
+                              {isGeminiExchangingCode && (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                  <RefreshCw className="h-4 w-4 animate-spin" />
+                                  <span>{t('pages.settings.sections.gemini.subscription.verifying')}</span>
+                                </div>
+                              )}
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  onClick={handleSaveGeminiAuthCode}
+                                  disabled={isGeminiExchangingCode || !tempGeminiAuthCode.trim()}
+                                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                >
+                                  {t('pages.settings.sections.gemini.subscription.saveButton')}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={handleCancelGeminiAuth}
+                                  disabled={isGeminiExchangingCode}
+                                >
+                                  {t('pages.settings.sections.gemini.subscription.cancelButton')}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* API Key 模式 - 環境變數 */}
+                      {geminiSettings.authMethod === 'apikey' && (
+                        <div className="space-y-4">
+                          <EnvironmentVariables
+                            value={geminiSettings.environmentVariables || []}
+                            onChange={(variables) =>
+                              setGeminiSettings(prev => (prev ? { ...prev, environmentVariables: variables } : prev))
+                            }
+                          />
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>

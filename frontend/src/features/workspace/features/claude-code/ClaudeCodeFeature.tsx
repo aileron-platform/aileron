@@ -71,7 +71,6 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
         <SubagentsPage
           apiPrefix="claude-code"
           availableScopes={AGENT_TOOL_CONFIGS.claude.capabilities.agentDefinitions?.scopes}
-          fields={AGENT_TOOL_CONFIGS.claude.capabilities.agentDefinitions?.fields}
           i18nNamespace={AGENT_TOOL_CONFIGS.claude.i18nNamespace}
         />
       );

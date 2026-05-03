@@ -35,6 +35,10 @@ class AmbiguousDocumentError(RuntimeError):
     """Found multiple files with same name"""
 
 
+class InvalidDocumentFileNameError(ValueError):
+    """File name is unsafe or uses an unsupported extension"""
+
+
 def utcnow() -> datetime:
     """Get current UTC time"""
 
@@ -253,9 +257,20 @@ class ScopedMarkdownRepository:
         return directory / namespace
 
     def _normalize_file_name(self, file_name: str) -> str:
-        if file_name.endswith(".md"):
-            return file_name
-        return f"{file_name}.md"
+        clean_name = file_name.strip()
+        path = Path(clean_name)
+        if (
+            not clean_name
+            or path.is_absolute()
+            or ".." in path.parts
+            or "/" in clean_name
+            or "\\" in clean_name
+            or (path.suffix and path.suffix.lower() != ".md")
+        ):
+            raise InvalidDocumentFileNameError(file_name)
+        if clean_name.endswith(".md"):
+            return clean_name
+        return f"{clean_name}.md"
 
     def _load_record(
         self, file_path: Path, scope: DocumentScope, directory: Path

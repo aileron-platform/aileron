@@ -171,7 +171,6 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
             <SubagentsPage
               apiPrefix={config.apiPathPrefix}
               availableScopes={config.capabilities.agentDefinitions.scopes}
-              fields={config.capabilities.agentDefinitions.fields}
               i18nNamespace={config.i18nNamespace}
               selectedId={documentSelectedId}
               onSelect={onDocumentSelect}

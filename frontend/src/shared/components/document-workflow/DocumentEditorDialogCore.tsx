@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/shared/components/ui/select';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
+import { cn } from '@/shared/utils/cn';
 
 export interface DocumentEditorScopeOption<TScope extends string> {
   value: TScope;
@@ -45,9 +46,11 @@ export interface DocumentEditorDialogCoreProps<TScope extends string> {
   onFileNameChange: (fileName: string) => void;
   content: string;
   contentLabel: string;
+  contentPlaceholder?: string;
   contentHelper?: string;
   contentError?: string;
   contentFooter: React.ReactNode;
+  editorMode?: 'markdown' | 'plain';
   extraFields?: React.ReactNode;
   onContentChange: (content: string) => void;
   cancelLabel: string;
@@ -70,6 +73,11 @@ export const ensureMarkdownExtension = (fileName: string): string => {
   return trimmed.toLowerCase().endsWith('.md') ? trimmed : `${trimmed}.md`;
 };
 
+export const ensureDocumentExtension = (fileName: string, extension: '.md' | '.toml'): string => {
+  const trimmed = fileName.trim();
+  return trimmed.toLowerCase().endsWith(extension) ? trimmed : `${trimmed}${extension}`;
+};
+
 export function DocumentEditorDialogCore<TScope extends string>({
   open,
   isEdit,
@@ -90,9 +98,11 @@ export function DocumentEditorDialogCore<TScope extends string>({
   onFileNameChange,
   content,
   contentLabel,
+  contentPlaceholder,
   contentHelper,
   contentError,
   contentFooter,
+  editorMode = 'markdown',
   extraFields,
   onContentChange,
   cancelLabel,
@@ -168,12 +178,29 @@ export function DocumentEditorDialogCore<TScope extends string>({
               <div className="flex flex-1 flex-col space-y-2">
                 <label className="text-sm font-medium text-foreground">{contentLabel}</label>
                 <div className="flex-1 overflow-hidden rounded-lg border">
-                  <MarkdownEditor
-                    value={content}
-                    onChange={(value) => onContentChange(value ?? '')}
-                    className="h-full"
-                    footerExtras={contentFooter}
-                  />
+                  {editorMode === 'markdown' ? (
+                    <MarkdownEditor
+                      value={content}
+                      onChange={(value) => onContentChange(value ?? '')}
+                      placeholder={contentPlaceholder}
+                      className="h-full"
+                      footerExtras={contentFooter}
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col bg-background">
+                      <textarea
+                        value={content}
+                        onChange={(event) => onContentChange(event.target.value)}
+                        placeholder={contentPlaceholder}
+                        className={cn(
+                          'h-full w-full flex-1 resize-none border-0 bg-background p-6 font-mono text-sm text-foreground focus:outline-none',
+                        )}
+                      />
+                      <div className="border-t border-border bg-muted/40 px-4 py-2 text-xs text-muted-foreground">
+                        <div className="flex items-center justify-end gap-3">{contentFooter}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 {contentError ? <p className="mt-2 text-xs text-destructive">{contentError}</p> : null}
                 {contentHelper ? <p className="text-xs text-muted-foreground">{contentHelper}</p> : null}

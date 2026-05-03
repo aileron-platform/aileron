@@ -31,6 +31,7 @@ from .models import (
     CodexSettingsRequest,
     EnvironmentVariable,
     FirewallConfigRequest,
+    GeminiRequest,
     GitSettingsRequest,
     SSHKeysRequest,
 )
@@ -48,8 +49,10 @@ class InternalService:
         self.home_dir = Path("/home/developer")
         self.ssh_dir = self.home_dir / ".ssh"
         self.claude_dir = self.home_dir / ".claude"
+        self.gemini_dir = self.home_dir / ".gemini"
         self.codex_auth_dir = self.home_dir / ".codex"
         self.codex_sessions_dir = self.home_dir / ".codex-sessions"
+        self._gemini_env_keys_env = "GEMINI_SYNCED_KEYS"
         self._credentials_filename = ".credentials.json"
         self._env_keys_env = "CLAUDE_CODE_SYNCED_KEYS"
         self._auth_method_env = "CLAUDE_CODE_AUTH_METHOD"
@@ -699,6 +702,89 @@ class InternalService:
             raise Exception(f"Git configuration failed: {e}")
         except Exception as e:
             logger.error(f"Git settings setup failed: {e}")
+            raise
+
+    async def setup_gemini(self, request: GeminiRequest) -> Dict[str, str]:
+        """Setup Gemini credentials and environment variables"""
+        try:
+            logger.info("Starting Gemini setup, auth_method=%s", request.auth_method)
+
+            self.gemini_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
+            creds_path = self.gemini_dir / "oauth_creds.json"
+
+            if request.auth_method == "subscription" and request.access_token:
+                creds_data = {
+                    "access_token": request.access_token,
+                    "refresh_token": request.refresh_token,
+                    "scope": request.scope or "",
+                    "token_type": "Bearer",
+                    "id_token": request.id_token,
+                    "expiry_date": request.expires_at,
+                }
+                creds_path.write_text(json.dumps(creds_data, indent=2))
+                creds_path.chmod(0o600)
+                logger.info("Gemini oauth_creds.json written")
+            elif not request.access_token and creds_path.exists():
+                creds_path.unlink()
+                logger.info("Gemini oauth_creds.json removed (disconnect)")
+
+            # Write environment variables to .bashrc
+            bashrc_path = self.home_dir / ".bashrc"
+            marker_start = "# Aileron - Gemini Environment Variables - START\n"
+            marker_end = "# Aileron - Gemini Environment Variables - END\n"
+
+            existing_lines: list[str] = []
+            if bashrc_path.exists():
+                with open(bashrc_path, "r", encoding="utf-8") as f:
+                    existing_lines = f.readlines()
+
+            filtered_lines = []
+            skip = False
+            for line in existing_lines:
+                if line == marker_start:
+                    skip = True
+                    continue
+                if line == marker_end:
+                    skip = False
+                    continue
+                if not skip:
+                    filtered_lines.append(line)
+
+            synced_keys: List[str] = []
+            new_env_lines: list[str] = []
+            if request.environment_variables:
+                new_env_lines.append(marker_start)
+                for env_var in request.environment_variables:
+                    if env_var.key and env_var.value:
+                        escaped = (
+                            env_var.value
+                            .replace("\\", "\\\\")
+                            .replace('"', '\\"')
+                            .replace("$", "\\$")
+                            .replace("`", "\\`")
+                        )
+                        new_env_lines.append(f'export {env_var.key}="{escaped}"\n')
+                        synced_keys.append(env_var.key)
+                new_env_lines.append(marker_end)
+
+            with open(bashrc_path, "w", encoding="utf-8") as f:
+                f.writelines(filtered_lines)
+                f.writelines(new_env_lines)
+
+            if synced_keys:
+                os.environ[self._gemini_env_keys_env] = ",".join(synced_keys)
+            else:
+                os.environ.pop(self._gemini_env_keys_env, None)
+
+            logger.info("Gemini setup completed, env_vars=%d", len(synced_keys))
+            return {
+                "auth_method": request.auth_method or "none",
+                "credentials_written": str(creds_path.exists()),
+                "environment_variables_set": str(len(synced_keys)),
+            }
+
+        except Exception as e:
+            logger.error(f"Gemini setup failed: {e}")
             raise
 
     async def get_setup_status(self) -> Dict[str, Dict[str, str]]:

@@ -16,6 +16,7 @@ from .models import (
     ClaudeCodeRequest,
     CodexSettingsRequest,
     FirewallConfigRequest,
+    GeminiRequest,
     GitSettingsRequest,
     InternalApiResponse,
     SSHKeysRequest,
@@ -241,6 +242,34 @@ async def logout_codex(
         message="Codex logged out",
         details=details,
     )
+
+
+@router.post(
+    "/settings/gemini",
+    response_model=InternalApiResponse,
+    summary="Sync Gemini settings",
+    description="Write Gemini oauth_creds.json and environment variables"
+)
+async def sync_gemini(
+    request: GeminiRequest,
+    service: Annotated[InternalService, Depends(get_internal_service)]
+) -> InternalApiResponse:
+    """Sync Gemini settings to workspace-runtime"""
+    try:
+        logger.info("Received Gemini sync request")
+        details = await service.setup_gemini(request)
+        logger.info("Gemini sync successful")
+        return InternalApiResponse(
+            success=True,
+            message="Gemini configuration completed successfully",
+            details=details,
+        )
+    except Exception as e:
+        logger.error(f"Gemini sync failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gemini setup failed: {str(e)}",
+        )
 
 
 @router.post(

@@ -238,17 +238,6 @@ export interface AgentDefinitionCapability extends AgentCapabilityBase {
   displayLabelKey: string;
   scopes: AgentScope[];
   format: AgentDocumentFormat;
-  fields?: SubagentFieldSchema[];
-}
-
-export interface SubagentFieldSchema {
-  key: string;
-  type: 'string' | 'number' | 'boolean' | 'string[]' | 'object';
-  labelKey: string;
-  required: boolean;
-  default?: unknown;
-  placeholder?: string;
-  placeholderKey?: string;
 }
 
 export interface AgentToolCapabilities {

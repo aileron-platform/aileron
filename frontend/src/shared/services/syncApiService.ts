@@ -13,6 +13,7 @@ export interface SyncWorkspaceResult {
     ssh: { success: boolean; message: string };
     claude_code: { success: boolean; message: string };
     codex?: { success: boolean; message: string };
+    gemini?: { success: boolean; message: string };
     git: { success: boolean; message: string };
   };
   error?: string;

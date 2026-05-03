@@ -155,12 +155,36 @@ class GitSettings(CamelModel):
     signing_key: Optional[str] = Field(None, alias="signingKey")
 
 
+class GeminiAccountInfo(CamelModel):
+    email: Optional[str] = None
+    name: Optional[str] = None
+
+
+class GeminiEnvironmentVariable(CamelModel):
+    key: str
+    value: str
+
+
+class GeminiSettings(CamelModel):
+    auth_method: str = Field("subscription", alias="authMethod")
+    access_token: Optional[str] = Field(None, alias="accessToken")
+    refresh_token: Optional[str] = Field(None, alias="refreshToken")
+    id_token: Optional[str] = Field(None, alias="idToken")
+    expires_at: Optional[int] = Field(None, alias="expiresAt", description="Expiration time (millisecond timestamp)")
+    scope: Optional[str] = None
+    account: Optional[GeminiAccountInfo] = None
+    environment_variables: list[GeminiEnvironmentVariable] = Field(
+        default_factory=list, alias="environmentVariables"
+    )
+
+
 class UserSettings(CamelModel):
     general: GeneralSettings = Field(default_factory=GeneralSettings)
     ssh: SSHSettings = Field(default_factory=SSHSettings)
     claude_code: ClaudeCodeSettings = Field(default_factory=ClaudeCodeSettings, alias="claudeCode")
     codex: CodexSettings = Field(default_factory=CodexSettings)
     git: GitSettings = Field(default_factory=GitSettings)
+    gemini: GeminiSettings = Field(default_factory=GeminiSettings)
 
 
 class UserProfileResponse(CamelModel):
@@ -177,6 +201,7 @@ class UserSettingsUpdate(CamelModel):
     claude_code: Optional[ClaudeCodeSettings] = Field(None, alias="claudeCode")
     codex: Optional[CodexSettings] = None
     git: Optional[GitSettings] = None
+    gemini: Optional[GeminiSettings] = None
 
 
 class SSHKeyPairResponse(CamelModel):

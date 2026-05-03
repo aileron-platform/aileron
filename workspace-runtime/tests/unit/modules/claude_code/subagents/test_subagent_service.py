@@ -325,9 +325,7 @@ class TestCreateDocument:
         subagent_service._repository = mock_repository
         payload = SubagentCreateRequest(
             file_name="new-agent.md",
-            content="# New agent",
-            name="New Agent",
-            description="A new agent"
+            content="---\nname: New Agent\ndescription: A new agent\n---\n\n# New agent",
         )
 
         # Act
@@ -347,7 +345,7 @@ class TestCreateDocument:
         subagent_service._repository = mock_repository
         payload = SubagentCreateRequest(
             file_name="existing.md",
-            content="# Content"
+            content="---\nname: Existing\ndescription: Existing agent\n---\n\n# Content",
         )
 
         # Act & Assert
@@ -356,6 +354,18 @@ class TestCreateDocument:
                 "test-workspace", DocumentScope.PROJECT, payload
             )
         assert exc_info.value.status_code == 409
+
+    def test_create_document_rejects_missing_markdown_metadata(self, subagent_service):
+        mock_repository = MagicMock()
+        subagent_service._repository = mock_repository
+        payload = SubagentCreateRequest(file_name="agent.md", content="# Missing metadata")
+
+        with pytest.raises(HTTPException) as exc_info:
+            subagent_service.create_document("test-workspace", DocumentScope.PROJECT, payload)
+
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail["target"] == "content"
+        mock_repository.create_record.assert_not_called()
 
 
 class TestUpdateDocument:
@@ -368,8 +378,7 @@ class TestUpdateDocument:
         mock_repository.update_record.return_value = sample_markdown_record
         subagent_service._repository = mock_repository
         payload = SubagentUpdateRequest(
-            content="# Updated content",
-            name="Updated Agent"
+            content="---\nname: Updated Agent\ndescription: Updated agent\n---\n\n# Updated content",
         )
 
         # Act
@@ -387,7 +396,7 @@ class TestUpdateDocument:
         mock_repository = MagicMock()
         mock_repository.update_record.side_effect = DocumentNotFoundError("Not found")
         subagent_service._repository = mock_repository
-        payload = SubagentUpdateRequest(content="# Content")
+        payload = SubagentUpdateRequest(content="---\nname: Missing\ndescription: Missing agent\n---\n\n# Content")
 
         # Act & Assert
         with pytest.raises(HTTPException) as exc_info:

@@ -60,16 +60,7 @@ describe('AGENT_TOOL_CONFIGS', () => {
 
   it('opens Gemini subagents and memory placeholder navigation', () => {
     expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.supported).toBe(true);
-    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.fields?.map((field) => field.key)).toEqual([
-      'name',
-      'description',
-      'kind',
-      'tools',
-      'model',
-      'temperature',
-      'max_turns',
-      'timeout_mins',
-    ]);
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.format).toBe('markdown');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.gemini)).toEqual([
       'gemini-md',
       'mcp',

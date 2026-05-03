@@ -130,12 +130,34 @@ export interface UserSettingsGit {
   signingKey: string | null;
 }
 
+export interface GeminiAccountInfo {
+  email?: string;
+  name?: string;
+}
+
+export interface GeminiEnvironmentVariable {
+  key: string;
+  value: string;
+}
+
+export interface UserSettingsGemini {
+  authMethod: 'subscription' | 'apikey';
+  accessToken?: string;
+  refreshToken?: string;
+  idToken?: string;
+  expiresAt?: number;
+  scope?: string;
+  account?: GeminiAccountInfo;
+  environmentVariables: GeminiEnvironmentVariable[];
+}
+
 export interface UserSettings {
   general: UserSettingsGeneral;
   ssh: UserSettingsSSH;
   claudeCode: UserSettingsClaudeCode;
   codex: UserSettingsCodex;
   git: UserSettingsGit;
+  gemini: UserSettingsGemini;
 }
 
 export interface UserSettingsResponse {

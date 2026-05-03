@@ -79,8 +79,9 @@ class TestSyncService:
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is True
             assert result["codex"]["success"] is True
+            assert result["gemini"]["success"] is True
             assert result["git"]["success"] is True
-            assert mock_client.post.call_count == 4
+            assert mock_client.post.call_count == 5
 
     @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_no_ssh_keys(

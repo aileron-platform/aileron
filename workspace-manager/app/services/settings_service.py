@@ -216,6 +216,28 @@ class SettingsService:
             if "signingKey" in git_data:
                 settings.git_signing_key = git_data["signingKey"]
 
+        if "gemini" in data and isinstance(data["gemini"], dict):
+            gemini_data = data["gemini"]
+            additional_settings = settings.additional_settings or {}
+            gemini_additional = additional_settings.get("gemini", {})
+
+            for key in (
+                "authMethod",
+                "accessToken",
+                "refreshToken",
+                "idToken",
+                "expiresAt",
+                "scope",
+                "account",
+                "environmentVariables",
+            ):
+                if key in gemini_data:
+                    gemini_additional[key] = gemini_data[key]
+
+            additional_settings["gemini"] = gemini_additional
+            settings.additional_settings = additional_settings
+            flag_modified(settings, "additional_settings")
+
         settings.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(settings)
@@ -325,13 +347,42 @@ class SettingsService:
             git_data = new_data["git"]
             old_git = old_settings.git
 
-            # Compare if Git user information changed
             if (git_data.get("userName") != old_git.user_name or
                 git_data.get("userEmail") != old_git.user_email):
                 changes["git"] = {
                     "userName": git_data.get("userName"),
                     "userEmail": git_data.get("userEmail")
                 }
+
+        # Detect Gemini settings changes
+        if "gemini" in new_data:
+            gemini_data = new_data["gemini"]
+            old_gemini = old_settings.gemini
+            has_changes = False
+            gemini_changes = {}
+
+            if gemini_data.get("authMethod") != old_gemini.auth_method:
+                has_changes = True
+                gemini_changes["authMethod"] = gemini_data.get("authMethod")
+
+            if gemini_data.get("accessToken") != old_gemini.access_token:
+                has_changes = True
+                gemini_changes["accessToken"] = gemini_data.get("accessToken")
+                gemini_changes["refreshToken"] = gemini_data.get("refreshToken")
+                gemini_changes["idToken"] = gemini_data.get("idToken")
+                gemini_changes["expiresAt"] = gemini_data.get("expiresAt")
+                gemini_changes["scope"] = gemini_data.get("scope")
+
+            new_env_vars = gemini_data.get("environmentVariables", [])
+            if "environmentVariables" in gemini_data and self._env_vars_changed(
+                old_gemini.environment_variables,
+                new_env_vars,
+            ):
+                has_changes = True
+                gemini_changes["environmentVariables"] = new_env_vars
+
+            if has_changes:
+                changes["gemini"] = gemini_changes
 
         return changes
 
@@ -439,12 +490,32 @@ class SettingsService:
             signing_key=settings.git_signing_key,
         )
 
+        gemini_additional = additional_settings.get("gemini", {})
+        gemini_account = None
+        gemini_account_data = gemini_additional.get("account")
+        if gemini_account_data:
+            from app.models.settings import GeminiAccountInfo
+            gemini_account = GeminiAccountInfo(**gemini_account_data)
+
+        from app.models.settings import GeminiSettings, GeminiEnvironmentVariable
+        gemini_model = GeminiSettings(
+            auth_method=gemini_additional.get("authMethod", "subscription"),
+            access_token=gemini_additional.get("accessToken") or None,
+            refresh_token=gemini_additional.get("refreshToken") or None,
+            id_token=gemini_additional.get("idToken") or None,
+            expires_at=gemini_additional.get("expiresAt") or None,
+            scope=gemini_additional.get("scope") or None,
+            account=gemini_account,
+            environment_variables=gemini_additional.get("environmentVariables", []),
+        )
+
         return UserSettings(
             general=general_model,
             ssh=ssh_model,
             claude_code=claude_model,
             codex=codex_model,
             git=git_model,
+            gemini=gemini_model,
         )
 
     def _list_active_models(self) -> list[ClaudeModelInfo]:

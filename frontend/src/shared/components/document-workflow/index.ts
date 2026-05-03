@@ -8,6 +8,7 @@ export { MarkdownDocumentShell } from './MarkdownDocumentShell';
 export type { MarkdownDocumentShellProps } from './MarkdownDocumentShell';
 export {
   DocumentEditorDialogCore,
+  ensureDocumentExtension,
   ensureMarkdownExtension,
   formatDocumentContentSize,
 } from './DocumentEditorDialogCore';

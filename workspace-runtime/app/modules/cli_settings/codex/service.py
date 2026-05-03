@@ -657,8 +657,8 @@ class CodexSettingsService:
                 detail={"error": "MISSING_SUBAGENT_CONTENT", "message": "content or definition is required"},
             )
 
-        target_relative_path = self._subagent_filename(definition.name)
-        previous_path = self._resolve_subagent_file(layer, request.path) if request.path else None
+        target_relative_path = request.path or self._subagent_filename(definition.name)
+        previous_path = self._resolve_subagent_file(layer, request.previousPath) if request.previousPath else None
         target_path = self._resolve_subagent_file(layer, target_relative_path)
         if target_path.exists() and previous_path != target_path and not request.overwrite:
             raise HTTPException(
@@ -894,11 +894,16 @@ class CodexSettingsService:
         )
 
     def _resolve_subagent_file(self, layer: CodexLayer, relative_path: str) -> Path:
+        if not relative_path or not relative_path.strip():
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_SUBAGENT_PATH", "target": "fileName", "message": relative_path},
+            )
         clean_path = Path(relative_path)
         if clean_path.is_absolute() or ".." in clean_path.parts or clean_path.suffix.lower() != ".toml":
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_SUBAGENT_PATH", "message": relative_path},
+                detail={"error": "INVALID_SUBAGENT_PATH", "target": "fileName", "message": relative_path},
             )
         return self._resolver.resolve(layer, CodexResource.SUBAGENTS) / clean_path
 
@@ -1049,7 +1054,12 @@ class CodexSettingsService:
         except Exception as exc:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_TOML", "message": str(exc), "path": str(path) if path else None},
+                detail={
+                    "error": "INVALID_TOML",
+                    "target": "content",
+                    "message": str(exc),
+                    "path": str(path) if path else None,
+                },
             ) from exc
         return parsed
 
@@ -1062,7 +1072,7 @@ class CodexSettingsService:
         if missing:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={"error": "MISSING_SUBAGENT_FIELD", "fields": missing},
+                detail={"error": "MISSING_SUBAGENT_FIELD", "target": "content", "fields": missing},
             )
         definition_data = {key: data[key] for key in SUBAGENT_STRUCTURED_KEYS if key in data}
         return self._validated_subagent_definition(CodexSubagentDefinition(**definition_data))
@@ -1076,7 +1086,7 @@ class CodexSettingsService:
         if missing:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={"error": "MISSING_SUBAGENT_FIELD", "fields": missing},
+                detail={"error": "MISSING_SUBAGENT_FIELD", "target": "content", "fields": missing},
             )
         candidates = definition.nickname_candidates
         if candidates is not None:
@@ -1084,7 +1094,7 @@ class CodexSettingsService:
             if not cleaned or len(cleaned) != len(candidates) or len(set(cleaned)) != len(cleaned):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    detail={"error": "INVALID_NICKNAME_CANDIDATES"},
+                    detail={"error": "INVALID_NICKNAME_CANDIDATES", "target": "content"},
                 )
             definition.nickname_candidates = cleaned
         return definition
@@ -1099,7 +1109,7 @@ class CodexSettingsService:
         if not stem:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_SUBAGENT_NAME", "message": name},
+                detail={"error": "INVALID_SUBAGENT_NAME", "target": "content", "message": name},
             )
         return f"{stem}.toml"
 

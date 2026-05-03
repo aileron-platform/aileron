@@ -54,11 +54,19 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.agentSettings.common.subagents.dialog.fields.scope.label': 'Scope',
         'workspace.agentSettings.common.subagents.dialog.fields.fileName.label': 'File name',
         'workspace.agentSettings.common.subagents.dialog.fields.fileName.placeholder': 'agent.md',
+        'workspace.agentSettings.common.subagents.dialog.fields.fileName.placeholders.markdown': 'agent.md',
+        'workspace.agentSettings.common.subagents.dialog.fields.fileName.placeholders.toml': 'agent.toml',
         'workspace.agentSettings.common.subagents.dialog.fields.name.label': 'Name',
         'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder': 'reviewer',
         'workspace.agentSettings.common.subagents.dialog.fields.tools.label': 'Tools',
         'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder': 'Read, Grep',
         'workspace.agentSettings.common.subagents.dialog.fields.content.label': 'Content',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.labels.markdown': 'Markdown document',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.labels.toml': 'TOML document',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.helpers.markdown': 'Agent helper',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.helpers.toml': 'TOML helper',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.placeholders.markdown': 'Markdown placeholder',
+        'workspace.agentSettings.common.subagents.dialog.fields.content.placeholders.toml': 'TOML placeholder',
         'workspace.agentSettings.common.subagents.dialog.fields.content.helper': 'Agent helper',
         'workspace.agentSettings.common.subagents.dialog.actions.cancel': 'Cancel',
         'workspace.agentSettings.common.subagents.dialog.actions.create': 'Create',
@@ -166,7 +174,7 @@ describe('document-style shared dialogs', () => {
     }));
   });
 
-  it('serializes schema-driven subagent fields into frontmatter', async () => {
+  it('submits subagent source document content without metadata fields', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
 
@@ -177,24 +185,17 @@ describe('document-style shared dialogs', () => {
         initialValue={null}
         onClose={vi.fn()}
         onSubmit={onSubmit}
-        fields={[
-          { key: 'name', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder' },
-          { key: 'tools', type: 'string[]', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder' },
-        ]}
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('agent.md'), 'reviewer');
-    await user.type(screen.getByLabelText('Name'), 'reviewer');
-    await user.click(screen.getByLabelText('Tools'));
-    await user.paste('Read, Grep');
-    await user.type(screen.getByLabelText('Markdown content'), 'Review carefully');
+    await user.type(screen.getByPlaceholderText('agent.md'), 'reviewer.md');
+    await user.type(screen.getByLabelText('Markdown content'), '---\nname: reviewer\ndescription: Reviews code\n---\n\nReview carefully');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('name: reviewer'),
+      title: 'reviewer.md',
+      content: '---\nname: reviewer\ndescription: Reviews code\n---\n\nReview carefully',
     }));
-    expect(onSubmit.mock.calls[0][0].content).toContain('tools:\n  - Read\n  - Grep');
   });
 
   it('preserves template agent submit payload after owner split', async () => {

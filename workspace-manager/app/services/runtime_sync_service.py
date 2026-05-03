@@ -59,6 +59,11 @@ class RuntimeSyncService:
                     self._sync_git_settings(runtime["url"], changes["git"], runtime["workspace_id"])
                 )
 
+            if "gemini" in changes:
+                runtime_tasks.append(
+                    self._sync_gemini(runtime["url"], changes["gemini"], runtime["workspace_id"])
+                )
+
             # Combine all tasks from each runtime
             if runtime_tasks:
                 tasks.extend(runtime_tasks)
@@ -269,6 +274,40 @@ class RuntimeSyncService:
         except Exception as e:
             logger.error(f"Git settings sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Git sync failed for {workspace_id}: {e}")
+
+    async def _sync_gemini(self, runtime_url: str, gemini_data: dict, workspace_id: str) -> Dict[str, any]:
+        """Sync Gemini settings to specified runtime"""
+        url = f"{runtime_url}/internal/settings/gemini"
+        headers = {"Authorization": f"Bearer {self.internal_api_token}"}
+
+        payload = {
+            "authMethod": gemini_data.get("authMethod"),
+            "accessToken": gemini_data.get("accessToken"),
+            "refreshToken": gemini_data.get("refreshToken"),
+            "idToken": gemini_data.get("idToken"),
+            "expiresAt": gemini_data.get("expiresAt"),
+            "scope": gemini_data.get("scope"),
+            "environmentVariables": gemini_data.get("environmentVariables", []),
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                response.raise_for_status()
+                result = response.json()
+
+            logger.info(f"Gemini sync succeeded - workspace: {workspace_id}")
+            return {
+                "type": "gemini",
+                "workspace_id": workspace_id,
+                "runtime_url": runtime_url,
+                "success": True,
+                "response": result,
+            }
+
+        except Exception as e:
+            logger.error(f"Gemini sync failed - workspace: {workspace_id}, error: {e}")
+            raise Exception(f"Gemini sync failed for {workspace_id}: {e}")
 
     async def sync_firewall_to_runtime(
         self, workspace_id: str, firewall_config: dict

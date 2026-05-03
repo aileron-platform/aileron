@@ -4,13 +4,12 @@ import { AgentDefinitionDialog } from '../components/dialogs/AgentDefinitionDial
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import type { AgentDocument, AgentScope, SubagentFieldSchema } from '../types';
+import type { AgentDocument, AgentScope } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface SubagentsPageProps {
   apiPrefix?: string;
   availableScopes?: AgentScope[];
-  fields?: SubagentFieldSchema[];
   i18nNamespace?: string;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
@@ -19,7 +18,6 @@ export interface SubagentsPageProps {
 const SubagentsPage: React.FC<SubagentsPageProps> = ({
   apiPrefix = 'claude-code',
   availableScopes = ['project', 'user', 'plugin'],
-  fields,
   i18nNamespace = 'workspace.agentSettings.common',
   selectedId,
   onSelect,
@@ -94,13 +92,12 @@ const SubagentsPage: React.FC<SubagentsPageProps> = ({
     }> = (props) => (
       <AgentDefinitionDialog
         {...props}
-        fields={fields}
         i18nNamespace={i18nNamespace}
       />
     );
     Wrapper.displayName = 'SubagentDialogWrapper';
     return Wrapper;
-  }, [fields, i18nNamespace]);
+  }, [i18nNamespace]);
 
   const visibleDocuments = useMemo(
     () => documents.filter((doc) => availableScopes.includes(doc.scope)),

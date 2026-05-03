@@ -731,6 +731,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     payload: {
       layer: 'user' | 'project';
       path?: string | null;
+      previousPath?: string | null;
       content?: string | null;
       definition?: CodexSubagentDefinition | null;
       overwrite?: boolean;
@@ -1246,8 +1247,6 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     const payload = {
       fileName: (document.metadata?.fileName as string) ?? document.title,
       content: document.content,
-      name: document.title,
-      description: document.description,
     };
     const response = await apiRequest<CliSubagentDocumentResponse>(
       runtimeBaseUrl,
@@ -1270,9 +1269,8 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
       {
         method: 'PUT',
         body: {
+          fileName: (document.metadata?.fileName as string | undefined) ?? document.title,
           content: document.content,
-          name: document.title,
-          description: document.description,
         },
       },
     );

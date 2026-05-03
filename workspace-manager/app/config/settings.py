@@ -341,6 +341,18 @@ class Settings(BaseSettings):
         default="aileron-frontend",
         description="Keycloak client ID"
     )
+    GEMINI_GOOGLE_CLIENT_ID: str = Field(
+        default="",
+        description="Google OAuth client ID for Gemini integration",
+    )
+    GEMINI_GOOGLE_CLIENT_SECRET: str = Field(
+        default="",
+        description="Google OAuth client secret for Gemini integration",
+    )
+    GEMINI_GOOGLE_REDIRECT_URI: str = Field(
+        default="https://codeassist.google.com/authcode",
+        description="Google OAuth redirect URI for Gemini integration",
+    )
 
     @property
     def allowed_origins_list(self) -> List[str]:

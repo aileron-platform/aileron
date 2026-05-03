@@ -23,6 +23,7 @@ from app.middleware.request_id import RequestIDMiddleware
 from app.routers import (
     automation_router,
     container_images_router,
+    gemini_oauth_router,
     health_router,
     knowledge_bases_router,
     oauth_router,
@@ -256,6 +257,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(oauth_router, prefix="/api/v1")
+app.include_router(gemini_oauth_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(teams_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")

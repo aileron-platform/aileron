@@ -286,6 +286,7 @@ def test_codex_subagents_save_raw_toml_preserves_advanced_fields_and_renames(tmp
         "/api/v1/workspaces/ws-1/codex/subagents",
         json={
             "layer": "project",
+            "path": "reviewer.toml",
             "content": """
 name = "Code Reviewer"
 description = "Reviews code"
@@ -300,8 +301,8 @@ url = "https://example.test/mcp"
     )
 
     assert response.status_code == 200
-    assert response.json()["relativePath"] == "code-reviewer.toml"
-    content = (resolver.resolve("project", "subagents") / "code-reviewer.toml").read_text(encoding="utf-8")
+    assert response.json()["relativePath"] == "reviewer.toml"
+    content = (resolver.resolve("project", "subagents") / "reviewer.toml").read_text(encoding="utf-8")
     assert 'custom_key = "keep"' in content
     assert "[mcp_servers.docs]" in content
 
@@ -309,20 +310,21 @@ url = "https://example.test/mcp"
         "/api/v1/workspaces/ws-1/codex/subagents",
         json={
             "layer": "project",
-            "path": "code-reviewer.toml",
-            "definition": {
-                "name": "Security Reviewer",
-                "description": "Reviews security",
-                "developer_instructions": "Focus on security bugs.",
-                "model_reasoning_effort": "high",
-                "nickname_candidates": ["Echo"],
-            },
+            "path": "security-reviewer.toml",
+            "previousPath": "reviewer.toml",
+            "content": """
+name = "Security Reviewer"
+description = "Reviews security"
+developer_instructions = "Focus on security bugs."
+model_reasoning_effort = "high"
+nickname_candidates = ["Echo"]
+""".strip(),
         },
     )
 
     assert response.status_code == 200
     assert response.json()["relativePath"] == "security-reviewer.toml"
-    assert not (resolver.resolve("project", "subagents") / "code-reviewer.toml").exists()
+    assert not (resolver.resolve("project", "subagents") / "reviewer.toml").exists()
     assert (resolver.resolve("project", "subagents") / "security-reviewer.toml").is_file()
 
 
@@ -337,7 +339,7 @@ def test_codex_subagents_validation_conflict_and_delete(tmp_path) -> None:
 
     response = client.put(
         "/api/v1/workspaces/ws-1/codex/subagents",
-        json={"layer": "user", "content": 'name = "missing"\ndescription = "Missing"\n'},
+        json={"layer": "user", "path": "missing.toml", "content": 'name = "missing"\ndescription = "Missing"\n'},
     )
     assert response.status_code == 400
 
@@ -345,14 +347,26 @@ def test_codex_subagents_validation_conflict_and_delete(tmp_path) -> None:
         "/api/v1/workspaces/ws-1/codex/subagents",
         json={
             "layer": "user",
-            "definition": {
-                "name": "existing",
-                "description": "Duplicate",
-                "developer_instructions": "Duplicate.",
-            },
+            "path": "existing.toml",
+            "content": 'name = "existing"\ndescription = "Duplicate"\ndeveloper_instructions = "Duplicate."\n',
         },
     )
     assert response.status_code == 409
+
+
+    invalid = client.put(
+        "/api/v1/workspaces/ws-1/codex/subagents",
+        json={"layer": "user", "path": "../escape.toml", "content": 'name = "escape"\ndescription = "Escape"\ndeveloper_instructions = "No."\n'},
+    )
+    assert invalid.status_code == 400
+    assert not (agents_dir.parent / "escape.toml").exists()
+
+    invalid_toml = client.put(
+        "/api/v1/workspaces/ws-1/codex/subagents",
+        json={"layer": "user", "path": "broken.toml", "content": "name = ["},
+    )
+    assert invalid_toml.status_code == 400
+    assert not (agents_dir / "broken.toml").exists()
 
     response = client.delete("/api/v1/workspaces/ws-1/codex/subagents?layer=user&path=existing.toml")
     assert response.status_code == 200

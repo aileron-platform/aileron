@@ -39,6 +39,7 @@ class SyncService:
             "ssh": {"success": False, "message": ""},
             "claude_code": {"success": False, "message": ""},
             "codex": {"success": False, "message": ""},
+            "gemini": {"success": False, "message": ""},
             "git": {"success": False, "message": ""},
         }
         
@@ -186,7 +187,52 @@ class SyncService:
                 logger.error(f"Codex settings sync failed: {e}")
                 results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
             
-            # 4. Sync Git settings
+            # 4. Sync Gemini settings
+            try:
+                logger.info(f"Sync Gemini settings to workspace {workspace.id}")
+
+                additional_settings = settings.additional_settings or {}
+                gemini_settings = additional_settings.get("gemini", {})
+
+                gemini_payload = {
+                    "authMethod": gemini_settings.get("authMethod", "subscription"),
+                    "accessToken": gemini_settings.get("accessToken"),
+                    "refreshToken": gemini_settings.get("refreshToken"),
+                    "idToken": gemini_settings.get("idToken"),
+                    "expiresAt": gemini_settings.get("expiresAt"),
+                    "scope": gemini_settings.get("scope"),
+                    "environmentVariables": gemini_settings.get("environmentVariables", []),
+                }
+
+                logger.info(
+                    "Gemini sync payload prepared: auth_method=%s has_token=%s env_count=%s",
+                    gemini_payload["authMethod"],
+                    bool(gemini_payload["accessToken"]),
+                    len(gemini_payload["environmentVariables"]),
+                )
+
+                response = await client.post(
+                    f"{base_url}/api/v1/internal/settings/gemini",
+                    json=gemini_payload,
+                )
+                response.raise_for_status()
+                results["gemini"]["success"] = True
+                results["gemini"]["message"] = i18n.translate("sync.gemini.success", language=language)
+                logger.info(f"Gemini settings sync succeeded: {workspace.id}")
+            except httpx.HTTPStatusError as e:
+                logger.error(f"Gemini HTTP Error: {e.response.status_code} - {e.response.text}")
+                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+            except httpx.TimeoutException as e:
+                logger.error(f"Gemini request timeout: {e}")
+                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+            except httpx.ConnectError as e:
+                logger.error(f"Gemini connection error: {e}")
+                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+            except Exception as e:
+                logger.error(f"Gemini settings sync failed: {e}")
+                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+
+            # 5. Sync Git settings
             if settings.git_user_name and settings.git_user_email:
                 try:
                     logger.info(f"Sync Git settings to workspace {workspace.id}")

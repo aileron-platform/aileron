@@ -448,6 +448,7 @@ class CodexSubagentSaveRequest(BaseModel):
 
     layer: CodexEditableLayer = "project"
     path: str | None = None
+    previousPath: str | None = None
     content: str | None = None
     definition: CodexSubagentDefinition | None = None
     overwrite: bool = False
