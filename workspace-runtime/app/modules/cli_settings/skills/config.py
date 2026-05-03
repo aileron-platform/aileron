@@ -55,7 +55,7 @@ def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:
         ),
         SkillTool.CODEX: SkillToolConfig(
             tool=SkillTool.CODEX,
-            project_dot_dir=".agents",
+            project_dot_dir=".codex",
             skill_dir_name="skills",
             user_root=codex_paths.resolve(CodexLayer.USER, CodexResource.SKILLS),
             supports_plugin=False,

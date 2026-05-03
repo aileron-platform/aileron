@@ -35,6 +35,7 @@ from .service import (
     CliMcpScopeNotSupportedError,
     CliMcpServerAlreadyExistsError,
     CliMcpServerNotFoundError,
+    CliMcpReadOnlyScopeError,
     CliMcpToggleNotSupportedError,
     CliMcpService,
     McpTool,
@@ -81,6 +82,13 @@ def _toggle_not_supported(error: CliMcpToggleNotSupportedError) -> HTTPException
     return HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail={"error": "TOGGLE_NOT_SUPPORTED", "message": str(error)},
+    )
+
+
+def _read_only_scope(error: CliMcpReadOnlyScopeError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={"error": "PLUGIN_SCOPE_READ_ONLY", "message": str(error)},
     )
 
 
@@ -172,6 +180,8 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     ) -> CliMcpScopeResponse:
         try:
             return service.create_servers(workspace_id, scope, payload)
+        except CliMcpReadOnlyScopeError as error:
+            raise _read_only_scope(error) from error
         except CliMcpScopeNotSupportedError as error:
             raise _scope_error(error) from error
         except CliMcpServerAlreadyExistsError as error:
@@ -198,6 +208,8 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
             return service.update_server(
                 workspace_id, scope, server_name, payload
             )
+        except CliMcpReadOnlyScopeError as error:
+            raise _read_only_scope(error) from error
         except CliMcpScopeNotSupportedError as error:
             raise _scope_error(error) from error
         except CliMcpServerNotFoundError:
@@ -223,6 +235,8 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
     ) -> CliMcpServerDeleteResponse:
         try:
             return service.delete_server(workspace_id, scope, server_name)
+        except CliMcpReadOnlyScopeError as error:
+            raise _read_only_scope(error) from error
         except CliMcpScopeNotSupportedError as error:
             raise _scope_error(error) from error
         except CliMcpServerNotFoundError:
@@ -247,6 +261,8 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
             return service.toggle_server_status(
                 workspace_id, scope, server_name, enabled
             )
+        except CliMcpReadOnlyScopeError as error:
+            raise _read_only_scope(error) from error
         except CliMcpToggleNotSupportedError as error:
             raise _toggle_not_supported(error) from error
         except CliMcpScopeNotSupportedError as error:
@@ -296,6 +312,8 @@ def create_mcp_router(tool: McpTool) -> APIRouter:
                 scope=scope, file=file_content, overwrite=overwrite
             )
             return service.import_servers_from_file(workspace_id, payload)
+        except CliMcpReadOnlyScopeError as error:
+            raise _read_only_scope(error) from error
         except CliMcpScopeNotSupportedError as error:
             raise _scope_error(error) from error
         except ValueError as error:

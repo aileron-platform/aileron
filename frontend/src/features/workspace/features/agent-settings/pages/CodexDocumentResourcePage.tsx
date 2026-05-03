@@ -3,7 +3,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DocumentWorkflowDialogProps } from '@/shared/components/document-workflow';
 import { formatDocumentContentSize } from '@/shared/components/document-workflow';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { createLogger } from '@/shared/services/logger';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { AgentDocumentPage } from '../components/DocumentPage';
 import { CodexSubagentDialog } from '../components/dialogs/CodexSubagentDialog';
@@ -17,8 +16,6 @@ import {
   type CodexSubagentsResponse,
 } from '../services/agentSettingsApi';
 import type { AgentDocument, AgentScope } from '../types';
-
-const logger = createLogger('CodexDocumentResourcePage');
 
 type CodexDocumentResource = 'subagents' | 'prompts';
 type CodexEditableLayer = 'project' | 'user';
@@ -156,40 +153,30 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
         }
       }
 
-      const documents = await Promise.all(
-        Array.from(summariesById.values()).map(async (summary) => {
-          if (summary.readOnly || (summary.source !== 'project' && summary.source !== 'user')) {
-            return mapSummaryToDocument(summary, '');
-          }
-          try {
-            const file = await api.getCodexFile(
-              runtimeBaseUrl || '',
-              workspaceId || '',
-              resource,
-              summary.source,
-              summary.path,
-            );
-            return mapSummaryToDocument(summary, file.content);
-          } catch (error) {
-            logger.error('loadCodexDocumentFailed', { resource, path: summary.path, error });
-            return mapSummaryToDocument(summary, '');
-          }
-        }),
-      );
-
-      return documents.sort((a, b) => a.title.localeCompare(b.title));
+      return Array.from(summariesById.values())
+        .map((summary) => mapSummaryToDocument(summary, ''))
+        .sort((a, b) => a.title.localeCompare(b.title));
     },
+    staleTime: 30_000,
   });
 
   const baseDocuments = documentsQuery.data ?? [];
-  const selectedDocumentSummary = useMemo(() => {
+  const selectedDocumentTarget = useMemo(() => {
     const document = baseDocuments.find((item) => item.id === selectedId);
     const source = document?.metadata?.source;
-    const path = document?.metadata?.fileName;
-    if ((source !== 'project' && source !== 'user') || typeof path !== 'string') {
+    const path = (document?.metadata?.relativePath as string | undefined)
+      || (document?.metadata?.fileName as string | undefined);
+    if (
+      (source !== 'project' && source !== 'user' && source !== 'plugin' && source !== 'built_in')
+      || typeof path !== 'string'
+    ) {
       return null;
     }
-    return { source, path };
+    return {
+      source,
+      path,
+      pluginId: typeof document?.metadata?.pluginId === 'string' ? document.metadata.pluginId : undefined,
+    };
   }, [baseDocuments, selectedId]);
 
   const selectedDocumentQuery = useQuery({
@@ -198,22 +185,41 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
       runtimeBaseUrl,
       workspaceId,
       resource,
-      selectedDocumentSummary?.source,
-      selectedDocumentSummary?.path,
+      selectedDocumentTarget?.source,
+      selectedDocumentTarget?.path,
+      selectedDocumentTarget?.pluginId,
     ],
     enabled: Boolean(
       runtimeBaseUrl
       && workspaceId
-      && selectedDocumentSummary?.source
-      && selectedDocumentSummary?.path,
+      && selectedDocumentTarget?.source
+      && selectedDocumentTarget?.path,
     ),
-    queryFn: async () => api.getCodexFile(
-      runtimeBaseUrl || '',
-      workspaceId || '',
-      resource,
-      selectedDocumentSummary?.source ?? 'project',
-      selectedDocumentSummary?.path ?? '',
-    ),
+    queryFn: async () => {
+      if (!selectedDocumentTarget) {
+        return null;
+      }
+      if (resource === 'subagents') {
+        return api.getCodexSubagent(
+          runtimeBaseUrl || '',
+          workspaceId || '',
+          selectedDocumentTarget.source as CodexSubagentItem['source'],
+          selectedDocumentTarget.path,
+          selectedDocumentTarget.pluginId,
+        );
+      }
+      if (selectedDocumentTarget.source !== 'project' && selectedDocumentTarget.source !== 'user') {
+        return null;
+      }
+      return api.getCodexFile(
+        runtimeBaseUrl || '',
+        workspaceId || '',
+        resource,
+        selectedDocumentTarget.source,
+        selectedDocumentTarget.path,
+      );
+    },
+    staleTime: 30_000,
   });
 
   const refresh = async () => {
@@ -320,13 +326,16 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
       if (document.id !== selectedId) {
         return document;
       }
-      const content = selectedDocumentQuery.data.content;
+      const selectedData = selectedDocumentQuery.data;
+      const content = selectedData && 'content' in selectedData ? selectedData.content : document.content;
+      const definition = selectedData && 'definition' in selectedData ? selectedData.definition : document.metadata?.definition;
       return {
         ...document,
         content,
         size: formatDocumentContentSize(content || ' '),
         metadata: {
           ...document.metadata,
+          definition,
           sizeBytes: content.length,
         },
       };

@@ -213,8 +213,8 @@ const agentSettings = {
             all: '所有範圍',
             project: '專案',
             user: '個人',
-            plugin: 'Plugin 與 inline',
-            managed: '受管理',
+            plugin: 'Plugin',
+            built_in: '內建',
           },
         },
       },
@@ -232,14 +232,16 @@ const agentSettings = {
           project: '專案',
           user: '個人',
           plugin: 'Plugin',
-          managed: '受管理',
+          built_in: '內建',
         },
       },
       sources: {
         hooks_json: 'hooks.json',
         inline_config: '唯讀 inline config',
         plugin: '唯讀 plugin',
-        managed: '唯讀受管理',
+        built_in: '唯讀內建',
+        project: '唯讀專案',
+        user: '唯讀個人',
       },
       events: {
         SessionStart: { name: 'SessionStart', option: 'SessionStart' },
@@ -313,6 +315,7 @@ const agentSettings = {
         enabled: 'codex_hooks 已啟用',
         saveFailed: '無法儲存 hooks.json',
         invalidJson: 'hooks.json 必須是有效 JSON',
+        loadIncomplete: 'Codex hooks 回應缺少 scope。',
       },
     },
     plugins: {
@@ -365,7 +368,7 @@ const agentSettings = {
       loading: '載入文件中…',
       stats: { total: '共 {{count}} 項' },
       scope: {
-        values: { project: '專案', user: '個人', plugin: 'Plugin', built_in: '內建', managed: '受管理' },
+        values: { project: '專案', user: '個人', plugin: 'Plugin', built_in: '內建' },
       },
       status: { effective: '生效中', overridden: '已被覆蓋' },
       toml: {
@@ -695,6 +698,10 @@ const agentSettings = {
         deleteForbidden: {
           title: '外掛服務器為唯讀',
           description: '外掛管理的 MCP 服務器無法在此刪除。',
+        },
+        pluginReadOnly: {
+          title: '外掛服務器為唯讀',
+          description: '外掛 MCP 服務器由外掛層級的啟用設定控制。',
         },
         createSuccess: { title: '已建立 MCP 服務器' },
         updateSuccess: { title: '已更新 MCP 服務器' },

@@ -21,11 +21,13 @@ from .models import (
     CodexFileListResponse,
     CodexFileUpdateRequest,
     CodexHooksDocumentResponse,
+    CodexHooksScopesResponse,
     CodexManagedRequirementsResponse,
     CodexOverviewResponse,
     CodexPluginToggleRequest,
     CodexPluginToggleResponse,
     CodexPluginsResponse,
+    CodexReadableLayer,
     CodexSettingsCapabilitiesResponse,
     CodexSettingsCapability,
     CodexRulesListResponse,
@@ -285,6 +287,16 @@ async def get_codex_hooks(
     return service.get_hooks_document(workspace_id, layer)
 
 
+@router.get("/hooks-scopes", response_model=CodexHooksScopesResponse, responses=build_responses(400, 401, 422, 500))
+async def list_codex_hooks_scopes(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    service: CodexSettingsService = Depends(get_codex_settings_service),
+) -> CodexHooksScopesResponse:
+    """Return all editable Codex hooks documents with shared read-only sources."""
+
+    return service.list_hooks_documents(workspace_id)
+
+
 @router.put("/hooks", response_model=CodexHooksDocumentResponse, responses=build_responses(400, 401, 422, 500))
 async def update_codex_hooks(
     payload: CodexTextFileUpdateRequest,
@@ -340,6 +352,19 @@ async def list_codex_subagents(
     return service.list_subagents(workspace_id)
 
 
+@router.get("/subagents/detail", response_model=CodexSubagentItem, responses=build_responses(400, 401, 404, 422, 500))
+async def get_codex_subagent(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    source: str = Query(..., description="Subagent source"),
+    path: str = Query(..., description="Relative .toml path"),
+    pluginId: str | None = Query(default=None, description="Plugin ID for plugin subagents"),
+    service: CodexSettingsService = Depends(get_codex_settings_service),
+) -> CodexSubagentItem:
+    """Return a selected Codex subagent document."""
+
+    return service.get_subagent(workspace_id, source, path, plugin_id=pluginId)
+
+
 @router.put("/subagents", response_model=CodexSubagentItem, responses=build_responses(400, 401, 409, 422, 500))
 async def save_codex_subagent(
     payload: CodexSubagentSaveRequest,
@@ -382,7 +407,7 @@ async def delete_codex_subagent(
 async def list_codex_files(
     resource: str,
     workspace_id: str = Path(..., description="Workspace ID"),
-    layer: CodexEditableLayer = Query(..., description="Settings layer"),
+    layer: CodexReadableLayer = Query(..., description="Settings layer"),
     service: CodexSettingsService = Depends(get_codex_settings_service),
 ) -> CodexFileListResponse:
     """List Codex skills, subagents, or prompts files."""
@@ -394,13 +419,14 @@ async def list_codex_files(
 async def get_codex_file(
     resource: str,
     workspace_id: str = Path(..., description="Workspace ID"),
-    layer: CodexEditableLayer = Query(..., description="Settings layer"),
+    layer: CodexReadableLayer = Query(..., description="Settings layer"),
     path: str = Query(..., description="Relative file path"),
+    pluginId: str | None = Query(default=None, description="Plugin ID for plugin layer files"),
     service: CodexSettingsService = Depends(get_codex_settings_service),
 ) -> CodexTextFileResponse:
     """Return a Codex skills, subagents, or prompts file."""
 
-    return service.get_file(workspace_id, layer, resource, path)
+    return service.get_file(workspace_id, layer, resource, path, plugin_id=pluginId)
 
 
 @router.put("/{resource}/file", response_model=CodexTextFileResponse, responses=build_responses(400, 401, 404, 422, 500))

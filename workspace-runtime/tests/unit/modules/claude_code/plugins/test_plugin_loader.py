@@ -721,6 +721,96 @@ class TestLoadPluginSkills:
         assert result[0].skill_name == "pdf"
 
 
+class TestPluginComponentCache:
+    """Test plugin component cache behavior."""
+
+    @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
+    @patch.object(PluginComponentsLoader, '_load_plugin_commands_for_plugin')
+    @patch.object(PluginComponentsLoader, '_load_plugin_agents_for_plugin')
+    @patch.object(PluginComponentsLoader, '_load_plugin_mcp_for_plugin')
+    @patch.object(PluginComponentsLoader, '_load_plugin_hooks_for_plugin')
+    @patch.object(PluginComponentsLoader, '_load_plugin_skills_for_plugin')
+    def test_reuses_component_discovery_across_surfaces(
+        self,
+        mock_load_skills,
+        mock_load_hooks,
+        mock_load_mcp,
+        mock_load_agents,
+        mock_load_commands,
+        mock_get_enabled,
+        plugin_loader,
+    ):
+        """Test loading one surface caches component discovery for another."""
+        mock_get_enabled.return_value = {"plugin1@market1": True}
+        mock_load_commands.return_value = [
+            ComponentFileInfo("/path/cmd.md", "cmd.md", "plugin1", "market1")
+        ]
+        mock_load_agents.return_value = [
+            ComponentFileInfo("/path/agent.md", "agent.md", "plugin1", "market1")
+        ]
+        mock_load_mcp.return_value = {"server": {"command": "node"}}
+        mock_load_hooks.return_value = {"PreToolUse": []}
+        mock_load_skills.return_value = [
+            SkillDirectoryInfo("/path/skill", "skill", "plugin1", "market1")
+        ]
+
+        assert plugin_loader.load_plugin_commands("test-workspace")[0].file_name == "cmd.md"
+        assert plugin_loader.load_plugin_agents("test-workspace")[0].file_name == "agent.md"
+        assert plugin_loader.load_plugin_mcp_servers("test-workspace")["plugin1@market1"]["server"]["command"] == "node"
+        assert plugin_loader.load_plugin_hooks("test-workspace")["plugin1@market1"]["PreToolUse"] == []
+        assert plugin_loader.load_plugin_skills("test-workspace")[0].skill_name == "skill"
+
+        assert mock_load_commands.call_count == 1
+        assert mock_load_agents.call_count == 1
+        assert mock_load_mcp.call_count == 1
+        assert mock_load_hooks.call_count == 1
+        assert mock_load_skills.call_count == 1
+
+        plugin_loader.clear_cache("test-workspace")
+        plugin_loader.load_plugin_commands("test-workspace")
+        assert mock_load_commands.call_count == 2
+
+    @patch.object(PluginComponentsLoader, '_get_enabled_plugins')
+    def test_invalidates_component_cache_when_plugin_file_changes(
+        self,
+        mock_get_enabled,
+        plugin_loader,
+        tmp_path,
+    ):
+        """Test component cache invalidates when a plugin component file changes."""
+        marketplace_root = tmp_path / "market1"
+        plugin_root = marketplace_root / "plugins" / "plugin1"
+        commands_dir = plugin_root / "commands"
+        marketplace_config_dir = marketplace_root / ".claude-plugin"
+        commands_dir.mkdir(parents=True)
+        marketplace_config_dir.mkdir(parents=True)
+        marketplace_path = marketplace_config_dir / "marketplace.json"
+        marketplace_path.write_text(
+            json.dumps({
+                "name": "market1",
+                "plugins": [
+                    {
+                        "name": "plugin1",
+                        "source": "./plugins/plugin1",
+                        "strict": True,
+                    }
+                ],
+            }),
+            encoding="utf-8",
+        )
+        command_path = commands_dir / "test.md"
+        command_path.write_text("---\ndescription: First\n---\nBody\n", encoding="utf-8")
+        mock_get_enabled.return_value = {"plugin1@market1": True}
+
+        with patch.object(plugin_loader, "_get_marketplace_path", return_value=marketplace_path):
+            first = plugin_loader.load_plugin_commands("test-workspace")
+            command_path.write_text("---\ndescription: Updated description\n---\nBody\n", encoding="utf-8")
+            second = plugin_loader.load_plugin_commands("test-workspace")
+
+        assert first[0].description == "First"
+        assert second[0].description == "Updated description"
+
+
 class TestGetPluginLoaderSingleton:
     """Test get_plugin_loader singleton pattern."""
 

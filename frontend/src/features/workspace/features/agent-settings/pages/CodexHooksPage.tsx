@@ -17,14 +17,12 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
-import { SettingsDocumentEditor } from '../components/SettingsDocumentEditor';
 import {
   WorkspaceHookDialog,
   type EventOption,
@@ -39,7 +37,7 @@ import {
 } from '../services/agentSettingsApi';
 
 type CodexLayer = 'user' | 'project';
-type CodexHookScope = CodexLayer | 'plugin' | 'managed';
+type CodexHookScope = CodexLayer | 'plugin' | 'built_in';
 type CodexHookAction = { type: 'command'; command?: string; timeout?: number | null; statusMessage?: string | null; raw?: Record<string, unknown> };
 
 const hookEvents = ['SessionStart', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'UserPromptSubmit', 'Stop'] as const;
@@ -73,8 +71,14 @@ const parseHooksContent = (content: string): Record<string, unknown[]> => {
 };
 
 const sourceToScope = (entry: CodexHookEntry): CodexHookScope => {
-  if (entry.source === 'hooks_json' && (entry.layer === 'project' || entry.layer === 'user')) return entry.layer;
-  if (entry.source === 'managed') return 'managed';
+  if (
+    (entry.source === 'hooks_json'
+      || entry.source === 'inline_config'
+      || entry.source === 'project'
+      || entry.source === 'user')
+    && (entry.layer === 'project' || entry.layer === 'user')
+  ) return entry.layer;
+  if (entry.source === 'built_in') return 'built_in';
   return 'plugin';
 };
 
@@ -190,9 +194,11 @@ const CodexHooksPage: React.FC = () => {
   const hooksQuery = useQuery({
     queryKey: ['codex-hooks-workflow', runtimeBaseUrl, workspaceId],
     queryFn: async () => {
-      const responses = await Promise.all(
-        editableLayers.map((layer) => api.getCodexHooks(runtimeBaseUrl || '', workspaceId || '', layer)),
-      );
+      const response = await api.listCodexHooksScopes(runtimeBaseUrl || '', workspaceId || '');
+      const responses = editableLayers.map((layer) => response.scopes.find((scope) => scope.layer === layer));
+      if (!responses[0] || !responses[1]) {
+        throw new Error(t('workspace.agentSettings.codex.hooks.notifications.loadIncomplete'));
+      }
       const byLayer = {
         project: responses[0],
         user: responses[1],
@@ -204,6 +210,7 @@ const CodexHooksPage: React.FC = () => {
       return byLayer;
     },
     enabled: Boolean(runtimeBaseUrl && workspaceId),
+    staleTime: 30_000,
   });
 
   const invalidate = async () => {
@@ -257,6 +264,24 @@ const CodexHooksPage: React.FC = () => {
       ));
     });
   }, [codexHookItems, scopeFilter, search]);
+
+  const scopeFilterOptions = useMemo<Array<[string, typeof Layers]>>(() => {
+    const hasPluginHooks = codexHookItems.some((hook) => hook.scope === 'plugin' || hook.layer === 'plugin');
+    const hasBuiltInHooks = codexHookItems.some((hook) => hook.scope === 'built_in' || hook.layer === 'built_in');
+    return [
+      ['all', Layers],
+      ['project', FolderGit],
+      ['user', User],
+      ...(hasPluginHooks ? [['plugin', Puzzle] as [string, typeof Layers]] : []),
+      ...(hasBuiltInHooks ? [['built_in', Puzzle] as [string, typeof Layers]] : []),
+    ];
+  }, [codexHookItems]);
+
+  React.useEffect(() => {
+    if (scopeFilter !== 'all' && !scopeFilterOptions.some(([value]) => value === scopeFilter)) {
+      setScopeFilter('all');
+    }
+  }, [scopeFilter, scopeFilterOptions]);
 
   const dialogEventOptions = useMemo<EventOption[]>(() => (
     hookEvents.map((eventName) => ({
@@ -353,13 +378,7 @@ const CodexHooksPage: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[
-                    ['all', Layers],
-                    ['project', FolderGit],
-                    ['user', User],
-                    ['plugin', Puzzle],
-                    ['managed', AlertTriangle],
-                  ].map(([value, Icon]) => (
+                  {scopeFilterOptions.map(([value, Icon]) => (
                     <SelectItem key={String(value)} value={String(value)}>
                       <div className="flex items-center gap-2">
                         {React.createElement(Icon as typeof Layers, { className: 'h-3 w-3' })}
@@ -544,39 +563,6 @@ const CodexHooksPage: React.FC = () => {
               {t('workspace.agentSettings.codex.hooks.list.empty')}
             </div>
           ) : null}
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-3">
-              <CardTitle className="text-base">{t('workspace.agentSettings.codex.hooks.jsonTitle')}</CardTitle>
-              <div className="flex items-center gap-2">
-                <Select value={activeLayer} onValueChange={(value) => setActiveLayer(value as CodexLayer)}>
-                  <SelectTrigger className="h-8 w-32 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="project">{t('workspace.agentSettings.codex.common.layers.project')}</SelectItem>
-                    <SelectItem value="user">{t('workspace.agentSettings.codex.common.layers.user')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => saveMutation.mutate({ layer: activeLayer, content: draftContent[activeLayer] })}
-                  disabled={isBusy}
-                >
-                  {t('workspace.agentSettings.codex.common.actions.save')}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="h-72">
-              <SettingsDocumentEditor
-                format="json"
-                value={draftContent[activeLayer]}
-                onChange={(value) => setDraftContent((current) => ({ ...current, [activeLayer]: value }))}
-                readOnly={hooksQuery.isFetching}
-              />
-            </CardContent>
-          </Card>
         </div>
       </SettingsWorkflowShell>
 

@@ -63,6 +63,8 @@ class PluginComponentsLoader:
             settings_service: SettingsService instance
         """
         self.settings_service = settings_service
+        self._components_cache: dict[str, tuple[tuple[Any, ...], dict[str, Any]]] = {}
+        self._cache_lock = threading.Lock()
 
     # =========================================================================
     # Public Methods - Called by functional modules
@@ -79,24 +81,13 @@ class PluginComponentsLoader:
         Returns:
             List[ComponentFileInfo]: Commands list
         """
-        result = []
-
         try:
-            enabled_plugins = self._get_enabled_plugins(workspace_id)
-
-            for plugin_id in enabled_plugins.keys():
-                try:
-                    commands = self._load_plugin_commands_for_plugin(
-                        workspace_id, plugin_id
-                    )
-                    result.extend(commands)
-                except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to load commands from plugin '{plugin_id}': {e}")
+            return list(self._load_plugin_components(workspace_id)["commands"])
 
         except Exception as e:
             logger.error(f"Failed to load plugin commands: {e}")
 
-        return result
+        return []
 
     def load_plugin_agents(
         self,
@@ -109,24 +100,13 @@ class PluginComponentsLoader:
         Returns:
             List[ComponentFileInfo]: Agents list
         """
-        result = []
-
         try:
-            enabled_plugins = self._get_enabled_plugins(workspace_id)
-
-            for plugin_id in enabled_plugins.keys():
-                try:
-                    agents = self._load_plugin_agents_for_plugin(
-                        workspace_id, plugin_id
-                    )
-                    result.extend(agents)
-                except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to load agents from plugin '{plugin_id}': {e}")
+            return list(self._load_plugin_components(workspace_id)["agents"])
 
         except Exception as e:
             logger.error(f"Failed to load plugin agents: {e}")
 
-        return result
+        return []
 
     def load_plugin_mcp_servers(
         self,
@@ -140,25 +120,13 @@ class PluginComponentsLoader:
             Dict[plugin_id, Dict[server_name, server_config]]:
             MCP servers dictionary grouped by plugin
         """
-        result = {}
-
         try:
-            enabled_plugins = self._get_enabled_plugins(workspace_id)
-
-            for plugin_id in enabled_plugins.keys():
-                try:
-                    mcp_servers = self._load_plugin_mcp_for_plugin(
-                        workspace_id, plugin_id
-                    )
-                    if mcp_servers:
-                        result[plugin_id] = mcp_servers
-                except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to load MCP servers from plugin '{plugin_id}': {e}")
+            return dict(self._load_plugin_components(workspace_id)["mcp_servers"])
 
         except Exception as e:
             logger.error(f"Failed to load plugin MCP servers: {e}")
 
-        return result
+        return {}
 
     def load_plugin_hooks(
         self,
@@ -171,25 +139,13 @@ class PluginComponentsLoader:
         Returns:
             Dict[plugin_id, hooks_config]: Hooks configuration grouped by plugin
         """
-        result = {}
-
         try:
-            enabled_plugins = self._get_enabled_plugins(workspace_id)
-
-            for plugin_id in enabled_plugins.keys():
-                try:
-                    hooks = self._load_plugin_hooks_for_plugin(
-                        workspace_id, plugin_id
-                    )
-                    if hooks:
-                        result[plugin_id] = hooks
-                except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to load hooks from plugin '{plugin_id}': {e}")
+            return dict(self._load_plugin_components(workspace_id)["hooks"])
 
         except Exception as e:
             logger.error(f"Failed to load plugin hooks: {e}")
 
-        return result
+        return {}
 
     def load_plugin_skills(
         self,
@@ -202,28 +158,217 @@ class PluginComponentsLoader:
         Returns:
             List[SkillDirectoryInfo]: Skills directory list
         """
-        result = []
-
         try:
-            enabled_plugins = self._get_enabled_plugins(workspace_id)
-
-            for plugin_id in enabled_plugins.keys():
-                try:
-                    skills = self._load_plugin_skills_for_plugin(
-                        workspace_id, plugin_id
-                    )
-                    result.extend(skills)
-                except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
-                    logger.error(f"Failed to load skills from plugin '{plugin_id}': {e}")
+            return list(self._load_plugin_components(workspace_id)["skills"])
 
         except Exception as e:
             logger.error(f"Failed to load plugin skills: {e}")
 
-        return result
+        return []
+
+    def clear_cache(self, workspace_id: str | None = None) -> None:
+        """Clear cached plugin component discovery."""
+
+        with self._cache_lock:
+            if workspace_id is None:
+                self._components_cache.clear()
+            else:
+                self._components_cache.pop(workspace_id, None)
 
     # =========================================================================
     # Private Methods - Internal implementation
     # =========================================================================
+
+    def _load_plugin_components(self, workspace_id: str) -> dict[str, Any]:
+        enabled_plugins = self._get_enabled_plugins(workspace_id)
+        cache_key = self._components_cache_key(workspace_id, enabled_plugins)
+        with self._cache_lock:
+            cached = self._components_cache.get(workspace_id)
+            if cached is not None and cached[0] == cache_key:
+                return cached[1]
+
+        result: dict[str, Any] = {
+            "commands": [],
+            "agents": [],
+            "mcp_servers": {},
+            "hooks": {},
+            "skills": [],
+        }
+        for plugin_id in enabled_plugins.keys():
+            try:
+                result["commands"].extend(self._load_plugin_commands_for_plugin(workspace_id, plugin_id))
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logger.error(f"Failed to load commands from plugin '{plugin_id}': {e}")
+            try:
+                result["agents"].extend(self._load_plugin_agents_for_plugin(workspace_id, plugin_id))
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logger.error(f"Failed to load agents from plugin '{plugin_id}': {e}")
+            try:
+                mcp_servers = self._load_plugin_mcp_for_plugin(workspace_id, plugin_id)
+                if mcp_servers:
+                    result["mcp_servers"][plugin_id] = mcp_servers
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logger.error(f"Failed to load MCP servers from plugin '{plugin_id}': {e}")
+            try:
+                hooks = self._load_plugin_hooks_for_plugin(workspace_id, plugin_id)
+                if hooks:
+                    result["hooks"][plugin_id] = hooks
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logger.error(f"Failed to load hooks from plugin '{plugin_id}': {e}")
+            try:
+                result["skills"].extend(self._load_plugin_skills_for_plugin(workspace_id, plugin_id))
+            except (FileNotFoundError, ValueError, json.JSONDecodeError) as e:
+                logger.error(f"Failed to load skills from plugin '{plugin_id}': {e}")
+
+        with self._cache_lock:
+            self._components_cache[workspace_id] = (cache_key, result)
+        return result
+
+    def _components_cache_key(self, workspace_id: str, enabled_plugins: dict[str, bool]) -> tuple[Any, ...]:
+        plugin_signatures: list[tuple[str, tuple[Any, ...] | None]] = []
+        for plugin_id in sorted(enabled_plugins):
+            try:
+                plugin_signatures.append((plugin_id, self._plugin_component_signature(workspace_id, plugin_id)))
+            except (FileNotFoundError, ValueError):
+                plugin_signatures.append((plugin_id, None))
+        return (tuple(sorted(enabled_plugins.items())), tuple(plugin_signatures))
+
+    def _plugin_component_signature(self, workspace_id: str, plugin_id: str) -> tuple[Any, ...]:
+        plugin_name, marketplace_name = self._parse_plugin_id(plugin_id)
+        marketplace_path = self._get_marketplace_path(workspace_id, marketplace_name)
+        marketplace_data = self._read_json_file(marketplace_path)
+        plugin_config = self._find_plugin_in_marketplace(marketplace_data, plugin_name)
+        base_path = self._get_marketplace_base_path(marketplace_path)
+        source_path = self._resolve_path(base_path, plugin_config.get("source", "./"))
+        strict_mode = plugin_config.get("strict", True)
+
+        if strict_mode:
+            command_signature = self._directory_component_signature(source_path / "commands", "*.md")
+            agent_signature = self._directory_component_signature(source_path / "agents", "*.md")
+        else:
+            command_signature = self._configured_component_paths_signature(
+                base_path,
+                plugin_config.get("commands", []),
+                "*.md",
+            )
+            agent_signature = self._configured_component_paths_signature(
+                base_path,
+                plugin_config.get("agents", []),
+                "*.md",
+            )
+
+        return (
+            self._file_signature(marketplace_path),
+            ("commands", command_signature),
+            ("agents", agent_signature),
+            ("mcp", self._mcp_component_signature(base_path, source_path, plugin_config)),
+            ("hooks", self._hooks_component_signature(base_path, source_path, plugin_config)),
+            ("skills", self._skills_component_signature(source_path, plugin_config.get("skills", []))),
+        )
+
+    def _mcp_component_signature(
+        self,
+        base_path: Path,
+        source_path: Path,
+        plugin_config: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        mcp_servers = plugin_config.get("mcpServers")
+        if isinstance(mcp_servers, str):
+            return self._file_signature(self._resolve_path(base_path, mcp_servers))
+        if not mcp_servers:
+            return self._file_signature(source_path / ".mcp.json")
+        return ("inline",)
+
+    def _hooks_component_signature(
+        self,
+        base_path: Path,
+        source_path: Path,
+        plugin_config: dict[str, Any],
+    ) -> tuple[Any, ...]:
+        hooks = plugin_config.get("hooks")
+        if isinstance(hooks, str):
+            return self._file_signature(self._resolve_path(base_path, hooks))
+        if not hooks:
+            return self._file_signature(source_path / "hooks" / "hooks.json")
+        return ("inline",)
+
+    def _skills_component_signature(
+        self,
+        source_path: Path,
+        skills_raw: Any,
+    ) -> tuple[Any, ...]:
+        if isinstance(skills_raw, str):
+            skills_raw = [skills_raw]
+        if not isinstance(skills_raw, list):
+            return ()
+        signatures = []
+        for skill_relative_path in skills_raw:
+            if not isinstance(skill_relative_path, str):
+                continue
+            skill_path = self._resolve_path(source_path, skill_relative_path)
+            signatures.append((str(skill_path), self._path_tree_signature(skill_path)))
+        return tuple(signatures)
+
+    def _configured_component_paths_signature(
+        self,
+        base_path: Path,
+        paths_raw: Any,
+        pattern: str,
+    ) -> tuple[Any, ...]:
+        if isinstance(paths_raw, str):
+            paths_raw = [paths_raw]
+        if not isinstance(paths_raw, list):
+            return ()
+        signatures = []
+        for item in paths_raw:
+            if not isinstance(item, str):
+                continue
+            item_path = self._resolve_path(base_path, item)
+            if item_path.is_dir():
+                signatures.append((str(item_path), self._directory_component_signature(item_path, pattern)))
+            else:
+                signatures.append(self._file_signature(item_path))
+        return tuple(signatures)
+
+    def _directory_component_signature(self, directory: Path, pattern: str) -> tuple[Any, ...]:
+        if not directory.exists():
+            return (str(directory), None)
+        if not directory.is_dir():
+            return self._file_signature(directory)
+        return (
+            str(directory),
+            self._path_mtime_ns(directory),
+            tuple(self._file_signature(path) for path in sorted(directory.rglob(pattern))),
+        )
+
+    def _path_tree_signature(self, path: Path) -> tuple[Any, ...]:
+        if not path.exists():
+            return (str(path), None)
+        if path.is_file():
+            return self._file_signature(path)
+        return (
+            str(path),
+            self._path_mtime_ns(path),
+            tuple(
+                self._file_signature(child)
+                for child in sorted(path.rglob("*"))
+                if child.is_file()
+            ),
+        )
+
+    def _file_signature(self, path: Path) -> tuple[str, int | None, int | None]:
+        try:
+            stat = path.stat()
+            return (str(path), stat.st_mtime_ns, stat.st_size)
+        except OSError:
+            return (str(path), None, None)
+
+    @staticmethod
+    def _path_mtime_ns(path: Path) -> int | None:
+        try:
+            return path.stat().st_mtime_ns
+        except OSError:
+            return None
 
     def _get_enabled_plugins(self, workspace_id: str) -> dict[str, bool]:
         """Get enabled plugins
@@ -637,4 +782,3 @@ def get_plugin_loader(settings_service) -> PluginComponentsLoader:
                 _loader_instance = PluginComponentsLoader(settings_service)
 
     return _loader_instance
-

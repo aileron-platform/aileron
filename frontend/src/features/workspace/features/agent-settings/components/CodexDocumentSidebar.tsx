@@ -49,7 +49,6 @@ const sourceIconMap = {
   user: User,
   plugin: Puzzle,
   built_in: Puzzle,
-  managed: Puzzle,
 } satisfies Record<CodexDocumentScopeFilter, React.ComponentType<{ className?: string }>>;
 
 const sourceClass = (source: CodexDocumentSource) => (
@@ -133,7 +132,7 @@ const CodexDocumentSidebar: React.FC<CodexDocumentSidebarProps> = ({ resource, s
   const documents = useMemo(() => documentsQuery.data ?? [], [documentsQuery.data]);
   const scopeOptions: CodexDocumentScopeFilter[] = resource === 'rules'
     ? ['project', 'user']
-    : ['all', 'project', 'user', 'plugin', 'built_in', 'managed'];
+    : ['all', 'project', 'user', 'plugin', 'built_in'];
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase();
     return documents.filter((document) => {

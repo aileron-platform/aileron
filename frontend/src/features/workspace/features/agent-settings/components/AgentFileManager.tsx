@@ -51,10 +51,45 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
   const { data: pluginSkillsData } = useQuery({
     queryKey: ['agent-plugin-skills', config.apiPathPrefix, workspaceId],
     queryFn: () => api.listPluginSkills(workspaceRuntime.runtimeBaseUrl || '', workspaceId),
-    enabled: Boolean(workspaceId && workspaceRuntime.runtimeBaseUrl && collectionType === 'skills' && scope === 'plugin' && capability?.supportsPlugin),
+    enabled: Boolean(
+      workspaceId
+      && workspaceRuntime.runtimeBaseUrl
+      && config.apiPathPrefix !== 'codex'
+      && collectionType === 'skills'
+      && scope === 'plugin'
+      && capability?.supportsPlugin,
+    ),
   });
 
   const pluginSkills = pluginSkillsData?.plugins ?? [];
+
+  const { data: codexPluginsData } = useQuery({
+    queryKey: ['codex-skills-scope-availability', workspaceRuntime.runtimeBaseUrl, workspaceId, refreshToken],
+    queryFn: () => api.listCodexPlugins(
+      workspaceRuntime.runtimeBaseUrl || '',
+      workspaceId,
+    ),
+    enabled: Boolean(
+      workspaceId
+      && workspaceRuntime.runtimeBaseUrl
+      && config.apiPathPrefix === 'codex'
+      && collectionType === 'skills',
+    ),
+  });
+
+  const effectiveScopes = useMemo(() => {
+    if (config.apiPathPrefix !== 'codex' || collectionType !== 'skills') {
+      return scopes;
+    }
+    const hasEnabledPlugins = codexPluginsData?.plugins.some((plugin) => plugin.enabled) ?? false;
+    return scopes.filter((scopeValue) => scopeValue !== 'plugin' || hasEnabledPlugins);
+  }, [codexPluginsData?.plugins, collectionType, config.apiPathPrefix, scopes]);
+
+  React.useEffect(() => {
+    if (!effectiveScopes.includes(scope)) {
+      setScope(effectiveScopes[0] ?? 'project');
+    }
+  }, [effectiveScopes, scope]);
 
   const fileTreeAdapter = useMemo(() => createAgentFileTreeDataAdapter({
     workspaceId,
@@ -84,14 +119,14 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
     },
   });
 
-  const scopeOptions = useMemo(() => scopes.map((scopeValue) => {
+  const scopeOptions = useMemo(() => effectiveScopes.map((scopeValue) => {
     const Icon = scopeIcons[scopeValue] ?? FolderGit;
     return {
       value: scopeValue,
       label: t(`${i18nPrefix}.scope.${scopeValue}`),
       icon: <Icon className="h-3 w-3" />,
     };
-  }), [i18nPrefix, scopes, t]);
+  }), [effectiveScopes, i18nPrefix, t]);
 
   const pluginSelector = scope === 'plugin' && pluginSkills.length > 0 ? (
     <div className="flex items-center gap-2">

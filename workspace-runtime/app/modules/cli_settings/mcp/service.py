@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Tuple
 
 from app.config.settings import get_workspace_path
 from app.modules.cli_settings.codex_paths import CodexLayer, CodexResource, get_codex_path_resolver
+from app.modules.cli_settings.codex.plugin_resources import CodexPluginResourceResolver
+from app.modules.cli_settings.toml_utils import parse_toml
 
 from .config_strategies import ConfigFileStrategy, JsonConfigStrategy, TomlConfigStrategy
 from .models import (
@@ -53,6 +55,10 @@ class CliMcpServerNotFoundError(KeyError):
 
 class CliMcpToggleNotSupportedError(ValueError):
     """This tool does not support toggle"""
+
+
+class CliMcpReadOnlyScopeError(ValueError):
+    """Specified scope is read-only and cannot be mutated"""
 
 
 # === Tool Enum ==========================================================
@@ -178,6 +184,7 @@ class CliMcpService:
         scope: CliMcpScope,
         payload: CliMcpServerCreateRequest,
     ) -> CliMcpScopeResponse:
+        self._ensure_mutable_scope(scope)
         servers = self._load_servers(workspace_id, scope)
         prepared = self._prepare_payload(payload.mcpServers)
         if not prepared:
@@ -204,6 +211,7 @@ class CliMcpService:
         server_name: str,
         payload: CliMcpServerUpdateRequest,
     ) -> CliMcpScopeResponse:
+        self._ensure_mutable_scope(scope)
         servers = self._load_servers(workspace_id, scope)
         if server_name not in servers:
             raise CliMcpServerNotFoundError(server_name)
@@ -230,6 +238,7 @@ class CliMcpService:
     def delete_server(
         self, workspace_id: str, scope: CliMcpScope, server_name: str
     ) -> CliMcpServerDeleteResponse:
+        self._ensure_mutable_scope(scope)
         servers = self._load_servers(workspace_id, scope)
         if server_name not in servers:
             raise CliMcpServerNotFoundError(server_name)
@@ -246,6 +255,7 @@ class CliMcpService:
         server_name: str,
         enabled: bool,
     ) -> CliMcpScopeResponse:
+        self._ensure_mutable_scope(scope)
         if not self._config.supports_toggle:
             raise CliMcpToggleNotSupportedError(
                 f"{self._config.tool.value} does not support MCP server toggle"
@@ -268,6 +278,7 @@ class CliMcpService:
     def import_servers(
         self, workspace_id: str, payload: CliMcpImportRequest
     ) -> CliMcpImportResponse:
+        self._ensure_mutable_scope(payload.scope)
         servers = self._load_servers(workspace_id, payload.scope)
         prepared = self._prepare_payload(payload.mcpServers)
         if not prepared:
@@ -343,6 +354,11 @@ class CliMcpService:
         )
 
     # === Internal Utilities ================================================
+
+    @staticmethod
+    def _ensure_mutable_scope(scope: CliMcpScope) -> None:
+        if scope == CliMcpScope.PLUGIN:
+            raise CliMcpReadOnlyScopeError("Plugin MCP servers are controlled by plugin enablement")
 
     def _scope_file(self, workspace_id: str, scope: CliMcpScope) -> Path:
         if scope == CliMcpScope.PLUGIN:
@@ -447,35 +463,40 @@ class CliMcpService:
 
     def _load_codex_plugin_servers(self) -> Dict[str, Dict[str, Any]]:
         servers: Dict[str, Dict[str, Any]] = {}
-        codex_home = get_codex_path_resolver().codex_home
-        cache_root = codex_home / "plugins" / "cache"
-        if not cache_root.is_dir():
-            return servers
-        for manifest_path in sorted(cache_root.glob("**/.codex-plugin/plugin.json")):
-            try:
-                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            if not isinstance(manifest, dict):
-                continue
-            plugin_name = str(manifest.get("name") or manifest.get("id") or manifest_path.parent.parent.name)
-            try:
-                marketplace = str(manifest.get("marketplace") or manifest_path.relative_to(cache_root).parts[0])
-            except Exception:
-                marketplace = ""
-            raw_servers = manifest.get("mcp_servers") or manifest.get("mcpServers") or {}
-            if not isinstance(raw_servers, dict):
-                continue
-            for name, config in raw_servers.items():
-                if not isinstance(config, dict):
-                    continue
-                servers[f"{plugin_name}:{name}"] = {
-                    **config,
-                    "enabled": True,
-                    "pluginName": plugin_name,
-                    "marketplaceName": marketplace,
-                }
+        resolver = CodexPluginResourceResolver(get_codex_path_resolver())
+        for server in resolver.mcp_servers(self._enabled_codex_plugin_ids()):
+            servers[f"{server.plugin.name}:{server.name}"] = {
+                **server.config,
+                "enabled": True,
+                "pluginId": server.plugin.plugin_id,
+                "pluginName": server.plugin.name,
+                "marketplaceName": server.plugin.marketplace_name or "",
+            }
         return servers
+
+    @staticmethod
+    def _enabled_codex_plugin_ids() -> set[str]:
+        resolver = get_codex_path_resolver()
+        merged: dict[str, Any] = {}
+        for layer in (CodexLayer.USER, CodexLayer.PROJECT):
+            path = resolver.resolve(layer, CodexResource.CONFIG)
+            if not path.is_file():
+                continue
+            try:
+                config = parse_toml(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            plugins = config.get("plugins")
+            if not isinstance(plugins, dict):
+                continue
+            merged.update(plugins)
+        return {
+            plugin_id
+            for plugin_id, plugin_config in merged.items()
+            if isinstance(plugin_id, str)
+            and isinstance(plugin_config, dict)
+            and plugin_config.get("enabled") is True
+        }
 
     # --- OpenCode Format Conversion -----------------------------------------
 

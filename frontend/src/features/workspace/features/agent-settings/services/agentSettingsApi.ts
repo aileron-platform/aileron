@@ -204,7 +204,7 @@ export interface CodexRulesListResponse {
 
 export interface CodexTextFileResponse {
   workspaceId: string;
-  layer: 'user' | 'project';
+  layer: 'user' | 'project' | 'plugin';
   path: string;
   content: string;
   exists: boolean;
@@ -217,7 +217,7 @@ export interface CodexRulesValidationResponse {
   stderr: string;
 }
 
-export type CodexHookSource = 'hooks_json' | 'inline_config' | 'plugin' | 'managed';
+export type CodexHookSource = 'hooks_json' | 'inline_config' | 'plugin' | 'built_in' | 'project' | 'user';
 export type CodexHookEventScope = 'session_start' | 'turn';
 export type CodexHookMatcherTarget = 'source' | 'tool_name' | 'none';
 
@@ -261,6 +261,11 @@ export interface CodexHooksDocumentResponse extends CodexTextFileResponse {
   eventMetadata: CodexHookEventMetadata[];
 }
 
+export interface CodexHooksScopesResponse {
+  workspaceId: string;
+  scopes: CodexHooksDocumentResponse[];
+}
+
 export interface CodexPluginSummary {
   id: string;
   name: string;
@@ -290,14 +295,14 @@ export interface CodexFileSummary {
 
 export interface CodexFileListResponse {
   workspaceId: string;
-  layer: 'user' | 'project';
+  layer: 'user' | 'project' | 'plugin';
   resource: string;
   directory: string;
   files: CodexFileSummary[];
   config: Record<string, unknown>;
 }
 
-export type CodexSubagentSource = 'built_in' | 'user' | 'project' | 'plugin' | 'managed';
+export type CodexSubagentSource = 'built_in' | 'user' | 'project' | 'plugin';
 
 export interface CodexSubagentDefinition {
   name: string;
@@ -542,6 +547,16 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     );
   },
 
+  async listCodexHooksScopes(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+  ): Promise<CodexHooksScopesResponse> {
+    return apiRequest<CodexHooksScopesResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/hooks-scopes`,
+    );
+  },
+
   async updateCodexHooks(
     runtimeBaseUrl: string,
     workspaceId: string,
@@ -589,7 +604,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     resource: string,
-    layer: 'user' | 'project',
+    layer: 'user' | 'project' | 'plugin',
   ): Promise<CodexFileListResponse> {
     return apiRequest<CodexFileListResponse>(
       runtimeBaseUrl,
@@ -601,12 +616,17 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     resource: string,
-    layer: 'user' | 'project',
+    layer: 'user' | 'project' | 'plugin',
     path: string,
+    pluginId?: string,
   ): Promise<CodexTextFileResponse> {
+    const query = new URLSearchParams({ layer, path });
+    if (pluginId) {
+      query.set('pluginId', pluginId);
+    }
     return apiRequest<CodexTextFileResponse>(
       runtimeBaseUrl,
-      `workspaces/${workspaceId}/codex/${resource}/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+      `workspaces/${workspaceId}/codex/${resource}/file?${query.toString()}`,
     );
   },
 
@@ -641,6 +661,23 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
 
   async listCodexSubagents(runtimeBaseUrl: string, workspaceId: string): Promise<CodexSubagentsResponse> {
     return apiRequest<CodexSubagentsResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/codex/subagents`);
+  },
+
+  async getCodexSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    source: CodexSubagentSource,
+    path: string,
+    pluginId?: string,
+  ): Promise<CodexSubagentItem> {
+    const query = new URLSearchParams({ source, path });
+    if (pluginId) {
+      query.set('pluginId', pluginId);
+    }
+    return apiRequest<CodexSubagentItem>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/subagents/detail?${query.toString()}`,
+    );
   },
 
   async saveCodexSubagent(

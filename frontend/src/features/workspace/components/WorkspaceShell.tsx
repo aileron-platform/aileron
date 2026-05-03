@@ -799,7 +799,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       runtimeBaseUrl={workspaceRuntime.runtimeBaseUrl}
       terminalExternalUrl={workspaceRuntime.terminalExternalUrl}
     >
-      <ClaudeCodeProvider isActive={isAgentSettingsFeature}>
+      <ClaudeCodeProvider
+        isActive={isAgentSettingsFeature}
+        activeSubView={state.currentFeature === 'claude-code' ? state.claudeCodeSettings.subView : null}
+      >
         <ChatPanelStateProvider>
           <OpenSpecWorkspaceProvider>
             <div className="h-screen w-screen flex flex-col bg-background">

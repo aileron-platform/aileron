@@ -44,7 +44,6 @@ export interface DocumentPageProps {
 const documentSourceType = (document: AgentDocument): AgentSettingsSourceType => {
   const source = document.metadata?.source;
   if (source === 'built_in') return 'built-in';
-  if (source === 'managed') return 'managed';
   if (source === 'inline-config') return 'inline-config';
   if (source === 'project' || source === 'user' || source === 'local' || source === 'plugin') return source;
   return document.scope;

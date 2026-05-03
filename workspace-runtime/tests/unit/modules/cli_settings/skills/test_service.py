@@ -58,21 +58,21 @@ def test_plugin_scope_is_not_supported(tmp_path: Path, monkeypatch: pytest.Monke
 def test_codex_config_uses_codex_skill_directories() -> None:
     config = get_skill_config(SkillTool.CODEX)
 
-    assert config.project_dot_dir == ".agents"
-    assert config.user_root == Path("/home/developer/.agents/skills")
+    assert config.project_dot_dir == ".codex"
+    assert config.user_root == Path("/home/developer/.codex/skills")
 
 
 def test_codex_project_tree_reads_from_dot_codex(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     codex_config = SkillToolConfig(
         tool=SkillTool.CODEX,
-        project_dot_dir=".agents",
+        project_dot_dir=".codex",
         skill_dir_name="skills",
         user_root=tmp_path / "user-codex-skills",
         supports_plugin=False,
         api_prefix="codex",
     )
     workspace_root = tmp_path / "workspace"
-    skill_file = workspace_root / ".agents" / "skills" / "openspec-explore" / "SKILL.md"
+    skill_file = workspace_root / ".codex" / "skills" / "openspec-explore" / "SKILL.md"
     skill_file.parent.mkdir(parents=True, exist_ok=True)
     skill_file.write_text("---\nname: openspec-explore\n---\nbody\n", encoding="utf-8")
 

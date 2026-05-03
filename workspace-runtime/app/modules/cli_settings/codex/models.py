@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 
 
 CodexEditableLayer = Literal["user", "project"]
-CodexSubagentSource = Literal["built_in", "user", "project", "plugin", "managed"]
+CodexReadableLayer = Literal["user", "project", "plugin"]
+CodexSubagentSource = Literal["built_in", "user", "project", "plugin"]
 
 
 class CodexSettingsCapability(BaseModel):
@@ -212,7 +213,7 @@ class CodexTextFileResponse(BaseModel):
     """Text file response for Codex settings."""
 
     workspaceId: str
-    layer: CodexEditableLayer
+    layer: CodexReadableLayer
     path: str
     content: str
     exists: bool
@@ -242,7 +243,7 @@ class CodexRulesValidationResponse(BaseModel):
     stderr: str = ""
 
 
-CodexHookSource = Literal["hooks_json", "inline_config", "plugin", "managed"]
+CodexHookSource = Literal["hooks_json", "inline_config", "plugin", "built_in", "project", "user"]
 CodexHookEventScope = Literal["session_start", "turn"]
 CodexHookMatcherTarget = Literal["source", "tool_name", "none"]
 
@@ -298,6 +299,13 @@ class CodexHooksDocumentResponse(BaseModel):
     inlineHooks: list[dict[str, Any]] = Field(default_factory=list)
     entries: list[CodexHookEntry] = Field(default_factory=list)
     eventMetadata: list[CodexHookEventMetadata] = Field(default_factory=list)
+
+
+class CodexHooksScopesResponse(BaseModel):
+    """Hooks response for all editable scopes."""
+
+    workspaceId: str
+    scopes: list[CodexHooksDocumentResponse] = Field(default_factory=list)
 
 
 class CodexFeatureEnableResponse(BaseModel):
@@ -361,7 +369,7 @@ class CodexFileListResponse(BaseModel):
     """Codex managed file list response."""
 
     workspaceId: str
-    layer: CodexEditableLayer
+    layer: CodexReadableLayer
     resource: str
     directory: str
     files: list[CodexFileSummary] = Field(default_factory=list)

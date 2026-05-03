@@ -70,6 +70,47 @@ describe('AgentFileTreeDataAdapter', () => {
     expect(tree[0].children?.[0]).toMatchObject({ name: 'SKILL.md', path: 'builder/SKILL.md', scope: 'project' });
   });
 
+  it('reads Codex plugin skill content with the plugin identity', async () => {
+    apiClientMock.get
+      .mockResolvedValueOnce({
+        files: [
+          {
+            name: 'review',
+            path: 'review/SKILL.md',
+            sizeBytes: 10,
+            source: 'plugin',
+            readOnly: true,
+            metadata: { pluginId: 'demo@local', pluginName: 'Demo', marketplaceName: 'local' },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ content: '# Review\n' });
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'codex',
+      collection: 'skills',
+      scope: 'plugin',
+      runtimeBaseUrl: 'http://runtime.local',
+    });
+
+    const tree = await adapter.getTree();
+    const content = await adapter.getContent('review/SKILL.md');
+
+    expect(apiClientMock.get).toHaveBeenNthCalledWith(1, '/workspaces/ws-1/codex/skills/files?layer=plugin');
+    expect(tree[0].children?.[0]).toMatchObject({
+      pluginId: 'demo@local',
+      pluginName: 'Demo',
+      marketplaceName: 'local',
+      writable: false,
+    });
+    expect(apiClientMock.get).toHaveBeenNthCalledWith(
+      2,
+      '/workspaces/ws-1/codex/skills/file?layer=plugin&path=review%2FSKILL.md&pluginId=demo%40local',
+    );
+    expect(content).toBe('# Review\n');
+  });
+
   it('uses the configured collection and scope when moving files', async () => {
     apiClientMock.post.mockResolvedValueOnce({ success: true });
 

@@ -10,6 +10,7 @@ const apiMock = {
   updateCodexFile: vi.fn(),
   deleteCodexFile: vi.fn(),
   listCodexSubagents: vi.fn(),
+  getCodexSubagent: vi.fn(),
   saveCodexSubagent: vi.fn(),
   deleteCodexSubagent: vi.fn(),
 };
@@ -46,6 +47,24 @@ describe('CodexDocumentResourcePage', () => {
     apiMock.listCodexFiles.mockResolvedValue({ files: [] });
     apiMock.getCodexFile.mockResolvedValue({ content: '# Content' });
     apiMock.listCodexSubagents.mockResolvedValue({ items: [], registry: [] });
+    apiMock.getCodexSubagent.mockResolvedValue({
+      id: 'built_in:worker',
+      name: 'worker',
+      source: 'built_in',
+      editable: false,
+      readOnly: true,
+      path: 'worker.toml',
+      relativePath: 'worker.toml',
+      content: 'name = "worker"\ndescription = "Worker"\ndeveloper_instructions = "Do work."\n',
+      definition: {
+        name: 'worker',
+        description: 'Worker',
+        developer_instructions: 'Do work.',
+      },
+      effective: true,
+      overridden: false,
+      metadata: { format: 'toml' },
+    });
     apiMock.saveCodexSubagent.mockResolvedValue({
       id: 'project:reviewer.toml',
       name: 'reviewer',
@@ -151,9 +170,7 @@ describe('CodexDocumentResourcePage', () => {
         ],
       })
       .mockResolvedValueOnce({ files: [] });
-    apiMock.getCodexFile
-      .mockResolvedValueOnce({ content: '' })
-      .mockResolvedValueOnce({ content: '# Loaded Later' });
+    apiMock.getCodexFile.mockResolvedValueOnce({ content: '# Loaded Later' });
 
     render(
       <CodexDocumentResourcePage
@@ -164,6 +181,37 @@ describe('CodexDocumentResourcePage', () => {
     );
 
     expect(await screen.findByText('Loaded Later')).toBeInTheDocument();
+  });
+
+  it('does not fetch every prompt body before rendering the list', async () => {
+    apiMock.listCodexFiles
+      .mockResolvedValueOnce({
+        files: [
+          { name: 'alpha.md', path: 'alpha.md', sizeBytes: 5, source: 'project', readOnly: false, metadata: {} },
+          { name: 'beta.md', path: 'beta.md', sizeBytes: 5, source: 'project', readOnly: false, metadata: {} },
+        ],
+      })
+      .mockResolvedValueOnce({ files: [] });
+    apiMock.getCodexFile.mockResolvedValue({ content: '# Alpha' });
+
+    render(
+      <CodexDocumentResourcePage
+        resource="prompts"
+        selectedId="project:alpha.md"
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('alpha.md')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.codex.documents.stats.total:2')).toBeInTheDocument();
+    await waitFor(() => expect(apiMock.getCodexFile).toHaveBeenCalledTimes(1));
+    expect(apiMock.getCodexFile).toHaveBeenCalledWith(
+      'http://runtime.test',
+      'ws-1',
+      'prompts',
+      'project',
+      'alpha.md',
+    );
   });
 
   it('renders read-only subagent sources without fetching editable content', async () => {
@@ -206,6 +254,13 @@ describe('CodexDocumentResourcePage', () => {
     expect(screen.getByText('workspace.agentSettings.codex.subagents.registry.summary')).toBeInTheDocument();
     expect(apiMock.listCodexSubagents).toHaveBeenCalledWith('http://runtime.test', 'ws-1');
     expect(apiMock.getCodexFile).not.toHaveBeenCalled();
+    expect(apiMock.getCodexSubagent).toHaveBeenCalledWith(
+      'http://runtime.test',
+      'ws-1',
+      'built_in',
+      'worker.toml',
+      undefined,
+    );
   });
 
   it('creates a structured Codex subagent definition with optional fields', async () => {

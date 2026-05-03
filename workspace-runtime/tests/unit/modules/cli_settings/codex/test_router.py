@@ -245,17 +245,38 @@ sandbox_mode = "workspace-write"
     )
     resolver.resolve("user", "config").parent.mkdir(parents=True, exist_ok=True)
     resolver.resolve("user", "config").write_text("[agents]\nmax_threads = 4\nmax_depth = 1\n", encoding="utf-8")
+    requirements = resolver.resolve("project", "managed_requirements")
+    requirements.parent.mkdir(parents=True, exist_ok=True)
+    requirements.write_text(
+        """
+[agents.requirements_worker]
+description = "Project requirements worker"
+developer_instructions = "Use requirements instructions."
+""".strip(),
+        encoding="utf-8",
+    )
 
     response = client.get("/api/v1/workspaces/ws-1/codex/subagents")
 
     assert response.status_code == 200
     payload = response.json()
+    assert all(item["source"] != "managed" for item in payload["items"])
     worker_items = [item for item in payload["items"] if item["name"] == "worker"]
     assert {item["source"] for item in worker_items} == {"project", "user", "built_in"}
     assert next(item for item in worker_items if item["source"] == "project")["effective"] is True
     assert next(item for item in worker_items if item["source"] == "user")["overridden"] is True
     assert next(item for item in worker_items if item["source"] == "built_in")["readOnly"] is True
+    requirements_item = next(item for item in payload["items"] if item["name"] == "requirements_worker")
+    assert requirements_item["source"] == "project"
+    assert requirements_item["readOnly"] is True
+    assert all(item["content"] == "" for item in payload["items"])
     assert payload["registry"][0]["settings"]["max_threads"] == 4
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/subagents/detail?source=project&path=worker.toml")
+    assert response.status_code == 200
+    detail = response.json()
+    assert detail["content"].startswith('name = "worker"')
+    assert detail["definition"]["developer_instructions"] == "Use project worker instructions."
 
 
 def test_codex_subagents_save_raw_toml_preserves_advanced_fields_and_renames(tmp_path) -> None:
@@ -425,7 +446,13 @@ statusMessage = "Checking managed"
     )
     manifest = plugin_hooks.parents[1] / ".codex-plugin" / "plugin.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    manifest.write_text('{"id":"hook-demo","marketplace":"local","name":"Hook Demo"}', encoding="utf-8")
+    manifest.write_text(
+        '{"id":"hook-demo","marketplace":"local","name":"Hook Demo","hooks":"./hooks/hooks.json"}',
+        encoding="utf-8",
+    )
+    user_config = resolver.resolve("user", "config")
+    user_config.parent.mkdir(parents=True, exist_ok=True)
+    user_config.write_text('[plugins."hook-demo@local"]\nenabled = true\n', encoding="utf-8")
 
     response = client.put(
         "/api/v1/workspaces/ws-1/codex/hooks?layer=project",
@@ -442,8 +469,9 @@ statusMessage = "Checking managed"
         "hooks_json",
         "inline_config",
         "plugin",
-        "managed",
+        "project",
     }
+    assert all(entry["source"] != "managed" for entry in payload["entries"])
     json_entry = next(entry for entry in payload["entries"] if entry["source"] == "hooks_json")
     assert json_entry["readOnly"] is False
     assert json_entry["layer"] == "project"
@@ -455,12 +483,19 @@ statusMessage = "Checking managed"
     plugin_entry = next(entry for entry in payload["entries"] if entry["source"] == "plugin")
     assert plugin_entry["pluginId"] == "hook-demo@local"
     assert plugin_entry["readOnly"] is True
-    managed_entry = next(entry for entry in payload["entries"] if entry["source"] == "managed")
-    assert managed_entry["layer"] == "project"
-    assert managed_entry["actions"][0]["statusMessage"] == "Checking managed"
+    requirements_entry = next(entry for entry in payload["entries"] if entry["source"] == "project" and entry["readOnly"])
+    assert requirements_entry["layer"] == "project"
+    assert requirements_entry["actions"][0]["statusMessage"] == "Checking managed"
     session_metadata = next(item for item in payload["eventMetadata"] if item["event"] == "SessionStart")
     assert session_metadata["matcherTarget"] == "source"
     assert resolver.resolve("project", "hooks").read_text(encoding="utf-8").startswith('{"PreToolUse"')
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/hooks-scopes")
+    assert response.status_code == 200
+    scopes = {scope["layer"]: scope for scope in response.json()["scopes"]}
+    assert set(scopes) == {"project", "user"}
+    assert scopes["project"]["entries"]
+    assert scopes["user"]["entries"]
 
     response = client.put(
         "/api/v1/workspaces/ws-1/codex/hooks?layer=project",
@@ -538,7 +573,10 @@ def test_codex_file_resources_manage_editable_files_and_read_only_sources(tmp_pa
     plugin_skill.write_text("# Review\n", encoding="utf-8")
     manifest = plugin_skill.parents[2] / ".codex-plugin" / "plugin.json"
     manifest.parent.mkdir(parents=True, exist_ok=True)
-    manifest.write_text('{"id":"demo","marketplace":"local"}', encoding="utf-8")
+    manifest.write_text('{"id":"demo","marketplace":"local","skills":"./skills"}', encoding="utf-8")
+    user_config = resolver.resolve("user", "config")
+    user_config.parent.mkdir(parents=True, exist_ok=True)
+    user_config.write_text('[plugins."demo@local"]\nenabled = true\n', encoding="utf-8")
 
     response = client.get("/api/v1/workspaces/ws-1/codex/subagents/files?layer=project")
     assert response.status_code == 404
@@ -563,7 +601,55 @@ def test_codex_file_resources_manage_editable_files_and_read_only_sources(tmp_pa
     files = response.json()["items"]
     built_in = {file["name"]: file for file in files if file["source"] == "built_in"}
     assert built_in["worker"]["overridden"] is True
+    assert built_in["worker"]["content"] == ""
 
     response = client.get("/api/v1/workspaces/ws-1/codex/skills/files?layer=user")
     assert response.status_code == 200
-    assert any(file["source"] == "plugin" and file["readOnly"] for file in response.json()["files"])
+    assert [file for file in response.json()["files"] if file["source"] == "plugin"] == []
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/skills/files?layer=plugin")
+    assert response.status_code == 200
+    plugin_file = next(file for file in response.json()["files"] if file["source"] == "plugin" and file["readOnly"])
+    assert plugin_file["metadata"]["pluginId"] == "demo@local"
+    assert plugin_file["metadata"]["pluginName"] == "demo"
+
+    response = client.get(
+        "/api/v1/workspaces/ws-1/codex/skills/file?layer=plugin&path=review%2FSKILL.md&pluginId=demo%40local"
+    )
+    assert response.status_code == 200
+    assert response.json()["layer"] == "plugin"
+    assert response.json()["content"] == "# Review\n"
+
+    response = client.put(
+        "/api/v1/workspaces/ws-1/codex/skills/file?layer=plugin",
+        json={"path": "review/SKILL.md", "content": "# Changed\n"},
+    )
+    assert response.status_code == 422
+
+
+def test_codex_plugin_resources_hide_disabled_plugin_entries(tmp_path) -> None:
+    client, resolver = _client(tmp_path)
+    package_root = resolver.codex_home / "plugins" / "cache" / "local" / "demo" / "abc"
+    skill = package_root / "skills" / "review" / "SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text("# Review\n", encoding="utf-8")
+    hooks = package_root / "hooks" / "hooks.json"
+    hooks.parent.mkdir(parents=True, exist_ok=True)
+    hooks.write_text('{"SessionStart":[{"hooks":[{"type":"command","command":"echo plugin"}]}]}', encoding="utf-8")
+    manifest = package_root / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text(
+        '{"id":"demo","marketplace":"local","name":"Demo","skills":"./skills","hooks":"./hooks/hooks.json"}',
+        encoding="utf-8",
+    )
+    config = resolver.resolve("user", "config")
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text('[plugins."demo@local"]\nenabled = false\n', encoding="utf-8")
+
+    skills_response = client.get("/api/v1/workspaces/ws-1/codex/skills/files?layer=plugin")
+    hooks_response = client.get("/api/v1/workspaces/ws-1/codex/hooks?layer=user")
+
+    assert skills_response.status_code == 200
+    assert [item for item in skills_response.json()["files"] if item["source"] == "plugin"] == []
+    assert hooks_response.status_code == 200
+    assert [item for item in hooks_response.json()["entries"] if item["source"] == "plugin"] == []

@@ -6,6 +6,8 @@ import CodexHooksPage from './CodexHooksPage';
 
 const apiMock = {
   getCodexHooks: vi.fn(),
+  listCodexHooksScopes: vi.fn(),
+  listCodexPlugins: vi.fn(),
   updateCodexHooks: vi.fn(),
   enableCodexHooks: vi.fn(),
 };
@@ -29,12 +31,6 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
-vi.mock('../components/SettingsDocumentEditor', () => ({
-  SettingsDocumentEditor: ({ value }: { value: string }) => (
-    <textarea aria-label="codex-hooks-json" readOnly value={value} />
-  ),
-}));
-
 vi.mock('../services/agentSettingsApi', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/agentSettingsApi')>();
   return {
@@ -44,8 +40,14 @@ vi.mock('../services/agentSettingsApi', async (importOriginal) => {
 });
 
 describe('CodexHooksPage', () => {
+  const hooksScopesResponse = (project: Record<string, unknown>, user: Record<string, unknown>) => ({
+    workspaceId: 'ws-1',
+    scopes: [project, user],
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMock.listCodexPlugins.mockResolvedValue({ plugins: [] });
     apiMock.updateCodexHooks.mockImplementation((_baseUrl, _workspaceId, layer, content) => Promise.resolve({
       workspaceId: 'ws-1',
       layer,
@@ -57,8 +59,8 @@ describe('CodexHooksPage', () => {
       entries: [],
       eventMetadata: [],
     }));
-    apiMock.getCodexHooks
-      .mockResolvedValueOnce({
+    apiMock.listCodexHooksScopes.mockResolvedValue(hooksScopesResponse(
+      {
         workspaceId: 'ws-1',
         layer: 'project',
         path: '/workspace/.codex/hooks.json',
@@ -120,16 +122,16 @@ describe('CodexHooksPage', () => {
             raw: { matcher: 'startup', hooks: [{ type: 'command', command: 'echo plugin', statusMessage: 'Loading plugin' }] },
           },
           {
-            id: 'managed:project:Stop:0',
+            id: 'project:requirements:Stop:0',
             event: 'Stop',
             index: 0,
             matcher: null,
-            actions: [{ type: 'command', command: 'echo managed', statusMessage: 'Checking managed' }],
-            action: { type: 'command', command: 'echo managed', statusMessage: 'Checking managed' },
-            source: 'managed',
+            actions: [{ type: 'command', command: 'echo requirements', statusMessage: 'Checking requirements' }],
+            action: { type: 'command', command: 'echo requirements', statusMessage: 'Checking requirements' },
+            source: 'project',
             layer: 'project',
             readOnly: true,
-            raw: { type: 'command', command: 'echo managed', statusMessage: 'Checking managed' },
+            raw: { type: 'command', command: 'echo requirements', statusMessage: 'Checking requirements' },
           },
         ],
         eventMetadata: [
@@ -137,8 +139,8 @@ describe('CodexHooksPage', () => {
           { event: 'PreToolUse', scope: 'turn', matcherSupported: true, matcherTarget: 'tool_name', matcherExamples: ['Bash', 'apply_patch'] },
           { event: 'Stop', scope: 'turn', matcherSupported: false, matcherTarget: 'none', matcherExamples: [] },
         ],
-      })
-      .mockResolvedValueOnce({
+      },
+      {
         workspaceId: 'ws-1',
         layer: 'user',
         path: '/home/developer/.codex/hooks.json',
@@ -148,7 +150,8 @@ describe('CodexHooksPage', () => {
         inlineHooks: [],
         entries: [],
         eventMetadata: [],
-      });
+      },
+    ));
     apiMock.enableCodexHooks.mockResolvedValue({ workspaceId: 'ws-1', featureEnabled: true });
   });
 
@@ -161,10 +164,11 @@ describe('CodexHooksPage', () => {
     expect(screen.getByText('echo json')).toBeInTheDocument();
     expect(screen.getByText('echo inline')).toBeInTheDocument();
     expect(screen.getByText('echo plugin')).toBeInTheDocument();
-    expect(screen.getByText('echo managed')).toBeInTheDocument();
+    expect(screen.getByText('echo requirements')).toBeInTheDocument();
     expect(screen.getAllByText('workspace.agentSettings.codex.hooks.sources.inline_config').length).toBeGreaterThan(0);
     expect(screen.getAllByText('workspace.agentSettings.codex.hooks.sources.plugin').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('workspace.agentSettings.codex.hooks.sources.managed').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('workspace.agentSettings.codex.hooks.sources.project').length).toBeGreaterThan(0);
+    expect(screen.queryByText('workspace.agentSettings.codex.hooks.sources.managed')).not.toBeInTheDocument();
     expect(screen.getAllByLabelText('workspace.agentSettings.codex.hooks.actions.edit')).toHaveLength(1);
 
     await user.click(screen.getByText('workspace.agentSettings.codex.hooks.actions.enableFeature'));
@@ -191,5 +195,60 @@ describe('CodexHooksPage', () => {
     await waitFor(() => expect(apiMock.updateCodexHooks).toHaveBeenCalled());
     const content = apiMock.updateCodexHooks.mock.calls[0][3];
     expect(JSON.parse(content).PreToolUse[0].hooks[0].statusMessage).toBe('Reviewing Bash command');
+  });
+
+  it('hides plugin scope filter when loaded hooks do not include plugin entries or enabled plugins', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
+      configurable: true,
+      value: () => false,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: () => undefined,
+    });
+    apiMock.listCodexHooksScopes.mockResolvedValueOnce(hooksScopesResponse(
+      {
+        workspaceId: 'ws-1',
+        layer: 'project',
+        path: '/workspace/.codex/hooks.json',
+        content: '{}',
+        exists: true,
+        featureEnabled: true,
+        inlineHooks: [],
+        entries: [],
+        eventMetadata: [],
+      },
+      {
+        workspaceId: 'ws-1',
+        layer: 'user',
+        path: '/home/developer/.codex/hooks.json',
+        content: '{}',
+        exists: false,
+        featureEnabled: false,
+        inlineHooks: [],
+        entries: [],
+        eventMetadata: [],
+      },
+    ));
+
+    render(<CodexHooksPage />);
+
+    expect(await screen.findByText('workspace.agentSettings.codex.hooks.header.title')).toBeInTheDocument();
+    await user.click(screen.getAllByRole('combobox')[0]);
+
+    expect(screen.getByText('workspace.agentSettings.codex.hooks.filters.scope.options.project')).toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.codex.hooks.filters.scope.options.plugin')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.codex.hooks.filters.scope.options.managed')).not.toBeInTheDocument();
+  });
+
+  it('loads all Codex hook scopes through the aggregate endpoint', async () => {
+    render(<CodexHooksPage />);
+
+    await screen.findByText('echo json');
+
+    expect(apiMock.listCodexHooksScopes).toHaveBeenCalledTimes(1);
+    expect(apiMock.getCodexHooks).not.toHaveBeenCalled();
+    expect(apiMock.listCodexPlugins).not.toHaveBeenCalled();
   });
 });

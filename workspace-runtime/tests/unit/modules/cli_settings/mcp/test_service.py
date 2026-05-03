@@ -23,6 +23,7 @@ from app.modules.cli_settings.mcp.config_strategies import (
     JsonConfigStrategy,
     TomlConfigStrategy,
 )
+from app.modules.cli_settings.codex_paths import CodexLayer, CodexPathResolver, CodexResource
 from app.modules.cli_settings.mcp.models import (
     CliMcpImportRequest,
     CliMcpImportUploadRequest,
@@ -354,6 +355,80 @@ class TestCodexMcp:
         # Verify write location
         user_path = tmp_path / "user" / "config.toml"
         assert user_path.exists()
+
+    def test_plugin_scope_reads_manifest_relative_mcp_servers(self, tmp_path: Path, workspace_path: Path, monkeypatch):
+        codex_resolver = CodexPathResolver(
+            user_home=tmp_path / "home" / "developer",
+            workspace_root=workspace_path,
+        )
+        monkeypatch.setattr(
+            "app.modules.cli_settings.mcp.service.get_codex_path_resolver",
+            lambda: codex_resolver,
+        )
+        package_root = codex_resolver.codex_home / ".tmp" / "plugins" / "plugins" / "demo"
+        manifest = package_root / ".codex-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            '{"id":"demo","marketplace":"local","name":"Demo","mcpServers":"./.mcp.json"}',
+            encoding="utf-8",
+        )
+        (package_root / ".mcp.json").write_text(
+            '{"mcpServers":{"docs":{"command":"npx","args":["-y","docs-mcp"]}}}',
+            encoding="utf-8",
+        )
+        config_path = codex_resolver.resolve(CodexLayer.USER, CodexResource.CONFIG)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('[plugins."demo@local"]\nenabled = true\n', encoding="utf-8")
+
+        svc = self._make_service(tmp_path)
+        result = svc.list_servers("ws1", CliMcpScope.PLUGIN)
+
+        assert "Demo:docs" in result.scopes[0].mcpServers
+        server = result.scopes[0].mcpServers["Demo:docs"]
+        assert server.command == "npx"
+        assert server.pluginId == "demo@local"
+        assert server.pluginName == "Demo"
+        assert server.marketplaceName == "local"
+
+    def test_plugin_scope_hides_disabled_manifest_mcp_servers(self, tmp_path: Path, workspace_path: Path, monkeypatch):
+        codex_resolver = CodexPathResolver(
+            user_home=tmp_path / "home" / "developer",
+            workspace_root=workspace_path,
+        )
+        monkeypatch.setattr(
+            "app.modules.cli_settings.mcp.service.get_codex_path_resolver",
+            lambda: codex_resolver,
+        )
+        package_root = codex_resolver.codex_home / ".tmp" / "plugins" / "plugins" / "demo"
+        manifest = package_root / ".codex-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(
+            '{"id":"demo","marketplace":"local","name":"Demo","mcpServers":{"docs":{"command":"npx"}}}',
+            encoding="utf-8",
+        )
+        config_path = codex_resolver.resolve(CodexLayer.USER, CodexResource.CONFIG)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('[plugins."demo@local"]\nenabled = false\n', encoding="utf-8")
+
+        svc = self._make_service(tmp_path)
+        result = svc.list_servers("ws1", CliMcpScope.PLUGIN)
+
+        assert result.scopes[0].mcpServers == {}
+
+    def test_plugin_scope_mutations_are_rejected(self, tmp_path: Path, workspace_path: Path):
+        svc = self._make_service(tmp_path)
+        payload = CliMcpServerCreateRequest(mcpServers={"srv": CliMcpServerConfig(command="cmd")})
+
+        with pytest.raises(ValueError, match="controlled by plugin enablement"):
+            svc.create_servers("ws1", CliMcpScope.PLUGIN, payload)
+        with pytest.raises(ValueError, match="controlled by plugin enablement"):
+            svc.update_server("ws1", CliMcpScope.PLUGIN, "srv", CliMcpServerUpdateRequest(mcpServers={"srv": CliMcpServerConfig(command="cmd")}))
+        with pytest.raises(ValueError, match="controlled by plugin enablement"):
+            svc.delete_server("ws1", CliMcpScope.PLUGIN, "srv")
+        with pytest.raises(ValueError, match="controlled by plugin enablement"):
+            svc.toggle_server_status("ws1", CliMcpScope.PLUGIN, "srv", False)
+        with pytest.raises(ValueError, match="controlled by plugin enablement"):
+            svc.import_servers("ws1", CliMcpImportRequest(scope=CliMcpScope.PLUGIN, mcpServers={"srv": CliMcpServerConfig(command="cmd")}))
 
 
 # === OpenCode tests =========================================================

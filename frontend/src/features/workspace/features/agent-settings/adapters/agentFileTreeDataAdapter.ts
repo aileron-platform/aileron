@@ -38,7 +38,7 @@ const agentFileEndpoints = {
 
 export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   private readonly client: ApiClient;
-  private readonly codexReadOnlyContent = new Map<string, string>();
+  private readonly codexPluginIds = new Map<string, string>();
 
   constructor(private readonly options: AgentFileTreeDataAdapterOptions) {
     if (!options.workspaceId) {
@@ -68,13 +68,14 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   async getContent(path: string): Promise<string> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
     if (apiPrefix === 'codex') {
-      const readOnlyContent = this.codexReadOnlyContent.get(path);
-      if (readOnlyContent !== undefined) {
-        return readOnlyContent;
+      const layer = scope === 'plugin' ? 'plugin' : scope === 'user' ? 'user' : 'project';
+      const query = new URLSearchParams({ layer, path });
+      const pluginId = this.codexPluginIds.get(path);
+      if (pluginId) {
+        query.set('pluginId', pluginId);
       }
-      const layer = scope === 'user' ? 'user' : 'project';
       const response = await this.client.get<{ content?: string }>(
-        `/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+        `/workspaces/${workspaceId}/codex/${collection}/file?${query.toString()}`,
       );
       return response.content ?? '';
     }
@@ -224,17 +225,18 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
     collection: AgentFileCollection,
     scope: AgentSelectedFile['scope'],
   ): Promise<FileTreeNode[]> {
-    const layer = scope === 'user' ? 'user' : 'project';
+    const layer = scope === 'plugin' ? 'plugin' : scope === 'user' ? 'user' : 'project';
     const response = await this.client.get<CodexFileListResponse>(
       `/workspaces/${workspaceId}/codex/${collection}/files?layer=${layer}`,
     );
     const summaries = response.files.filter((file) => (
       scope === 'plugin' ? file.source === 'plugin' : file.source === scope
     ));
-    this.codexReadOnlyContent.clear();
+    this.codexPluginIds.clear();
     for (const summary of summaries) {
-      if (summary.readOnly) {
-        this.codexReadOnlyContent.set(summary.path, JSON.stringify(summary.metadata ?? {}, null, 2));
+      const pluginId = summary.metadata?.pluginId;
+      if (summary.source === 'plugin' && typeof pluginId === 'string') {
+        this.codexPluginIds.set(summary.path, pluginId);
       }
     }
     return buildTreeFromCodexSummaries(summaries);
@@ -284,6 +286,10 @@ const buildTreeFromCodexSummaries = (summaries: CodexFileSummary[]): FileTreeNod
         : 'plugin',
       writable: !summary.readOnly,
       extension: fileName.includes('.') ? fileName.split('.').pop() : undefined,
+      metadata: summary.metadata,
+      pluginId: typeof summary.metadata?.pluginId === 'string' ? summary.metadata.pluginId : undefined,
+      pluginName: typeof summary.metadata?.pluginName === 'string' ? summary.metadata.pluginName : undefined,
+      marketplaceName: typeof summary.metadata?.marketplaceName === 'string' ? summary.metadata.marketplaceName : undefined,
     };
     if (parentPath) {
       ensureDirectory(parentPath).children?.push(node);

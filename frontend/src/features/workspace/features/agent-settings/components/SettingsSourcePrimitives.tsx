@@ -11,7 +11,7 @@ import { cn } from '@/shared/utils/cn';
 import type { AgentScope } from '../types';
 import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 
-export type AgentSettingsSourceType = AgentScope | 'managed' | 'built-in' | 'inline-config';
+export type AgentSettingsSourceType = AgentScope | 'built-in' | 'inline-config';
 
 export interface AgentSettingsSourceDescriptor {
   type: AgentSettingsSourceType;
@@ -36,7 +36,6 @@ const sourceIconClasses = 'h-3 w-3';
 
 const SOURCE_BADGE_CLASSES: Record<AgentSettingsSourceType, string> = {
   ...SCOPE_BADGE_CLASSES,
-  managed: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700',
   'built-in': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-700',
   'inline-config': 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700',
 };
@@ -46,7 +45,6 @@ const SOURCE_ICONS: Record<AgentSettingsSourceType, React.ComponentType<{ classN
   user: User,
   local: Building,
   plugin: Puzzle,
-  managed: AlertCircle,
   'built-in': Info,
   'inline-config': Info,
 };

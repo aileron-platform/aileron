@@ -38,6 +38,9 @@ const CodexPluginsPage: React.FC = () => {
     onSuccess: () => {
       setShowNewThreadNotice(true);
       void queryClient.invalidateQueries({ queryKey: ['codex-plugins', runtimeBaseUrl, workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ['codex-hooks-workflow', runtimeBaseUrl, workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ['codex-skills-scope-availability', runtimeBaseUrl, workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent-file-tree'] });
       toast({ title: t('workspace.agentSettings.codex.plugins.notifications.saved') });
     },
   });

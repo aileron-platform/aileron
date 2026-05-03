@@ -213,8 +213,8 @@ const agentSettings = {
             all: 'All scopes',
             project: 'Project',
             user: 'User',
-            plugin: 'Plugin and inline',
-            managed: 'Managed',
+            plugin: 'Plugin',
+            built_in: 'Built-in',
           },
         },
       },
@@ -232,14 +232,16 @@ const agentSettings = {
           project: 'Project',
           user: 'User',
           plugin: 'Plugin',
-          managed: 'Managed',
+          built_in: 'Built-in',
         },
       },
       sources: {
         hooks_json: 'hooks.json',
         inline_config: 'Read-only inline config',
         plugin: 'Read-only plugin',
-        managed: 'Read-only managed',
+        built_in: 'Read-only built-in',
+        project: 'Read-only project',
+        user: 'Read-only personal',
       },
       events: {
         SessionStart: { name: 'SessionStart', option: 'SessionStart' },
@@ -313,6 +315,7 @@ const agentSettings = {
         enabled: 'codex_hooks enabled',
         saveFailed: 'Unable to save hooks.json',
         invalidJson: 'hooks.json must be valid JSON',
+        loadIncomplete: 'Codex hooks response is missing a scope.',
       },
     },
     plugins: {
@@ -365,7 +368,7 @@ const agentSettings = {
       loading: 'Loading documents…',
       stats: { total: '{{count}} item(s)' },
       scope: {
-        values: { project: 'Project', user: 'Personal', plugin: 'Plugin', built_in: 'Built-in', managed: 'Managed' },
+        values: { project: 'Project', user: 'Personal', plugin: 'Plugin', built_in: 'Built-in' },
       },
       status: { effective: 'Effective', overridden: 'Overridden' },
       toml: {
@@ -695,6 +698,10 @@ const agentSettings = {
         deleteForbidden: {
           title: 'Plugin server is read-only',
           description: 'Plugin-managed MCP servers cannot be deleted here.',
+        },
+        pluginReadOnly: {
+          title: 'Plugin server is read-only',
+          description: 'Plugin MCP servers are controlled by the plugin-level enabled setting.',
         },
         createSuccess: { title: 'MCP server created' },
         updateSuccess: { title: 'MCP server updated' },

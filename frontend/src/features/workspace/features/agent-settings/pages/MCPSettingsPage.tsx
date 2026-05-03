@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Wrench, Search, Upload, Plus, Loader2, AlertCircle, Building, User, Layers, Laptop, Puzzle, RefreshCw } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -45,6 +46,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
   const [servers, setServers] = useState<AgentMcpServer[]>([]);
+  const [serversLoaded, setServersLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedScope, setSelectedScope] = useState<AgentScope | 'all'>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -56,6 +58,24 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const [visibleEnvs, setVisibleEnvs] = useState<Record<string, boolean>>({});
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
+
+  const hasPluginServers = servers.some((server) => server.scope === 'plugin');
+
+  const pluginsQuery = useQuery({
+    queryKey: ['codex-plugins', runtimeBaseUrl, workspaceId],
+    queryFn: () => api.listCodexPlugins(runtimeBaseUrl || '', workspaceId || ''),
+    enabled: Boolean(
+      apiPrefix === 'codex'
+      && runtimeBaseUrl
+      && workspaceId
+      && !runtimeError
+      && serversLoaded
+      && !hasPluginServers,
+    ),
+    staleTime: 30_000,
+  });
+
+  const hasEnabledCodexPlugins = pluginsQuery.data?.plugins.some((plugin) => plugin.enabled) ?? false;
 
   const filteredServers = useMemo(() => {
     let filtered = servers;
@@ -76,6 +96,20 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     return filtered;
   }, [servers, search, selectedScope]);
 
+  const effectiveScopes = useMemo(() => {
+    return availableScopes.filter((scope) => (
+      scope !== 'plugin'
+      || hasPluginServers
+      || (apiPrefix === 'codex' && hasEnabledCodexPlugins)
+    ));
+  }, [apiPrefix, availableScopes, hasEnabledCodexPlugins, hasPluginServers]);
+
+  useEffect(() => {
+    if (selectedScope !== 'all' && !effectiveScopes.includes(selectedScope)) {
+      setSelectedScope('all');
+    }
+  }, [effectiveScopes, selectedScope]);
+
   const fetchServers = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId || runtimeError) {
       return;
@@ -84,7 +118,8 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     setError(null);
     try {
       const response = await api.listMcpServers(runtimeBaseUrl, workspaceId);
-      setServers(response);
+      setServers(Array.isArray(response) ? response : []);
+      setServersLoaded(true);
     } catch (err) {
       const message = err instanceof Error
         ? err.message
@@ -103,6 +138,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   useEffect(() => {
     if (!isRuntimeReady) {
       setServers([]);
+      setServersLoaded(false);
       return;
     }
     void fetchServers();
@@ -241,6 +277,15 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   const handleToggleStatus = useCallback(
     async (server: AgentMcpServer, enabled: boolean) => {
+      if (server.scope === 'plugin') {
+        toast({
+          variant: 'destructive',
+          title: t(`${i18nNamespace}.mcp.messages.pluginReadOnly.title`),
+          description: t(`${i18nNamespace}.mcp.messages.pluginReadOnly.description`),
+        });
+        return;
+      }
+
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         toast({
           variant: 'destructive',
@@ -275,6 +320,10 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   const handleImport = useCallback(
     async (options: { scope: AgentMcpServer['scope']; file: File; overwrite?: boolean }) => {
+      if (options.scope === 'plugin') {
+        throw new Error(t(`${i18nNamespace}.mcp.messages.pluginReadOnly.description`));
+      }
+
       if (!runtimeBaseUrl || !workspaceId || runtimeError) {
         throw new Error(t(`${i18nNamespace}.mcp.messages.runtimeNotReady`));
       }
@@ -328,28 +377,28 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                         <Layers className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.all`)}
                       </div>
                     </SelectItem>
-                    {availableScopes.includes('project') && (
+                    {effectiveScopes.includes('project') && (
                       <SelectItem value="project">
                         <div className="flex items-center gap-2">
                           <Building className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.project`)}
                         </div>
                       </SelectItem>
                     )}
-                    {availableScopes.includes('user') && (
+                    {effectiveScopes.includes('user') && (
                       <SelectItem value="user">
                         <div className="flex items-center gap-2">
                           <User className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.user`)}
                         </div>
                       </SelectItem>
                     )}
-                    {availableScopes.includes('local') && (
+                    {effectiveScopes.includes('local') && (
                       <SelectItem value="local">
                         <div className="flex items-center gap-2">
                           <Laptop className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.local`)}
                         </div>
                       </SelectItem>
                     )}
-                    {availableScopes.includes('plugin') && (
+                    {effectiveScopes.includes('plugin') && (
                       <SelectItem value="plugin">
                         <div className="flex items-center gap-2">
                           <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.plugin`)}
@@ -468,7 +517,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                       delete: t(`${i18nNamespace}.mcp.actions.delete`),
                       readOnlyTooltip: t(`${i18nNamespace}.mcp.plugin.readonly`),
                     }}
-                    supportsToggle={supportsToggle}
+                    supportsToggle={supportsToggle && server.scope !== 'plugin'}
                     canEdit={canEdit(server)}
                     canDelete={canDelete(server)}
                     disabled={!isRuntimeReady}
@@ -494,7 +543,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           open={dialogOpen}
           mode={dialogMode}
           server={activeServer}
-          availableScopes={availableScopes}
+          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin')}
           i18nNamespace={i18nNamespace}
           onClose={() => {
             setDialogOpen(false);
@@ -507,7 +556,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           open={importOpen}
           onClose={() => setImportOpen(false)}
           onImport={handleImport}
-          availableScopes={availableScopes}
+          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin')}
           i18nNamespace={i18nNamespace}
         />
       

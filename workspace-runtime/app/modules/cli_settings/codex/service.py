@@ -27,6 +27,7 @@ from .models import (
     CodexHookEntry,
     CodexHookEventMetadata,
     CodexHooksDocumentResponse,
+    CodexHooksScopesResponse,
     CodexManagedRequirementsResponse,
     CodexManagedRequirementsSource,
     CodexOverviewManagedRequirementsState,
@@ -52,6 +53,7 @@ from .models import (
     CodexTextFileResponse,
     CodexTrustUpdateResponse,
 )
+from .plugin_resources import CodexPluginResourceResolver
 
 DEFAULT_PROJECT_DOC_MAX_BYTES = 32 * 1024
 
@@ -211,6 +213,7 @@ class CodexSettingsService:
 
     def __init__(self, resolver: CodexPathResolver | None = None) -> None:
         self._resolver = resolver or get_codex_path_resolver()
+        self._plugin_resolver = CodexPluginResourceResolver(self._resolver)
 
     def get_overview(self, workspace_id: str) -> CodexOverviewResponse:
         user_config_path = self._resolver.resolve(CodexLayer.USER, CodexResource.CONFIG)
@@ -494,26 +497,55 @@ class CodexSettingsService:
         )
 
     def get_hooks_document(self, workspace_id: str, layer: CodexLayer | str) -> CodexHooksDocumentResponse:
+        shared = self._shared_hook_sources()
+        return self._get_hooks_document_with_shared_sources(workspace_id, layer, shared)
+
+    def list_hooks_documents(self, workspace_id: str) -> CodexHooksScopesResponse:
+        shared = self._shared_hook_sources()
+        return CodexHooksScopesResponse(
+            workspaceId=workspace_id,
+            scopes=[
+                self._get_hooks_document_with_shared_sources(workspace_id, CodexLayer.PROJECT, shared),
+                self._get_hooks_document_with_shared_sources(workspace_id, CodexLayer.USER, shared),
+            ],
+        )
+
+    def _get_hooks_document_with_shared_sources(
+        self,
+        workspace_id: str,
+        layer: CodexLayer | str,
+        shared: dict[str, Any],
+    ) -> CodexHooksDocumentResponse:
         codex_layer = CodexLayer(layer)
         path = self._resolver.resolve(codex_layer, CodexResource.HOOKS)
         content = path.read_text(encoding="utf-8") if path.is_file() else ""
-        inline_hooks = self._inline_hooks()
+        inline_hooks = shared["inline_hooks"]
         return CodexHooksDocumentResponse(
             workspaceId=workspace_id,
             layer=codex_layer.value,
             path=str(path),
             content=content,
             exists=path.is_file(),
-            featureEnabled=self._codex_hooks_enabled(),
+            featureEnabled=shared["feature_enabled"],
             inlineHooks=inline_hooks,
             entries=[
                 *self._structured_hooks(codex_layer, content, path),
-                *self._inline_hook_entries(inline_hooks),
-                *self._plugin_hook_entries(),
-                *self._managed_hook_entries(),
+                *shared["inline_entries"],
+                *shared["plugin_entries"],
+                *shared["requirements_entries"],
             ],
             eventMetadata=HOOK_EVENT_METADATA,
         )
+
+    def _shared_hook_sources(self) -> dict[str, Any]:
+        inline_hooks = self._inline_hooks()
+        return {
+            "feature_enabled": self._codex_hooks_enabled(),
+            "inline_hooks": inline_hooks,
+            "inline_entries": self._inline_hook_entries(inline_hooks),
+            "plugin_entries": self._plugin_hook_entries(),
+            "requirements_entries": self._requirements_hook_entries(),
+        }
 
     def update_hooks_document(
         self,
@@ -581,6 +613,7 @@ class CodexSettingsService:
         plugins[plugin_id] = plugin_config
         config["plugins"] = plugins
         _write_toml(path, config)
+        self._plugin_resolver.clear_cache()
         return CodexPluginToggleResponse(
             workspaceId=workspace_id,
             layer=codex_layer.value,
@@ -594,9 +627,14 @@ class CodexSettingsService:
             *self._editable_subagent_items(CodexLayer.PROJECT),
             *self._built_in_subagent_items(),
             *self._plugin_subagent_items(),
-            *self._managed_subagent_items(),
+            *self._requirements_subagent_items(),
         ]
         self._apply_subagent_precedence(items)
+        for item in items:
+            if item.readOnly:
+                item.content = ""
+            elif item.definition is not None:
+                item.content = ""
         items.sort(key=lambda item: (item.name, self._subagent_source_order(item), item.relativePath or item.path or ""))
         return CodexSubagentsResponse(
             workspaceId=workspace_id,
@@ -653,7 +691,56 @@ class CodexSettingsService:
             deleted=deleted,
         )
 
+    def get_subagent(
+        self,
+        workspace_id: str,
+        source: str,
+        relative_path: str,
+        plugin_id: str | None = None,
+    ) -> CodexSubagentItem:
+        clean_path = Path(relative_path)
+        if clean_path.is_absolute() or ".." in clean_path.parts:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_SUBAGENT_PATH", "message": relative_path},
+            )
+        if source in {"project", "user"}:
+            return self._subagent_item_from_file(CodexLayer(source), self._resolve_subagent_file(CodexLayer(source), relative_path))
+        if source == "built_in":
+            item = next(
+                (item for item in self._built_in_subagent_items() if item.relativePath == relative_path or item.path == relative_path),
+                None,
+            )
+            if item is not None:
+                return item
+        if source == "plugin":
+            item = next(
+                (
+                    item
+                    for item in self._plugin_subagent_items()
+                    if item.relativePath == relative_path and (plugin_id is None or item.pluginId == plugin_id)
+                ),
+                None,
+            )
+            if item is not None:
+                return item
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"error": "SUBAGENT_NOT_FOUND", "message": relative_path},
+        )
+
     def list_files(self, workspace_id: str, layer: CodexLayer | str, resource: str) -> CodexFileListResponse:
+        if str(layer) == "plugin":
+            files = self._plugin_skill_summaries() if resource == "skills" else []
+            return CodexFileListResponse(
+                workspaceId=workspace_id,
+                layer="plugin",
+                resource=resource,
+                directory="",
+                files=files,
+                config=self._resource_config(resource),
+            )
+
         codex_layer = CodexLayer(layer)
         directory = self._file_resource_path(codex_layer, resource)
         files = [
@@ -667,8 +754,6 @@ class CodexSettingsService:
             for path in sorted(directory.rglob("*"))
             if path.is_file()
         ] if directory.is_dir() else []
-        if resource == "skills":
-            files.extend(self._plugin_skill_summaries())
         return CodexFileListResponse(
             workspaceId=workspace_id,
             layer=codex_layer.value,
@@ -678,7 +763,16 @@ class CodexSettingsService:
             config=self._resource_config(resource),
         )
 
-    def get_file(self, workspace_id: str, layer: CodexLayer | str, resource: str, relative_path: str) -> CodexTextFileResponse:
+    def get_file(
+        self,
+        workspace_id: str,
+        layer: CodexLayer | str,
+        resource: str,
+        relative_path: str,
+        plugin_id: str | None = None,
+    ) -> CodexTextFileResponse:
+        if str(layer) == "plugin":
+            return self._get_plugin_file(workspace_id, resource, relative_path, plugin_id)
         codex_layer = CodexLayer(layer)
         path = self._resolve_managed_file(codex_layer, resource, relative_path)
         return CodexTextFileResponse(
@@ -762,6 +856,42 @@ class CodexSettingsService:
                 detail={"error": "INVALID_FILE_PATH", "message": relative_path},
             )
         return self._file_resource_path(layer, resource) / clean_path
+
+    def _get_plugin_file(
+        self,
+        workspace_id: str,
+        resource: str,
+        relative_path: str,
+        plugin_id: str | None,
+    ) -> CodexTextFileResponse:
+        clean_path = Path(relative_path)
+        if clean_path.is_absolute() or ".." in clean_path.parts:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_FILE_PATH", "message": relative_path},
+            )
+        if resource != "skills":
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail={"error": "UNKNOWN_PLUGIN_FILE_RESOURCE", "message": resource},
+            )
+        skill = self._plugin_resolver.find_skill(
+            plugin_id,
+            str(clean_path),
+            self._enabled_plugin_ids(),
+        )
+        if skill is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail={"error": "PLUGIN_FILE_NOT_FOUND", "message": relative_path},
+            )
+        return CodexTextFileResponse(
+            workspaceId=workspace_id,
+            layer="plugin",
+            path=str(skill.path),
+            content=skill.path.read_text(encoding="utf-8"),
+            exists=True,
+        )
 
     def _resolve_subagent_file(self, layer: CodexLayer, relative_path: str) -> Path:
         clean_path = Path(relative_path)
@@ -853,7 +983,7 @@ class CodexSettingsService:
                 )
         return items
 
-    def _managed_subagent_items(self) -> list[CodexSubagentItem]:
+    def _requirements_subagent_items(self) -> list[CodexSubagentItem]:
         items: list[CodexSubagentItem] = []
         for layer in (CodexLayer.USER, CodexLayer.PROJECT):
             path = self._resolver.resolve(layer, CodexResource.MANAGED_REQUIREMENTS)
@@ -868,9 +998,9 @@ class CodexSettingsService:
                 definition = self._definition_from_subagent_data(data)
                 items.append(
                     CodexSubagentItem(
-                        id=f"managed:{layer.value}:{name}",
+                        id=f"{layer.value}:requirements:{name}",
                         name=definition.name,
-                        source="managed",
+                        source=layer.value,
                         editable=False,
                         readOnly=True,
                         layer=layer.value,
@@ -900,7 +1030,7 @@ class CodexSettingsService:
 
     @staticmethod
     def _subagent_source_order(item: CodexSubagentItem) -> int:
-        return {"project": 0, "user": 1, "built_in": 2, "plugin": 3, "managed": 4}.get(item.source, 9)
+        return {"project": 0, "user": 1, "built_in": 2, "plugin": 3}.get(item.source, 9)
 
     def _apply_subagent_precedence(self, items: list[CodexSubagentItem]) -> None:
         by_name: dict[str, list[CodexSubagentItem]] = {}
@@ -979,49 +1109,60 @@ class CodexSettingsService:
             merged.update(_as_table(config.get("plugins")))
         return merged
 
+    def _enabled_plugin_ids(self) -> set[str]:
+        return {
+            plugin_id
+            for plugin_id, config in self._configured_plugins().items()
+            if isinstance(plugin_id, str) and _as_table(config).get("enabled") is True
+        }
+
     def _discovered_plugins(self) -> dict[str, dict[str, Any]]:
         discovered: dict[str, dict[str, Any]] = {}
         self._collect_marketplace_plugins(discovered)
-        for manifest_path in self._plugin_manifest_paths():
-            manifest = self._read_json_file(manifest_path)
-            plugin_id = self._plugin_id_from_manifest(manifest, manifest_path)
-            current = discovered.setdefault(plugin_id, {})
+        for package in self._plugin_resolver.packages():
+            current = discovered.setdefault(package.plugin_id, {})
             current.update(
                 {
-                    "name": manifest.get("name") or manifest.get("id") or plugin_id,
-                    "marketplace": manifest.get("marketplace") or self._marketplace_from_plugin_id(plugin_id),
+                    "name": package.name,
+                    "marketplace": package.marketplace_name,
                     "installed": True,
-                    "path": str(manifest_path.parent.parent),
-                    "sourcePath": str(manifest_path),
-                    "bundled": self._plugin_bundles(manifest, manifest_path.parent.parent),
+                    "path": str(package.package_root),
+                    "sourcePath": str(package.manifest_path),
+                    "bundled": self._plugin_resolver.bundled_summary(package),
                 },
             )
         return discovered
 
     def _collect_marketplace_plugins(self, discovered: dict[str, dict[str, Any]]) -> None:
-        marketplace_path = self._resolver.codex_home / ".tmp" / "plugins" / ".agents" / "plugins" / "marketplace.json"
-        if not marketplace_path.is_file():
-            return
-        marketplace = self._read_json_file(marketplace_path)
-        for entry in self._flatten_plugin_entries(marketplace):
-            plugin_id = self._plugin_id_from_entry(entry)
-            if not plugin_id:
+        marketplace_paths = [
+            self._resolver.codex_home / ".tmp" / "plugins" / ".agents" / "plugins" / "marketplace.json",
+            *sorted((self._resolver.codex_home / ".tmp").glob("plugins-clone-*/.agents/plugins/marketplace.json")),
+        ]
+        for marketplace_path in marketplace_paths:
+            if not marketplace_path.is_file():
                 continue
-            current = discovered.setdefault(plugin_id, {})
-            current.update(
-                {
-                    "name": entry.get("name") or entry.get("id") or plugin_id,
-                    "marketplace": entry.get("marketplace") or self._marketplace_from_plugin_id(plugin_id),
-                    "listed": True,
-                    "sourcePath": str(marketplace_path),
-                    "bundled": self._plugin_bundles(entry, None),
-                },
-            )
+            marketplace = self._read_json_file(marketplace_path)
+            marketplace_name = marketplace.get("name") if isinstance(marketplace.get("name"), str) else None
+            for entry in self._flatten_plugin_entries(marketplace):
+                plugin_id = self._plugin_id_from_entry(entry, marketplace_name)
+                if not plugin_id:
+                    continue
+                current = discovered.setdefault(plugin_id, {})
+                current.update(
+                    {
+                        "name": entry.get("name") or entry.get("id") or plugin_id,
+                        "marketplace": entry.get("marketplace") or self._marketplace_from_plugin_id(plugin_id),
+                        "listed": True,
+                        "sourcePath": str(marketplace_path),
+                        "bundled": self._plugin_bundles(entry, None),
+                    },
+                )
 
     def _plugin_manifest_paths(self) -> list[Path]:
         roots = [
             self._resolver.codex_home / "plugins" / "cache",
             self._resolver.codex_home / ".tmp" / "plugins" / "plugins",
+            *sorted((self._resolver.codex_home / ".tmp").glob("plugins-clone-*/plugins")),
         ]
         paths: list[Path] = []
         for root in roots:
@@ -1050,11 +1191,11 @@ class CodexSettingsService:
         return entries
 
     @staticmethod
-    def _plugin_id_from_entry(entry: dict[str, Any]) -> str | None:
+    def _plugin_id_from_entry(entry: dict[str, Any], default_marketplace: str | None = None) -> str | None:
         raw_id = entry.get("id") or entry.get("name")
         if not isinstance(raw_id, str) or not raw_id:
             return None
-        marketplace = entry.get("marketplace")
+        marketplace = entry.get("marketplace") or default_marketplace
         if "@" not in raw_id and isinstance(marketplace, str) and marketplace:
             return f"{raw_id}@{marketplace}"
         return raw_id
@@ -1067,6 +1208,8 @@ class CodexSettingsService:
             return f"{plugin_id}@{marketplace}"
         if "@" not in plugin_id:
             inferred_marketplace = self._marketplace_from_cache_path(manifest_path)
+            if not inferred_marketplace:
+                inferred_marketplace = self._marketplace_from_tmp_clone_path(manifest_path)
             if inferred_marketplace:
                 return f"{plugin_id}@{inferred_marketplace}"
         return plugin_id
@@ -1081,6 +1224,15 @@ class CodexSettingsService:
         except ValueError:
             return None
         return relative.parts[0] if relative.parts else None
+
+    def _marketplace_from_tmp_clone_path(self, manifest_path: Path) -> str | None:
+        for parent in manifest_path.parents:
+            if not parent.name.startswith("plugins-clone-"):
+                continue
+            marketplace = self._read_json(parent / ".agents" / "plugins" / "marketplace.json")
+            name = marketplace.get("name")
+            return name if isinstance(name, str) and name else None
+        return None
 
     @staticmethod
     def _plugin_bundles(manifest: dict[str, Any], package_root: Path | None) -> dict[str, Any]:
@@ -1108,23 +1260,22 @@ class CodexSettingsService:
 
     def _plugin_skill_summaries(self) -> list[CodexFileSummary]:
         summaries: list[CodexFileSummary] = []
-        for manifest_path in self._plugin_manifest_paths():
-            package_root = manifest_path.parent.parent
-            skills_dir = package_root / "skills"
-            if not skills_dir.is_dir():
-                continue
-            plugin_id = self._plugin_id_from_manifest(self._read_json_file(manifest_path), manifest_path)
-            for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
-                summaries.append(
-                    CodexFileSummary(
-                        name=skill_md.parent.name,
-                        path=str(skill_md.relative_to(skills_dir)),
-                        sizeBytes=skill_md.stat().st_size,
-                        source="plugin",
-                        readOnly=True,
-                        metadata={"pluginId": plugin_id, "sourcePath": str(skill_md)},
-                    ),
-                )
+        for skill in self._plugin_resolver.skills(self._enabled_plugin_ids()):
+            summaries.append(
+                CodexFileSummary(
+                    name=skill.name,
+                    path=skill.relative_path,
+                    sizeBytes=skill.path.stat().st_size,
+                    source="plugin",
+                    readOnly=True,
+                    metadata={
+                        "pluginId": skill.plugin.plugin_id,
+                        "pluginName": skill.plugin.name,
+                        "marketplaceName": skill.plugin.marketplace_name,
+                        "sourcePath": str(skill.path),
+                    },
+                ),
+            )
         return summaries
 
     def _resource_config(self, resource: str) -> dict[str, Any]:
@@ -1255,9 +1406,8 @@ class CodexSettingsService:
 
     def _plugin_hook_entries(self) -> list[CodexHookEntry]:
         entries: list[CodexHookEntry] = []
-        for plugin_id, plugin in sorted(self._discovered_plugins().items()):
-            bundled = _as_table(plugin.get("bundled"))
-            hook_map = self._normalize_hooks_root(bundled.get("hooks"))
+        for document in self._plugin_resolver.hook_documents(self._enabled_plugin_ids()):
+            hook_map = self._normalize_hooks_root(document.content)
             if not hook_map:
                 continue
             entries.extend(
@@ -1265,16 +1415,16 @@ class CodexSettingsService:
                     hook_map,
                     source="plugin",
                     read_only=True,
-                    source_path=plugin.get("sourcePath") if isinstance(plugin.get("sourcePath"), str) else None,
-                    plugin_id=plugin_id,
-                    plugin_name=str(plugin.get("name") or plugin_id),
-                    marketplace_name=plugin.get("marketplace") if isinstance(plugin.get("marketplace"), str) else None,
-                    id_prefix=f"plugin:{plugin_id}",
+                    source_path=str(document.source_path),
+                    plugin_id=document.plugin.plugin_id,
+                    plugin_name=document.plugin.name,
+                    marketplace_name=document.plugin.marketplace_name,
+                    id_prefix=f"plugin:{document.plugin.plugin_id}",
                 ),
             )
         return entries
 
-    def _managed_hook_entries(self) -> list[CodexHookEntry]:
+    def _requirements_hook_entries(self) -> list[CodexHookEntry]:
         entries: list[CodexHookEntry] = []
         for layer in (CodexLayer.PROJECT, CodexLayer.USER):
             path = self._resolver.resolve(layer, CodexResource.MANAGED_REQUIREMENTS)
@@ -1285,11 +1435,11 @@ class CodexSettingsService:
             entries.extend(
                 self._hook_entries_from_event_map(
                     hook_map,
-                    source="managed",
+                    source=layer.value,
                     read_only=True,
                     layer=layer.value,
                     source_path=str(path),
-                    id_prefix=f"managed:{layer.value}",
+                    id_prefix=f"{layer.value}:requirements",
                 ),
             )
         return entries

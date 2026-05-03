@@ -7,6 +7,7 @@ const actionableSubViews = (config: AgentToolConfig) => config.availableSubViews
 describe('AGENT_TOOL_CONFIGS', () => {
   it('exposes Codex hooks in navigation with the official lifecycle events', () => {
     expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.supported).toBe(true);
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.scopes).toContain('plugin');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).toContain('hooks');
     expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.events.map((event) => event.value)).toEqual([
       'SessionStart',
@@ -24,6 +25,10 @@ describe('AGENT_TOOL_CONFIGS', () => {
   });
 
   it('exposes the supported Codex settings navigation surface', () => {
+    expect(AGENT_TOOL_CONFIGS.codex.availableScopes).toContain('plugin');
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.mcp?.scopes).toContain('plugin');
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.skills?.scopes).toContain('plugin');
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.skills?.readOnlyScopes).toContain('plugin');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).toEqual([
       'agents-md',
       'skills',

@@ -31,6 +31,9 @@ export interface SettingsFileTreeScopeOption<TScope extends string = string> {
 export interface SettingsFileSelection<TScope extends string = string> {
   path: string;
   scope: TScope;
+  pluginId?: string;
+  pluginName?: string;
+  marketplaceName?: string;
 }
 
 export interface SettingsFileTreeWorkflowLabels {
@@ -118,6 +121,9 @@ export const SettingsFileTreeWorkflow = <TScope extends string = string>({
     onSelect({
       path: node.path,
       scope: ((node.scope as TScope | null) || scope),
+      pluginId: node.pluginId,
+      pluginName: node.pluginName,
+      marketplaceName: node.marketplaceName,
     });
   }, [onSelect, scope]);
 

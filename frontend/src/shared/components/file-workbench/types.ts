@@ -9,6 +9,10 @@ export interface FileTreeNode {
   size?: number;
   extension?: string;
   scope?: 'project' | 'user' | 'plugin';
+  metadata?: Record<string, unknown>;
+  pluginId?: string;
+  pluginName?: string;
+  marketplaceName?: string;
   modifiedAt?: string;
   createdAt?: string;
 }

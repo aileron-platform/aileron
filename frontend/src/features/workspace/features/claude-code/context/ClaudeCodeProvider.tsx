@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import type { ClaudeDocument } from '../data';
 import { claudeCodeApi } from '../services/claudeCodeApi';
@@ -9,6 +9,7 @@ type DocumentCollectionState = {
   loading: boolean;
   error: string | null;
   selectedId: string | null;
+  loaded?: boolean;
 };
 
 type DocumentCollectionController = DocumentCollectionState & {
@@ -31,12 +32,14 @@ const createInitialState = (): DocumentCollectionState => ({
   loading: false,
   error: null,
   selectedId: null,
+  loaded: false,
 });
 
 export const ClaudeCodeContext = createContext<ClaudeCodeContextValue | null>(null);
 
 interface ClaudeCodeProviderProps {
   isActive: boolean;
+  activeSubView?: string | null;
   children: React.ReactNode;
 }
 
@@ -46,11 +49,13 @@ const useSortedDocuments = () =>
     [],
   );
 
-export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive, children }) => {
+export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive, activeSubView, children }) => {
   const { workspaceRuntime } = useWorkspace();
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl;
   const workspaceId = workspaceRuntime.workspaceId;
   const runtimeError = workspaceRuntime.error;
+  const workspaceKey = runtimeBaseUrl && workspaceId ? `${runtimeBaseUrl}:${workspaceId}` : null;
+  const previousWorkspaceKey = useRef<string | null>(null);
 
   const sortDocuments = useSortedDocuments();
 
@@ -74,94 +79,123 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
   }, []);
 
   useEffect(() => {
-    if (!runtimeBaseUrl || !workspaceId) {
+    if (previousWorkspaceKey.current !== workspaceKey) {
+      previousWorkspaceKey.current = workspaceKey;
       resetCollections();
     }
-  }, [runtimeBaseUrl, workspaceId, resetCollections]);
+  }, [workspaceKey, resetCollections]);
 
   const refreshSlashCommands = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId) {
       setSlashCommands(createInitialState());
       return;
     }
+    const requestWorkspaceKey = workspaceKey;
     setSlashCommands((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const documents = await claudeCodeApi.listSlashCommands(runtimeBaseUrl, workspaceId);
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       setSlashCommands((prev) => {
         const sorted = sortDocuments(documents);
         const nextSelected = prev.selectedId && sorted.some((doc) => doc.id === prev.selectedId)
           ? prev.selectedId
           : sorted[0]?.id ?? null;
-        return { items: sorted, loading: false, error: null, selectedId: nextSelected };
+        return { items: sorted, loading: false, error: null, selectedId: nextSelected, loaded: true };
       });
     } catch (error) {
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       const message = error instanceof Error ? error.message : '載入 Slash Commands 失敗';
-      setSlashCommands((prev) => ({ ...prev, loading: false, error: message }));
+      setSlashCommands((prev) => ({ ...prev, loading: false, error: message, loaded: true }));
     }
-  }, [runtimeBaseUrl, workspaceId, sortDocuments]);
+  }, [runtimeBaseUrl, workspaceId, workspaceKey, sortDocuments]);
 
   const refreshOutputStyles = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId) {
       setOutputStyles(createInitialState());
       return;
     }
+    const requestWorkspaceKey = workspaceKey;
     setOutputStyles((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const documents = await claudeCodeApi.listOutputStyles(runtimeBaseUrl, workspaceId);
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       setOutputStyles((prev) => {
         const sorted = sortDocuments(documents);
         const nextSelected = prev.selectedId && sorted.some((doc) => doc.id === prev.selectedId)
           ? prev.selectedId
           : sorted[0]?.id ?? null;
-        return { items: sorted, loading: false, error: null, selectedId: nextSelected };
+        return { items: sorted, loading: false, error: null, selectedId: nextSelected, loaded: true };
       });
     } catch (error) {
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       const message = error instanceof Error ? error.message : '載入 Output Styles 失敗';
-      setOutputStyles((prev) => ({ ...prev, loading: false, error: message }));
+      setOutputStyles((prev) => ({ ...prev, loading: false, error: message, loaded: true }));
     }
-  }, [runtimeBaseUrl, workspaceId, sortDocuments]);
+  }, [runtimeBaseUrl, workspaceId, workspaceKey, sortDocuments]);
 
   const refreshSubagents = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId) {
       setSubagents(createInitialState());
       return;
     }
+    const requestWorkspaceKey = workspaceKey;
     setSubagents((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const documents = await claudeCodeApi.listSubagents(runtimeBaseUrl, workspaceId);
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       setSubagents((prev) => {
         const sorted = sortDocuments(documents);
         const nextSelected = prev.selectedId && sorted.some((doc) => doc.id === prev.selectedId)
           ? prev.selectedId
           : sorted[0]?.id ?? null;
-        return { items: sorted, loading: false, error: null, selectedId: nextSelected };
+        return { items: sorted, loading: false, error: null, selectedId: nextSelected, loaded: true };
       });
     } catch (error) {
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       const message = error instanceof Error ? error.message : '載入 Subagents 失敗';
-      setSubagents((prev) => ({ ...prev, loading: false, error: message }));
+      setSubagents((prev) => ({ ...prev, loading: false, error: message, loaded: true }));
     }
-  }, [runtimeBaseUrl, workspaceId, sortDocuments]);
+  }, [runtimeBaseUrl, workspaceId, workspaceKey, sortDocuments]);
 
   const refreshMemory = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId) {
       setMemory(createInitialState());
       return;
     }
+    const requestWorkspaceKey = workspaceKey;
     setMemory((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const documents = await claudeCodeApi.listMemoryDocuments(runtimeBaseUrl, workspaceId);
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       setMemory((prev) => {
         const sorted = sortDocuments(documents);
         const nextSelected = prev.selectedId && sorted.some((doc) => doc.id === prev.selectedId)
           ? prev.selectedId
           : sorted[0]?.id ?? null;
-        return { items: sorted, loading: false, error: null, selectedId: nextSelected };
+        return { items: sorted, loading: false, error: null, selectedId: nextSelected, loaded: true };
       });
     } catch (error) {
+      if (previousWorkspaceKey.current !== requestWorkspaceKey) {
+        return;
+      }
       const message = error instanceof Error ? error.message : '載入 Memory 失敗';
-      setMemory((prev) => ({ ...prev, loading: false, error: message }));
+      setMemory((prev) => ({ ...prev, loading: false, error: message, loaded: true }));
     }
-  }, [runtimeBaseUrl, workspaceId, sortDocuments]);
+  }, [runtimeBaseUrl, workspaceId, workspaceKey, sortDocuments]);
 
   const selectSlashCommand = useCallback((id: string | null) => {
     setSlashCommands((prev) => ({ ...prev, selectedId: id }));
@@ -462,22 +496,56 @@ export const ClaudeCodeProvider: React.FC<ClaudeCodeProviderProps> = ({ isActive
     if (!runtimeBaseUrl || !workspaceId) {
       return;
     }
-    void refreshSlashCommands();
-    void refreshOutputStyles();
-    void refreshSubagents();
-    void refreshMemory();
-  }, [isActive, runtimeBaseUrl, workspaceId, refreshSlashCommands, refreshOutputStyles, refreshSubagents, refreshMemory]);
+    if (activeSubView === 'slash-commands' && !slashCommands.loaded && !slashCommands.loading) {
+      void refreshSlashCommands();
+      return;
+    }
+    if (activeSubView === 'output-styles' && !outputStyles.loaded && !outputStyles.loading) {
+      void refreshOutputStyles();
+      return;
+    }
+    if (activeSubView === 'subagents' && !subagents.loaded && !subagents.loading) {
+      void refreshSubagents();
+      return;
+    }
+    if (activeSubView === 'memory' && !memory.loaded && !memory.loading) {
+      void refreshMemory();
+    }
+  }, [
+    isActive,
+    activeSubView,
+    runtimeBaseUrl,
+    workspaceId,
+    slashCommands.loaded,
+    slashCommands.loading,
+    outputStyles.loaded,
+    outputStyles.loading,
+    subagents.loaded,
+    subagents.loading,
+    memory.loaded,
+    memory.loading,
+    refreshSlashCommands,
+    refreshOutputStyles,
+    refreshSubagents,
+    refreshMemory,
+  ]);
 
   useWorkspaceTemplateInstallRefresh({
     workspaceId,
     enabled: isActive,
     features: ['slashCommands', 'outputStyles', 'subAgents'],
     onRefresh: async () => {
-      await Promise.all([
-        refreshSlashCommands(),
-        refreshOutputStyles(),
-        refreshSubagents(),
-      ]);
+      const refreshes: Array<Promise<void>> = [];
+      if (activeSubView === 'slash-commands' || slashCommands.loaded) {
+        refreshes.push(refreshSlashCommands());
+      }
+      if (activeSubView === 'output-styles' || outputStyles.loaded) {
+        refreshes.push(refreshOutputStyles());
+      }
+      if (activeSubView === 'subagents' || subagents.loaded) {
+        refreshes.push(refreshSubagents());
+      }
+      await Promise.all(refreshes);
     },
   });
 

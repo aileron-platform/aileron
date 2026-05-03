@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ScrollText, Wand2 } from 'lucide-react';
@@ -33,35 +32,20 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const codexResourceQuery = useQuery({
-    queryKey: ['codex-skill-resource-config', workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId, selectedFile?.scope],
-    queryFn: () => api.listCodexFiles(
-      workspaceRuntime.runtimeBaseUrl,
-      workspaceRuntime.workspaceId,
-      collectionType,
-      selectedFile?.scope === 'user' ? 'user' : 'project',
-    ),
-    enabled: apiPrefix === 'codex' && collectionType === 'skills' && Boolean(selectedFile && workspaceRuntime.runtimeBaseUrl && workspaceRuntime.workspaceId),
-  });
-
   React.useEffect(() => {
     if (!selectedFile) {
       setFileContent('');
       return;
     }
-    if (apiPrefix === 'codex' && selectedFile.scope === 'plugin') {
-      setFileContent('');
-      return;
-    }
-
     setIsLoadingFile(true);
     const loadFile = apiPrefix === 'codex'
       ? api.getCodexFile(
         workspaceRuntime.runtimeBaseUrl,
         workspaceRuntime.workspaceId,
         collectionType,
-        selectedFile.scope === 'user' ? 'user' : 'project',
+        selectedFile.scope === 'plugin' ? 'plugin' : selectedFile.scope === 'user' ? 'user' : 'project',
         selectedFile.path,
+        selectedFile.pluginId,
       )
       : api[collectionType === 'scripts' ? 'getScript' : 'getSkill'](
         workspaceRuntime.runtimeBaseUrl,
@@ -84,6 +68,7 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
 
   const handleSaveFile = async (content: string) => {
     if (!selectedFile) return;
+    if (selectedFile.scope === 'plugin') return;
 
     setIsSaving(true);
     try {
@@ -131,11 +116,6 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
           </div>
         ) : (
           <div className="flex h-full flex-col">
-            {apiPrefix === 'codex' && codexResourceQuery.data?.config && Object.keys(codexResourceQuery.data.config).length > 0 ? (
-              <pre className="max-h-28 overflow-auto border-b border-border bg-muted/40 p-3 text-xs">
-                {JSON.stringify(codexResourceQuery.data.config, null, 2)}
-              </pre>
-            ) : null}
             <div className="min-h-0 flex-1">
               <FileEditor
                 key={selectedFile.path}

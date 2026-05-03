@@ -118,6 +118,10 @@ export interface AgentFileNode {
   modified?: string;
   content?: string;
   scope?: AgentScope;
+  metadata?: Record<string, unknown>;
+  pluginId?: string;
+  pluginName?: string;
+  marketplaceName?: string;
 }
 
 export interface AgentFileCollectionResponse {
@@ -167,6 +171,9 @@ export interface AgentPluginSkillsResponse {
 export interface AgentSelectedFile {
   path: string;
   scope: Extract<AgentScope, 'project' | 'user' | 'plugin'>;
+  pluginId?: string;
+  pluginName?: string;
+  marketplaceName?: string;
 }
 
 export interface AgentToolScopeOption {
