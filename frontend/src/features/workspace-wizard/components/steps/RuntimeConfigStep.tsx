@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { ArrowLeft, Network, Plus, Settings, X } from 'lucide-react';
+import { ArrowLeft, Plus, Settings, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -13,9 +13,6 @@ export interface RuntimeHelperActions {
   addEnvVar: () => void;
   updateEnvVar: (id: string, patch: Partial<{ key: string; value: string }>) => void;
   removeEnvVar: (id: string) => void;
-  addPortMapping: () => void;
-  updatePortMapping: (id: string, patch: Partial<{ containerPort: number | ''; hostPort: number | ''; protocol: 'http' | 'https' | 'tcp' }>) => void;
-  removePortMapping: (id: string) => void;
 }
 
 interface RuntimeConfigStepProps {
@@ -29,8 +26,6 @@ interface RuntimeConfigStepProps {
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
-const PROTOCOL_OPTIONS: Array<'http' | 'https' | 'tcp'> = ['http', 'https', 'tcp'];
-
 export const RuntimeConfigStep: React.FC<RuntimeConfigStepProps> = ({
   data,
   onChange,
@@ -41,10 +36,10 @@ export const RuntimeConfigStep: React.FC<RuntimeConfigStepProps> = ({
   isSubmitting,
   t,
 }) => {
-  // 載入容器映像列表
+  // Load the available container images.
   const { data: containerImagesData, isLoading: isLoadingImages } = useContainerImages();
 
-  // 當映像載入完成且 runtime 為空時，設置預設值
+  // Apply the default runtime once images are loaded.
   useEffect(() => {
     if (containerImagesData && !data.runtime && containerImagesData.defaultImageId) {
       onChange({ ...data, runtime: containerImagesData.defaultImageId });
@@ -226,99 +221,6 @@ export const RuntimeConfigStep: React.FC<RuntimeConfigStepProps> = ({
                 {t('workspace.wizard.steps.runtimeConfig.fields.envVars.add')}
               </Button>
             </div>
-
-            {data.provisioner === 'docker' ? (
-              <div className="space-y-3">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Network className="h-4 w-4" />
-                  {t('workspace.wizard.steps.runtimeConfig.fields.portMappings.label')}
-                  <span className="ml-1 text-muted-foreground">{t('workspace.wizard.steps.runtimeConfig.optional')}</span>
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  {t('workspace.wizard.steps.runtimeConfig.fields.portMappings.helper')}
-                </p>
-
-                {data.portMappings.map((mapping) => (
-                  <div key={mapping.id} className="grid grid-cols-12 items-end gap-2 rounded-lg border p-3">
-                    <div className="col-span-4">
-                      <Label className="text-xs">{t('workspace.wizard.steps.runtimeConfig.fields.portMappings.containerPort')}</Label>
-                    <Input
-                      type="number"
-                      value={mapping.containerPort === '' ? '' : mapping.containerPort}
-                      onChange={(event) => helpers.updatePortMapping(mapping.id, { containerPort: event.target.value === '' ? '' : Number(event.target.value) })}
-                      placeholder={t('workspace.wizard.steps.runtimeConfig.fields.portMappings.containerPlaceholder')}
-                      disabled={isSubmitting}
-                      min={1}
-                      max={65535}
-                    />
-                  </div>
-                    <div className="col-span-4">
-                      <Label className="text-xs">{t('workspace.wizard.steps.runtimeConfig.fields.portMappings.hostPort')}</Label>
-                      <Input
-                        type="number"
-                        value={mapping.hostPort === '' ? '' : mapping.hostPort}
-                        onChange={(event) => helpers.updatePortMapping(mapping.id, { hostPort: event.target.value === '' ? '' : Number(event.target.value) })}
-                        placeholder={t('workspace.wizard.steps.runtimeConfig.fields.portMappings.hostPlaceholder')}
-                        disabled={isSubmitting}
-                        min={1}
-                        max={65535}
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs">{t('workspace.wizard.steps.runtimeConfig.fields.portMappings.protocol')}</Label>
-                      <Select
-                        value={mapping.protocol}
-                        onValueChange={(value) => helpers.updatePortMapping(mapping.id, { protocol: value as typeof mapping.protocol })}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PROTOCOL_OPTIONS.map((protocol) => (
-                            <SelectItem key={protocol} value={protocol}>
-                              {t(`workspace.wizard.steps.runtimeConfig.fields.portMappings.protocolOptions.${protocol}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => helpers.removePortMapping(mapping.id)}
-                        disabled={isSubmitting}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={helpers.addPortMapping}
-                  disabled={isSubmitting}
-                  className="w-full"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  {t('workspace.wizard.steps.runtimeConfig.fields.portMappings.add')}
-                </Button>
-
-                <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-                  <p>{t('workspace.wizard.steps.runtimeConfig.notes.autoAssign')}</p>
-                  <p>{t('workspace.wizard.steps.runtimeConfig.notes.reserved')}</p>
-                  <p>{t('workspace.wizard.steps.runtimeConfig.notes.examples')}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                Workspace-level port exposure is only available for Docker workspaces.
-              </div>
-            )}
 
             <div className="flex items-center justify-between pt-4">
               <Button type="button" variant="outline" onClick={onPrevious} disabled={isSubmitting} className="flex items-center gap-2">

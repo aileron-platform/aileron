@@ -61,7 +61,6 @@ def sample_workspace():
     workspace.branch = "main"
     workspace.workspace_path = "/workspace"
     workspace.env_vars = [{"key": "FOO", "value": "bar"}]
-    workspace.port_mappings = []
     workspace.runtime_resources = None
     workspace.workspace_firewall_network_access_enabled = True
     workspace.workspace_firewall_domain_access_mode = "specific"

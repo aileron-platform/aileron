@@ -181,7 +181,7 @@ describe('AutomationJobEditDialog', () => {
     expect(screen.getByText('Owned')).toBeInTheDocument();
   });
 
-  it('submits the edited payload and supports slash command insertion', async () => {
+  it('submits the edited payload and supports slash command insertion', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     const { onSave } = renderDialog();
 

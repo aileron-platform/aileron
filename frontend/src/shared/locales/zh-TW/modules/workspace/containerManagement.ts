@@ -50,49 +50,6 @@ const containerManagement = {
       valuePlaceholder: '變數值',
       add: '新增環境變數',
     },
-    portMappings: {
-      system: {
-        label: '系統連接埠',
-        description: '由平台管理的預設 Docker 連接埠。',
-        fields: {
-          name: '名稱',
-          containerPort: '容器連接埠',
-          hostPort: '主機連接埠',
-          protocol: '協定',
-          description: '描述',
-        },
-      },
-      label: '端口映射配置',
-      description: '配置容器端口映射，可以指定固定端口或使用動態分配',
-      fields: {
-        containerPort: {
-          label: '容器端口',
-          placeholder: '3000',
-        },
-        hostPort: {
-          label: '主機端口',
-          placeholder: '自動分配',
-        },
-        protocol: {
-          label: '協議',
-          options: {
-            tcp: 'TCP',
-            udp: 'UDP',
-          },
-        },
-        description: {
-          label: '描述',
-          placeholder: '端口用途說明',
-        },
-      },
-      add: '新增端口映射',
-      kubernetesUnsupported: 'Kubernetes 工作區目前不支援工作區層級的連接埠對外暴露設定。',
-      hints: {
-        autoAssign: '• 主機端口留空將自動分配可用端口',
-        defaultPort: '• 容器端口 3002 為 Workspace Runtime 預設端口',
-        reservedPorts: '• 避免使用系統保留端口 (1-1023)',
-      },
-    },
     environments: {
       universal: {
         label: '標準容器映像',

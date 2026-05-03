@@ -12,7 +12,6 @@ from app.models import (
     WorkspaceCreateRequest,
     WorkspaceUpdateRequest,
     WorkspaceEnvVar,
-    WorkspacePortMapping,
     WorkspaceResourceRequirements,
     WorkspaceResourceValues,
 )
@@ -130,7 +129,6 @@ def sample_workspace_db(user_factory):
     workspace.cli_type = "claude-code"
     workspace.setup_script = "npm install"
     workspace.env_vars = []
-    workspace.port_mappings = []
     workspace.runtime_status = "running"
     workspace.runtime_container_id = "container-123"
     workspace.runtime_internal_url = "http://localhost:3002"
@@ -220,15 +218,6 @@ class TestWorkspaceGet:
         assert result.components.browser.phase == "running"
         assert result.components.canvas.phase == "stopped"
         assert result.runtime_resources is None
-        assert [item.name for item in result.system_port_mappings] == [
-            "runtime",
-            "terminal",
-            "browser-webrtc",
-            "browser-cdp",
-            "canvas",
-            "canvas-api",
-        ]
-        assert all(item.editable is False for item in result.system_port_mappings)
         assert result.firewall_available is True
         assert result.firewall.workspace.effective_allowed_domains == [
             "github.com",
@@ -337,13 +326,6 @@ class TestWorkspaceCreate:
             cli_type="claude-code",
             setup_script="npm install",
             env_vars=[],
-            port_mappings=[
-                WorkspacePortMapping(
-                    container_port=3002,
-                    host_port=8080,
-                    protocol="tcp"
-                )
-            ],
             preferred_cli="claude-code",
             fallback_enabled=True,
             workspace_path="/workspace"
@@ -370,7 +352,6 @@ class TestWorkspaceCreate:
             git_url="https://github.com/test/repo.git",
             runtime="docker",
             env_vars=[],
-            port_mappings=[]
         )
 
         # Act & Assert
@@ -400,7 +381,6 @@ class TestWorkspaceCreate:
                 WorkspaceEnvVar(key="NODE_ENV", value="production"),
                 WorkspaceEnvVar(key="PORT", value="3000")
             ],
-            port_mappings=[]
         )
 
         # Act
@@ -414,36 +394,6 @@ class TestWorkspaceCreate:
             {"key": "NODE_ENV", "value": "production"},
             {"key": "PORT", "value": "3000"},
         ]
-
-    def test_create_workspace_sets_external_port_from_default_mapping(
-        self, workspace_service, mock_db_session, user_factory
-    ):
-        """Test: Creating Workspace Adds External Port Mapping from Container Port 3002"""
-        owner = user_factory()
-        mock_db_session.get.return_value = owner
-
-        def mock_refresh(obj):
-            _apply_workspace_defaults(obj, owner=owner)
-
-        mock_db_session.refresh.side_effect = mock_refresh
-
-        create_request = WorkspaceCreateRequest(
-            owner_id=owner.id,
-            name="Mapped Workspace",
-            git_url="https://github.com/test/repo.git",
-            runtime="docker",
-            env_vars=[],
-            port_mappings=[
-                WorkspacePortMapping(container_port=3002, host_port=43002, protocol="tcp"),
-                WorkspacePortMapping(container_port=8080, host_port=48080, protocol="tcp"),
-            ],
-        )
-
-        result = workspace_service.create(create_request)
-
-        created_workspace = mock_db_session.add.call_args[0][0]
-        assert created_workspace.runtime_external_port == 43002
-        assert result.runtime_status.external_port == 43002
 
     def test_create_docker_workspace_accepts_firewall_when_cilium_disabled(
         self, workspace_service, mock_db_session, user_factory
@@ -464,7 +414,6 @@ class TestWorkspaceCreate:
             git_url="https://github.com/test/repo.git",
             runtime="docker",
             env_vars=[],
-            port_mappings=[],
             firewall=FirewallConfig(
                 workspace=FirewallRuleConfig(
                     network_access_enabled=True,
@@ -503,7 +452,6 @@ class TestWorkspaceCreate:
             name="K8s Workspace",
             runtime="universal",
             env_vars=[],
-            port_mappings=[],
         )
 
         result = workspace_service.create(create_request)
@@ -530,7 +478,6 @@ class TestWorkspaceCreate:
             name="Docker Workspace",
             runtime="universal",
             env_vars=[],
-            port_mappings=[],
             runtime_resources=WorkspaceResourceRequirements(
                 requests=WorkspaceResourceValues(cpu="500m", memory="2Gi"),
                 limits=WorkspaceResourceValues(cpu="2000m", memory="4Gi"),
@@ -543,7 +490,7 @@ class TestWorkspaceCreate:
         ):
             workspace_service.create(create_request)
 
-    def test_create_kubernetes_workspace_rejects_port_mappings(
+    def test_create_kubernetes_workspace_without_port_configuration(
         self, workspace_service, mock_db_session, user_factory
     ):
         owner = user_factory()
@@ -557,16 +504,13 @@ class TestWorkspaceCreate:
             name="K8s Workspace",
             runtime="universal",
             env_vars=[],
-            port_mappings=[
-                WorkspacePortMapping(container_port=3000, host_port=3100, protocol="tcp")
-            ],
         )
+        def mock_refresh(obj):
+            _apply_workspace_defaults(obj, owner=owner)
 
-        with pytest.raises(
-            ValueError,
-            match="portMappings only supports Docker workspaces",
-        ):
-            workspace_service.create(create_request)
+        mock_db_session.refresh.side_effect = mock_refresh
+        result = workspace_service.create(create_request)
+        assert result is not None
 
     def test_create_kubernetes_workspace_persists_runtime_resources_override(
         self, workspace_service, mock_db_session, user_factory
@@ -590,7 +534,6 @@ class TestWorkspaceCreate:
             name="K8s Workspace",
             runtime="universal",
             env_vars=[],
-            port_mappings=[],
             runtime_resources=WorkspaceResourceRequirements(
                 requests=WorkspaceResourceValues(cpu="750m", memory="3Gi"),
                 limits=WorkspaceResourceValues(cpu="2500m", memory="5Gi"),
@@ -624,7 +567,6 @@ class TestWorkspaceCreate:
             provisioner="kubernetes",
             target_namespace="forbidden",
             env_vars=[],
-            port_mappings=[],
         )
 
         with pytest.raises(ValueError, match="Invalid Kubernetes namespace"):
@@ -649,7 +591,6 @@ class TestWorkspaceCreate:
             provisioner="kubernetes",
             target_namespace="workspace-system",
             env_vars=[],
-            port_mappings=[],
         )
 
         result = workspace_service.create(create_request)
@@ -758,25 +699,6 @@ class TestWorkspaceUpdate:
         with pytest.raises(
             ValueError,
             match="runtimeResources only supports Kubernetes workspaces",
-        ):
-            workspace_service.update("workspace-123", update_request)
-
-    def test_update_kubernetes_workspace_rejects_port_mappings(
-        self, workspace_service, mock_db_session, sample_workspace_db
-    ):
-        mock_db_session.get.return_value = sample_workspace_db
-        sample_workspace_db.provisioner = "kubernetes"
-        sample_workspace_db.target_namespace = "workspace-system"
-
-        update_request = WorkspaceUpdateRequest(
-            port_mappings=[
-                WorkspacePortMapping(container_port=3000, host_port=3100, protocol="tcp")
-            ]
-        )
-
-        with pytest.raises(
-            ValueError,
-            match="portMappings only supports Docker workspaces",
         ):
             workspace_service.update("workspace-123", update_request)
 
@@ -1095,31 +1017,6 @@ class TestWorkspaceLifecycle:
         result = workspace_service.mark_browser_restarting("missing-workspace")
 
         assert result is False
-
-    def test_update_workspace_with_port_mappings(
-        self, workspace_service, mock_db_session, sample_workspace_db
-    ):
-        """Test: Update Workspace Port Mappings"""
-        # Arrange
-        mock_db_session.get.return_value = sample_workspace_db
-
-        update_request = WorkspaceUpdateRequest(
-            port_mappings=[
-                WorkspacePortMapping(
-                    container_port=8080,
-                    host_port=8081,
-                    protocol="tcp"
-                )
-            ]
-        )
-
-        # Act
-        result = workspace_service.update("workspace-123", update_request)
-
-        # Assert
-        assert result is not None
-        assert len(sample_workspace_db.port_mappings) == 1
-        mock_db_session.commit.assert_called_once()
 
     def test_update_workspace_with_runtime_status(
         self, workspace_service, mock_db_session, sample_workspace_db

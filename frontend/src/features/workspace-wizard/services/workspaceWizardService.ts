@@ -28,7 +28,7 @@ const DEFAULT_BRANCH = 'main';
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_ATTEMPTS = 10;
 
-// Helper function to build API URLs with proper trailing slashes
+// Build API URLs with a trailing slash when needed.
 const buildApiUrl = (path?: string): string => {
   if (path) {
     return `${API_BASE}/${path}`;
@@ -55,7 +55,7 @@ interface RuntimeLogEntry {
 
 export const workspaceWizardService = {
   async createWorkspace(payload: CreateWorkspacePayload): Promise<CreateWorkspaceResult> {
-    // ownerId 不需要在前端指定，後端會從認證 token 中自動獲取當前用戶 ID
+    // The backend derives ownerId from the authenticated user context.
     const workspace = await apiClient.post<WorkspaceDetailResponse>(buildApiUrl(), {
       name: payload.name,
       description: payload.description,
@@ -64,8 +64,7 @@ export const workspaceWizardService = {
       targetNamespace: payload.targetNamespace,
       setupScript: payload.setupScript,
       envVars: payload.envVars,
-      ...(payload.portMappings.length > 0 ? { portMappings: payload.portMappings } : {}),
-      // 使用用戶選擇的分支，如果沒有則使用預設值
+      // Use the selected branch, or fall back to the default branch.
       branch: payload.branch || DEFAULT_BRANCH,
       cliType: payload.cliType,
     });
@@ -98,7 +97,7 @@ export const workspaceWizardService = {
         commands: data.commands && data.commands.length > 0 ? data.commands : [`workspace login`, `workspace pull ${workspaceId}`],
       };
     } catch (error) {
-      // 如果 404 或其他錯誤，回退到預設指令
+      // Fall back to the default instructions when the endpoint is unavailable.
       const workspace = await apiClient.get<WorkspaceDetailResponse>(buildApiUrl(workspaceId));
       return buildDefaultCliInstructions(workspace.id, workspace.branch);
     }

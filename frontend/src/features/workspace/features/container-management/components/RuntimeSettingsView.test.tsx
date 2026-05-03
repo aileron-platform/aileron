@@ -58,17 +58,13 @@ describe('RuntimeSettingsView', () => {
     rebuildMock.mockReset();
   });
 
-  it('renders docker system ports separately from custom port mappings', async () => {
+  it('renders runtime settings without port mapping controls', async () => {
     getMock.mockResolvedValue({
       id: 'ws-123',
       runtime: 'universal',
       provisioner: 'docker',
       setupScript: '',
       envVars: [],
-      portMappings: [{ containerPort: 9000, hostPort: 39000, protocol: 'tcp', description: 'Custom' }],
-      systemPortMappings: [
-        { name: 'runtime', containerPort: 3002, hostPort: 31002, protocol: 'tcp', description: 'Workspace runtime API', editable: false },
-      ],
     });
 
     render(<RuntimeSettingsView />);
@@ -77,15 +73,11 @@ describe('RuntimeSettingsView', () => {
       expect(getMock).toHaveBeenCalledWith('/workspaces/ws-123');
     });
 
-    expect(
-      await screen.findByText('workspace.containerManagement.runtime.portMappings.system.label')
-    ).toBeInTheDocument();
-    expect(screen.getByDisplayValue('runtime')).toBeDisabled();
-    expect(screen.getByDisplayValue('Workspace runtime API')).toBeDisabled();
-    expect(screen.getByDisplayValue('Custom')).toBeInTheDocument();
+    expect(screen.queryByText('workspace.containerManagement.runtime.portMappings.system.label')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.containerManagement.runtime.portMappings.label')).not.toBeInTheDocument();
   });
 
-  it('shows unsupported copy for kubernetes workspaces instead of port mapping editor', async () => {
+  it('shows kubernetes runtime resources without port mapping editor', async () => {
     getMock.mockResolvedValue({
       id: 'ws-123',
       runtime: 'universal',
@@ -96,8 +88,6 @@ describe('RuntimeSettingsView', () => {
         requests: { cpu: '500m', memory: '2Gi' },
         limits: { cpu: '2000m', memory: '4Gi' },
       },
-      portMappings: [],
-      systemPortMappings: [],
     });
 
     render(<RuntimeSettingsView />);
@@ -106,13 +96,7 @@ describe('RuntimeSettingsView', () => {
       expect(getMock).toHaveBeenCalledWith('/workspaces/ws-123');
     });
 
-    expect(
-      await screen.findByText(
-        'workspace.containerManagement.runtime.portMappings.kubernetesUnsupported'
-      )
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText('workspace.containerManagement.runtime.portMappings.system.label')
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.containerManagement.runtime.portMappings.system.label')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.containerManagement.runtime.portMappings.kubernetesUnsupported')).not.toBeInTheDocument();
   });
 });

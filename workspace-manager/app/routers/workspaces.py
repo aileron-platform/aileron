@@ -242,8 +242,6 @@ def _translate_workspace_value_error(translate, code: str, params: dict | None =
         return translate("workspace.firewall_unavailable")
     if code == "WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED":
         return translate("workspace.runtime_resources_unsupported")
-    if code == "WORKSPACE_PORT_MAPPINGS_UNSUPPORTED":
-        return translate("workspace.port_mappings_unsupported")
     if code == "WORKSPACE_INVALID_NAMESPACE":
         return translate("workspace.invalid_namespace", namespace=params.get("namespace", ""))
     return translate("knowledge_base.invalid.request")
@@ -351,6 +349,16 @@ def _should_schedule_kb_runtime_sync(workspace: object) -> bool:
     return provisioner == "docker" and isinstance(runtime_container_id, str) and bool(runtime_container_id)
 
 
+def _reject_removed_port_configuration(translate, payload: object) -> None:
+    if not isinstance(payload, dict):
+        return
+    if "portMappings" in payload or "systemPortMappings" in payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=translate("workspace.port_mappings_removed"),
+        )
+
+
 @router.get(
     "/",
     response_model=WorkspaceListResponse,
@@ -382,13 +390,15 @@ def list_workspaces(
     summary="Create workspace",
     responses=build_responses(400, 401, 422, 500),
 )
-def create_workspace(
+async def create_workspace(
     request: Request,
-    payload: WorkspaceCreateRequest,
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceDetail:
     try:
+        payload_data = await request.json()
+        _reject_removed_port_configuration(request.state.translate, payload_data)
+        payload = WorkspaceCreateRequest.model_validate(payload_data)
         current_user_id = _require_current_user_id(request)
         payload.owner_id = current_user_id
 
@@ -492,13 +502,15 @@ def get_workspace_runtime_logs(
 )
 async def update_workspace(
     workspace_id: str,
-    payload: WorkspaceUpdateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
     service: WorkspaceService = Depends(get_workspace_service),
 ) -> WorkspaceDetail:
     current_user_id = _require_current_user_id(request)
     try:
+        payload_data = await request.json()
+        _reject_removed_port_configuration(request.state.translate, payload_data)
+        payload = WorkspaceUpdateRequest.model_validate(payload_data)
         # Only firewall configuration changes need additional sync to workspace-runtime, other columns are persisted by manager itself.
         firewall_changed = payload.firewall is not None
 

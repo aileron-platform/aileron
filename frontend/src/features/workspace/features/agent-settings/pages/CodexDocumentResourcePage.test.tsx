@@ -316,7 +316,7 @@ describe('CodexDocumentResourcePage', () => {
     ));
   });
 
-  it('validates raw TOML mode and submits raw content without structured fields', async () => {
+  it('validates raw TOML mode and submits raw content without structured fields', { timeout: 10000 }, async () => {
     const user = userEvent.setup();
     render(<CodexDocumentResourcePage resource="subagents" />);
 

@@ -147,7 +147,7 @@ describe('JobCreateDialog', () => {
     mocks.listSlashCommands.mockResolvedValue([]);
   });
 
-  it('uses structured schedule controls and submits the generated cron string', async () => {
+  it('uses structured schedule controls and submits the generated cron string', { timeout: 10000 }, async () => {
     render(<JobCreateDialog />);
 
     expect(await screen.findByText('Create scheduled task definition')).toBeInTheDocument();

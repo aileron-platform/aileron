@@ -25,8 +25,6 @@ from app.models import (
     WorkspaceEnvVar,
     WorkspaceListResponse,
     WorkspaceOwner,
-    WorkspacePortMapping,
-    WorkspaceSystemPortMapping,
     WorkspaceKnowledgeBaseAttachment,
     WorkspaceResourceRequirements,
     WorkspaceRuntimeJobSummary,
@@ -51,7 +49,6 @@ WORKSPACE_SHARE_CONFLICT_MESSAGE = "Workspace share already exists"
 WORKSPACE_SHARE_NOT_FOUND_MESSAGE = "Workspace share does not exist"
 WORKSPACE_INVALID_NAMESPACE_MESSAGE = "Invalid Kubernetes namespace"
 WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED_MESSAGE = "runtimeResources only supports Kubernetes workspaces"
-WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE = "portMappings only supports Docker workspaces"
 
 
 class WorkspaceError(ValueError):
@@ -208,10 +205,6 @@ class WorkspaceService:
             raise WorkspaceError(WORKSPACE_OWNER_NOT_FOUND_MESSAGE, code="WORKSPACE_OWNER_NOT_FOUND")
 
         provisioner = self._resolve_workspace_provisioner()
-        self._ensure_port_mappings_supported(
-            provisioner=provisioner,
-            port_mappings=payload.port_mappings,
-        )
         if payload.firewall is not None:
             self._ensure_firewall_available(provisioner=provisioner)
         target_namespace = self._resolve_target_namespace(
@@ -224,12 +217,6 @@ class WorkspaceService:
         )
 
         default_internal_port = 3002
-        external_port = None
-
-        for mapping in payload.port_mappings:
-            if mapping.container_port == default_internal_port and mapping.host_port:
-                external_port = mapping.host_port
-
         workspace = db_models.Workspace(
             id=str(uuid4()),
             owner_id=payload.owner_id,
@@ -244,7 +231,6 @@ class WorkspaceService:
             cli_type=payload.cli_type or "claude-code",
             setup_script=payload.setup_script,
             env_vars=[env.model_dump() for env in payload.env_vars],
-            port_mappings=[mapping.model_dump() for mapping in payload.port_mappings],
             workspace_firewall_network_access_enabled=(
                 payload.firewall.workspace.network_access_enabled
                 if payload.firewall
@@ -281,7 +267,7 @@ class WorkspaceService:
             acp_cli_args=payload.acp_cli_args or [],
             runtime_status="starting",
             runtime_internal_port=default_internal_port,
-            runtime_external_port=external_port,
+            runtime_external_port=None,
             runtime_last_seen=None,
         )
 
@@ -327,19 +313,6 @@ class WorkspaceService:
                     else None
                 ),
             )
-        if "portMappings" in data:
-            next_provisioner = data.get("provisioner", workspace.provisioner)
-            incoming_port_mappings = [
-                WorkspacePortMapping(**item) for item in data["portMappings"] or []
-            ]
-            self._ensure_port_mappings_supported(
-                provisioner=next_provisioner,
-                port_mappings=incoming_port_mappings,
-            )
-            workspace.port_mappings = [
-                mapping.model_dump() for mapping in incoming_port_mappings
-            ]
-            data.pop("portMappings", None)
         if "runtimeStatus" in data:
             status = RuntimeStatus(**data.pop("runtimeStatus"))
             workspace.runtime_status = status.status
@@ -679,8 +652,6 @@ class WorkspaceService:
         )
 
         env_vars = [WorkspaceEnvVar(**item) for item in workspace.env_vars or []]
-        system_port_mappings = self._build_system_port_mappings(workspace)
-        port_mappings = [WorkspacePortMapping(**item) for item in workspace.port_mappings or []]
         components = self._to_components(workspace)
         raw_kb_attachments = getattr(workspace, "knowledge_base_attachments", [])
         if not isinstance(raw_kb_attachments, list):
@@ -714,8 +685,6 @@ class WorkspaceService:
             setup_script=workspace.setup_script,
             env_vars=env_vars,
             runtime_resources=self._effective_runtime_resources(workspace),
-            system_port_mappings=system_port_mappings,
-            port_mappings=port_mappings,
             runtime_status=runtime_status,
             components=components,
             firewall_available=self._is_firewall_available_for_provisioner(workspace.provisioner),
@@ -884,83 +853,6 @@ class WorkspaceService:
                 code="WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED",
             )
         return runtime_resources.model_dump(by_alias=True)
-
-    def _ensure_port_mappings_supported(
-        self,
-        *,
-        provisioner: str,
-        port_mappings: list[WorkspacePortMapping],
-    ) -> None:
-        if provisioner == "kubernetes" and port_mappings:
-            raise WorkspaceError(
-                WORKSPACE_PORT_MAPPINGS_UNSUPPORTED_MESSAGE,
-                code="WORKSPACE_PORT_MAPPINGS_UNSUPPORTED",
-            )
-
-    def _build_system_port_mappings(
-        self,
-        workspace: db_models.Workspace,
-    ) -> list[WorkspaceSystemPortMapping]:
-        if workspace.provisioner != "docker":
-            return []
-
-        rows = [
-            (
-                "runtime",
-                workspace.runtime_internal_port,
-                workspace.runtime_external_port,
-                "tcp",
-                "Workspace runtime API",
-            ),
-            (
-                "terminal",
-                3004,
-                workspace.terminal_external_port,
-                "tcp",
-                "Workspace terminal websocket",
-            ),
-            (
-                "browser-webrtc",
-                workspace.browser_webrtc_internal_port,
-                workspace.browser_webrtc_external_port,
-                "tcp",
-                "Browser WebRTC signaling",
-            ),
-            (
-                "browser-cdp",
-                workspace.browser_cdp_internal_port,
-                workspace.browser_cdp_external_port,
-                "tcp",
-                "Browser CDP proxy",
-            ),
-            (
-                "canvas",
-                workspace.canvas_internal_port,
-                workspace.canvas_external_port,
-                "tcp",
-                "Canvas render server",
-            ),
-            (
-                "canvas-api",
-                workspace.canvas_api_internal_port,
-                workspace.canvas_api_external_port,
-                "tcp",
-                "Canvas management API",
-            ),
-        ]
-
-        return [
-            WorkspaceSystemPortMapping(
-                name=name,
-                container_port=container_port,
-                host_port=host_port,
-                protocol=protocol,
-                description=description,
-                editable=False,
-            )
-            for name, container_port, host_port, protocol, description in rows
-            if container_port
-        ]
 
     def _effective_runtime_resources(
         self,

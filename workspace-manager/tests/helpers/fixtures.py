@@ -80,7 +80,6 @@ class TestDataFactory:
             "cliType": cli_type,  # Use alias
             "setupScript": "#!/bin/bash\necho 'Setting up workspace...'",  # Use alias
             "envVars": [],  # Use alias
-            "portMappings": [],  # Use alias
             "preferredCli": "claude-code",  # Use alias
             "fallbackEnabled": True,  # Use alias
             "workspacePath": "/workspace",  # Use alias

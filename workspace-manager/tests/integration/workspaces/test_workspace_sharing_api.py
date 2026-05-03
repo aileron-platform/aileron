@@ -48,7 +48,6 @@ def _create_workspace(
             provisioner="docker",
             runtime_status="running",
             env_vars=[],
-            port_mappings=[],
             workspace_firewall_allowed_domains=[],
             browser_firewall_allowed_domains=[],
             acp_cli_args=[],

@@ -32,7 +32,6 @@ describe('workspaceWizardService.createWorkspace', () => {
       targetNamespace: 'workspace-system',
       setupScript: 'echo hello',
       envVars: [{ key: 'NODE_ENV', value: 'development' }],
-      portMappings: [{ containerPort: 3000, hostPort: 3100, protocol: 'http' }],
       cliType: 'claude-code',
     });
 
@@ -45,7 +44,6 @@ describe('workspaceWizardService.createWorkspace', () => {
       targetNamespace: 'workspace-system',
       setupScript: 'echo hello',
       envVars: [{ key: 'NODE_ENV', value: 'development' }],
-      portMappings: [{ containerPort: 3000, hostPort: 3100, protocol: 'http' }],
       branch: 'main',
       cliType: 'claude-code',
     });
@@ -63,7 +61,6 @@ describe('workspaceWizardService.createWorkspace', () => {
       targetNamespace: 'workspace-system',
       setupScript: 'echo hello',
       envVars: [{ key: 'NODE_ENV', value: 'development' }],
-      portMappings: [],
       cliType: 'claude-code',
     });
 

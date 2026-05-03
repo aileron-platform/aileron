@@ -16,20 +16,12 @@ export interface EnvVarItem {
   value: string;
 }
 
-export interface PortMappingItem {
-  id: string;
-  containerPort: number | '';
-  hostPort: number | '';
-  protocol: 'http' | 'https' | 'tcp';
-}
-
 export interface RuntimeConfigForm {
   runtime: string; // 動態從容器映像配置載入
   provisioner: 'docker' | 'kubernetes';
   targetNamespace: string | null;
   setupScript: string;
   envVars: EnvVarItem[];
-  portMappings: PortMappingItem[];
 }
 
 export interface WorkspaceWizardState {
@@ -51,7 +43,6 @@ export interface CreateWorkspacePayload {
   targetNamespace?: string;
   setupScript: string;
   envVars: Array<{ key: string; value: string }>;
-  portMappings: Array<{ containerPort: number; hostPort: number; protocol: PortMappingItem['protocol'] }>;
   cliType: CliType;
 }
 

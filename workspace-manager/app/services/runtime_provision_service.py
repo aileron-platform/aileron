@@ -360,22 +360,11 @@ class RuntimeProvisionService:
         canvas_port = workspace.canvas_internal_port or 3003
         terminal_port = 3004
 
-        mappings = []
-        for mapping in workspace.port_mappings or []:
-            container_port = int(mapping.get("container_port", default_port))
-            if container_port in [default_port, canvas_port, terminal_port]:
-                continue
-            mappings.append({
-                "container_port": container_port,
-                "host_port": mapping.get("host_port"),
-                "protocol": mapping.get("protocol", "tcp")
-            })
-
         return {
             "default_internal_port": default_port,
             "canvas_internal_port": canvas_port,
             "terminal_internal_port": terminal_port,
-            "mappings": mappings,
+            "mappings": [],
         }
 
     def _build_volumes(self, workspace: db_models.Workspace) -> list[VolumeMount]:

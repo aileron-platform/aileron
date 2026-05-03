@@ -193,8 +193,6 @@ class Workspace(Base):
     browser_firewall_domain_access_mode: Mapped[str] = mapped_column(Text, default="all")
     browser_firewall_allowed_domains: Mapped[list[str]] = mapped_column(JSON, default=list)
 
-    port_mappings: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
-
     active_claude_session_id: Mapped[Optional[str]] = mapped_column(Text)
     preferred_cli: Mapped[str] = mapped_column(Text, default="claude-code")
     cli_type: Mapped[str] = mapped_column(String(32), default="claude-code")

@@ -103,21 +103,6 @@ const wizard = {
           valuePlaceholder: '變數值',
           add: '新增環境變數',
         },
-        portMappings: {
-          label: '端口映射',
-          helper: '可將容器端口對應到主機端口供外部存取。',
-          containerPort: '容器端口',
-          containerPlaceholder: '例如 3000',
-          hostPort: '主機端口',
-          hostPlaceholder: '自動分配',
-          protocol: '協定',
-          protocolOptions: {
-            http: 'HTTP',
-            https: 'HTTPS',
-            tcp: 'TCP',
-          },
-          add: '新增端口映射',
-        },
       },
       runtimeOptions: {
         universal: {
@@ -132,11 +117,6 @@ const wizard = {
           label: 'Python 環境',
           description: '針對 Python 專案最佳化，內建 pip 與 poetry。',
         },
-      },
-      notes: {
-        autoAssign: '主機端口留空時會自動從可用範圍分配。',
-        reserved: '3002 端口保留給 Workspace Runtime，不可修改。',
-        examples: '常用端口：3000（Node.js）、8000（Python）、8080（API Gateway）。',
       },
     },
     workspaceCreation: {

@@ -103,21 +103,6 @@ const wizard = {
           valuePlaceholder: 'Variable value',
           add: 'Add environment variable',
         },
-        portMappings: {
-          label: 'Port mappings',
-          helper: 'Expose container ports to your local machine.',
-          containerPort: 'Container port',
-          containerPlaceholder: 'e.g. 3000',
-          hostPort: 'Host port',
-          hostPlaceholder: 'Auto assign',
-          protocol: 'Protocol',
-          protocolOptions: {
-            http: 'HTTP',
-            https: 'HTTPS',
-            tcp: 'TCP',
-          },
-          add: 'Add port mapping',
-        },
       },
       runtimeOptions: {
         universal: {
@@ -132,11 +117,6 @@ const wizard = {
           label: 'Python runtime',
           description: 'Optimised Python environment with pip and poetry.',
         },
-      },
-      notes: {
-        autoAssign: 'Leave the host port blank to assign an available port automatically.',
-        reserved: 'Port 3002 is reserved for the Workspace runtime service.',
-        examples: 'Common ports: 3000 (Node.js), 8000 (Python), 8080 (API gateways).',
       },
     },
     workspaceCreation: {

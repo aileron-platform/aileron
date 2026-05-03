@@ -50,7 +50,6 @@ def _create_workspace(
             runtime_status=runtime_status,
             runtime_container_id=runtime_container_id,
             env_vars=[],
-            port_mappings=[],
             workspace_firewall_allowed_domains=[],
             browser_firewall_allowed_domains=[],
             acp_cli_args=[],

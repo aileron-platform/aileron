@@ -51,51 +51,6 @@ const containerManagement = {
       valuePlaceholder: 'Variable value',
       add: 'Add environment variable',
     },
-    portMappings: {
-      system: {
-        label: 'System Ports',
-        description: 'Default Docker ports managed by the platform.',
-        fields: {
-          name: 'Name',
-          containerPort: 'Container Port',
-          hostPort: 'Host Port',
-          protocol: 'Protocol',
-          description: 'Description',
-        },
-      },
-      label: 'Port mappings',
-      description:
-        'Configure container port forwarding. Assign static ports or let the host pick automatically.',
-      fields: {
-        containerPort: {
-          label: 'Container port',
-          placeholder: '3000',
-        },
-        hostPort: {
-          label: 'Host port',
-          placeholder: 'Auto-assign',
-        },
-        protocol: {
-          label: 'Protocol',
-          options: {
-            tcp: 'TCP',
-            udp: 'UDP',
-          },
-        },
-        description: {
-          label: 'Description',
-          placeholder: 'Describe the port usage',
-        },
-      },
-      add: 'Add port mapping',
-      kubernetesUnsupported:
-        'Workspace-level port exposure is not supported for Kubernetes workspaces.',
-      hints: {
-        autoAssign: '• Leave host port blank to automatically assign an available port.',
-        defaultPort: '• Container port 3002 is the default Workspace Runtime port.',
-        reservedPorts: '• Avoid using system reserved ports (1-1023).',
-      },
-    },
     environments: {
       universal: {
         label: 'Standard Container Image',

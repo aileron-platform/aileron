@@ -17,7 +17,7 @@
   "workspace.firewall_unavailable": "Firewall is unavailable for the current workspace provisioner",
   "workspace.invalid_namespace": "Invalid Kubernetes namespace: {namespace}",
   "workspace.runtime_resources_unsupported": "runtimeResources is only supported for Kubernetes workspaces",
-  "workspace.port_mappings_unsupported": "portMappings is only supported for Docker workspaces",
+  "workspace.port_mappings_removed": "Workspace port mapping configuration is no longer supported",
   "workspace.share.target_not_found": "Target user for workspace sharing not found",
   "workspace.share.owner_forbidden": "Cannot share a workspace with its owner",
   "workspace.share.conflict": "Workspace share already exists",

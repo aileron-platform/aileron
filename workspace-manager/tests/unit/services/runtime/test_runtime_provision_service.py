@@ -90,9 +90,6 @@ def sample_workspace():
     workspace.env_vars = [
         {"key": "NODE_ENV", "value": "production"},
     ]
-    workspace.port_mappings = [
-        {"container_port": 8000, "host_port": 9000, "protocol": "tcp"}
-    ]
     workspace.setup_script = "#!/bin/bash\necho 'Setup complete'"
     workspace.knowledge_base_attachments = []
     return workspace
@@ -193,8 +190,8 @@ class TestRuntimeProvisionService:
             assert any(v.target == "/workspace" for v in context.volumes)
             
             # Ports
-            # Currently runtime context only contains main Service, terminal and custom Mapping
-            assert len(context.ports) == 3
+            # Only the runtime and terminal ports are published by this context.
+            assert len(context.ports) == 2
             
             # Template rendered
             mock_template_engine.render_to_file.assert_called_once()

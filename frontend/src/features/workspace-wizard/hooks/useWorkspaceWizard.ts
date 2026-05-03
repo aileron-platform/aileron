@@ -5,7 +5,6 @@ import {
   WorkspaceWizardState,
   WizardStepKey,
   EnvVarItem,
-  PortMappingItem,
 } from '../types';
 import { workspaceWizardService } from '../services/workspaceWizardService';
 import { apiClient } from '@/shared/api/apiClient';
@@ -51,7 +50,6 @@ const initialState: WorkspaceWizardState = {
         : null,
     setupScript: '',
     envVars: [],
-    portMappings: [],
   },
   createdWorkspaceId: null,
   isSubmitting: false,
@@ -128,25 +126,6 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
     }));
   }, [setRuntimeConfig]);
 
-  const addPortMapping = useCallback(() => {
-    const next: PortMappingItem = { id: crypto.randomUUID(), containerPort: '', hostPort: '', protocol: 'http' };
-    setRuntimeConfig((prev) => ({ ...prev, portMappings: [...prev.portMappings, next] }));
-  }, [setRuntimeConfig]);
-
-  const updatePortMapping = useCallback((id: string, patch: Partial<PortMappingItem>) => {
-    setRuntimeConfig((prev) => ({
-      ...prev,
-      portMappings: prev.portMappings.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    }));
-  }, [setRuntimeConfig]);
-
-  const removePortMapping = useCallback((id: string) => {
-    setRuntimeConfig((prev) => ({
-      ...prev,
-      portMappings: prev.portMappings.filter((item) => item.id !== id),
-    }));
-  }, [setRuntimeConfig]);
-
   const goToStep = useCallback((step: WizardStepKey) => {
     dispatch({ type: 'SET_STEP', payload: step });
   }, []);
@@ -162,7 +141,7 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
       return false;
     }
 
-    // 如果填寫了 gitUrl，則必須有 branch
+    // Require a branch when a Git URL is provided.
     if (state.basicInfo.gitUrl.trim() && !state.basicInfo.branch.trim()) {
       dispatch({ type: 'SET_ERROR', payload: 'validation.gitBranchRequired' });
       return false;
@@ -191,16 +170,6 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
         envVars: state.runtimeConfig.envVars
           .filter((item) => item.key.trim())
           .map((item) => ({ key: item.key.trim(), value: item.value })),
-        portMappings:
-          state.runtimeConfig.provisioner === 'docker'
-            ? state.runtimeConfig.portMappings
-                .filter((item) => item.containerPort && item.hostPort)
-                .map((item) => ({
-                  containerPort: Number(item.containerPort),
-                  hostPort: Number(item.hostPort),
-                  protocol: item.protocol,
-                }))
-            : [],
         cliType: state.basicInfo.cliType,
       };
 
@@ -216,9 +185,9 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
   }, [goToStep, state.basicInfo, state.runtimeConfig]);
 
   useEffect(() => {
-    // 只在正確的步驟且有 workspaceId 時啟動輪詢
+    // Start polling only when the wizard is on the creation step and has a workspace ID.
     if (state.step !== 'workspaceCreation' || !state.createdWorkspaceId) {
-      // 清理輪詢狀態
+      // Clean up any active polling state.
       if (pollingRef.current.interval) {
         clearInterval(pollingRef.current.interval);
         pollingRef.current.interval = null;
@@ -228,7 +197,7 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
       return;
     }
 
-    // 如果已經在輪詢中，不要重複啟動
+    // Avoid starting a second polling loop.
     if (pollingRef.current.isActive) {
       return;
     }
@@ -242,14 +211,14 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
         const status = (workspace as any).runtimeStatus?.status;
 
         if (status === 'running' || status === 'stopped') {
-          // 清理輪詢
+          // Stop polling once the workspace reaches a ready state.
           if (pollingRef.current.interval) {
             clearInterval(pollingRef.current.interval);
             pollingRef.current.interval = null;
           }
           pollingRef.current.isActive = false;
           dispatch({ type: 'SET_POLLING', payload: false });
-          // 不自動跳轉，讓用戶手動點擊「下一步」
+          // Do not auto-advance; let the user move to the next step manually.
           return true;
         }
         return false;
@@ -260,15 +229,15 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
     };
 
     const startPolling = async () => {
-      // 立即檢查一次
+      // Check once immediately.
       if (await checkStatus()) {
         return;
       }
 
-      // 開始定期輪詢
+      // Start periodic polling.
       pollingRef.current.interval = setInterval(async () => {
         await checkStatus();
-      }, 1500); // 每1.5秒檢查一次
+      }, 1500); // Check every 1.5 seconds.
     };
 
     startPolling();
@@ -297,11 +266,8 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
       addEnvVar,
       updateEnvVar,
       removeEnvVar,
-      addPortMapping,
-      updatePortMapping,
-      removePortMapping,
     }),
-    [addEnvVar, updateEnvVar, removeEnvVar, addPortMapping, updatePortMapping, removePortMapping]
+    [addEnvVar, updateEnvVar, removeEnvVar]
   );
 
   return {
