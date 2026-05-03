@@ -147,7 +147,7 @@ class CodexImportAdapter(BaseTemplateImportAdapter):
                 sourceType=self.source_type,
             ),
             agentsMdContent=_read_text_if_exists(root / "AGENTS.md"),
-            commands=_load_markdown_documents(root / ".codex" / "commands", root),
+            commands=_load_markdown_documents(root / ".codex" / "prompts", root),
             agents=_load_markdown_documents(root / ".codex" / "agents", root),
             skills=_load_skills(root / ".codex" / "skills", root),
             hooks=hooks,
@@ -157,7 +157,7 @@ class CodexImportAdapter(BaseTemplateImportAdapter):
             resources=_collect_extra_resources(
                 root,
                 excluded={"AGENTS.md", ".codex/config.toml", ".codex/hooks.json"},
-                excluded_prefixes=(".codex/commands/", ".codex/agents/", ".codex/skills/"),
+                excluded_prefixes=(".codex/prompts/", ".codex/agents/", ".codex/skills/"),
             ),
         )
 

@@ -17,6 +17,7 @@ class TemplateInstallServiceStub:
     """Configurable return result TemplateInstallService stub"""
 
     def __init__(self) -> None:
+        self.last_slash_command_request: Any | None = None
         self.slash_commands_result: tuple[bool, InstallResults] = (
             True,
             InstallResults(created=["test.md"], updated=[], failed=[]),
@@ -61,6 +62,7 @@ class TemplateInstallServiceStub:
     async def install_slash_commands(
         self, workspace_id: str, request: Any
     ) -> tuple[bool, InstallResults]:
+        self.last_slash_command_request = request
         return self.slash_commands_result
 
     async def install_subagents(
@@ -404,6 +406,7 @@ def test_ti_010_install_template_batch_partial_install(client):
             json={
                 "templateId": "test-template-id",
                 "templateName": "test-template",
+                "cliType": "codex",
                 "slashCommands": [
                     {"fileName": "test.md", "content": "# Test\nContent"}
                 ],
@@ -425,6 +428,8 @@ def test_ti_010_install_template_batch_partial_install(client):
     assert payload["results"]["scripts"] is not None
     assert payload["results"]["claudeMd"] is None
     assert payload["results"]["subagents"] is None
+    assert service.last_slash_command_request is not None
+    assert service.last_slash_command_request.cliType == "codex"
 
 
 def test_ti_011_install_template_compiled_plan_success(client):

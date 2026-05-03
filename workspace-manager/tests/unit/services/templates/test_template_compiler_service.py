@@ -58,6 +58,15 @@ def _seed_canonical_template(tmp_path: Path) -> None:
     )
 
 
+def _seed_namespaced_command_template(tmp_path: Path) -> None:
+    _seed_canonical_template(tmp_path)
+    template_root = tmp_path / "templates" / "demo-template"
+    _write(
+        template_root / "commands" / "deploy" / "build.md",
+        "---\nname: build\ndescription: Build deployable artifact\n---\nBuild the project.\n",
+    )
+
+
 @pytest.mark.unit
 def test_compile_claude_template_generates_expected_paths(compiler_service, tmp_path):
     _seed_canonical_template(tmp_path)
@@ -93,11 +102,38 @@ def test_compile_codex_template_generates_codex_specific_files(compiler_service,
     assert plan.target == CanonicalTarget.CODEX.value
     assert [item.path for item in plan.files][:3] == [
         "AGENTS.md",
-        ".codex/commands/review-ui.md",
+        ".codex/prompts/review-ui.md",
         ".codex/agents/ui-investigator.md",
     ]
+    assert all(".codex/commands/" not in item.path for item in plan.files)
     assert any(issue.feature == "outputStyle" for issue in plan.warnings)
     assert plan.install_hints["commands"][0]["fileName"] == "review-ui.md"
+
+
+@pytest.mark.unit
+def test_compile_namespace_capable_targets_preserve_command_namespace(compiler_service, tmp_path):
+    _seed_namespaced_command_template(tmp_path)
+
+    claude_plan = compiler_service.compile_template("demo-template", CanonicalTarget.CLAUDE_CODE.value)
+    gemini_plan = compiler_service.compile_template("demo-template", CanonicalTarget.GEMINI.value)
+    opencode_plan = compiler_service.compile_template("demo-template", CanonicalTarget.OPENCODE.value)
+
+    assert any(item.path == ".claude/commands/deploy/build.md" for item in claude_plan.files)
+    assert any(item.path == ".gemini/commands/deploy/build.toml" for item in gemini_plan.files)
+    assert any(item.path == ".opencode/commands/deploy/build.md" for item in opencode_plan.files)
+
+
+@pytest.mark.unit
+def test_compile_codex_template_reports_namespaced_commands_as_unsupported(compiler_service, tmp_path):
+    _seed_namespaced_command_template(tmp_path)
+
+    plan = compiler_service.compile_template("demo-template", CanonicalTarget.CODEX.value)
+
+    assert all(item.path != ".codex/prompts/deploy/build.md" for item in plan.files)
+    assert any(
+        issue.feature == "commands" and "commands/deploy/build.md" in issue.message
+        for issue in plan.unsupported
+    )
 
 
 @pytest.mark.unit

@@ -32,6 +32,8 @@ from app.modules.claude_code.common import DocumentScope
 from app.modules.claude_code.mcp.models import McpImportResponse
 from app.modules.claude_code.hooks.models import HookImportResponse
 from app.modules.cli_settings.agents_md.models import AgentsMdScope
+from app.modules.cli_settings.codex.service import CodexSettingsService
+from app.modules.cli_settings.codex_paths import CodexPathResolver
 
 
 @pytest.fixture
@@ -219,6 +221,39 @@ class TestSlashCommandsInstallation:
         assert len(results.created) == 3
         assert len(results.failed) == 0
 
+    @pytest.mark.asyncio
+    async def test_install_codex_slash_command_to_prompts(self, service, temp_dirs):
+        request = SlashCommandInstallRequest(
+            cliType="codex",
+            commands=[
+                SlashCommandInstallItem(fileName="review.md", content="# Review")
+            ],
+        )
+
+        with patch("app.modules.cli_settings.codex_paths.DEFAULT_AILERON_USER_HOME", temp_dirs["home_dir"]):
+            success, results = await service.install_slash_commands("workspace-1", request)
+
+        assert success is True
+        assert results.created == ["review.md"]
+        prompt_file = temp_dirs["home_dir"] / ".codex" / "prompts" / "review.md"
+        assert prompt_file.read_text(encoding="utf-8") == "# Review"
+
+    @pytest.mark.asyncio
+    async def test_install_codex_slash_command_rejects_namespace(self, service, temp_dirs):
+        request = SlashCommandInstallRequest(
+            cliType="codex",
+            commands=[
+                SlashCommandInstallItem(fileName="deploy/build.md", content="# Build")
+            ],
+        )
+
+        with patch("app.modules.cli_settings.codex_paths.DEFAULT_AILERON_USER_HOME", temp_dirs["home_dir"]):
+            success, results = await service.install_slash_commands("workspace-1", request)
+
+        assert success is False
+        assert results.failed == ["deploy/build.md"]
+        assert not (temp_dirs["home_dir"] / ".codex" / "prompts" / "deploy" / "build.md").exists()
+
 
 class TestCompiledInstallPlan:
     """Test compiled install plan file installation."""
@@ -256,6 +291,48 @@ class TestCompiledInstallPlan:
         assert results["claudeMd"].created == ["AGENTS.md"]
         assert results["slashCommands"].created == [".codex/prompts/review-ui.md"]
         assert results["subagents"].created == [".codex/agents/ui-investigator.md"]
+
+    @pytest.mark.asyncio
+    async def test_install_codex_prompt_and_skill_visible_to_codex_resources(self, service, temp_dirs):
+        workspace_root = service.scripts_base_dir.parent / "workspace"
+        prompt_request = InstallPlanRequest(
+            target="codex",
+            files=[
+                CompiledTemplateFileInstallItem(
+                    path=".codex/prompts/review.md",
+                    source="commands/review.md",
+                    content="# Review",
+                ),
+            ],
+        )
+        skill_request = SkillsInstallRequest(
+            cliType="codex",
+            skills=[
+                SkillFileItem(
+                    path="review/SKILL.md",
+                    content="# Review skill",
+                ),
+            ],
+        )
+
+        with patch("app.modules.internal.template_install_service.get_workspace_path", return_value=str(workspace_root)):
+            await service.install_compiled_files("workspace-1", prompt_request)
+            success, skills_results, _, _ = await service.install_skills("workspace-1", skill_request)
+
+        assert success is True
+        assert skills_results.created == ["review/SKILL.md"]
+
+        codex_service = CodexSettingsService(
+            CodexPathResolver(
+                user_home=temp_dirs["home_dir"],
+                workspace_root=workspace_root,
+            )
+        )
+        prompt_files = codex_service.list_files("workspace-1", "project", "prompts").files
+        skill_files = codex_service.list_files("workspace-1", "project", "skills").files
+
+        assert [file.path for file in prompt_files] == ["review.md"]
+        assert [file.path for file in skill_files] == ["review/SKILL.md"]
 
     @pytest.mark.asyncio
     async def test_install_compiled_files_rejects_path_traversal(self, service):

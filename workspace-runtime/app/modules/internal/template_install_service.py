@@ -39,6 +39,7 @@ from app.modules.cli_settings.mcp.models import (
 )
 from app.modules.cli_settings.mcp.service import CliMcpService, McpTool, get_mcp_tool_config
 from app.modules.cli_settings.skills.config import SkillTool, get_skill_config
+from app.modules.cli_settings.slash_commands.config import SlashCommandTool, get_slash_command_config
 from app.config.settings import get_workspace_path
 
 from .template_install_models import (
@@ -206,33 +207,41 @@ class TemplateInstallService:
     async def install_slash_commands(
         self, workspace_id: str, request: SlashCommandInstallRequest
     ) -> Tuple[bool, InstallResults]:
-        """Install Slash Commands to USER scope (~/.claude/commands/)
-
-        Determine installation location by filename:
-        - If filename contains '/', treat as having namespace, preserve full path structure
-        - Otherwise install directly under commands directory
-
-        Examples:
-        - "command.md" -> ~/.claude/commands/command.md
-        - "deploy/build.md" -> ~/.claude/commands/deploy/build.md
-        - "git/hooks/pre-commit.md" -> ~/.claude/commands/git/hooks/pre-commit.md
-        """
+        """Install Slash Commands or equivalent prompt resources to user scope."""
         results = InstallResults()
-        commands_dir = self.claude_dir / "commands"
+        cli_type = (request.cliType or "claude-code").strip().lower()
+        if cli_type == "claude-code":
+            commands_dir = self.claude_dir / "commands"
+            supports_namespace = True
+        else:
+            tool = self._resolve_slash_command_tool(cli_type)
+            config = get_slash_command_config(tool)
+            commands_dir = config.user_root
+            supports_namespace = config.supports_namespace
         commands_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
 
         for cmd in request.commands:
             try:
-                # Use filename directly (may contain path)
+                if not self._is_safe_relative_path(cmd.fileName):
+                    logger.warning("Invalid slash command path: %s", cmd.fileName)
+                    results.failed.append(cmd.fileName)
+                    continue
+                if "/" in cmd.fileName and not supports_namespace:
+                    logger.warning(
+                        "Slash command namespace is unsupported for cli type %s: %s",
+                        cli_type,
+                        cmd.fileName,
+                    )
+                    results.failed.append(cmd.fileName)
+                    continue
+
                 file_path = commands_dir / cmd.fileName
 
-                # If filename contains path, ensure parent directory exists
                 if "/" in cmd.fileName:
                     file_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
 
                 is_new = not file_path.exists()
 
-                # Write file (overwrite)
                 file_path.write_text(cmd.content, encoding="utf-8")
                 file_path.chmod(0o644)
 
@@ -242,7 +251,10 @@ class TemplateInstallService:
                     results.updated.append(cmd.fileName)
 
                 logger.info(
-                    f"{'Created' if is_new else 'Updated'} slash command: {cmd.fileName}"
+                    "%s slash command for %s: %s",
+                    "Created" if is_new else "Updated",
+                    cli_type,
+                    cmd.fileName,
                 )
 
             except Exception as e:
@@ -688,6 +700,17 @@ class TemplateInstallService:
         else:
             results.updated.append(strategy["agents_md_file"])
         return True, results
+
+    @staticmethod
+    def _resolve_slash_command_tool(cli_type: str) -> SlashCommandTool:
+        normalized = cli_type.strip().lower()
+        if normalized == "codex":
+            return SlashCommandTool.CODEX
+        if normalized == "gemini":
+            return SlashCommandTool.GEMINI
+        if normalized == "opencode":
+            return SlashCommandTool.OPENCODE
+        raise ValueError(f"Unsupported cli type for slash command installation: {cli_type}")
 
     @staticmethod
     def _resolve_skill_tool(cli_type: str) -> SkillTool:

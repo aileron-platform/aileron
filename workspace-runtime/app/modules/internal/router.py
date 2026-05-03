@@ -869,7 +869,7 @@ async def install_template(
     if request.slashCommands:
         try:
             from .template_install_models import SlashCommandInstallRequest as SCRequest
-            sc_request = SCRequest(commands=request.slashCommands)
+            sc_request = SCRequest(commands=request.slashCommands, cliType=request.cliType or "claude-code")
             success, sc_results = await service.install_slash_commands(workspace_id, sc_request)
             results.slashCommands = TemplateInstallItemResult(
                 success=success,

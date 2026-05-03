@@ -22,6 +22,9 @@ class SlashCommandInstallRequest(BaseModel):
     """Slash Commands install request"""
 
     commands: List[SlashCommandInstallItem] = Field(..., description="Command list")
+    cliType: str = Field(default="claude-code", alias="cliType", description="CLI type")
+
+    model_config = {"populate_by_name": True}
 
 
 class SubagentInstallItem(BaseModel):

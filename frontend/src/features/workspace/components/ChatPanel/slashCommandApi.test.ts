@@ -12,6 +12,12 @@ vi.mock('@/shared/api/apiClient', () => ({
   },
 }));
 
+vi.mock('@/shared/services/logger', () => ({
+  createLogger: () => ({
+    warn: vi.fn(),
+  }),
+}));
+
 import { slashCommandApi } from './slashCommandApi';
 
 describe('slashCommandApi.listPickerItems', () => {
@@ -123,5 +129,148 @@ describe('slashCommandApi.listPickerItems', () => {
         invocation: '/openspec:explore',
       }),
     );
+  });
+
+  it('loads Codex plugin skills from Codex plugin resource APIs', async () => {
+    getMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        layer: 'plugin',
+        resource: 'skills',
+        directory: '',
+        files: [
+          {
+            name: 'review',
+            path: 'review/SKILL.md',
+            sizeBytes: 42,
+            source: 'plugin',
+            readOnly: true,
+            metadata: {
+              pluginId: 'demo@local',
+              pluginName: 'demo',
+              marketplaceName: 'local',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        layer: 'plugin',
+        path: 'review/SKILL.md',
+        content: '---\nname: review\ndescription: Review code\n---\nbody',
+        exists: true,
+      });
+
+    const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'codex', ['plugin']);
+
+    expect(getMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/codex/skills/files?layer=plugin');
+    expect(getMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/codex/skills/file?layer=plugin&path=review%2FSKILL.md&pluginId=demo%40local');
+    expect(items).toEqual([
+      expect.objectContaining({
+        kind: 'skill',
+        pluginName: 'demo',
+        displayName: 'demo:review',
+        invocation: '/demo:review',
+        description: 'Review code',
+      }),
+    ]);
+  });
+
+  it('hides disabled Codex plugin skills when plugin resources return no files', async () => {
+    getMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        layer: 'plugin',
+        resource: 'skills',
+        directory: '',
+        files: [],
+      });
+
+    const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'codex', ['plugin']);
+
+    expect(getMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/codex/skills/files?layer=plugin');
+    expect(items).toEqual([]);
+  });
+
+  it('keeps Codex prompts when plugin skill discovery fails', async () => {
+    getMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [
+          {
+            scope: 'project',
+            documents: [
+              {
+                fileName: 'review.md',
+                description: 'Review the workspace',
+                scope: 'project',
+                size: '1 KB',
+              },
+            ],
+          },
+        ],
+      })
+      .mockRejectedValueOnce(new Error('plugin unavailable'));
+
+    const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'codex', ['plugin']);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        kind: 'slash-command',
+        displayName: 'review',
+        invocation: '/review',
+      }),
+    ]);
+  });
+
+  it('keeps Codex skills when prompt discovery fails', async () => {
+    getMock
+      .mockRejectedValueOnce(new Error('prompts unavailable'))
+      .mockResolvedValueOnce({
+        path: '/',
+        scope: 'project',
+        total: 1,
+        nodes: [
+          {
+            id: '/review',
+            name: 'review',
+            path: '/review',
+            type: 'directory',
+            scope: 'project',
+            children: [
+              {
+                id: '/review/SKILL.md',
+                name: 'SKILL.md',
+                path: '/review/SKILL.md',
+                type: 'file',
+                scope: 'project',
+              },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        path: '/review/SKILL.md',
+        scope: 'project',
+        content: '---\nname: review\ndescription: Review code\n---\nbody',
+      });
+
+    const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'codex', ['project']);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        kind: 'skill',
+        displayName: 'review',
+        invocation: '/review',
+      }),
+    ]);
   });
 });

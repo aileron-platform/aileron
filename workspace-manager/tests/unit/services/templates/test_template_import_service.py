@@ -203,12 +203,12 @@ def test_import_gemini_template_parses_settings_and_commands(import_service, tmp
 @pytest.mark.unit
 def test_import_codex_template_parses_config_hooks_and_commands(import_service, tmp_path):
     source_root = tmp_path / "codex-template"
-    (source_root / ".codex" / "commands").mkdir(parents=True)
+    (source_root / ".codex" / "prompts").mkdir(parents=True)
     (source_root / ".codex" / "agents").mkdir(parents=True)
     (source_root / ".codex" / "skills" / "reviewer").mkdir(parents=True)
 
     (source_root / "AGENTS.md").write_text("# Codex rules", encoding="utf-8")
-    (source_root / ".codex" / "commands" / "review.md").write_text(
+    (source_root / ".codex" / "prompts" / "review.md").write_text(
         "---\nname: review\ndescription: Review changes\n---\nReview changes",
         encoding="utf-8",
     )
@@ -263,6 +263,22 @@ def test_import_codex_template_parses_config_hooks_and_commands(import_service, 
 
 
 @pytest.mark.unit
+def test_import_codex_template_ignores_deprecated_commands_path(import_service, tmp_path):
+    source_root = tmp_path / "codex-template"
+    (source_root / ".codex" / "commands").mkdir(parents=True)
+    (source_root / "AGENTS.md").write_text("# Codex rules", encoding="utf-8")
+    (source_root / ".codex" / "commands" / "review.md").write_text(
+        "---\nname: review\n---\nReview changes",
+        encoding="utf-8",
+    )
+
+    imported = import_service.import_from_root(source_root)
+
+    assert imported.metadata.source_type == "codex"
+    assert imported.commands == []
+
+
+@pytest.mark.unit
 def test_import_opencode_template_collects_unresolved_items(import_service, tmp_path):
     source_root = tmp_path / "open-code"
     (source_root / ".opencode" / "commands").mkdir(parents=True)
@@ -295,12 +311,12 @@ def test_import_opencode_template_collects_unresolved_items(import_service, tmp_
 @pytest.mark.unit
 def test_normalizer_writes_canonical_template_tree(import_service, tmp_path):
     source_root = tmp_path / "codex-template"
-    (source_root / ".codex" / "commands").mkdir(parents=True)
+    (source_root / ".codex" / "prompts").mkdir(parents=True)
     (source_root / ".codex" / "agents").mkdir(parents=True)
     (source_root / ".codex" / "skills" / "review").mkdir(parents=True)
 
     (source_root / "AGENTS.md").write_text("# AGENTS", encoding="utf-8")
-    (source_root / ".codex" / "commands" / "review.md").write_text(
+    (source_root / ".codex" / "prompts" / "review.md").write_text(
         "---\nname: review\n---\nReview changes",
         encoding="utf-8",
     )
@@ -369,11 +385,11 @@ def _build_claude_source(root: Path) -> tuple[CanonicalTarget, str]:
 
 
 def _build_codex_source(root: Path) -> tuple[CanonicalTarget, str]:
-    (root / ".codex" / "commands").mkdir(parents=True)
+    (root / ".codex" / "prompts").mkdir(parents=True)
     (root / ".codex" / "agents").mkdir(parents=True)
     (root / ".codex" / "skills" / "review").mkdir(parents=True)
     (root / "AGENTS.md").write_text("# Codex rules", encoding="utf-8")
-    (root / ".codex" / "commands" / "review.md").write_text(
+    (root / ".codex" / "prompts" / "review.md").write_text(
         "---\nname: review\n---\nReview changes",
         encoding="utf-8",
     )

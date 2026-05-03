@@ -37,10 +37,17 @@ class BaseTemplateTargetAdapter(ABC):
             )
         ]
 
-    def _compile_markdown_collection(self, template, docs, directory: str, extension: str = ".md") -> List[CompiledTemplateFile]:
+    def _compile_markdown_collection(
+        self,
+        template,
+        docs,
+        directory: str,
+        extension: str = ".md",
+        source_root: str = "commands",
+    ) -> List[CompiledTemplateFile]:
         files: List[CompiledTemplateFile] = []
         for doc in docs:
-            target_name = Path(doc.path).stem + extension
+            target_name = self._target_relative_path(doc.path, source_root, extension)
             files.append(
                 CompiledTemplateFile(
                     path=f"{directory}/{target_name}",
@@ -49,6 +56,23 @@ class BaseTemplateTargetAdapter(ABC):
                 )
             )
         return files
+
+    @staticmethod
+    def _target_relative_path(doc_path: str, source_root: str, extension: str = ".md") -> str:
+        path = Path(doc_path)
+        try:
+            relative = path.relative_to(source_root)
+        except ValueError:
+            relative = Path(path.name)
+        return relative.with_suffix(extension).as_posix()
+
+    @staticmethod
+    def _is_namespaced_command(doc_path: str) -> bool:
+        try:
+            relative = Path(doc_path).relative_to("commands")
+        except ValueError:
+            relative = Path(doc_path)
+        return len(relative.parts) > 1
 
     def _compile_output_style_fallback(self, template) -> List[CompileIssue]:
         if not template.output_style:
@@ -73,7 +97,7 @@ class ClaudeCodeAdapter(BaseTemplateTargetAdapter):
             files=[
                 *self._compile_agents_md(template, "CLAUDE.md"),
                 *self._compile_markdown_collection(template, template.commands, ".claude/commands"),
-                *self._compile_markdown_collection(template, template.agents, ".claude/agents/user"),
+                *self._compile_markdown_collection(template, template.agents, ".claude/agents/user", source_root="agents"),
             ],
             warnings=[],
             unsupported=[],
@@ -87,16 +111,27 @@ class CodexAdapter(BaseTemplateTargetAdapter):
         super().__init__(CanonicalTarget.CODEX)
 
     def compile(self, template) -> InstallPlan:
+        unsupported = [
+            CompileIssue(
+                feature="commands",
+                target=self.target,
+                message=f"Codex prompts do not support namespaced command path: {doc.path}",
+            )
+            for doc in template.commands
+            if self._is_namespaced_command(doc.path)
+        ]
+        prompt_docs = [doc for doc in template.commands if not self._is_namespaced_command(doc.path)]
+        fallback_issues = self._compile_output_style_fallback(template)
         return InstallPlan(
             target=self.target,
             files=[
                 *self._compile_agents_md(template, "AGENTS.md"),
-                *self._compile_markdown_collection(template, template.commands, ".codex/commands"),
-                *self._compile_markdown_collection(template, template.agents, ".codex/agents"),
+                *self._compile_markdown_collection(template, prompt_docs, ".codex/prompts"),
+                *self._compile_markdown_collection(template, template.agents, ".codex/agents", source_root="agents"),
             ],
-            warnings=self._compile_output_style_fallback(template),
-            unsupported=[],
-            degradationNotes=self._compile_output_style_fallback(template),
+            warnings=[*fallback_issues, *unsupported],
+            unsupported=unsupported,
+            degradationNotes=fallback_issues,
             installHints=_build_runtime_install_hints(template),
         )
 
@@ -109,6 +144,7 @@ class GeminiAdapter(BaseTemplateTargetAdapter):
         files = self._compile_agents_md(template, "GEMINI.md")
         for doc in template.commands:
             description = str(doc.frontmatter.get("description") or "")
+            target_name = self._target_relative_path(doc.path, "commands", ".toml")
             toml_content = "\n".join(
                 [
                     f'name = "{doc.name}"',
@@ -123,12 +159,12 @@ class GeminiAdapter(BaseTemplateTargetAdapter):
             )
             files.append(
                 CompiledTemplateFile(
-                    path=f".gemini/commands/{Path(doc.path).stem}.toml",
+                    path=f".gemini/commands/{target_name}",
                     source=doc.path,
                     content=toml_content,
                 )
             )
-        files.extend(self._compile_markdown_collection(template, template.agents, ".gemini/agents"))
+        files.extend(self._compile_markdown_collection(template, template.agents, ".gemini/agents", source_root="agents"))
         return InstallPlan(
             target=self.target,
             files=files,
@@ -149,7 +185,7 @@ class OpenCodeAdapter(BaseTemplateTargetAdapter):
             files=[
                 *self._compile_agents_md(template, "AGENTS.md"),
                 *self._compile_markdown_collection(template, template.commands, ".opencode/commands"),
-                *self._compile_markdown_collection(template, template.agents, ".opencode/agents"),
+                *self._compile_markdown_collection(template, template.agents, ".opencode/agents", source_root="agents"),
             ],
             warnings=self._compile_output_style_fallback(template),
             unsupported=[],
