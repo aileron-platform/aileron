@@ -23,8 +23,10 @@ class HookAction(BaseModel):
     """Hook action definition"""
 
     type: HookActionType = Field(..., description="Action type")
+    name: str | None = Field(None, description="Action name")
     command: str | None = Field(None, description="Command or instruction")
     timeout: int | None = Field(None, description="Timeout in seconds")
+    description: str | None = Field(None, description="Action description")
 
 
 class HookRule(BaseModel):

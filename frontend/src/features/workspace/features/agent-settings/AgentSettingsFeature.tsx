@@ -105,7 +105,13 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
       }
       return (
         <React.Suspense fallback={loadingFallback}>
-          <HooksSettingsPage apiPrefix={config.apiPathPrefix} availableScopes={config.availableScopes} hookEvents={config.hookEvents} i18nNamespace={config.i18nNamespace} />
+          <HooksSettingsPage
+            apiPrefix={config.apiPathPrefix}
+            availableScopes={config.availableScopes}
+            hookEvents={config.hookEvents}
+            i18nNamespace={config.i18nNamespace}
+            supportsActionMetadata={config.capabilities.hooks.supportsActionMetadata}
+          />
         </React.Suspense>
       );
 

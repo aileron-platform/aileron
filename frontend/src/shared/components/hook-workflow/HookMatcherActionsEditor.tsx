@@ -7,8 +7,10 @@ import { Textarea } from '@/shared/components/ui/textarea';
 
 export interface HookActionConfig {
   type: 'command';
+  name?: string | null;
   command: string;
   timeout: number;
+  description?: string | null;
   statusMessage?: string | null;
   raw?: Record<string, unknown>;
 }
@@ -28,9 +30,15 @@ export interface HookMatcherActionsLabels {
   matcherRemove: string;
   executionSectionTitle: string;
   executionAdd: string;
+  executionNameLabel?: string;
+  executionNamePlaceholder?: string;
+  executionNameHelp?: string;
   executionTimeoutLabel: string;
   executionTimeoutPlaceholder: string;
   executionTimeoutHelp: string;
+  executionDescriptionLabel?: string;
+  executionDescriptionPlaceholder?: string;
+  executionDescriptionHelp?: string;
   executionCommandLabel: string;
   executionCommandPlaceholder: string;
   executionCommandHelp: string;
@@ -67,6 +75,7 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
   onChange,
 }) => {
   const supportsStatusMessage = Boolean(labels.executionStatusMessageLabel);
+  const supportsMetadata = Boolean(labels.executionNameLabel || labels.executionDescriptionLabel);
   const handleMatcherChange = (matcherIndex: number, value: string) => {
     onChange(matchers.map((item, index) => (
       index === matcherIndex ? { ...item, matcher: value } : item
@@ -177,6 +186,46 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
               {matcher.hooks.map((execution, hookIndex) => (
                 <div key={hookIndex} className="rounded border border-border/70 bg-muted/30 p-3">
                   <div className="space-y-3">
+                    {supportsMetadata ? (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {labels.executionNameLabel ? (
+                          <div className="space-y-2">
+                            <Label className="text-sm">{labels.executionNameLabel}</Label>
+                            <Input
+                              value={execution.name ?? ''}
+                              onChange={(event) =>
+                                updateHookExecution(matcherIndex, hookIndex, {
+                                  name: event.target.value,
+                                })
+                              }
+                              placeholder={labels.executionNamePlaceholder}
+                            />
+                            {labels.executionNameHelp ? (
+                              <p className="text-xs text-muted-foreground">{labels.executionNameHelp}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {labels.executionDescriptionLabel ? (
+                          <div className="space-y-2">
+                            <Label className="text-sm">{labels.executionDescriptionLabel}</Label>
+                            <Input
+                              value={execution.description ?? ''}
+                              onChange={(event) =>
+                                updateHookExecution(matcherIndex, hookIndex, {
+                                  description: event.target.value,
+                                })
+                              }
+                              placeholder={labels.executionDescriptionPlaceholder}
+                            />
+                            {labels.executionDescriptionHelp ? (
+                              <p className="text-xs text-muted-foreground">{labels.executionDescriptionHelp}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className="space-y-2">
                       <Label className="text-sm">{labels.executionTimeoutLabel}</Label>
                       <Input

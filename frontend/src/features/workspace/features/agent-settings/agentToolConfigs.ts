@@ -91,7 +91,7 @@ const geminiCapabilities: AgentToolCapabilities = {
     endpoint: 'agents-md',
   },
   mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: false },
-  hooks: { supported: true, scopes: ['project', 'user'], events: geminiHookEvents },
+  hooks: { supported: true, scopes: ['project', 'user'], events: geminiHookEvents, supportsActionMetadata: true },
   slashCommands: { supported: true, scopes: ['project', 'user'], format: 'toml', supportsNamespace: true },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },

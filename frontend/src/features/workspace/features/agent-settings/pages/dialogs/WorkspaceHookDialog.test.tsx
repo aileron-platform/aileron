@@ -38,6 +38,12 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.agentSettings.common.hooks.dialog.matcher.remove': 'Remove matcher',
         'workspace.agentSettings.common.hooks.dialog.execution.sectionTitle': 'Executions',
         'workspace.agentSettings.common.hooks.dialog.execution.add': 'Add execution',
+        'workspace.agentSettings.common.hooks.dialog.execution.nameLabel': 'Hook name',
+        'workspace.agentSettings.common.hooks.dialog.execution.namePlaceholder': 'Name placeholder',
+        'workspace.agentSettings.common.hooks.dialog.execution.nameHelp': 'Name help',
+        'workspace.agentSettings.common.hooks.dialog.execution.descriptionLabel': 'Description',
+        'workspace.agentSettings.common.hooks.dialog.execution.descriptionPlaceholder': 'Description placeholder',
+        'workspace.agentSettings.common.hooks.dialog.execution.descriptionHelp': 'Description help',
         'workspace.agentSettings.common.hooks.dialog.execution.timeoutLabel': 'Timeout',
         'workspace.agentSettings.common.hooks.dialog.execution.timeoutPlaceholder': '30',
         'workspace.agentSettings.common.hooks.dialog.execution.timeoutHelp': 'Timeout help',
@@ -83,6 +89,115 @@ describe('WorkspaceHookDialog', () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         scope: 'project',
         eventName: 'PreToolUse',
+        matchers: [
+          {
+            matcher: 'Write',
+            hooks: [{ type: 'command', command: 'echo write', timeout: 30 }],
+          },
+        ],
+      }));
+    });
+  });
+
+  it('keeps action metadata hidden unless enabled by the tool capability', () => {
+    render(
+      <WorkspaceHookDialog
+        open
+        mode="create"
+        hook={null}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByPlaceholderText('Name placeholder')).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Description placeholder')).not.toBeInTheDocument();
+  });
+
+  it('submits Gemini hook action name and description when metadata is enabled', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <WorkspaceHookDialog
+        open
+        mode="create"
+        hook={null}
+        supportsActionMetadata
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await user.clear(screen.getByPlaceholderText('Pattern placeholder'));
+    await user.type(screen.getByPlaceholderText('Pattern placeholder'), 'Write');
+    await user.type(screen.getByPlaceholderText('Name placeholder'), 'security-check');
+    await user.type(screen.getByPlaceholderText('Description placeholder'), 'Check commands before execution');
+    await user.type(screen.getByPlaceholderText('Command placeholder'), 'echo write');
+    await user.click(screen.getByRole('button', { name: 'Create hook' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+        matchers: [
+          {
+            matcher: 'Write',
+            hooks: [
+              {
+                type: 'command',
+                name: 'security-check',
+                description: 'Check commands before execution',
+                command: 'echo write',
+                timeout: 30,
+              },
+            ],
+          },
+        ],
+      }));
+    });
+  });
+
+  it('preserves and clears Gemini hook action metadata in edit mode', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <WorkspaceHookDialog
+        open
+        mode="edit"
+        hook={{
+          id: 'project:PreToolUse',
+          scope: 'project',
+          eventName: 'PreToolUse',
+          matchers: [
+            {
+              matcher: 'Write',
+              hooks: [
+                {
+                  type: 'command',
+                  name: 'security-check',
+                  description: 'Check commands before execution',
+                  command: 'echo write',
+                  timeout: 30,
+                },
+              ],
+            },
+          ],
+        }}
+        supportsActionMetadata
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    expect(screen.getByDisplayValue('security-check')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Check commands before execution')).toBeInTheDocument();
+
+    await user.clear(screen.getByPlaceholderText('Name placeholder'));
+    await user.clear(screen.getByPlaceholderText('Description placeholder'));
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         matchers: [
           {
             matcher: 'Write',

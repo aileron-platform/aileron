@@ -69,6 +69,58 @@ def test_list_get_update_and_delete_scope(service: CliHookService) -> None:
     assert service.get_scope("ws-1", CliHookScope.PROJECT).hooks == {}
 
 
+def test_gemini_hook_metadata_round_trip_persistence(service: CliHookService) -> None:
+    updated = service.update_scope(
+        "ws-1",
+        CliHookScope.PROJECT,
+        CliHookScopeUpsertRequest(
+            hooks={
+                "PreToolUse": [
+                    {
+                        "matcher": "*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "name": "security-check",
+                                "description": "Check commands before execution",
+                                "command": "echo hi",
+                                "timeout": 10,
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+    )
+
+    action = updated.hooks["PreToolUse"][0].hooks[0]
+    assert action.name == "security-check"
+    assert action.description == "Check commands before execution"
+
+    fetched_action = service.get_scope("ws-1", CliHookScope.PROJECT).hooks["PreToolUse"][0].hooks[0]
+    assert fetched_action.name == "security-check"
+    assert fetched_action.description == "Check commands before execution"
+
+    file_path = service._scope_file("ws-1", CliHookScope.PROJECT)
+    stored_action = json.loads(file_path.read_text(encoding="utf-8"))["hooks"]["PreToolUse"][0]["hooks"][0]
+    assert stored_action["name"] == "security-check"
+    assert stored_action["description"] == "Check commands before execution"
+
+
+def test_gemini_hook_metadata_is_optional(service: CliHookService) -> None:
+    updated = service.update_scope(
+        "ws-1",
+        CliHookScope.PROJECT,
+        CliHookScopeUpsertRequest(
+            hooks={"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": "echo hi"}]}]}
+        ),
+    )
+
+    action = updated.hooks["PreToolUse"][0].hooks[0]
+    assert action.name is None
+    assert action.description is None
+
+
 def test_delete_scope_handles_existing_file_without_hooks(service: CliHookService) -> None:
     file_path = service._scope_file("ws-1", CliHookScope.USER)
     file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,4 +213,3 @@ def test_validate_scope_and_load_scope_document_defensive_paths(
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(json.dumps({"hooks": ["invalid"]}), encoding="utf-8")
     assert service.get_scope("ws-1", CliHookScope.USER).hooks == {}
-

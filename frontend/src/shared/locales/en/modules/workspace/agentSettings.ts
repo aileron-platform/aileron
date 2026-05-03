@@ -621,6 +621,12 @@ const agentSettings = {
         execution: {
           sectionTitle: 'Hook execution',
           add: 'Add action',
+          nameLabel: 'Hook name',
+          namePlaceholder: 'security-check',
+          nameHelp: 'Optional friendly name used by Gemini CLI logs and hook commands.',
+          descriptionLabel: 'Description',
+          descriptionPlaceholder: 'Briefly explain what this hook does.',
+          descriptionHelp: 'Optional purpose text stored with this hook action.',
           timeoutLabel: 'Timeout (seconds)',
           timeoutPlaceholder: '30',
           timeoutHelp: 'Maximum command execution time. Commands are cancelled when exceeding the limit.',

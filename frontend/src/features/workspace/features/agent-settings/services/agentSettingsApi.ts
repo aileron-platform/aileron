@@ -422,6 +422,12 @@ export const buildHookRulesFromAgentHook = (hook: AgentHookWithEvent): AgentHook
             command: action.command?.trim() ?? '',
             timeout: typeof action.timeout === 'number' ? action.timeout : null,
           };
+          if (action.name?.trim()) {
+            nextAction.name = action.name.trim();
+          }
+          if (action.description?.trim()) {
+            nextAction.description = action.description.trim();
+          }
           if (action.statusMessage?.trim()) {
             nextAction.statusMessage = action.statusMessage.trim();
           }
@@ -442,8 +448,10 @@ export const mapHookScopeDocumentToAgentHooks = (
         matcher: rule.matcher,
         hooks: rule.hooks.map((action) => ({
           type: 'command' as const,
+          name: action.name ?? undefined,
           command: action.command ?? '',
           timeout: typeof action.timeout === 'number' ? action.timeout : undefined,
+          description: action.description ?? undefined,
           statusMessage: action.statusMessage ?? undefined,
         })),
       })),

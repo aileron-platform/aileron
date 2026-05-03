@@ -38,8 +38,10 @@ export interface AgentMcpServer {
 
 export interface AgentHookActionConfig {
   type: 'command' | 'webhook' | 'mcp_call';
+  name?: string | null;
   command?: string | null;
   timeout?: number | null;
+  description?: string | null;
   statusMessage?: string | null;
 }
 
@@ -217,6 +219,7 @@ export interface AgentMcpCapability extends AgentCapabilityBase {
 export interface AgentHooksCapability extends AgentCapabilityBase {
   scopes: AgentHookScope[];
   events: HookEventOption[];
+  supportsActionMetadata?: boolean;
 }
 
 export interface AgentFileCollectionCapability extends AgentCapabilityBase {

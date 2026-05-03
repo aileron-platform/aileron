@@ -621,6 +621,12 @@ const agentSettings = {
         execution: {
           sectionTitle: 'Hook 執行配置',
           add: '新增執行動作',
+          nameLabel: 'Hook 名稱',
+          namePlaceholder: 'security-check',
+          nameHelp: '選填，Gemini CLI logs 與 hook commands 會使用的友善名稱。',
+          descriptionLabel: '描述',
+          descriptionPlaceholder: '簡要說明此 hook 的用途。',
+          descriptionHelp: '選填，會與這個 hook action 一起儲存的用途說明。',
           timeoutLabel: '超時時間（秒）',
           timeoutPlaceholder: '30',
           timeoutHelp: '命令的執行時間上限，超過即會被取消。',

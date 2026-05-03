@@ -85,9 +85,16 @@ export interface HooksSettingsPageProps {
   availableScopes?: AgentScope[];
   hookEvents?: HookEventOption[];
   i18nNamespace?: string;
+  supportsActionMetadata?: boolean;
 }
 
-const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'claude-code', availableScopes = ALL_SCOPES, hookEvents, i18nNamespace = 'workspace.agentSettings.common' }) => {
+const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
+  apiPrefix = 'claude-code',
+  availableScopes = ALL_SCOPES,
+  hookEvents,
+  i18nNamespace = 'workspace.agentSettings.common',
+  supportsActionMetadata = false,
+}) => {
   const [scopeDocuments, setScopeDocuments] = useState<HookScopeState>(() => createEmptyScopeDocuments());
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState<'all' | AgentHook['scope']>('all');
@@ -511,7 +518,9 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                                 <div key={`${hook.id}-exec-${matcherIndex}-${execIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
                                   <div className="mb-1 flex items-center gap-2">
                                     <Badge variant="outline" className="px-1 py-0 text-xs">
-                                      {t(`${i18nNamespace}.hooks.matchers.commandLabel`)}
+                                      {exec.name?.trim()
+                                        ? exec.name
+                                        : t(`${i18nNamespace}.hooks.matchers.commandLabel`)}
                                     </Badge>
                                     {exec.timeout && (
                                       <span className="text-muted-foreground">
@@ -526,6 +535,9 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
                                       ? exec.command
                                       : t(`${i18nNamespace}.hooks.matchers.noCommand`)}
                                   </p>
+                                  {exec.description?.trim() ? (
+                                    <p className="truncate text-muted-foreground">{exec.description}</p>
+                                  ) : null}
                                 </div>
                               ))}
                               {matcher.hooks.length > 2 && (
@@ -601,6 +613,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
         availableScopes={availableScopes}
         eventOptions={dialogEventOptions}
         i18nNamespace={i18nNamespace}
+        supportsActionMetadata={supportsActionMetadata}
         onClose={() => {
           setDialogOpen(false);
           setActiveHook(null);

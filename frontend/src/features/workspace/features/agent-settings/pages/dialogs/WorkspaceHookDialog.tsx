@@ -74,6 +74,7 @@ export interface WorkspaceHookDialogProps {
   i18nNamespace?: string;
   matcherHelp?: (eventName: string) => string[];
   supportsStatusMessage?: boolean;
+  supportsActionMetadata?: boolean;
   onClose: () => void;
   onSubmit: (hook: WorkspaceHookData) => void;
 }
@@ -88,6 +89,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
   i18nNamespace = 'workspace.agentSettings.common',
   matcherHelp,
   supportsStatusMessage = false,
+  supportsActionMetadata = false,
   onClose,
   onSubmit,
 }) => {
@@ -155,6 +157,10 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
             type: 'command',
             command: exec.command ?? '',
             timeout: exec.timeout ?? 30,
+            ...(supportsActionMetadata ? {
+              name: exec.name ?? '',
+              description: exec.description ?? '',
+            } : {}),
             ...(supportsStatusMessage ? { statusMessage: exec.statusMessage ?? '' } : {}),
           })),
         })),
@@ -167,7 +173,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     const nextForm = { ...DEFAULT_FORM, id: `hook-${Date.now()}`, eventName: defaultEvent };
     setForm(nextForm);
     checkDuplicateEvent(nextForm.eventName, nextForm.scope);
-  }, [checkDuplicateEvent, externalEventOptions, hook, mode, open, supportsStatusMessage]);
+  }, [checkDuplicateEvent, externalEventOptions, hook, mode, open, supportsActionMetadata, supportsStatusMessage]);
 
   const handleChange = <TField extends keyof HookFormState>(
     field: TField,
@@ -205,8 +211,12 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
           .filter((hookAction) => hookAction.command?.trim())
           .map((hookAction) => ({
             type: 'command' as const,
+            ...(supportsActionMetadata && hookAction.name?.trim() ? { name: hookAction.name.trim() } : {}),
             command: hookAction.command,
             timeout: hookAction.timeout,
+            ...(supportsActionMetadata && hookAction.description?.trim()
+              ? { description: hookAction.description.trim() }
+              : {}),
             ...(supportsStatusMessage ? { statusMessage: hookAction.statusMessage?.trim() || null } : {}),
           })),
       }))
@@ -234,6 +244,14 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     matcherRemove: t(`${i18nNamespace}.hooks.dialog.matcher.remove`),
     executionSectionTitle: t(`${i18nNamespace}.hooks.dialog.execution.sectionTitle`),
     executionAdd: t(`${i18nNamespace}.hooks.dialog.execution.add`),
+    ...(supportsActionMetadata ? {
+      executionNameLabel: t(`${i18nNamespace}.hooks.dialog.execution.nameLabel`),
+      executionNamePlaceholder: t(`${i18nNamespace}.hooks.dialog.execution.namePlaceholder`),
+      executionNameHelp: t(`${i18nNamespace}.hooks.dialog.execution.nameHelp`),
+      executionDescriptionLabel: t(`${i18nNamespace}.hooks.dialog.execution.descriptionLabel`),
+      executionDescriptionPlaceholder: t(`${i18nNamespace}.hooks.dialog.execution.descriptionPlaceholder`),
+      executionDescriptionHelp: t(`${i18nNamespace}.hooks.dialog.execution.descriptionHelp`),
+    } : {}),
     executionTimeoutLabel: t(`${i18nNamespace}.hooks.dialog.execution.timeoutLabel`),
     executionTimeoutPlaceholder: t(`${i18nNamespace}.hooks.dialog.execution.timeoutPlaceholder`),
     executionTimeoutHelp: t(`${i18nNamespace}.hooks.dialog.execution.timeoutHelp`),

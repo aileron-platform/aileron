@@ -33,6 +33,16 @@ const codexLabels: HookMatcherActionsLabels = {
   executionStatusMessageHelp: 'Status help',
 };
 
+const metadataLabels: HookMatcherActionsLabels = {
+  ...labels,
+  executionNameLabel: 'Hook name',
+  executionNamePlaceholder: 'Name placeholder',
+  executionNameHelp: 'Name help',
+  executionDescriptionLabel: 'Description',
+  executionDescriptionPlaceholder: 'Description placeholder',
+  executionDescriptionHelp: 'Description help',
+};
+
 const matchers: HookMatcher[] = [
   {
     matcher: '*',
@@ -141,6 +151,48 @@ describe('HookMatcherActionsEditor', () => {
       {
         matcher: '*',
         hooks: [{ type: 'command', command: 'echo test', timeout: 30, statusMessage: 'Running hook' }],
+      },
+    ]);
+  });
+
+  it('updates action metadata only when the caller enables metadata fields', () => {
+    const onChange = vi.fn();
+
+    render(
+      <HookMatcherActionsEditor
+        matchers={matchers}
+        labels={metadataLabels}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Name placeholder'), {
+      target: { value: 'security-check' },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        matcher: '*',
+        hooks: [{ type: 'command', command: 'echo test', timeout: 30, name: 'security-check' }],
+      },
+    ]);
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByPlaceholderText('Description placeholder'), {
+      target: { value: 'Check commands before execution' },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        matcher: '*',
+        hooks: [
+          {
+            type: 'command',
+            command: 'echo test',
+            timeout: 30,
+            description: 'Check commands before execution',
+          },
+        ],
       },
     ]);
   });
