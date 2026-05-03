@@ -54,6 +54,10 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.agentSettings.common.subagents.dialog.fields.scope.label': 'Scope',
         'workspace.agentSettings.common.subagents.dialog.fields.fileName.label': 'File name',
         'workspace.agentSettings.common.subagents.dialog.fields.fileName.placeholder': 'agent.md',
+        'workspace.agentSettings.common.subagents.dialog.fields.name.label': 'Name',
+        'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder': 'reviewer',
+        'workspace.agentSettings.common.subagents.dialog.fields.tools.label': 'Tools',
+        'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder': 'Read, Grep',
         'workspace.agentSettings.common.subagents.dialog.fields.content.label': 'Content',
         'workspace.agentSettings.common.subagents.dialog.fields.content.helper': 'Agent helper',
         'workspace.agentSettings.common.subagents.dialog.actions.cancel': 'Cancel',
@@ -160,6 +164,37 @@ describe('document-style shared dialogs', () => {
       size: '1KB',
       metadata: { fileName: 'researcher.md' },
     }));
+  });
+
+  it('serializes schema-driven subagent fields into frontmatter', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <AgentDefinitionDialog
+        open
+        mode="create"
+        initialValue={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+        fields={[
+          { key: 'name', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder' },
+          { key: 'tools', type: 'string[]', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder' },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('agent.md'), 'reviewer');
+    await user.type(screen.getByLabelText('Name'), 'reviewer');
+    await user.click(screen.getByLabelText('Tools'));
+    await user.paste('Read, Grep');
+    await user.type(screen.getByLabelText('Markdown content'), 'Review carefully');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('name: reviewer'),
+    }));
+    expect(onSubmit.mock.calls[0][0].content).toContain('tools:\n  - Read\n  - Grep');
   });
 
   it('preserves template agent submit payload after owner split', async () => {

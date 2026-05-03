@@ -10,6 +10,7 @@ from .codex import router as codex_router
 from .mcp import McpTool, create_mcp_router
 from .skills import SkillTool, create_skills_router
 from .slash_commands import SlashCommandTool, create_slash_commands_router
+from .subagents import SubagentTool, create_subagents_router
 
 router = APIRouter(prefix="/workspaces/{workspace_id}")
 
@@ -20,7 +21,6 @@ router.include_router(codex_router)
 router.include_router(create_agents_md_router(AgentsMdTool.CLAUDE))
 router.include_router(create_agents_md_router(AgentsMdTool.GEMINI))
 router.include_router(create_agents_md_router(AgentsMdTool.OPENCODE))
-router.include_router(create_agents_md_router(AgentsMdTool.CODEX))
 
 # MCP routes
 router.include_router(create_mcp_router(McpTool.GEMINI))
@@ -39,5 +39,9 @@ router.include_router(create_skills_router(SkillTool.CODEX))
 router.include_router(create_slash_commands_router(SlashCommandTool.GEMINI))
 router.include_router(create_slash_commands_router(SlashCommandTool.OPENCODE))
 router.include_router(create_slash_commands_router(SlashCommandTool.CODEX))
+
+# Subagents routes
+router.include_router(create_subagents_router(SubagentTool.CLAUDE))
+router.include_router(create_subagents_router(SubagentTool.GEMINI))
 
 __all__ = ["router"]

@@ -5,6 +5,7 @@ import type {
   AgentToolCapabilities,
   AgentToolScopeOption,
   HookEventOption,
+  SubagentFieldSchema,
 } from './types';
 
 const projectUserScopes: AgentToolScopeOption[] = [
@@ -47,13 +48,31 @@ const codexHookEvents: HookEventOption[] = [
   { value: 'Stop', labelKey: 'workspace.agentSettings.codex.hooks.events.Stop', optionKey: 'workspace.agentSettings.codex.hooks.events.Stop' },
 ];
 
+const claudeSubagentFields: SubagentFieldSchema[] = [
+  { key: 'name', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder' },
+  { key: 'description', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.description.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.description.placeholder' },
+  { key: 'tools', type: 'string[]', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder' },
+  { key: 'model', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.model.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.model.placeholder' },
+];
+
+const geminiSubagentFields: SubagentFieldSchema[] = [
+  { key: 'name', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.name.placeholder' },
+  { key: 'description', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.description.label', required: true, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.description.placeholder' },
+  { key: 'kind', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.kind.label', required: false, default: 'local', placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.kind.placeholder' },
+  { key: 'tools', type: 'string[]', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.tools.placeholder' },
+  { key: 'model', type: 'string', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.model.label', required: false, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.model.placeholder' },
+  { key: 'temperature', type: 'number', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.temperature.label', required: false, default: 1, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.temperature.placeholder' },
+  { key: 'max_turns', type: 'number', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.maxTurns.label', required: false, default: 30, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.maxTurns.placeholder' },
+  { key: 'timeout_mins', type: 'number', labelKey: 'workspace.agentSettings.common.subagents.dialog.fields.timeoutMins.label', required: false, default: 10, placeholderKey: 'workspace.agentSettings.common.subagents.dialog.fields.timeoutMins.placeholder' },
+];
+
 const buildAvailableSubViews = (instructionSubView: string, capabilities: AgentToolCapabilities, extra: string[] = []) => [
   instructionSubView,
-  ...(capabilities.mcp?.supported === false ? [] : ['mcp']),
-  ...(capabilities.hooks?.supported === false || !capabilities.hooks ? [] : ['hooks']),
+  ...(capabilities.mcp?.supported === false || !capabilities.mcp ? [] : ['mcp']),
+  ...(capabilities.skills?.supported === false || !capabilities.skills ? [] : ['skills']),
   ...(capabilities.slashCommands?.supported === false || !capabilities.slashCommands ? [] : ['slash-commands']),
   ...(capabilities.agentDefinitions?.supported === false || !capabilities.agentDefinitions ? [] : ['subagents']),
-  ...(capabilities.skills?.supported === false || !capabilities.skills ? [] : ['skills']),
+  ...(capabilities.hooks?.supported === false || !capabilities.hooks ? [] : ['hooks']),
   ...(capabilities.scripts?.supported === false || !capabilities.scripts ? [] : ['scripts']),
   ...extra,
 ];
@@ -76,6 +95,7 @@ const claudeCapabilities: AgentToolCapabilities = {
     displayLabelKey: 'workspace.navigation.sub.claudeCodeSettings.subagents',
     scopes: ['project', 'user', 'plugin'],
     format: 'markdown',
+    fields: claudeSubagentFields,
   },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
   scripts: { supported: true, collection: 'scripts', scopes: ['project', 'user'], supportsPlugin: false },
@@ -95,7 +115,15 @@ const geminiCapabilities: AgentToolCapabilities = {
   slashCommands: { supported: true, scopes: ['project', 'user'], format: 'toml', supportsNamespace: true },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
-  agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
+  agentDefinitions: {
+    supported: true,
+    endpoint: 'subagents',
+    displayLabelKey: 'workspace.agentSettings.common.subViews.subagents',
+    scopes: ['project', 'user'],
+    format: 'markdown',
+    fields: geminiSubagentFields,
+  },
+  memory: { supported: false },
 };
 
 const opencodeCapabilities: AgentToolCapabilities = {
@@ -137,10 +165,10 @@ const codexCapabilities: AgentToolCapabilities = {
 
 const codexSettingsSubViews = [
   'agents-md',
-  'skills',
-  'subagents',
-  'prompts',
   'mcp',
+  'skills',
+  'prompts',
+  'subagents',
   'hooks',
   'rules',
   'plugins',
@@ -169,7 +197,7 @@ const geminiConfig: AgentToolConfig = {
   navigationLabelKey: 'workspace.navigation.main.geminiSettings',
   navigationIcon: Sparkles,
   agentsMd: geminiCapabilities.instructions!,
-  availableSubViews: buildAvailableSubViews('gemini-md', geminiCapabilities),
+  availableSubViews: buildAvailableSubViews('gemini-md', geminiCapabilities, ['memory']),
   apiPathPrefix: 'gemini',
   availableScopes: ['project', 'user'],
   supportsToggle: false,

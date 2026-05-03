@@ -1,35 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { DocumentPage } from '../components/DocumentPage';
-import { AgentCommandDialog } from '../components/dialogs/AgentCommandDialog';
+import { AgentDefinitionDialog } from '../components/dialogs/AgentDefinitionDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import type { AgentDocument, AgentScope } from '../types';
+import type { AgentDocument, AgentScope, SubagentFieldSchema } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
-export interface SlashCommandsPageProps {
+export interface SubagentsPageProps {
   apiPrefix?: string;
   availableScopes?: AgentScope[];
-  format?: 'markdown' | 'toml';
+  fields?: SubagentFieldSchema[];
   i18nNamespace?: string;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
 }
 
-const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
+const SubagentsPage: React.FC<SubagentsPageProps> = ({
   apiPrefix = 'claude-code',
-  availableScopes = ['project', 'user'],
-  format = 'markdown',
+  availableScopes = ['project', 'user', 'plugin'],
+  fields,
   i18nNamespace = 'workspace.agentSettings.common',
   selectedId,
   onSelect,
 }) => {
   const { t } = useI18n();
   const { workspaceRuntime } = useWorkspace();
-
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl;
   const workspaceId = workspaceRuntime.workspaceId;
-
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
   const [documents, setDocuments] = useState<AgentDocument[]>([]);
@@ -45,7 +43,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const docs = await api.listSlashCommands(runtimeBaseUrl, workspaceId);
+      const docs = await api.listSubagents(runtimeBaseUrl, workspaceId);
       setDocuments(docs);
       if (docs.length > 0 && !selectedIdValue) {
         setSelectedId(docs[0].id);
@@ -63,32 +61,28 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
 
   useWorkspaceTemplateInstallRefresh({
     workspaceId,
-    features: ['slashCommands'],
+    features: ['subagents'],
     onRefresh: loadDocuments,
   });
 
   const handleCreate = useCallback(async (doc: AgentDocument): Promise<AgentDocument> => {
-    const created = await api.createSlashCommand(runtimeBaseUrl, workspaceId, doc);
+    const created = await api.createSubagent(runtimeBaseUrl, workspaceId, doc);
     await loadDocuments();
     return created;
   }, [api, runtimeBaseUrl, workspaceId, loadDocuments]);
 
   const handleUpdate = useCallback(async (doc: AgentDocument): Promise<AgentDocument> => {
-    const updated = await api.updateSlashCommand(runtimeBaseUrl, workspaceId, doc);
+    const updated = await api.updateSubagent(runtimeBaseUrl, workspaceId, doc);
     await loadDocuments();
     return updated;
   }, [api, runtimeBaseUrl, workspaceId, loadDocuments]);
 
   const handleDelete = useCallback(async (id: string) => {
-    const doc = documents.find((d) => d.id === id);
+    const doc = documents.find((item) => item.id === id);
     if (!doc) return;
-    await api.deleteSlashCommand(runtimeBaseUrl, workspaceId, doc);
+    await api.deleteSubagent(runtimeBaseUrl, workspaceId, doc);
     await loadDocuments();
   }, [api, runtimeBaseUrl, workspaceId, documents, loadDocuments]);
-
-  const handleRefresh = useCallback(async () => {
-    await loadDocuments();
-  }, [loadDocuments]);
 
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
@@ -98,20 +92,24 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onClose: () => void;
       onSubmit: (document: AgentDocument) => Promise<void> | void;
     }> = (props) => (
-        <AgentCommandDialog
+      <AgentDefinitionDialog
         {...props}
-        format={format}
-        availableScopes={availableScopes}
+        fields={fields}
         i18nNamespace={i18nNamespace}
       />
     );
-    Wrapper.displayName = 'CommandDialogWrapper';
+    Wrapper.displayName = 'SubagentDialogWrapper';
     return Wrapper;
-  }, [format, availableScopes, i18nNamespace]);
+  }, [fields, i18nNamespace]);
+
+  const visibleDocuments = useMemo(
+    () => documents.filter((doc) => availableScopes.includes(doc.scope)),
+    [availableScopes, documents],
+  );
 
   return (
     <DocumentPage
-      documents={documents}
+      documents={visibleDocuments}
       selectedId={selectedIdValue}
       onSelect={setSelectedId}
       onCreate={handleCreate}
@@ -119,19 +117,19 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onDelete={handleDelete}
       isLoading={loading}
       error={error}
-      onRefresh={handleRefresh}
+      onRefresh={loadDocuments}
       dialogComponent={DialogWrapper}
       i18nNamespace={i18nNamespace}
       config={{
-        metaKey: 'slash-commands',
-        contentFormat: format,
-        createButtonLabel: t(`${i18nNamespace}.slashCommands.actions.create`),
-        emptyStateTitle: t(`${i18nNamespace}.slashCommands.empty.title`),
-        emptyStateDescription: t(`${i18nNamespace}.slashCommands.empty.description`),
-        dialogTitle: t(`${i18nNamespace}.slashCommands.pageTitle`),
+        metaKey: 'subagents',
+        contentFormat: 'markdown',
+        createButtonLabel: t(`${i18nNamespace}.subagents.actions.create`),
+        emptyStateTitle: t(`${i18nNamespace}.subagents.empty.title`),
+        emptyStateDescription: t(`${i18nNamespace}.subagents.empty.description`),
+        dialogTitle: t(`${i18nNamespace}.subagents.pageTitle`),
       }}
     />
   );
 };
 
-export default SlashCommandsPage;
+export default SubagentsPage;

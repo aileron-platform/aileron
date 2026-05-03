@@ -180,6 +180,53 @@ describe('slashCommandApi.listPickerItems', () => {
     ]);
   });
 
+  it('loads root-level Codex plugin SKILL.md documents', async () => {
+    getMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        layer: 'plugin',
+        resource: 'skills',
+        directory: '',
+        files: [
+          {
+            name: 'SKILL.md',
+            path: 'SKILL.md',
+            sizeBytes: 42,
+            source: 'plugin',
+            readOnly: true,
+            metadata: {
+              pluginId: 'single@local',
+              pluginName: 'single',
+              marketplaceName: 'local',
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        layer: 'plugin',
+        path: 'SKILL.md',
+        content: '---\nname: single-review\ndescription: Review from root skill\n---\nbody',
+        exists: true,
+      });
+
+    const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'codex', ['plugin']);
+
+    expect(getMock).toHaveBeenCalledWith('/api/v1/workspaces/ws-1/codex/skills/file?layer=plugin&path=SKILL.md&pluginId=single%40local');
+    expect(items).toEqual([
+      expect.objectContaining({
+        kind: 'skill',
+        pluginName: 'single',
+        displayName: 'single:single-review',
+        invocation: '/single:single-review',
+      }),
+    ]);
+  });
+
   it('hides disabled Codex plugin skills when plugin resources return no files', async () => {
     getMock
       .mockResolvedValueOnce({

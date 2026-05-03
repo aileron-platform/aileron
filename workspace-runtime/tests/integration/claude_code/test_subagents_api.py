@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Optional
 
 from app.modules.claude_code.common import DocumentScope
-from app.modules.claude_code.subagents.dependencies import get_subagent_service
-from app.modules.claude_code.subagents.models import (
+from app.modules.cli_settings.subagents.dependencies import get_subagent_service
+from app.modules.cli_settings.subagents.models import (
     SubagentCollectionResponse,
     SubagentCreateRequest,
     SubagentDeleteResponse,

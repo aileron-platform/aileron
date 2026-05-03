@@ -87,6 +87,18 @@ vi.mock('../features/agent-settings/components/CodexDocumentSidebar', () => ({
   ),
 }));
 
+vi.mock('../features/agent-settings/components/AgentDocumentSidebar', () => ({
+  default: ({ resource, onSelect }: { resource: string; onSelect: (id: string | null) => void }) => (
+    <button
+      type="button"
+      data-testid={`agent-document-sidebar-${resource}`}
+      onClick={() => onSelect('project:gemini-selected.md')}
+    >
+      agent-document-sidebar
+    </button>
+  ),
+}));
+
 vi.mock('../features/openspec/OpenSpecWorkspaceContext', () => ({
   OpenSpecWorkspaceProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -252,6 +264,34 @@ describe('WorkspaceShell', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('user:opsx-apply.md');
+    });
+  });
+
+  it('passes Gemini slash-command sidebar selection into the settings content column', async () => {
+    mocks.workspaceState.currentFeature = 'gemini';
+    mocks.workspaceState.agentToolSettings.subView = 'slash-commands';
+    mocks.workspaceRuntime.cliType = 'gemini';
+
+    render(<WorkspaceShell />);
+
+    expect(await screen.findByTestId('agent-settings-feature')).toHaveTextContent('no-document-selected');
+    fireEvent.click(await screen.findByTestId('agent-document-sidebar-slash-commands'));
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('project:gemini-selected.md');
+    });
+  });
+
+  it('passes Gemini subagent sidebar selection into the settings content column', async () => {
+    mocks.workspaceState.currentFeature = 'gemini';
+    mocks.workspaceState.agentToolSettings.subView = 'subagents';
+    mocks.workspaceRuntime.cliType = 'gemini';
+
+    render(<WorkspaceShell />);
+
+    expect(await screen.findByTestId('agent-settings-feature')).toHaveTextContent('no-document-selected');
+    fireEvent.click(await screen.findByTestId('agent-document-sidebar-subagents'));
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('project:gemini-selected.md');
     });
   });
 });

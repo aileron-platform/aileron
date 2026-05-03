@@ -102,7 +102,7 @@ describe('WorkspaceSidebar', () => {
     expect(screen.getByText('workspace.navigation.main.codexSettings')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.subViews.agentsMd')).toBeInTheDocument();
     expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.skills')).toBeInTheDocument();
-    expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.subagents')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.subagents')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.subViews.prompts')).toBeInTheDocument();
     expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.mcp')).toBeInTheDocument();
     expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.hooks')).toBeInTheDocument();

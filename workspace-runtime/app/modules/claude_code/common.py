@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 import yaml
 
@@ -231,13 +231,20 @@ class MarkdownDocumentRecord:
 class ScopedMarkdownRepository:
     """Handle scope-stored Markdown files"""
 
-    def __init__(self, folder_name: str, *, supports_namespace: bool = False) -> None:
+    def __init__(
+        self,
+        folder_name: str,
+        *,
+        supports_namespace: bool = False,
+        scope_root_resolver: Callable[[str, DocumentScope], Path] | None = None,
+    ) -> None:
         self.folder_name = folder_name
         self.supports_namespace = supports_namespace
+        self._scope_root_resolver = scope_root_resolver
 
     # Directory & Path ---------------------------------------------
     def _directory(self, workspace_id: str, scope: DocumentScope) -> Path:
-        root = resolve_scope_root(workspace_id, scope)
+        root = self._scope_root_resolver(workspace_id, scope) if self._scope_root_resolver else resolve_scope_root(workspace_id, scope)
         return root / self.folder_name
 
     def _namespace_directory(self, directory: Path, namespace: str | None) -> Path:

@@ -1,4 +1,4 @@
-"""Subagents Service"""
+"""CLI subagents service."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, status
 
-from ..common import (
+from app.modules.claude_code.common import (
     AmbiguousDocumentError,
     DocumentNotFoundError,
     DocumentScope,
@@ -17,6 +17,8 @@ from ..common import (
     format_file_size,
     iter_requested_scopes,
 )
+
+from .config import SubagentToolConfig
 from .models import (
     SubagentCollectionResponse,
     SubagentCreateRequest,
@@ -32,62 +34,52 @@ logger = logging.getLogger(__name__)
 
 
 class SubagentService:
-    """Service for managing Subagent configuration files"""
+    """Service for managing CLI subagent markdown files."""
 
-    def __init__(self) -> None:
-        self._repository = ScopedMarkdownRepository("agents")
+    def __init__(self, config: SubagentToolConfig) -> None:
+        self._config = config
+        self._repository = ScopedMarkdownRepository(
+            config.agents_dir,
+            scope_root_resolver=config.scope_root,
+        )
 
     def list_scopes(
         self, workspace_id: str, scope: DocumentScope | None = None
     ) -> SubagentCollectionResponse:
-        """
-        List all subagents
-
-        Modified: Auto-integrate plugin agents
-        """
         groups = []
-
-        # 1. Load existing agents (project/user)
         for scope_item in iter_requested_scopes(scope, allow_local=False):
+            if scope_item == DocumentScope.PLUGIN:
+                continue
             records = self._repository.list_records(workspace_id, scope_item)
             documents = [self._to_summary(record) for record in records]
             documents.sort(key=lambda item: item.file_name)
             groups.append(SubagentScopeGroup(scope=scope_item, documents=documents))
 
-        # 2. Load plugin agents (added)
-        if scope is None or scope == DocumentScope.PLUGIN:
+        if self._config.supports_plugin and (scope is None or scope == DocumentScope.PLUGIN):
             try:
                 plugin_agents = self._load_plugin_agents(workspace_id)
                 if plugin_agents:
-                    groups.append(
-                        SubagentScopeGroup(
-                            scope=DocumentScope.PLUGIN,
-                            documents=plugin_agents
-                        )
-                    )
-            except Exception as e:
-                logger.error(f"Failed to load plugin agents: {e}")
+                    groups.append(SubagentScopeGroup(scope=DocumentScope.PLUGIN, documents=plugin_agents))
+            except Exception:
+                logger.error("Failed to load plugin agents", exc_info=True)
 
         return SubagentCollectionResponse(workspaceId=workspace_id, scopes=groups)
 
     def get_scope(self, workspace_id: str, scope: DocumentScope) -> SubagentScopeResponse:
-        records = self._repository.list_records(workspace_id, scope)
-        documents = [self._to_summary(record) for record in records]
+        if scope == DocumentScope.PLUGIN and self._config.supports_plugin:
+            documents = self._load_plugin_agents(workspace_id)
+        else:
+            records = self._repository.list_records(workspace_id, scope)
+            documents = [self._to_summary(record) for record in records]
         documents.sort(key=lambda item: item.file_name)
-        return SubagentScopeResponse(
-            workspaceId=workspace_id,
-            scope=scope,
-            documents=documents,
-        )
+        return SubagentScopeResponse(workspaceId=workspace_id, scope=scope, documents=documents)
 
     def get_document(
         self, workspace_id: str, scope: DocumentScope, file_name: str
     ) -> SubagentDocumentResponse:
-        # If PLUGIN scope, load from plugin
-        if scope == DocumentScope.PLUGIN:
+        if scope == DocumentScope.PLUGIN and self._config.supports_plugin:
             return self._get_plugin_document(workspace_id, file_name)
 
-        # Otherwise load from file system
         try:
             record = self._repository.get_record(workspace_id, scope, file_name)
         except AmbiguousDocumentError as error:
@@ -102,11 +94,7 @@ class SubagentService:
             ) from error
         summary = self._to_summary(record)
         detail = SubagentDocument(**summary.model_dump(), content=record.content)
-        return SubagentDocumentResponse(
-            workspaceId=workspace_id,
-            scope=scope,
-            document=detail,
-        )
+        return SubagentDocumentResponse(workspaceId=workspace_id, scope=scope, document=detail)
 
     def create_document(
         self,
@@ -115,12 +103,7 @@ class SubagentService:
         payload: SubagentCreateRequest,
     ) -> SubagentDocumentResponse:
         try:
-            record = self._repository.create_record(
-                workspace_id,
-                scope,
-                payload.file_name,
-                payload.content,
-            )
+            record = self._repository.create_record(workspace_id, scope, payload.file_name, payload.content)
         except DuplicateDocumentError as error:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -132,11 +115,7 @@ class SubagentService:
             fallback_description=payload.description,
         )
         detail = SubagentDocument(**summary.model_dump(), content=record.content)
-        return SubagentDocumentResponse(
-            workspaceId=workspace_id,
-            scope=scope,
-            document=detail,
-        )
+        return SubagentDocumentResponse(workspaceId=workspace_id, scope=scope, document=detail)
 
     def update_document(
         self,
@@ -146,12 +125,7 @@ class SubagentService:
         payload: SubagentUpdateRequest,
     ) -> SubagentDocumentResponse:
         try:
-            record = self._repository.update_record(
-                workspace_id,
-                scope,
-                file_name,
-                payload.content,
-            )
+            record = self._repository.update_record(workspace_id, scope, file_name, payload.content)
         except AmbiguousDocumentError as error:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -168,11 +142,7 @@ class SubagentService:
             fallback_description=payload.description,
         )
         detail = SubagentDocument(**summary.model_dump(), content=record.content)
-        return SubagentDocumentResponse(
-            workspaceId=workspace_id,
-            scope=scope,
-            document=detail,
-        )
+        return SubagentDocumentResponse(workspaceId=workspace_id, scope=scope, document=detail)
 
     def delete_document(self, workspace_id: str, scope: DocumentScope, file_name: str) -> None:
         try:
@@ -188,47 +158,70 @@ class SubagentService:
                 detail={"error": "404_NOT_FOUND", "message": str(error)},
             ) from error
 
+    def _load_plugin_agents(self, workspace_id: str) -> list[SubagentSummary]:
+        from app.modules.claude_code.plugins.loader import get_plugin_loader
+        from app.modules.claude_code.settings.dependencies import get_settings_service
+
+        settings_service = get_settings_service()
+        loader = get_plugin_loader(settings_service)
+        plugin_agents = loader.load_plugin_agents(workspace_id)
+        summaries: list[SubagentSummary] = []
+        for agent in plugin_agents:
+            size = getattr(agent, "size", None)
+            if not size:
+                try:
+                    size = format_file_size(Path(agent.file_path).stat().st_size)
+                except OSError:
+                    size = "0B"
+            summaries.append(
+                SubagentSummary(
+                    fileName=agent.file_name,
+                    name=agent.file_name,
+                    description=agent.description,
+                    scope=DocumentScope.PLUGIN,
+                    size=size,
+                    pluginName=agent.plugin_name,
+                    marketplaceName=agent.marketplace_name,
+                )
+            )
+        return summaries
+
     def _get_plugin_document(
         self, workspace_id: str, file_name: str
     ) -> SubagentDocumentResponse:
-        """Load single document from plugin"""
-        from ..plugins.loader import get_plugin_loader
-        from ..settings.dependencies import get_settings_service
+        from app.modules.claude_code.plugins.loader import get_plugin_loader
+        from app.modules.claude_code.settings.dependencies import get_settings_service
 
         settings_service = get_settings_service()
         loader = get_plugin_loader(settings_service)
 
-        plugin_agents = loader.load_plugin_agents(workspace_id)
-
-        for agent in plugin_agents:
-            if agent.file_name == file_name:
-                try:
-                    content = Path(agent.file_path).read_text(encoding="utf-8")
-                    file_size = Path(agent.file_path).stat().st_size
-                    size_str = format_file_size(file_size)
-
-                    detail = SubagentDocument(
-                        fileName=agent.file_name,
-                        name=agent.file_name,
-                        description=agent.description,
-                        scope=DocumentScope.PLUGIN,
-                        size=size_str,
-                        content=content,
-                        pluginName=agent.plugin_name,
-                        marketplaceName=agent.marketplace_name
-                    )
-
-                    return SubagentDocumentResponse(
-                        workspaceId=workspace_id,
-                        scope=DocumentScope.PLUGIN,
-                        document=detail,
-                    )
-                except (OSError, IOError) as e:
-                    logger.error(f"Failed to read plugin agent {agent.file_path}: {e}")
-                    raise HTTPException(
-                        status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail={"error": "PLUGIN_READ_ERROR", "message": str(e)},
-                    ) from e
+        for agent in loader.load_plugin_agents(workspace_id):
+            if agent.file_name != file_name:
+                continue
+            try:
+                path = Path(agent.file_path)
+                content = path.read_text(encoding="utf-8")
+                detail = SubagentDocument(
+                    fileName=agent.file_name,
+                    name=agent.file_name,
+                    description=agent.description,
+                    scope=DocumentScope.PLUGIN,
+                    size=format_file_size(path.stat().st_size),
+                    content=content,
+                    pluginName=agent.plugin_name,
+                    marketplaceName=agent.marketplace_name,
+                )
+                return SubagentDocumentResponse(
+                    workspaceId=workspace_id,
+                    scope=DocumentScope.PLUGIN,
+                    document=detail,
+                )
+            except OSError as error:
+                logger.error("Failed to read plugin agent", exc_info=True)
+                raise HTTPException(
+                    status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail={"error": "PLUGIN_READ_ERROR", "message": str(error)},
+                ) from error
 
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
@@ -246,54 +239,12 @@ class SubagentService:
             fallback_name=fallback_name,
             fallback_description=fallback_description,
         )
-        name = metadata.get("name")
-        if not name:
-            name = record.file_name
+        name = metadata.get("name") or record.file_name
         description = metadata.get("description") or fallback_description
         return SubagentSummary(
             fileName=record.file_name,
-            name=name,
-            description=description,
+            name=str(name),
+            description=str(description) if description is not None else None,
             scope=record.scope,
             size=record.size_label,
         )
-
-    def _load_plugin_agents(
-        self,
-        workspace_id: str
-    ) -> list[SubagentSummary]:
-        """Load plugin agents
-
-        Returns:
-            List[SubagentSummary]: Documents with pluginName and marketplaceName
-        """
-        from ..plugins.loader import get_plugin_loader
-        from ..settings.dependencies import get_settings_service
-
-        settings_service = get_settings_service()
-        loader = get_plugin_loader(settings_service)
-
-        plugin_agents = loader.load_plugin_agents(workspace_id)
-
-        documents = []
-        for agent in plugin_agents:
-            try:
-                file_size = Path(agent.file_path).stat().st_size
-                size_str = format_file_size(file_size)
-
-                documents.append(
-                    SubagentSummary(
-                        fileName=agent.file_name,
-                        name=agent.file_name,
-                        description=agent.description,
-                        scope=DocumentScope.PLUGIN,
-                        size=size_str,
-                        pluginName=agent.plugin_name,
-                        marketplaceName=agent.marketplace_name
-                    )
-                )
-            except (OSError, IOError) as e:
-                logger.error(f"Failed to read plugin agent {agent.file_path}: {e}")
-
-        return documents
-

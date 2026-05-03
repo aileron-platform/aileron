@@ -48,6 +48,7 @@ export interface DocumentEditorDialogCoreProps<TScope extends string> {
   contentHelper?: string;
   contentError?: string;
   contentFooter: React.ReactNode;
+  extraFields?: React.ReactNode;
   onContentChange: (content: string) => void;
   cancelLabel: string;
   cancelVariant?: React.ComponentProps<typeof Button>['variant'];
@@ -92,6 +93,7 @@ export function DocumentEditorDialogCore<TScope extends string>({
   contentHelper,
   contentError,
   contentFooter,
+  extraFields,
   onContentChange,
   cancelLabel,
   cancelVariant = 'ghost',
@@ -156,6 +158,12 @@ export function DocumentEditorDialogCore<TScope extends string>({
                   onChange={onFileNameChange}
                 />
               )}
+
+              {extraFields ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {extraFields}
+                </div>
+              ) : null}
 
               <div className="flex flex-1 flex-col space-y-2">
                 <label className="text-sm font-medium text-foreground">{contentLabel}</label>

@@ -239,9 +239,9 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         parentId: 'claude-code',
       },
       {
-        id: 'hooks',
-        labelKey: 'workspace.navigation.sub.claudeCodeSettings.hooks',
-        icon: CLAUDE_CODE_ICONS['hooks'],
+        id: 'skills',
+        labelKey: 'workspace.navigation.sub.claudeCodeSettings.skills',
+        icon: CLAUDE_CODE_ICONS['skills'],
         parentId: 'claude-code',
       },
       {
@@ -251,15 +251,21 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         parentId: 'claude-code',
       },
       {
-        id: 'output-styles',
-        labelKey: 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
-        icon: CLAUDE_CODE_ICONS['output-styles'],
+        id: 'subagents',
+        labelKey: 'workspace.navigation.sub.claudeCodeSettings.subagents',
+        icon: CLAUDE_CODE_ICONS['subagents'],
         parentId: 'claude-code',
       },
       {
-        id: 'skills',
-        labelKey: 'workspace.navigation.sub.claudeCodeSettings.skills',
-        icon: CLAUDE_CODE_ICONS['skills'],
+        id: 'hooks',
+        labelKey: 'workspace.navigation.sub.claudeCodeSettings.hooks',
+        icon: CLAUDE_CODE_ICONS['hooks'],
+        parentId: 'claude-code',
+      },
+      {
+        id: 'output-styles',
+        labelKey: 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
+        icon: CLAUDE_CODE_ICONS['output-styles'],
         parentId: 'claude-code',
       },
       {
@@ -272,12 +278,6 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         id: 'memory',
         labelKey: 'workspace.navigation.sub.claudeCodeSettings.memory',
         icon: CLAUDE_CODE_ICONS['memory'],
-        parentId: 'claude-code',
-      },
-      {
-        id: 'subagents',
-        labelKey: 'workspace.navigation.sub.claudeCodeSettings.subagents',
-        icon: CLAUDE_CODE_ICONS['subagents'],
         parentId: 'claude-code',
       },
       {
@@ -323,11 +323,11 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'prompts': 'workspace.agentSettings.common.subViews.prompts',
   'slash-commands': 'workspace.navigation.sub.claudeCodeSettings.slashCommands',
   'output-styles': 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
-  'subagents': 'workspace.navigation.sub.claudeCodeSettings.subagents',
+  'subagents': 'workspace.agentSettings.common.subViews.subagents',
   'skills': 'workspace.navigation.sub.claudeCodeSettings.skills',
   'scripts': 'workspace.navigation.sub.claudeCodeSettings.scripts',
   'settings': 'workspace.navigation.sub.claudeCodeSettings.settings',
-  'memory': 'workspace.navigation.sub.claudeCodeSettings.memory',
+  'memory': 'workspace.agentSettings.common.subViews.memory',
 };
 
 /**

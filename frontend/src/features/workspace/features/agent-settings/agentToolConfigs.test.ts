@@ -31,10 +31,10 @@ describe('AGENT_TOOL_CONFIGS', () => {
     expect(AGENT_TOOL_CONFIGS.codex.capabilities.skills?.readOnlyScopes).toContain('plugin');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).toEqual([
       'agents-md',
-      'skills',
-      'subagents',
-      'prompts',
       'mcp',
+      'skills',
+      'prompts',
+      'subagents',
       'hooks',
       'rules',
       'plugins',
@@ -56,5 +56,28 @@ describe('AGENT_TOOL_CONFIGS', () => {
     expect(AGENT_TOOL_CONFIGS.gemini.capabilities.slashCommands?.format).toBe('toml');
     expect(AGENT_TOOL_CONFIGS.codex.capabilities.slashCommands?.format).toBe('markdown');
     expect(AGENT_TOOL_CONFIGS.opencode.capabilities.slashCommands?.format).toBe('markdown');
+  });
+
+  it('opens Gemini subagents and memory placeholder navigation', () => {
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.supported).toBe(true);
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.fields?.map((field) => field.key)).toEqual([
+      'name',
+      'description',
+      'kind',
+      'tools',
+      'model',
+      'temperature',
+      'max_turns',
+      'timeout_mins',
+    ]);
+    expect(actionableSubViews(AGENT_TOOL_CONFIGS.gemini)).toEqual([
+      'gemini-md',
+      'mcp',
+      'skills',
+      'slash-commands',
+      'subagents',
+      'hooks',
+      'memory',
+    ]);
   });
 });

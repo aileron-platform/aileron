@@ -107,6 +107,33 @@ interface CliSlashCommandDocumentResponse {
 
 const buildCliDocumentId = (scope: string, fileName: string) => `${scope}:${fileName}`;
 
+type CliSubagentScope = 'project' | 'user' | 'plugin';
+
+interface CliSubagentSummary {
+  fileName: string;
+  name?: string | null;
+  description?: string | null;
+  scope: CliSubagentScope;
+  size: string;
+  pluginName?: string | null;
+  marketplaceName?: string | null;
+}
+
+interface CliSubagentDetail extends CliSubagentSummary {
+  content: string;
+}
+
+interface CliSubagentScopesResponse {
+  workspaceId: string;
+  scopes: Array<{ scope: CliSubagentScope; documents: CliSubagentSummary[] }>;
+}
+
+interface CliSubagentDocumentResponse {
+  workspaceId: string;
+  scope: CliSubagentScope;
+  document: CliSubagentDetail;
+}
+
 const mapCliSlashCommandDocument = (
   scope: CliSlashCommandScope,
   detail: CliSlashCommandDetail,
@@ -128,6 +155,24 @@ const mapCliSlashCommandDocument = (
     },
   };
 };
+
+const mapCliSubagentDocument = (
+  scope: CliSubagentScope,
+  detail: CliSubagentDetail,
+): AgentDocument => ({
+  id: buildCliDocumentId(scope, detail.fileName),
+  title: detail.name ?? detail.fileName,
+  description: detail.description ?? '',
+  content: detail.content,
+  scope,
+  size: detail.size,
+  pluginName: detail.pluginName ?? undefined,
+  marketplaceName: detail.marketplaceName ?? undefined,
+  metadata: {
+    fileName: detail.fileName,
+    source: scope,
+  },
+});
 
 type AgentMcpScope = AgentScope;
 
@@ -1164,6 +1209,86 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     await apiRequest(
       runtimeBaseUrl,
       `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${scope}/${encodeURIComponent(fileName)}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  // ============ Subagents ============
+
+  async listSubagents(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+  ): Promise<AgentDocument[]> {
+    const scopesRes = await apiRequest<CliSubagentScopesResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/subagents`,
+    );
+
+    const documents: AgentDocument[] = [];
+    for (const group of scopesRes.scopes) {
+      for (const summary of group.documents) {
+        const detailRes = await apiRequest<CliSubagentDocumentResponse>(
+          runtimeBaseUrl,
+          `workspaces/${workspaceId}/${apiPrefix}/subagents/${group.scope}/${encodeURIComponent(summary.fileName)}`,
+        );
+        documents.push(mapCliSubagentDocument(group.scope, detailRes.document));
+      }
+    }
+    return documents.sort((a, b) => a.title.localeCompare(b.title));
+  },
+
+  async createSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    document: AgentDocument,
+  ): Promise<AgentDocument> {
+    const scope = document.scope as CliSubagentScope;
+    const payload = {
+      fileName: (document.metadata?.fileName as string) ?? document.title,
+      content: document.content,
+      name: document.title,
+      description: document.description,
+    };
+    const response = await apiRequest<CliSubagentDocumentResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/subagents/${scope}`,
+      { method: 'POST', body: payload },
+    );
+    return mapCliSubagentDocument(response.scope, response.document);
+  },
+
+  async updateSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    document: AgentDocument,
+  ): Promise<AgentDocument> {
+    const scope = document.scope as CliSubagentScope;
+    const fileName = (document.metadata?.fileName as string) ?? document.title;
+    const response = await apiRequest<CliSubagentDocumentResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/subagents/${scope}/${encodeURIComponent(fileName)}`,
+      {
+        method: 'PUT',
+        body: {
+          content: document.content,
+          name: document.title,
+          description: document.description,
+        },
+      },
+    );
+    return mapCliSubagentDocument(response.scope, response.document);
+  },
+
+  async deleteSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    document: Pick<AgentDocument, 'scope' | 'metadata' | 'title'>,
+  ): Promise<void> {
+    const scope = document.scope as CliSubagentScope;
+    const fileName = (document.metadata?.fileName as string) ?? document.title;
+    await apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/${apiPrefix}/subagents/${scope}/${encodeURIComponent(fileName)}`,
       { method: 'DELETE' },
     );
   },

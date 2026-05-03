@@ -58,6 +58,10 @@ vi.mock('./pages/CodexDocumentResourcePage', () => ({
   default: ({ resource }: { resource: string }) => <div data-testid={`codex-document-resource-${resource}`} />,
 }));
 
+vi.mock('./pages/SubagentsPage', () => ({
+  default: ({ apiPrefix }: { apiPrefix: string }) => <div data-testid={`subagents-page-${apiPrefix}`} />,
+}));
+
 describe('AgentSettingsFeature shared rendering', () => {
   it('renders Claude Code settings through the shared feature surface', async () => {
     render(<AgentSettingsFeature cliType="claude" subView="scripts" />);
@@ -69,6 +73,12 @@ describe('AgentSettingsFeature shared rendering', () => {
     render(<AgentSettingsFeature cliType="gemini" subView="gemini-md" />);
 
     expect(screen.getByTestId('agents-md-page')).toBeInTheDocument();
+  });
+
+  it('renders Gemini subagents through the shared subagents page', async () => {
+    render(<AgentSettingsFeature cliType="gemini" subView="subagents" />);
+
+    expect(await screen.findByTestId('subagents-page-gemini')).toBeInTheDocument();
   });
 
   it('renders OpenCode settings after shared component extraction', async () => {

@@ -214,6 +214,10 @@ const mapCodexPluginSkillToItem = (
   };
 };
 
+const isCodexSkillDocument = (file: CodexFileSummaryResponse): boolean => {
+  return file.name === 'SKILL.md' || file.path === 'SKILL.md' || file.path.endsWith('/SKILL.md');
+};
+
 const loadSkillMetadata = async (
   client: ApiClient,
   workspaceId: string,
@@ -285,7 +289,7 @@ export const slashCommandApi = {
             const response = await client.get<CodexFileListResponse>(
               `/api/v1/workspaces/${workspaceId}/codex/skills/files?layer=plugin`,
             );
-            const pluginSkills = response.files.filter((file) => file.source === 'plugin' && file.path.endsWith('/SKILL.md'));
+            const pluginSkills = response.files.filter((file) => file.source === 'plugin' && isCodexSkillDocument(file));
             const items = await Promise.all(pluginSkills.map(async (skill) => {
               try {
                 const metadata = await loadCodexPluginSkillMetadata(client, workspaceId, skill);

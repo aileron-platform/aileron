@@ -90,6 +90,10 @@ const AgentFileManager = React.lazy(() =>
   import('../features/agent-settings/components/AgentFileManager'),
 );
 
+const AgentDocumentSidebar = React.lazy(() =>
+  import('../features/agent-settings/components/AgentDocumentSidebar'),
+);
+
 const CodexDocumentSidebar = React.lazy(() =>
   import('../features/agent-settings/components/CodexDocumentSidebar'),
 );
@@ -236,7 +240,11 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     && (state.agentToolSettings.subView === 'subagents'
       || state.agentToolSettings.subView === 'prompts'
       || state.agentToolSettings.subView === 'rules');
-  const isAgentToolFourColumn = isAgentToolFeatureActive && (state.agentToolSettings.subView === 'skills' || isCodexDocumentView);
+  const isAgentToolFourColumn = isAgentToolFeatureActive && (
+    state.agentToolSettings.subView === 'skills'
+    || isCodexDocumentView
+    || (cliType === 'gemini' && (state.agentToolSettings.subView === 'slash-commands' || state.agentToolSettings.subView === 'subagents'))
+  );
   const isAgentToolSkillsView = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
 
   const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isScriptsView || isMemoryView || isAgentToolFourColumn;
@@ -403,6 +411,28 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
               resource={subView}
               selectedId={codexDocumentSelectedId}
               onSelect={setCodexDocumentSelectedId}
+            />
+          </React.Suspense>
+        );
+      }
+      if (cliType === 'gemini' && (subView === 'slash-commands' || subView === 'subagents')) {
+        const cliConfig = getAgentToolConfig(cliType);
+        return (
+          <React.Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                {t('workspace.layout.loading.agentSettings')}
+              </div>
+            }
+          >
+            <AgentDocumentSidebar
+              resource={subView}
+              selectedId={codexDocumentSelectedId}
+              onSelect={setCodexDocumentSelectedId}
+              apiPrefix={cliConfig.apiPathPrefix}
+              availableScopes={subView === 'slash-commands'
+                ? cliConfig.capabilities.slashCommands?.scopes
+                : cliConfig.capabilities.agentDefinitions?.scopes}
             />
           </React.Suspense>
         );

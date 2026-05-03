@@ -23,6 +23,7 @@ const CodexRulesPage = React.lazy(() => import('./pages/CodexRulesPage'));
 const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
 const CodexPluginsPage = React.lazy(() => import('./pages/CodexPluginsPage'));
 const CodexDocumentResourcePage = React.lazy(() => import('./pages/CodexDocumentResourcePage'));
+const SubagentsPage = React.lazy(() => import('./pages/SubagentsPage'));
 
 export interface AgentSettingsFeatureProps {
   cliType: AgentToolType;
@@ -119,6 +120,8 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
             availableScopes={config.availableScopes.filter((s): s is 'project' | 'user' => s === 'project' || s === 'user')}
             format={config.slashCommandFormat}
             i18nNamespace={config.i18nNamespace}
+            selectedId={documentSelectedId}
+            onSelect={onDocumentSelect}
           />
         </React.Suspense>
       );
@@ -156,6 +159,20 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
           <React.Suspense fallback={loadingFallback}>
             <CodexDocumentResourcePage
               resource="subagents"
+              selectedId={documentSelectedId}
+              onSelect={onDocumentSelect}
+            />
+          </React.Suspense>
+        );
+      }
+      if (config.capabilities.agentDefinitions?.supported) {
+        return (
+          <React.Suspense fallback={loadingFallback}>
+            <SubagentsPage
+              apiPrefix={config.apiPathPrefix}
+              availableScopes={config.capabilities.agentDefinitions.scopes}
+              fields={config.capabilities.agentDefinitions.fields}
+              i18nNamespace={config.i18nNamespace}
               selectedId={documentSelectedId}
               onSelect={onDocumentSelect}
             />

@@ -6,12 +6,14 @@
 
 import React from 'react';
 import { Command } from 'lucide-react';
-import { SettingsPage, OutputStylesPage, SubagentsPage, MemoryPage, SlashCommandsPage } from './pages';
+import { SettingsPage, OutputStylesPage, MemoryPage, SlashCommandsPage } from './pages';
 import AgentsMdPage from '../agent-settings/pages/AgentsMdPage';
 import MCPSettingsPage from '../agent-settings/pages/MCPSettingsPage';
 import HooksSettingsPage from '../agent-settings/pages/HooksSettingsPage';
 import SkillsPage from '../agent-settings/pages/SkillsPage';
 import ScriptsPage from '../agent-settings/pages/ScriptsPage';
+import SubagentsPage from '../agent-settings/pages/SubagentsPage';
+import { AGENT_TOOL_CONFIGS } from '../agent-settings/agentToolConfigs';
 import { getAgentToolConfig } from '../agent-settings/utils';
 import type { AgentSelectedFile } from '../agent-settings/types';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -65,7 +67,14 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
     case 'output-styles':
       return <OutputStylesPage />;
     case 'subagents':
-      return <SubagentsPage />;
+      return (
+        <SubagentsPage
+          apiPrefix="claude-code"
+          availableScopes={AGENT_TOOL_CONFIGS.claude.capabilities.agentDefinitions?.scopes}
+          fields={AGENT_TOOL_CONFIGS.claude.capabilities.agentDefinitions?.fields}
+          i18nNamespace={AGENT_TOOL_CONFIGS.claude.i18nNamespace}
+        />
+      );
     case 'skills':
       return <SkillsPage selectedFile={selectedSkillFileValue} onSelect={setSelectedSkillFile} />;
     case 'scripts':

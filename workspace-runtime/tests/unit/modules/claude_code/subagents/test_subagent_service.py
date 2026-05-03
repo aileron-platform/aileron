@@ -7,8 +7,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from fastapi import HTTPException
 
-from app.modules.claude_code.subagents.service import SubagentService
-from app.modules.claude_code.subagents.models import (
+from app.modules.cli_settings.subagents.config import SubagentTool, get_subagent_config
+from app.modules.cli_settings.subagents.service import SubagentService
+from app.modules.cli_settings.subagents.models import (
     SubagentCollectionResponse,
     SubagentCreateRequest,
     SubagentDocument,
@@ -30,7 +31,7 @@ from app.modules.claude_code.common import (
 @pytest.fixture
 def subagent_service():
     """Subagent service fixture."""
-    return SubagentService()
+    return SubagentService(get_subagent_config(SubagentTool.CLAUDE))
 
 
 @pytest.fixture
@@ -70,11 +71,19 @@ class TestSubagentServiceInitialization:
     def test_service_init(self):
         """Test service initialization."""
         # Act
-        service = SubagentService()
+        service = SubagentService(get_subagent_config(SubagentTool.CLAUDE))
 
         # Assert
         assert service is not None
         assert service._repository is not None
+
+    def test_gemini_service_uses_gemini_agents_folder(self):
+        """Test Gemini service configuration."""
+        service = SubagentService(get_subagent_config(SubagentTool.GEMINI))
+
+        assert service._config.project_dot_dir == ".gemini"
+        assert service._config.agents_dir == "agents"
+        assert service._config.api_prefix == "gemini"
 
 
 class TestToSummary:
