@@ -20,7 +20,7 @@ describe('SettingsWorkflowShell', () => {
     expect(screen.getByText('Create your first hook')).toBeInTheDocument();
   });
 
-  it('在有項目時顯示 summary、controls 與內容', () => {
+  it('在有項目時顯示主 header summary、controls 與內容', () => {
     render(
       <SettingsWorkflowShell
         title="MCP"
@@ -35,18 +35,19 @@ describe('SettingsWorkflowShell', () => {
       </SettingsWorkflowShell>
     );
 
+    expect(screen.getByRole('heading', { name: 'MCP' })).toBeInTheDocument();
+    expect(screen.getAllByText('MCP')).toHaveLength(1);
     expect(screen.getByText('2 items')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
     expect(screen.getByText('Server A')).toBeInTheDocument();
   });
 
-  it('singleHeader 模式會把 summary 整合進主 header 並隱藏次級 toolbar', () => {
+  it('summary 會整合進主 header 並隱藏沒有 controls 的次級 toolbar', () => {
     render(
       <SettingsWorkflowShell
         title="Hooks"
         icon={Wrench}
         hasItems
-        singleHeader
         summary={<div>3 items</div>}
         emptyTitle="unused"
         emptyDescription="unused"

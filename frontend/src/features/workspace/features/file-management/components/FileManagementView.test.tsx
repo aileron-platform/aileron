@@ -61,6 +61,7 @@ vi.mock('@/shared/components/layout/CollapsedSidebarPlaceholder', () => ({
 vi.mock('lucide-react', () => ({
   Folder: () => null,
   Loader2: () => null,
+  RefreshCw: () => null,
 }));
 
 vi.mock('@/shared/utils/fileTypeUtils', () => ({

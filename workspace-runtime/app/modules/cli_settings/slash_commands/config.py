@@ -10,6 +10,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict
 
+from app.modules.cli_settings.codex_paths import CodexLayer, CodexResource, get_codex_path_resolver
+
 
 class SlashCommandTool(str, Enum):
     """CLI tools that support slash commands"""
@@ -48,6 +50,7 @@ class SlashCommandToolConfig:
 
 def _tool_configs() -> Dict[SlashCommandTool, SlashCommandToolConfig]:
     home = Path.home()
+    codex_paths = get_codex_path_resolver()
     return {
         SlashCommandTool.GEMINI: SlashCommandToolConfig(
             tool=SlashCommandTool.GEMINI,
@@ -64,7 +67,7 @@ def _tool_configs() -> Dict[SlashCommandTool, SlashCommandToolConfig]:
             file_extension=".md",
             format=DocumentFormat.MARKDOWN,
             project_dot_dir=".codex",
-            user_root=home / ".codex" / "prompts",
+            user_root=codex_paths.resolve(CodexLayer.USER, CodexResource.PROMPTS),
             supports_namespace=False,
         ),
         SlashCommandTool.OPENCODE: SlashCommandToolConfig(

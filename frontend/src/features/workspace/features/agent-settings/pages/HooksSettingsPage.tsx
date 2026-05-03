@@ -443,7 +443,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({ apiPrefix = 'clau
           />
         }
         controls={
-          <div className="relative w-64">
+          <div className="relative w-full max-w-md">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
             <Input
               value={search}

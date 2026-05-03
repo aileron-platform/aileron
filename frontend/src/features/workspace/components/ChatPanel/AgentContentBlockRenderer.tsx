@@ -397,7 +397,7 @@ const PermissionRequestMessageRenderer: React.FC<{
     return null;
   }
 
-  if (agentTool !== 'claude-code') {
+  if (agentTool !== 'claude-code' && agentTool !== 'codex') {
     return (
       <div className="px-2 py-1">
         <AcpDecisionWidget
@@ -444,7 +444,10 @@ const PermissionRequestMessageRenderer: React.FC<{
           approved_by: approvedBy,
         }}
         requested_at={message.created_at}
-        onApprove={isActivePermission ? onApprove : undefined}
+        onApprove={agentTool === 'claude-code' && isActivePermission ? onApprove : undefined}
+        onCodexApprove={agentTool === 'codex' && isActivePermission
+          ? (messageId) => onApprove?.(messageId, 'once')
+          : undefined}
         onDeny={isActivePermission ? onDeny : undefined}
         collapsible={false}
         defaultExpanded={true}

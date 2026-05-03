@@ -154,7 +154,7 @@ export const extractAcpOutputText = (output: unknown): string => {
 };
 
 export const extractAcpErrorText = (output: unknown): string => {
-  if (typeof output === 'string') return output;
+  if (typeof output === 'string') return '';
   const outputRecord = asRecord(output);
   if (!outputRecord) return '';
 

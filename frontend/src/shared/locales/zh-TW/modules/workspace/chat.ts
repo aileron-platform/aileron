@@ -103,10 +103,6 @@ const chat = {
           description: '允許 Codex 操作，不顯示批准提示。',
         },
       },
-      network: {
-        label: '網路存取',
-        description: '允許 Codex 在 sandbox turn 中存取網路。',
-      },
     },
   },
   dialogs: {

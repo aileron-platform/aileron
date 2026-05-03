@@ -48,7 +48,6 @@ def test_agent_session_response_serializes_codex_permission_config() -> None:
             codex=CodexPermissionConfig(
                 sandbox_mode=CodexSandboxMode.RELAXED,
                 approval_policy=CodexApprovalPolicy.SUGGEST,
-                network_access=True,
             ),
         ),
     )
@@ -59,7 +58,6 @@ def test_agent_session_response_serializes_codex_permission_config() -> None:
     assert response.permission_config.codex == {
         "sandboxMode": "relaxed",
         "approvalPolicy": "suggest",
-        "networkAccess": True,
     }
 
 

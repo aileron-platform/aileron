@@ -33,7 +33,6 @@ class CodexPermissionConfig:
 
     sandbox_mode: CodexSandboxMode = CodexSandboxMode.STRICT
     approval_policy: CodexApprovalPolicy = CodexApprovalPolicy.MANUAL
-    network_access: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +57,6 @@ class PermissionConfig:
             codex_config = CodexPermissionConfig(
                 sandbox_mode=CodexSandboxMode(codex_data.get("sandboxMode", "strict")),
                 approval_policy=CodexApprovalPolicy(codex_data.get("approvalPolicy", "manual")),
-                network_access=codex_data.get("networkAccess", False),
             )
 
         return cls(
@@ -73,7 +71,6 @@ class PermissionConfig:
             result["codex"] = {
                 "sandboxMode": self.codex.sandbox_mode.value,
                 "approvalPolicy": self.codex.approval_policy.value,
-                "networkAccess": self.codex.network_access,
             }
         return result
 

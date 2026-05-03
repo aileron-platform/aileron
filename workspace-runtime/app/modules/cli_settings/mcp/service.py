@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from app.config.settings import get_workspace_path
+from app.modules.cli_settings.codex_paths import CodexLayer, CodexResource, get_codex_path_resolver
 
 from .config_strategies import ConfigFileStrategy, JsonConfigStrategy, TomlConfigStrategy
 from .models import (
@@ -82,6 +83,7 @@ class CliMcpToolConfig:
 
 def _tool_configs() -> Dict[McpTool, CliMcpToolConfig]:
     home = Path.home()
+    codex_paths = get_codex_path_resolver()
     json_strategy = JsonConfigStrategy()
     toml_strategy = TomlConfigStrategy()
 
@@ -97,7 +99,7 @@ def _tool_configs() -> Dict[McpTool, CliMcpToolConfig]:
         McpTool.CODEX: CliMcpToolConfig(
             tool=McpTool.CODEX,
             project_file=".codex/config.toml",
-            user_file_path=home / ".codex" / "config.toml",
+            user_file_path=codex_paths.resolve(CodexLayer.USER, CodexResource.CONFIG),
             servers_key="mcp_servers",
             strategy=toml_strategy,
             supports_toggle=True,
@@ -134,7 +136,9 @@ class CliMcpService:
     def list_servers(
         self, workspace_id: str, scope: CliMcpScope | None = None
     ) -> CliMcpServerCollectionResponse:
-        scopes = [scope] if scope else list(CliMcpScope)
+        scopes = [scope] if scope else [CliMcpScope.PROJECT, CliMcpScope.USER]
+        if not scope and self._config.tool == McpTool.CODEX:
+            scopes.append(CliMcpScope.PLUGIN)
         groups: List[CliMcpScopeServers] = []
         for s in scopes:
             servers = self._load_servers(workspace_id, s)
@@ -341,6 +345,8 @@ class CliMcpService:
     # === Internal Utilities ================================================
 
     def _scope_file(self, workspace_id: str, scope: CliMcpScope) -> Path:
+        if scope == CliMcpScope.PLUGIN:
+            raise CliMcpScopeNotSupportedError("Plugin MCP servers are read-only package sources")
         if scope == CliMcpScope.PROJECT:
             return Path(get_workspace_path()) / self._config.project_file
         return self._config.user_file_path
@@ -348,6 +354,8 @@ class CliMcpService:
     def _load_servers(
         self, workspace_id: str, scope: CliMcpScope
     ) -> Dict[str, Dict[str, Any]]:
+        if scope == CliMcpScope.PLUGIN and self._config.tool == McpTool.CODEX:
+            return self._load_codex_plugin_servers()
         path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(path)
         raw = data.get(self._config.servers_key)
@@ -361,6 +369,8 @@ class CliMcpService:
         scope: CliMcpScope,
         servers: Dict[str, Dict[str, Any]],
     ) -> None:
+        if scope == CliMcpScope.PLUGIN:
+            raise CliMcpScopeNotSupportedError("Plugin MCP servers are read-only package sources")
         path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(path)
         data[self._config.servers_key] = servers
@@ -434,6 +444,38 @@ class CliMcpService:
             name: self._to_runtime(name, entry)
             for name, entry in sorted(servers.items())
         }
+
+    def _load_codex_plugin_servers(self) -> Dict[str, Dict[str, Any]]:
+        servers: Dict[str, Dict[str, Any]] = {}
+        codex_home = get_codex_path_resolver().codex_home
+        cache_root = codex_home / "plugins" / "cache"
+        if not cache_root.is_dir():
+            return servers
+        for manifest_path in sorted(cache_root.glob("**/.codex-plugin/plugin.json")):
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if not isinstance(manifest, dict):
+                continue
+            plugin_name = str(manifest.get("name") or manifest.get("id") or manifest_path.parent.parent.name)
+            try:
+                marketplace = str(manifest.get("marketplace") or manifest_path.relative_to(cache_root).parts[0])
+            except Exception:
+                marketplace = ""
+            raw_servers = manifest.get("mcp_servers") or manifest.get("mcpServers") or {}
+            if not isinstance(raw_servers, dict):
+                continue
+            for name, config in raw_servers.items():
+                if not isinstance(config, dict):
+                    continue
+                servers[f"{plugin_name}:{name}"] = {
+                    **config,
+                    "enabled": True,
+                    "pluginName": plugin_name,
+                    "marketplaceName": marketplace,
+                }
+        return servers
 
     # --- OpenCode Format Conversion -----------------------------------------
 
@@ -510,7 +552,18 @@ class CliMcpService:
           - command, args, env same as Claude
           - enabled natively supported
         """
-        data: Dict[str, Any] = {}
+        data: Dict[str, Any] = {
+            key: value
+            for key, value in native.items()
+            if key
+            not in {
+                "command",
+                "args",
+                "env",
+                "headers",
+                "url",
+            }
+        }
 
         if native.get("url"):
             data["type"] = CliMcpTransportType.HTTP
@@ -534,7 +587,7 @@ class CliMcpService:
     @staticmethod
     def _codex_to_native(config: CliMcpServerConfig) -> Dict[str, Any]:
         """Unified format -> Codex native format (does not save type field)"""
-        native: Dict[str, Any] = {}
+        native: Dict[str, Any] = dict(config.model_extra or {})
 
         if config.type in (CliMcpTransportType.HTTP, CliMcpTransportType.SSE):
             if config.url:
@@ -549,5 +602,7 @@ class CliMcpService:
             native["env"] = dict(config.env)
         if config.headers:
             native["headers"] = dict(config.headers)
+        if "enabled" in config.model_fields_set:
+            native["enabled"] = getattr(config, "enabled", True)
 
         return native

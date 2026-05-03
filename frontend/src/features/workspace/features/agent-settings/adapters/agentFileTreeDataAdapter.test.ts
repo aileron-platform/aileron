@@ -25,7 +25,7 @@ describe('AgentFileTreeDataAdapter', () => {
     vi.clearAllMocks();
   });
 
-  it.each(['claude-code', 'gemini', 'codex', 'opencode'] as const)(
+  it.each(['claude-code', 'gemini', 'opencode'] as const)(
     'uses the active %s API prefix for file trees',
     async (apiPrefix) => {
       apiClientMock.get.mockResolvedValueOnce({ nodes: [] });
@@ -45,6 +45,30 @@ describe('AgentFileTreeDataAdapter', () => {
       );
     },
   );
+
+  it('maps Codex file summaries into a file tree', async () => {
+    apiClientMock.get.mockResolvedValueOnce({
+      files: [
+        { name: 'SKILL.md', path: 'builder/SKILL.md', sizeBytes: 12, source: 'project', readOnly: false, metadata: {} },
+        { name: 'SKILL.md', path: 'plugin/SKILL.md', sizeBytes: 10, source: 'plugin', readOnly: true, metadata: { pluginId: 'github@openai' } },
+      ],
+    });
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'codex',
+      collection: 'skills',
+      scope: 'project',
+      runtimeBaseUrl: 'http://runtime.local',
+    });
+
+    const tree = await adapter.getTree();
+
+    expect(apiClientMock.get).toHaveBeenCalledWith('/workspaces/ws-1/codex/skills/files?layer=project');
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({ name: 'builder', type: 'directory' });
+    expect(tree[0].children?.[0]).toMatchObject({ name: 'SKILL.md', path: 'builder/SKILL.md', scope: 'project' });
+  });
 
   it('uses the configured collection and scope when moving files', async () => {
     apiClientMock.post.mockResolvedValueOnce({ success: true });

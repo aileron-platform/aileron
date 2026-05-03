@@ -9,11 +9,14 @@ export interface HookActionConfig {
   type: 'command';
   command: string;
   timeout: number;
+  statusMessage?: string | null;
+  raw?: Record<string, unknown>;
 }
 
 export interface HookMatcher {
   matcher: string;
   hooks: HookActionConfig[];
+  raw?: Record<string, unknown>;
 }
 
 export interface HookMatcherActionsLabels {
@@ -31,6 +34,9 @@ export interface HookMatcherActionsLabels {
   executionCommandLabel: string;
   executionCommandPlaceholder: string;
   executionCommandHelp: string;
+  executionStatusMessageLabel?: string;
+  executionStatusMessagePlaceholder?: string;
+  executionStatusMessageHelp?: string;
   executionRemove: string;
 }
 
@@ -60,6 +66,7 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
   matcherCardClassName = 'bg-card',
   onChange,
 }) => {
+  const supportsStatusMessage = Boolean(labels.executionStatusMessageLabel);
   const handleMatcherChange = (matcherIndex: number, value: string) => {
     onChange(matchers.map((item, index) => (
       index === matcherIndex ? { ...item, matcher: value } : item
@@ -203,6 +210,22 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
                       />
                       <p className="text-xs text-muted-foreground">{labels.executionCommandHelp}</p>
                     </div>
+
+                    {supportsStatusMessage ? (
+                      <div className="space-y-2">
+                        <Label className="text-sm">{labels.executionStatusMessageLabel}</Label>
+                        <Input
+                          value={execution.statusMessage ?? ''}
+                          onChange={(event) =>
+                            updateHookExecution(matcherIndex, hookIndex, {
+                              statusMessage: event.target.value,
+                            })
+                          }
+                          placeholder={labels.executionStatusMessagePlaceholder}
+                        />
+                        <p className="text-xs text-muted-foreground">{labels.executionStatusMessageHelp}</p>
+                      </div>
+                    ) : null}
 
                     {matcher.hooks.length > 1 ? (
                       <div className="flex justify-end">

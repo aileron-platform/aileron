@@ -14,10 +14,14 @@ from app.services.sync_service import SyncService
 
 logger = get_logger(__name__)
 
-_TASK_DEFINITIONS: Dict[str, str] = {
+_COMMON_TASK_DEFINITIONS: Dict[str, str] = {
     "ssh": "SSH Keys",
-    "claudeCode": "Claude Code",
     "git": "Git Settings",
+}
+
+_AGENT_TASK_DEFINITIONS: Dict[str, tuple[str, str, str]] = {
+    "claude-code": ("claudeCode", "claude_code", "Claude Code"),
+    "codex": ("codex", "codex", "Codex"),
 }
 
 _STATUS_SUCCESS = "success"
@@ -50,9 +54,9 @@ class WorkspaceSetupService:
             logger.info("User %s has not configured personal settings yet, skip synchronization", workspace.owner_id)
             tasks = [
                 self._create_task_status(
-                    key, _STATUS_SKIPPED, "No settings to synchronize"
+                    key, display_name, _STATUS_SKIPPED, "No settings to synchronize"
                 )
-                for key in _TASK_DEFINITIONS
+                for key, display_name in self._task_definitions(workspace).items()
             ]
             return WorkspaceSetupStatus(
                 workspace_id=workspace.id,
@@ -64,8 +68,9 @@ class WorkspaceSetupService:
         sync_result = await SyncService.sync_settings_to_runtime(workspace, user_settings)
 
         tasks = []
-        for key, display_name in _TASK_DEFINITIONS.items():
-            source_key = "claude_code" if key == "claudeCode" else key
+        source_keys = self._source_keys(workspace)
+        for key, display_name in self._task_definitions(workspace).items():
+            source_key = source_keys[key]
             result = sync_result.get(source_key, {})
             message = result.get("message", "") or ""
             success = bool(result.get("success"))
@@ -80,6 +85,7 @@ class WorkspaceSetupService:
             tasks.append(
                 self._create_task_status(
                     key,
+                    display_name,
                     status,
                     message or f"{display_name} synchronization not yet complete",
                 )
@@ -113,14 +119,14 @@ class WorkspaceSetupService:
         checks: Dict[str, Dict[str, str]] = payload.get("checks", {}) if isinstance(payload, dict) else {}
 
         tasks = []
-        for key in _TASK_DEFINITIONS:
+        for key, display_name in self._task_definitions(workspace).items():
             detail = checks.get(key) or {}
             status = detail.get("status", _STATUS_PENDING)
             message = detail.get("message", "") or "Waiting for synchronization result"
             if status not in {_STATUS_SUCCESS, _STATUS_FAILED, _STATUS_PENDING, _STATUS_SKIPPED}:
                 status = _STATUS_PENDING
 
-            tasks.append(self._create_task_status(key, status, message))
+            tasks.append(self._create_task_status(key, display_name, status, message))
 
         completed = all(task.status in {_STATUS_SUCCESS, _STATUS_SKIPPED} for task in tasks)
         return WorkspaceSetupStatus(workspace_id=workspace.id, completed=completed, tasks=tasks)
@@ -131,13 +137,34 @@ class WorkspaceSetupService:
             raise WorkspaceSetupError(f"Workspace {workspace_id} does not exist", code="WORKSPACE_NOT_FOUND", params={"workspaceId": workspace_id})
         return workspace
 
-    def _create_task_status(self, key: str, status: str, message: str) -> WorkspaceSetupTaskStatus:
+    def _create_task_status(self, key: str, display_name: str, status: str, message: str) -> WorkspaceSetupTaskStatus:
         return WorkspaceSetupTaskStatus(
             task_key=key,
-            task_name=_TASK_DEFINITIONS[key],
+            task_name=display_name,
             status=status,
             message=message,
         )
+
+    def _task_definitions(self, workspace: db_models.Workspace) -> Dict[str, str]:
+        definitions: Dict[str, str] = {"ssh": _COMMON_TASK_DEFINITIONS["ssh"]}
+        agent_key, _, agent_name = _AGENT_TASK_DEFINITIONS.get(
+            workspace.cli_type or "claude-code",
+            _AGENT_TASK_DEFINITIONS["claude-code"],
+        )
+        definitions[agent_key] = agent_name
+        definitions["git"] = _COMMON_TASK_DEFINITIONS["git"]
+        return definitions
+
+    def _source_keys(self, workspace: db_models.Workspace) -> Dict[str, str]:
+        agent_key, source_key, _ = _AGENT_TASK_DEFINITIONS.get(
+            workspace.cli_type or "claude-code",
+            _AGENT_TASK_DEFINITIONS["claude-code"],
+        )
+        return {
+            "ssh": "ssh",
+            agent_key: source_key,
+            "git": "git",
+        }
 
     @staticmethod
     def _is_skipped_message(message: str) -> bool:

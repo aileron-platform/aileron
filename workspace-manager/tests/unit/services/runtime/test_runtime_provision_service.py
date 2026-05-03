@@ -219,6 +219,28 @@ class TestRuntimeProvisionService:
         assert sources["/home/developer/.claude"] == str(tmp_path / "claude-data" / "workspace_123")
         assert (tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh").is_file()
 
+    def test_build_volumes_mounts_runtime_vendor_in_development(
+        self,
+        provision_service,
+        sample_workspace,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
+        monkeypatch.setenv("NODE_ENV", "development")
+        monkeypatch.setenv("HOST_WORKSPACE_RUNTIME_DIR", str(tmp_path / "workspace-runtime"))
+
+        volumes = provision_service._build_volumes(sample_workspace)
+
+        sources = {volume.target: volume.source for volume in volumes}
+        assert sources["/workspace-runtime/app"] == str(tmp_path / "workspace-runtime" / "app")
+        assert sources["/workspace-runtime/scripts"] == str(tmp_path / "workspace-runtime" / "scripts")
+        assert sources["/workspace-runtime/tests"] == str(tmp_path / "workspace-runtime" / "tests")
+        assert sources["/workspace-runtime/vendor"] == str(tmp_path / "workspace-runtime" / "vendor")
+        assert sources["/workspace-runtime/pyproject.toml"] == str(
+            tmp_path / "workspace-runtime" / "pyproject.toml"
+        )
+        assert sources["/workspace-runtime/uv.lock"] == str(tmp_path / "workspace-runtime" / "uv.lock")
+
     def test_build_volumes_adds_knowledge_base_mounts(
         self, provision_service, sample_workspace, mock_settings, tmp_path: Path
     ):

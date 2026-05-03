@@ -75,8 +75,10 @@ class FakeThread:
     def __init__(self, handle) -> None:
         self.id = "thread-1"
         self._handle = handle
+        self.turn_calls = []
 
     async def turn(self, *_args, **_kwargs):
+        self.turn_calls.append((_args, _kwargs))
         return self._handle
 
 
@@ -365,3 +367,37 @@ async def test_execute_task_uses_latest_file_patch_when_final_changes_empty(monk
 
     assert result.assistant_message_ids == ["assistant-file-1"]
     assert persisted_results[0]["changes"] == [latest_change]
+
+
+@pytest.mark.asyncio
+async def test_execute_task_wraps_string_prompt_in_text_input(monkeypatch) -> None:
+    handle = FakeHandle([])
+    thread = FakeThread(handle)
+    state = SessionState(
+        codex=SimpleNamespace(thread_start=AsyncMock(return_value=thread)),
+        dispatcher=CodexSessionApprovalDispatcher(),
+    )
+    tool = CodexTool(FakeManager(state))
+
+    monkeypatch.setattr(module, "global_tool_decision_manager", FakeDecisionManager())
+    monkeypatch.setattr(
+        tool,
+        "_load_session_context",
+        AsyncMock(return_value=(SimpleNamespace(sdk_session_id=None), None, "/workspace")),
+    )
+    monkeypatch.setattr(
+        tool,
+        "_persist_user_message",
+        AsyncMock(return_value={"message_id": "user-1"}),
+    )
+    monkeypatch.setattr(tool, "_save_sdk_session_id", AsyncMock())
+
+    await tool.execute_task("session-1", "prompt")
+
+    assert len(thread.turn_calls) == 1
+    args, kwargs = thread.turn_calls[0]
+    assert kwargs == {}
+    assert len(args) == 1
+    assert len(args[0]) == 1
+    assert type(args[0][0]).__name__ == "TextInput"
+    assert args[0][0].text == "prompt"

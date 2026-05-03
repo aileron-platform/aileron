@@ -40,6 +40,7 @@ export interface AgentHookActionConfig {
   type: 'command' | 'webhook' | 'mcp_call';
   command?: string | null;
   timeout?: number | null;
+  statusMessage?: string | null;
 }
 
 export interface AgentHookRuleConfig {

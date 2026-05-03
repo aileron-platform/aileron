@@ -883,6 +883,20 @@ export const FileManagementView: React.FC = () => {
         onSearchClear={managerState.clearSearch}
         searchPlaceholder={t('workspace.fileManagement.tree.search.placeholder')}
         showSearch={!isCollapsed}
+        headerActions={(
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={() => handleRefresh()}
+            disabled={managerState.isLoading}
+            aria-label={t('common.fileTree.contextMenu.refresh')}
+            title={t('common.fileTree.contextMenu.refresh')}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${managerState.isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        )}
         showToolbar={false}
       >
         {isCollapsed ? (

@@ -103,6 +103,14 @@ describe('useAgentSession', () => {
               title: 'Session A',
               created_at: '2026-04-24T00:00:00Z',
               updated_at: '2026-04-24T00:00:00Z',
+              agentic_tool: 'claude-code',
+            },
+            {
+              session_id: 'session-a-codex',
+              title: 'Session A Codex',
+              created_at: '2026-04-25T00:00:00Z',
+              updated_at: '2026-04-25T00:00:00Z',
+              agentic_tool: 'codex',
             },
           ],
         };
@@ -115,6 +123,7 @@ describe('useAgentSession', () => {
             title: 'Session B',
             created_at: '2026-04-24T00:00:00Z',
             updated_at: '2026-04-24T00:00:00Z',
+            agentic_tool: 'claude-code',
           },
         ],
       };
@@ -174,6 +183,62 @@ describe('useAgentSession', () => {
     expect(mocks.listSessionsMock).toHaveBeenCalledWith(
       'http://runtime.test',
       expect.objectContaining({ workspace_id: 'ws-b' })
+    );
+  });
+
+  it('filters sessions by cliType and auto-creates a Codex session when only Claude sessions exist', async () => {
+    mocks.listSessionsMock.mockImplementation(async (_runtimeBaseUrl: string, params: { workspace_id?: string; agentic_tool?: string }) => {
+      if (params.workspace_id === 'ws-codex') {
+        return {
+          items: [
+            {
+              session_id: 'session-claude-1',
+              title: 'Claude Session',
+              created_at: '2026-04-24T00:00:00Z',
+              updated_at: '2026-04-24T00:00:00Z',
+              agentic_tool: 'claude-code',
+            },
+          ],
+        };
+      }
+
+      return { items: [] };
+    });
+
+    mocks.createSessionMock.mockResolvedValue({
+      session_id: 'session-codex-1',
+      title: 'Codex Session',
+      created_at: '2026-04-25T00:00:00Z',
+      updated_at: '2026-04-25T00:00:00Z',
+      agentic_tool: 'codex',
+    });
+
+    const { result } = renderHook(() =>
+      useAgentSession({
+        runtimeBaseUrl: 'http://runtime.test',
+        workspaceId: 'ws-codex',
+        cliType: 'codex',
+        autoConnect: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.state.currentSessionId).toBe('session-codex-1');
+    });
+
+    expect(mocks.listSessionsMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      expect.objectContaining({
+        workspace_id: 'ws-codex',
+        agentic_tool: 'codex',
+      })
+    );
+    expect(mocks.createSessionMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      expect.objectContaining({
+        workspace_id: 'ws-codex',
+        agentic_tool: 'codex',
+      })
     );
   });
 });

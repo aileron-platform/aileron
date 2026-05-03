@@ -416,6 +416,7 @@ class RuntimeProvisionService:
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/app", target="/workspace-runtime/app"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/scripts", target="/workspace-runtime/scripts"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/tests", target="/workspace-runtime/tests"))
+                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/vendor", target="/workspace-runtime/vendor"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/pyproject.toml", target="/workspace-runtime/pyproject.toml"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/uv.lock", target="/workspace-runtime/uv.lock"))
                 volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/supervisord.conf", target="/workspace-runtime/supervisord.conf"))

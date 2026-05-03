@@ -46,6 +46,7 @@ export const CLAUDE_CODE_ICONS = {
   'skills': Wand2,
   'scripts': FileCode,
   'memory': Brain,
+  'rules': Shield,
 } as const;
 
 export interface NavigationConfig {
@@ -295,6 +296,9 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
 const AGENT_SETTINGS_ICONS: Record<string, LucideIcon> = {
   'mcp': Network,
   'hooks': Zap,
+  'rules': Shield,
+  'plugins': Wand2,
+  'prompts': Command,
   'slash-commands': Command,
   'skills': Wand2,
   'claude-md': FileText,
@@ -314,6 +318,9 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'agents-md': 'workspace.agentSettings.common.subViews.agentsMd',
   'mcp': 'workspace.navigation.sub.claudeCodeSettings.mcp',
   'hooks': 'workspace.navigation.sub.claudeCodeSettings.hooks',
+  'rules': 'workspace.agentSettings.common.subViews.rules',
+  'plugins': 'workspace.agentSettings.common.subViews.plugins',
+  'prompts': 'workspace.agentSettings.common.subViews.prompts',
   'slash-commands': 'workspace.navigation.sub.claudeCodeSettings.slashCommands',
   'output-styles': 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
   'subagents': 'workspace.navigation.sub.claudeCodeSettings.subagents',

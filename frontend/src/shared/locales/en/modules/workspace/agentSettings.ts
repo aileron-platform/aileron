@@ -98,6 +98,365 @@ const agentSettings = {
   },
   codex: {
     agentsMd: 'AGENTS.md',
+    common: {
+      actions: {
+        refresh: 'Refresh',
+        save: 'Save',
+      },
+      layer: 'Layer',
+      layers: {
+        project: 'Project',
+        user: 'Personal',
+      },
+      empty: 'Not configured',
+      errors: {
+        loadFailed: 'Unable to load Codex settings.',
+      },
+    },
+    agentsMd: {
+      title: 'AGENTS.md',
+      confirmDiscard: 'Discard unsaved changes?',
+      footer: '{{path}} · {{sizeBytes}} / {{maxBytes}} bytes',
+      notifications: {
+        saveSuccess: 'AGENTS.md saved',
+        saveFailed: 'Unable to save AGENTS.md',
+      },
+      caveatTitles: {
+        override: 'Override file active',
+        fallback: 'Fallback instructions active',
+        size_limit: 'Instruction size limit',
+      },
+      caveats: {
+        override: '{{path}} takes precedence over AGENTS.md for this project.',
+        fallback: '{{path}} is the active fallback instruction source because AGENTS.md is missing.',
+        sizeLimit: 'This file is {{sizeBytes}} bytes and the configured limit is {{maxBytes}} bytes.',
+      },
+    },
+    rules: {
+      title: 'Rules',
+      filesTitle: '.rules files',
+      loading: 'Loading rules…',
+      empty: {
+        title: 'No rules files found',
+        description: 'Create a .rules file to control which commands Codex can run outside the sandbox.',
+      },
+      confirmDelete: 'Are you sure you want to delete "{{title}}"?',
+      fileName: 'File: {{fileName}}',
+      fileNamePlaceholder: 'default.rules',
+      commandPlaceholder: 'Sample command, for example git status',
+      defaultContent: 'prefix_rule(\n    pattern = ["git", ["status", "diff", "log"]],\n    decision = "allow",\n    justification = "Read-only git inspection",\n)\n',
+      actions: {
+        create: 'Add rules file',
+        validate: 'Validate',
+      },
+      dialog: {
+        title: { create: 'Add rules file', edit: 'Edit rules file' },
+        description: {
+          create: 'Create a Codex .rules file for an editable layer.',
+          edit: 'Update this Codex .rules file.',
+        },
+        fields: {
+          scope: { label: 'Layer' },
+          fileName: {
+            label: 'File name',
+            helper: 'Use a relative path that ends with .rules.',
+          },
+          content: {
+            label: 'Rules content',
+            estimatedSize: 'Estimated size: {{size}}',
+          },
+        },
+        validation: {
+          fileName: 'Enter a relative .rules file name without parent traversal.',
+          content: 'Rules content cannot be empty.',
+        },
+        actions: { cancel: 'Cancel', save: 'Save changes', create: 'Create rules file' },
+      },
+      notifications: {
+        saved: 'Rules file saved',
+        deleted: 'Rules file deleted',
+        saveFailed: 'Unable to save rules file',
+        validateFailed: 'Unable to validate rules file',
+      },
+      validation: {
+        valid: 'Validation passed with exit code {{exitCode}}.',
+        invalid: 'Validation failed with exit code {{exitCode}}.',
+      },
+      validationDialog: {
+        title: 'Validate rules',
+        description: 'Check how this .rules file evaluates a sample command.',
+        fields: {
+          command: {
+            label: 'Sample command',
+            helper: 'The command is sent to Codex exec policy validation as arguments.',
+          },
+        },
+        actions: {
+          close: 'Close',
+          validate: 'Run validation',
+        },
+      },
+    },
+    hooks: {
+      title: 'Hooks',
+      header: { title: 'Hooks' },
+      jsonTitle: 'hooks.json',
+      loading: 'Loading hooks…',
+      featureWarning: {
+        title: 'Hooks feature disabled',
+        description: 'Codex will not load hooks until features.codex_hooks is enabled for an editable config layer.',
+      },
+      filters: {
+        scope: {
+          label: 'Scope',
+          options: {
+            all: 'All scopes',
+            project: 'Project',
+            user: 'User',
+            plugin: 'Plugin and inline',
+            managed: 'Managed',
+          },
+        },
+      },
+      actions: {
+        refresh: 'Refresh',
+        create: 'Add hook',
+        edit: 'Edit hook',
+        delete: 'Remove hook',
+        enableFeature: 'Enable codex_hooks',
+      },
+      stats: { hooks: '{{count}} hook(s)' },
+      search: { placeholder: 'Search hooks...' },
+      scope: {
+        badge: {
+          project: 'Project',
+          user: 'User',
+          plugin: 'Plugin',
+          managed: 'Managed',
+        },
+      },
+      sources: {
+        hooks_json: 'hooks.json',
+        inline_config: 'Read-only inline config',
+        plugin: 'Read-only plugin',
+        managed: 'Read-only managed',
+      },
+      events: {
+        SessionStart: { name: 'SessionStart', option: 'SessionStart' },
+        PreToolUse: { name: 'PreToolUse', option: 'PreToolUse' },
+        PostToolUse: { name: 'PostToolUse', option: 'PostToolUse' },
+        PermissionRequest: { name: 'PermissionRequest', option: 'PermissionRequest' },
+        UserPromptSubmit: { name: 'UserPromptSubmit', option: 'UserPromptSubmit' },
+        Stop: { name: 'Stop', option: 'Stop' },
+      },
+      matchers: {
+        title: 'Matcher configuration',
+        matcherLabel: 'Matcher',
+        actionsCount: '{{count}} action(s)',
+        commandLabel: 'Command',
+        timeoutValue: '{{value}}s',
+        statusMessageValue: 'Status: {{value}}',
+        noCommand: 'No command provided',
+        summary: { matchers: '{{count}} matcher(s)', commands: '{{count}} action(s)' },
+      },
+      list: { empty: 'No hooks match the current filters.' },
+      dialog: {
+        title: { edit: 'Edit hook', create: 'Add hook' },
+        description: 'Configure Codex hook scope, lifecycle event, matcher, and command.',
+        scope: {
+          label: 'Scope',
+          labelWithAsterisk: 'Scope *',
+          placeholder: 'Choose scope',
+          options: { project: 'Project', user: 'User', local: 'Local' },
+        },
+        event: { label: 'Event type *', placeholder: 'Choose event' },
+        matcher: {
+          sectionTitle: 'Matcher configuration',
+          add: 'Add matcher',
+          patternLabel: 'Match pattern',
+          patternPlaceholder: 'Tool name pattern or *',
+          helper: {
+            intro: 'Pattern for matching Codex tool or permission events.',
+            simple: '• Simple string: Write matches only the Write tool',
+            regex: '• Regular expression: Edit|Write or Notebook.*',
+            wildcard: '• * matches all tools; empty string is also allowed',
+            ignored: 'Codex ignores matchers for this event.',
+            sessionSource: 'Pattern for matching how the Codex session starts.',
+            sessionExamples: 'Examples: startup, resume, clear, or startup|resume.',
+            toolName: 'Pattern for matching Codex tool names.',
+            toolExamples: 'Examples: Bash, apply_patch, Edit, Write, or mcp__filesystem__.*.',
+          },
+          remove: 'Remove matcher',
+        },
+        execution: {
+          sectionTitle: 'Hook execution',
+          add: 'Add action',
+          timeoutLabel: 'Timeout (seconds)',
+          timeoutPlaceholder: '30',
+          timeoutHelp: 'Maximum command execution time. Commands are cancelled when exceeding the limit.',
+          commandLabel: 'Command *',
+          commandPlaceholder: 'Enter the command to execute',
+          commandHelp: 'Codex runs hook commands from the workspace context.',
+          statusMessageLabel: 'Status message',
+          statusMessagePlaceholder: 'Checking command',
+          statusMessageHelp: 'Optional progress text shown while Codex runs this command hook.',
+          remove: 'Remove action',
+        },
+        actions: { cancel: 'Cancel', save: 'Save changes', create: 'Add hook' },
+        validation: {
+          duplicateEventWarning: 'Duplicate event type detected',
+          duplicateEventSuggestion: 'Consider editing the existing hook instead of creating a duplicate event.',
+        },
+      },
+      notifications: {
+        saved: 'hooks.json saved',
+        enabled: 'codex_hooks enabled',
+        saveFailed: 'Unable to save hooks.json',
+        invalidJson: 'hooks.json must be valid JSON',
+      },
+    },
+    plugins: {
+      title: 'Plugins',
+      empty: 'No local plugins found.',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      listed: 'Listed',
+      installed: 'Installed',
+      installReserved: 'Marketplace install UI is reserved for a later version. This page reads local registry, cache, and config state.',
+      actions: {
+        enable: 'Enable',
+        disable: 'Disable',
+      },
+      notifications: {
+        saved: 'Plugin setting saved',
+      },
+    },
+    files: {
+      filesTitle: 'Files',
+      empty: 'No files found.',
+      pathPlaceholder: 'Relative path',
+      actions: {
+        newFile: 'New file',
+      },
+      titles: {
+        skills: 'Skills',
+        subagents: 'Subagents',
+        prompts: 'Prompts',
+      },
+      sources: {
+        user: 'User',
+        project: 'Project',
+        plugin: 'Plugin',
+        built_in: 'Built-in',
+      },
+      notifications: {
+        saved: 'File saved',
+        deleted: 'File deleted',
+        saveFailed: 'Unable to save file',
+      },
+    },
+    documents: {
+      meta: {
+        prompts: { title: 'Prompt settings' },
+        subagents: { title: 'Subagent settings' },
+        rules: { title: 'Rules settings' },
+      },
+      actions: { refresh: 'Refresh', edit: 'Edit', copyContent: 'Copy content', download: 'Download', delete: 'Delete' },
+      loading: 'Loading documents…',
+      stats: { total: '{{count}} item(s)' },
+      scope: {
+        values: { project: 'Project', user: 'Personal', plugin: 'Plugin', built_in: 'Built-in', managed: 'Managed' },
+      },
+      status: { effective: 'Effective', overridden: 'Overridden' },
+      toml: {
+        description: 'Description',
+        prompt: 'Prompt',
+        developerInstructions: 'Developer instructions',
+        raw: 'Raw TOML',
+      },
+      size: { badge: 'Size: {{size}}' },
+      confirmDelete: 'Are you sure you want to delete "{{title}}"?',
+      sidebar: {
+        toggle: { expand: 'Expand sidebar', collapse: 'Collapse sidebar' },
+        searchPlaceholder: 'Search documents...',
+        scope: { all: 'All sources' },
+        loading: 'Loading items…',
+        empty: 'No items match the current filters.',
+      },
+    },
+    prompts: {
+      pageTitle: 'Prompts',
+      actions: { create: 'Add prompt' },
+      empty: {
+        title: 'No prompts yet',
+        description: 'Create reusable prompts for common workflows.',
+      },
+      dialog: {
+        title: { create: 'Add prompt', edit: 'Edit prompt' },
+        description: { create: 'Create a reusable prompt.', edit: 'Update this prompt.' },
+        tabs: { basic: 'Basic settings', editor: 'Prompt editor' },
+        fields: {
+          scope: { label: 'Layer' },
+          fileName: { label: 'File name', placeholder: 'prompt.md' },
+          namespace: { label: 'Namespace', placeholder: 'Optional namespace', helper: 'Use folders or namespaces to organize related prompts.' },
+          content: { label: 'Prompt content', estimatedSize: 'Estimated size: {{size}}' },
+        },
+        validation: { fileName: 'Please enter a file name.', content: 'Prompt content cannot be empty.' },
+        actions: { cancel: 'Cancel', save: 'Save changes', create: 'Create prompt' },
+      },
+    },
+    subagents: {
+      pageTitle: 'Subagents',
+      actions: { create: 'Add subagent' },
+      empty: {
+        title: 'No subagents yet',
+        description: 'Create specialized subagents for repeated task patterns.',
+      },
+      dialog: {
+        title: { create: 'Add subagent', edit: 'Edit subagent' },
+        description: {
+          create: 'Configure a subagent definition.',
+          edit: 'Update this subagent definition.',
+        },
+        fields: {
+          scope: { label: 'Layer' },
+          name: { label: 'Name', placeholder: 'code_reviewer' },
+          description: { label: 'Description', placeholder: 'Reviews code for correctness and test gaps.' },
+          developerInstructions: { label: 'Developer instructions', placeholder: 'Review code like an owner.' },
+          nicknameCandidates: { label: 'Nickname candidates', placeholder: 'Atlas\nDelta' },
+          model: { label: 'Model', placeholder: 'gpt-5.4' },
+          modelReasoningEffort: {
+            label: 'Reasoning effort',
+            options: {
+              high: { label: 'High', description: 'Trace complex logic, assumptions, and edge cases.' },
+              medium: { label: 'Medium', description: 'Balanced default for most agents.' },
+              low: { label: 'Low', description: 'Use when speed matters for straightforward tasks.' },
+            },
+          },
+          sandboxMode: {
+            label: 'Sandbox mode',
+            options: {
+              'read-only': { label: 'Read only', description: 'Inspect files without editing or running commands unless approved.' },
+              'workspace-write': { label: 'Workspace write', description: 'Read files, edit within the workspace, and run routine local commands.' },
+              'danger-full-access': { label: 'Full access', description: 'Run without sandbox filesystem or network restrictions.' },
+            },
+          },
+          rawContent: { label: 'Raw TOML', placeholder: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""' },
+        },
+        tabs: { structured: 'Structured', raw: 'Raw TOML' },
+        validation: {
+          name: 'Please enter a subagent name.',
+          description: 'Please enter a description.',
+          developerInstructions: 'Please enter developer instructions.',
+          rawContent: 'Raw TOML cannot be empty.',
+        },
+        fallbackTitle: 'Subagent',
+        actions: { cancel: 'Cancel', save: 'Save changes', create: 'Create subagent' },
+      },
+      registry: {
+        summary: '{{layer}} agents: max threads {{maxThreads}}, max depth {{maxDepth}}, job runtime {{jobMaxRuntime}}s',
+      },
+    },
     runtime: {
       title: 'Session permissions are active',
       description: 'Codex now runs through the Python SDK with per-session permission controls.',
@@ -107,17 +466,45 @@ const agentSettings = {
   common: {
     loading: 'Loading...',
     subViews: {
+      overview: 'Overview',
+      claudeMd: 'CLAUDE.md',
       geminiMd: 'GEMINI.md',
       agentsMd: 'AGENTS.md',
+      config: 'Config',
+      profiles: 'Profiles',
+      permissionsProfiles: 'Permissions Profiles',
+      features: 'Features',
+      appsConnectors: 'Apps / Connectors',
+      modelProviders: 'Model Providers',
+      rules: 'Rules',
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
+      plugins: 'Plugins',
       slashCommands: 'Slash Commands',
+      prompts: 'Prompts',
       skills: 'Skills',
+      scripts: 'Scripts',
+      subagents: 'Subagents',
+      managedRequirements: 'Managed Requirements',
+      memory: 'Memory',
+      outputStyles: 'Output Styles',
+      settings: 'Settings',
+      unknown: 'Settings',
     },
     scope: {
       project: 'Project',
       user: 'User',
       global: 'Global',
+    },
+    sourceNotices: {
+      readOnly: {
+        title: 'Read-only source',
+        description: '{{source}} is provided by the system or a plugin and cannot be edited here.',
+      },
+      newThread: {
+        title: 'New thread required',
+        description: 'Changes to this setting apply to new Codex threads. Existing threads keep their current loaded capabilities.',
+      },
     },
     comingSoon: {
       title: 'Coming Soon',
@@ -262,7 +649,7 @@ const agentSettings = {
     mcp: {
       header: {
         title: 'Model Context Protocol settings',
-        actions: { import: 'Import config', create: 'Add server' },
+        actions: { refresh: 'Refresh', import: 'Import config', create: 'Add server' },
       },
       stats: {
         title: 'Overview',
@@ -292,7 +679,7 @@ const agentSettings = {
       },
       list: { empty: 'No MCP servers match the current filters.', loading: 'Loading MCP servers...' },
       status: { runtimeUnavailable: 'Workspace runtime is unavailable: {{message}}' },
-      actions: { showEnvValues: 'Show values', hideEnvValues: 'Hide values' },
+      actions: { showEnvValues: 'Show values', hideEnvValues: 'Hide values', edit: 'Edit server', delete: 'Delete server' },
       plugin: { readonly: 'Plugin managed' },
       confirm: { delete: 'Delete MCP server "{{name}}"?' },
       messages: {

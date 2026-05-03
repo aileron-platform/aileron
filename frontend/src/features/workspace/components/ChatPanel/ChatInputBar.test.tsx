@@ -87,4 +87,33 @@ describe('ChatInputBar', () => {
 
     expect(screen.getByTitle('workspace.chat.input.codexPermission.label')).toBeInTheDocument();
   });
+
+  it('does not show a Codex network access toggle', () => {
+    render(
+      <ChatInputBar
+        value="prompt"
+        isConnected
+        hasActiveRequests={false}
+        attachments={[]}
+        codeReferences={[]}
+        cliType="codex"
+        codexPermissionConfig={DEFAULT_CODEX_PERMISSION_CONFIG}
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        onOpenFilePicker={vi.fn()}
+        onOpenUploadDialog={vi.fn()}
+        onOpenSlashDialog={vi.fn()}
+        onOpenOpenSpecDialog={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        onRemoveCodeReference={vi.fn()}
+        onCodexPermissionConfigChange={vi.fn()}
+        t={t}
+      />,
+    );
+
+    fireEvent.click(screen.getByTitle('workspace.chat.input.codexPermission.label'));
+
+    expect(screen.queryByText('workspace.chat.input.codexPermission.network.label')).not.toBeInTheDocument();
+  });
 });

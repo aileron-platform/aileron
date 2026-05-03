@@ -238,6 +238,7 @@ export const BasicInfoStep: React.FC<BasicInfoStepProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="claude-code">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.claudeCode')}</SelectItem>
+                  <SelectItem value="codex">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.codex')}</SelectItem>
                   <SelectItem value="gemini">{t('workspace.wizard.steps.basicInfo.fields.cliType.options.gemini')}</SelectItem>
                 </SelectContent>
               </Select>

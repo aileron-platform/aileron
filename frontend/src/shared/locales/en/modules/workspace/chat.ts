@@ -103,10 +103,6 @@ const chat = {
           description: 'Allow Codex actions without approval prompts.',
         },
       },
-      network: {
-        label: 'Network access',
-        description: 'Allow Codex sandboxed turns to access the network.',
-      },
     },
   },
   dialogs: {

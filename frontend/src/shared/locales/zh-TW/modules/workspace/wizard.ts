@@ -58,6 +58,7 @@ const wizard = {
           helper: '建立後不可變更，且只可安裝相容此 CLI 類型的模板。',
           options: {
             claudeCode: 'Claude Code',
+            codex: 'Codex',
             gemini: 'Gemini',
           },
         },

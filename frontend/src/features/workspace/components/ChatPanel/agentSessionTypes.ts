@@ -113,7 +113,6 @@ export type CodexApprovalPolicy = 'manual' | 'suggest' | 'auto';
 export interface CodexPermissionConfig {
   sandboxMode: CodexSandboxMode;
   approvalPolicy: CodexApprovalPolicy;
-  networkAccess: boolean;
 }
 
 export interface PermissionConfig {

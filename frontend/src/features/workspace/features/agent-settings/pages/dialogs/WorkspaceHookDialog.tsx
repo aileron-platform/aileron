@@ -72,6 +72,8 @@ export interface WorkspaceHookDialogProps {
   availableScopes?: HookScope[];
   eventOptions?: EventOption[];
   i18nNamespace?: string;
+  matcherHelp?: (eventName: string) => string[];
+  supportsStatusMessage?: boolean;
   onClose: () => void;
   onSubmit: (hook: WorkspaceHookData) => void;
 }
@@ -84,6 +86,8 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
   availableScopes,
   eventOptions: externalEventOptions,
   i18nNamespace = 'workspace.agentSettings.common',
+  matcherHelp,
+  supportsStatusMessage = false,
   onClose,
   onSubmit,
 }) => {
@@ -151,6 +155,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
             type: 'command',
             command: exec.command ?? '',
             timeout: exec.timeout ?? 30,
+            ...(supportsStatusMessage ? { statusMessage: exec.statusMessage ?? '' } : {}),
           })),
         })),
       });
@@ -162,7 +167,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     const nextForm = { ...DEFAULT_FORM, id: `hook-${Date.now()}`, eventName: defaultEvent };
     setForm(nextForm);
     checkDuplicateEvent(nextForm.eventName, nextForm.scope);
-  }, [checkDuplicateEvent, externalEventOptions, hook, mode, open]);
+  }, [checkDuplicateEvent, externalEventOptions, hook, mode, open, supportsStatusMessage]);
 
   const handleChange = <TField extends keyof HookFormState>(
     field: TField,
@@ -202,6 +207,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
             type: 'command' as const,
             command: hookAction.command,
             timeout: hookAction.timeout,
+            ...(supportsStatusMessage ? { statusMessage: hookAction.statusMessage?.trim() || null } : {}),
           })),
       }))
       .filter((matcher) => matcher.hooks.length > 0);
@@ -219,7 +225,7 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     matcherAdd: t(`${i18nNamespace}.hooks.dialog.matcher.add`),
     matcherPatternLabel: t(`${i18nNamespace}.hooks.dialog.matcher.patternLabel`),
     matcherPatternPlaceholder: t(`${i18nNamespace}.hooks.dialog.matcher.patternPlaceholder`),
-    matcherPatternHelp: [
+    matcherPatternHelp: matcherHelp?.(form.eventName) ?? [
       t(`${i18nNamespace}.hooks.dialog.matcher.helper.intro`),
       t(`${i18nNamespace}.hooks.dialog.matcher.helper.simple`),
       t(`${i18nNamespace}.hooks.dialog.matcher.helper.regex`),
@@ -234,6 +240,11 @@ export const WorkspaceHookDialog: React.FC<WorkspaceHookDialogProps> = ({
     executionCommandLabel: t(`${i18nNamespace}.hooks.dialog.execution.commandLabel`),
     executionCommandPlaceholder: t(`${i18nNamespace}.hooks.dialog.execution.commandPlaceholder`),
     executionCommandHelp: t(`${i18nNamespace}.hooks.dialog.execution.commandHelp`),
+    ...(supportsStatusMessage ? {
+      executionStatusMessageLabel: t(`${i18nNamespace}.hooks.dialog.execution.statusMessageLabel`),
+      executionStatusMessagePlaceholder: t(`${i18nNamespace}.hooks.dialog.execution.statusMessagePlaceholder`),
+      executionStatusMessageHelp: t(`${i18nNamespace}.hooks.dialog.execution.statusMessageHelp`),
+    } : {}),
     executionRemove: t(`${i18nNamespace}.hooks.dialog.execution.remove`),
   };
 

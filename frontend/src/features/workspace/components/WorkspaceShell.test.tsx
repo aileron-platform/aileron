@@ -73,6 +73,20 @@ vi.mock('../features/claude-code/components', () => ({
   MarkdownSidebar: () => <div>markdown-sidebar</div>,
 }));
 
+vi.mock('../features/agent-settings/AgentSettingsFeature', () => ({
+  default: ({ documentSelectedId }: { documentSelectedId?: string | null }) => (
+    <div data-testid="agent-settings-feature">{documentSelectedId ?? 'no-document-selected'}</div>
+  ),
+}));
+
+vi.mock('../features/agent-settings/components/CodexDocumentSidebar', () => ({
+  default: ({ onSelect }: { onSelect: (id: string | null) => void }) => (
+    <button type="button" data-testid="codex-document-sidebar" onClick={() => onSelect('user:opsx-apply.md')}>
+      codex-document-sidebar
+    </button>
+  ),
+}));
+
 vi.mock('../features/openspec/OpenSpecWorkspaceContext', () => ({
   OpenSpecWorkspaceProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -152,8 +166,10 @@ describe('WorkspaceShell', () => {
     mocks.workspaceState.chatExpanded = false;
     mocks.workspaceState.fileManagementEditorExpanded = false;
     mocks.workspaceState.rightChatCollapsed = false;
+    mocks.workspaceState.agentToolSettings.subView = '';
     mocks.workspaceState.canvas.subView = 'web-canvas';
     mocks.workspaceState.versionControl.subView = 'changes';
+    mocks.workspaceRuntime.cliType = null;
   });
 
   it('keeps chat draft and mount instance stable when switching into version-control', async () => {
@@ -221,5 +237,21 @@ describe('WorkspaceShell', () => {
     expect(screen.queryByTestId('global-navigation')).not.toBeInTheDocument();
     expect(screen.getByTestId('custom-main-content')).toBeInTheDocument();
     expect(screen.getByTestId('workspace-third-column')).toHaveStyle({ minWidth: '0' });
+  });
+
+  it('passes Codex document sidebar selection into the settings content column', async () => {
+    mocks.workspaceState.currentFeature = 'codex';
+    mocks.workspaceState.agentToolSettings.subView = 'prompts';
+    mocks.workspaceRuntime.cliType = 'codex';
+
+    render(<WorkspaceShell />);
+
+    expect(await screen.findByTestId('agent-settings-feature')).toHaveTextContent('no-document-selected');
+
+    fireEvent.click(await screen.findByTestId('codex-document-sidebar'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-settings-feature')).toHaveTextContent('user:opsx-apply.md');
+    });
   });
 });

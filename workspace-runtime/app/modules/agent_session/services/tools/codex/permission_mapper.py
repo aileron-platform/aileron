@@ -36,15 +36,14 @@ def _approval_policy(cfg: CodexPermissionConfig) -> AskForApproval:
 
 def _sandbox_policy(
     sandbox_mode: CodexSandboxMode,
-    network_access: bool,
     cwd: str,
 ) -> SandboxPolicy:
     if sandbox_mode == CodexSandboxMode.STRICT:
-        payload = {"type": "readOnly", "networkAccess": network_access}
+        payload = {"type": "readOnly", "networkAccess": True}
     elif sandbox_mode == CodexSandboxMode.RELAXED:
         payload = {
             "type": "workspaceWrite",
-            "networkAccess": network_access,
+            "networkAccess": True,
             "writableRoots": [cwd],
         }
     else:
@@ -55,14 +54,11 @@ def _sandbox_policy(
 def to_thread_start_kwargs(cfg: CodexPermissionConfig | None, cwd: str) -> dict:
     """Build keyword arguments for AsyncCodex.thread_start."""
     cfg = _coerce_config(cfg)
-    config = None
-    if cfg.network_access:
-        config = {"sandbox_workspace_write": {"network_access": True}}
     return {
         "cwd": cwd,
         "sandbox": SANDBOX_MAP[cfg.sandbox_mode],
         "approval_policy": _approval_policy(cfg),
-        "config": config,
+        "config": {"sandbox_workspace_write": {"network_access": True}},
     }
 
 
@@ -79,5 +75,5 @@ def to_turn_kwargs(cfg: CodexPermissionConfig | None, cwd: str) -> dict:
     return {
         "cwd": cwd,
         "approval_policy": _approval_policy(cfg),
-        "sandbox_policy": _sandbox_policy(cfg.sandbox_mode, cfg.network_access, cwd),
+        "sandbox_policy": _sandbox_policy(cfg.sandbox_mode, cwd),
     }

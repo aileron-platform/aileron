@@ -7,7 +7,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { Switch } from '@/shared/components/ui/switch';
 import type {
   CodexApprovalPolicy,
   CodexPermissionConfig,
@@ -26,14 +25,12 @@ const APPROVAL_POLICIES: CodexApprovalPolicy[] = ['manual', 'suggest', 'auto'];
 export const DEFAULT_CODEX_PERMISSION_CONFIG: CodexPermissionConfig = {
   sandboxMode: 'strict',
   approvalPolicy: 'manual',
-  networkAccess: false,
 };
 
 export const isCodexPermissionConfig = (value: unknown): value is CodexPermissionConfig => {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<CodexPermissionConfig>;
   return (
-    typeof candidate.networkAccess === 'boolean' &&
     SANDBOX_MODES.includes(candidate.sandboxMode as CodexSandboxMode) &&
     APPROVAL_POLICIES.includes(candidate.approvalPolicy as CodexApprovalPolicy)
   );
@@ -50,10 +47,6 @@ export const CodexPermissionSelector: React.FC<CodexPermissionSelectorProps> = (
 
   const setApprovalPolicy = (approvalPolicy: CodexApprovalPolicy) => {
     onChange({ ...value, approvalPolicy });
-  };
-
-  const setNetworkAccess = (networkAccess: boolean) => {
-    onChange({ ...value, networkAccess });
   };
 
   const sandboxLabel = t(`workspace.chat.input.codexPermission.sandbox.${value.sandboxMode}.label`);
@@ -127,18 +120,6 @@ export const CodexPermissionSelector: React.FC<CodexPermissionSelectorProps> = (
             </div>
           </DropdownMenuItem>
         ))}
-
-        <DropdownMenuSeparator />
-
-        <div className="flex items-center justify-between gap-3 px-3 py-3">
-          <div className="space-y-1">
-            <div className="text-sm font-medium">{t('workspace.chat.input.codexPermission.network.label')}</div>
-            <div className="text-xs leading-relaxed text-muted-foreground">
-              {t('workspace.chat.input.codexPermission.network.description')}
-            </div>
-          </div>
-          <Switch checked={value.networkAccess} onCheckedChange={setNetworkAccess} />
-        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -109,7 +109,10 @@ export const ChatPanel: React.FC = () => {
       const saved = localStorage.getItem('chatCodexPermissionConfig');
       const parsed = saved ? JSON.parse(saved) : null;
       if (isCodexPermissionConfig(parsed)) {
-        return parsed;
+        return {
+          sandboxMode: parsed.sandboxMode,
+          approvalPolicy: parsed.approvalPolicy,
+        };
       }
     } catch (error) {
       logger.error('Failed to load Codex permission config from localStorage', { error });

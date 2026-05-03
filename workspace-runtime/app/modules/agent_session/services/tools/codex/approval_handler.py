@@ -154,12 +154,25 @@ class CodexApprovalHandler:
         if method == "item/commandExecution/requestApproval":
             command = params.get("command") or params.get("cmd") or params.get("commandLine")
             cwd = params.get("cwd") or params.get("workingDirectory")
-            return {"command": command, "cwd": cwd}
+            return {
+                key: value
+                for key, value in {
+                    "command": command,
+                    "cwd": cwd,
+                }.items()
+                if value is not None
+            }
 
         if method == "item/fileChange/requestApproval":
+            path = params.get("grantRoot") or params.get("path")
+            reason = params.get("reason")
             return {
-                "path": params.get("grantRoot") or params.get("path"),
-                "reason": params.get("reason"),
+                key: value
+                for key, value in {
+                    "path": path,
+                    "reason": reason,
+                }.items()
+                if value is not None
             }
 
         return dict(params)

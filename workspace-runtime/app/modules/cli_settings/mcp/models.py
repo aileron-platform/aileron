@@ -16,6 +16,7 @@ class CliMcpScope(str, Enum):
 
     PROJECT = "project"
     USER = "user"
+    PLUGIN = "plugin"
 
 
 class CliMcpTransportType(str, Enum):

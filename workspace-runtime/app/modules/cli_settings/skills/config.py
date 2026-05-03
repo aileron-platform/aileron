@@ -10,6 +10,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict
 
+from app.modules.cli_settings.codex_paths import CodexLayer, CodexResource, get_codex_path_resolver
+
 
 class SkillTool(str, Enum):
     """CLI tools that support skills"""
@@ -41,6 +43,7 @@ class SkillToolConfig:
 
 def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:
     home = Path.home()
+    codex_paths = get_codex_path_resolver()
     return {
         SkillTool.GEMINI: SkillToolConfig(
             tool=SkillTool.GEMINI,
@@ -52,9 +55,9 @@ def _tool_configs() -> Dict[SkillTool, SkillToolConfig]:
         ),
         SkillTool.CODEX: SkillToolConfig(
             tool=SkillTool.CODEX,
-            project_dot_dir=".codex",
+            project_dot_dir=".agents",
             skill_dir_name="skills",
-            user_root=home / ".codex" / "skills",
+            user_root=codex_paths.resolve(CodexLayer.USER, CodexResource.SKILLS),
             supports_plugin=False,
             api_prefix="codex",
         ),

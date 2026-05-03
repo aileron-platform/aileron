@@ -27,7 +27,6 @@ export const SettingsWorkflowShell: React.FC<SettingsWorkflowShellProps> = ({
   icon: Icon,
   headerActions,
   summary,
-  singleHeader = false,
   controls,
   error,
   isLoading = false,
@@ -40,7 +39,7 @@ export const SettingsWorkflowShell: React.FC<SettingsWorkflowShellProps> = ({
   children,
   contentClassName = 'space-y-4 p-4',
 }) => {
-  const showToolbar = !singleHeader && Boolean(summary || controls);
+  const showControlsBar = Boolean(controls);
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -48,7 +47,7 @@ export const SettingsWorkflowShell: React.FC<SettingsWorkflowShellProps> = ({
         title={title}
         icon={Icon}
         actions={headerActions}
-        info={singleHeader ? summary : undefined}
+        info={summary}
       />
 
       {error ? (
@@ -57,17 +56,12 @@ export const SettingsWorkflowShell: React.FC<SettingsWorkflowShellProps> = ({
         </div>
       ) : null}
 
-      {showToolbar ? (
-        <div className="border-b border-border bg-background px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-foreground">{title}</span>
-              </div>
-              {summary}
+      {showControlsBar ? (
+        <div className="border-b border-border bg-muted/20 px-4 py-2">
+          <div className="flex min-h-8 items-center gap-2">
+            <div className="w-full min-w-0">
+              {controls}
             </div>
-            {controls}
           </div>
         </div>
       ) : null}

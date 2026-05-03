@@ -58,6 +58,7 @@ const wizard = {
           helper: 'This cannot be changed after creation and determines which templates are compatible.',
           options: {
             claudeCode: 'Claude Code',
+            codex: 'Codex',
             gemini: 'Gemini',
           },
         },

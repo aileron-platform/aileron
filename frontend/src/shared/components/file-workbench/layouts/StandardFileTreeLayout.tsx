@@ -28,6 +28,8 @@ export interface StandardFileTreeLayoutProps {
   showSearch?: boolean;
   
   toolbarContent?: React.ReactNode;
+
+  headerActions?: React.ReactNode;
   
   showToolbar?: boolean;
   
@@ -55,6 +57,7 @@ export const StandardFileTreeLayout: React.FC<StandardFileTreeLayoutProps> = ({
   searchPlaceholder,
   showSearch = true,
   toolbarContent,
+  headerActions,
   showToolbar = true,
   children,
   className,
@@ -89,21 +92,24 @@ export const StandardFileTreeLayout: React.FC<StandardFileTreeLayoutProps> = ({
           )}
 
 
-          {onToggleCollapse && (
-            <button
-              onClick={onToggleCollapse}
-              className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground transition"
-              aria-label={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
-              title={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
-            >
-              <ChevronLeft
-                className={cn(
-                  'w-3.5 h-3.5 transition-transform',
-                  isCollapsed && 'rotate-180'
-                )}
-              />
-            </button>
-          )}
+          <div className="flex flex-shrink-0 items-center gap-1">
+            {!isCollapsed ? headerActions : null}
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground transition"
+                aria-label={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
+                title={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
+              >
+                <ChevronLeft
+                  className={cn(
+                    'w-3.5 h-3.5 transition-transform',
+                    isCollapsed && 'rotate-180'
+                  )}
+                />
+              </button>
+            )}
+          </div>
         </div>
       )}
 

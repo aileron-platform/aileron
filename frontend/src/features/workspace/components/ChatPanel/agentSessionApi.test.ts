@@ -73,8 +73,12 @@ describe('agentSessionApi sessions', () => {
 
     const response = await agentSessionApi.listSessions('http://runtime.test', {
       workspace_id: 'ws-1',
+      agentic_tool: 'codex',
     });
 
     expect(response.items[0]?.session_id).toBe('sess-k8s-2');
+    expect(getMock).toHaveBeenCalledWith(
+      '/api/v1/agent-sessions?workspace_id=ws-1&agentic_tool=codex'
+    );
   });
 });

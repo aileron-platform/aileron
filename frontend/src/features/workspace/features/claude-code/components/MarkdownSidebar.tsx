@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useContext } from 'react';
-import { ChevronLeft, Search, Puzzle, Layers, FolderGit, User, HardDrive } from 'lucide-react';
+import { ChevronLeft, Search, Puzzle, Layers, FolderGit, User, HardDrive, RefreshCw } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
@@ -132,18 +133,34 @@ const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, avail
             </span>
           </div>
         ) : null}
-        <button
-          onClick={toggleSecondColumn}
-          className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground"
-          aria-label={isCollapsed
-            ? t('workspace.claudeCode.documents.sidebar.toggle.expand')
-            : t('workspace.claudeCode.documents.sidebar.toggle.collapse')}
-          title={isCollapsed
-            ? t('workspace.claudeCode.documents.sidebar.toggle.expand')
-            : t('workspace.claudeCode.documents.sidebar.toggle.collapse')}
-        >
-          <ChevronLeft className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
-        </button>
+        <div className="flex flex-shrink-0 items-center gap-1">
+          {!isCollapsed ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => void collection.refresh()}
+              disabled={collection.loading}
+              aria-label={t('workspace.claudeCode.documents.actions.refresh')}
+              title={t('workspace.claudeCode.documents.actions.refresh')}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${collection.loading ? 'animate-spin' : ''}`} />
+            </Button>
+          ) : null}
+          <button
+            onClick={toggleSecondColumn}
+            className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground"
+            aria-label={isCollapsed
+              ? t('workspace.claudeCode.documents.sidebar.toggle.expand')
+              : t('workspace.claudeCode.documents.sidebar.toggle.collapse')}
+            title={isCollapsed
+              ? t('workspace.claudeCode.documents.sidebar.toggle.expand')
+              : t('workspace.claudeCode.documents.sidebar.toggle.collapse')}
+          >
+            <ChevronLeft className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {isCollapsed ? (

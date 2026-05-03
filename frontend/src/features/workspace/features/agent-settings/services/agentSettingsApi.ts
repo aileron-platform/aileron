@@ -173,6 +173,180 @@ interface AgentsMdUpdateResponse {
   scope: string;
 }
 
+export interface CodexAgentsMdCaveat {
+  type: 'override' | 'fallback' | 'size_limit';
+  path?: string | null;
+  messageKey: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CodexAgentsMdResponse extends AgentsMdResponse {
+  path: string;
+  exists: boolean;
+  activePath?: string | null;
+  maxBytes: number;
+  sizeBytes: number;
+  caveats: CodexAgentsMdCaveat[];
+}
+
+export interface CodexRulesFileSummary {
+  name: string;
+  path: string;
+  sizeBytes: number;
+}
+
+export interface CodexRulesListResponse {
+  workspaceId: string;
+  layer: 'user' | 'project';
+  directory: string;
+  files: CodexRulesFileSummary[];
+}
+
+export interface CodexTextFileResponse {
+  workspaceId: string;
+  layer: 'user' | 'project';
+  path: string;
+  content: string;
+  exists: boolean;
+}
+
+export interface CodexRulesValidationResponse {
+  valid: boolean;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export type CodexHookSource = 'hooks_json' | 'inline_config' | 'plugin' | 'managed';
+export type CodexHookEventScope = 'session_start' | 'turn';
+export type CodexHookMatcherTarget = 'source' | 'tool_name' | 'none';
+
+export interface CodexHookEventMetadata {
+  event: string;
+  scope: CodexHookEventScope;
+  matcherSupported: boolean;
+  matcherTarget: CodexHookMatcherTarget;
+  matcherExamples: string[];
+}
+
+export interface CodexHookCommandAction {
+  type: 'command';
+  command: string;
+  timeout?: number | null;
+  statusMessage?: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface CodexHookEntry {
+  id: string;
+  event: string;
+  index: number;
+  matcher?: string | null;
+  actions: CodexHookCommandAction[];
+  action?: CodexHookCommandAction | Record<string, unknown>;
+  source: CodexHookSource;
+  layer?: 'user' | 'project' | null;
+  readOnly: boolean;
+  sourcePath?: string | null;
+  pluginId?: string | null;
+  pluginName?: string | null;
+  marketplaceName?: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface CodexHooksDocumentResponse extends CodexTextFileResponse {
+  featureEnabled: boolean;
+  inlineHooks: Array<Record<string, unknown>>;
+  entries: CodexHookEntry[];
+  eventMetadata: CodexHookEventMetadata[];
+}
+
+export interface CodexPluginSummary {
+  id: string;
+  name: string;
+  marketplace?: string | null;
+  listed: boolean;
+  installed: boolean;
+  enabled: boolean;
+  path?: string | null;
+  sourcePath?: string | null;
+  bundled: Record<string, unknown>;
+}
+
+export interface CodexPluginsResponse {
+  workspaceId: string;
+  plugins: CodexPluginSummary[];
+  installReserved: boolean;
+}
+
+export interface CodexFileSummary {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  source: 'user' | 'project' | 'plugin' | 'built_in';
+  readOnly: boolean;
+  metadata: Record<string, unknown>;
+}
+
+export interface CodexFileListResponse {
+  workspaceId: string;
+  layer: 'user' | 'project';
+  resource: string;
+  directory: string;
+  files: CodexFileSummary[];
+  config: Record<string, unknown>;
+}
+
+export type CodexSubagentSource = 'built_in' | 'user' | 'project' | 'plugin' | 'managed';
+
+export interface CodexSubagentDefinition {
+  name: string;
+  description: string;
+  developer_instructions: string;
+  nickname_candidates?: string[] | null;
+  model?: string | null;
+  model_reasoning_effort?: string | null;
+  sandbox_mode?: string | null;
+  mcp_servers?: Record<string, unknown> | null;
+  skills?: Record<string, unknown> | null;
+}
+
+export interface CodexSubagentItem {
+  id: string;
+  name: string;
+  source: CodexSubagentSource;
+  editable: boolean;
+  readOnly: boolean;
+  layer?: 'user' | 'project' | null;
+  path?: string | null;
+  relativePath?: string | null;
+  sourcePath?: string | null;
+  content: string;
+  definition?: CodexSubagentDefinition | null;
+  effective: boolean;
+  overridden: boolean;
+  pluginId?: string | null;
+  pluginName?: string | null;
+  marketplaceName?: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface CodexSubagentRegistrySource {
+  layer: 'user' | 'project';
+  path: string;
+  settings: {
+    max_threads?: number | null;
+    max_depth?: number | null;
+    job_max_runtime_seconds?: number | null;
+  };
+}
+
+export interface CodexSubagentsResponse {
+  workspaceId: string;
+  items: CodexSubagentItem[];
+  registry: CodexSubagentRegistrySource[];
+}
+
 const cloneHookRuleMap = (hooks: AgentHookRuleMap | undefined): AgentHookRuleMap => {
   if (!hooks) return {};
   return Object.fromEntries(
@@ -192,11 +366,17 @@ export const buildHookRulesFromAgentHook = (hook: AgentHookWithEvent): AgentHook
       matcher: matcher.matcher.trim() || '*',
       hooks: matcher.hooks
         .filter((action) => Boolean(action.command?.trim()))
-        .map((action) => ({
-          type: 'command' as const,
-          command: action.command?.trim() ?? '',
-          timeout: typeof action.timeout === 'number' ? action.timeout : null,
-        })),
+        .map((action) => {
+          const nextAction: AgentHookActionConfig = {
+            type: 'command',
+            command: action.command?.trim() ?? '',
+            timeout: typeof action.timeout === 'number' ? action.timeout : null,
+          };
+          if (action.statusMessage?.trim()) {
+            nextAction.statusMessage = action.statusMessage.trim();
+          }
+          return nextAction;
+        }),
     }))
     .filter((rule) => rule.hooks.length > 0);
 
@@ -214,6 +394,7 @@ export const mapHookScopeDocumentToAgentHooks = (
           type: 'command' as const,
           command: action.command ?? '',
           timeout: typeof action.timeout === 'number' ? action.timeout : undefined,
+          statusMessage: action.statusMessage ?? undefined,
         })),
       })),
     }))
@@ -263,6 +444,236 @@ const buildMcpServerPayload = (server: AgentMcpServer): Record<string, McpServer
 // ============ API factory ============
 
 export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: string = 'agents-md') => ({
+  async getCodexAgentsMd(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    scope: string,
+  ): Promise<CodexAgentsMdResponse> {
+    return apiRequest<CodexAgentsMdResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/agents-md?scope=${scope}`,
+    );
+  },
+
+  async updateCodexAgentsMd(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    payload: { scope: string; content: string },
+  ): Promise<AgentsMdUpdateResponse> {
+    return apiRequest<AgentsMdUpdateResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/agents-md`,
+      { method: 'PUT', body: payload },
+    );
+  },
+
+  async listCodexRules(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+  ): Promise<CodexRulesListResponse> {
+    return apiRequest<CodexRulesListResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/rules?layer=${layer}`,
+    );
+  },
+
+  async getCodexRulesFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    path: string,
+  ): Promise<CodexTextFileResponse> {
+    return apiRequest<CodexTextFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/rules/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+    );
+  },
+
+  async updateCodexRulesFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    path: string,
+    content: string,
+  ): Promise<CodexTextFileResponse> {
+    return apiRequest<CodexTextFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/rules/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+      { method: 'PUT', body: { path, content } },
+    );
+  },
+
+  async deleteCodexRulesFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    path: string,
+  ): Promise<void> {
+    await apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/rules/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  async validateCodexRulesFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    path: string,
+    command: string[],
+  ): Promise<CodexRulesValidationResponse> {
+    return apiRequest<CodexRulesValidationResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/rules/validate`,
+      { method: 'POST', body: { layer, path, command } },
+    );
+  },
+
+  async getCodexHooks(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+  ): Promise<CodexHooksDocumentResponse> {
+    return apiRequest<CodexHooksDocumentResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/hooks?layer=${layer}`,
+    );
+  },
+
+  async updateCodexHooks(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    content: string,
+  ): Promise<CodexHooksDocumentResponse> {
+    return apiRequest<CodexHooksDocumentResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/hooks?layer=${layer}`,
+      { method: 'PUT', body: { content } },
+    );
+  },
+
+  async enableCodexHooks(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+  ): Promise<{ workspaceId: string; featureEnabled: boolean }> {
+    return apiRequest<{ workspaceId: string; featureEnabled: boolean }>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/hooks/enable?layer=${layer}`,
+      { method: 'POST' },
+    );
+  },
+
+  async listCodexPlugins(runtimeBaseUrl: string, workspaceId: string): Promise<CodexPluginsResponse> {
+    return apiRequest<CodexPluginsResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/codex/plugins`);
+  },
+
+  async setCodexPluginEnabled(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    pluginId: string,
+    layer: 'user' | 'project',
+    enabled: boolean,
+  ): Promise<{ workspaceId: string; layer: 'user' | 'project'; pluginId: string; enabled: boolean; newThreadRequired: boolean }> {
+    return apiRequest<{ workspaceId: string; layer: 'user' | 'project'; pluginId: string; enabled: boolean; newThreadRequired: boolean }>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/plugins/${encodeURIComponent(pluginId)}`,
+      { method: 'PATCH', body: { layer, enabled } },
+    );
+  },
+
+  async listCodexFiles(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    resource: string,
+    layer: 'user' | 'project',
+  ): Promise<CodexFileListResponse> {
+    return apiRequest<CodexFileListResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/${resource}/files?layer=${layer}`,
+    );
+  },
+
+  async getCodexFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    resource: string,
+    layer: 'user' | 'project',
+    path: string,
+  ): Promise<CodexTextFileResponse> {
+    return apiRequest<CodexTextFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/${resource}/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+    );
+  },
+
+  async updateCodexFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    resource: string,
+    layer: 'user' | 'project',
+    path: string,
+    content: string,
+  ): Promise<CodexTextFileResponse> {
+    return apiRequest<CodexTextFileResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/${resource}/file?layer=${layer}`,
+      { method: 'PUT', body: { path, content } },
+    );
+  },
+
+  async deleteCodexFile(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    resource: string,
+    layer: 'user' | 'project',
+    path: string,
+  ): Promise<void> {
+    await apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/${resource}/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+  },
+
+  async listCodexSubagents(runtimeBaseUrl: string, workspaceId: string): Promise<CodexSubagentsResponse> {
+    return apiRequest<CodexSubagentsResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/codex/subagents`);
+  },
+
+  async saveCodexSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    payload: {
+      layer: 'user' | 'project';
+      path?: string | null;
+      content?: string | null;
+      definition?: CodexSubagentDefinition | null;
+      overwrite?: boolean;
+    },
+  ): Promise<CodexSubagentItem> {
+    return apiRequest<CodexSubagentItem>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/subagents`,
+      { method: 'PUT', body: payload },
+    );
+  },
+
+  async deleteCodexSubagent(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    layer: 'user' | 'project',
+    path: string,
+  ): Promise<void> {
+    await apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/subagents?layer=${layer}&path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    );
+  },
+
   async getAgentsMd(
     runtimeBaseUrl: string,
     workspaceId: string,

@@ -90,6 +90,10 @@ const AgentFileManager = React.lazy(() =>
   import('../features/agent-settings/components/AgentFileManager'),
 );
 
+const CodexDocumentSidebar = React.lazy(() =>
+  import('../features/agent-settings/components/CodexDocumentSidebar'),
+);
+
 const OpenSpecSidebar = React.lazy(() =>
   import('../features/openspec/components/OpenSpecSidebar'),
 );
@@ -139,6 +143,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   } | null>(null);
   const [skillSelectedFile, setSkillSelectedFile] = useState<AgentSelectedFile | null>(null);
   const [scriptSelectedFile, setScriptSelectedFile] = useState<AgentSelectedFile | null>(null);
+  const [codexDocumentSelectedId, setCodexDocumentSelectedId] = useState<string | null>(null);
   const resolveDeleteFallback = useWorkspaceDeleteFallback();
 
   // Drag resize handler.
@@ -227,7 +232,11 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   // Other agent tool subviews that use four-column mode.
   const AGENT_TOOL_FEATURES = ['gemini', 'opencode', 'codex'] as const;
   const isAgentToolFeatureActive = (AGENT_TOOL_FEATURES as readonly string[]).includes(state.currentFeature);
-  const isAgentToolFourColumn = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
+  const isCodexDocumentView = state.currentFeature === 'codex'
+    && (state.agentToolSettings.subView === 'subagents'
+      || state.agentToolSettings.subView === 'prompts'
+      || state.agentToolSettings.subView === 'rules');
+  const isAgentToolFourColumn = isAgentToolFeatureActive && (state.agentToolSettings.subView === 'skills' || isCodexDocumentView);
   const isAgentToolSkillsView = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
 
   const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isScriptsView || isMemoryView || isAgentToolFourColumn;
@@ -245,6 +254,10 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       setScriptSelectedFile(null);
     }
   }, [isScriptsView]);
+
+  useEffect(() => {
+    setCodexDocumentSelectedId(null);
+  }, [state.currentFeature, state.agentToolSettings.subView]);
 
   // Determine whether the current mode is three-column.
   const isThreeColumn = currentItem?.mode === 'three-column' && !isFourColumnView;
@@ -377,6 +390,23 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     // Second column for other agent tools.
     if (isAgentToolFeatureActive) {
       const subView = state.agentToolSettings.subView;
+      if (state.currentFeature === 'codex' && (subView === 'subagents' || subView === 'prompts' || subView === 'rules')) {
+        return (
+          <React.Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                {t('workspace.layout.loading.agentSettings')}
+              </div>
+            }
+          >
+            <CodexDocumentSidebar
+              resource={subView}
+              selectedId={codexDocumentSelectedId}
+              onSelect={setCodexDocumentSelectedId}
+            />
+          </React.Suspense>
+        );
+      }
       if (subView === 'skills') {
         const cliConfig = getAgentToolConfig(cliType);
         if (!workspaceRuntime.workspaceId) {
@@ -509,6 +539,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
             onSkillSelect={setSkillSelectedFile}
             scriptSelectedFile={scriptSelectedFile}
             onScriptSelect={setScriptSelectedFile}
+            documentSelectedId={codexDocumentSelectedId}
+            onDocumentSelect={setCodexDocumentSelectedId}
           />
         </React.Suspense>
       );
@@ -529,6 +561,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
             onSkillSelect={setSkillSelectedFile}
             scriptSelectedFile={scriptSelectedFile}
             onScriptSelect={setScriptSelectedFile}
+            documentSelectedId={codexDocumentSelectedId}
+            onDocumentSelect={setCodexDocumentSelectedId}
           />
         </React.Suspense>
       );

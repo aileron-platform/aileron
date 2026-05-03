@@ -26,6 +26,13 @@ const labels: HookMatcherActionsLabels = {
   executionRemove: 'Remove execution',
 };
 
+const codexLabels: HookMatcherActionsLabels = {
+  ...labels,
+  executionStatusMessageLabel: 'Status message',
+  executionStatusMessagePlaceholder: 'Status placeholder',
+  executionStatusMessageHelp: 'Status help',
+};
+
 const matchers: HookMatcher[] = [
   {
     matcher: '*',
@@ -110,6 +117,30 @@ describe('HookMatcherActionsEditor', () => {
       {
         matcher: '*',
         hooks: [{ type: 'command', command: 'echo done', timeout: 30 }],
+      },
+    ]);
+
+  });
+
+  it('updates status message only when the caller enables the Codex-specific field', () => {
+    const onChange = vi.fn();
+
+    render(
+      <HookMatcherActionsEditor
+        matchers={matchers}
+        labels={codexLabels}
+        onChange={onChange}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Status placeholder'), {
+      target: { value: 'Running hook' },
+    });
+
+    expect(onChange).toHaveBeenLastCalledWith([
+      {
+        matcher: '*',
+        hooks: [{ type: 'command', command: 'echo test', timeout: 30, statusMessage: 'Running hook' }],
       },
     ]);
   });

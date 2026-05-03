@@ -38,7 +38,6 @@ class TestPermissionConfig:
         codex_config = CodexPermissionConfig(
             sandbox_mode=CodexSandboxMode.RELAXED,
             approval_policy=CodexApprovalPolicy.AUTO,
-            network_access=True,
         )
         config = PermissionConfig(
             mode=PermissionMode.ACCEPT_EDITS,
@@ -66,6 +65,24 @@ class TestPermissionConfig:
         config = PermissionConfig.from_dict(data)
 
         assert config.mode == PermissionMode.ACCEPT_EDITS
+
+    def test_codex_config_omits_network_access(self):
+        """Test Codex permission config does not expose network access."""
+        config = PermissionConfig.from_dict(
+            {
+                "mode": "default",
+                "codex": {
+                    "sandboxMode": "relaxed",
+                    "approvalPolicy": "manual",
+                },
+            }
+        )
+
+        assert config.codex is not None
+        assert config.to_dict()["codex"] == {
+            "sandboxMode": "relaxed",
+            "approvalPolicy": "manual",
+        }
 
 
 class TestModelConfig:

@@ -67,6 +67,10 @@ def test_extract_tool_input_shapes() -> None:
         "item/fileChange/requestApproval",
         {"grantRoot": "/workspace/a.py", "reason": "edit"},
     ) == {"path": "/workspace/a.py", "reason": "edit"}
+    assert handler._extract_tool_input(
+        "item/fileChange/requestApproval",
+        {"grantRoot": None, "reason": None},
+    ) == {}
 
 
 def test_permissions_request_returns_without_emit() -> None:

@@ -8,6 +8,7 @@ import logging
 from typing import Any, Optional
 
 from codex_app_server.generated.v2_all import CommandExecutionStatus, PatchApplyStatus
+from codex_app_server import TextInput
 
 from app.database import async_session_scope
 from app.modules.agent_session.domain.enums import PermissionMode
@@ -146,7 +147,7 @@ class CodexTool(ITool):
                 )
                 await self._save_sdk_session_id(session_id, state.thread.id)
 
-            handle = await state.thread.turn(prompt, **to_turn_kwargs(cfg, cwd))
+            handle = await state.thread.turn([TextInput(prompt)], **to_turn_kwargs(cfg, cwd))
             state.active_turn = handle
 
             async for notification in handle.stream():

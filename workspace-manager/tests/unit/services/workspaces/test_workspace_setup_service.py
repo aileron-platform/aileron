@@ -30,6 +30,7 @@ def sample_workspace():
     workspace.id = "workspace-123"
     workspace.owner_id = "user-123"
     workspace.runtime_internal_url = "http://localhost:3002"
+    workspace.cli_type = "claude-code"
 
     # Mock owner and settings
     owner = MagicMock()
@@ -47,6 +48,7 @@ def sample_workspace_without_runtime():
     workspace.id = "workspace-456"
     workspace.owner_id = "user-456"
     workspace.runtime_internal_url = None
+    workspace.cli_type = "claude-code"
     return workspace
 
 
@@ -179,6 +181,30 @@ class TestInitialSync:
             assert task_statuses["ssh"] == "skipped"
             assert task_statuses["claudeCode"] == "success"
             assert task_statuses["git"] == "skipped"
+
+    @pytest.mark.asyncio
+    async def test_run_initial_sync_uses_codex_task_for_codex_workspace(
+        self, setup_service, mock_db_session, sample_workspace
+    ):
+        """Test: Codex workspace uses Codex setup task"""
+        sample_workspace.cli_type = "codex"
+        mock_db_session.get.return_value = sample_workspace
+
+        mock_sync_result = {
+            "ssh": {"success": True, "message": "SSH Sync succeeded"},
+            "codex": {"success": True, "message": "Codex Sync succeeded"},
+            "git": {"success": True, "message": "Git Sync succeeded"},
+        }
+
+        with patch("app.services.workspace_setup_service.SyncService.sync_settings_to_runtime",
+                   new_callable=AsyncMock, return_value=mock_sync_result):
+            result = await setup_service.run_initial_sync("workspace-123")
+
+        task_names = {task.task_key: task.task_name for task in result.tasks}
+        task_statuses = {task.task_key: task.status for task in result.tasks}
+        assert "claudeCode" not in task_statuses
+        assert task_names["codex"] == "Codex"
+        assert task_statuses["codex"] == "success"
 
 
 # ============================================================================
@@ -351,6 +377,38 @@ class TestFetchRuntimeStatus:
         assert task_statuses["claudeCode"] == "success"
         assert task_statuses["git"] == "failed"
 
+    @pytest.mark.asyncio
+    async def test_fetch_runtime_status_uses_codex_check_for_codex_workspace(
+        self, setup_service, mock_db_session, sample_workspace
+    ):
+        """Test: Codex workspace reads Codex runtime status"""
+        sample_workspace.cli_type = "codex"
+        mock_db_session.get.return_value = sample_workspace
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "checks": {
+                "ssh": {"status": "success", "message": "SSH configured"},
+                "codex": {"status": "success", "message": "Codex configured"},
+                "git": {"status": "success", "message": "Git configured"},
+            }
+        }
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_client
+
+            result = await setup_service.fetch_runtime_status("workspace-123")
+
+        task_names = {task.task_key: task.task_name for task in result.tasks}
+        task_statuses = {task.task_key: task.status for task in result.tasks}
+        assert "claudeCode" not in task_statuses
+        assert task_names["codex"] == "Codex"
+        assert task_statuses["codex"] == "success"
+
 
 # ============================================================================
 # Workspace Retrieval Tests
@@ -400,6 +458,7 @@ class TestTaskStatusCreation:
         # Act
         task = setup_service._create_task_status(
             key="ssh",
+            display_name="SSH Keys",
             status="success",
             message="SSH configured"
         )

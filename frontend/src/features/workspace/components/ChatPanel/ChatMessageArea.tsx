@@ -454,7 +454,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           {/* Pending Permission Widget - 顯示在訊息列表底部（僅當 messages 中尚無相同請求時） */}
           {pendingPermission && !hasPendingInMessages && (
             <div className="px-4 py-2">
-              {agentTool && agentTool !== 'claude-code' ? (
+              {agentTool && agentTool !== 'claude-code' && agentTool !== 'codex' ? (
                 <AcpDecisionWidget
                   requestId={pendingPermission.request_id}
                   status="pending"
@@ -488,6 +488,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
                   }}
                   requested_at={new Date().toISOString()}
                   onApprove={handlePendingApprove}
+                  onCodexApprove={(messageId) => handlePendingApprove(messageId, 'once')}
                   onDeny={handlePendingDeny}
                 />
               )}

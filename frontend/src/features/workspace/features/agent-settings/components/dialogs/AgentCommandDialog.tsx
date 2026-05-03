@@ -23,16 +23,15 @@ import {
   formatDocumentContentSize,
   type DocumentWorkflowDialogProps,
 } from '@/shared/components/document-workflow';
-import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
-import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
+import { SettingsDocumentEditor } from '../SettingsDocumentEditor';
 import type { AgentDocument, AgentScope } from '../../types';
 
 export interface AgentCommandDialogProps extends DocumentWorkflowDialogProps<AgentDocument> {
   availableScopes?: AgentScope[];
   format?: 'markdown' | 'toml';
   i18nNamespace?: string;
+  dialogKey?: 'slashCommands' | 'prompts';
 }
 
 const ensureFileExtension = (fileName: string, format: 'markdown' | 'toml'): string => {
@@ -48,6 +47,7 @@ export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
   availableScopes,
   format = 'markdown',
   i18nNamespace = 'workspace.agentSettings.common',
+  dialogKey = 'slashCommands',
   onClose,
   onSubmit,
 }) => {
@@ -84,7 +84,7 @@ export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
     setSubmitting(false);
   }, [buildInitialState, open]);
 
-  const getTranslationKey = (key: string) => `${i18nNamespace}.slashCommands.dialog.${key}`;
+  const getTranslationKey = (key: string) => `${i18nNamespace}.${dialogKey}.dialog.${key}`;
 
   const validate = () => {
     const nextErrors: { fileName?: string; content?: string } = {};
@@ -219,29 +219,18 @@ export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
                   {t(getTranslationKey('fields.content.label'))}
                 </label>
                 <div className="flex-1 overflow-hidden rounded-lg border">
-                  {format === 'toml' ? (
-                    <Editor
-                      height="100%"
-                      language="toml"
-                      value={content}
-                      onMount={(_editor, monaco) => disableMonacoDiagnostics(monaco)}
-                      onChange={(value) => setContent(value ?? '')}
-                      options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 13 }}
-                    />
-                  ) : (
-                    <MarkdownEditor
-                      value={content}
-                      onChange={(value) => setContent(value ?? '')}
-                      className="h-full"
-                      footerExtras={
-                        <span className="text-xs text-muted-foreground">
-                          {t(getTranslationKey('fields.content.estimatedSize'), {
-                            size: formatDocumentContentSize(content),
-                          })}
-                        </span>
-                      }
-                    />
-                  )}
+                  <SettingsDocumentEditor
+                    value={content}
+                    format={format}
+                    onChange={setContent}
+                    footerExtras={
+                      <span className="text-xs text-muted-foreground">
+                        {t(getTranslationKey('fields.content.estimatedSize'), {
+                          size: formatDocumentContentSize(content),
+                        })}
+                      </span>
+                    }
+                  />
                 </div>
                 {errors.content ? <p className="mt-2 text-xs text-destructive">{errors.content}</p> : null}
               </div>

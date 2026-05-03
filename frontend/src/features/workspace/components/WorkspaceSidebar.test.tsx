@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
       archived: 1,
     },
   },
+  cliType: 'claude-code',
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -41,7 +42,7 @@ vi.mock('../providers/WorkspaceProvider', () => ({
     state: mocks.workspaceState,
     dispatch: mocks.dispatchMock,
     workspaceRuntime: {
-      cliType: 'claude-code',
+      cliType: mocks.cliType,
     },
   }),
 }));
@@ -72,6 +73,7 @@ describe('WorkspaceSidebar', () => {
       complete: 2,
       archived: 1,
     };
+    mocks.cliType = 'claude-code';
   });
 
   it('renders OpenSpec subview counts from summary data', () => {
@@ -88,5 +90,28 @@ describe('WorkspaceSidebar', () => {
     expect(within(inProgressButton!).getByText('4')).toBeInTheDocument();
     expect(within(completeButton!).getByText('2')).toBeInTheDocument();
     expect(within(archivedButton!).getByText('1')).toBeInTheDocument();
+  });
+
+  it('renders the supported Codex settings navigation for Codex workspaces', () => {
+    mocks.cliType = 'codex';
+    mocks.workspaceState.currentFeature = 'codex';
+    mocks.workspaceState.expandedNavigationItems = ['codex'];
+
+    render(<WorkspaceSidebar />);
+
+    expect(screen.getByText('workspace.navigation.main.codexSettings')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.agentsMd')).toBeInTheDocument();
+    expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.skills')).toBeInTheDocument();
+    expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.subagents')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.prompts')).toBeInTheDocument();
+    expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.mcp')).toBeInTheDocument();
+    expect(screen.getByText('workspace.navigation.sub.claudeCodeSettings.hooks')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.rules')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.subViews.plugins')).toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.common.subViews.overview')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.common.subViews.config')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.common.subViews.permissionsProfiles')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.common.subViews.appsConnectors')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.common.subViews.managedRequirements')).not.toBeInTheDocument();
   });
 });

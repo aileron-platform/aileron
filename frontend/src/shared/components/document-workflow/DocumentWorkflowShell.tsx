@@ -61,6 +61,7 @@ export interface DocumentWorkflowShellProps<TDocument extends DocumentWorkflowDo
   loadingLabel: string;
   renderContent: (document: TDocument) => React.ReactNode;
   renderMeta?: (document: TDocument) => React.ReactNode;
+  renderSelectedActions?: (document: TDocument) => React.ReactNode;
   canEdit?: (document: TDocument | null) => boolean;
   canDelete?: (document: TDocument | null) => boolean;
   onCopyContent?: (document: TDocument) => Promise<void> | void;
@@ -93,6 +94,7 @@ export const DocumentWorkflowShell = <TDocument extends DocumentWorkflowDocument
   loadingLabel,
   renderContent,
   renderMeta,
+  renderSelectedActions,
   canEdit = () => true,
   canDelete = () => true,
   onCopyContent,
@@ -243,6 +245,8 @@ export const DocumentWorkflowShell = <TDocument extends DocumentWorkflowDocument
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {renderSelectedActions ? renderSelectedActions(selectedDocument) : null}
+
                   <Button
                     variant="outline"
                     size="sm"

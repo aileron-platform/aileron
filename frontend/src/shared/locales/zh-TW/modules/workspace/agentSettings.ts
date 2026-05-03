@@ -98,6 +98,365 @@ const agentSettings = {
   },
   codex: {
     agentsMd: 'AGENTS.md',
+    common: {
+      actions: {
+        refresh: '重新整理',
+        save: '儲存',
+      },
+      layer: '層級',
+      layers: {
+        project: '專案',
+        user: '個人',
+      },
+      empty: '未設定',
+      errors: {
+        loadFailed: '無法載入 Codex 設定。',
+      },
+    },
+    agentsMd: {
+      title: 'AGENTS.md',
+      confirmDiscard: '要放棄尚未儲存的變更嗎？',
+      footer: '{{path}} · {{sizeBytes}} / {{maxBytes}} bytes',
+      notifications: {
+        saveSuccess: 'AGENTS.md 已儲存',
+        saveFailed: '無法儲存 AGENTS.md',
+      },
+      caveatTitles: {
+        override: 'Override 檔案生效中',
+        fallback: 'Fallback instructions 生效中',
+        size_limit: 'Instruction 大小限制',
+      },
+      caveats: {
+        override: '{{path}} 會優先於這個專案的 AGENTS.md。',
+        fallback: '因為 AGENTS.md 不存在，{{path}} 目前是有效的 fallback instruction 來源。',
+        sizeLimit: '這個檔案目前是 {{sizeBytes}} bytes，設定上限為 {{maxBytes}} bytes。',
+      },
+    },
+    rules: {
+      title: 'Rules',
+      filesTitle: '.rules 檔案',
+      loading: '載入 rules 中…',
+      empty: {
+        title: '沒有 rules 檔案',
+        description: '建立 .rules 檔案來控制 Codex 可在 sandbox 外執行哪些指令。',
+      },
+      confirmDelete: '確定要刪除「{{title}}」嗎？',
+      fileName: '檔案：{{fileName}}',
+      fileNamePlaceholder: 'default.rules',
+      commandPlaceholder: '範例指令，例如 git status',
+      defaultContent: 'prefix_rule(\n    pattern = ["git", ["status", "diff", "log"]],\n    decision = "allow",\n    justification = "Read-only git inspection",\n)\n',
+      actions: {
+        create: '新增 rules 檔案',
+        validate: '驗證',
+      },
+      dialog: {
+        title: { create: '新增 rules 檔案', edit: '編輯 rules 檔案' },
+        description: {
+          create: '為可編輯層級建立 Codex .rules 檔案。',
+          edit: '更新這個 Codex .rules 檔案。',
+        },
+        fields: {
+          scope: { label: '層級' },
+          fileName: {
+            label: '檔案名稱',
+            helper: '使用以 .rules 結尾的相對路徑。',
+          },
+          content: {
+            label: 'Rules 內容',
+            estimatedSize: '預估大小：{{size}}',
+          },
+        },
+        validation: {
+          fileName: '請輸入不含 parent traversal 的相對 .rules 檔名。',
+          content: 'Rules 內容不可為空。',
+        },
+        actions: { cancel: '取消', save: '儲存變更', create: '建立 rules 檔案' },
+      },
+      notifications: {
+        saved: 'Rules 檔案已儲存',
+        deleted: 'Rules 檔案已刪除',
+        saveFailed: '無法儲存 rules 檔案',
+        validateFailed: '無法驗證 rules 檔案',
+      },
+      validation: {
+        valid: '驗證通過，exit code {{exitCode}}。',
+        invalid: '驗證失敗，exit code {{exitCode}}。',
+      },
+      validationDialog: {
+        title: '驗證 rules',
+        description: '檢查這個 .rules 檔案如何評估範例指令。',
+        fields: {
+          command: {
+            label: '範例指令',
+            helper: '這個指令會以 arguments 形式送到 Codex exec policy validation。',
+          },
+        },
+        actions: {
+          close: '關閉',
+          validate: '執行驗證',
+        },
+      },
+    },
+    hooks: {
+      title: 'Hooks',
+      header: { title: 'Hooks' },
+      jsonTitle: 'hooks.json',
+      loading: '載入 hooks 中…',
+      featureWarning: {
+        title: 'Hooks feature 未啟用',
+        description: '在可編輯 config layer 啟用 features.codex_hooks 之前，Codex 不會載入 hooks。',
+      },
+      filters: {
+        scope: {
+          label: '範圍',
+          options: {
+            all: '所有範圍',
+            project: '專案',
+            user: '個人',
+            plugin: 'Plugin 與 inline',
+            managed: '受管理',
+          },
+        },
+      },
+      actions: {
+        refresh: '重整',
+        create: '新增 hook',
+        edit: '編輯 hook',
+        delete: '移除 hook',
+        enableFeature: '啟用 codex_hooks',
+      },
+      stats: { hooks: '共 {{count}} 個 hook' },
+      search: { placeholder: '搜尋 hooks...' },
+      scope: {
+        badge: {
+          project: '專案',
+          user: '個人',
+          plugin: 'Plugin',
+          managed: '受管理',
+        },
+      },
+      sources: {
+        hooks_json: 'hooks.json',
+        inline_config: '唯讀 inline config',
+        plugin: '唯讀 plugin',
+        managed: '唯讀受管理',
+      },
+      events: {
+        SessionStart: { name: 'SessionStart', option: 'SessionStart' },
+        PreToolUse: { name: 'PreToolUse', option: 'PreToolUse' },
+        PostToolUse: { name: 'PostToolUse', option: 'PostToolUse' },
+        PermissionRequest: { name: 'PermissionRequest', option: 'PermissionRequest' },
+        UserPromptSubmit: { name: 'UserPromptSubmit', option: 'UserPromptSubmit' },
+        Stop: { name: 'Stop', option: 'Stop' },
+      },
+      matchers: {
+        title: 'Matcher 設定',
+        matcherLabel: 'Matcher',
+        actionsCount: '{{count}} 個 action',
+        commandLabel: 'Command',
+        timeoutValue: '{{value}} 秒',
+        statusMessageValue: '狀態：{{value}}',
+        noCommand: '未設定 command',
+        summary: { matchers: '{{count}} 個 matcher', commands: '{{count}} 個 action' },
+      },
+      list: { empty: '沒有符合目前篩選的 hooks。' },
+      dialog: {
+        title: { edit: '編輯 hook', create: '新增 hook' },
+        description: '設定 Codex hook 的範圍、lifecycle event、matcher 與 command。',
+        scope: {
+          label: '範圍',
+          labelWithAsterisk: '範圍 *',
+          placeholder: '選擇範圍',
+          options: { project: '專案', user: '個人', local: 'Local' },
+        },
+        event: { label: 'Event 類型 *', placeholder: '選擇 event' },
+        matcher: {
+          sectionTitle: 'Matcher 設定',
+          add: '新增 matcher',
+          patternLabel: 'Match pattern',
+          patternPlaceholder: 'Tool name pattern 或 *',
+          helper: {
+            intro: '用來匹配 Codex tool 或 permission event 的 pattern。',
+            simple: '• 簡單字串：Write 只匹配 Write tool',
+            regex: '• Regular expression：Edit|Write 或 Notebook.*',
+            wildcard: '• * 匹配所有 tools；也允許空字串',
+            ignored: 'Codex 會忽略這個 event 的 matcher。',
+            sessionSource: '用來匹配 Codex session 啟動來源的 pattern。',
+            sessionExamples: '範例：startup、resume、clear 或 startup|resume。',
+            toolName: '用來匹配 Codex tool name 的 pattern。',
+            toolExamples: '範例：Bash、apply_patch、Edit、Write 或 mcp__filesystem__.*。',
+          },
+          remove: '移除 matcher',
+        },
+        execution: {
+          sectionTitle: 'Hook execution',
+          add: '新增 action',
+          timeoutLabel: 'Timeout（秒）',
+          timeoutPlaceholder: '30',
+          timeoutHelp: 'Command 最長執行時間，超過會被取消。',
+          commandLabel: 'Command *',
+          commandPlaceholder: '輸入要執行的 command',
+          commandHelp: 'Codex 會從 workspace context 執行 hook commands。',
+          statusMessageLabel: '狀態訊息',
+          statusMessagePlaceholder: '正在檢查 command',
+          statusMessageHelp: '選填，Codex 執行這個 command hook 時顯示的進度文字。',
+          remove: '移除 action',
+        },
+        actions: { cancel: '取消', save: '儲存變更', create: '新增 hook' },
+        validation: {
+          duplicateEventWarning: '偵測到重複 event 類型',
+          duplicateEventSuggestion: '建議編輯既有 hook，而不是建立重複 event。',
+        },
+      },
+      notifications: {
+        saved: 'hooks.json 已儲存',
+        enabled: 'codex_hooks 已啟用',
+        saveFailed: '無法儲存 hooks.json',
+        invalidJson: 'hooks.json 必須是有效 JSON',
+      },
+    },
+    plugins: {
+      title: 'Plugins',
+      empty: '沒有本地 plugins。',
+      enabled: '已啟用',
+      disabled: '已停用',
+      listed: '已列出',
+      installed: '已安裝',
+      installReserved: 'Marketplace 安裝 UI 先保留給後續版本。這個頁面會讀取本地 registry、cache 與 config 狀態。',
+      actions: {
+        enable: '啟用',
+        disable: '停用',
+      },
+      notifications: {
+        saved: 'Plugin 設定已儲存',
+      },
+    },
+    files: {
+      filesTitle: '檔案',
+      empty: '沒有檔案。',
+      pathPlaceholder: '相對路徑',
+      actions: {
+        newFile: '新增檔案',
+      },
+      titles: {
+        skills: 'Skills',
+        subagents: 'Subagents',
+        prompts: 'Prompts',
+      },
+      sources: {
+        user: '使用者',
+        project: '專案',
+        plugin: 'Plugin',
+        built_in: '內建',
+      },
+      notifications: {
+        saved: '檔案已儲存',
+        deleted: '檔案已刪除',
+        saveFailed: '無法儲存檔案',
+      },
+    },
+    documents: {
+      meta: {
+        prompts: { title: 'Prompt 設定' },
+        subagents: { title: 'Subagent 設定' },
+        rules: { title: 'Rules 設定' },
+      },
+      actions: { refresh: '重整', edit: '編輯', copyContent: '複製內容', download: '下載', delete: '刪除' },
+      loading: '載入文件中…',
+      stats: { total: '共 {{count}} 項' },
+      scope: {
+        values: { project: '專案', user: '個人', plugin: 'Plugin', built_in: '內建', managed: '受管理' },
+      },
+      status: { effective: '生效中', overridden: '已被覆蓋' },
+      toml: {
+        description: '描述',
+        prompt: '提示',
+        developerInstructions: '開發者指令',
+        raw: 'Raw TOML',
+      },
+      size: { badge: '大小：{{size}}' },
+      confirmDelete: '確定要刪除「{{title}}」嗎？',
+      sidebar: {
+        toggle: { expand: '展開側欄', collapse: '收合側欄' },
+        searchPlaceholder: '搜尋文件...',
+        scope: { all: '所有來源' },
+        loading: '載入項目中…',
+        empty: '沒有符合目前篩選的項目。',
+      },
+    },
+    prompts: {
+      pageTitle: 'Prompts',
+      actions: { create: '新增 Prompt' },
+      empty: {
+        title: '尚未建立任何 Prompt',
+        description: '建立可重複使用的 Prompt 來處理常見工作流程。',
+      },
+      dialog: {
+        title: { create: '新增 Prompt', edit: '編輯 Prompt' },
+        description: { create: '建立可重複使用的 Prompt。', edit: '更新此 Prompt。' },
+        tabs: { basic: '基本設定', editor: 'Prompt 編輯器' },
+        fields: {
+          scope: { label: '層級' },
+          fileName: { label: '檔案名稱', placeholder: 'prompt.md' },
+          namespace: { label: '命名空間', placeholder: '選填命名空間', helper: '使用資料夾或命名空間組織相關 Prompt。' },
+          content: { label: 'Prompt 內容', estimatedSize: '預估大小：{{size}}' },
+        },
+        validation: { fileName: '請輸入檔案名稱。', content: 'Prompt 內容不可為空。' },
+        actions: { cancel: '取消', save: '儲存變更', create: '建立 Prompt' },
+      },
+    },
+    subagents: {
+      pageTitle: 'Subagents',
+      actions: { create: '新增 Subagent' },
+      empty: {
+        title: '尚未建立任何 Subagent',
+        description: '建立專責 Subagent 以處理重複性的任務模式。',
+      },
+      dialog: {
+        title: { create: '新增 Subagent', edit: '編輯 Subagent' },
+        description: {
+          create: '設定 Subagent 定義。',
+          edit: '更新此 Subagent 定義。',
+        },
+        fields: {
+          scope: { label: '層級' },
+          name: { label: '名稱', placeholder: 'code_reviewer' },
+          description: { label: '描述', placeholder: '檢查程式正確性與測試缺口。' },
+          developerInstructions: { label: 'Developer instructions', placeholder: 'Review code like an owner.' },
+          nicknameCandidates: { label: '暱稱候選', placeholder: 'Atlas\nDelta' },
+          model: { label: '模型', placeholder: 'gpt-5.4' },
+          modelReasoningEffort: {
+            label: '推理強度',
+            options: {
+              high: { label: 'High', description: '適合追蹤複雜邏輯、檢查假設與處理邊界情境。' },
+              medium: { label: 'Medium', description: '多數 agents 的平衡預設值。' },
+              low: { label: 'Low', description: '適合任務單純且速度更重要的情境。' },
+            },
+          },
+          sandboxMode: {
+            label: 'Sandbox mode',
+            options: {
+              'read-only': { label: 'Read only', description: '只能檢視檔案，編輯或執行命令需經核准。' },
+              'workspace-write': { label: 'Workspace write', description: '可讀取檔案、在 workspace 內編輯，並執行常規本機命令。' },
+              'danger-full-access': { label: 'Full access', description: '不套用 sandbox 的檔案系統與網路限制。' },
+            },
+          },
+          rawContent: { label: 'Raw TOML', placeholder: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""' },
+        },
+        tabs: { structured: '結構化', raw: 'Raw TOML' },
+        validation: {
+          name: '請輸入 Subagent 名稱。',
+          description: '請輸入描述。',
+          developerInstructions: '請輸入 developer instructions。',
+          rawContent: 'Raw TOML 不可為空。',
+        },
+        fallbackTitle: 'Subagent',
+        actions: { cancel: '取消', save: '儲存變更', create: '建立 Subagent' },
+      },
+      registry: {
+        summary: '{{layer}} agents：max threads {{maxThreads}}、max depth {{maxDepth}}、job runtime {{jobMaxRuntime}}s',
+      },
+    },
     runtime: {
       title: '會話權限已啟用',
       description: 'Codex 現在會透過 Python SDK 執行，並使用每個會話各自的權限控制。',
@@ -107,17 +466,45 @@ const agentSettings = {
   common: {
     loading: '載入中...',
     subViews: {
+      overview: '總覽',
+      claudeMd: 'CLAUDE.md',
       geminiMd: 'GEMINI.md',
       agentsMd: 'AGENTS.md',
+      config: 'Config',
+      profiles: 'Profiles',
+      permissionsProfiles: 'Permissions Profiles',
+      features: 'Features',
+      appsConnectors: 'Apps / Connectors',
+      modelProviders: 'Model Providers',
+      rules: 'Rules',
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
+      plugins: 'Plugins',
       slashCommands: 'Slash Commands',
+      prompts: 'Prompts',
       skills: 'Skills',
+      scripts: 'Scripts',
+      subagents: 'Subagents',
+      managedRequirements: 'Managed Requirements',
+      memory: 'Memory',
+      outputStyles: 'Output Styles',
+      settings: 'Settings',
+      unknown: '設定',
     },
     scope: {
       project: '專案',
       user: '使用者',
       global: '全域',
+    },
+    sourceNotices: {
+      readOnly: {
+        title: '唯讀來源',
+        description: '{{source}} 由系統或 plugin 提供，無法在此編輯。',
+      },
+      newThread: {
+        title: '需要新 thread',
+        description: '這項設定的變更會套用到新的 Codex thread；既有 thread 會保留目前已載入的能力。',
+      },
     },
     comingSoon: {
       title: '即將推出',
@@ -262,7 +649,7 @@ const agentSettings = {
     mcp: {
       header: {
         title: 'Model Context Protocol 設定',
-        actions: { import: '導入配置', create: '新增服務器' },
+        actions: { refresh: '重整', import: '導入配置', create: '新增服務器' },
       },
       stats: {
         title: '統計',
@@ -292,7 +679,7 @@ const agentSettings = {
       },
       list: { empty: '未找到符合條件的服務器', loading: '正在載入 MCP 服務器...' },
       status: { runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}' },
-      actions: { showEnvValues: '顯示值', hideEnvValues: '隱藏值' },
+      actions: { showEnvValues: '顯示值', hideEnvValues: '隱藏值', edit: '編輯 server', delete: '刪除 server' },
       plugin: { readonly: '外掛管理' },
       confirm: { delete: '確定要刪除 MCP 服務器「{{name}}」嗎？' },
       messages: {

@@ -38,6 +38,15 @@ const geminiHookEvents: HookEventOption[] = [
   { value: 'Notification', labelKey: 'workspace.agentSettings.gemini.hooks.events.Notification.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.Notification.option' },
 ];
 
+const codexHookEvents: HookEventOption[] = [
+  { value: 'SessionStart', labelKey: 'workspace.agentSettings.codex.hooks.events.SessionStart', optionKey: 'workspace.agentSettings.codex.hooks.events.SessionStart' },
+  { value: 'PreToolUse', labelKey: 'workspace.agentSettings.codex.hooks.events.PreToolUse', optionKey: 'workspace.agentSettings.codex.hooks.events.PreToolUse' },
+  { value: 'PostToolUse', labelKey: 'workspace.agentSettings.codex.hooks.events.PostToolUse', optionKey: 'workspace.agentSettings.codex.hooks.events.PostToolUse' },
+  { value: 'PermissionRequest', labelKey: 'workspace.agentSettings.codex.hooks.events.PermissionRequest', optionKey: 'workspace.agentSettings.codex.hooks.events.PermissionRequest' },
+  { value: 'UserPromptSubmit', labelKey: 'workspace.agentSettings.codex.hooks.events.UserPromptSubmit', optionKey: 'workspace.agentSettings.codex.hooks.events.UserPromptSubmit' },
+  { value: 'Stop', labelKey: 'workspace.agentSettings.codex.hooks.events.Stop', optionKey: 'workspace.agentSettings.codex.hooks.events.Stop' },
+];
+
 const buildAvailableSubViews = (instructionSubView: string, capabilities: AgentToolCapabilities, extra: string[] = []) => [
   instructionSubView,
   ...(capabilities.mcp?.supported === false ? [] : ['mcp']),
@@ -84,7 +93,7 @@ const geminiCapabilities: AgentToolCapabilities = {
   mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: false },
   hooks: { supported: true, scopes: ['project', 'user'], events: geminiHookEvents },
   slashCommands: { supported: true, scopes: ['project', 'user'], format: 'toml', supportsNamespace: true },
-  skills: { supported: true, collection: 'skills', scopes: ['project', 'user'], supportsPlugin: false },
+  skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
   agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
 };
@@ -114,17 +123,28 @@ const codexCapabilities: AgentToolCapabilities = {
     supported: true,
     fileName: 'AGENTS.md',
     subViewId: 'agents-md',
-    labelKey: 'workspace.agentSettings.codex.agentsMd',
+    labelKey: 'workspace.agentSettings.codex.agentsMd.title',
     scopes: projectUserScopes,
     endpoint: 'agents-md',
   },
-  mcp: { supported: true, scopes: ['project', 'user'], supportsToggle: true },
-  hooks: { supported: false, scopes: [], events: [] },
+  mcp: { supported: true, scopes: ['project', 'user', 'plugin'], supportsToggle: true },
+  hooks: { supported: true, scopes: ['project', 'user'], events: codexHookEvents },
   slashCommands: { supported: true, scopes: ['project', 'user'], format: 'markdown', supportsNamespace: false },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user'], supportsPlugin: false },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
   agentDefinitions: { supported: false, endpoint: 'agents', displayLabelKey: 'workspace.agentSettings.common.subViews.agents', scopes: [], format: 'markdown' },
 };
+
+const codexSettingsSubViews = [
+  'agents-md',
+  'skills',
+  'subagents',
+  'prompts',
+  'mcp',
+  'hooks',
+  'rules',
+  'plugins',
+];
 
 const claudeConfig: AgentToolConfig = {
   id: 'claude',
@@ -180,7 +200,7 @@ const codexConfig: AgentToolConfig = {
   navigationLabelKey: 'workspace.navigation.main.codexSettings',
   navigationIcon: Bot,
   agentsMd: codexCapabilities.instructions!,
-  availableSubViews: buildAvailableSubViews('agents-md', codexCapabilities),
+  availableSubViews: codexSettingsSubViews,
   apiPathPrefix: 'codex',
   availableScopes: ['project', 'user'],
   i18nNamespace: 'workspace.agentSettings.common',

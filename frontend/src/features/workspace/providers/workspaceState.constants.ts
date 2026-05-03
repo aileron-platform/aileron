@@ -151,15 +151,34 @@ export const getClaudeCodeSubView = (pathname: string): WorkspaceState['claudeCo
 
 // 根據路由路徑決定 Agent 工具設定子視圖（gemini/opencode/codex 共用）
 export const getAgentToolSubView = (pathname: string): string => {
-  if (pathname.includes('/mcp')) return 'mcp';
-  if (pathname.includes('/hooks')) return 'hooks';
-  if (pathname.includes('/slash-commands')) return 'slash-commands';
-  if (pathname.includes('/skills')) return 'skills';
-  if (pathname.includes('/gemini-md')) return 'gemini-md';
-  if (pathname.includes('/agents-md')) return 'agents-md';
-  // 根據 Agent 類型決定預設指令檔案子視圖
-  if (pathname.includes('/gemini')) return 'gemini-md';
-  return 'agents-md'; // codex / opencode 預設值
+  const segments = pathname.split('/').filter(Boolean);
+  const agentIndex = segments.findIndex((segment) => (
+    segment === 'gemini' || segment === 'opencode' || segment === 'codex'
+  ));
+
+  if (agentIndex >= 0) {
+    const agent = segments[agentIndex];
+    const subView = segments[agentIndex + 1];
+    if (agent === 'codex') {
+      const allowedCodexSubViews = new Set([
+        'agents-md',
+        'skills',
+        'subagents',
+        'prompts',
+        'mcp',
+        'hooks',
+        'rules',
+        'plugins',
+      ]);
+      return subView && allowedCodexSubViews.has(subView) ? subView : 'agents-md';
+    }
+    if (subView) {
+      return subView;
+    }
+    return agent === 'gemini' ? 'gemini-md' : 'agents-md';
+  }
+
+  return 'agents-md';
 };
 
 // 根據路由路徑決定預覽子視圖

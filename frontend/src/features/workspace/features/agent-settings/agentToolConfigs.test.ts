@@ -5,11 +5,35 @@ import type { AgentToolConfig } from './types';
 const actionableSubViews = (config: AgentToolConfig) => config.availableSubViews;
 
 describe('AGENT_TOOL_CONFIGS', () => {
-  it('hides unsupported hooks for Codex and OpenCode', () => {
-    expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.supported).toBe(false);
+  it('exposes Codex hooks in navigation with the official lifecycle events', () => {
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.supported).toBe(true);
+    expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).toContain('hooks');
+    expect(AGENT_TOOL_CONFIGS.codex.capabilities.hooks?.events.map((event) => event.value)).toEqual([
+      'SessionStart',
+      'PreToolUse',
+      'PostToolUse',
+      'PermissionRequest',
+      'UserPromptSubmit',
+      'Stop',
+    ]);
+  });
+
+  it('hides unsupported hooks for OpenCode', () => {
     expect(AGENT_TOOL_CONFIGS.opencode.capabilities.hooks?.supported).toBe(false);
-    expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).not.toContain('hooks');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.opencode)).not.toContain('hooks');
+  });
+
+  it('exposes the supported Codex settings navigation surface', () => {
+    expect(actionableSubViews(AGENT_TOOL_CONFIGS.codex)).toEqual([
+      'agents-md',
+      'skills',
+      'subagents',
+      'prompts',
+      'mcp',
+      'hooks',
+      'rules',
+      'plugins',
+    ]);
   });
 
   it('keeps scripts as an agent-settings capability but only exposes Claude initially', () => {

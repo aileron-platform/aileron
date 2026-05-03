@@ -11,6 +11,7 @@ import type {
   FileUploadResult,
 } from '@/shared/components/file-workbench';
 import type { AgentFileCollection, AgentSelectedFile } from '../types';
+import type { CodexFileListResponse, CodexFileSummary } from '../services/agentSettingsApi';
 
 export interface AgentFileTreeDataAdapterOptions {
   workspaceId: string;
@@ -37,6 +38,7 @@ const agentFileEndpoints = {
 
 export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   private readonly client: ApiClient;
+  private readonly codexReadOnlyContent = new Map<string, string>();
 
   constructor(private readonly options: AgentFileTreeDataAdapterOptions) {
     if (!options.workspaceId) {
@@ -50,6 +52,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async getTree(): Promise<FileTreeNode[]> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      return this.getCodexTree(workspaceId, collection, scope);
+    }
     const response = await this.client.get<{ nodes?: FileTreeNode[] }>(
       agentFileEndpoints.getTree(workspaceId, apiPrefix, collection, scope),
     );
@@ -62,6 +67,17 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async getContent(path: string): Promise<string> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      const readOnlyContent = this.codexReadOnlyContent.get(path);
+      if (readOnlyContent !== undefined) {
+        return readOnlyContent;
+      }
+      const layer = scope === 'user' ? 'user' : 'project';
+      const response = await this.client.get<{ content?: string }>(
+        `/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}&path=${encodeURIComponent(path)}`,
+      );
+      return response.content ?? '';
+    }
     const response = await this.client.get<{ data?: { content?: string } }>(
       agentFileEndpoints.getContent(workspaceId, apiPrefix, collection, path, scope),
     );
@@ -70,6 +86,14 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async create(request: FileOperationRequest): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      const layer = scope === 'user' ? 'user' : 'project';
+      await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}`, {
+        path: request.path.replace(/^\/+/, ''),
+        content: request.content ?? '',
+      });
+      return { success: true };
+    }
     const baseUrl = agentFileEndpoints.create(workspaceId, apiPrefix, collection, scope);
     const url = `${baseUrl}&path=${encodeURIComponent(request.path)}&type=file${
       request.content ? `&content=${encodeURIComponent(request.content)}` : ''
@@ -79,12 +103,25 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async update(path: string, content: string): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      const layer = scope === 'user' ? 'user' : 'project';
+      await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}`, {
+        path: path.replace(/^\/+/, ''),
+        content,
+      });
+      return { success: true };
+    }
     const baseUrl = agentFileEndpoints.update(workspaceId, apiPrefix, collection, path, scope);
     return this.client.put(`${baseUrl}&content=${encodeURIComponent(content)}`);
   }
 
   async delete(path: string, recursive = false): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      const layer = scope === 'user' ? 'user' : 'project';
+      await this.client.delete(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}&path=${encodeURIComponent(path.replace(/^\/+/, ''))}`);
+      return { success: true };
+    }
     return this.client.delete(agentFileEndpoints.delete(workspaceId, apiPrefix, collection, path, scope, recursive));
   }
 
@@ -158,6 +195,20 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   private postMove(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (apiPrefix === 'codex') {
+      const fileName = sourcePath.split('/').pop() || sourcePath;
+      return this.getContent(sourcePath)
+        .then((content) => this.create({
+          type: 'create',
+          path: `${targetPath}/${fileName}`.replace(/^\/+/, ''),
+          content,
+          isDirectory: false,
+        }))
+        .then(async (response) => {
+          await this.delete(sourcePath);
+          return response;
+        });
+    }
     const baseUrl = agentFileEndpoints.move(workspaceId, apiPrefix, collection, scope);
     const url = new URL(baseUrl, window.location.origin);
     url.searchParams.set('sourcePath', sourcePath);
@@ -167,7 +218,90 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
     url.searchParams.set('overwrite', 'false');
     return this.client.post(url.pathname + url.search);
   }
+
+  private async getCodexTree(
+    workspaceId: string,
+    collection: AgentFileCollection,
+    scope: AgentSelectedFile['scope'],
+  ): Promise<FileTreeNode[]> {
+    const layer = scope === 'user' ? 'user' : 'project';
+    const response = await this.client.get<CodexFileListResponse>(
+      `/workspaces/${workspaceId}/codex/${collection}/files?layer=${layer}`,
+    );
+    const summaries = response.files.filter((file) => (
+      scope === 'plugin' ? file.source === 'plugin' : file.source === scope
+    ));
+    this.codexReadOnlyContent.clear();
+    for (const summary of summaries) {
+      if (summary.readOnly) {
+        this.codexReadOnlyContent.set(summary.path, JSON.stringify(summary.metadata ?? {}, null, 2));
+      }
+    }
+    return buildTreeFromCodexSummaries(summaries);
+  }
 }
+
+const buildTreeFromCodexSummaries = (summaries: CodexFileSummary[]): FileTreeNode[] => {
+  const roots: FileTreeNode[] = [];
+  const directories = new Map<string, FileTreeNode>();
+
+  const ensureDirectory = (path: string): FileTreeNode => {
+    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+    const existing = directories.get(cleanPath);
+    if (existing) return existing;
+    const name = cleanPath.split('/').pop() || cleanPath;
+    const node: FileTreeNode = {
+      id: cleanPath,
+      name,
+      path: cleanPath,
+      type: 'directory',
+      children: [],
+      hasChildren: true,
+    };
+    directories.set(cleanPath, node);
+    const parentPath = cleanPath.split('/').slice(0, -1).join('/');
+    if (parentPath) {
+      ensureDirectory(parentPath).children?.push(node);
+    } else {
+      roots.push(node);
+    }
+    return node;
+  };
+
+  for (const summary of summaries) {
+    const cleanPath = summary.path.replace(/^\/+/, '');
+    const parts = cleanPath.split('/').filter(Boolean);
+    const fileName = parts.pop() || summary.name;
+    const parentPath = parts.join('/');
+    const node: FileTreeNode = {
+      id: cleanPath,
+      name: fileName,
+      path: cleanPath,
+      type: 'file',
+      size: summary.sizeBytes,
+      scope: summary.source === 'user' || summary.source === 'project' || summary.source === 'plugin'
+        ? summary.source
+        : 'plugin',
+      writable: !summary.readOnly,
+      extension: fileName.includes('.') ? fileName.split('.').pop() : undefined,
+    };
+    if (parentPath) {
+      ensureDirectory(parentPath).children?.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const sortNodes = (nodes: FileTreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    nodes.forEach((node) => node.children && sortNodes(node.children));
+  };
+  sortNodes(roots);
+  return roots;
+};
 
 export const createAgentFileTreeDataAdapter = (
   options: AgentFileTreeDataAdapterOptions,

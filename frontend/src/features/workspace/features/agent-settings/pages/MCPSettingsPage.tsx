@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Wrench, Search, Edit, Trash2, Upload, Plus, Loader2, AlertCircle, Building, User, Layers, Laptop, Puzzle, Info, Eye, EyeOff } from 'lucide-react';
-import { Badge } from '@/shared/components/ui/badge';
+import { Wrench, Search, Upload, Plus, Loader2, AlertCircle, Building, User, Layers, Laptop, Puzzle, RefreshCw } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
-import { Switch } from '@/shared/components/ui/switch';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import {
   Select,
@@ -12,24 +10,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/shared/components/ui/tooltip';
+import { TooltipProvider } from '@/shared/components/ui/tooltip';
+import { MCPServerCard } from '@/shared/components/mcp-workflow';
 import type { AgentMcpServer, AgentScope } from '../types';
-
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 import MCPImportDialog from './dialogs/MCPImportDialog';
 import { WorkspaceMCPServerDialog } from './dialogs/WorkspaceMCPServerDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
+import { AgentSettingsSourceBadge } from '../components/SettingsSourcePrimitives';
+
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
@@ -369,6 +363,16 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs"
+                onClick={() => void fetchServers()}
+                disabled={!isRuntimeReady || loading || runtimeLoading}
+              >
+                <RefreshCw className={`mr-1 h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+                {t(`${i18nNamespace}.mcp.header.actions.refresh`)}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
                 onClick={() => setImportOpen(true)}
                 disabled={!isRuntimeReady}
               >
@@ -386,7 +390,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
             />
           }
           controls={
-            <div className="relative w-64">
+            <div className="relative w-full max-w-md">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
               <Input
                 value={search}
@@ -436,179 +440,46 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
               {!runtimeLoading && !loading &&
                 filteredServers.map((server) => (
-                  <div
+                  <MCPServerCard
                     key={server.id}
-                    className={`rounded-lg border border-border bg-background p-6 transition-all ${supportsToggle && server.enabled === false ? 'opacity-60 bg-muted/30' : ''
-                      }`}
-                  >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <h3 className="text-lg font-semibold text-foreground">{server.name}</h3>
-                          <Badge className={SCOPE_BADGE_CLASSES[server.scope]}>
-                            {t(`${i18nNamespace}.mcp.server.scope.${server.scope}`)}
-                          </Badge>
-
-                          {server.scope === 'plugin' && server.pluginName && (
-                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                              <Puzzle className="h-3 w-3" />
-                              {server.pluginName}@{server.marketplaceName}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3 ml-4">
-                        {supportsToggle && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-muted/50">
-                            <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                                {server.enabled !== false
-                                ? t(`${i18nNamespace}.mcp.server.status.enabled`)
-                                : t(`${i18nNamespace}.mcp.server.status.disabled`)}
-                            </span>
-                            <Switch
-                              checked={server.enabled !== false}
-                              onCheckedChange={(checked) => handleToggleStatus(server, checked)}
-                              disabled={!isRuntimeReady}
-                            />
-                          </div>
-                        )}
-
-                        {canEdit(server) && (
-                          <>
-                            <button
-                              type="button"
-                              className="rounded-md p-2 transition-colors hover:bg-muted"
-                              onClick={() => handleOpenEdit(server)}
-                              disabled={!isRuntimeReady}
-                            >
-                              <Edit className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-md p-2 transition-colors hover:bg-muted"
-                              onClick={() => handleDelete(server)}
-                              disabled={!isRuntimeReady}
-                            >
-                              <Trash2 className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </>
-                        )}
-
-                        {server.scope === 'plugin' && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                type="button"
-                                className="rounded-md p-2 text-muted-foreground cursor-help"
-                                disabled
-                              >
-                                <Info className="h-4 w-4" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="max-w-xs">
-                              <p className="text-sm">
-                                {t(`${i18nNamespace}.mcp.plugin.readonly`)}
-                              </p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-muted-foreground min-w-[80px]">
-                          {t(`${i18nNamespace}.mcp.serverDetails.transportType`)}:
-                        </span>
-                        <span className="font-mono bg-muted px-2 py-1 text-xs">
-                          {(server.transport ?? 'stdio').toUpperCase()}
-                        </span>
-                      </div>
-                      {(server.transport === 'http' || server.transport === 'sse') && server.url && (
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-muted-foreground min-w-[80px]">
-                            {t(`${i18nNamespace}.mcp.serverDetails.serverUrl`)}:
-                          </span>
-                          <span className="font-mono text-xs break-all">{server.url}</span>
-                        </div>
-                      )}
-                      {(server.transport === 'http' || server.transport === 'sse') && server.headers && Object.keys(server.headers).length > 0 && (
-                        <div className="flex items-start gap-2">
-                          <span className="font-medium text-muted-foreground min-w-[80px]">
-                            {t(`${i18nNamespace}.mcp.serverDetails.headers`)}:
-                          </span>
-                          <div className="flex-1 space-y-1">
-                            {Object.entries(server.headers).map(([key, value]) => (
-                              <div key={key} className="bg-muted/30 rounded px-2 py-1">
-                                <span className="font-mono text-xs break-all">
-                                  <span className="text-blue-600 dark:text-blue-400 font-semibold">{key}</span>
-                                  <span className="text-muted-foreground mx-1">:</span>
-                                  <span className="text-foreground">{value}</span>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      {server.transport === 'stdio' && (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-muted-foreground min-w-[80px]">
-                              {t(`${i18nNamespace}.mcp.serverDetails.command`)}:
-                            </span>
-                            <span className="font-mono text-xs">{server.command ?? '-'}</span>
-                          </div>
-                          {server.args && server.args.length > 0 && (
-                            <div className="flex items-start gap-2">
-                              <span className="font-medium text-muted-foreground min-w-[80px]">
-                                {t(`${i18nNamespace}.mcp.serverDetails.commandArgs`)}:
-                              </span>
-                              <span className="font-mono text-xs break-all">{server.args.join(' ')}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {server.env && Object.keys(server.env).length > 0 && (
-                        <div className="flex items-start gap-2">
-                          <div className="flex items-center gap-2 min-w-[80px]">
-                            <span className="font-medium text-muted-foreground">
-                              {t(`${i18nNamespace}.mcp.serverDetails.env`)}:
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setVisibleEnvs(prev => ({ ...prev, [server.id]: !prev[server.id] }))}
-                              className="rounded p-0.5 transition-colors hover:bg-muted"
-                              title={
-                                visibleEnvs[server.id]
-                                  ? t(`${i18nNamespace}.mcp.actions.hideEnvValues`)
-                                  : t(`${i18nNamespace}.mcp.actions.showEnvValues`)
-                              }
-                            >
-                              {visibleEnvs[server.id] ? (
-                                <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />
-                              ) : (
-                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            {Object.entries(server.env).map(([key, value]) => (
-                              <div key={key} className="bg-muted/30 rounded px-2 py-1">
-                                <span className="font-mono text-xs break-all">
-                                  <span className="text-primary font-semibold">{key}</span>
-                                  <span className="text-muted-foreground mx-1">=</span>
-                                  <span className="text-foreground">
-                                    {visibleEnvs[server.id] ? value : '***'}
-                                  </span>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    server={server}
+                    scopeBadge={(
+                      <AgentSettingsSourceBadge
+                        source={{
+                          type: server.scope,
+                          label: t(`${i18nNamespace}.mcp.server.scope.${server.scope}`),
+                          pluginName: server.pluginName,
+                          marketplaceName: server.marketplaceName,
+                        }}
+                      />
+                    )}
+                    labels={{
+                      enabled: t(`${i18nNamespace}.mcp.server.status.enabled`),
+                      disabled: t(`${i18nNamespace}.mcp.server.status.disabled`),
+                      transportType: t(`${i18nNamespace}.mcp.serverDetails.transportType`),
+                      serverUrl: t(`${i18nNamespace}.mcp.serverDetails.serverUrl`),
+                      headers: t(`${i18nNamespace}.mcp.serverDetails.headers`),
+                      command: t(`${i18nNamespace}.mcp.serverDetails.command`),
+                      commandArgs: t(`${i18nNamespace}.mcp.serverDetails.commandArgs`),
+                      env: t(`${i18nNamespace}.mcp.serverDetails.env`),
+                      showEnvValues: t(`${i18nNamespace}.mcp.actions.showEnvValues`),
+                      hideEnvValues: t(`${i18nNamespace}.mcp.actions.hideEnvValues`),
+                      edit: t(`${i18nNamespace}.mcp.actions.edit`),
+                      delete: t(`${i18nNamespace}.mcp.actions.delete`),
+                      readOnlyTooltip: t(`${i18nNamespace}.mcp.plugin.readonly`),
+                    }}
+                    supportsToggle={supportsToggle}
+                    canEdit={canEdit(server)}
+                    canDelete={canDelete(server)}
+                    disabled={!isRuntimeReady}
+                    envVisible={visibleEnvs[server.id]}
+                    onEdit={handleOpenEdit}
+                    onDelete={handleDelete}
+                    onToggleStatus={handleToggleStatus}
+                    onToggleEnvVisibility={(target) => {
+                      setVisibleEnvs((prev) => ({ ...prev, [target.id]: !prev[target.id] }));
+                    }}
+                  />
                 ))}
 
               {!runtimeLoading && !loading && filteredServers.length === 0 && isRuntimeReady && !error && (

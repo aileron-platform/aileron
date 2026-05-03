@@ -32,3 +32,26 @@ export type { AgentSettingsApi } from './services/agentSettingsApi';
 
 // Shared constants.
 export { SCOPE_BADGE_CLASSES } from './constants/scopeStyles';
+
+// Shared settings UI primitives.
+export {
+  AgentSettingsLayerSelector,
+  AgentSettingsSourceBadge,
+  NewThreadNotice,
+  ReadOnlySourceNotice,
+  getAgentSettingsSourceIcon,
+} from './components/SettingsSourcePrimitives';
+export {
+  SettingsFileTreeWorkflow,
+} from './components/SettingsFileTreeWorkflow';
+export type {
+  AgentSettingsLayerSelectorProps,
+  AgentSettingsSourceDescriptor,
+  AgentSettingsSourceType,
+} from './components/SettingsSourcePrimitives';
+export type {
+  SettingsFileSelection,
+  SettingsFileTreeScopeOption,
+  SettingsFileTreeWorkflowLabels,
+  SettingsFileTreeWorkflowProps,
+} from './components/SettingsFileTreeWorkflow';

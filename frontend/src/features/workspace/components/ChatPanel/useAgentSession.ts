@@ -199,6 +199,10 @@ const safeSessionStorageRemove = (key: string) => {
   }
 };
 
+const filterSessionsByTool = (sessions: { agentic_tool?: string | null }[], tool: AgenticTool) => (
+  sessions.filter((session) => session.agentic_tool === tool)
+);
+
 const loadLastWsSeq = (sessionId: string): number | null => {
   const raw = safeSessionStorageGet(getWsSeqCacheKey(sessionId));
   if (!raw) return null;
@@ -446,12 +450,24 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       try {
         const response = await agentApi.sessions.listSessions(runtimeBaseUrl, {
           workspace_id: workspaceId,
+          agentic_tool: workspaceDefaultTool,
           source: 'user',
           archived: false,
           limit: 50,
         });
-        store.setSessions(response.items);
-        setRealtimeSessions(response.items);
+        const matchingSessions = filterSessionsByTool(response.items, workspaceDefaultTool);
+
+        if (matchingSessions.length !== response.items.length) {
+          logger.debug('Filtered sessions by agentic tool', {
+            workspaceId,
+            agenticTool: workspaceDefaultTool,
+            totalSessions: response.items.length,
+            matchingSessions: matchingSessions.length,
+          });
+        }
+
+        store.setSessions(matchingSessions);
+        setRealtimeSessions(matchingSessions);
 
         // 如果不是 workspace 切換（初次載入），才在這裡恢復 session
         if (!isWorkspaceSwitch) {
@@ -459,7 +475,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             const lastSessionId = localStorage.getItem(`agent_session:last_active:${workspaceId}`);
             if (lastSessionId) {
               // 驗證 session 是否仍存在於載入的列表中
-              const sessionExists = response.items.some(s => s.session_id === lastSessionId);
+              const sessionExists = matchingSessions.some(s => s.session_id === lastSessionId);
               if (sessionExists) {
                 store.setCurrentSession(lastSessionId);
               } else {
@@ -492,7 +508,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         // 使用保存的 sessionIdToVerify 而非 state.currentSessionId，避免競態條件
         let shouldSelectNewSession = false;
         if (isWorkspaceSwitch && sessionIdToVerify) {
-          const sessionExists = response.items.some(s => s.session_id === sessionIdToVerify);
+          const sessionExists = matchingSessions.some(s => s.session_id === sessionIdToVerify);
           if (!sessionExists) {
             logger.debug('Previously restored session no longer exists after workspace switch', {
               sessionId: sessionIdToVerify,
@@ -526,9 +542,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               workspaceId,
               sessionId: sessionIdToVerify
             });
-          } else if (response.items.length > 0) {
+          } else if (matchingSessions.length > 0) {
             // 情況2: 沒有預設 session 或預設已失效，選擇最新的（列表第一個是最近更新的）
-            const latestSession = response.items[0];
+            const latestSession = matchingSessions[0];
             selectedSessionId = latestSession.session_id;
             logger.info(`✓ Case 2: Auto-selecting latest session (${action})`, {
               workspaceId,
@@ -579,7 +595,7 @@ export function useAgentSession(options: UseAgentSessionOptions) {
               workspaceId,
               sessionIdToVerify,
               shouldSelectNewSession,
-              totalSessions: response.items.length
+              totalSessions: matchingSessions.length
             });
             store.setConnectionStatus('error',
               'Failed to select a session. Please refresh the page.'
