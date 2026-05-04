@@ -245,8 +245,6 @@ services:
       - GIT_USER_EMAIL=developer@workspace.local
       # Java Configuration
       - JAVA_HOME=${WORKSPACE_RUNTIME_JAVA_HOME:-/usr/lib/jvm/openjdk-21}
-      # VS Code Server Configuration
-      - VSCODE_SERVER_PORT=8080
       # Terminal Service Configuration
       - TERMINAL_PORT=3004
       - REDIS_HOST=redis
@@ -278,7 +276,6 @@ services:
       - "3002:3002"   # FastAPI (固定端口)
       - "3004:3004"   # Terminal Service (固定端口)
       - "2222:22"     # SSH
-      - "8080"        # VS Code Server (隨機端口)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace-runtime:/workspace-runtime  # Mount 整個專案目錄（包含 tests 目錄，用於整合測試）

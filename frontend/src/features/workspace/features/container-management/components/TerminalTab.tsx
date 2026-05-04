@@ -1,12 +1,11 @@
 /**
- * TerminalTab - 單個 Terminal Tab 組件
+ * TerminalTab - Single terminal tab component
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import '@xterm/xterm/css/xterm.css';
 import { createLogger } from '@/shared/services/logger';
@@ -15,10 +14,10 @@ const logger = createLogger('TerminalTab');
 
 interface TerminalTabProps {
   tabId: string;
-  isActive: boolean; // Keep for backward compatibility or use as "focused"
-  isVisible?: boolean; // New prop for visibility
-  style?: React.CSSProperties; // New prop for grid positioning
-  className?: string; // New prop for custom classes
+  isActive: boolean;
+  isVisible?: boolean;
+  style?: React.CSSProperties;
+  className?: string;
   onInput: (tabId: string, data: string) => void;
   onResize: (tabId: string, cols: number, rows: number) => void;
   onSelectionChange?: (text: string) => void;
@@ -28,6 +27,54 @@ interface TerminalTabProps {
 }
 
 type DocumentWithFonts = Document & { fonts?: Document['fonts'] };
+
+interface TerminalRegistryEntry {
+  terminal: XTerm;
+  fitAddon: FitAddon;
+}
+
+const terminalRegistry = new Map<string, TerminalRegistryEntry>();
+
+export const disposeTerminalInstance = (tabId: string) => {
+  const entry = terminalRegistry.get(tabId);
+  if (!entry) return;
+  entry.terminal.dispose();
+  terminalRegistry.delete(tabId);
+};
+
+export const disposeAllTerminalInstances = () => {
+  terminalRegistry.forEach((entry) => {
+    entry.terminal.dispose();
+  });
+  terminalRegistry.clear();
+};
+
+const createTerminalEntry = () => {
+  const terminal = new XTerm({
+    allowProposedApi: true,
+    cursorBlink: true,
+    bracketedPasteMode: true,
+    fontFamily:
+      'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    fontSize: 13,
+    scrollback: 1000,
+    theme: {
+      background: '#0f172a',
+      foreground: '#f8fafc',
+      cursor: '#22d3ee',
+    },
+  });
+
+  const fitAddon = new FitAddon();
+  const webLinksAddon = new WebLinksAddon();
+  const searchAddon = new SearchAddon();
+
+  terminal.loadAddon(fitAddon);
+  terminal.loadAddon(webLinksAddon);
+  terminal.loadAddon(searchAddon);
+
+  return { terminal, fitAddon };
+};
 
 export const TerminalTab: React.FC<TerminalTabProps> = ({
   tabId,
@@ -61,7 +108,7 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
   }, []);
 
   const performFit = useCallback(() => {
-    // 清除之前的 timeout 和 animation frame
+    // Cancel pending fit work before scheduling the next resize pass.
     if (resizeTimeoutRef.current !== null) {
       clearTimeout(resizeTimeoutRef.current);
     }
@@ -69,14 +116,14 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       cancelAnimationFrame(rafFitRef.current);
     }
 
-    // 使用 timeout 防抖，避免短時間內多次 resize
+    // Debounce resize bursts to avoid sending excessive PTY resize events.
     resizeTimeoutRef.current = window.setTimeout(() => {
       rafFitRef.current = requestAnimationFrame(() => {
         const fitAddon = fitAddonRef.current;
         const terminal = terminalInstanceRef.current;
         if (!fitAddon || !terminal) return;
 
-        // 如果不可見，不執行 fit，避免錯誤
+        // Skip fitting hidden terminals because xterm cannot measure them reliably.
         if (hostElement && hostElement.offsetParent === null) {
           return;
         }
@@ -84,94 +131,84 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
         try {
           fitAddon.fit();
           const { cols, rows } = terminal;
+          terminal.refresh(0, Math.max(rows - 1, 0));
           const lastSize = lastSentSizeRef.current;
           if (lastSize.cols !== cols || lastSize.rows !== rows) {
             onResize(tabId, cols, rows);
             lastSentSizeRef.current = { cols, rows };
-            // 通知父組件更新狀態列
+            // Notify the parent so the status bar stays in sync.
             if (onTerminalResizeRef.current) {
               onTerminalResizeRef.current(cols, rows);
             }
           }
         } catch (error) {
-          logger.debug('Terminal fit 失敗', { error });
+          logger.debug('Terminal fit failed', { error });
         }
         rafFitRef.current = null;
       });
       resizeTimeoutRef.current = null;
-    }, 100); // 100ms 防抖延遲
+    }, 100);
   }, [tabId, onResize, hostElement]);
 
-  // 初始化 terminal
+  // Initialize or reattach the terminal instance for this tab.
   useEffect(() => {
     if (!hostElement) return;
 
-    const terminal = new XTerm({
-      allowProposedApi: true,
-      cursorBlink: true,
-      fontFamily:
-        'Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      fontSize: 13,
-      scrollback: 1000,
-      convertEol: true,
-      theme: {
-        background: '#0f172a',
-        foreground: '#f8fafc',
-        cursor: '#22d3ee',
-      },
-    });
-
-    const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
-    const searchAddon = new SearchAddon();
-
-    terminal.loadAddon(fitAddon);
-    terminal.loadAddon(webLinksAddon);
-    terminal.loadAddon(searchAddon);
-
-    // 嘗試載入 WebGL 加速
-    try {
-      const webglAddon = new WebglAddon();
-      terminal.loadAddon(webglAddon);
-    } catch (error) {
-      logger.debug('WebGL 加速不可用，使用回退模式', { error });
+    let entry = terminalRegistry.get(tabId);
+    if (!entry) {
+      entry = createTerminalEntry();
+      terminalRegistry.set(tabId, entry);
     }
 
-    terminal.open(hostElement);
+    const { terminal, fitAddon } = entry;
+    const terminalElement = terminal.element;
+    if (terminalElement) {
+      hostElement.appendChild(terminalElement);
+    } else {
+      terminal.open(hostElement);
+    }
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (event.type === 'keydown' && event.key === 'Enter' && event.shiftKey) {
+        event.preventDefault();
+        onInput(tabId, '\n');
+        return false;
+      }
+      return true;
+    });
 
     terminalInstanceRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    // 等待字體載入後再 fit
+    // Wait for fonts before fitting so character dimensions are stable.
     const doc = document as DocumentWithFonts;
     if (doc.fonts && doc.fonts.ready) {
       doc.fonts.ready.then(() => {
         performFit();
       }).catch((error) => {
-        logger.debug('字體載入失敗', { error });
+        logger.debug('Font loading failed', { error });
         performFit();
       });
     } else {
       performFit();
     }
 
-    // 監聽輸入
+    // Forward terminal input to the remote PTY.
     const dataDisposable = terminal.onData((data) => {
       onInput(tabId, data);
     });
 
-    // 監聽選取變化
+    // Track selection for copy actions.
     const selectionDisposable = terminal.onSelectionChange(() => {
       if (onSelectionChange) {
         onSelectionChange(terminal.getSelection() ?? '');
       }
     });
 
-    // 附加到 realtime manager
+    // Attach to the realtime manager output stream.
     const detach = attachXterm(tabId, terminal);
     detachTerminalRef.current = detach;
 
-    // 監聽容器大小變化
+    // Observe container size changes.
     const resizeObserver = new ResizeObserver(() => {
       performFit();
     });
@@ -191,11 +228,10 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
       if (detachTerminalRef.current) {
         detachTerminalRef.current();
       }
-      terminal.dispose();
     };
   }, [hostElement, tabId, onInput, onSelectionChange, attachXterm, performFit]);
 
-  // 當可見性改變時，重新 fit
+  // Refit when visibility changes.
   useEffect(() => {
     if (isVisible) {
       performFit();
@@ -211,4 +247,3 @@ export const TerminalTab: React.FC<TerminalTabProps> = ({
     />
   );
 };
-

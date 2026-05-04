@@ -933,6 +933,12 @@ const agentSettings = {
         loading: 'Loading items…',
         empty: 'No items match the current filters.',
       },
+      toml: {
+        description: 'Description',
+        prompt: 'Prompt',
+        developerInstructions: 'Developer instructions',
+        raw: 'Raw TOML',
+      },
     },
     subagents: {
       pageTitle: 'Subagent settings',

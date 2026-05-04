@@ -70,6 +70,8 @@ class SubagentCreateRequest(BaseModel):
 
     file_name: str = Field(..., alias="fileName", description="File name")
     content: str = Field(..., description="Markdown content")
+    name: str | None = Field(None, description="Subagent name")
+    description: str | None = Field(None, description="Subagent description")
 
     model_config = {"populate_by_name": True}
 
@@ -79,6 +81,8 @@ class SubagentUpdateRequest(BaseModel):
 
     file_name: str | None = Field(None, alias="fileName", description="New file name")
     content: str = Field(..., description="Markdown content")
+    name: str | None = Field(None, description="Subagent name")
+    description: str | None = Field(None, description="Subagent description")
 
     model_config = {"populate_by_name": True}
 

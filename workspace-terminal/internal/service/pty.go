@@ -13,7 +13,7 @@ import (
 )
 
 // Create PTY
-func createPTY(workspacePath string, cols int, rows int) (*TerminalTab, error) {
+func createPTY(workspacePath string, cols int, rows int, replayBufferBytes int) (*TerminalTab, error) {
 	// Create shell command (using both login and interactive)
 	cmd := exec.Command("/bin/bash", "-l", "-i")
 	cmd.Dir = workspacePath
@@ -58,9 +58,11 @@ func createPTY(workspacePath string, cols int, rows int) (*TerminalTab, error) {
 		WorkspacePath: workspacePath,
 		CreatedAt:     time.Now(),
 		LastActiveAt:  time.Now(),
+		Status:        "running",
 		pty:           ptmx,
 		cmd:           cmd,
-		OutputChan:    make(chan []byte, 256),
+		OutputChan:    make(chan OutputChunk, 256),
+		replay:        newReplayRing(replayBufferBytes),
 	}
 
 	// Start output monitoring goroutine
@@ -75,20 +77,41 @@ func monitorPTYOutput(tab *TerminalTab) {
 	for {
 		n, err := tab.pty.Read(buf)
 		if err != nil {
+			tab.markExited()
 			close(tab.OutputChan)
 			return
 		}
 		if n > 0 {
-			// Copy data to avoid race condition
 			data := make([]byte, n)
 			copy(data, buf[:n])
-			select {
-			case tab.OutputChan <- data:
-			default:
-				// Drop old data when channel is full
-			}
+			tab.OutputChan <- tab.replay.append(data)
 		}
 	}
+}
+
+func (tab *TerminalTab) markExited() {
+	tab.mu.Lock()
+	defer tab.mu.Unlock()
+
+	if tab.Status == "exited" {
+		return
+	}
+
+	exitCode := 0
+	if tab.cmd != nil {
+		err := tab.cmd.Wait()
+		if err != nil && tab.cmd.ProcessState != nil {
+			exitCode = tab.cmd.ProcessState.ExitCode()
+		} else if err != nil {
+			exitCode = -1
+		} else if tab.cmd.ProcessState != nil {
+			exitCode = tab.cmd.ProcessState.ExitCode()
+		}
+	}
+
+	tab.Status = "exited"
+	tab.ExitCode = &exitCode
+	tab.LastActiveAt = time.Now()
 }
 
 func getContainerID() string {
@@ -115,6 +138,7 @@ func (tab *TerminalTab) SendInput(data []byte) error {
 		return fmt.Errorf("PTY not available")
 	}
 
+	tab.LastActiveAt = time.Now()
 	_, err := tab.pty.Write(data)
 	return err
 }
@@ -130,6 +154,7 @@ func (tab *TerminalTab) Resize(cols int, rows int) error {
 
 	tab.Cols = cols
 	tab.Rows = rows
+	tab.LastActiveAt = time.Now()
 
 	return pty.Setsize(tab.pty, &pty.Winsize{
 		Rows: uint16(rows),

@@ -64,6 +64,7 @@ make docker-down
 | `MAX_TABS_PER_WORKSPACE` | max tabs per workspace | `10` |
 | `SESSION_TIMEOUT` | session timeout in seconds | `300` |
 | `PTY_BUFFER_SIZE` | PTY buffer size | `1024` |
+| `TERMINAL_REPLAY_BUFFER_BYTES` | per-tab replay ring size for reconnect output replay | `1048576` |
 
 ## API
 
@@ -72,6 +73,8 @@ make docker-down
 ```text
 ws://localhost:8745/ws/terminal?token={token}&workspace_id={workspace_id}
 ```
+
+`workspace_id` is required. The service scopes clients, tabs, and broadcasts by workspace id.
 
 ### Health Check
 
@@ -96,6 +99,8 @@ Client-to-server message types:
 - `close_tab`
 - `switch_tab`
 - `list_tabs`
+- `rename_tab`
+- `replay`
 - `input`
 - `resize`
 - `clear`
@@ -106,7 +111,9 @@ Server-to-client message types:
 - `tab_created`
 - `tab_closed`
 - `tab_switched`
+- `tab_updated`
 - `tab_list`
+- `tab_replay_reset`
 - `output`
 - `resized`
 - `error`

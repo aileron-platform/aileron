@@ -139,12 +139,6 @@ This page lists all service environment variables. Docker mode sets them in `doc
 | `SESSION_TIMEOUT` | `300` | Session timeout (seconds) |
 | `PTY_BUFFER_SIZE` | `1024` | PTY buffer size |
 
-### VS Code Server
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VSCODE_SERVER_PORT` | `8080` | VS Code Server port |
-
 ### Claude API
 
 | Variable | Default | Description |

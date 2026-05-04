@@ -6,21 +6,23 @@ type MessageType string
 
 const (
 	// Connection management
-	TypeConnect    MessageType = "connect"
-	TypeConnected  MessageType = "connected"
-	TypeDisconnect MessageType = "disconnect"
+	TypeConnected MessageType = "connected"
 
 	// Tab management
 	TypeCreateTab MessageType = "create_tab"
 	TypeCloseTab  MessageType = "close_tab"
 	TypeSwitchTab MessageType = "switch_tab"
 	TypeListTabs  MessageType = "list_tabs"
+	TypeRenameTab MessageType = "rename_tab"
+	TypeReplay    MessageType = "replay"
 
 	// Events
 	TypeTabCreated  MessageType = "tab_created"
 	TypeTabClosed   MessageType = "tab_closed"
 	TypeTabSwitched MessageType = "tab_switched"
 	TypeTabList     MessageType = "tab_list"
+	TypeTabUpdated  MessageType = "tab_updated"
+	TypeReplayReset MessageType = "tab_replay_reset"
 
 	// Terminal operations
 	TypeInput   MessageType = "input"
@@ -40,6 +42,19 @@ type Message struct {
 	Timestamp int64                  `json:"timestamp,omitempty"`
 }
 
+type TerminalTabMetadata struct {
+	TabID         string `json:"tab_id"`
+	SessionID     string `json:"session_id"`
+	Name          string `json:"name"`
+	WorkspacePath string `json:"workspace_path"`
+	Cols          int    `json:"cols"`
+	Rows          int    `json:"rows"`
+	CreatedAt     int64  `json:"created_at"`
+	LastActiveAt  int64  `json:"last_active_at"`
+	Status        string `json:"status"`
+	ExitCode      *int   `json:"exit_code,omitempty"`
+}
+
 // Helper functions for specific message types
 func NewConnectedMessage(clientID string, userID string) *Message {
 	return &Message{
@@ -53,23 +68,29 @@ func NewConnectedMessage(clientID string, userID string) *Message {
 	}
 }
 
-func NewTabCreatedMessage(tabID string, sessionID string, name string, workspacePath string, cols int, rows int) *Message {
+func NewTabCreatedMessage(tab TerminalTabMetadata) *Message {
 	return &Message{
 		Type:  TypeTabCreated,
-		TabID: tabID,
+		TabID: tab.TabID,
 		Data: map[string]interface{}{
-			"session_id":     sessionID,
-			"name":           name,
-			"workspace_path": workspacePath,
-			"cols":           cols,
-			"rows":           rows,
-			"created_at":     time.Now().Unix(),
+			"tab": tab,
 		},
 		Timestamp: time.Now().Unix(),
 	}
 }
 
-func NewTabClosedMessage(tabID string, exitCode int) *Message {
+func NewTabUpdatedMessage(tab TerminalTabMetadata) *Message {
+	return &Message{
+		Type:  TypeTabUpdated,
+		TabID: tab.TabID,
+		Data: map[string]interface{}{
+			"tab": tab,
+		},
+		Timestamp: time.Now().Unix(),
+	}
+}
+
+func NewTabClosedMessage(tabID string, exitCode *int) *Message {
 	return &Message{
 		Type:  TypeTabClosed,
 		TabID: tabID,
@@ -91,12 +112,13 @@ func NewTabSwitchedMessage(tabID string) *Message {
 	}
 }
 
-func NewOutputMessage(tabID string, data []byte) *Message {
+func NewOutputMessage(tabID string, seq uint64, data []byte) *Message {
 	return &Message{
 		Type:  TypeOutput,
 		TabID: tabID,
 		Data: map[string]interface{}{
 			"data": string(data),
+			"seq":  seq,
 		},
 		Timestamp: time.Now().Unix(),
 	}
@@ -126,12 +148,24 @@ func NewErrorMessage(tabID string, code string, message string) *Message {
 	}
 }
 
-func NewTabListMessage(tabs []map[string]interface{}) *Message {
+func NewTabListMessage(tabs []TerminalTabMetadata) *Message {
 	return &Message{
 		Type: TypeTabList,
 		Data: map[string]interface{}{
 			"tabs":  tabs,
 			"count": len(tabs),
+		},
+		Timestamp: time.Now().Unix(),
+	}
+}
+
+func NewReplayResetMessage(tabID string, requestedSeq uint64, floorSeq uint64) *Message {
+	return &Message{
+		Type:  TypeReplayReset,
+		TabID: tabID,
+		Data: map[string]interface{}{
+			"requested_seq": requestedSeq,
+			"floor_seq":     floorSeq,
 		},
 		Timestamp: time.Now().Unix(),
 	}

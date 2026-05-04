@@ -34,7 +34,7 @@ const logger = createLogger('TerminalView');
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useTerminalStream } from '@/features/workspace/realtime';
 import { useGitContextsQuery } from '@/features/workspace/features/version-control/hooks/useVersionControlQueries';
-import { TerminalTab } from './TerminalTab';
+import { TerminalTab, disposeAllTerminalInstances, disposeTerminalInstance } from './TerminalTab';
 import { TerminalLayoutSelector, TerminalLayoutType } from './TerminalLayoutSelector';
 import { LAYOUT_DEFINITIONS, LayoutNode, getPaneCount } from './LayoutDefinitions';
 import { TERMINAL_MAX_TABS } from '../config/terminalConfig';
@@ -48,6 +48,7 @@ import {
 
 type PendingTabRequest = { paneIndex: number; name: string; workspacePath: string };
 type PendingAssignQueue = number[];
+type PaneSize = { cols: number; rows: number };
 
 export const TerminalView: React.FC = () => {
   const { t } = useI18n();
@@ -96,6 +97,7 @@ export const TerminalView: React.FC = () => {
   const pendingTabQueueRef = useRef<PendingTabRequest[]>([]);
   const pendingAssignQueueRef = useRef<PendingAssignQueue>([]);
   const prevLayoutRef = useRef<TerminalLayoutType>('single');
+  const paneSizeMapRef = useRef<Map<number, PaneSize>>(new Map());
   const setActivePane = useCallback(
     (index: number) => {
       setActivePaneIndex((prev) => (prev === index ? prev : index));
@@ -203,16 +205,14 @@ export const TerminalView: React.FC = () => {
     [t, terminalSize.rows, terminalSize.cols, selectedText],
   );
 
-  const buildTerminalName = useCallback(
-    (index: number) =>
-      t('workspace.containerManagement.terminal.tabs.label', {
-        index,
-        defaultValue: `終端機 ${index}`,
-      }),
-    [t],
-  );
+  const getPaneSize = useCallback((paneIndex: number): PaneSize | undefined => {
+    const paneSize = paneSizeMapRef.current.get(paneIndex);
+    if (paneSize && paneSize.cols > 0 && paneSize.rows > 0) return paneSize;
+    if (terminalSize.cols > 0 && terminalSize.rows > 0) return terminalSize;
+    return undefined;
+  }, [terminalSize]);
 
-  // Auto-connect
+  // Auto-connect.
   useEffect(() => {
     if (workspaceRuntime.workspaceId && workspaceRuntime.terminalExternalUrl) {
       const timer = setTimeout(() => {
@@ -226,9 +226,16 @@ export const TerminalView: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceRuntime.workspaceId, workspaceRuntime.terminalExternalUrl]);
 
-  // 若有排隊建立的分頁，於連線就緒時補發
+  useEffect(() => {
+    return () => {
+      disposeAllTerminalInstances();
+    };
+  }, []);
+
+  // Flush queued tab creates after the socket is synced.
   useEffect(() => {
     if (terminalState.status !== 'open') return;
+    if (!terminalState.isSynced) return;
     if (pendingTabQueueRef.current.length === 0) return;
 
     const queued = [...pendingTabQueueRef.current];
@@ -238,11 +245,11 @@ export const TerminalView: React.FC = () => {
       pendingPaneIndexRef.current = paneIndex;
       pendingAssignQueueRef.current.push(paneIndex);
       setActivePane(paneIndex);
-      createTab(name, workspacePath);
+      createTab(name, workspacePath, getPaneSize(paneIndex));
     });
-  }, [terminalState.status, createTab, setActivePane]);
+  }, [terminalState.status, terminalState.isSynced, createTab, setActivePane, getPaneSize]);
 
-  // 將新建立的 tab 指派到預期的 pane
+  // Assign newly created tabs to requested panes.
   useEffect(() => {
     if (pendingAssignQueueRef.current.length === 0) return;
 
@@ -278,7 +285,6 @@ export const TerminalView: React.FC = () => {
       const neededPanes = layoutPaneCount;
       let newMapping = [...prevMapping];
 
-      // 清理已不存在的 tab 映射，避免向失效的連線送出指令
       const validTabIds = new Set(terminalState.tabs.map((tab) => tab.tabId));
       newMapping = newMapping.map((id) => (id && validTabIds.has(id) ? id : null));
 
@@ -289,6 +295,16 @@ export const TerminalView: React.FC = () => {
         ];
       } else if (newMapping.length > neededPanes) {
         newMapping = newMapping.slice(0, neededPanes);
+      }
+
+      if (layout === 'single') {
+        const focusedTabId = prevMapping[activePaneIndex];
+        newMapping[0] =
+          (focusedTabId && validTabIds.has(focusedTabId) ? focusedTabId : null) ??
+          terminalState.activeTabId ??
+          terminalState.tabs[0]?.tabId ??
+          null;
+        return newMapping;
       }
 
       const mappedTabs = new Set(newMapping.filter((id): id is string => Boolean(id)));
@@ -307,21 +323,24 @@ export const TerminalView: React.FC = () => {
         pendingPaneIndexRef.current = null;
       }
 
-      if (layout === 'single' && terminalState.activeTabId) {
-        newMapping[0] = terminalState.activeTabId;
+      for (let i = 0; i < newMapping.length && unmappedTabs.length > 0; i += 1) {
+        if (!newMapping[i]) {
+          const tab = unmappedTabs.shift();
+          newMapping[i] = tab?.tabId ?? null;
+        }
       }
 
       return newMapping;
     },
-    [layoutPaneCount, terminalState.tabs, layout, terminalState.activeTabId],
+    [layoutPaneCount, terminalState.tabs, layout, terminalState.activeTabId, activePaneIndex],
   );
 
-  // Initialize pane mapping when tabs change or layout changes
+  // Reconcile pane mapping when tabs or layout changes.
   useEffect(() => {
     setPaneMapping(reconcilePaneMapping);
   }, [reconcilePaneMapping]);
 
-  // 當 tab 新增且有等待指派的 pane 時，立即掛載到目標 pane
+  // Attach the newest created tab to the requested pane.
   useEffect(() => {
     if (pendingPaneIndexRef.current === null) return;
     const targetIndex = pendingPaneIndexRef.current;
@@ -340,19 +359,12 @@ export const TerminalView: React.FC = () => {
   useEffect(() => {
     const prevLayout = prevLayoutRef.current;
     if (prevLayout !== layout) {
-      if (prevLayout === 'single' && layout !== 'single') {
-        setPaneMapping(Array(getPaneCount(layout)).fill(null));
-        setActivePaneIndex(0);
-        pendingPaneIndexRef.current = null;
-      }
-      if (layout === 'single') {
-        setPaneMapping((prev) => (prev.length ? prev : [null]));
-      }
+      setActivePaneIndex((prev) => Math.min(prev, Math.max(getPaneCount(layout) - 1, 0)));
       prevLayoutRef.current = layout;
     }
   }, [layout]);
 
-  // Sync active tab with active pane (ONLY for multi-pane layouts)
+  // Sync local active tab with the focused pane.
   useEffect(() => {
     if (layout === 'single') return;
 
@@ -376,36 +388,20 @@ export const TerminalView: React.FC = () => {
       }
 
       pendingPaneIndexRef.current = paneIndex;
-
-      const usedNumbers = new Set<number>();
-      const trailingNumber = /(\d+)\s*$/;
-      terminalState.tabs.forEach((tab) => {
-        const match = tab.name.match(trailingNumber);
-        if (match) {
-          usedNumbers.add(parseInt(match[1], 10));
-        }
-      });
-
-      let nextNum = 1;
-      while (usedNumbers.has(nextNum)) nextNum += 1;
-
-      const name = buildTerminalName(nextNum);
       const request: PendingTabRequest = {
         paneIndex,
-        name,
+        name: '',
         workspacePath: defaultWorkspacePath,
       };
 
-      // 標記期望掛載的 pane，等待 tab_created 時對應
       pendingPaneIndexRef.current = paneIndex;
       pendingAssignQueueRef.current.push(paneIndex);
 
-      // 若未連線，先排隊並強制重連，等連線後再建立
-      if (terminalState.status !== 'open') {
+      if (terminalState.status !== 'open' || !terminalState.isSynced) {
         pendingTabQueueRef.current.push(request);
         connect({ force: true });
       } else {
-        createTab(name, request.workspacePath);
+        createTab(request.name, request.workspacePath, getPaneSize(paneIndex));
       }
 
       setActivePane(paneIndex);
@@ -413,20 +409,22 @@ export const TerminalView: React.FC = () => {
     [
       createTab,
       terminalState.tabs,
-      buildTerminalName,
       terminalState.status,
+      terminalState.isSynced,
       connect,
       toast,
       menuLabels.maxLimitDescription,
       menuLabels.maxLimitTitle,
       setActivePane,
       defaultWorkspacePath,
+      getPaneSize,
     ],
   );
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
       closeTab(tabId);
+      disposeTerminalInstance(tabId);
       // Update mapping to remove the closed tab
       setPaneMapping((prev) => prev.map((id) => (id === tabId ? null : id)));
     },
@@ -467,6 +465,7 @@ export const TerminalView: React.FC = () => {
     const tabName = activeTab.name;
 
     closeTab(activeTabId);
+    disposeTerminalInstance(activeTabId);
     setPaneMapping((prev) => prev.map((id) => (id === activeTabId ? null : id)));
     pendingPaneIndexRef.current = activePaneIndex;
     pendingAssignQueueRef.current.push(activePaneIndex);
@@ -484,7 +483,7 @@ export const TerminalView: React.FC = () => {
     }
 
     window.setTimeout(() => {
-      createTab(tabName, request.workspacePath);
+      createTab(tabName, request.workspacePath, getPaneSize(activePaneIndex));
     }, 120);
   }, [
     paneMapping,
@@ -496,6 +495,7 @@ export const TerminalView: React.FC = () => {
     connect,
     setPaneMapping,
     defaultWorkspacePath,
+    getPaneSize,
   ]);
 
   const requestLayoutChange = useCallback(
@@ -602,19 +602,29 @@ export const TerminalView: React.FC = () => {
   }, [paneMapping]);
 
   const handleTerminalResize = useCallback((cols: number, rows: number) => {
+    paneSizeMapRef.current.set(activePaneIndex, { cols, rows });
     setTerminalSize({ cols, rows });
-  }, []);
+  }, [activePaneIndex]);
 
-  // Initial tab creation if none exist
+  // Create the default tab only after backend sync confirms there are no tabs.
   useEffect(() => {
     if (
       terminalState.status === 'open' &&
+      terminalState.isSynced &&
       terminalState.tabs.length === 0 &&
       pendingTabQueueRef.current.length === 0
     ) {
-      createTab(buildTerminalName(1), defaultWorkspacePath);
+      createTab('', defaultWorkspacePath, getPaneSize(activePaneIndex));
     }
-  }, [terminalState.status, terminalState.tabs.length, createTab, buildTerminalName, defaultWorkspacePath]);
+  }, [
+    terminalState.status,
+    terminalState.isSynced,
+    terminalState.tabs.length,
+    createTab,
+    defaultWorkspacePath,
+    getPaneSize,
+    activePaneIndex,
+  ]);
 
   // Handle connection errors
   useEffect(() => {
@@ -631,15 +641,6 @@ export const TerminalView: React.FC = () => {
   const activeTab = terminalState.tabs.find((t) => t.tabId === activeTabId);
 
   const statusInfo = useMemo(() => {
-    if (!activeTab) {
-      return {
-        color: 'bg-gray-500',
-        label: t('workspace.containerManagement.terminal.status.unassigned', {
-          defaultValue: '未指派',
-        }),
-      };
-    }
-
     if (terminalState.status === 'connecting') {
       return {
         color: 'bg-sky-500',
@@ -653,6 +654,22 @@ export const TerminalView: React.FC = () => {
         color: 'bg-amber-500',
         label: t('workspace.containerManagement.terminal.status.reconnecting', {
           defaultValue: '重新連線中...',
+        }),
+      };
+    }
+    if (terminalState.status === 'open' && !terminalState.isSynced) {
+      return {
+        color: 'bg-sky-500',
+        label: t('workspace.containerManagement.terminal.status.syncing', {
+          defaultValue: '正在同步終端機工作階段...',
+        }),
+      };
+    }
+    if (!activeTab) {
+      return {
+        color: 'bg-gray-500',
+        label: t('workspace.containerManagement.terminal.status.unassigned', {
+          defaultValue: '未指派',
         }),
       };
     }
@@ -673,7 +690,7 @@ export const TerminalView: React.FC = () => {
         defaultValue: '已中斷連線',
       }),
     };
-  }, [terminalState.status, terminalState.error, t, activeTab]);
+  }, [terminalState.status, terminalState.error, terminalState.isSynced, t, activeTab]);
 
   const renderEmptyPane = useCallback(
     (paneIndex: number) => (

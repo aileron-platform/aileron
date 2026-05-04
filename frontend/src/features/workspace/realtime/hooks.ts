@@ -25,8 +25,8 @@ export const useTerminalStream = () => {
   );
 
   const createTab = useCallback(
-    (name: string, workspacePath?: string) => {
-      context.terminal.createTab(name, workspacePath);
+    (name: string, workspacePath?: string, size?: { cols: number; rows: number }) => {
+      context.terminal.createTab(name, workspacePath, size);
     },
     [context],
   );

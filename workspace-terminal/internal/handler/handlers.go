@@ -20,31 +20,28 @@ func (h *WebSocketHandler) handleCreateTab(client *model.Client, msg *model.Mess
 		return
 	}
 
-	name, ok := msg.Data["name"].(string)
-	if !ok || name == "" {
-		name = "Terminal" // Default name
-	}
+	name, _ := msg.Data["name"].(string)
 
 	workspacePath, ok := msg.Data["workspace_path"].(string)
 	if !ok || workspacePath == "" {
 		workspacePath = "/workspace" // Default working directory
 	}
 
-	tab, err := h.terminalMgr.CreateTab(client.WorkspaceID, int(cols), int(rows), workspacePath)
+	tab, err := h.terminalMgr.CreateTab(client.WorkspaceID, name, int(cols), int(rows), workspacePath)
 	if err != nil {
 		h.logger.Error("Failed to create tab", zap.Error(err))
 		h.sendError(client, "TAB_CREATION_FAILED", err.Error())
 		return
 	}
 
-	response := model.NewTabCreatedMessage(tab.TabID, tab.SessionID, name, tab.WorkspacePath, tab.Cols, tab.Rows)
+	response := model.NewTabCreatedMessage(service.TabMetadata(tab))
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
 	go h.monitorTabOutput(client.WorkspaceID, tab)
 
 	h.logger.Info("Tab created",
 		zap.String("tab_id", tab.TabID),
-		zap.String("name", name),
+		zap.String("name", tab.Name),
 		zap.String("workspace_id", client.WorkspaceID))
 }
 
@@ -54,14 +51,14 @@ func (h *WebSocketHandler) handleCloseTab(client *model.Client, msg *model.Messa
 		return
 	}
 
-	err := h.terminalMgr.CloseTab(client.WorkspaceID, msg.TabID)
+	exitCode, err := h.terminalMgr.CloseTab(client.WorkspaceID, msg.TabID)
 	if err != nil {
 		h.logger.Error("Failed to close tab", zap.Error(err))
 		h.sendError(client, "TAB_CLOSE_FAILED", err.Error())
 		return
 	}
 
-	response := model.NewTabClosedMessage(msg.TabID, 0)
+	response := model.NewTabClosedMessage(msg.TabID, exitCode)
 	h.broadcastToWorkspace(client.WorkspaceID, response)
 
 	h.logger.Info("Tab closed",
@@ -75,7 +72,7 @@ func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Mess
 		return
 	}
 
-	err := h.terminalMgr.SwitchTab(client.WorkspaceID, msg.TabID)
+	err := h.terminalMgr.ValidateTab(client.WorkspaceID, msg.TabID)
 	if err != nil {
 		h.logger.Error("Failed to switch tab", zap.Error(err))
 		h.sendError(client, "TAB_SWITCH_FAILED", err.Error())
@@ -83,7 +80,7 @@ func (h *WebSocketHandler) handleSwitchTab(client *model.Client, msg *model.Mess
 	}
 
 	response := model.NewTabSwitchedMessage(msg.TabID)
-	h.broadcastToWorkspace(client.WorkspaceID, response)
+	h.sendMessage(client, response)
 
 	h.logger.Info("Tab switched",
 		zap.String("tab_id", msg.TabID),
@@ -164,21 +161,68 @@ func (h *WebSocketHandler) handleListTabs(client *model.Client, msg *model.Messa
 		return
 	}
 
-	tabsList := make([]map[string]interface{}, 0, len(tabs))
+	tabsList := make([]model.TerminalTabMetadata, 0, len(tabs))
 	for _, tab := range tabs {
-		tabsList = append(tabsList, map[string]interface{}{
-			"tab_id":         tab.TabID,
-			"session_id":     tab.SessionID,
-			"cols":           tab.Cols,
-			"rows":           tab.Rows,
-			"cwd":            tab.WorkspacePath,
-			"created_at":     tab.CreatedAt.Unix(),
-			"last_active_at": tab.LastActiveAt.Unix(),
-		})
+		tabsList = append(tabsList, service.TabMetadata(tab))
 	}
 
 	response := model.NewTabListMessage(tabsList)
 	h.sendMessage(client, response)
+}
+
+func (h *WebSocketHandler) handleRenameTab(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	name, ok := msg.Data["name"].(string)
+	if !ok || name == "" {
+		h.sendError(client, "INVALID_PARAMS", "name is required and must be a non-empty string")
+		return
+	}
+
+	tab, err := h.terminalMgr.RenameTab(client.WorkspaceID, msg.TabID, name)
+	if err != nil {
+		h.logger.Error("Failed to rename tab", zap.Error(err))
+		h.sendError(client, "TAB_RENAME_FAILED", err.Error())
+		return
+	}
+
+	h.broadcastToWorkspace(client.WorkspaceID, model.NewTabUpdatedMessage(service.TabMetadata(tab)))
+}
+
+func (h *WebSocketHandler) handleReplay(client *model.Client, msg *model.Message) {
+	if msg.TabID == "" {
+		h.sendError(client, "INVALID_PARAMS", "tab_id is required")
+		return
+	}
+
+	fromSeq, ok := msg.Data["from_seq"].(float64)
+	if !ok {
+		h.sendError(client, "INVALID_PARAMS", "from_seq is required and must be a number")
+		return
+	}
+
+	chunks, floorSeq, replayable, err := h.terminalMgr.ReplayFrom(client.WorkspaceID, msg.TabID, uint64(fromSeq))
+	if err != nil {
+		h.sendError(client, "INVALID_TAB_ID", err.Error())
+		return
+	}
+	if !replayable {
+		h.sendMessage(client, model.NewReplayResetMessage(msg.TabID, uint64(fromSeq), floorSeq))
+		return
+	}
+
+	for _, chunk := range chunks {
+		if err := h.sendMessage(client, model.NewOutputMessage(msg.TabID, chunk.Seq, chunk.Data)); err != nil {
+			h.logger.Error("Failed to replay output",
+				zap.String("client_id", client.ID),
+				zap.String("tab_id", msg.TabID),
+				zap.Error(err))
+			return
+		}
+	}
 }
 
 func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message) {
@@ -202,11 +246,11 @@ func (h *WebSocketHandler) handleClear(client *model.Client, msg *model.Message)
 }
 
 func (h *WebSocketHandler) monitorTabOutput(workspaceID string, tab *service.TerminalTab) {
-	for data := range tab.OutputChan {
-		if data == nil {
+	for chunk := range tab.OutputChan {
+		if chunk.Data == nil {
 			continue
 		}
-		msg := model.NewOutputMessage(tab.TabID, data)
+		msg := model.NewOutputMessage(tab.TabID, chunk.Seq, chunk.Data)
 		h.broadcastToWorkspace(workspaceID, msg)
 	}
 

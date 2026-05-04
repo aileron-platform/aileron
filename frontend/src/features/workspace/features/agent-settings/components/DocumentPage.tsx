@@ -53,6 +53,13 @@ const documentSourceType = (document: AgentDocument): AgentSettingsSourceType =>
 const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({ content, i18nNamespace }) => {
   const { t } = useI18n();
   const [rawExpanded, setRawExpanded] = useState(false);
+  const getTomlLabel = (key: 'description' | 'prompt' | 'developerInstructions' | 'raw') => {
+    const namespaceKey = `${i18nNamespace}.documents.toml.${key}`;
+    const translated = t(namespaceKey);
+    return translated === namespaceKey
+      ? t(`workspace.agentSettings.common.documents.toml.${key}`)
+      : translated;
+  };
 
   const parsed = useMemo(() => {
     try {
@@ -81,7 +88,7 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
       {parsed.description ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
-            {t(`${i18nNamespace}.documents.toml.description`)}
+            {getTomlLabel('description')}
           </h4>
           <p className="text-sm text-foreground">{parsed.description}</p>
         </div>
@@ -90,7 +97,7 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
       {parsed.prompt ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
-            {t(`${i18nNamespace}.documents.toml.prompt`)}
+            {getTomlLabel('prompt')}
           </h4>
           <MarkdownContent content={parsed.prompt} />
         </div>
@@ -99,7 +106,7 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
       {parsed.developerInstructions ? (
         <div className="rounded-lg border border-border bg-muted/30 p-4">
           <h4 className="mb-2 text-sm font-semibold text-muted-foreground">
-            {t(`${i18nNamespace}.documents.toml.developerInstructions`)}
+            {getTomlLabel('developerInstructions')}
           </h4>
           <MarkdownContent content={parsed.developerInstructions} />
         </div>
@@ -112,7 +119,7 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
           onClick={() => setRawExpanded(!rawExpanded)}
         >
           <ChevronDown className={`h-4 w-4 transition-transform ${rawExpanded ? 'rotate-0' : '-rotate-90'}`} />
-          {t(`${i18nNamespace}.documents.toml.raw`)}
+          {getTomlLabel('raw')}
         </button>
         {rawExpanded ? (
           <div className="border-t border-border p-4">

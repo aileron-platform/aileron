@@ -228,6 +228,8 @@ const containerManagement = {
     status: {
       connecting: 'Connecting...',
       reconnecting: 'Reconnecting...',
+      syncing: 'Syncing terminal sessions...',
+      replayReset: 'Terminal screen was reset after reconnect',
       connected: 'Connected',
       disconnected: 'Disconnected',
       unassigned: 'Not assigned',

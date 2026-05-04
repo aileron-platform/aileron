@@ -42,9 +42,14 @@ func NewWebSocketHandler(
 
 func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 	token := c.Query("token")
+	workspaceID := c.Query("workspace_id")
 
 	if token == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token parameter"})
+		return
+	}
+	if workspaceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing workspace_id parameter"})
 		return
 	}
 
@@ -66,7 +71,7 @@ func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 		ID:          clientID,
 		WS:          ws,
 		UserID:      tokenInfo.UserID,
-		WorkspaceID: "", // Terminal Service does not bind to workspace
+		WorkspaceID: workspaceID,
 		Token:       token,
 		ConnectedAt: time.Now(),
 	}
@@ -75,7 +80,8 @@ func (h *WebSocketHandler) HandleTerminalWS(c *gin.Context) {
 
 	h.logger.Info("Client connected",
 		zap.String("client_id", clientID),
-		zap.String("user_id", tokenInfo.UserID))
+		zap.String("user_id", tokenInfo.UserID),
+		zap.String("workspace_id", workspaceID))
 
 	h.sendMessage(client, model.NewConnectedMessage(clientID, tokenInfo.UserID))
 
@@ -126,6 +132,10 @@ func (h *WebSocketHandler) routeMessage(client *model.Client, msg *model.Message
 		h.handleResize(client, msg)
 	case model.TypeListTabs:
 		h.handleListTabs(client, msg)
+	case model.TypeRenameTab:
+		h.handleRenameTab(client, msg)
+	case model.TypeReplay:
+		h.handleReplay(client, msg)
 	case model.TypeClear:
 		h.handleClear(client, msg)
 	default:

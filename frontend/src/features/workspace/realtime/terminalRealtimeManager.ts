@@ -1,6 +1,6 @@
 
 import { createTerminalStore } from './terminalStore';
-import type { TerminalStore } from './terminalStore';
+import type { TerminalStore, TerminalTabMetadata } from './terminalStore';
 import { WebSocketConnectionRegistry, ManagedSocketStatus } from './core/websocketRegistry';
 import type { WebSocketType } from './core/websocketRegistry';
 import type { Terminal } from '@xterm/xterm';
@@ -23,7 +23,7 @@ export interface TerminalRealtimeAPI {
   getSnapshot: () => ReturnType<TerminalStore['getSnapshot']>;
   connect: (options?: ConnectOptions) => void;
   disconnect: (options?: { allowReconnect?: boolean }) => void;
-  createTab: (name: string, workspacePath?: string) => void;
+  createTab: (name: string, workspacePath?: string, size?: { cols: number; rows: number }) => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
   renameTab: (tabId: string, name: string) => void;
@@ -63,15 +63,13 @@ export class TerminalRealtimeManager {
   ) {
     this.registry = registry;
     this.store = createTerminalStore();
-    // Provide fallback translations if translate function not provided
     this.translate = translate || ((key: string) => {
       const fallbacks: Record<string, string> = {
-        'common.messages.terminalConnectionFailed': '終端連線網址建立失敗',
-        'common.messages.terminalError': '終端連線發生錯誤',
+        'common.messages.terminalConnectionFailed': 'Failed to create terminal connection URL',
+        'common.messages.terminalError': 'Terminal connection error occurred',
       };
       return fallbacks[key] || key;
     });
-    // Provide fallback token getter if not provided
     this.getToken = getToken || (() => {
       try {
         const stored = window.sessionStorage.getItem('oidc_tokens');
@@ -80,7 +78,7 @@ export class TerminalRealtimeManager {
           return parsed.access_token || null;
         }
       } catch (error) {
-        logger.warn(' Failed to get token from sessionStorage', error);
+        logger.warn('Failed to get token from sessionStorage', error);
       }
       return null;
     });
@@ -140,7 +138,7 @@ export class TerminalRealtimeManager {
           unsubscribe();
           terminal.dispose?.();
         } catch (error) {
-          logger.debug('清理終端附件時發生錯誤', { error });
+          logger.debug('Failed to clean up terminal attachment', { error });
         }
       });
     });
@@ -165,7 +163,7 @@ export class TerminalRealtimeManager {
 
     if (!this.workspaceId || !this.terminalUrl) {
       logger.error(' Missing workspaceId or terminalUrl');
-      this.store.setStatus('error', 'Terminal URL 尚未就緒');
+      this.store.setStatus('error', this.translate('common.messages.terminalConnectionFailed'));
       return;
     }
 
@@ -182,7 +180,7 @@ export class TerminalRealtimeManager {
       try {
         socket.close();
       } catch (error) {
-        logger.error('關閉既有終端連線失敗', { error });
+        logger.error('Failed to close existing terminal connection', { error });
       }
     }
 
@@ -207,7 +205,7 @@ export class TerminalRealtimeManager {
         try {
           nextSocket.close();
         } catch (error) {
-          logger.error('終端連線逾時計時器關閉失敗', { error });
+          logger.error('Failed to close terminal connection after timeout', { error });
         }
       }
     }, CONNECTION_TIMEOUT);
@@ -226,7 +224,7 @@ export class TerminalRealtimeManager {
       try {
         managed.socket.close();
       } catch (error) {
-        logger.error('關閉終端 WebSocket 失敗', { error });
+        logger.error('Failed to close terminal WebSocket', { error });
       }
     }
     this.registry.setSocket(TERMINAL_SOCKET_TYPE, null, 'closed');
@@ -235,19 +233,22 @@ export class TerminalRealtimeManager {
     }
   };
 
-  private createTab = (name: string, workspacePath?: string) => {
+  private createTab = (name: string, workspacePath?: string, size?: { cols: number; rows: number }) => {
     const managed = this.registry.get(TERMINAL_SOCKET_TYPE);
     const socket = managed.socket;
     if (socket && socket.readyState === WebSocket.OPEN) {
+      const data: Record<string, string | number> = {
+        workspace_path: workspacePath || '/workspace',
+        cols: size?.cols ?? 80,
+        rows: size?.rows ?? 24,
+      };
+      if (name) {
+        data.name = name;
+      }
       socket.send(
         JSON.stringify({
           type: 'create_tab',
-          data: {
-            name,
-            workspace_path: workspacePath || '/workspace',
-            cols: 80,
-            rows: 24,
-          },
+          data,
         }),
       );
     }
@@ -283,7 +284,17 @@ export class TerminalRealtimeManager {
   };
 
   private renameTab = (tabId: string, name: string) => {
-    this.store.renameTab(tabId, name);
+    const managed = this.registry.get(TERMINAL_SOCKET_TYPE);
+    const socket = managed.socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: 'rename_tab',
+          tab_id: tabId,
+          data: { name },
+        }),
+      );
+    }
   };
 
   private sendInput = (tabId: string, data: string) => {
@@ -333,7 +344,7 @@ export class TerminalRealtimeManager {
       try {
         terminal.write(entry.data);
       } catch (error) {
-        logger.debug('寫入既有終端歷史失敗', { error });
+        logger.debug('Failed to write existing terminal history', { error });
       }
     });
 
@@ -366,7 +377,7 @@ export class TerminalRealtimeManager {
         try {
           terminal.write(combined);
         } catch (error) {
-          logger.debug('寫入終端輸出失敗', { error });
+          logger.debug('Failed to write terminal output', { error });
         }
         attachment.offset = historyLength;
       }
@@ -399,7 +410,7 @@ export class TerminalRealtimeManager {
         try {
           terminal.reset();
         } catch (error) {
-          logger.debug('清除終端歷史失敗', { error });
+          logger.debug('Failed to clear terminal history', { error });
         }
         attachment.offset = 0;
       });
@@ -414,20 +425,19 @@ export class TerminalRealtimeManager {
       const url = new URL(this.terminalUrl);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
 
-      // Go terminal service WebSocket 路徑
       url.pathname = '/ws/terminal';
 
-      // 添加 token 參數
       const token = this.getToken();
       if (token) {
         url.searchParams.set('token', token);
       } else {
         logger.warn(' No token available for WebSocket connection');
       }
+      url.searchParams.set('workspace_id', this.workspaceId);
 
       return url.toString();
     } catch (error) {
-      logger.error('建立終端 WebSocket URL 失敗', { error });
+      logger.error('Failed to build terminal WebSocket URL', { error });
       return null;
     }
   }
@@ -438,17 +448,43 @@ export class TerminalRealtimeManager {
     this.registry.resetAttempts(TERMINAL_SOCKET_TYPE);
     this.clearConnectionTimer();
     this.store.setStatus('open');
+    this.store.setSynced(false);
+    this.sendListTabs();
   };
+
+  private sendListTabs() {
+    const managed = this.registry.get(TERMINAL_SOCKET_TYPE);
+    const socket = managed.socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: 'list_tabs' }));
+    }
+  }
+
+  private requestReplay(tabId: string, fromSeq: number) {
+    const managed = this.registry.get(TERMINAL_SOCKET_TYPE);
+    const socket = managed.socket;
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(
+        JSON.stringify({
+          type: 'replay',
+          tab_id: tabId,
+          data: { from_seq: fromSeq },
+        }),
+      );
+    }
+  }
 
   private handleMessage = (event: MessageEvent<string>) => {
     try {
       const payload = JSON.parse(event.data) as
         | { type: 'connected'; data: { client_id: string; user_id: string } }
-        | { type: 'tab_created'; tab_id: string; data: { session_id: string; name: string; workspace_path: string } }
+        | { type: 'tab_created'; tab_id: string; data: { tab: TerminalTabMetadata } }
+        | { type: 'tab_updated'; tab_id: string; data: { tab: TerminalTabMetadata } }
         | { type: 'tab_closed'; tab_id: string }
         | { type: 'tab_switched'; tab_id: string }
-        | { type: 'output'; tab_id: string; data: { data: string } }
-        | { type: 'tab_list'; data: { tabs: Array<{ tab_id: string; session_id: string; name: string }> } }
+        | { type: 'output'; tab_id: string; data: { data: string; seq?: number } }
+        | { type: 'tab_replay_reset'; tab_id: string }
+        | { type: 'tab_list'; data: { tabs: TerminalTabMetadata[] } }
         | { type: 'error'; data: { code: string; message: string }; tab_id?: string };
 
       switch (payload.type) {
@@ -457,12 +493,11 @@ export class TerminalRealtimeManager {
           this.store.setStatus('open');
           break;
         case 'tab_created':
-          this.store.createTab(
-            payload.tab_id,
-            payload.data.name,
-            payload.data.session_id,
-            payload.data.workspace_path
-          );
+          this.store.upsertTab(payload.data.tab);
+          this.requestReplay(payload.tab_id, 1);
+          break;
+        case 'tab_updated':
+          this.store.upsertTab(payload.data.tab);
           break;
         case 'tab_closed':
           this.store.closeTab(payload.tab_id);
@@ -471,14 +506,17 @@ export class TerminalRealtimeManager {
           this.store.switchTab(payload.tab_id);
           break;
         case 'output':
-          this.store.appendOutput(payload.tab_id, payload.data.data);
+          this.store.appendOutput(payload.tab_id, payload.data.data, payload.data.seq);
+          break;
+        case 'tab_replay_reset':
+          this.clearHistory(payload.tab_id);
           break;
         case 'tab_list':
-          // 處理 tab 列表
+          this.store.applyTabList(payload.data.tabs);
           payload.data.tabs.forEach((tab) => {
-            const existingTab = this.store.getSnapshot().tabs.find((t) => t.tabId === tab.tab_id);
-            if (!existingTab) {
-              this.store.createTab(tab.tab_id, tab.name, tab.session_id);
+            const restored = this.store.getSnapshot().tabs.find((t) => t.tabId === tab.tab_id);
+            if (restored && restored.history.length === 0) {
+              this.requestReplay(tab.tab_id, Math.max(restored.lastOutputSeq + 1, 1));
             }
           });
           break;
@@ -489,7 +527,7 @@ export class TerminalRealtimeManager {
           break;
       }
     } catch (error) {
-      logger.error('解析終端 WebSocket 訊息失敗', { error });
+      logger.error('Failed to parse terminal WebSocket message', { error });
     }
   };
 
@@ -515,7 +553,7 @@ export class TerminalRealtimeManager {
   };
 
   private handleError = (event: Event) => {
-    logger.error('終端 WebSocket 發生錯誤', { event });
+    logger.error('Terminal WebSocket error', { event });
     this.store.setStatus('error', this.translate('common.messages.terminalError'));
   };
 

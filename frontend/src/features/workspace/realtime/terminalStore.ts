@@ -9,6 +9,20 @@ export type TerminalConnectionStatus =
 export interface TerminalHistoryEntry {
   id: string;
   data: string;
+  seq?: number;
+}
+
+export interface TerminalTabMetadata {
+  tab_id: string;
+  session_id: string;
+  name: string;
+  workspace_path: string;
+  cols: number;
+  rows: number;
+  created_at: number;
+  last_active_at: number;
+  status: 'running' | 'exited';
+  exit_code?: number | null;
 }
 
 export interface TerminalTab {
@@ -18,6 +32,12 @@ export interface TerminalTab {
   history: TerminalHistoryEntry[];
   lastActivityAt: number | null;
   workspacePath?: string;
+  cols?: number;
+  rows?: number;
+  createdAt?: number;
+  status?: 'running' | 'exited';
+  exitCode?: number | null;
+  lastOutputSeq: number;
 }
 
 export interface TerminalState {
@@ -26,6 +46,7 @@ export interface TerminalState {
   status: TerminalConnectionStatus;
   error?: string;
   clientId: string | null;
+  isSynced: boolean;
 }
 
 export type TerminalStoreListener = () => void;
@@ -35,12 +56,14 @@ export interface TerminalStore {
   subscribe: (listener: TerminalStoreListener) => () => void;
   setStatus: (status: TerminalConnectionStatus, error?: string) => void;
   setClientId: (clientId: string | null) => void;
-  createTab: (tabId: string, name: string, sessionId: string, workspacePath?: string) => void;
+  upsertTab: (metadata: TerminalTabMetadata) => void;
+  applyTabList: (tabs: TerminalTabMetadata[]) => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
-  appendOutput: (tabId: string, data: string) => void;
+  appendOutput: (tabId: string, data: string, seq?: number) => void;
   updateTabSession: (tabId: string, sessionId: string) => void;
   renameTab: (tabId: string, name: string) => void;
+  setSynced: (isSynced: boolean) => void;
   reset: () => void;
   clearHistory: (tabId: string) => void;
   getActiveTab: () => TerminalTab | null;
@@ -61,6 +84,7 @@ const INITIAL_STATE: TerminalState = {
   activeTabId: null,
   status: 'idle',
   clientId: null,
+  isSynced: false,
 };
 
 export const createTerminalStore = (): TerminalStore => {
@@ -80,11 +104,37 @@ export const createTerminalStore = (): TerminalStore => {
     return state.tabs.find((tab) => tab.tabId === tabId);
   };
 
-  const appendOutput = (tabId: string, data: string) => {
+  const toTerminalTab = (
+    metadata: TerminalTabMetadata,
+    existing?: TerminalTab,
+  ): TerminalTab => ({
+    tabId: metadata.tab_id,
+    sessionId: metadata.session_id,
+    name: metadata.name,
+    history: existing?.history ?? [],
+    lastActivityAt: metadata.last_active_at ? metadata.last_active_at * 1000 : existing?.lastActivityAt ?? Date.now(),
+    workspacePath: metadata.workspace_path,
+    cols: metadata.cols,
+    rows: metadata.rows,
+    createdAt: metadata.created_at,
+    status: metadata.status,
+    exitCode: metadata.exit_code ?? null,
+    lastOutputSeq: existing?.lastOutputSeq ?? 0,
+  });
+
+  const sortTabs = (tabs: TerminalTab[]) => {
+    return [...tabs].sort((a, b) => {
+      const createdDiff = (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      if (createdDiff !== 0) return createdDiff;
+      return a.tabId.localeCompare(b.tabId);
+    });
+  };
+
+  const appendOutput = (tabId: string, data: string, seq?: number) => {
     const tabs = state.tabs.map((tab) => {
       if (tab.tabId !== tabId) return tab;
 
-      let history = [...tab.history, { id: createHistoryEntryId(), data }];
+      let history = [...tab.history, { id: createHistoryEntryId(), data, seq }];
       if (history.length > MAX_HISTORY_LENGTH) {
         const trimCount = Math.max(history.length - MAX_HISTORY_LENGTH, HISTORY_TRIM_CHUNK);
         history = history.slice(trimCount);
@@ -94,6 +144,7 @@ export const createTerminalStore = (): TerminalStore => {
         ...tab,
         history,
         lastActivityAt: Date.now(),
+        lastOutputSeq: seq ?? tab.lastOutputSeq,
       };
     });
 
@@ -122,19 +173,28 @@ export const createTerminalStore = (): TerminalStore => {
     setClientId: (clientId: string | null) => {
       setState({ clientId });
     },
-    createTab: (tabId: string, name: string, sessionId: string, workspacePath?: string) => {
-      const newTab: TerminalTab = {
-        tabId,
-        sessionId,
-        name,
-        history: [],
-        lastActivityAt: Date.now(),
-        workspacePath,
-      };
-      const tabs = [...state.tabs, newTab];
+    upsertTab: (metadata: TerminalTabMetadata) => {
+      const existing = state.tabs.find((tab) => tab.tabId === metadata.tab_id);
+      const tabs = existing
+        ? state.tabs.map((tab) => (tab.tabId === metadata.tab_id ? toTerminalTab(metadata, tab) : tab))
+        : [...state.tabs, toTerminalTab(metadata)];
       setState({
-        tabs,
-        activeTabId: state.activeTabId || tabId,
+        tabs: sortTabs(tabs),
+        activeTabId: state.activeTabId || metadata.tab_id,
+      });
+    },
+    applyTabList: (metadataTabs: TerminalTabMetadata[]) => {
+      const nextTabs = metadataTabs.map((metadata) =>
+        toTerminalTab(metadata, state.tabs.find((tab) => tab.tabId === metadata.tab_id)),
+      );
+      const activeTabId =
+        state.activeTabId && nextTabs.some((tab) => tab.tabId === state.activeTabId)
+          ? state.activeTabId
+          : nextTabs[0]?.tabId ?? null;
+      setState({
+        tabs: sortTabs(nextTabs),
+        activeTabId,
+        isSynced: true,
       });
     },
     closeTab: (tabId: string) => {
@@ -163,6 +223,9 @@ export const createTerminalStore = (): TerminalStore => {
         tab.tabId === tabId ? { ...tab, name } : tab
       );
       setState({ tabs });
+    },
+    setSynced: (isSynced: boolean) => {
+      setState({ isSynced });
     },
     appendOutput,
     reset: () => {

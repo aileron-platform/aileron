@@ -933,6 +933,12 @@ const agentSettings = {
         loading: '載入資料中…',
         empty: '尚未找到符合條件的項目',
       },
+      toml: {
+        description: '描述',
+        prompt: 'Prompt',
+        developerInstructions: 'Developer instructions',
+        raw: '原始 TOML',
+      },
     },
     subagents: {
       pageTitle: 'Subagent 設定',

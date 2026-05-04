@@ -16,6 +16,7 @@ type Config struct {
 	MaxTabsPerWorkspace int
 	SessionTimeout      int // seconds
 	PTYBufferSize       int
+	ReplayBufferBytes   int
 }
 
 func Load() *Config {
@@ -29,6 +30,7 @@ func Load() *Config {
 		MaxTabsPerWorkspace: getEnvInt("MAX_TABS_PER_WORKSPACE", 10),
 		SessionTimeout:      getEnvInt("SESSION_TIMEOUT", 300),
 		PTYBufferSize:       getEnvInt("PTY_BUFFER_SIZE", 1024),
+		ReplayBufferBytes:   getEnvInt("TERMINAL_REPLAY_BUFFER_BYTES", 1024*1024),
 	}
 }
 
@@ -46,4 +48,3 @@ func getEnvInt(key string, defaultVal int) int {
 	}
 	return defaultVal
 }
-

@@ -226,6 +226,8 @@ const containerManagement = {
     status: {
       connecting: '連線中...',
       reconnecting: '重新連線中...',
+      syncing: '正在同步終端機工作階段...',
+      replayReset: '重新連線後已重設終端畫面',
       connected: '已連線',
       disconnected: '已中斷連線',
       unassigned: '未指派',

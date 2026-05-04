@@ -139,12 +139,6 @@ title: 環境變數參考
 | `SESSION_TIMEOUT` | `300` | Session 超時（秒） |
 | `PTY_BUFFER_SIZE` | `1024` | PTY 緩衝區大小 |
 
-### VS Code Server
-
-| 變數 | 預設值 | 說明 |
-|------|--------|------|
-| `VSCODE_SERVER_PORT` | `8080` | VS Code Server 監聽 port |
-
 ### Claude API
 
 | 變數 | 預設值 | 說明 |
