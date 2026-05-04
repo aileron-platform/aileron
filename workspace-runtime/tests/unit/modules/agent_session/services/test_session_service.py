@@ -10,7 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.modules.agent_session.domain.entities import AgentSession
-from app.modules.agent_session.domain.enums import AgentSessionStatus, AgenticTool, PermissionMode
+from app.modules.agent_session.domain.enums import (
+    AgentSessionStatus,
+    AgenticTool,
+    GeminiPermissionMode,
+    PermissionMode,
+)
 from app.modules.agent_session.domain.value_objects import ModelConfig, PermissionConfig
 from app.modules.agent_session.schemas.agent_session import (
     AgentSessionCreate,
@@ -201,6 +206,24 @@ class TestAgentSessionService:
         assert data_blob["context_window_limit"] == 1000000
 
     @pytest.mark.asyncio
+    async def test_create_session_defaults_gemini_permission_to_yolo(self, service) -> None:
+        model = MagicMock()
+        entity = self._session_entity(session_id="gemini-default")
+        service.session_repo.create = AsyncMock(return_value=model)
+        service.session_repo.to_entity = MagicMock(return_value=entity)
+
+        await service.create_session(
+            AgentSessionCreate(
+                workspace_id="ws-gemini",
+                agentic_tool=AgenticTool.GEMINI,
+            )
+        )
+
+        data_blob = json.loads(service.session_repo.create.await_args.args[0]["data"])
+        assert data_blob["permission_config"]["mode"] == PermissionMode.DEFAULT.value
+        assert data_blob["permission_config"]["gemini"] == GeminiPermissionMode.YOLO.value
+
+    @pytest.mark.asyncio
     async def test_create_session_persists_git_context_and_workspace_path(self, service) -> None:
         model = MagicMock()
         entity = self._session_entity(session_id="context-session")
@@ -362,6 +385,7 @@ class TestAgentSessionService:
     async def test_update_session_merges_title_permission_and_model_settings(self, service) -> None:
         existing = MagicMock()
         existing.data = json.dumps({"title": "before", "contextFiles": ["keep.txt"]})
+        existing.agentic_tool = AgenticTool.CLAUDE_CODE.value
         updated = MagicMock()
         entity = self._session_entity(
             session_id="updated-session",
@@ -394,6 +418,30 @@ class TestAgentSessionService:
         assert data_blob["permission_config"]["mode"] == PermissionMode.BYPASS_PERMISSIONS.value
         assert data_blob["model_config"]["model"] == "claude-sonnet-4"
         service.emitter.emit_session_patched.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_session_defaults_missing_gemini_permission_to_yolo(self, service) -> None:
+        existing = MagicMock()
+        existing.data = json.dumps({"contextFiles": ["keep.txt"]})
+        existing.agentic_tool = AgenticTool.GEMINI.value
+        updated = MagicMock()
+        entity = self._session_entity(
+            session_id="gemini-updated",
+            agentic_tool=AgenticTool.GEMINI,
+        )
+        service.session_repo.find_by_id = AsyncMock(return_value=existing)
+        service.session_repo.update = AsyncMock(return_value=updated)
+        service.session_repo.to_entity = MagicMock(return_value=entity)
+
+        await service.update_session(
+            "gemini-updated",
+            AgentSessionUpdate(
+                permission_config=PermissionConfigCreate(mode=PermissionMode.DEFAULT),
+            ),
+        )
+
+        data_blob = json.loads(service.session_repo.update.await_args.args[1]["data"])
+        assert data_blob["permission_config"]["gemini"] == GeminiPermissionMode.YOLO.value
 
     @pytest.mark.asyncio
     async def test_update_session_returns_none_when_update_fails(self, service) -> None:

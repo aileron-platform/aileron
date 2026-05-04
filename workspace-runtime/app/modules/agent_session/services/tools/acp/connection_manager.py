@@ -28,6 +28,7 @@ class AcpConnection:
     context_manager: Any
     client_impl: AcpClient
     sdk_session_id: Optional[str] = None
+    gemini_spawned_with: Optional[str] = None
     initialized: bool = False
 
 
@@ -44,6 +45,7 @@ class AcpConnectionManager:
         tool_type: str,
         command: str,
         args: list[str],
+        extra_args: Optional[list[str]],
         env: Optional[dict[str, str]],
         cwd: str,
         supports_terminal: bool = True,
@@ -61,6 +63,7 @@ class AcpConnectionManager:
                 tool_type=tool_type,
                 command=command,
                 args=args,
+                extra_args=extra_args or [],
                 env=env,
                 cwd=cwd,
                 supports_terminal=supports_terminal,
@@ -90,12 +93,14 @@ class AcpConnectionManager:
         tool_type: str,
         command: str,
         args: list[str],
+        extra_args: list[str],
         env: Optional[dict[str, str]],
         cwd: str,
         supports_terminal: bool = True,
     ) -> AcpConnection:
         client_impl = AcpClient(runtime_session_id=session_id, workspace_path=cwd)
-        context_manager = spawn_agent_process(client_impl, command, *args, env=env, cwd=cwd)
+        spawn_args = [*args, *extra_args]
+        context_manager = spawn_agent_process(client_impl, command, *spawn_args, env=env, cwd=cwd)
         try:
             connection, process = await context_manager.__aenter__()
         except Exception:
@@ -110,6 +115,7 @@ class AcpConnectionManager:
             process=process,
             context_manager=context_manager,
             client_impl=client_impl,
+            gemini_spawned_with=self._extract_gemini_spawned_with(tool_type, extra_args),
         )
 
         try:
@@ -120,6 +126,16 @@ class AcpConnectionManager:
             raise
 
         return acp_conn
+
+    @staticmethod
+    def _extract_gemini_spawned_with(tool_type: str, extra_args: list[str]) -> Optional[str]:
+        """Capture the Gemini approval mode applied when the process was spawned."""
+        if tool_type != "gemini":
+            return None
+        for index, arg in enumerate(extra_args):
+            if arg == "--approval-mode" and index + 1 < len(extra_args):
+                return extra_args[index + 1]
+        return None
 
     async def _initialize_connection(self, conn: AcpConnection, supports_terminal: bool = True) -> None:
         if conn.initialized:

@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 ALLOWED_WORKSPACE_PATH_ROOTS = (Path("/workspace"), Path("/knowledge"))
 
 from ..domain.entities import AgentSession
-from ..domain.enums import AgenticTool, AgentSessionStatus
+from ..domain.enums import AgenticTool, AgentSessionStatus, GeminiPermissionMode, PermissionMode
 from ..domain.value_objects import (
     ModelConfig,
     PermissionConfig,
@@ -129,12 +129,12 @@ class AgentSessionService:
         if data.title:
             data_blob["title"] = data.title
 
-        if data.permission_config:
-            data_blob["permission_config"] = {
-                "mode": data.permission_config.mode.value,
-            }
-            if data.permission_config.codex:
-                data_blob["permission_config"]["codex"] = data.permission_config.codex
+        permission_config = self._build_permission_config_blob(
+            agentic_tool=data.agentic_tool,
+            permission_config=data.permission_config,
+        )
+        if permission_config:
+            data_blob["permission_config"] = permission_config
 
         if data.model_settings:
             data_blob["model_config"] = {
@@ -182,6 +182,32 @@ class AgentSessionService:
             logger.error("Failed to send sessions:created event: %s", e)
 
         return session_entity
+
+    def _build_permission_config_blob(
+        self,
+        *,
+        agentic_tool: AgenticTool,
+        permission_config: Any | None,
+    ) -> Dict[str, Any] | None:
+        """Build persisted permission config with Gemini defaults applied."""
+        if permission_config is None:
+            if agentic_tool != AgenticTool.GEMINI:
+                return None
+            return {
+                "mode": PermissionMode.DEFAULT.value,
+                "gemini": GeminiPermissionMode.YOLO.value,
+            }
+
+        config_data: Dict[str, Any] = {
+            "mode": permission_config.mode.value,
+        }
+        if permission_config.codex:
+            config_data["codex"] = permission_config.codex
+        if agentic_tool == AgenticTool.GEMINI:
+            config_data["gemini"] = permission_config.gemini or GeminiPermissionMode.YOLO.value
+        elif permission_config.gemini:
+            config_data["gemini"] = permission_config.gemini
+        return config_data
 
     async def get_session(
         self,
@@ -280,11 +306,10 @@ class AgentSessionService:
                 existing_data["title"] = data.title
 
             if data.permission_config is not None:
-                existing_data["permission_config"] = {
-                    "mode": data.permission_config.mode.value,
-                }
-                if data.permission_config.codex:
-                    existing_data["permission_config"]["codex"] = data.permission_config.codex
+                existing_data["permission_config"] = self._build_permission_config_blob(
+                    agentic_tool=AgenticTool(existing.agentic_tool),
+                    permission_config=data.permission_config,
+                )
 
             if data.model_settings is not None:
                 existing_data["model_config"] = {

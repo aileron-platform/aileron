@@ -8,10 +8,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from ..domain.enums import (
     AgenticTool,
+    GeminiPermissionMode,
     PermissionMode,
     PermissionScope,
     AgentSessionStatus,
@@ -28,6 +30,24 @@ class PermissionConfigCreate(BaseModel):
 
     mode: PermissionMode = PermissionMode.DEFAULT
     codex: Optional[Dict[str, Any]] = None
+    gemini: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_gemini(self) -> "PermissionConfigCreate":
+        """Validate Gemini permission mode values."""
+        if self.gemini is None:
+            return self
+
+        try:
+            GeminiPermissionMode(self.gemini)
+        except ValueError as exc:
+            raise PydanticCustomError(
+                "value_error",
+                "Invalid Gemini permission mode",
+                {"code": "INVALID_GEMINI_PERMISSION_MODE"},
+            ) from exc
+
+        return self
 
 
 class ModelConfigCreate(BaseModel):
@@ -152,6 +172,8 @@ class PermissionConfigResponse(BaseModel):
 
     mode: str
     codex: Optional[Dict[str, Any]] = None
+    gemini: Optional[str] = None
+    gemini_spawned_with: Optional[str] = None
 
 
 class ModelConfigResponse(BaseModel):
@@ -229,9 +251,19 @@ class AgentSessionResponse(BaseModel):
         # Create permission_config
         permission_config = None
         if entity.permission_config:
+            gemini_spawned_with = None
+            if entity.agentic_tool == AgenticTool.GEMINI:
+                from ..services.tools.acp.tool_manager import get_acp_tool_manager
+
+                connection = get_acp_tool_manager().get_connection(entity.id)
+                if connection:
+                    gemini_spawned_with = connection.gemini_spawned_with
+
             permission_config = PermissionConfigResponse(
                 mode=entity.permission_config.mode.value,
                 codex=entity.permission_config.to_dict().get("codex"),
+                gemini=entity.permission_config.gemini.value if entity.permission_config.gemini else None,
+                gemini_spawned_with=gemini_spawned_with,
             )
 
         # Create model_settings

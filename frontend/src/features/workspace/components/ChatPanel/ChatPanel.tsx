@@ -30,6 +30,8 @@ import { useAgentSession } from './useAgentSession';
 import { useAgentSessionStore } from './agentSessionStore';
 import { useToast } from '@/shared/components/ui/use-toast';
 import {
+  DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
+  isGeminiSessionPermissionMode,
   PermissionScope,
   isPermissionMode,
   type PermissionMode,
@@ -65,6 +67,9 @@ export const ChatPanel: React.FC = () => {
 
   const {
     state: agentState,
+    currentSession,
+    geminiPermissionMode,
+    setGeminiPermissionMode,
     sendMessage,
     createSession,
     selectSession,
@@ -130,8 +135,14 @@ export const ChatPanel: React.FC = () => {
         codex: codexPermissionConfig,
       };
     }
+    if (agentType === 'gemini') {
+      return {
+        mode: 'default',
+        gemini: geminiPermissionMode ?? DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
+      };
+    }
     return { mode: permissionMode };
-  }, [agentType, codexPermissionConfig, permissionMode]);
+  }, [agentType, codexPermissionConfig, geminiPermissionMode, permissionMode]);
   const {
     actions: openSpecActions,
     ensureLoaded: ensureOpenSpecLoaded,
@@ -508,6 +519,21 @@ export const ChatPanel: React.FC = () => {
     setPermissionMode(mode);
   }, []);
 
+  const handleGeminiPermissionModeChange = useCallback((mode: string) => {
+    if (!isGeminiSessionPermissionMode(mode)) {
+      logger.warn('Ignored invalid Gemini permission mode selection', { mode });
+      return;
+    }
+    setGeminiPermissionMode(mode).catch((error) => {
+      logger.error('Failed to update Gemini permission mode', { error, mode });
+      toast({
+        title: t('workspace.chat.errors.executionFailed'),
+        description: error instanceof Error ? error.message : t('workspace.chat.errors.executionFailed'),
+        variant: 'destructive',
+      });
+    });
+  }, [setGeminiPermissionMode, t, toast]);
+
   const handleOpenSpecActionSelect = useCallback((nextDraft: string) => {
     const trimmed = uiState.draftMessage.trimEnd();
     const nextValue = trimmed.length > 0 ? `${trimmed} ${nextDraft.trim()}` : nextDraft.trim();
@@ -717,12 +743,6 @@ export const ChatPanel: React.FC = () => {
 
   const hasActiveConversation = agentState.messages.length > 0 || !!agentState.activeTask;
 
-  // Find current session to check its status
-  const currentSession = useMemo(() => {
-    if (!agentState.currentSessionId) return null;
-    return agentState.sessions.find(s => s.session_id === agentState.currentSessionId) || null;
-  }, [agentState.currentSessionId, agentState.sessions]);
-
   // Session is active when streaming/thinking, has queued messages, sending message, or task is actively running
   const hasQueuedMessages = agentState.messages.some(m => m.queued === true);
 
@@ -819,6 +839,11 @@ export const ChatPanel: React.FC = () => {
             cliType={cliType}
             permissionMode={permissionMode}
             codexPermissionConfig={codexPermissionConfig}
+            geminiPermissionMode={geminiPermissionMode}
+            geminiAppliesOnNextHint={
+              agentType === 'gemini'
+              && geminiPermissionMode !== (currentSession?.permission_config?.geminiSpawnedWith ?? geminiPermissionMode)
+            }
             onChange={handleDraftChange}
             onSend={handleSend}
             onAbort={handleAbort}
@@ -830,6 +855,7 @@ export const ChatPanel: React.FC = () => {
             onRemoveCodeReference={uiActions.removeCodeReference}
             onPermissionModeChange={handlePermissionModeChange}
             onCodexPermissionConfigChange={setCodexPermissionConfig}
+            onGeminiPermissionModeChange={handleGeminiPermissionModeChange}
             t={t}
           />
         </>

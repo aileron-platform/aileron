@@ -5,7 +5,7 @@
  * 提供 React 元件使用 Agent Session 功能的 hooks
  */
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useAgentSession');
@@ -23,14 +23,17 @@ import {
 import { MESSAGES_PER_PAGE } from '../../realtime/agentSession/useRealtimeData';
 import type {
   AgenticTool,
+  GeminiSessionPermissionMode,
   ToolDecisionRequest,
   PromptRequest,
   PermissionConfig,
 } from './agentSessionTypes';
 import {
+  DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
   resolveAgenticToolFromCliType,
   extractToolDecisionInput,
   isAgenticTool,
+  isGeminiSessionPermissionMode,
   isPermissionMode,
 } from './agentSessionTypes';
 
@@ -302,6 +305,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
   const restoredThinkingPrefixRef = useRef<string | null>(null);
   const pendingStreamingResumeRef = useRef(false);
   const pendingThinkingResumeRef = useRef(false);
+  const [pendingGeminiPermissionMode, setPendingGeminiPermissionMode] = useState<GeminiSessionPermissionMode>(
+    DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
+  );
   // 追蹤已停止的任務 ID，用於忽略後續的 streaming 訊息
   const stoppedTaskIdsRef = useRef<Set<string>>(new Set());
   // 追蹤 sessionStorage 配額是否已經用盡，避免重複嘗試儲存
@@ -358,6 +364,19 @@ export function useAgentSession(options: UseAgentSessionOptions) {
     setSessions: setRealtimeSessions,
     upsertSession: upsertRealtimeSession,
   } = useRealtimeSessions(workspaceId);
+
+  const currentSession = useMemo(
+    () => state.sessions.find(session => session.session_id === state.currentSessionId) ?? null,
+    [state.currentSessionId, state.sessions],
+  );
+
+  const geminiPermissionMode = useMemo<GeminiSessionPermissionMode>(() => {
+    const sessionMode = currentSession?.permission_config?.gemini;
+    if (isGeminiSessionPermissionMode(sessionMode)) {
+      return sessionMode;
+    }
+    return pendingGeminiPermissionMode;
+  }, [currentSession?.permission_config?.gemini, pendingGeminiPermissionMode]);
   const streamingMessages = useStreamingMessages(state.currentSessionId);
 
   useEffect(() => {
@@ -556,9 +575,16 @@ export function useAgentSession(options: UseAgentSessionOptions) {
             // 情況3: 沒有任何 sessions，建立一個新的
             logger.debug(`✓ Case 3: No sessions found, creating initial session (${action})`, { workspaceId });
             try {
+              const permissionConfig = workspaceDefaultTool === 'gemini'
+                ? {
+                    mode: 'default' as const,
+                    gemini: DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
+                  }
+                : undefined;
               const newSession = await agentApi.sessions.createSession(runtimeBaseUrl, {
                 workspace_id: workspaceId,
                 agentic_tool: workspaceDefaultTool,
+                permission_config: permissionConfig,
                 git_context_id: gitContextId ?? undefined,
               });
               upsertRealtimeSession(newSession);
@@ -1346,8 +1372,18 @@ export function useAgentSession(options: UseAgentSessionOptions) {
           ? state.selectedTool
           : workspaceDefaultTool;
       const resolvedPermissionConfig = permissionConfig && isPermissionMode(permissionConfig.mode)
-        ? permissionConfig
-        : undefined;
+        ? {
+            ...permissionConfig,
+            gemini: resolvedTool === 'gemini'
+              ? permissionConfig.gemini ?? DEFAULT_GEMINI_SESSION_PERMISSION_MODE
+              : permissionConfig.gemini,
+          }
+        : resolvedTool === 'gemini'
+          ? {
+              mode: 'default',
+              gemini: DEFAULT_GEMINI_SESSION_PERMISSION_MODE,
+            }
+          : undefined;
 
       try {
         const session = await agentApi.sessions.createSession(runtimeBaseUrl, {
@@ -1382,7 +1418,14 @@ export function useAgentSession(options: UseAgentSessionOptions) {
       let sessionId = state.currentSessionId;
       let createdSessionForPrompt = false;
       const resolvedPermissionConfig = permissionConfig && isPermissionMode(permissionConfig.mode)
-        ? permissionConfig
+        ? {
+            ...permissionConfig,
+            gemini: permissionConfig.gemini ?? (
+              currentSession?.agentic_tool === 'gemini'
+                ? DEFAULT_GEMINI_SESSION_PERMISSION_MODE
+                : permissionConfig.gemini
+            ),
+          }
         : undefined;
 
       if (!sessionId) {
@@ -1415,7 +1458,35 @@ export function useAgentSession(options: UseAgentSessionOptions) {
         throw error;
       }
     },
-    [runtimeBaseUrl, state.currentSessionId, createSession, upsertRealtimeSession]
+    [runtimeBaseUrl, state.currentSessionId, createSession, currentSession?.agentic_tool, upsertRealtimeSession]
+  );
+
+  const setGeminiPermissionMode = useCallback(
+    async (mode: GeminiSessionPermissionMode) => {
+      setPendingGeminiPermissionMode(mode);
+
+      if (!state.currentSessionId) {
+        return;
+      }
+
+      const session = currentSession;
+      if (!session) {
+        return;
+      }
+
+      const nextPermissionConfig: PermissionConfig = {
+        mode: session.permission_config?.mode ?? 'default',
+        codex: session.permission_config?.codex,
+        gemini: mode,
+      };
+      const updatedSession = await agentApi.sessions.updateSession(
+        runtimeBaseUrl,
+        state.currentSessionId,
+        { permission_config: nextPermissionConfig },
+      );
+      upsertRealtimeSession(updatedSession);
+    },
+    [currentSession, runtimeBaseUrl, state.currentSessionId, upsertRealtimeSession],
   );
 
   const stopTask = useCallback(async () => {
@@ -1579,6 +1650,9 @@ export function useAgentSession(options: UseAgentSessionOptions) {
 
   return {
     state,
+    currentSession,
+    geminiPermissionMode,
+    setGeminiPermissionMode,
     loadSessions,
     selectSession,
     createSession,

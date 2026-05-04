@@ -159,6 +159,15 @@ class PermissionMode(str, Enum):
     AUTO = "auto"
 
 
+class GeminiPermissionMode(str, Enum):
+    """Gemini CLI approval modes for the `--approval-mode` flag."""
+
+    DEFAULT = "default"
+    AUTO_EDIT = "autoEdit"
+    YOLO = "yolo"
+    PLAN = "plan"
+
+
 class PermissionScope(str, Enum):
     """Permission scope.
 
@@ -245,6 +254,7 @@ __all__ = [
     "CodexApprovalPolicy",
     "CodexSandboxMode",
     "ContentBlockType",
+    "GeminiPermissionMode",
     "MessageRole",
     "MessageStatus",
     "MessageType",

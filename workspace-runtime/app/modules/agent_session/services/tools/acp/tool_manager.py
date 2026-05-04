@@ -9,7 +9,7 @@ from app.modules.agent_session.services.tools.base.types import ToolType
 from app.modules.file_system.workspace_service import WorkspaceDataService
 
 from .acp_tool import AcpTool
-from .connection_manager import AcpConnectionManager
+from .connection_manager import AcpConnection, AcpConnectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,10 @@ class AcpToolManager:
 
     def get_existing_tool(self, tool_type: ToolType) -> Optional[AcpTool]:
         return self._tools.get(tool_type.value)
+
+    def get_connection(self, session_id: str) -> Optional[AcpConnection]:
+        """Return the active ACP connection for a runtime session."""
+        return self._connection_manager.get_existing(session_id)
 
     def reset(self) -> None:
         self._tools = {}

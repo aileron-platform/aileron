@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from app.modules.agent_session.domain.enums import GeminiPermissionMode
 from app.modules.agent_session.services.tools.acp import acp_tool as tool_module
 from app.modules.agent_session.services.tools.base.types import ToolType
 
@@ -59,11 +60,13 @@ def _patch_db_layer(
     monkeypatch.setattr(tool_module, "MessageService", lambda db: SimpleNamespace())
 
 
-def _make_tool() -> tuple[tool_module.AcpTool, SimpleNamespace, SimpleNamespace]:
+def _make_tool(
+    tool_type: ToolType = ToolType.CODEX,
+) -> tuple[tool_module.AcpTool, SimpleNamespace, SimpleNamespace]:
     workspace_service = SimpleNamespace(get_workspace=AsyncMock())
     connection_manager = SimpleNamespace(get_or_create=AsyncMock(), get_existing=lambda session_id: None)
     tool = tool_module.AcpTool(
-        tool_type=ToolType.CODEX,
+        tool_type=tool_type,
         workspace_service=workspace_service,
         connection_manager=connection_manager,
     )
@@ -219,3 +222,106 @@ async def test_stop_task() -> None:
 
     connection_manager.get_existing = lambda session_id: SimpleNamespace(connection=SimpleNamespace(cancel=AsyncMock()), sdk_session_id=None)
     assert await tool.stop_task("session-2") == {"success": True}
+
+
+def test_to_cli_approval_flag_covers_all_modes() -> None:
+    expected = {
+        GeminiPermissionMode.DEFAULT: "default",
+        GeminiPermissionMode.AUTO_EDIT: "auto_edit",
+        GeminiPermissionMode.YOLO: "yolo",
+        GeminiPermissionMode.PLAN: "plan",
+    }
+
+    assert {mode: tool_module._to_cli_approval_flag(mode) for mode in GeminiPermissionMode} == expected
+
+
+@pytest.mark.asyncio
+async def test_execute_task_adds_gemini_approval_mode_args(monkeypatch: pytest.MonkeyPatch) -> None:
+    tool, workspace_service, connection_manager = _make_tool(ToolType.GEMINI)
+    message_repo = _make_message_repo()
+    session_repo = _make_session_repo()
+    _patch_db_layer(monkeypatch, message_repo=message_repo, session_repo=session_repo)
+
+    monkeypatch.setattr(tool_module, "create_user_message", AsyncMock(return_value={"message_id": "user-1"}))
+    monkeypatch.setattr(tool_module, "create_assistant_message", AsyncMock(return_value={"message_id": "assistant-1"}))
+
+    session_repo.find_by_id = AsyncMock(
+        return_value=SimpleNamespace(
+            workspace_id="ws-1",
+            sdk_session_id=None,
+            custom_context={},
+            permission_config=SimpleNamespace(gemini=GeminiPermissionMode.AUTO_EDIT),
+        )
+    )
+    workspace_service.get_workspace = AsyncMock(
+        return_value=SimpleNamespace(
+            acp_cli_args=[],
+            env_vars=[],
+            workspace_path="/workspace/demo",
+        )
+    )
+    connection_manager.get_or_create = AsyncMock(
+        return_value=SimpleNamespace(
+            connection=SimpleNamespace(
+                prompt=AsyncMock(return_value=SimpleNamespace(stop_reason=None, model_dump=lambda **kwargs: {}))
+            ),
+            client_impl=SimpleNamespace(
+                set_task_context=Mock(),
+                finalize_streaming=AsyncMock(),
+                get_current_content=lambda: ("", ""),
+                get_tool_executions=lambda: [],
+            ),
+        )
+    )
+    tool._ensure_sdk_session = AsyncMock(return_value="sdk-1")
+
+    await tool.execute_task("session-1", "hi")
+
+    kwargs = connection_manager.get_or_create.await_args.kwargs
+    assert kwargs["args"] == ["--acp"]
+    assert kwargs["extra_args"] == ["--approval-mode", "auto_edit"]
+
+
+@pytest.mark.asyncio
+async def test_execute_task_defaults_gemini_approval_mode_to_yolo(monkeypatch: pytest.MonkeyPatch) -> None:
+    tool, workspace_service, connection_manager = _make_tool(ToolType.GEMINI)
+    message_repo = _make_message_repo()
+    session_repo = _make_session_repo()
+    _patch_db_layer(monkeypatch, message_repo=message_repo, session_repo=session_repo)
+
+    monkeypatch.setattr(tool_module, "create_user_message", AsyncMock(return_value={"message_id": "user-1"}))
+    monkeypatch.setattr(tool_module, "create_assistant_message", AsyncMock(return_value={"message_id": "assistant-1"}))
+
+    session_repo.find_by_id = AsyncMock(
+        return_value=SimpleNamespace(
+            workspace_id="ws-1",
+            sdk_session_id=None,
+            custom_context={},
+            permission_config=SimpleNamespace(gemini=None),
+        )
+    )
+    workspace_service.get_workspace = AsyncMock(
+        return_value=SimpleNamespace(
+            acp_cli_args=[],
+            env_vars=[],
+            workspace_path="/workspace/demo",
+        )
+    )
+    connection_manager.get_or_create = AsyncMock(
+        return_value=SimpleNamespace(
+            connection=SimpleNamespace(
+                prompt=AsyncMock(return_value=SimpleNamespace(stop_reason=None, model_dump=lambda **kwargs: {}))
+            ),
+            client_impl=SimpleNamespace(
+                set_task_context=Mock(),
+                finalize_streaming=AsyncMock(),
+                get_current_content=lambda: ("", ""),
+                get_tool_executions=lambda: [],
+            ),
+        )
+    )
+    tool._ensure_sdk_session = AsyncMock(return_value="sdk-1")
+
+    await tool.execute_task("session-1", "hi")
+
+    assert connection_manager.get_or_create.await_args.kwargs["extra_args"] == ["--approval-mode", "yolo"]

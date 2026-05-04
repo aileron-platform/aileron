@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 from .enums import (
     CodexApprovalPolicy,
     CodexSandboxMode,
+    GeminiPermissionMode,
     PermissionMode,
     PermissionScope,
     PermissionStatus,
@@ -44,6 +45,7 @@ class PermissionConfig:
 
     mode: PermissionMode = PermissionMode.DEFAULT
     codex: Optional[CodexPermissionConfig] = None
+    gemini: Optional[GeminiPermissionMode] = None
 
     @classmethod
     def from_dict(cls, data: Optional[Dict[str, Any]]) -> "PermissionConfig":
@@ -62,6 +64,7 @@ class PermissionConfig:
         return cls(
             mode=PermissionMode(data.get("mode", "default")),
             codex=codex_config,
+            gemini=GeminiPermissionMode(data["gemini"]) if data.get("gemini") else None,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -72,6 +75,8 @@ class PermissionConfig:
                 "sandboxMode": self.codex.sandbox_mode.value,
                 "approvalPolicy": self.codex.approval_policy.value,
             }
+        if self.gemini:
+            result["gemini"] = self.gemini.value
         return result
 
 

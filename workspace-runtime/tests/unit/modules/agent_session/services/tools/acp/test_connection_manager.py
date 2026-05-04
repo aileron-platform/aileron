@@ -38,7 +38,7 @@ async def test_get_or_create_reuses_alive_connection_and_replaces_dead_one(monke
 
     manager._connections["session-1"] = alive
     assert (
-        await manager.get_or_create("session-1", "codex", "cmd", [], None, "/tmp")
+        await manager.get_or_create("session-1", "codex", "cmd", [], [], None, "/tmp")
         is alive
     )
 
@@ -48,7 +48,7 @@ async def test_get_or_create_reuses_alive_connection_and_replaces_dead_one(monke
     monkeypatch.setattr(manager, "_close_connection", close_mock)
     monkeypatch.setattr(manager, "_create_connection", create_mock)
 
-    result = await manager.get_or_create("session-1", "codex", "cmd", ["a"], {"X": "1"}, "/tmp")
+    result = await manager.get_or_create("session-1", "codex", "cmd", ["a"], ["--noop"], {"X": "1"}, "/tmp")
 
     assert result is created
     close_mock.assert_awaited_once_with(dead)
@@ -86,7 +86,7 @@ async def test_create_connection_initializes_and_handles_failures(monkeypatch: p
     init_mock = AsyncMock()
     monkeypatch.setattr(manager, "_initialize_connection", init_mock)
 
-    connection = await manager._create_connection("session-1", "codex", "cmd", ["a"], {"X": "1"}, "/tmp")
+    connection = await manager._create_connection("session-1", "codex", "cmd", ["a"], ["--noop"], {"X": "1"}, "/tmp")
 
     assert connection.connection is entered_connection
     assert connection.process is process
@@ -98,7 +98,7 @@ async def test_create_connection_initializes_and_handles_failures(monkeypatch: p
     )
     monkeypatch.setattr(cm_module, "spawn_agent_process", lambda *args, **kwargs: failing_context)
     with pytest.raises(RuntimeError, match="spawn failed"):
-        await manager._create_connection("session-1", "codex", "cmd", [], None, "/tmp")
+        await manager._create_connection("session-1", "codex", "cmd", [], [], None, "/tmp")
     failing_context.__aexit__.assert_awaited_once()
 
     context_manager2 = SimpleNamespace(
@@ -110,7 +110,7 @@ async def test_create_connection_initializes_and_handles_failures(monkeypatch: p
     close_mock = AsyncMock()
     monkeypatch.setattr(manager, "_close_connection", close_mock)
     with pytest.raises(RuntimeError, match="init failed"):
-        await manager._create_connection("session-1", "codex", "cmd", [], None, "/tmp")
+        await manager._create_connection("session-1", "codex", "cmd", [], [], None, "/tmp")
     close_mock.assert_awaited_once()
 
 
@@ -141,3 +141,18 @@ async def test_initialize_and_close_connection(monkeypatch: pytest.MonkeyPatch) 
     initialize.assert_awaited_once()
     assert conn.initialized is True
     assert unregister_calls == ["session-1"]
+
+
+def test_extract_gemini_spawned_with() -> None:
+    assert cm_module.AcpConnectionManager._extract_gemini_spawned_with(
+        "gemini",
+        ["--approval-mode", "auto_edit"],
+    ) == "auto_edit"
+    assert cm_module.AcpConnectionManager._extract_gemini_spawned_with(
+        "gemini",
+        [],
+    ) is None
+    assert cm_module.AcpConnectionManager._extract_gemini_spawned_with(
+        "codex",
+        ["--approval-mode", "yolo"],
+    ) is None

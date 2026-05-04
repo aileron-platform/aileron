@@ -25,7 +25,9 @@ import type {
   PromptRequest,
   PromptResponse,
   ToolCapabilities,
+  PermissionConfig,
 } from './agentSessionTypes';
+import { isGeminiSessionPermissionMode } from './agentSessionTypes';
 
 /**
  * 創建帶認證的 Runtime API Client
@@ -42,11 +44,29 @@ function createRuntimeClient(runtimeBaseUrl: string): ApiClient {
   });
 }
 
+const normalizePermissionConfig = (permissionConfig: any): PermissionConfig | null => {
+  if (!permissionConfig || typeof permissionConfig !== 'object') {
+    return null;
+  }
+
+  return {
+    mode: permissionConfig.mode,
+    codex: permissionConfig.codex,
+    gemini: isGeminiSessionPermissionMode(permissionConfig.gemini)
+      ? permissionConfig.gemini
+      : undefined,
+    geminiSpawnedWith: isGeminiSessionPermissionMode(permissionConfig.gemini_spawned_with)
+      ? permissionConfig.gemini_spawned_with
+      : undefined,
+  };
+};
+
 const normalizeSessionResponse = (session: any): AgentSession => {
   const normalizedSessionId = session?.session_id;
   return {
     ...session,
     session_id: normalizedSessionId,
+    permission_config: normalizePermissionConfig(session?.permission_config),
   } as AgentSession;
 };
 

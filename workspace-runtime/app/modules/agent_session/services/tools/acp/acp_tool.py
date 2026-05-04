@@ -10,7 +10,7 @@ from acp.helpers import text_block
 from acp.schema import PromptResponse
 
 from app.database import async_session_scope
-from app.modules.agent_session.domain.enums import PermissionMode
+from app.modules.agent_session.domain.enums import GeminiPermissionMode, PermissionMode
 from app.modules.agent_session.repositories.agent_session_repository import AgentSessionRepository
 from app.modules.agent_session.repositories.message_repository import MessageRepository
 from app.modules.agent_session.services.message_service import MessageService
@@ -33,9 +33,22 @@ DEFAULT_COMMANDS = {
 }
 
 DEFAULT_ARGS = {
-    ToolType.GEMINI.value: ["--experimental-acp"],
+    ToolType.GEMINI.value: ["--acp"],
     ToolType.OPENCODE.value: [],
 }
+
+
+def _to_cli_approval_flag(mode: GeminiPermissionMode) -> str:
+    """Convert persisted Gemini permission modes into CLI approval mode flags."""
+    if mode == GeminiPermissionMode.AUTO_EDIT:
+        return "auto_edit"
+    if mode in {
+        GeminiPermissionMode.DEFAULT,
+        GeminiPermissionMode.YOLO,
+        GeminiPermissionMode.PLAN,
+    }:
+        return mode.value
+    raise ValueError(f"Unsupported Gemini permission mode: {mode}")
 
 
 class AcpTool(ITool):
@@ -106,6 +119,11 @@ class AcpTool(ITool):
 
         command = DEFAULT_COMMANDS.get(self._tool_type.value, self._tool_type.value)
         args = list(DEFAULT_ARGS.get(self._tool_type.value, []))
+        extra_args: list[str] = []
+        if self._tool_type == ToolType.GEMINI:
+            gemini_mode = session.permission_config.gemini if session.permission_config else None
+            resolved_mode = gemini_mode or GeminiPermissionMode.YOLO
+            extra_args.extend(["--approval-mode", _to_cli_approval_flag(resolved_mode)])
         if workspace_info.acp_cli_args:
             args.extend(workspace_info.acp_cli_args)
         env_vars = {item.key: item.value for item in workspace_info.env_vars}
@@ -116,6 +134,7 @@ class AcpTool(ITool):
             tool_type=self._tool_type.value,
             command=command,
             args=args,
+            extra_args=extra_args,
             env=env_vars or None,
             cwd=cwd,
             supports_terminal=True,

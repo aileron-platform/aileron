@@ -15,6 +15,7 @@ from app.modules.agent_session.domain.enums import (
     AgentSessionStatus,
     CodexApprovalPolicy,
     CodexSandboxMode,
+    GeminiPermissionMode,
     MessageStatus,
     PermissionMode,
     ToolDecisionOutcome,
@@ -59,6 +60,34 @@ def test_agent_session_response_serializes_codex_permission_config() -> None:
         "sandboxMode": "relaxed",
         "approvalPolicy": "suggest",
     }
+
+
+def test_agent_session_response_serializes_gemini_permission_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    session = AgentSession(
+        id="session-gemini",
+        created_at=datetime.now(timezone.utc),
+        status=AgentSessionStatus.IDLE,
+        agentic_tool=AgenticTool.GEMINI,
+        workspace_id="ws-1",
+        permission_config=PermissionConfig(
+            mode=PermissionMode.DEFAULT,
+            gemini=GeminiPermissionMode.YOLO,
+        ),
+    )
+    monkeypatch.setattr(
+        "app.modules.agent_session.services.tools.acp.tool_manager.get_acp_tool_manager",
+        lambda: SimpleNamespace(
+            get_connection=lambda session_id: SimpleNamespace(gemini_spawned_with="yolo")
+            if session_id == "session-gemini"
+            else None
+        ),
+    )
+
+    response = AgentSessionResponse.from_entity(session)
+
+    assert response.permission_config is not None
+    assert response.permission_config.gemini == "yolo"
+    assert response.permission_config.gemini_spawned_with == "yolo"
 
 
 @pytest.mark.asyncio

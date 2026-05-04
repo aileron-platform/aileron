@@ -104,6 +104,28 @@ const chat = {
         },
       },
     },
+    geminiPermission: {
+      label: 'Gemini 權限',
+      description: '選擇 Gemini 在此工作階段如何批准工具使用。',
+      default: {
+        label: '預設',
+        description: '每次工具呼叫前都要求批准。',
+      },
+      autoEdit: {
+        label: '自動編輯',
+        description: '自動批准檔案編輯，shell 或網路工具仍會先詢問。',
+      },
+      yolo: {
+        label: 'YOLO',
+        description: '自動執行任意 shell 指令、檔案編輯與網路請求，不會再確認。',
+      },
+      plan: {
+        label: '規劃',
+        description: '讓工作階段維持唯讀，用於探索與規劃。',
+      },
+      applyOnNextHint: '這個設定會套用到下一段對話。',
+      yoloWarning: '自動執行任意 shell 指令、檔案編輯與網路請求，不會再確認。',
+    },
   },
   dialogs: {
     fileChooser: {

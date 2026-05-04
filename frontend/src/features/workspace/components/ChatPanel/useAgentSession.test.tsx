@@ -6,6 +6,7 @@ import { getAgentSessionStore, resetAgentSessionStore } from './agentSessionStor
 const mocks = vi.hoisted(() => ({
   listSessionsMock: vi.fn(),
   createSessionMock: vi.fn(),
+  updateSessionMock: vi.fn(),
   setRealtimeSessionsMock: vi.fn(),
   upsertRealtimeSessionMock: vi.fn(),
   refreshMock: vi.fn(async () => undefined),
@@ -42,6 +43,7 @@ vi.mock('./agentSessionApi', () => ({
     sessions: {
       listSessions: mocks.listSessionsMock,
       createSession: mocks.createSessionMock,
+      updateSession: mocks.updateSessionMock,
     },
     tasks: {
       stopTask: vi.fn(),
@@ -87,6 +89,7 @@ describe('useAgentSession', () => {
     sessionStorage.clear();
     mocks.listSessionsMock.mockReset();
     mocks.createSessionMock.mockReset();
+    mocks.updateSessionMock.mockReset();
     mocks.setRealtimeSessionsMock.mockReset();
     mocks.upsertRealtimeSessionMock.mockReset();
     mocks.refreshMock.mockClear();
@@ -239,6 +242,104 @@ describe('useAgentSession', () => {
         workspace_id: 'ws-codex',
         agentic_tool: 'codex',
       })
+    );
+  });
+
+  it('defaults Gemini session creation to yolo permission mode', async () => {
+    mocks.listSessionsMock.mockResolvedValue({ items: [] });
+    mocks.createSessionMock.mockResolvedValue({
+      session_id: 'session-gemini-1',
+      title: 'Gemini Session',
+      created_at: '2026-04-25T00:00:00Z',
+      updated_at: '2026-04-25T00:00:00Z',
+      agentic_tool: 'gemini',
+      permission_config: {
+        mode: 'default',
+        gemini: 'yolo',
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useAgentSession({
+        runtimeBaseUrl: 'http://runtime.test',
+        workspaceId: 'ws-gemini',
+        cliType: 'gemini',
+        autoConnect: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.state.currentSessionId).toBe('session-gemini-1');
+    });
+
+    expect(mocks.createSessionMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      expect.objectContaining({
+        workspace_id: 'ws-gemini',
+        agentic_tool: 'gemini',
+        permission_config: expect.objectContaining({
+          mode: 'default',
+          gemini: 'yolo',
+        }),
+      }),
+    );
+  });
+
+  it('patches Gemini permission mode on update', async () => {
+    mocks.listSessionsMock.mockResolvedValue({
+      items: [
+        {
+          session_id: 'session-gemini-current',
+          title: 'Gemini Session',
+          created_at: '2026-04-24T00:00:00Z',
+          updated_at: '2026-04-24T00:00:00Z',
+          agentic_tool: 'gemini',
+          permission_config: {
+            mode: 'default',
+            gemini: 'default',
+          },
+        },
+      ],
+    });
+    mocks.updateSessionMock.mockResolvedValue({
+      session_id: 'session-gemini-current',
+      title: 'Gemini Session',
+      created_at: '2026-04-24T00:00:00Z',
+      updated_at: '2026-04-24T00:00:00Z',
+      agentic_tool: 'gemini',
+      permission_config: {
+        mode: 'default',
+        gemini: 'plan',
+        gemini_spawned_with: 'default',
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useAgentSession({
+        runtimeBaseUrl: 'http://runtime.test',
+        workspaceId: 'ws-gemini-patch',
+        cliType: 'gemini',
+        autoConnect: true,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.state.currentSessionId).toBe('session-gemini-current');
+    });
+
+    await act(async () => {
+      await result.current.setGeminiPermissionMode('plan');
+    });
+
+    expect(mocks.updateSessionMock).toHaveBeenCalledWith(
+      'http://runtime.test',
+      'session-gemini-current',
+      {
+        permission_config: {
+          mode: 'default',
+          gemini: 'plan',
+        },
+      },
     );
   });
 });

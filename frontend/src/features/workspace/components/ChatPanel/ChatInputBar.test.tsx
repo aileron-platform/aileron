@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ChatInputBar } from './ChatInputBar';
 import { DEFAULT_CODEX_PERMISSION_CONFIG } from './CodexPermissionSelector';
+import { DEFAULT_GEMINI_SESSION_PERMISSION_CONFIG } from './GeminiPermissionSelector';
 
 const t = (key: string) => key;
 
@@ -115,5 +116,57 @@ describe('ChatInputBar', () => {
     fireEvent.click(screen.getByTitle('workspace.chat.input.codexPermission.label'));
 
     expect(screen.queryByText('workspace.chat.input.codexPermission.network.label')).not.toBeInTheDocument();
+  });
+
+  it('shows Gemini permission controls for Gemini sessions only', () => {
+    const { rerender } = render(
+      <ChatInputBar
+        value="prompt"
+        isConnected
+        hasActiveRequests={false}
+        attachments={[]}
+        codeReferences={[]}
+        cliType="gemini"
+        geminiPermissionMode={DEFAULT_GEMINI_SESSION_PERMISSION_CONFIG}
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        onOpenFilePicker={vi.fn()}
+        onOpenUploadDialog={vi.fn()}
+        onOpenSlashDialog={vi.fn()}
+        onOpenOpenSpecDialog={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        onRemoveCodeReference={vi.fn()}
+        onGeminiPermissionModeChange={vi.fn()}
+        t={t}
+      />,
+    );
+
+    expect(screen.getByTitle('workspace.chat.input.geminiPermission.label')).toBeInTheDocument();
+
+    rerender(
+      <ChatInputBar
+        value="prompt"
+        isConnected
+        hasActiveRequests={false}
+        attachments={[]}
+        codeReferences={[]}
+        cliType="codex"
+        codexPermissionConfig={DEFAULT_CODEX_PERMISSION_CONFIG}
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        onAbort={vi.fn()}
+        onOpenFilePicker={vi.fn()}
+        onOpenUploadDialog={vi.fn()}
+        onOpenSlashDialog={vi.fn()}
+        onOpenOpenSpecDialog={vi.fn()}
+        onRemoveAttachment={vi.fn()}
+        onRemoveCodeReference={vi.fn()}
+        onCodexPermissionConfigChange={vi.fn()}
+        t={t}
+      />,
+    );
+
+    expect(screen.queryByTitle('workspace.chat.input.geminiPermission.label')).not.toBeInTheDocument();
   });
 });

@@ -109,6 +109,16 @@ export const isPermissionMode = (value: unknown): value is PermissionMode =>
 /** Permission Config for session creation */
 export type CodexSandboxMode = 'strict' | 'relaxed' | 'off';
 export type CodexApprovalPolicy = 'manual' | 'suggest' | 'auto';
+export type GeminiSessionPermissionMode = 'default' | 'autoEdit' | 'yolo' | 'plan';
+
+export const GEMINI_SESSION_PERMISSION_MODES = ['default', 'autoEdit', 'yolo', 'plan'] as const;
+export const DEFAULT_GEMINI_SESSION_PERMISSION_MODE: GeminiSessionPermissionMode = 'yolo';
+
+export const isGeminiSessionPermissionMode = (
+  value: unknown,
+): value is GeminiSessionPermissionMode =>
+  typeof value === 'string'
+  && GEMINI_SESSION_PERMISSION_MODES.includes(value as GeminiSessionPermissionMode);
 
 export interface CodexPermissionConfig {
   sandboxMode: CodexSandboxMode;
@@ -118,6 +128,8 @@ export interface CodexPermissionConfig {
 export interface PermissionConfig {
   mode: PermissionMode;
   codex?: CodexPermissionConfig;
+  gemini?: GeminiSessionPermissionMode;
+  geminiSpawnedWith?: GeminiSessionPermissionMode;
 }
 
 // ============================================================================
@@ -246,6 +258,7 @@ export interface AgentSession {
   context_window_used?: number | null;
   message_count?: number;
   title?: string | null;
+  permission_config?: PermissionConfig | null;
 }
 
 export interface SessionCreateRequest {

@@ -8,7 +8,8 @@ import { formatFileSize } from '@/shared/utils/fileTypeUtils';
 import { PermissionModeSelector, type PermissionMode } from './PermissionModeSelector';
 import { normalizeAgentType } from '../../features/agent-settings/utils';
 import { CodexPermissionSelector } from './CodexPermissionSelector';
-import type { CodexPermissionConfig } from './agentSessionTypes';
+import { GeminiPermissionSelector } from './GeminiPermissionSelector';
+import type { CodexPermissionConfig, GeminiSessionPermissionMode } from './agentSessionTypes';
 
 export interface ChatInputBarProps {
   value: string;
@@ -20,6 +21,8 @@ export interface ChatInputBarProps {
   cliType?: string;
   permissionMode?: PermissionMode;
   codexPermissionConfig?: CodexPermissionConfig;
+  geminiPermissionMode?: GeminiSessionPermissionMode;
+  geminiAppliesOnNextHint?: boolean;
   onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
   onAbort: () => void;
@@ -31,6 +34,7 @@ export interface ChatInputBarProps {
   onRemoveCodeReference: (id: string) => void;
   onPermissionModeChange?: (mode: PermissionMode) => void;
   onCodexPermissionConfigChange?: (config: CodexPermissionConfig) => void;
+  onGeminiPermissionModeChange?: (mode: GeminiSessionPermissionMode) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
 }
 
@@ -44,6 +48,8 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   cliType,
   permissionMode = 'bypassPermissions',
   codexPermissionConfig,
+  geminiPermissionMode,
+  geminiAppliesOnNextHint = false,
   onChange,
   onSend,
   onAbort,
@@ -55,6 +61,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onRemoveCodeReference,
   onPermissionModeChange,
   onCodexPermissionConfigChange,
+  onGeminiPermissionModeChange,
   t,
 }) => {
   const hasMessage = value.trim().length > 0;
@@ -64,6 +71,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   const normalizedAgentType = normalizeAgentType(cliType);
   const showPermissionMode = normalizedAgentType === 'claude';
   const showCodexPermission = normalizedAgentType === 'codex';
+  const showGeminiPermission = normalizedAgentType === 'gemini';
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -198,6 +206,14 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 <CodexPermissionSelector
                   value={codexPermissionConfig}
                   onChange={onCodexPermissionConfigChange}
+                  t={t}
+                />
+              )}
+              {showGeminiPermission && geminiPermissionMode && onGeminiPermissionModeChange && (
+                <GeminiPermissionSelector
+                  value={geminiPermissionMode}
+                  onChange={onGeminiPermissionModeChange}
+                  appliesOnNextHint={geminiAppliesOnNextHint}
                   t={t}
                 />
               )}

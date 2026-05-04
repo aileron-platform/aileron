@@ -104,6 +104,28 @@ const chat = {
         },
       },
     },
+    geminiPermission: {
+      label: 'Gemini permissions',
+      description: 'Choose how Gemini approves tool usage for this session.',
+      default: {
+        label: 'Default',
+        description: 'Ask for approval before every tool call.',
+      },
+      autoEdit: {
+        label: 'Auto edit',
+        description: 'Automatically approve file edits and ask before shell or network tools.',
+      },
+      yolo: {
+        label: 'YOLO',
+        description: 'Automatically execute arbitrary shell commands, file edits, and network requests without confirmation.',
+      },
+      plan: {
+        label: 'Plan',
+        description: 'Keep the session read-only for exploration and planning.',
+      },
+      applyOnNextHint: 'This setting applies to the next conversation.',
+      yoloWarning: 'Automatically execute arbitrary shell commands, file edits, and network requests without confirmation.',
+    },
   },
   dialogs: {
     fileChooser: {
