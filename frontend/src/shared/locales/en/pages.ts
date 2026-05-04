@@ -180,7 +180,7 @@ const pages = {
         },
         subscription: {
           title: 'Claude Subscription',
-          connectButton: 'Authorize Claude',
+          connectButton: 'Connect Claude account',
           disconnectButton: 'Disconnect',
           authCodeLabel: 'Authentication Code',
           authCodePlaceholder: 'ngawlWyaJBpnk0yDb2cPtNzB#jmujzwLN3K-HMpcoiqLiPl06pDbA8f2pBGKbEJ4_U60',
@@ -207,7 +207,7 @@ const pages = {
           cancelButton: 'Cancel',
           success: {
             title: 'Authentication Successful',
-            description: 'Successfully connected to Claude Subscription',
+            description: 'Claude account connected successfully',
             syncDescription: 'Authentication successful! Please click the "Sync Settings" button to sync settings to Workspace.',
           },
           errors: {
@@ -221,7 +221,7 @@ const pages = {
           disconnect: {
             loginRequiredTitle: 'Unable to disconnect',
             successTitle: 'Disconnected',
-            successDescription: 'Authentication data has been cleared',
+            successDescription: 'Claude account link data has been cleared',
             failedTitle: 'Failed to disconnect',
             failedDescription: 'Please try again later',
           },
@@ -285,13 +285,13 @@ const pages = {
         login: {
           title: 'ChatGPT subscription',
           account: 'Account',
-          notConnectedDescription: 'Sign in to use Codex with your ChatGPT subscription in workspace containers.',
+          notConnectedDescription: 'Connect your account to use Codex with your ChatGPT subscription in workspace containers.',
           deviceCode: 'Open the verification page and enter code {{code}}.',
           openVerificationLink: 'Open Codex verification page',
-          signInButton: 'Start sign in',
+          connectButton: 'Connect ChatGPT account',
           refreshButton: 'Refresh status',
           cancelButton: 'Cancel',
-          logoutButton: 'Logout',
+          disconnectButton: 'Disconnect',
           status: {
             notConnected: 'Not connected',
             pending: 'Pending',
@@ -302,7 +302,7 @@ const pages = {
           errors: {
             startFailedTitle: 'Unable to start Codex login',
             startFailedDescription: 'Make sure the workspace runtime is running and the Codex login service is available, then try again.',
-            logoutFailedTitle: 'Unable to logout Codex',
+            logoutFailedTitle: 'Unable to disconnect Codex',
             logoutFailedDescription: 'Please try again later.',
           },
           window: {
@@ -335,7 +335,7 @@ const pages = {
         },
         subscription: {
           title: 'Google Subscription',
-          connectButton: 'Authorize Google',
+          connectButton: 'Connect Google account',
           disconnectButton: 'Disconnect',
           authCodeLabel: 'Authentication Code',
           authCodePlaceholder: 'Paste the code from the Google authorization page',
@@ -362,7 +362,7 @@ const pages = {
           cancelButton: 'Cancel',
           success: {
             title: 'Authentication Successful',
-            description: 'Successfully connected to Google Account',
+            description: 'Google account connected successfully',
             syncDescription: 'Authentication successful! Please click the "Sync Settings" button to sync settings to Workspace.',
           },
           errors: {
@@ -376,7 +376,7 @@ const pages = {
           disconnect: {
             loginRequiredTitle: 'Unable to disconnect',
             successTitle: 'Disconnected',
-            successDescription: 'Google authentication data has been cleared',
+            successDescription: 'Google account link data has been cleared',
             failedTitle: 'Failed to disconnect',
             failedDescription: 'Please try again later',
           },

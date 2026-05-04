@@ -157,6 +157,26 @@ describe('SettingsPage Codex tab', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders tabs in the expected order', async () => {
+    render(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'pages.settings.tabs.general' })).toBeInTheDocument();
+    });
+
+    const tabNames = screen.getAllByRole('tab').map((tab) => tab.textContent);
+
+    expect(tabNames).toEqual([
+      'pages.settings.tabs.general',
+      'pages.settings.tabs.claudeCode',
+      'pages.settings.tabs.codex',
+      'pages.settings.tabs.gemini',
+      'pages.settings.tabs.opencode',
+      'pages.settings.tabs.ssh',
+      'pages.settings.tabs.git',
+    ]);
+  });
+
   it('refreshes Codex login status through the manager API', async () => {
     const user = userEvent.setup();
     vi.mocked(apiClient.get)
@@ -208,7 +228,7 @@ describe('SettingsPage Codex tab', () => {
 
     await user.click(screen.getByRole('tab', { name: 'pages.settings.tabs.codex' }));
     await user.click(
-      await screen.findByRole('button', { name: 'pages.settings.sections.codex.login.signInButton' })
+      await screen.findByRole('button', { name: 'pages.settings.sections.codex.login.connectButton' })
     );
 
     await waitFor(() => {

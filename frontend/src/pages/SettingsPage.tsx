@@ -863,11 +863,11 @@ export const SettingsPage: React.FC = () => {
             <Tabs defaultValue="general" className="w-full flex-1 flex flex-col min-h-0">
               <TabsList className="flex w-full overflow-x-auto flex-shrink-0">
                 <TabsTrigger value="general">{t('pages.settings.tabs.general')}</TabsTrigger>
-                <TabsTrigger value="ssh">{t('pages.settings.tabs.ssh')}</TabsTrigger>
                 <TabsTrigger value="claude-code">{t('pages.settings.tabs.claudeCode')}</TabsTrigger>
+                <TabsTrigger value="codex">{t('pages.settings.tabs.codex')}</TabsTrigger>
                 <TabsTrigger value="gemini">{t('pages.settings.tabs.gemini')}</TabsTrigger>
                 <TabsTrigger value="opencode">{t('pages.settings.tabs.opencode')}</TabsTrigger>
-                <TabsTrigger value="codex">{t('pages.settings.tabs.codex')}</TabsTrigger>
+                <TabsTrigger value="ssh">{t('pages.settings.tabs.ssh')}</TabsTrigger>
                 <TabsTrigger value="git">{t('pages.settings.tabs.git')}</TabsTrigger>
               </TabsList>
 
@@ -1070,32 +1070,41 @@ export const SettingsPage: React.FC = () => {
                       {/* Subscription 認證 */}
                       {claudeCodeSettings.authMethod === 'subscription' && (
                         <div className="space-y-4">
-                          {/* 已連接狀態 - 依照資料庫的 subscriptionAccessToken 決定 */}
                           {claudeCodeSettings.subscriptionAccessToken && !showAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary-foreground">
-                                  <span className="h-2 w-2 rounded-full bg-primary"></span>
-                                  {t('pages.settings.sections.claudeCode.subscription.status.connected')}
-                                </span>
+                            <div className="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary dark:bg-primary/15 dark:text-primary-foreground">
+                                      <span className="h-2 w-2 rounded-full bg-primary"></span>
+                                      {t('pages.settings.sections.claudeCode.subscription.status.connected')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.claudeCode.subscription.account')}: <span className="font-mono text-foreground">
+                                      {claudeCodeSettings.oauthAccount?.emailAddress || appState.user.email || 'N/A'}
+                                      {claudeCodeSettings.oauthAccount?.displayName && (
+                                        <span className="ml-2 font-sans text-muted-foreground">({claudeCodeSettings.oauthAccount.displayName})</span>
+                                      )}
+                                    </span>
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.claudeCode.subscription.description')}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleDisconnectAuth}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    {t('pages.settings.sections.claudeCode.subscription.disconnectButton')}
+                                  </Button>
+                                </div>
                               </div>
 
-                              <div className="space-y-2">
-                                <p className="text-sm text-muted-foreground">
-                                  {t('pages.settings.sections.claudeCode.subscription.account')}: <span className="font-mono text-foreground">
-                                    {claudeCodeSettings.oauthAccount?.emailAddress || appState.user.email || 'N/A'}
-                                    {claudeCodeSettings.oauthAccount?.displayName && (
-                                      <span className="ml-2 font-sans text-muted-foreground">({claudeCodeSettings.oauthAccount.displayName})</span>
-                                    )}
-                                  </span>
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  {t('pages.settings.sections.claudeCode.subscription.description')}
-                                </p>
-                              </div>
-
-                              {/* 模型選擇 */}
                               <div className="space-y-2">
                                 <Label>{t('pages.settings.sections.claudeCode.apikey.modelLabel')}</Label>
                                 <Input
@@ -1110,86 +1119,80 @@ export const SettingsPage: React.FC = () => {
                                   {t('pages.settings.sections.claudeCode.apikey.modelHelp')}
                                 </p>
                               </div>
-
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={handleDisconnectAuth}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                {t('pages.settings.sections.claudeCode.subscription.disconnectButton')}
-                              </Button>
                             </div>
                           )}
 
-                          {/* 未連接狀態 - 步驟1 */}
                           {!claudeCodeSettings.subscriptionAccessToken && !showAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                                  {t('pages.settings.sections.claudeCode.subscription.status.notConnected')}
-                                </span>
+                            <div className="rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                      {t('pages.settings.sections.claudeCode.subscription.status.notConnected')}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={handleClaudeOAuth}
+                                    className="w-fit"
+                                  >
+                                    {t('pages.settings.sections.claudeCode.subscription.connectButton')}
+                                  </Button>
+                                </div>
                               </div>
-
-                              <Button
-                                type="button"
-                                onClick={handleClaudeOAuth}
-                                className="w-fit"
-                              >
-                                {t('pages.settings.sections.claudeCode.subscription.connectButton')}
-                              </Button>
                             </div>
                           )}
 
-                          {/* 輸入 Authentication Code - 步驟2 */}
                           {showAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                                  {t('pages.settings.sections.claudeCode.subscription.status.notConnected')}
-                                </span>
-                              </div>
-
-                              <p className="text-sm text-muted-foreground">
-                                {t('pages.settings.sections.claudeCode.subscription.authCodeHint')}
-                              </p>
-
-                              <Input
-                                placeholder={t('pages.settings.sections.claudeCode.subscription.authCodePlaceholder')}
-                                value={tempAuthCode}
-                                onChange={(e) => setTempAuthCode(e.target.value)}
-                                className="font-mono"
-                                disabled={isExchangingCode}
-                              />
-
-                              {isExchangingCode && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <RefreshCw className="h-4 w-4 animate-spin" />
-                                  <span>{t('pages.settings.sections.claudeCode.subscription.verifying')}</span>
+                            <div className="rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0 flex-1 space-y-4">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.claudeCode.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                      {t('pages.settings.sections.claudeCode.subscription.status.notConnected')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.claudeCode.subscription.authCodeHint')}
+                                  </p>
+                                  <Input
+                                    placeholder={t('pages.settings.sections.claudeCode.subscription.authCodePlaceholder')}
+                                    value={tempAuthCode}
+                                    onChange={(e) => setTempAuthCode(e.target.value)}
+                                    className="font-mono"
+                                    disabled={isExchangingCode}
+                                  />
+                                  {isExchangingCode && (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                      <span>{t('pages.settings.sections.claudeCode.subscription.verifying')}</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  onClick={handleSaveAuthCode}
-                                  disabled={isExchangingCode || !tempAuthCode.trim()}
-                                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                                >
-                                  {t('pages.settings.sections.claudeCode.subscription.saveButton')}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={handleCancelAuth}
-                                  disabled={isExchangingCode}
-                                >
-                                  {t('pages.settings.sections.claudeCode.subscription.cancelButton')}
-                                </Button>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={handleSaveAuthCode}
+                                    disabled={isExchangingCode || !tempAuthCode.trim()}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                  >
+                                    {t('pages.settings.sections.claudeCode.subscription.saveButton')}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleCancelAuth}
+                                    disabled={isExchangingCode}
+                                  >
+                                    {t('pages.settings.sections.claudeCode.subscription.cancelButton')}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1286,108 +1289,119 @@ export const SettingsPage: React.FC = () => {
                       {/* Subscription 認證 */}
                       {geminiSettings.authMethod === 'subscription' && (
                         <div className="space-y-4">
-                          {/* 已連接狀態 */}
                           {geminiSettings.accessToken && !showGeminiAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary-foreground">
-                                  <span className="h-2 w-2 rounded-full bg-primary"></span>
-                                  {t('pages.settings.sections.gemini.subscription.status.connected')}
-                                </span>
-                              </div>
-                              <div className="space-y-2">
-                                <p className="text-sm text-muted-foreground">
-                                  {t('pages.settings.sections.gemini.subscription.account')}: <span className="font-mono text-foreground">
-                                    {geminiSettings.account?.email || 'N/A'}
-                                    {geminiSettings.account?.name && (
-                                      <span className="ml-2 font-sans text-muted-foreground">({geminiSettings.account.name})</span>
-                                    )}
-                                  </span>
-                                </p>
-                                {geminiSettings.expiresAt && (
+                            <div className="rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary dark:bg-primary/15 dark:text-primary-foreground">
+                                      <span className="h-2 w-2 rounded-full bg-primary"></span>
+                                      {t('pages.settings.sections.gemini.subscription.status.connected')}
+                                    </span>
+                                  </div>
                                   <p className="text-sm text-muted-foreground">
-                                    {t('pages.settings.sections.gemini.subscription.expiresAt')}: <span className="font-mono text-foreground">{new Date(geminiSettings.expiresAt).toLocaleString()}</span>
+                                    {t('pages.settings.sections.gemini.subscription.account')}: <span className="font-mono text-foreground">
+                                      {geminiSettings.account?.email || 'N/A'}
+                                      {geminiSettings.account?.name && (
+                                        <span className="ml-2 font-sans text-muted-foreground">({geminiSettings.account.name})</span>
+                                      )}
+                                    </span>
                                   </p>
-                                )}
-                                <p className="text-sm text-muted-foreground">
-                                  {t('pages.settings.sections.gemini.subscription.description')}
-                                </p>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={handleDisconnectGemini}
-                                className="text-muted-foreground hover:text-foreground"
-                              >
-                                {t('pages.settings.sections.gemini.subscription.disconnectButton')}
-                              </Button>
-                            </div>
-                          )}
-
-                          {/* 未連接狀態 - 步驟1 */}
-                          {!geminiSettings.accessToken && !showGeminiAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                                  {t('pages.settings.sections.gemini.subscription.status.notConnected')}
-                                </span>
-                              </div>
-                              <Button
-                                type="button"
-                                onClick={handleGeminiOAuth}
-                                className="w-fit"
-                              >
-                                {t('pages.settings.sections.gemini.subscription.connectButton')}
-                              </Button>
-                            </div>
-                          )}
-
-                          {/* 輸入授權碼 - 步驟2 */}
-                          {showGeminiAuthCodeInput && (
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-                                  <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                                  {t('pages.settings.sections.gemini.subscription.status.notConnected')}
-                                </span>
-                              </div>
-                              <p className="text-sm text-muted-foreground">
-                                {t('pages.settings.sections.gemini.subscription.authCodeHint')}
-                              </p>
-                              <Input
-                                placeholder={t('pages.settings.sections.gemini.subscription.authCodePlaceholder')}
-                                value={tempGeminiAuthCode}
-                                onChange={(e) => setTempGeminiAuthCode(e.target.value)}
-                                className="font-mono"
-                                disabled={isGeminiExchangingCode}
-                              />
-                              {isGeminiExchangingCode && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                  <RefreshCw className="h-4 w-4 animate-spin" />
-                                  <span>{t('pages.settings.sections.gemini.subscription.verifying')}</span>
+                                  {geminiSettings.expiresAt && (
+                                    <p className="text-sm text-muted-foreground">
+                                      {t('pages.settings.sections.gemini.subscription.expiresAt')}: <span className="font-mono text-foreground">{new Date(geminiSettings.expiresAt).toLocaleString()}</span>
+                                    </p>
+                                  )}
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.gemini.subscription.description')}
+                                  </p>
                                 </div>
-                              )}
-                              <div className="flex gap-2">
-                                <Button
-                                  type="button"
-                                  onClick={handleSaveGeminiAuthCode}
-                                  disabled={isGeminiExchangingCode || !tempGeminiAuthCode.trim()}
-                                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                                >
-                                  {t('pages.settings.sections.gemini.subscription.saveButton')}
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={handleCancelGeminiAuth}
-                                  disabled={isGeminiExchangingCode}
-                                >
-                                  {t('pages.settings.sections.gemini.subscription.cancelButton')}
-                                </Button>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleDisconnectGemini}
+                                    className="text-muted-foreground hover:text-foreground"
+                                  >
+                                    {t('pages.settings.sections.gemini.subscription.disconnectButton')}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {!geminiSettings.accessToken && !showGeminiAuthCodeInput && (
+                            <div className="rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                      {t('pages.settings.sections.gemini.subscription.status.notConnected')}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={handleGeminiOAuth}
+                                    className="w-fit"
+                                  >
+                                    {t('pages.settings.sections.gemini.subscription.connectButton')}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {showGeminiAuthCodeInput && (
+                            <div className="rounded-lg border border-border bg-muted/30 p-4">
+                              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                <div className="min-w-0 flex-1 space-y-4">
+                                  <div className="flex items-center gap-3">
+                                    <h3 className="text-lg font-semibold">{t('pages.settings.sections.gemini.subscription.title')}</h3>
+                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200">
+                                      <span className="h-2 w-2 rounded-full bg-red-500"></span>
+                                      {t('pages.settings.sections.gemini.subscription.status.notConnected')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    {t('pages.settings.sections.gemini.subscription.authCodeHint')}
+                                  </p>
+                                  <Input
+                                    placeholder={t('pages.settings.sections.gemini.subscription.authCodePlaceholder')}
+                                    value={tempGeminiAuthCode}
+                                    onChange={(e) => setTempGeminiAuthCode(e.target.value)}
+                                    className="font-mono"
+                                    disabled={isGeminiExchangingCode}
+                                  />
+                                  {isGeminiExchangingCode && (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                      <span>{t('pages.settings.sections.gemini.subscription.verifying')}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex shrink-0 flex-wrap gap-2">
+                                  <Button
+                                    type="button"
+                                    onClick={handleSaveGeminiAuthCode}
+                                    disabled={isGeminiExchangingCode || !tempGeminiAuthCode.trim()}
+                                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                  >
+                                    {t('pages.settings.sections.gemini.subscription.saveButton')}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={handleCancelGeminiAuth}
+                                    disabled={isGeminiExchangingCode}
+                                  >
+                                    {t('pages.settings.sections.gemini.subscription.cancelButton')}
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1511,8 +1525,8 @@ export const SettingsPage: React.FC = () => {
                                 </Button>
                               </>
                             ) : codexSettings.loginStatus === 'connected' ? (
-                              <Button variant="outline" onClick={handleCodexLogout} disabled={isCodexAuthLoading}>
-                                {t('pages.settings.sections.codex.login.logoutButton')}
+                                <Button variant="outline" onClick={handleCodexLogout} disabled={isCodexAuthLoading}>
+                                {t('pages.settings.sections.codex.login.disconnectButton')}
                               </Button>
                             ) : (
                               <Button
@@ -1520,7 +1534,7 @@ export const SettingsPage: React.FC = () => {
                                 onClick={handleCodexSignIn}
                                 disabled={isCodexAuthLoading}
                               >
-                                {t('pages.settings.sections.codex.login.signInButton')}
+                                {t('pages.settings.sections.codex.login.connectButton')}
                               </Button>
                             )}
                           </div>
