@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/shared/components/ui/alert";
 import { Badge } from "@/shared/components/ui/badge";
 import { AlertCircle, Info, Upload, CheckCircle, FileText, File, X } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { sortAgentSettingsScopeValues } from '../../components/SettingsSourcePrimitives';
 
 type McpScope = 'project' | 'user' | 'local';
 
@@ -29,7 +30,7 @@ interface MCPImportDialogProps {
 const MCPImportDialog: React.FC<MCPImportDialogProps> = ({ open, onClose, onImport, availableScopes, i18nNamespace = 'workspace.agentSettings.common' }) => {
   // Exclude plugin because import does not support plugin scope.
   const importScopes: McpScope[] = availableScopes
-    ? (availableScopes.filter((s): s is McpScope => s === 'project' || s === 'user' || s === 'local'))
+    ? sortAgentSettingsScopeValues(availableScopes.filter((s): s is McpScope => s === 'project' || s === 'user' || s === 'local'))
     : DEFAULT_IMPORT_SCOPES;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

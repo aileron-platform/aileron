@@ -28,6 +28,7 @@ export interface DocumentPageConfig {
   emptyStateDescription: string;
   dialogTitle: string;
   hideScopeBadge?: boolean;
+  showRawToml?: boolean;
 }
 
 export interface DocumentPageProps {
@@ -50,7 +51,11 @@ const documentSourceType = (document: AgentDocument): AgentSettingsSourceType =>
   return normalizeAgentSettingsSourceType(typeof source === 'string' ? source : document.scope, document.scope);
 };
 
-const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({ content, i18nNamespace }) => {
+const TomlContentView: React.FC<{ content: string; i18nNamespace: string; showRaw: boolean }> = ({
+  content,
+  i18nNamespace,
+  showRaw,
+}) => {
   const { t } = useI18n();
   const [rawExpanded, setRawExpanded] = useState(false);
   const getTomlLabel = (key: 'description' | 'prompt' | 'developerInstructions' | 'raw') => {
@@ -82,6 +87,8 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
       return { description: null, prompt: null, developerInstructions: null };
     }
   }, [content]);
+  const hasParsedFields = Boolean(parsed.description || parsed.prompt || parsed.developerInstructions);
+  const showRawFallback = !showRaw && !hasParsedFields;
 
   return (
     <div className="space-y-4">
@@ -112,21 +119,28 @@ const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({
         </div>
       ) : null}
 
-      <div className="rounded-lg border border-border">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50"
-          onClick={() => setRawExpanded(!rawExpanded)}
-        >
-          <ChevronDown className={`h-4 w-4 transition-transform ${rawExpanded ? 'rotate-0' : '-rotate-90'}`} />
-          {getTomlLabel('raw')}
-        </button>
-        {rawExpanded ? (
-          <div className="border-t border-border p-4">
-            <pre className="whitespace-pre-wrap text-xs font-mono text-foreground">{content}</pre>
-          </div>
-        ) : null}
-      </div>
+      {showRaw ? (
+        <div className="rounded-lg border border-border">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50"
+            onClick={() => setRawExpanded(!rawExpanded)}
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${rawExpanded ? 'rotate-0' : '-rotate-90'}`} />
+            {getTomlLabel('raw')}
+          </button>
+          {rawExpanded ? (
+            <div className="border-t border-border p-4">
+              <pre className="whitespace-pre-wrap text-xs font-mono text-foreground">{content}</pre>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {showRawFallback ? (
+        <pre className="whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-4 text-xs font-mono text-foreground">
+          {content}
+        </pre>
+      ) : null}
     </div>
   );
 };
@@ -248,7 +262,7 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
       )}
       renderContent={(document) => (
         (config.contentFormat ?? (document.metadata?.format as string)) === 'toml'
-          ? <TomlContentView content={document.content} i18nNamespace={i18nNamespace} />
+          ? <TomlContentView content={document.content} i18nNamespace={i18nNamespace} showRaw={config.showRawToml ?? true} />
           : <MarkdownContent content={document.content} />
       )}
     />

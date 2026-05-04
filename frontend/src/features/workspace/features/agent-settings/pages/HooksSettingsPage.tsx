@@ -20,7 +20,7 @@ import {
   type AgentHookWithEvent,
   type AgentHookMatcher,
 } from '../services/agentSettingsApi';
-import { getAgentSettingsSourceBadgeClassName } from '../components/SettingsSourcePrimitives';
+import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
@@ -83,7 +83,7 @@ const removeHookFromMap = (hooks: AgentHookRuleMap, target: AgentHook): AgentHoo
   return next;
 };
 
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin', 'extension'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'extension', 'plugin'];
 
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
@@ -155,7 +155,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
     [scopeDocuments],
   );
 
-  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
+  const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
 
   useEffect(() => {
     if (scopeFilter !== 'all' && !effectiveScopes.includes(scopeFilter)) {

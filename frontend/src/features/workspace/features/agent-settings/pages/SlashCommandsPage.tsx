@@ -4,6 +4,7 @@ import { AgentCommandDialog } from '../components/dialogs/AgentCommandDialog';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
+import { sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentDocument, AgentScope } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
@@ -90,7 +91,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     await loadDocuments();
   }, [loadDocuments]);
 
-  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
+  const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
 
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
@@ -127,6 +128,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       config={{
         metaKey: 'slash-commands',
         contentFormat: format,
+        showRawToml: false,
         createButtonLabel: t(`${i18nNamespace}.slashCommands.actions.create`),
         emptyStateTitle: t(`${i18nNamespace}.slashCommands.empty.title`),
         emptyStateDescription: t(`${i18nNamespace}.slashCommands.empty.description`),

@@ -4,6 +4,7 @@ import { FileCode2 } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
+import { sortAgentSettingsScopeValues } from './SettingsSourcePrimitives';
 import { buildSidebarSourceOption, DocumentSidebar, type SidebarItem } from './shells/DocumentSidebar';
 import type { AgentDocument, AgentScope } from '../types';
 
@@ -81,7 +82,11 @@ const AgentDocumentSidebar: React.FC<AgentDocumentSidebarProps> = ({
     for (const scope of availableScopes ?? []) {
       values.add(scope);
     }
-    return Array.from(values).map((value) => (
+    const sortedValues = [
+      'all' as AgentDocumentScopeFilter,
+      ...sortAgentSettingsScopeValues(Array.from(values).filter((value) => value !== 'all')),
+    ];
+    return sortedValues.map((value) => (
       value === 'all'
         ? buildSidebarSourceOption(value, t(`${i18nNamespace}.documents.sidebar.scope.all`))
         : buildSidebarSourceOption(value, t(`${i18nNamespace}.documents.scope.values.${value}`, { defaultValue: value }))

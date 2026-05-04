@@ -44,6 +44,26 @@ export interface AgentSettingsSourceFilterProps<TValue extends string = string> 
 }
 
 const sourceIconClasses = 'h-3 w-3';
+const SOURCE_MENU_ORDER = [
+  'all',
+  'project',
+  'user',
+  'local',
+  'extension',
+  'built_in',
+  'inline_config',
+  'hooks_json',
+  'built-in',
+  'inline-config',
+];
+
+const getSourceMenuRank = (value: string) => {
+  if (value === 'plugin') {
+    return SOURCE_MENU_ORDER.indexOf('extension');
+  }
+  const index = SOURCE_MENU_ORDER.indexOf(value);
+  return index === -1 ? SOURCE_MENU_ORDER.length : index;
+};
 
 const SOURCE_BADGE_CLASSES: Record<AgentSettingsSourceType, string> = {
   project: 'bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border-primary/20 dark:border-primary/30',
@@ -89,6 +109,12 @@ export const normalizeAgentSettingsSourceType = (
 export const getAgentSettingsSourceBadgeClassName = (sourceType: string | null | undefined) =>
   SOURCE_BADGE_CLASSES[normalizeAgentSettingsSourceType(sourceType)];
 
+export const sortAgentSettingsScopeValues = <TValue extends string>(values: readonly TValue[]): TValue[] =>
+  [...values].sort((first, second) => getSourceMenuRank(first) - getSourceMenuRank(second));
+
+export const sortAgentSettingsSourceOptions = <TOption extends { value: string }>(options: readonly TOption[]): TOption[] =>
+  [...options].sort((first, second) => getSourceMenuRank(first.value) - getSourceMenuRank(second.value));
+
 export const AgentSettingsLayerSelector = <TValue extends string = string>({
   value,
   onChange,
@@ -96,7 +122,7 @@ export const AgentSettingsLayerSelector = <TValue extends string = string>({
   label,
   className,
 }: AgentSettingsLayerSelectorProps<TValue>) => {
-  const mappedOptions: ScopeOption[] = options.map((option) => ({
+  const mappedOptions: ScopeOption[] = sortAgentSettingsSourceOptions(options).map((option) => ({
     value: option.value,
     label: option.label,
     icon: option.icon,
@@ -120,7 +146,7 @@ export const AgentSettingsSourceFilter = <TValue extends string = string>({
   label,
   className,
 }: AgentSettingsSourceFilterProps<TValue>) => {
-  const mappedOptions: ScopeOption[] = options.map((option) => ({
+  const mappedOptions: ScopeOption[] = sortAgentSettingsSourceOptions(options).map((option) => ({
     value: option.value,
     label: option.label,
     icon: option.icon,

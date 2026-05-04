@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FolderGit, Puzzle, User, Wand2, ScrollText } from 'lucide-react';
+import { FolderGit, HardDrive, Puzzle, User, Wand2, ScrollText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { useI18n } from '@/shared/hooks/useI18n';
@@ -9,6 +9,7 @@ import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentFileCollection, AgentSelectedFile, AgentToolConfig } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsFileTreeWorkflow } from './SettingsFileTreeWorkflow';
+import { sortAgentSettingsScopeValues } from './SettingsSourcePrimitives';
 import type { AgentFileTreeScope, AgentFileTreeVisibleScope } from '../adapters/agentFileTreeDataAdapter';
 
 interface AgentFileManagerProps {
@@ -27,6 +28,7 @@ const scopeIcons = {
   all: FolderGit,
   project: FolderGit,
   user: User,
+  local: HardDrive,
   plugin: Puzzle,
   extension: Puzzle,
 };
@@ -40,7 +42,6 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
   const { t } = useI18n();
   const { layout, toggleSecondColumn, workspaceRuntime } = useWorkspace();
   const capability = config.capabilities[collectionType];
-  const scopes = capability?.scopes.length ? capability.scopes : ['project', 'user'];
   const [scope, setScope] = useState<AgentFileTreeVisibleScope>('all');
   const [selectedPlugin, setSelectedPlugin] = useState('all');
   const [refreshToken, setRefreshToken] = useState(0);
@@ -66,9 +67,10 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
 
   const pluginSkills = pluginSkillsData?.plugins ?? [];
 
-  const effectiveScopes = useMemo(() => {
-    return scopes;
-  }, [scopes]);
+  const effectiveScopes = useMemo(
+    () => sortAgentSettingsScopeValues(capability?.scopes.length ? capability.scopes : ['project', 'user']),
+    [capability?.scopes],
+  );
 
   React.useEffect(() => {
     if (scope !== 'all' && !effectiveScopes.includes(scope)) {

@@ -18,6 +18,7 @@ import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { ApiError } from '@/shared/api/apiClient';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
+import { sortAgentSettingsSourceOptions } from '../components/SettingsSourcePrimitives';
 import type { AgentToolConfig } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
@@ -237,7 +238,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {config.agentsMd.scopes.map((scopeOption) => (
+              {sortAgentSettingsSourceOptions(config.agentsMd.scopes).map((scopeOption) => (
                 <SelectItem key={scopeOption.value} value={scopeOption.value}>
                   <div className="flex items-center gap-2">
                     <scopeOption.icon className="h-3 w-3" />

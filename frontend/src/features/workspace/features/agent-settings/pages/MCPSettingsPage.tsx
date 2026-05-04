@@ -21,9 +21,16 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
-import { AgentSettingsSourceBadge } from '../components/SettingsSourcePrimitives';
+import { AgentSettingsSourceBadge, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin', 'extension'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'extension', 'plugin'];
+const scopeFilterIcons = {
+  project: Building,
+  user: User,
+  local: Laptop,
+  extension: Puzzle,
+  plugin: Puzzle,
+} satisfies Record<AgentScope, typeof Building>;
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
@@ -76,7 +83,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     return filtered;
   }, [servers, search, selectedScope]);
 
-  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
+  const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
 
   useEffect(() => {
     if (selectedScope !== 'all' && !effectiveScopes.includes(selectedScope)) {
@@ -349,41 +356,16 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                         <Layers className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.all`)}
                       </div>
                     </SelectItem>
-                    {effectiveScopes.includes('project') && (
-                      <SelectItem value="project">
-                        <div className="flex items-center gap-2">
-                          <Building className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.project`)}
-                        </div>
-                      </SelectItem>
-                    )}
-                    {effectiveScopes.includes('user') && (
-                      <SelectItem value="user">
-                        <div className="flex items-center gap-2">
-                          <User className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.user`)}
-                        </div>
-                      </SelectItem>
-                    )}
-                    {effectiveScopes.includes('local') && (
-                      <SelectItem value="local">
-                        <div className="flex items-center gap-2">
-                          <Laptop className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.local`)}
-                        </div>
-                      </SelectItem>
-                    )}
-                    {effectiveScopes.includes('plugin') && (
-                      <SelectItem value="plugin">
-                        <div className="flex items-center gap-2">
-                          <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.plugin`)}
-                        </div>
-                      </SelectItem>
-                    )}
-                    {effectiveScopes.includes('extension') && (
-                      <SelectItem value="extension">
-                        <div className="flex items-center gap-2">
-                          <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.extension`)}
-                        </div>
-                      </SelectItem>
-                    )}
+                    {effectiveScopes.map((scopeOption) => {
+                      const Icon = scopeFilterIcons[scopeOption];
+                      return (
+                        <SelectItem key={scopeOption} value={scopeOption}>
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.${scopeOption}`)}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>

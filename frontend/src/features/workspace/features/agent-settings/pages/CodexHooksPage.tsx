@@ -31,6 +31,7 @@ import {
 import {
   AgentSettingsSourceBadge,
   getAgentSettingsSourceBadgeClassName,
+  sortAgentSettingsScopeValues,
 } from '../components/SettingsSourcePrimitives';
 import {
   createAgentSettingsApi,
@@ -270,11 +271,17 @@ const CodexHooksPage: React.FC = () => {
 
   const scopeFilterOptions = useMemo<Array<[string, typeof Layers]>>(() => {
     const hasBuiltInHooks = codexHookItems.some((hook) => hook.scope === 'built_in' || hook.layer === 'built_in');
-    return [
-      ['all', Layers],
+    const scopeIcons = new Map<string, typeof Layers>([
       ['project', FolderGit],
       ['user', User],
       ['plugin', Puzzle],
+    ]);
+    return [
+      ['all', Layers],
+      ...sortAgentSettingsScopeValues(['project', 'user', 'plugin']).map((scope) => [
+        scope,
+        scopeIcons.get(scope) ?? Layers,
+      ] as [string, typeof Layers]),
       ...(hasBuiltInHooks ? [['built_in', Puzzle] as [string, typeof Layers]] : []),
     ];
   }, [codexHookItems]);

@@ -4,6 +4,7 @@ import { AgentDefinitionDialog } from '../components/dialogs/AgentDefinitionDial
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
+import { sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentDocument, AgentScope } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
@@ -82,6 +83,8 @@ const SubagentsPage: React.FC<SubagentsPageProps> = ({
     await loadDocuments();
   }, [api, runtimeBaseUrl, workspaceId, documents, loadDocuments]);
 
+  const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
+
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
       open: boolean;
@@ -100,8 +103,8 @@ const SubagentsPage: React.FC<SubagentsPageProps> = ({
   }, [i18nNamespace]);
 
   const visibleDocuments = useMemo(
-    () => documents.filter((doc) => availableScopes.includes(doc.scope)),
-    [availableScopes, documents],
+    () => documents.filter((doc) => effectiveScopes.includes(doc.scope)),
+    [effectiveScopes, documents],
   );
 
   return (

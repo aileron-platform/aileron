@@ -8,6 +8,7 @@ import {
   ReadOnlySourceNotice,
   getAgentSettingsSourceBadgeClassName,
   normalizeAgentSettingsSourceType,
+  sortAgentSettingsScopeValues,
 } from './SettingsSourcePrimitives';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -89,6 +90,16 @@ describe('SettingsSourcePrimitives', () => {
     fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'project' } });
 
     expect(onChange).toHaveBeenCalledWith('project');
+  });
+
+  it('orders scope values consistently for menus and groups plugins with extensions', () => {
+    expect(sortAgentSettingsScopeValues(['extension', 'local', 'plugin', 'user', 'project'])).toEqual([
+      'project',
+      'user',
+      'local',
+      'extension',
+      'plugin',
+    ]);
   });
 
   it('renders plugin source badges with marketplace identity', () => {
