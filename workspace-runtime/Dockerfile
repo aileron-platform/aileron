@@ -87,7 +87,7 @@ RUN echo 'export PYTHONPATH="/workspace-runtime:/workspace"' >> /home/developer/
     echo 'export CARGO_HOME="/home/developer/.cargo"' >> /home/developer/.bashrc && \
     echo 'export RUSTUP_HOME="/root/.rustup"' >> /home/developer/.bashrc && \
     echo 'if [ -f "$HOME/.cargo/env" ]; then source "$HOME/.cargo/env" 2>/dev/null || true; fi' >> /home/developer/.bashrc && \
-    echo 'export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.cargo/bin:$PATH"' >> /home/developer/.bashrc && \
+    echo 'export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.cargo/bin:$PATH"' >> /home/developer/.bashrc && \
     echo "export PS1='\$(whoami)@\$(hostname -s):\${PWD}\$ '" >> /home/developer/.bashrc && \
     chown developer:developer /home/developer/.bashrc
 
@@ -106,7 +106,7 @@ USER root
 # Install global tools as developer.
 ARG OPENSPEC_VERSION=1.3.0
 ARG CLAUDE_CLI_VERSION=stable
-ARG GEMINI_VERSION=0.40.0
+ARG GEMINI_VERSION=latest
 ARG AGENT_BROWSER_CLI_VERSION=latest
 ARG CODEX_CLI_VERSION=latest
 RUN printf '%s\n' \
@@ -145,9 +145,13 @@ RUN if command -v mise >/dev/null 2>&1; then mise use -g node@lts; fi && \
     npm config set fetch-retry-maxtimeout 120000
 RUN bash /usr/local/bin/install-npm-global.sh "@fission-ai/openspec@${OPENSPEC_VERSION}"
 RUN bash /usr/local/bin/install-npm-global.sh "@google/gemini-cli@${GEMINI_VERSION}"
-RUN gemini --version | grep -F "${GEMINI_VERSION}"
+RUN gemini --version && \
+    if [ "${GEMINI_VERSION}" != "latest" ]; then gemini --version | grep -F "${GEMINI_VERSION}"; fi
 RUN bash /usr/local/bin/install-npm-global.sh "agent-browser@${AGENT_BROWSER_CLI_VERSION}"
 RUN curl -fsSL https://opencode.ai/install | bash
+RUN test -x /home/developer/.opencode/bin/opencode && \
+    ln -sf /home/developer/.opencode/bin/opencode /home/developer/.local/bin/opencode && \
+    opencode --version
 RUN bash /usr/local/bin/install-npm-global.sh "@openai/codex@${CODEX_CLI_VERSION}"
 RUN curl -fsSL https://claude.ai/install.sh | bash -s "${CLAUDE_CLI_VERSION}"
 
@@ -158,7 +162,7 @@ RUN chown -R developer:developer /workspace-runtime /workspace /workspace-termin
 
 # Anthropic settings are injected at runtime, not baked into the image.
 
-ENV PATH="/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
+ENV PATH="/home/developer/.opencode/bin:/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
 
 ENV PYTHONPATH="/workspace-runtime:/workspace"
 ENV DISABLE_AUTOUPDATER=1

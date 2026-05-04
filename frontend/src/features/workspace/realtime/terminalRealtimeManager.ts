@@ -50,6 +50,8 @@ export class TerminalRealtimeManager {
 
   private attachments = new Map<string, Map<Terminal, { unsubscribe: () => void; offset: number }>>();
 
+  private renderedTerminals = new WeakMap<Terminal, string>();
+
   private apiCache: TerminalRealtimeAPI | null = null;
 
   private translate: (key: string) => string;
@@ -340,13 +342,17 @@ export class TerminalRealtimeManager {
     }
 
     const initialHistory = tab.history;
-    initialHistory.forEach((entry) => {
-      try {
-        terminal.write(entry.data);
-      } catch (error) {
-        logger.debug('Failed to write existing terminal history', { error });
-      }
-    });
+    const hasRenderedThisTab = this.renderedTerminals.get(terminal) === tabId;
+    if (!hasRenderedThisTab) {
+      initialHistory.forEach((entry) => {
+        try {
+          terminal.write(entry.data);
+        } catch (error) {
+          logger.debug('Failed to write existing terminal history', { error });
+        }
+      });
+      this.renderedTerminals.set(terminal, tabId);
+    }
 
     const attachment = {
       unsubscribe: () => { },
