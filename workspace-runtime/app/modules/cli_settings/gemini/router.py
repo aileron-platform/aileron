@@ -34,6 +34,8 @@ def _summary(extension) -> GeminiExtensionSummary:
     return GeminiExtensionSummary(
         name=extension.name,
         version=extension.version,
+        description=extension.description,
+        contextFileName=extension.contextFile.path.rsplit("/", 1)[-1] if extension.contextFile else None,
         installSource=install_info.source if install_info else None,
         installType=install_info.type if install_info else None,
         releaseTag=install_info.releaseTag if install_info else None,

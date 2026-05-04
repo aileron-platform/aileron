@@ -229,6 +229,8 @@ interface AgentsMdUpdateResponse {
 export interface GeminiExtensionSummary {
   name: string;
   version?: string | null;
+  description?: string | null;
+  contextFileName?: string | null;
   installSource?: string | null;
   installType?: string | null;
   releaseTag?: string | null;

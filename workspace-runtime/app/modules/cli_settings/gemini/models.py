@@ -76,6 +76,7 @@ class GeminiExtensionPackage(BaseModel):
 
     name: str
     version: str | None = None
+    description: str | None = None
     path: str
     manifest: dict[str, Any] = Field(default_factory=dict)
     installInfo: GeminiExtensionInstallInfo | None = None
@@ -95,6 +96,8 @@ class GeminiExtensionSummary(BaseModel):
 
     name: str
     version: str | None = None
+    description: str | None = None
+    contextFileName: str | None = None
     installSource: str | None = None
     installType: str | None = None
     releaseTag: str | None = None

@@ -97,15 +97,38 @@ const agentSettings = {
     title: 'Gemini Extensions',
     loading: '正在載入 extensions...',
     unknownVersion: '未知版本',
+    descriptionFallback: '此 extension 未提供描述。',
+    displayModes: {
+      enabled: '已啟用',
+      all: '全部',
+    },
     actions: {
       refresh: '重新整理',
       toggleWorkspace: '切換此工作區',
       toggleUser: '切換使用者',
       details: '詳細資料',
+      more: '更多 extension 操作',
+      showAll: '顯示全部 extensions',
+      enableWorkspace: '啟用於此工作區',
+      disableWorkspace: '停用於此工作區',
+      enableUser: '啟用於使用者層級',
+      disableUser: '停用於使用者層級',
+      clearSearch: '清除搜尋',
+    },
+    search: {
+      label: '搜尋 Gemini extensions',
+      placeholder: '搜尋名稱、描述或來源',
+      resultCount: '{{count}} 個 extensions',
+    },
+    pagination: {
+      previous: '上一頁',
+      next: '下一頁',
+      page: '第 {{current}} / {{total}} 頁',
+      summary: '顯示 {{start}}-{{end}}，共 {{total}} 個',
     },
     status: {
-      enabledHere: '此處已啟用',
-      disabledHere: '此處已停用',
+      enabledHere: '已啟用',
+      disabledHere: '已停用',
     },
     counts: {
       mcp: '{{count}} 個 MCP',
@@ -122,10 +145,16 @@ const agentSettings = {
     empty: {
       title: '沒有 Gemini extensions',
       description: '已安裝的 Gemini extensions 會顯示在這裡。',
+      enabledTitle: '沒有已啟用的 extensions',
+      enabledDescription: '切換到全部 extensions，即可將已安裝的 extension 啟用於此工作區。',
+      allTitle: '沒有已安裝的 extensions',
       installHint: '請在終端機使用 gemini extensions install <source> 安裝 extensions。',
+      searchTitle: '找不到符合的 extensions',
+      searchDescription: '調整搜尋關鍵字或清除搜尋以查看列表。',
     },
     detail: {
       title: '{{name}} 詳細資料',
+      fallbackTitle: 'Extension 詳細資料',
       loading: '正在載入 extension 詳細資料...',
       empty: '選擇 extension 以查看它提供的資源。',
       noInstallSource: '沒有安裝來源紀錄',
@@ -135,6 +164,23 @@ const agentSettings = {
       noPolicies: '沒有提供 policies。',
       excludeTools: '排除工具',
       noExcludeTools: '沒有排除工具。',
+      resources: '提供的資源',
+      mcpServers: 'MCP servers',
+      slashCommands: 'Slash commands',
+      skills: 'Skills',
+      hooks: 'Hooks',
+    },
+    notifications: {
+      enabled: {
+        title: 'Extension 已啟用',
+      },
+      disabled: {
+        title: 'Extension 已停用',
+      },
+      scope: {
+        workspace: '{{name}} 已更新於此工作區。',
+        user: '{{name}} 已更新於使用者層級。',
+      },
     },
     errors: {
       commandFailed: 'Gemini extension 指令執行失敗。',

@@ -165,10 +165,12 @@ class GeminiExtensionResourceResolver:
         version = manifest.get("version")
         version = str(version) if version is not None else None
         overrides = self._overrides_for(enablement, name)
+        context_file = self._read_context_file(extension_dir, manifest)
 
         return GeminiExtensionPackage(
             name=name,
             version=version,
+            description=_derive_description(manifest, context_file),
             path=str(extension_dir),
             manifest=manifest,
             installInfo=self._read_install_info(extension_dir),
@@ -180,7 +182,7 @@ class GeminiExtensionResourceResolver:
             hooks=self._read_hooks(extension_dir),
             policies=self._read_policies(extension_dir),
             excludeTools=[str(item) for item in manifest.get("excludeTools", []) if isinstance(item, str)],
-            contextFile=self._read_context_file(extension_dir, manifest),
+            contextFile=context_file,
         )
 
     def _read_enablement(self) -> dict[str, Any]:
@@ -324,3 +326,30 @@ def _matches_workspace(pattern: str, workspace: str) -> bool:
 def _normalize_enablement_pattern(pattern: str) -> str:
     normalized = str(Path(pattern).expanduser()).replace("\\", "/")
     return normalized.rstrip("/")
+
+
+def _derive_description(manifest: dict[str, Any], context_file: GeminiExtensionContextFile | None) -> str | None:
+    manifest_description = manifest.get("description")
+    if isinstance(manifest_description, str) and manifest_description.strip():
+        return manifest_description.strip()
+    if context_file is None:
+        return None
+    return _first_context_paragraph(context_file.content)
+
+
+def _first_context_paragraph(content: str) -> str | None:
+    lines: list[str] = []
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            if lines:
+                break
+            continue
+        if line.startswith("#"):
+            heading = line.lstrip("#").strip()
+            if heading:
+                lines.append(heading)
+            continue
+        lines.append(line)
+    paragraph = " ".join(lines).strip()
+    return paragraph or None

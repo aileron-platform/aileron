@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 import subprocess
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from app.modules.cli_settings.gemini.models import (
     GeminiExtensionCommandError,
     GeminiExtensionToggleScope,
 )
+from app.modules.cli_settings.gemini.router import _summary
 
 
 def test_is_enabled_for_uses_glob_negation_last_match_and_realpath(tmp_path: Path) -> None:
@@ -67,6 +69,7 @@ def test_resolver_reads_enabled_extension_contributions(tmp_path: Path) -> None:
             {
                 "name": "demo",
                 "version": "1.2.3",
+                "description": "Demo extension",
                 "mcpServers": {"fs": {"command": "node", "args": ["${extensionPath}${/}server.js"]}},
                 "excludeTools": ["Shell"],
             }
@@ -97,6 +100,7 @@ def test_resolver_reads_enabled_extension_contributions(tmp_path: Path) -> None:
     package = resolver.list_extensions(workspace)[0]
 
     assert package.enabledHere is True
+    assert package.description == "Demo extension"
     assert package.installInfo is not None
     assert package.installInfo.source == "github:example/demo"
     assert package.mcpServers[0].name == "fs"
@@ -106,7 +110,43 @@ def test_resolver_reads_enabled_extension_contributions(tmp_path: Path) -> None:
     assert package.policies[0].content == "allow = true\n"
     assert package.contextFile is not None
     assert package.contextFile.content == "context\n"
+    assert _summary(package).contextFileName == "GEMINI.md"
     assert package.excludeTools == ["Shell"]
+
+
+def test_resolver_derives_description_from_context_when_manifest_description_missing(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    extensions_dir = tmp_path / ".gemini" / "extensions"
+    extension_dir = extensions_dir / "demo"
+    extension_dir.mkdir(parents=True)
+
+    (extension_dir / "gemini-extension.json").write_text(json.dumps({"name": "demo"}), encoding="utf-8")
+    (extension_dir / "GEMINI.md").write_text(
+        "\n# Demo Extension\n\nSecond paragraph should not be used.\n",
+        encoding="utf-8",
+    )
+
+    package = GeminiExtensionResourceResolver(extensions_dir).list_extensions(workspace)[0]
+
+    assert package.description == "Demo Extension"
+
+
+def test_resolver_keeps_description_empty_when_manifest_and_context_missing(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    extensions_dir = tmp_path / ".gemini" / "extensions"
+    extension_dir = extensions_dir / "demo"
+    extension_dir.mkdir(parents=True)
+
+    (extension_dir / "gemini-extension.json").write_text(
+        json.dumps({"name": "demo", "description": "   "}),
+        encoding="utf-8",
+    )
+
+    package = GeminiExtensionResourceResolver(extensions_dir).list_extensions(workspace)[0]
+
+    assert package.description is None
 
 
 def test_toggle_wrapper_uses_expected_argv_and_cwd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -138,6 +178,14 @@ def test_toggle_wrapper_surfaces_stderr(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     assert error.value.stderr == "boom"
     assert error.value.command == ["gemini", "extensions", "enable", "demo", "--scope=workspace"]
+
+
+def test_extension_resource_module_does_not_directly_write_cli_owned_files() -> None:
+    source = inspect.getsource(extension_resources)
+
+    assert "extension_integrity.json" not in source
+    assert ".write_text(" not in source
+    assert ".open(" not in source
 
 
 def test_resolve_toggle_cwd_uses_workspace_realpath_and_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

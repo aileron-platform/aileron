@@ -97,15 +97,38 @@ const agentSettings = {
     title: 'Gemini Extensions',
     loading: 'Loading extensions...',
     unknownVersion: 'Unknown version',
+    descriptionFallback: 'This extension does not provide a description.',
+    displayModes: {
+      enabled: 'Enabled',
+      all: 'All',
+    },
     actions: {
       refresh: 'Refresh',
       toggleWorkspace: 'Toggle for this workspace',
       toggleUser: 'Toggle for user',
       details: 'Details',
+      more: 'More extension actions',
+      showAll: 'Show all extensions',
+      enableWorkspace: 'Enable for workspace',
+      disableWorkspace: 'Disable for workspace',
+      enableUser: 'Enable for user',
+      disableUser: 'Disable for user',
+      clearSearch: 'Clear search',
+    },
+    search: {
+      label: 'Search Gemini extensions',
+      placeholder: 'Search name, description, or source',
+      resultCount: '{{count}} extensions',
+    },
+    pagination: {
+      previous: 'Previous',
+      next: 'Next',
+      page: 'Page {{current}} / {{total}}',
+      summary: 'Showing {{start}}-{{end}} of {{total}}',
     },
     status: {
-      enabledHere: 'Enabled here',
-      disabledHere: 'Disabled here',
+      enabledHere: 'Enabled',
+      disabledHere: 'Disabled',
     },
     counts: {
       mcp: '{{count}} MCP',
@@ -122,10 +145,16 @@ const agentSettings = {
     empty: {
       title: 'No Gemini extensions',
       description: 'Installed Gemini extensions will appear here.',
+      enabledTitle: 'No enabled extensions',
+      enabledDescription: 'Switch to all extensions to enable an installed extension for this workspace.',
+      allTitle: 'No installed extensions',
       installHint: 'Install extensions from a terminal with gemini extensions install <source>.',
+      searchTitle: 'No matching extensions',
+      searchDescription: 'Adjust the search terms or clear search to view the list.',
     },
     detail: {
       title: '{{name}} details',
+      fallbackTitle: 'Extension details',
       loading: 'Loading extension details...',
       empty: 'Select an extension to inspect its contributed resources.',
       noInstallSource: 'No install source recorded',
@@ -135,6 +164,23 @@ const agentSettings = {
       noPolicies: 'No policies contributed.',
       excludeTools: 'Excluded tools',
       noExcludeTools: 'No excluded tools.',
+      resources: 'Contributed resources',
+      mcpServers: 'MCP servers',
+      slashCommands: 'Slash commands',
+      skills: 'Skills',
+      hooks: 'Hooks',
+    },
+    notifications: {
+      enabled: {
+        title: 'Extension enabled',
+      },
+      disabled: {
+        title: 'Extension disabled',
+      },
+      scope: {
+        workspace: '{{name}} was updated for this workspace.',
+        user: '{{name}} was updated for the user scope.',
+      },
     },
     errors: {
       commandFailed: 'Gemini extension command failed.',
