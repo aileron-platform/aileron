@@ -5,6 +5,7 @@ Inherits BaseFileService to provide skills file management for each CLI tool.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Optional
@@ -86,36 +87,84 @@ class CliSkillService(BaseFileService):
         max_depth: Optional[int] = None,
     ) -> dict:
         if scope == SkillScope.EXTENSION:
+            if not self.validate_scope(scope):
+                raise InvalidScopeException(f"Invalid scope: {scope}")
             now = datetime.now(timezone.utc).isoformat()
             nodes = []
             for package, skill in GeminiExtensionResourceResolver().enabled_skills(resolve_workspace_root()):
-                node_path = f"{package.name}/{skill.name}/SKILL.md"
+                skill_dir_path = skill.name
+                skill_file_path = f"{skill_dir_path}/SKILL.md"
+                metadata = {
+                    "extensionName": package.name,
+                    "extensionVersion": package.version,
+                }
                 nodes.append(
                     {
-                        "id": node_path,
-                        "name": "SKILL.md",
-                        "path": node_path,
-                        "type": "file",
+                        "id": skill_dir_path,
+                        "name": skill.name,
+                        "path": skill_dir_path,
+                        "type": "directory",
                         "scope": SkillScope.EXTENSION.value,
-                        "size": len(skill.content.encode("utf-8")),
+                        "size": 0,
                         "updatedAt": now,
                         "depth": 0,
-                        "children": [],
-                        "hasChildren": False,
-                        "extension": ".md",
-                        "fileType": "markdown",
-                        "metadata": {
-                            "extensionName": package.name,
-                            "extensionVersion": package.version,
-                        },
+                        "children": [
+                            {
+                                "id": skill_file_path,
+                                "name": "SKILL.md",
+                                "path": skill_file_path,
+                                "type": "file",
+                                "scope": SkillScope.EXTENSION.value,
+                                "size": len(skill.content.encode("utf-8")),
+                                "updatedAt": now,
+                                "depth": 1,
+                                "children": [],
+                                "hasChildren": False,
+                                "extension": ".md",
+                                "fileType": "markdown",
+                                "metadata": metadata,
+                            }
+                        ],
+                        "hasChildren": True,
+                        "metadata": metadata,
                     }
                 )
-            return {"path": path, "scope": scope, "nodes": nodes, "total": len(nodes)}
+            return {"path": path, "scope": scope, "nodes": nodes, "total": len(nodes) * 2}
         return super().get_tree(path, scope, include_hidden, max_depth)
 
+    def read_file(self, path: str, scope: Optional[str] = None) -> dict:
+        if scope == SkillScope.EXTENSION:
+            if not self.validate_scope(scope):
+                raise InvalidScopeException(f"Invalid scope: {scope}")
+            match = self._find_extension_skill_with_package(path)
+            if match is None:
+                raise InvalidScopeException(f"Invalid extension skill path: {path}")
+            package, skill = match
+            content = skill.content
+            now = datetime.now(timezone.utc).isoformat()
+            content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+            return {
+                "path": path,
+                "scope": scope,
+                "content": content,
+                "size": len(content.encode("utf-8")),
+                "updatedAt": now,
+                "versionId": f"extension:{package.name}:{skill.name}:{package.version}",
+                "contentHash": f"sha256:{content_hash}",
+                "metadata": {
+                    "extensionName": package.name,
+                    "extensionVersion": package.version,
+                },
+            }
+        return super().read_file(path, scope)
+
     def _find_extension_skill(self, relative_path: str):
+        match = self._find_extension_skill_with_package(relative_path)
+        return match[1] if match else None
+
+    def _find_extension_skill_with_package(self, relative_path: str):
         normalized = relative_path.strip("/")
         for package, skill in GeminiExtensionResourceResolver().enabled_skills(resolve_workspace_root()):
             if normalized in {f"{package.name}/{skill.name}/SKILL.md", f"{skill.name}/SKILL.md", "SKILL.md"}:
-                return skill
+                return package, skill
         return None

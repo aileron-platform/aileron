@@ -45,6 +45,8 @@ const GeminiExtensionsPage: React.FC = () => {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['gemini-extensions', runtimeBaseUrl, workspaceId] });
       await queryClient.invalidateQueries({ queryKey: ['gemini-extension-detail', runtimeBaseUrl, workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['agent-document-sidebar', runtimeBaseUrl, workspaceId, 'gemini'] });
+      await queryClient.invalidateQueries({ queryKey: ['agent-file-tree'] });
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : t(`${I18N_PREFIX}.errors.commandFailed`));

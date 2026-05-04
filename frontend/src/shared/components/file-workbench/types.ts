@@ -8,7 +8,7 @@ export interface FileTreeNode {
   writable?: boolean;
   size?: number;
   extension?: string;
-  scope?: 'project' | 'user' | 'plugin';
+  scope?: 'project' | 'user' | 'plugin' | 'extension';
   metadata?: Record<string, unknown>;
   pluginId?: string;
   pluginName?: string;

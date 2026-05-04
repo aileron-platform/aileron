@@ -246,6 +246,74 @@ class TestGeminiMcp:
         assert "srv" in exported.mcpServers
         assert exported.mcpServers["srv"].command == "npx"
 
+    def test_extension_scope_reads_enabled_gemini_extension_mcp_servers(
+        self,
+        tmp_path: Path,
+        workspace_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        class FakeResolver:
+            def enabled_mcp_servers(self, workspace_root: Path):
+                assert workspace_root == workspace_path
+                return {
+                    "superpowers-zh:docs": {
+                        "command": "npx",
+                        "args": ["-y", "docs-mcp"],
+                        "enabled": True,
+                        "source": {
+                            "type": "extension",
+                            "extensionName": "superpowers-zh",
+                            "extensionVersion": "1.1.6",
+                        },
+                        "extensionName": "superpowers-zh",
+                        "extensionVersion": "1.1.6",
+                    }
+                }
+
+        monkeypatch.setattr("app.modules.cli_settings.mcp.service.resolve_workspace_root", lambda: workspace_path)
+        monkeypatch.setattr("app.modules.cli_settings.mcp.service.GeminiExtensionResourceResolver", FakeResolver)
+
+        svc = self._make_service(tmp_path)
+        result = svc.get_scope("ws1", CliMcpScope.EXTENSION)
+
+        server = result.mcpServers["superpowers-zh:docs"]
+        assert server.command == "npx"
+        assert server.args == ["-y", "docs-mcp"]
+        assert server.enabled is True
+        assert server.model_extra["extensionName"] == "superpowers-zh"
+        assert server.model_extra["extensionVersion"] == "1.1.6"
+
+    def test_list_servers_includes_extension_scope_when_enabled_gemini_extensions_exist(
+        self,
+        tmp_path: Path,
+        workspace_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        class FakeResolver:
+            def enabled_mcp_servers(self, workspace_root: Path):
+                assert workspace_root == workspace_path
+                return {
+                    "superpowers-zh:docs": {
+                        "command": "npx",
+                        "args": ["-y", "docs-mcp"],
+                        "extensionName": "superpowers-zh",
+                        "extensionVersion": "1.1.6",
+                    }
+                }
+
+        monkeypatch.setattr("app.modules.cli_settings.mcp.service.resolve_workspace_root", lambda: workspace_path)
+        monkeypatch.setattr("app.modules.cli_settings.mcp.service.GeminiExtensionResourceResolver", FakeResolver)
+
+        svc = self._make_service(tmp_path)
+        result = svc.list_servers("ws1")
+
+        assert [scope.scope for scope in result.scopes] == [
+            CliMcpScope.PROJECT,
+            CliMcpScope.USER,
+            CliMcpScope.EXTENSION,
+        ]
+        assert "superpowers-zh:docs" in result.scopes[2].mcpServers
+
 
 # === Codex Tests (TOML) ==================================================
 

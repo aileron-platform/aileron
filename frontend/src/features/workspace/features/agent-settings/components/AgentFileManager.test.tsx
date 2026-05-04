@@ -66,7 +66,8 @@ describe('AgentFileManager Codex plugin scope', () => {
       />,
     );
 
-    expect(await screen.findByText('workspace.agentSettings.common.skills.scope.project')).toBeInTheDocument();
+    expect(await screen.findByText('workspace.agentSettings.common.skills.scope.all')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.skills.scope.project')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.skills.scope.plugin')).toBeInTheDocument();
     expect(apiMock.listCodexPlugins).not.toHaveBeenCalled();
   });
@@ -81,7 +82,23 @@ describe('AgentFileManager Codex plugin scope', () => {
       />,
     );
 
-    expect(await screen.findByText('workspace.agentSettings.common.skills.scope.plugin')).toBeInTheDocument();
+    expect(await screen.findByText('workspace.agentSettings.common.skills.scope.all')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.skills.scope.plugin')).toBeInTheDocument();
     expect(screen.queryByText('workspace.agentSettings.common.skills.scope.extension')).not.toBeInTheDocument();
+  });
+
+  it('shows extension scope for Gemini skills', async () => {
+    render(
+      <AgentFileManager
+        config={AGENT_TOOL_CONFIGS.gemini}
+        collectionType="skills"
+        workspaceId="ws-1"
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText('workspace.agentSettings.common.skills.scope.all')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.skills.scope.project')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.skills.scope.extension')).toBeInTheDocument();
   });
 });

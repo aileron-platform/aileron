@@ -36,6 +36,33 @@ describe('agentSettingsApi hook mapping', () => {
     });
   });
 
+  it('preserves extension hook source metadata when loading scope documents', () => {
+    const hooks = mapHookScopeDocumentToAgentHooks({
+      scope: 'extension',
+      hooks: {
+        SessionStart: [
+          {
+            matcher: 'startup|clear|compact',
+            extensionName: 'superpowers-zh',
+            extensionVersion: '1.1.6',
+            hooks: [
+              {
+                type: 'command',
+                command: '"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" session-start',
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(hooks[0]).toMatchObject({
+      scope: 'extension',
+      extensionName: 'superpowers-zh',
+      extensionVersion: '1.1.6',
+    });
+  });
+
   it('persists non-empty hook action metadata and omits blank metadata when saving', () => {
     expect(buildHookRulesFromAgentHook({
       id: 'project:PreToolUse',

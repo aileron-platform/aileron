@@ -9,6 +9,7 @@ import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentFileCollection, AgentSelectedFile, AgentToolConfig } from '../types';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsFileTreeWorkflow } from './SettingsFileTreeWorkflow';
+import type { AgentFileTreeScope, AgentFileTreeVisibleScope } from '../adapters/agentFileTreeDataAdapter';
 
 interface AgentFileManagerProps {
   config: AgentToolConfig;
@@ -23,6 +24,7 @@ const collectionIcons = {
 };
 
 const scopeIcons = {
+  all: FolderGit,
   project: FolderGit,
   user: User,
   plugin: Puzzle,
@@ -39,7 +41,7 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
   const { layout, toggleSecondColumn, workspaceRuntime } = useWorkspace();
   const capability = config.capabilities[collectionType];
   const scopes = capability?.scopes.length ? capability.scopes : ['project', 'user'];
-  const [scope, setScope] = useState<AgentSelectedFile['scope']>(scopes[0] ?? 'project');
+  const [scope, setScope] = useState<AgentFileTreeVisibleScope>('all');
   const [selectedPlugin, setSelectedPlugin] = useState('all');
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -65,35 +67,39 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
   const pluginSkills = pluginSkillsData?.plugins ?? [];
 
   const effectiveScopes = useMemo(() => {
-    if (config.apiPathPrefix !== 'codex' || collectionType !== 'skills') {
-      return scopes.filter((scopeValue) => scopeValue !== 'extension');
-    }
     return scopes;
-  }, [collectionType, config.apiPathPrefix, scopes]);
+  }, [scopes]);
 
   React.useEffect(() => {
-    if (!effectiveScopes.includes(scope)) {
-      setScope(effectiveScopes[0] ?? 'project');
+    if (scope !== 'all' && !effectiveScopes.includes(scope)) {
+      setScope('all');
     }
   }, [effectiveScopes, scope]);
+
+  const scopeLabels = useMemo(() => Object.fromEntries(
+    effectiveScopes.map((scopeValue) => [scopeValue, t(`${i18nPrefix}.scope.${scopeValue}`)]),
+  ) as Partial<Record<AgentFileTreeScope, string>>, [effectiveScopes, i18nPrefix, t]);
 
   const fileTreeAdapter = useMemo(() => createAgentFileTreeDataAdapter({
     workspaceId,
     apiPrefix: config.apiPathPrefix,
     scope,
+    scopes: effectiveScopes,
+    scopeLabels,
     collection: collectionType,
     runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl,
-  }), [collectionType, config.apiPathPrefix, scope, workspaceId, workspaceRuntime.runtimeBaseUrl]);
+  }), [collectionType, config.apiPathPrefix, effectiveScopes, scope, scopeLabels, workspaceId, workspaceRuntime.runtimeBaseUrl]);
 
   const fileTreeAdapterKey = useMemo(
     () => JSON.stringify({
       workspaceId,
       apiPrefix: config.apiPathPrefix,
       scope,
+      scopes: effectiveScopes,
       collection: collectionType,
       runtimeBaseUrl: workspaceRuntime.runtimeBaseUrl ?? null,
     }),
-    [collectionType, config.apiPathPrefix, scope, workspaceId, workspaceRuntime.runtimeBaseUrl],
+    [collectionType, config.apiPathPrefix, effectiveScopes, scope, workspaceId, workspaceRuntime.runtimeBaseUrl],
   );
 
   useWorkspaceTemplateInstallRefresh({
@@ -105,7 +111,7 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
     },
   });
 
-  const scopeOptions = useMemo(() => effectiveScopes.map((scopeValue) => {
+  const scopeOptions = useMemo(() => (['all', ...effectiveScopes] as AgentFileTreeVisibleScope[]).map((scopeValue) => {
     const Icon = scopeIcons[scopeValue] ?? FolderGit;
     return {
       value: scopeValue,
@@ -144,7 +150,7 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
       adapterKey={fileTreeAdapterKey}
       scope={scope}
       scopeOptions={scopeOptions}
-      readOnlyScopes={readOnlyScopes as AgentSelectedFile['scope'][]}
+      readOnlyScopes={['all', ...readOnlyScopes] as AgentFileTreeVisibleScope[]}
       labels={{
         title: t(`${i18nPrefix}.title`),
         scopeLabel: t(`${i18nPrefix}.scope.label`),
@@ -154,7 +160,7 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
       isCollapsed={isCollapsed}
       onToggleCollapse={toggleSecondColumn}
       onScopeChange={(value) => setScope(value)}
-      onSelect={onSelect}
+      onSelect={(file) => onSelect(file as AgentSelectedFile)}
       toolbarRightContent={pluginSelector}
       loadEnabled={Boolean(workspaceRuntime.runtimeBaseUrl)}
       refreshSignal={`${workspaceRuntime.runtimeBaseUrl ?? ''}:${refreshToken}`}

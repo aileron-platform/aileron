@@ -900,7 +900,7 @@ const agentSettings = {
       noSelection: 'Select a skill file from the list to preview its content.',
       title: 'Skills',
       searchPlaceholder: 'Search skills or files',
-      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
+      scope: { label: 'Scope', all: 'All scopes', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
       plugin: { label: 'Plugin', all: 'All plugins' },
     },
     scripts: {
@@ -908,7 +908,7 @@ const agentSettings = {
       noSelection: 'Select a script file from the list to preview its content.',
       title: 'Scripts',
       searchPlaceholder: 'Search scripts or files',
-      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
+      scope: { label: 'Scope', all: 'All scopes', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
       plugin: { label: 'Plugin', all: 'All plugins' },
     },
     documents: {

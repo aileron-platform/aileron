@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -213,3 +214,112 @@ def test_validate_scope_and_load_scope_document_defensive_paths(
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(json.dumps({"hooks": ["invalid"]}), encoding="utf-8")
     assert service.get_scope("ws-1", CliHookScope.USER).hooks == {}
+
+
+def test_extension_scope_loads_enabled_gemini_extension_hooks(
+    service: CliHookService,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir(exist_ok=True)
+    extensions_dir = tmp_path / "extensions"
+    extensions_dir.mkdir()
+
+    class FakeResolver:
+        def __init__(self) -> None:
+            self.extensions_dir = extensions_dir
+
+        def enabled_hook_documents(self, workspace_root_arg: Path):
+            assert workspace_root_arg == workspace_root
+            return [
+                SimpleNamespace(
+                    name="superpowers-zh",
+                    version="1.1.6",
+                    hooks=[
+                        SimpleNamespace(
+                            hooks={
+                                "SessionStart": [
+                                    {
+                                        "matcher": "startup|clear|compact",
+                                        "hooks": [
+                                            {
+                                                "type": "command",
+                                                "command": '"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" session-start',
+                                                "async": False,
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        )
+                    ],
+                )
+            ]
+
+    monkeypatch.setattr("app.modules.cli_settings.hooks.service.resolve_workspace_root", lambda: workspace_root)
+    monkeypatch.setattr("app.modules.cli_settings.hooks.service.GeminiExtensionResourceResolver", FakeResolver)
+
+    result = service.get_scope("ws-1", CliHookScope.EXTENSION)
+
+    rule = result.hooks["SessionStart"][0]
+    assert rule.matcher == "startup|clear|compact"
+    assert rule.extension_name == "superpowers-zh"
+    assert rule.extension_version == "1.1.6"
+    assert rule.hooks[0].command == '"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" session-start'
+
+
+def test_list_scopes_includes_enabled_gemini_extension_hooks(
+    service: CliHookService,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir(exist_ok=True)
+    extensions_dir = tmp_path / "extensions"
+    extensions_dir.mkdir()
+
+    class FakeResolver:
+        def __init__(self) -> None:
+            self.extensions_dir = extensions_dir
+
+        def enabled_hook_documents(self, workspace_root_arg: Path):
+            assert workspace_root_arg == workspace_root
+            return [
+                SimpleNamespace(
+                    name="superpowers-zh",
+                    version="1.1.6",
+                    hooks=[
+                        SimpleNamespace(
+                            hooks={
+                                "SessionStart": [
+                                    {
+                                        "matcher": "startup",
+                                        "hooks": [
+                                            {
+                                                "type": "command",
+                                                "command": "echo extension",
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                        )
+                    ],
+                )
+            ]
+
+    monkeypatch.setattr("app.modules.cli_settings.hooks.service.resolve_workspace_root", lambda: workspace_root)
+    monkeypatch.setattr("app.modules.cli_settings.hooks.service.GeminiExtensionResourceResolver", FakeResolver)
+
+    result = service.list_scopes("ws-1")
+
+    assert [document.scope for document in result.scopes] == [
+        CliHookScope.PROJECT,
+        CliHookScope.USER,
+        CliHookScope.EXTENSION,
+    ]
+    extension_document = result.scopes[2]
+    rule = extension_document.hooks["SessionStart"][0]
+    assert rule.extension_name == "superpowers-zh"
+    assert rule.extension_version == "1.1.6"

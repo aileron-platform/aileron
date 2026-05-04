@@ -225,7 +225,13 @@ class CliHookService:
     def _load_extension_scope_document(self, workspace_id: str) -> CliHookScopeDocument:
         hooks: Dict[str, List[HookRule]] = {}
         resolver = GeminiExtensionResourceResolver()
-        for package in resolver.enabled_hook_documents(resolve_workspace_root()):
+        if not resolver.extensions_dir.is_dir():
+            return CliHookScopeDocument(scope=CliHookScope.EXTENSION, hooks=hooks)
+        try:
+            workspace_root = resolve_workspace_root()
+        except FileNotFoundError:
+            return CliHookScopeDocument(scope=CliHookScope.EXTENSION, hooks=hooks)
+        for package in resolver.enabled_hook_documents(workspace_root):
             for document in package.hooks:
                 for event, rules in document.hooks.items():
                     if not isinstance(rules, list):

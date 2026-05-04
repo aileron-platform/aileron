@@ -13,10 +13,15 @@ import type {
 import type { AgentFileCollection, AgentSelectedFile } from '../types';
 import type { CodexFileListResponse, CodexFileSummary } from '../services/agentSettingsApi';
 
+export type AgentFileTreeScope = AgentSelectedFile['scope'];
+export type AgentFileTreeVisibleScope = AgentFileTreeScope | 'all';
+
 export interface AgentFileTreeDataAdapterOptions {
   workspaceId: string;
   apiPrefix: 'claude-code' | 'gemini' | 'codex' | 'opencode';
-  scope: AgentSelectedFile['scope'];
+  scope: AgentFileTreeVisibleScope;
+  scopes?: AgentFileTreeScope[];
+  scopeLabels?: Partial<Record<AgentFileTreeScope, string>>;
   collection: AgentFileCollection;
   runtimeBaseUrl?: string | null;
 }
@@ -51,14 +56,31 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   }
 
   async getTree(): Promise<FileTreeNode[]> {
-    const { workspaceId, apiPrefix, collection, scope } = this.options;
+    const { workspaceId, apiPrefix, collection, scope, scopes = [], scopeLabels = {} } = this.options;
+    if (scope === 'all') {
+      const trees = await Promise.all(scopes.map(async (scopeValue) => ({
+        scope: scopeValue,
+        nodes: apiPrefix === 'codex'
+          ? await this.getCodexTree(workspaceId, collection, scopeValue)
+          : await this.getScopedTree(workspaceId, apiPrefix, collection, scopeValue),
+      })));
+      return trees
+        .filter(({ nodes }) => nodes.length > 0)
+        .map(({ scope: scopeValue, nodes }) => ({
+          id: `scope:${scopeValue}`,
+          name: scopeLabels[scopeValue] ?? scopeValue,
+          path: `scope:${scopeValue}`,
+          type: 'directory',
+          scope: scopeValue,
+          writable: false,
+          hasChildren: nodes.length > 0,
+          children: prefixScopeNodes(scopeValue, nodes),
+        }));
+    }
     if (apiPrefix === 'codex') {
       return this.getCodexTree(workspaceId, collection, scope);
     }
-    const response = await this.client.get<{ nodes?: FileTreeNode[] }>(
-      agentFileEndpoints.getTree(workspaceId, apiPrefix, collection, scope),
-    );
-    return response.nodes ?? [];
+    return this.getScopedTree(workspaceId, apiPrefix, collection, scope);
   }
 
   async getChildren(): Promise<FileTreeNode[]> {
@@ -67,6 +89,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async getContent(path: string): Promise<string> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (scope === 'all') {
+      throw new Error('Cannot read content from the aggregate scope');
+    }
     if (apiPrefix === 'codex') {
       const layer = scope === 'plugin' ? 'plugin' : scope === 'user' ? 'user' : 'project';
       const query = new URLSearchParams({ layer, path });
@@ -87,6 +112,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async create(request: FileOperationRequest): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (scope === 'all') {
+      throw new Error('Cannot create files in the aggregate scope');
+    }
     if (apiPrefix === 'codex') {
       const layer = scope === 'user' ? 'user' : 'project';
       await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}`, {
@@ -104,6 +132,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async update(path: string, content: string): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (scope === 'all') {
+      throw new Error('Cannot update files in the aggregate scope');
+    }
     if (apiPrefix === 'codex') {
       const layer = scope === 'user' ? 'user' : 'project';
       await this.client.put(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}`, {
@@ -118,6 +149,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   async delete(path: string, recursive = false): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (scope === 'all') {
+      throw new Error('Cannot delete files in the aggregate scope');
+    }
     if (apiPrefix === 'codex') {
       const layer = scope === 'user' ? 'user' : 'project';
       await this.client.delete(`/workspaces/${workspaceId}/codex/${collection}/file?layer=${layer}&path=${encodeURIComponent(path.replace(/^\/+/, ''))}`);
@@ -196,6 +230,9 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
 
   private postMove(sourcePath: string, targetPath: string): Promise<FileOperationResponse> {
     const { workspaceId, apiPrefix, collection, scope } = this.options;
+    if (scope === 'all') {
+      throw new Error('Cannot move files in the aggregate scope');
+    }
     if (apiPrefix === 'codex') {
       const fileName = sourcePath.split('/').pop() || sourcePath;
       return this.getContent(sourcePath)
@@ -223,7 +260,7 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
   private async getCodexTree(
     workspaceId: string,
     collection: AgentFileCollection,
-    scope: AgentSelectedFile['scope'],
+    scope: AgentFileTreeScope,
   ): Promise<FileTreeNode[]> {
     const layer = scope === 'plugin' ? 'plugin' : scope === 'user' ? 'user' : 'project';
     const response = await this.client.get<CodexFileListResponse>(
@@ -241,7 +278,36 @@ export class AgentFileTreeDataAdapter implements FileTreeDataAdapter {
     }
     return buildTreeFromCodexSummaries(summaries);
   }
+
+  private async getScopedTree(
+    workspaceId: string,
+    apiPrefix: AgentFileTreeDataAdapterOptions['apiPrefix'],
+    collection: AgentFileCollection,
+    scope: AgentFileTreeScope,
+  ): Promise<FileTreeNode[]> {
+    const response = await this.client.get<{ nodes?: FileTreeNode[] }>(
+      agentFileEndpoints.getTree(workspaceId, apiPrefix, collection, scope),
+    );
+    return response.nodes ?? [];
+  }
 }
+
+const prefixScopeNodes = (scope: AgentFileTreeScope, nodes: FileTreeNode[]): FileTreeNode[] =>
+  nodes.map((node) => {
+    const displayPath = `${scope}/${node.path.replace(/^\/+/, '')}`;
+    return {
+      ...node,
+      id: `${scope}:${node.id || node.path}`,
+      path: displayPath,
+      scope: (node.scope as AgentFileTreeScope | undefined) ?? scope,
+      metadata: {
+        ...node.metadata,
+        sourcePath: node.path,
+        sourceScope: (node.scope as AgentFileTreeScope | undefined) ?? scope,
+      },
+      children: node.children ? prefixScopeNodes(scope, node.children) : undefined,
+    };
+  });
 
 const buildTreeFromCodexSummaries = (summaries: CodexFileSummary[]): FileTreeNode[] => {
   const roots: FileTreeNode[] = [];

@@ -301,7 +301,7 @@ class GeminiExtensionResourceResolver:
 def is_enabled_for(overrides: list[str], workspace_root: Path) -> bool:
     """Evaluate Gemini extension overrides for a workspace path."""
 
-    enabled = False
+    enabled = True
     workspace = str(workspace_root.resolve(strict=True))
     for pattern in overrides:
         negated = pattern.startswith("!")
@@ -312,7 +312,15 @@ def is_enabled_for(overrides: list[str], workspace_root: Path) -> bool:
 
 
 def _matches_workspace(pattern: str, workspace: str) -> bool:
-    normalized = str(Path(pattern).expanduser())
-    if fnmatch.fnmatch(workspace, normalized):
+    normalized = _normalize_enablement_pattern(pattern)
+    current = _normalize_enablement_pattern(workspace)
+    if normalized.endswith("/*") and current == normalized[:-2].rstrip("/"):
         return True
-    return fnmatch.fnmatch(f"{workspace}/", normalized.rstrip("/") + "/**")
+    if fnmatch.fnmatch(current, normalized):
+        return True
+    return fnmatch.fnmatch(f"{current}/", normalized)
+
+
+def _normalize_enablement_pattern(pattern: str) -> str:
+    normalized = str(Path(pattern).expanduser()).replace("\\", "/")
+    return normalized.rstrip("/")

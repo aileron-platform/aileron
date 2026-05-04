@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -184,6 +186,128 @@ class TestGeminiToml:
         assert len(scopes.scopes) == 1
         docs = scopes.scopes[0].documents
         assert any(d.namespace == "my-ns" for d in docs)
+
+    @patch("app.modules.cli_settings.slash_commands.service.resolve_workspace_root")
+    def test_lists_enabled_gemini_extension_commands(self, mock_workspace_root, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        home = tmp_path / "home"
+        extensions_dir = home / ".gemini" / "extensions"
+        extension_dir = extensions_dir / "gemini-cli-security"
+        commands_dir = extension_dir / "commands" / "security"
+        commands_dir.mkdir(parents=True)
+
+        (extension_dir / "gemini-extension.json").write_text(
+            json.dumps({"name": "gemini-cli-security", "version": "0.5.0"}),
+            encoding="utf-8",
+        )
+        for name in ["analyze", "analyze-full", "analyze-github-pr"]:
+            (commands_dir / f"{name}.toml").write_text(
+                f'description = "{name}"\nprompt = "scan"\n',
+                encoding="utf-8",
+            )
+        (extensions_dir / "extension-enablement.json").write_text(
+            json.dumps({"gemini-cli-security": {"overrides": [f"{workspace}/*"]}}),
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(Path, "home", lambda: home)
+        mock_workspace_root.return_value = workspace
+        svc = self._service(tmp_path)
+
+        result = svc.get_scope(WORKSPACE_ID, SlashCommandScope.EXTENSION)
+
+        assert [doc.file_name for doc in result.documents] == [
+            "analyze-full.toml",
+            "analyze-github-pr.toml",
+            "analyze.toml",
+        ]
+        assert {doc.namespace for doc in result.documents} == {"security"}
+        assert {doc.extension_name for doc in result.documents} == {"gemini-cli-security"}
+
+    @patch("app.modules.cli_settings.slash_commands.service.resolve_workspace_root")
+    def test_list_scopes_includes_extension_scope_when_enabled_commands_exist(
+        self,
+        mock_workspace_root,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        class FakeResolver:
+            def __init__(self) -> None:
+                self.extensions_dir = tmp_path / "extensions"
+                self.extensions_dir.mkdir()
+
+            def enabled_slash_commands(self, workspace_root: Path):
+                assert workspace_root == workspace
+                package = SimpleNamespace(name="gemini-cli-security", version="0.5.0")
+                return [
+                    (
+                        package,
+                        SimpleNamespace(
+                            fileName="analyze.toml",
+                            namespace="security",
+                            description="analyze",
+                            content='description = "analyze"\nprompt = "scan"\n',
+                        ),
+                    )
+                ]
+
+        monkeypatch.setattr("app.modules.cli_settings.slash_commands.service.GeminiExtensionResourceResolver", FakeResolver)
+        mock_workspace_root.return_value = workspace
+        svc = self._service(tmp_path)
+
+        result = svc.list_scopes(WORKSPACE_ID)
+
+        assert [group.scope for group in result.scopes] == [
+            SlashCommandScope.PROJECT,
+            SlashCommandScope.USER,
+            SlashCommandScope.EXTENSION,
+        ]
+        document = result.scopes[2].documents[0]
+        assert document.file_name == "analyze.toml"
+        assert document.namespace == "security"
+        assert document.extension_name == "gemini-cli-security"
+
+    @patch("app.modules.cli_settings.slash_commands.service.resolve_workspace_root")
+    def test_get_extension_document_reads_enabled_command_content(
+        self,
+        mock_workspace_root,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        class FakeResolver:
+            def enabled_slash_commands(self, workspace_root: Path):
+                assert workspace_root == workspace
+                package = SimpleNamespace(name="gemini-cli-security", version="0.5.0")
+                return [
+                    (
+                        package,
+                        SimpleNamespace(
+                            fileName="analyze.toml",
+                            namespace="security",
+                            description="analyze",
+                            content='description = "analyze"\nprompt = "scan"\n',
+                        ),
+                    )
+                ]
+
+        monkeypatch.setattr("app.modules.cli_settings.slash_commands.service.GeminiExtensionResourceResolver", FakeResolver)
+        mock_workspace_root.return_value = workspace
+        svc = self._service(tmp_path)
+
+        result = svc.get_document(WORKSPACE_ID, SlashCommandScope.EXTENSION, "analyze.toml")
+
+        assert result.scope == SlashCommandScope.EXTENSION
+        assert result.document.file_name == "analyze.toml"
+        assert result.document.content == 'description = "analyze"\nprompt = "scan"\n'
+        assert result.document.extension_name == "gemini-cli-security"
+        assert result.document.extension_version == "0.5.0"
 
 
 class TestCodexMarkdown:

@@ -12,7 +12,7 @@ from typing import List
 from app.config.settings import get_workspace_path
 from app.modules.cli_settings.gemini.extension_resources import GeminiExtensionResourceResolver, resolve_workspace_root
 
-from .config import DocumentFormat, SlashCommandScope, SlashCommandToolConfig
+from .config import DocumentFormat, SlashCommandScope, SlashCommandTool, SlashCommandToolConfig
 from .format_strategies import (
     DocumentFormatStrategy,
     MarkdownFormatStrategy,
@@ -132,7 +132,11 @@ class CliSlashCommandService:
         self, workspace_id: str, scope: SlashCommandScope | None = None
     ) -> CliSlashCommandScopesResponse:
         scopes = [scope] if scope else [SlashCommandScope.PROJECT, SlashCommandScope.USER]
-        extension_documents = self._list_extension_documents(workspace_id)
+        extension_documents = (
+            self._list_extension_documents(workspace_id)
+            if self._config.tool == SlashCommandTool.GEMINI and scope in {None, SlashCommandScope.EXTENSION}
+            else []
+        )
         if not scope and extension_documents:
             scopes.append(SlashCommandScope.EXTENSION)
         groups: List[CliSlashCommandScopeGroup] = []
@@ -309,7 +313,14 @@ class CliSlashCommandService:
 
     def _list_extension_documents(self, workspace_id: str) -> List[CliSlashCommandDocumentSummary]:
         documents: List[CliSlashCommandDocumentSummary] = []
-        for package, command in GeminiExtensionResourceResolver().enabled_slash_commands(resolve_workspace_root()):
+        resolver = GeminiExtensionResourceResolver()
+        if not resolver.extensions_dir.is_dir():
+            return documents
+        try:
+            workspace_root = resolve_workspace_root()
+        except FileNotFoundError:
+            return documents
+        for package, command in resolver.enabled_slash_commands(workspace_root):
             documents.append(
                 CliSlashCommandDocumentSummary(
                     fileName=command.fileName,

@@ -29,7 +29,27 @@ def test_is_enabled_for_uses_glob_negation_last_match_and_realpath(tmp_path: Pat
     assert is_enabled_for([f"{tmp_path}/real/**"], symlink)
     assert not is_enabled_for([f"{tmp_path}/real/**", f"!{workspace}"], symlink)
     assert is_enabled_for([f"!{tmp_path}/real/**", f"{workspace}"], symlink)
-    assert not is_enabled_for([f"{tmp_path}/other/**"], workspace)
+    assert is_enabled_for([f"{tmp_path}/other/**"], workspace)
+
+
+def test_is_enabled_for_defaults_to_enabled_and_uses_disable_overrides(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    home = tmp_path / "home" / "developer"
+    home.mkdir(parents=True)
+
+    assert is_enabled_for([], workspace)
+    assert is_enabled_for([f"!{home}/*"], workspace)
+    assert not is_enabled_for([f"!{home}/*"], home)
+
+
+def test_is_enabled_for_treats_gemini_workspace_star_pattern_as_root_match(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    assert is_enabled_for([f"{workspace}/*"], workspace)
+    assert not is_enabled_for([f"{workspace}/*", f"!{workspace}/*"], workspace)
+    assert is_enabled_for([f"!{workspace}/*", f"{workspace}/*"], workspace)
 
 
 def test_resolver_reads_enabled_extension_contributions(tmp_path: Path) -> None:

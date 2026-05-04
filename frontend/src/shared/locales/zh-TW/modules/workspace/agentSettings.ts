@@ -600,7 +600,7 @@ const agentSettings = {
             user: '個人',
             local: '本地',
             plugin: '外掛',
-            extension: 'Extension',
+            extension: '擴充套件',
           },
         },
       },
@@ -718,7 +718,7 @@ const agentSettings = {
           user: '個人',
           local: '本地',
           plugin: '外掛',
-          extension: 'Extension',
+          extension: '擴充套件',
         },
       },
       serverDetails: {
@@ -900,7 +900,7 @@ const agentSettings = {
       noSelection: '請從左側選擇技能檔案以檢視內容。',
       title: 'Skills',
       searchPlaceholder: '搜尋技能或檔案',
-      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
+      scope: { label: '範圍', all: '全部範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
       plugin: { label: '外掛', all: '所有外掛' },
     },
     scripts: {
@@ -908,7 +908,7 @@ const agentSettings = {
       noSelection: '請從左側選擇腳本檔案以檢視內容。',
       title: 'Scripts',
       searchPlaceholder: '搜尋腳本或檔案',
-      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
+      scope: { label: '範圍', all: '全部範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
       plugin: { label: '外掛', all: '所有外掛' },
     },
     documents: {
@@ -921,7 +921,7 @@ const agentSettings = {
       stats: { total: '共 {{count}} 項' },
       scope: {
         badge: '範圍：{{scope}}',
-        values: { project: '專案', user: '個人', local: '本地', plugin: '外掛', extension: 'Extension' },
+        values: { project: '專案', user: '個人', local: '本地', plugin: '外掛', extension: '擴充套件' },
       },
       size: { badge: '大小：{{size}}' },
       confirmDelete: '確定要刪除「{{title}}」嗎？',

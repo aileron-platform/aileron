@@ -118,9 +118,11 @@ export const SettingsFileTreeWorkflow = <TScope extends string = string>({
   const closeDialog = useCallback(() => setDialogState(null), []);
 
   const selectFile = useCallback((node: FileTreeNodeType) => {
+    const sourcePath = typeof node.metadata?.sourcePath === 'string' ? node.metadata.sourcePath : node.path;
+    const sourceScope = typeof node.metadata?.sourceScope === 'string' ? node.metadata.sourceScope : node.scope;
     onSelect({
-      path: node.path,
-      scope: ((node.scope as TScope | null) || scope),
+      path: sourcePath,
+      scope: ((sourceScope as TScope | null) || scope),
       pluginId: node.pluginId,
       pluginName: node.pluginName,
       marketplaceName: node.marketplaceName,

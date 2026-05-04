@@ -453,6 +453,10 @@ const cloneHookRuleMap = (hooks: AgentHookRuleMap | undefined): AgentHookRuleMap
       event,
       rules.map((rule) => ({
         matcher: rule.matcher,
+        pluginName: rule.pluginName,
+        marketplaceName: rule.marketplaceName,
+        extensionName: rule.extensionName,
+        extensionVersion: rule.extensionVersion,
         hooks: rule.hooks.map((action) => ({ ...action })),
       })),
     ]),

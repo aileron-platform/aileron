@@ -111,6 +111,63 @@ describe('AgentFileTreeDataAdapter', () => {
     expect(content).toBe('# Review\n');
   });
 
+  it('groups all scope file trees and preserves source metadata', async () => {
+    apiClientMock.get
+      .mockResolvedValueOnce({
+        nodes: [
+          {
+            id: 'dependency/SKILL.md',
+            name: 'SKILL.md',
+            path: 'dependency/SKILL.md',
+            type: 'file',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        nodes: [
+          {
+            id: 'dependency/SKILL.md',
+            name: 'SKILL.md',
+            path: 'dependency/SKILL.md',
+            type: 'file',
+          },
+        ],
+      });
+
+    const adapter = new AgentFileTreeDataAdapter({
+      workspaceId: 'ws-1',
+      apiPrefix: 'gemini',
+      collection: 'skills',
+      scope: 'all',
+      scopes: ['project', 'extension'],
+      scopeLabels: { project: 'Project', extension: 'Extension' },
+      runtimeBaseUrl: 'http://runtime.local',
+    });
+
+    const tree = await adapter.getTree();
+
+    expect(apiClientMock.get).toHaveBeenNthCalledWith(
+      1,
+      '/workspaces/ws-1/gemini/skills/tree?scope=project&includeHidden=true',
+    );
+    expect(apiClientMock.get).toHaveBeenNthCalledWith(
+      2,
+      '/workspaces/ws-1/gemini/skills/tree?scope=extension&includeHidden=true',
+    );
+    expect(tree).toHaveLength(2);
+    expect(tree[0]).toMatchObject({ name: 'Project', path: 'scope:project', writable: false });
+    expect(tree[0].children?.[0]).toMatchObject({
+      id: 'project:dependency/SKILL.md',
+      path: 'project/dependency/SKILL.md',
+      scope: 'project',
+      metadata: {
+        sourcePath: 'dependency/SKILL.md',
+        sourceScope: 'project',
+      },
+    });
+    expect(tree[1]).toMatchObject({ name: 'Extension', path: 'scope:extension', writable: false });
+  });
+
   it('uses the configured collection and scope when moving files', async () => {
     apiClientMock.post.mockResolvedValueOnce({ success: true });
 
