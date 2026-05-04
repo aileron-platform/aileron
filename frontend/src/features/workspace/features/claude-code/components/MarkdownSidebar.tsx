@@ -7,7 +7,7 @@ import { Button } from '@/shared/components/ui/button';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useClaudeCode, ClaudeCodeContext } from '../context/ClaudeCodeProvider';
-import { SCOPE_BADGE_CLASSES } from '../../agent-settings/constants/scopeStyles';
+import { getAgentSettingsSourceBadgeClassName } from '../../agent-settings/components/SettingsSourcePrimitives';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
 import type { ClaudeScope } from '../types';
@@ -261,7 +261,10 @@ const MarkdownSidebarContent: React.FC<MarkdownSidebarProps> = ({ subView, avail
                         <div className="truncate text-xs text-muted-foreground">{doc.description}</div>
                       </div>
                       {showScopeBadges && (
-                        <Badge variant="outline" className={`text-[10px] whitespace-nowrap flex-shrink-0 px-1 py-0 ${SCOPE_BADGE_CLASSES[doc.scope]}`}>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] whitespace-nowrap flex-shrink-0 px-1 py-0 ${getAgentSettingsSourceBadgeClassName(doc.scope)}`}
+                        >
                           {t(`workspace.claudeCode.documents.scope.values.${doc.scope}`)}
                         </Badge>
                       )}

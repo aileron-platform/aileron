@@ -2,9 +2,12 @@ import { render, screen, fireEvent } from '@/__tests__/utils/render';
 import { describe, expect, it, vi } from 'vitest';
 import {
   AgentSettingsLayerSelector,
+  AgentSettingsSourceFilter,
   AgentSettingsSourceBadge,
   NewThreadNotice,
   ReadOnlySourceNotice,
+  getAgentSettingsSourceBadgeClassName,
+  normalizeAgentSettingsSourceType,
 } from './SettingsSourcePrimitives';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -68,6 +71,26 @@ describe('SettingsSourcePrimitives', () => {
     expect(onChange).toHaveBeenCalledWith('user');
   });
 
+  it('adapts source filter options through the shared selector', () => {
+    const onChange = vi.fn();
+
+    render(
+      <AgentSettingsSourceFilter
+        value="all"
+        onChange={onChange}
+        label="Source"
+        options={[
+          { value: 'all', label: 'All' },
+          { value: 'project', label: 'Project' },
+        ]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'project' } });
+
+    expect(onChange).toHaveBeenCalledWith('project');
+  });
+
   it('renders plugin source badges with marketplace identity', () => {
     render(
       <AgentSettingsSourceBadge
@@ -81,6 +104,27 @@ describe('SettingsSourcePrimitives', () => {
     );
 
     expect(screen.getByText('github@openai-curated')).toBeInTheDocument();
+  });
+
+  it('normalizes legacy and backend source values to shared badge styles', () => {
+    expect(normalizeAgentSettingsSourceType('built-in')).toBe('built_in');
+    expect(normalizeAgentSettingsSourceType('inline-config')).toBe('inline_config');
+    expect(normalizeAgentSettingsSourceType('hooks_json')).toBe('hooks_json');
+    expect(normalizeAgentSettingsSourceType('unknown', 'user')).toBe('user');
+    expect(getAgentSettingsSourceBadgeClassName('built_in')).toContain('bg-sky-100');
+    expect(getAgentSettingsSourceBadgeClassName('hooks_json')).toContain('bg-amber-100');
+  });
+
+  it('renders normalized source badges for built-in and hooks.json values', () => {
+    render(
+      <div>
+        <AgentSettingsSourceBadge source={{ type: 'built_in', label: 'Built-in' }} />
+        <AgentSettingsSourceBadge source={{ type: 'hooks_json', label: 'hooks.json' }} />
+      </div>,
+    );
+
+    expect(screen.getByText('Built-in')).toBeInTheDocument();
+    expect(screen.getByText('hooks.json')).toBeInTheDocument();
   });
 
   it('renders localized source notices', () => {

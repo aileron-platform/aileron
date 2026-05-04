@@ -10,7 +10,11 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';
 import type { AgentDocument } from '../types';
 import { CLAUDE_CODE_ICONS } from '../../../components/navigation-constants';
-import { AgentSettingsSourceBadge, type AgentSettingsSourceType } from './SettingsSourcePrimitives';
+import {
+  AgentSettingsSourceBadge,
+  normalizeAgentSettingsSourceType,
+  type AgentSettingsSourceType,
+} from './SettingsSourcePrimitives';
 
 const logger = createLogger('DocumentPage');
 
@@ -43,10 +47,7 @@ export interface DocumentPageProps {
 
 const documentSourceType = (document: AgentDocument): AgentSettingsSourceType => {
   const source = document.metadata?.source;
-  if (source === 'built_in') return 'built-in';
-  if (source === 'inline-config') return 'inline-config';
-  if (source === 'project' || source === 'user' || source === 'local' || source === 'plugin' || source === 'extension') return source;
-  return document.scope;
+  return normalizeAgentSettingsSourceType(typeof source === 'string' ? source : document.scope, document.scope);
 };
 
 const TomlContentView: React.FC<{ content: string; i18nNamespace: string }> = ({ content, i18nNamespace }) => {

@@ -20,7 +20,7 @@ import {
   type AgentHookWithEvent,
   type AgentHookMatcher,
 } from '../services/agentSettingsApi';
-import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
+import { getAgentSettingsSourceBadgeClassName } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
@@ -489,7 +489,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
                         </h3>
                         <Badge
                           variant="outline"
-                          className={`text-xs ${SCOPE_BADGE_CLASSES[hook.scope]}`}
+                          className={`text-xs ${getAgentSettingsSourceBadgeClassName(hook.scope)}`}
                         >
                           {t(`${i18nNamespace}.hooks.scope.badge.${hook.scope}`)}
                         </Badge>

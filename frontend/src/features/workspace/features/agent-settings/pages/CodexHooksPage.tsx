@@ -28,7 +28,10 @@ import {
   type EventOption,
   type WorkspaceHookData,
 } from './dialogs/WorkspaceHookDialog';
-import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
+import {
+  AgentSettingsSourceBadge,
+  getAgentSettingsSourceBadgeClassName,
+} from '../components/SettingsSourcePrimitives';
 import {
   createAgentSettingsApi,
   type CodexHookEntry,
@@ -448,9 +451,7 @@ const CodexHooksPage: React.FC = () => {
             const totalMatchers = hook.matchers.length;
             const totalCommands = hook.matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
             const readOnly = hook.readOnly;
-            const badgeClass = hook.layer === 'project' || hook.layer === 'user'
-              ? SCOPE_BADGE_CLASSES[hook.layer]
-              : SCOPE_BADGE_CLASSES.plugin;
+            const badgeClass = getAgentSettingsSourceBadgeClassName(hook.layer);
 
             return (
               <div key={hook.id} className="relative rounded-lg border border-border bg-background p-6">
@@ -465,10 +466,13 @@ const CodexHooksPage: React.FC = () => {
                     >
                       {t(`workspace.agentSettings.codex.hooks.scope.badge.${hook.layer}`)}
                     </Badge>
-                    <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                      <Puzzle className="h-3 w-3" />
-                      {t(`workspace.agentSettings.codex.hooks.sources.${hook.source}`)}
-                    </Badge>
+                    <AgentSettingsSourceBadge
+                      source={{
+                        type: hook.source,
+                        label: t(`workspace.agentSettings.codex.hooks.sources.${hook.source}`),
+                      }}
+                      className="text-xs"
+                    />
                   </div>
 
                   <div className="mb-4">

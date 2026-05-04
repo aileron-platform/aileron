@@ -8,23 +8,9 @@
 import React, { useState } from 'react';
 import { getAgentToolConfig } from './utils';
 import type { AgentSelectedFile, AgentToolType } from './types';
-import AgentsMdPage from './pages/AgentsMdPage';
 import ComingSoonPlaceholder from './components/ComingSoonPlaceholder';
+import { PAGE_REGISTRY } from './pageRegistry';
 import { useI18n } from '@/shared/hooks/useI18n';
-
-// Shared page lazy imports.
-const MCPSettingsPage = React.lazy(() => import('./pages/MCPSettingsPage'));
-const HooksSettingsPage = React.lazy(() => import('./pages/HooksSettingsPage'));
-const SlashCommandsPage = React.lazy(() => import('./pages/SlashCommandsPage'));
-const SkillsPage = React.lazy(() => import('./pages/SkillsPage'));
-const ScriptsPage = React.lazy(() => import('./pages/ScriptsPage'));
-const CodexAgentsMdPage = React.lazy(() => import('./pages/CodexAgentsMdPage'));
-const CodexRulesPage = React.lazy(() => import('./pages/CodexRulesPage'));
-const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
-const CodexPluginsPage = React.lazy(() => import('./pages/CodexPluginsPage'));
-const CodexDocumentResourcePage = React.lazy(() => import('./pages/CodexDocumentResourcePage'));
-const SubagentsPage = React.lazy(() => import('./pages/SubagentsPage'));
-const GeminiExtensionsPage = React.lazy(() => import('./pages/GeminiExtensionsPage'));
 
 export interface AgentSettingsFeatureProps {
   cliType: AgentToolType;
@@ -58,172 +44,32 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
     </div>
   );
 
-  // Render the page for the active subview.
-  switch (subView) {
-    case config.agentsMd.subViewId:
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexAgentsMdPage />
-          </React.Suspense>
-        );
-      }
-      return <AgentsMdPage config={config} />;
-
-    case 'mcp':
-      if (config.capabilities.mcp?.supported === false || !config.capabilities.mcp) {
-        return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-      }
-      return (
-        <React.Suspense fallback={loadingFallback}>
-          <MCPSettingsPage apiPrefix={config.apiPathPrefix} availableScopes={config.availableScopes} supportsToggle={config.supportsToggle} i18nNamespace={config.i18nNamespace} />
-        </React.Suspense>
-      );
-
-    case 'rules':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexRulesPage
-              selectedId={documentSelectedId}
-              onSelect={onDocumentSelect}
-            />
-          </React.Suspense>
-        );
-      }
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-
-    case 'hooks':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexHooksPage />
-          </React.Suspense>
-        );
-      }
-      if (config.capabilities.hooks?.supported === false || !config.capabilities.hooks) {
-        return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-      }
-      return (
-        <React.Suspense fallback={loadingFallback}>
-          <HooksSettingsPage
-            apiPrefix={config.apiPathPrefix}
-            availableScopes={config.availableScopes}
-            hookEvents={config.hookEvents}
-            i18nNamespace={config.i18nNamespace}
-            supportsActionMetadata={config.capabilities.hooks.supportsActionMetadata}
-          />
-        </React.Suspense>
-      );
-
-    case 'slash-commands':
-      if (config.capabilities.slashCommands?.supported === false || !config.capabilities.slashCommands) {
-        return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-      }
-      return (
-        <React.Suspense fallback={loadingFallback}>
-          <SlashCommandsPage
-            apiPrefix={config.apiPathPrefix}
-            availableScopes={config.capabilities.slashCommands.scopes}
-            format={config.slashCommandFormat}
-            i18nNamespace={config.i18nNamespace}
-            selectedId={documentSelectedId}
-            onSelect={onDocumentSelect}
-          />
-        </React.Suspense>
-      );
-
-    case 'skills':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <SkillsPage selectedFile={selectedSkillFile} apiPrefix={config.apiPathPrefix} i18nNamespace={config.i18nNamespace} />
-          </React.Suspense>
-        );
-      }
-      if (config.capabilities.skills?.supported === false || !config.capabilities.skills) {
-        return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-      }
-      return (
-        <React.Suspense fallback={loadingFallback}>
-          <SkillsPage selectedFile={selectedSkillFile} apiPrefix={config.apiPathPrefix} i18nNamespace={config.i18nNamespace} />
-        </React.Suspense>
-      );
-
-    case 'plugins':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexPluginsPage />
-          </React.Suspense>
-        );
-      }
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-
-    case 'extensions':
-      if (cliType === 'gemini') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <GeminiExtensionsPage />
-          </React.Suspense>
-        );
-      }
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-
-    case 'subagents':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexDocumentResourcePage
-              resource="subagents"
-              selectedId={documentSelectedId}
-              onSelect={onDocumentSelect}
-            />
-          </React.Suspense>
-        );
-      }
-      if (config.capabilities.agentDefinitions?.supported) {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <SubagentsPage
-              apiPrefix={config.apiPathPrefix}
-              availableScopes={config.capabilities.agentDefinitions.scopes}
-              i18nNamespace={config.i18nNamespace}
-              selectedId={documentSelectedId}
-              onSelect={onDocumentSelect}
-            />
-          </React.Suspense>
-        );
-      }
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-
-    case 'prompts':
-      if (cliType === 'codex') {
-        return (
-          <React.Suspense fallback={loadingFallback}>
-            <CodexDocumentResourcePage
-              resource="prompts"
-              selectedId={documentSelectedId}
-              onSelect={onDocumentSelect}
-            />
-          </React.Suspense>
-        );
-      }
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-
-    case 'scripts':
-      if (config.capabilities.scripts?.supported === false) {
-        return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
-      }
-      return (
-        <React.Suspense fallback={loadingFallback}>
-          <ScriptsPage selectedFile={selectedScriptFile} apiPrefix={config.apiPathPrefix} i18nNamespace={config.i18nNamespace} />
-        </React.Suspense>
-      );
-
-    default:
-      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
+  const pageEntry = PAGE_REGISTRY[cliType]?.[subView];
+  if (!pageEntry) {
+    return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
   }
+
+  if (pageEntry.requiresCapability) {
+    const capability = config.capabilities[pageEntry.requiresCapability];
+    if (!capability || capability.supported === false) {
+      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
+    }
+  }
+
+  if (pageEntry.isSupported && !pageEntry.isSupported(config)) {
+    return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
+  }
+
+  return pageEntry.render({
+    cliType,
+    config,
+    subView,
+    loadingFallback,
+    selectedSkillFile,
+    selectedScriptFile,
+    documentSelectedId: documentSelectedId ?? null,
+    onDocumentSelect,
+  });
 };
 
 export default AgentSettingsFeature;

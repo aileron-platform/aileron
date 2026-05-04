@@ -9,9 +9,8 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import type { AgentScope } from '../types';
-import { SCOPE_BADGE_CLASSES } from '../constants/scopeStyles';
 
-export type AgentSettingsSourceType = AgentScope | 'built-in' | 'inline-config';
+export type AgentSettingsSourceType = AgentScope | 'built_in' | 'inline_config' | 'hooks_json';
 
 export interface AgentSettingsSourceDescriptor {
   type: AgentSettingsSourceType;
@@ -22,14 +21,24 @@ export interface AgentSettingsSourceDescriptor {
   extensionVersion?: string;
 }
 
+export interface AgentSettingsSourceOption<TValue extends string = string> {
+  value: TValue;
+  label: string;
+  icon?: React.ReactNode;
+}
+
 export interface AgentSettingsLayerSelectorProps<TValue extends string = string> {
   value: TValue;
   onChange: (value: TValue) => void;
-  options: Array<{
-    value: TValue;
-    label: string;
-    icon?: React.ReactNode;
-  }>;
+  options: AgentSettingsSourceOption<TValue>[];
+  label: string;
+  className?: string;
+}
+
+export interface AgentSettingsSourceFilterProps<TValue extends string = string> {
+  value: TValue;
+  onChange: (value: TValue) => void;
+  options: AgentSettingsSourceOption<TValue>[];
   label: string;
   className?: string;
 }
@@ -37,9 +46,14 @@ export interface AgentSettingsLayerSelectorProps<TValue extends string = string>
 const sourceIconClasses = 'h-3 w-3';
 
 const SOURCE_BADGE_CLASSES: Record<AgentSettingsSourceType, string> = {
-  ...SCOPE_BADGE_CLASSES,
-  'built-in': 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-700',
-  'inline-config': 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700',
+  project: 'bg-primary/10 dark:bg-primary/20 text-primary dark:text-primary border-primary/20 dark:border-primary/30',
+  user: 'bg-secondary dark:bg-secondary text-secondary-foreground dark:text-secondary-foreground border-border dark:border-border',
+  local: 'bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground border-border dark:border-border',
+  plugin: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700',
+  extension: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700',
+  built_in: 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-700',
+  inline_config: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-700',
+  hooks_json: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700',
 };
 
 const SOURCE_ICONS: Record<AgentSettingsSourceType, React.ComponentType<{ className?: string }>> = {
@@ -48,9 +62,32 @@ const SOURCE_ICONS: Record<AgentSettingsSourceType, React.ComponentType<{ classN
   local: Building,
   plugin: Puzzle,
   extension: Puzzle,
-  'built-in': Info,
-  'inline-config': Info,
+  built_in: Info,
+  inline_config: Info,
+  hooks_json: Info,
 };
+
+const LEGACY_SOURCE_TYPE_MAP = {
+  'built-in': 'built_in',
+  'inline-config': 'inline_config',
+} as const satisfies Record<string, AgentSettingsSourceType>;
+
+export const normalizeAgentSettingsSourceType = (
+  sourceType: string | null | undefined,
+  fallback: AgentSettingsSourceType = 'project',
+): AgentSettingsSourceType => {
+  if (!sourceType) return fallback;
+  if (sourceType in LEGACY_SOURCE_TYPE_MAP) {
+    return LEGACY_SOURCE_TYPE_MAP[sourceType as keyof typeof LEGACY_SOURCE_TYPE_MAP];
+  }
+  if (sourceType in SOURCE_BADGE_CLASSES) {
+    return sourceType as AgentSettingsSourceType;
+  }
+  return fallback;
+};
+
+export const getAgentSettingsSourceBadgeClassName = (sourceType: string | null | undefined) =>
+  SOURCE_BADGE_CLASSES[normalizeAgentSettingsSourceType(sourceType)];
 
 export const AgentSettingsLayerSelector = <TValue extends string = string>({
   value,
@@ -76,21 +113,46 @@ export const AgentSettingsLayerSelector = <TValue extends string = string>({
   );
 };
 
+export const AgentSettingsSourceFilter = <TValue extends string = string>({
+  value,
+  onChange,
+  options,
+  label,
+  className,
+}: AgentSettingsSourceFilterProps<TValue>) => {
+  const mappedOptions: ScopeOption[] = options.map((option) => ({
+    value: option.value,
+    label: option.label,
+    icon: option.icon,
+  }));
+
+  return (
+    <ScopeSelector
+      value={value}
+      onChange={(nextValue) => onChange(nextValue as TValue)}
+      options={mappedOptions}
+      label={label}
+      className={className}
+    />
+  );
+};
+
 export const AgentSettingsSourceBadge: React.FC<{
   source: AgentSettingsSourceDescriptor;
   className?: string;
 }> = ({ source, className }) => {
-  const Icon = SOURCE_ICONS[source.type];
-  const label = source.type === 'plugin' && source.pluginName
+  const normalizedType = normalizeAgentSettingsSourceType(source.type);
+  const Icon = SOURCE_ICONS[normalizedType];
+  const label = normalizedType === 'plugin' && source.pluginName
     ? `${source.pluginName}@${source.marketplaceName ?? source.label}`
-    : source.type === 'extension' && source.extensionName
+    : normalizedType === 'extension' && source.extensionName
       ? [source.extensionName, source.extensionVersion].filter(Boolean).join('@')
       : source.label;
 
   return (
     <Badge
       variant="outline"
-      className={cn('inline-flex items-center gap-1 text-[11px]', SOURCE_BADGE_CLASSES[source.type], className)}
+      className={cn('inline-flex items-center gap-1 text-[11px]', SOURCE_BADGE_CLASSES[normalizedType], className)}
     >
       <Icon className={sourceIconClasses} />
       {label}
@@ -131,4 +193,5 @@ export const NewThreadNotice: React.FC<{
   );
 };
 
-export const getAgentSettingsSourceIcon = (sourceType: AgentSettingsSourceType) => SOURCE_ICONS[sourceType];
+export const getAgentSettingsSourceIcon = (sourceType: string | null | undefined) =>
+  SOURCE_ICONS[normalizeAgentSettingsSourceType(sourceType)];

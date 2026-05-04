@@ -22,6 +22,7 @@ const subViewLabelKeys: Record<string, string> = {
   mcp: 'workspace.agentSettings.common.subViews.mcp',
   hooks: 'workspace.agentSettings.common.subViews.hooks',
   plugins: 'workspace.agentSettings.common.subViews.plugins',
+  extensions: 'workspace.agentSettings.common.subViews.extensions',
   'slash-commands': 'workspace.agentSettings.common.subViews.slashCommands',
   prompts: 'workspace.agentSettings.common.subViews.prompts',
   skills: 'workspace.agentSettings.common.subViews.skills',

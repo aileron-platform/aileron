@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Bot } from 'lucide-react';
 import {
   DocumentEditorDialogCore,
@@ -32,16 +32,18 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
   onSubmit,
 }) => {
   const { t } = useI18n();
-
-  const buildInitialState = useCallback((): AgentDefinitionFormState => ({
+  const contentTemplateKey = `${i18nNamespace}.subagents.dialog.fields.content.templates.${format}`;
+  const resolvedDefaultContent = useMemo(() => {
+    const translated = t(contentTemplateKey);
+    return translated === contentTemplateKey ? '' : translated;
+  }, [contentTemplateKey, t]);
+  const [formState, setFormState] = useState<AgentDefinitionFormState>(() => ({
     fileName: (initialValue?.metadata?.fileName as string | undefined)
       ?? (initialValue?.metadata?.relativePath as string | undefined)
       ?? '',
     scope: initialValue?.scope ?? 'project',
-    content: initialValue?.content ?? t(`${i18nNamespace}.subagents.dialog.fields.content.templates.${format}`),
-  }), [format, i18nNamespace, initialValue, t]);
-
-  const [formState, setFormState] = useState<AgentDefinitionFormState>(buildInitialState);
+    content: initialValue?.content ?? resolvedDefaultContent,
+  }));
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ fileName?: string; content?: string }>({});
   const isEdit = mode === 'edit';
@@ -57,10 +59,16 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    setFormState(buildInitialState());
+    setFormState({
+      fileName: (initialValue?.metadata?.fileName as string | undefined)
+        ?? (initialValue?.metadata?.relativePath as string | undefined)
+        ?? '',
+      scope: initialValue?.scope ?? 'project',
+      content: initialValue?.content ?? resolvedDefaultContent,
+    });
     setErrors({});
     setSubmitting(false);
-  }, [buildInitialState, open]);
+  }, [initialValue, open, resolvedDefaultContent]);
 
   const getTranslationKey = (key: string) => `${i18nNamespace}.subagents.dialog.${key}`;
 
@@ -69,7 +77,7 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
     const fileName = formState.fileName.trim();
     if (!fileName) {
       nextErrors.fileName = t(getTranslationKey('validation.fileName'));
-    } else if (!fileName.toLowerCase().endsWith(extension)) {
+    } else if (fileName.includes('.') && !fileName.toLowerCase().endsWith(extension)) {
       nextErrors.fileName = t(getTranslationKey('validation.fileExtension'), { extension });
     }
     if (!formState.content.trim()) {
@@ -90,6 +98,16 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
       const previousFileName = (initialValue?.metadata?.fileName as string | undefined)
         ?? (initialValue?.metadata?.relativePath as string | undefined)
         ?? initialValue?.id;
+      const metadata: Record<string, unknown> = {
+        ...initialValue?.metadata,
+        fileName: normalizedFileName,
+      };
+      if (previousFileName) {
+        metadata.previousFileName = previousFileName;
+      }
+      if (format === 'toml') {
+        metadata.format = format;
+      }
       const document: AgentDocument = {
         id: `${formState.scope}:${normalizedFileName}`,
         title: normalizedFileName,
@@ -97,13 +115,7 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
         scope: formState.scope,
         content: formState.content,
         size: formatDocumentContentSize(formState.content),
-        metadata: {
-          ...initialValue?.metadata,
-          fileName: normalizedFileName,
-          relativePath: normalizedFileName,
-          previousFileName,
-          format,
-        },
+        metadata,
       };
 
       try {
