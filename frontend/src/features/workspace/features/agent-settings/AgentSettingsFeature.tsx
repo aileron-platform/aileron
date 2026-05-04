@@ -24,6 +24,7 @@ const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
 const CodexPluginsPage = React.lazy(() => import('./pages/CodexPluginsPage'));
 const CodexDocumentResourcePage = React.lazy(() => import('./pages/CodexDocumentResourcePage'));
 const SubagentsPage = React.lazy(() => import('./pages/SubagentsPage'));
+const GeminiExtensionsPage = React.lazy(() => import('./pages/GeminiExtensionsPage'));
 
 export interface AgentSettingsFeatureProps {
   cliType: AgentToolType;
@@ -123,7 +124,7 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
         <React.Suspense fallback={loadingFallback}>
           <SlashCommandsPage
             apiPrefix={config.apiPathPrefix}
-            availableScopes={config.availableScopes.filter((s): s is 'project' | 'user' => s === 'project' || s === 'user')}
+            availableScopes={config.capabilities.slashCommands.scopes}
             format={config.slashCommandFormat}
             i18nNamespace={config.i18nNamespace}
             selectedId={documentSelectedId}
@@ -154,6 +155,16 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
         return (
           <React.Suspense fallback={loadingFallback}>
             <CodexPluginsPage />
+          </React.Suspense>
+        );
+      }
+      return <ComingSoonPlaceholder feature={subView} cliType={cliType} />;
+
+    case 'extensions':
+      if (cliType === 'gemini') {
+        return (
+          <React.Suspense fallback={loadingFallback}>
+            <GeminiExtensionsPage />
           </React.Suspense>
         );
       }

@@ -320,6 +320,7 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'hooks': 'workspace.navigation.sub.claudeCodeSettings.hooks',
   'rules': 'workspace.agentSettings.common.subViews.rules',
   'plugins': 'workspace.agentSettings.common.subViews.plugins',
+  'extensions': 'workspace.agentSettings.common.subViews.extensions',
   'prompts': 'workspace.agentSettings.common.subViews.prompts',
   'slash-commands': 'workspace.navigation.sub.claudeCodeSettings.slashCommands',
   'output-styles': 'workspace.navigation.sub.claudeCodeSettings.outputStyles',

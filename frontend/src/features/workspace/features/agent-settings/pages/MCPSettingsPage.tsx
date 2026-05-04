@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Wrench, Search, Upload, Plus, Loader2, AlertCircle, Building, User, Layers, Laptop, Puzzle, RefreshCw } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
@@ -24,7 +23,7 @@ import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import { AgentSettingsSourceBadge } from '../components/SettingsSourcePrimitives';
 
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin', 'extension'];
 
 export interface MCPSettingsPageProps {
   apiPrefix?: string;
@@ -46,7 +45,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
   const [servers, setServers] = useState<AgentMcpServer[]>([]);
-  const [serversLoaded, setServersLoaded] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedScope, setSelectedScope] = useState<AgentScope | 'all'>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,24 +56,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const [visibleEnvs, setVisibleEnvs] = useState<Record<string, boolean>>({});
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
-
-  const hasPluginServers = servers.some((server) => server.scope === 'plugin');
-
-  const pluginsQuery = useQuery({
-    queryKey: ['codex-plugins', runtimeBaseUrl, workspaceId],
-    queryFn: () => api.listCodexPlugins(runtimeBaseUrl || '', workspaceId || ''),
-    enabled: Boolean(
-      apiPrefix === 'codex'
-      && runtimeBaseUrl
-      && workspaceId
-      && !runtimeError
-      && serversLoaded
-      && !hasPluginServers,
-    ),
-    staleTime: 30_000,
-  });
-
-  const hasEnabledCodexPlugins = pluginsQuery.data?.plugins.some((plugin) => plugin.enabled) ?? false;
 
   const filteredServers = useMemo(() => {
     let filtered = servers;
@@ -96,13 +76,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     return filtered;
   }, [servers, search, selectedScope]);
 
-  const effectiveScopes = useMemo(() => {
-    return availableScopes.filter((scope) => (
-      scope !== 'plugin'
-      || hasPluginServers
-      || (apiPrefix === 'codex' && hasEnabledCodexPlugins)
-    ));
-  }, [apiPrefix, availableScopes, hasEnabledCodexPlugins, hasPluginServers]);
+  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
 
   useEffect(() => {
     if (selectedScope !== 'all' && !effectiveScopes.includes(selectedScope)) {
@@ -119,7 +93,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     try {
       const response = await api.listMcpServers(runtimeBaseUrl, workspaceId);
       setServers(Array.isArray(response) ? response : []);
-      setServersLoaded(true);
     } catch (err) {
       const message = err instanceof Error
         ? err.message
@@ -138,7 +111,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   useEffect(() => {
     if (!isRuntimeReady) {
       setServers([]);
-      setServersLoaded(false);
       return;
     }
     void fetchServers();
@@ -151,11 +123,11 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   });
 
   const canEdit = (server: AgentMcpServer): boolean => {
-    return server.scope !== 'plugin';
+    return server.scope !== 'plugin' && server.scope !== 'extension';
   };
 
   const canDelete = (server: AgentMcpServer): boolean => {
-    return server.scope !== 'plugin';
+    return server.scope !== 'plugin' && server.scope !== 'extension';
   };
 
   const handleOpenCreate = () => {
@@ -277,7 +249,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   const handleToggleStatus = useCallback(
     async (server: AgentMcpServer, enabled: boolean) => {
-      if (server.scope === 'plugin') {
+      if (server.scope === 'plugin' || server.scope === 'extension') {
         toast({
           variant: 'destructive',
           title: t(`${i18nNamespace}.mcp.messages.pluginReadOnly.title`),
@@ -320,7 +292,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
 
   const handleImport = useCallback(
     async (options: { scope: AgentMcpServer['scope']; file: File; overwrite?: boolean }) => {
-      if (options.scope === 'plugin') {
+      if (options.scope === 'plugin' || options.scope === 'extension') {
         throw new Error(t(`${i18nNamespace}.mcp.messages.pluginReadOnly.description`));
       }
 
@@ -402,6 +374,13 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                       <SelectItem value="plugin">
                         <div className="flex items-center gap-2">
                           <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.plugin`)}
+                        </div>
+                      </SelectItem>
+                    )}
+                    {effectiveScopes.includes('extension') && (
+                      <SelectItem value="extension">
+                        <div className="flex items-center gap-2">
+                          <Puzzle className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.extension`)}
                         </div>
                       </SelectItem>
                     )}
@@ -499,6 +478,8 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                           label: t(`${i18nNamespace}.mcp.server.scope.${server.scope}`),
                           pluginName: server.pluginName,
                           marketplaceName: server.marketplaceName,
+                          extensionName: server.extensionName,
+                          extensionVersion: server.extensionVersion,
                         }}
                       />
                     )}
@@ -517,7 +498,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
                       delete: t(`${i18nNamespace}.mcp.actions.delete`),
                       readOnlyTooltip: t(`${i18nNamespace}.mcp.plugin.readonly`),
                     }}
-                    supportsToggle={supportsToggle && server.scope !== 'plugin'}
+                    supportsToggle={supportsToggle && server.scope !== 'plugin' && server.scope !== 'extension'}
                     canEdit={canEdit(server)}
                     canDelete={canDelete(server)}
                     disabled={!isRuntimeReady}
@@ -543,7 +524,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           open={dialogOpen}
           mode={dialogMode}
           server={activeServer}
-          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin')}
+          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
           i18nNamespace={i18nNamespace}
           onClose={() => {
             setDialogOpen(false);
@@ -556,7 +537,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           open={importOpen}
           onClose={() => setImportOpen(false)}
           onImport={handleImport}
-          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin')}
+          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
           i18nNamespace={i18nNamespace}
         />
       

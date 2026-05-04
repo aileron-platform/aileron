@@ -147,6 +147,7 @@ class CodexSettingsRequest(BaseModel):
 class GeminiRequest(BaseModel):
     """Gemini configuration request"""
     auth_method: Optional[str] = Field(None, alias="authMethod")
+    account_email: Optional[str] = Field(None, alias="accountEmail")
     access_token: Optional[str] = Field(None, alias="accessToken")
     refresh_token: Optional[str] = Field(None, alias="refreshToken")
     id_token: Optional[str] = Field(None, alias="idToken")

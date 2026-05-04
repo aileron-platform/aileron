@@ -18,6 +18,8 @@ class CliSlashCommandDocumentSummary(BaseModel):
     scope: SlashCommandScope = Field(..., description="File scope")
     size: str = Field(..., description="File size")
     format: DocumentFormat = Field(..., description="Document format (markdown / toml)")
+    extension_name: str | None = Field(None, alias="extensionName", description="Source extension name")
+    extension_version: str | None = Field(None, alias="extensionVersion", description="Source extension version")
 
     model_config = {"populate_by_name": True}
 

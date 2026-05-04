@@ -89,7 +89,7 @@ describe('MCPSettingsPage Codex plugin scope', () => {
     expect(screen.getByText('Demo@local')).toBeInTheDocument();
   });
 
-  it('exposes plugin scope when Codex has enabled plugins without MCP servers', async () => {
+  it('exposes plugin scope even when there are no plugin MCP servers', async () => {
     const user = userEvent.setup();
     Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
       configurable: true,
@@ -108,7 +108,7 @@ describe('MCPSettingsPage Codex plugin scope', () => {
         enabled: true,
       },
     ]);
-    apiMock.listCodexPlugins.mockResolvedValue({ plugins: [{ id: 'github@openai-curated', enabled: true }] });
+    apiMock.listCodexPlugins.mockResolvedValue({ plugins: [] });
 
     render(
       <MCPSettingsPage
@@ -121,5 +121,6 @@ describe('MCPSettingsPage Codex plugin scope', () => {
     expect(await screen.findByText('docs')).toBeInTheDocument();
     await user.click(screen.getByRole('combobox'));
     expect(await screen.findByText('workspace.agentSettings.common.mcp.server.scope.plugin')).toBeInTheDocument();
+    expect(apiMock.listCodexPlugins).not.toHaveBeenCalled();
   });
 });

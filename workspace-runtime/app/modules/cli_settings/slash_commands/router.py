@@ -23,6 +23,7 @@ from .service import (
     CliSlashCommandAmbiguousError,
     CliSlashCommandDuplicateError,
     CliSlashCommandNotFoundError,
+    CliSlashCommandReadOnlyScopeError,
     CliSlashCommandService,
 )
 
@@ -51,6 +52,17 @@ def _ambiguous(error: CliSlashCommandAmbiguousError) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={"error": "AMBIGUOUS_DOCUMENT", "message": str(error)},
+    )
+
+
+def _read_only(error: CliSlashCommandReadOnlyScopeError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail={
+            "error": "READ_ONLY_SCOPE",
+            "messageKey": "workspace.agentSettings.common.errors.readOnlyScope",
+            "message": str(error),
+        },
     )
 
 
@@ -137,6 +149,8 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     ) -> CliSlashCommandDocumentResponse:
         try:
             return service.create_document(workspace_id, scope, payload)
+        except CliSlashCommandReadOnlyScopeError as error:
+            raise _read_only(error) from error
         except CliSlashCommandDuplicateError as error:
             raise _duplicate(error) from error
 
@@ -157,6 +171,8 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     ) -> CliSlashCommandDocumentResponse:
         try:
             return service.update_document(workspace_id, scope, file_name, payload)
+        except CliSlashCommandReadOnlyScopeError as error:
+            raise _read_only(error) from error
         except CliSlashCommandAmbiguousError as error:
             raise _ambiguous(error) from error
         except CliSlashCommandNotFoundError:
@@ -178,6 +194,8 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
     ) -> CliSlashCommandDeleteResponse:
         try:
             return service.delete_document(workspace_id, scope, file_name)
+        except CliSlashCommandReadOnlyScopeError as error:
+            raise _read_only(error) from error
         except CliSlashCommandAmbiguousError as error:
             raise _ambiguous(error) from error
         except CliSlashCommandNotFoundError:

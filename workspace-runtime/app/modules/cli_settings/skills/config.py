@@ -27,6 +27,7 @@ class SkillScope(str, Enum):
     PROJECT = "project"
     USER = "user"
     PLUGIN = "plugin"
+    EXTENSION = "extension"
 
 
 @dataclass(frozen=True)

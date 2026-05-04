@@ -196,6 +196,7 @@ class SyncService:
 
                 gemini_payload = {
                     "authMethod": gemini_settings.get("authMethod", "subscription"),
+                    "accountEmail": gemini_settings.get("account", {}).get("email"),
                     "accessToken": gemini_settings.get("accessToken"),
                     "refreshToken": gemini_settings.get("refreshToken"),
                     "idToken": gemini_settings.get("idToken"),

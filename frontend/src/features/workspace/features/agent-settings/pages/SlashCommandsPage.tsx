@@ -90,6 +90,8 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
     await loadDocuments();
   }, [loadDocuments]);
 
+  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
+
   const DialogWrapper = useMemo(() => {
     const Wrapper: React.FC<{
       open: boolean;
@@ -101,13 +103,13 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
         <AgentCommandDialog
         {...props}
         format={format}
-        availableScopes={availableScopes}
+        availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
         i18nNamespace={i18nNamespace}
       />
     );
     Wrapper.displayName = 'CommandDialogWrapper';
     return Wrapper;
-  }, [format, availableScopes, i18nNamespace]);
+  }, [format, effectiveScopes, i18nNamespace]);
 
   return (
     <DocumentPage

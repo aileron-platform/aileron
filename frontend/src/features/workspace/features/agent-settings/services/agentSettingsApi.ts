@@ -79,7 +79,7 @@ const apiRequest = async <T>(
   }
 };
 
-type CliSlashCommandScope = 'project' | 'user';
+type CliSlashCommandScope = 'project' | 'user' | 'extension';
 
 interface CliSlashCommandSummary {
   fileName: string;
@@ -88,6 +88,8 @@ interface CliSlashCommandSummary {
   scope: CliSlashCommandScope;
   size: string;
   format: 'markdown' | 'toml';
+  extensionName?: string | null;
+  extensionVersion?: string | null;
 }
 
 interface CliSlashCommandDetail extends CliSlashCommandSummary {
@@ -148,10 +150,14 @@ const mapCliSlashCommandDocument = (
     content: detail.content,
     scope,
     size: detail.size,
+    extensionName: detail.extensionName ?? undefined,
+    extensionVersion: detail.extensionVersion ?? undefined,
     metadata: {
       fileName: detail.fileName,
       namespace,
       format: detail.format,
+      extensionName: detail.extensionName ?? undefined,
+      extensionVersion: detail.extensionVersion ?? undefined,
     },
   };
 };
@@ -186,6 +192,8 @@ interface McpServerConfigResponse {
   enabled?: boolean;
   pluginName?: string;
   marketplaceName?: string;
+  extensionName?: string;
+  extensionVersion?: string;
 }
 
 interface McpScopeResponse {
@@ -216,6 +224,47 @@ interface AgentsMdResponse {
 interface AgentsMdUpdateResponse {
   workspaceId: string;
   scope: string;
+}
+
+export interface GeminiExtensionSummary {
+  name: string;
+  version?: string | null;
+  installSource?: string | null;
+  installType?: string | null;
+  releaseTag?: string | null;
+  enabledHere: boolean;
+  overrides: string[];
+  resourceCounts: Record<'mcp' | 'commands' | 'skills' | 'hooks' | 'policies', number>;
+  excludeToolsCount: number;
+}
+
+export interface GeminiExtensionDetail {
+  name: string;
+  version?: string | null;
+  installInfo?: {
+    source?: string | null;
+    type?: string | null;
+    releaseTag?: string | null;
+  } | null;
+  enabledHere: boolean;
+  overrides: string[];
+  contextFile?: { path: string; content: string } | null;
+  policies: Array<{ path: string; content: string }>;
+  excludeTools: string[];
+  mcpServers: Array<{ name: string; config: Record<string, unknown> }>;
+  slashCommands: Array<Record<string, unknown>>;
+  skills: Array<Record<string, unknown>>;
+  hooks: Array<Record<string, unknown>>;
+}
+
+export interface GeminiExtensionListResponse {
+  workspaceId: string;
+  extensions: GeminiExtensionSummary[];
+}
+
+export interface GeminiExtensionDetailResponse {
+  workspaceId: string;
+  extension: GeminiExtensionDetail;
 }
 
 export interface CodexAgentsMdCaveat {
@@ -455,6 +504,10 @@ export const mapHookScopeDocumentToAgentHooks = (
           statusMessage: action.statusMessage ?? undefined,
         })),
       })),
+      pluginName: rules.find((rule) => rule.pluginName)?.pluginName ?? undefined,
+      marketplaceName: rules.find((rule) => rule.marketplaceName)?.marketplaceName ?? undefined,
+      extensionName: rules.find((rule) => rule.extensionName)?.extensionName ?? undefined,
+      extensionVersion: rules.find((rule) => rule.extensionVersion)?.extensionVersion ?? undefined,
     }))
     .sort((a, b) => a.eventName.localeCompare(b.eventName));
 
@@ -475,6 +528,8 @@ const mapMcpServer = (
   enabled: config.enabled ?? true,
   pluginName: config.pluginName,
   marketplaceName: config.marketplaceName,
+  extensionName: config.extensionName,
+  extensionVersion: config.extensionVersion,
 });
 
 const normalizeMcpServers = (payload: McpServerCollectionResponse): AgentMcpServer[] =>
@@ -650,6 +705,43 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
       runtimeBaseUrl,
       `workspaces/${workspaceId}/codex/plugins/${encodeURIComponent(pluginId)}`,
       { method: 'PATCH', body: { layer, enabled } },
+    );
+  },
+
+  async listGeminiExtensions(runtimeBaseUrl: string, workspaceId: string): Promise<GeminiExtensionListResponse> {
+    return apiRequest<GeminiExtensionListResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/gemini/extensions`);
+  },
+
+  async getGeminiExtension(runtimeBaseUrl: string, workspaceId: string, name: string): Promise<GeminiExtensionDetailResponse> {
+    return apiRequest<GeminiExtensionDetailResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}`,
+    );
+  },
+
+  async enableGeminiExtension(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    name: string,
+    scope: 'workspace' | 'user',
+  ): Promise<{ workspaceId: string; name: string; enabledHere: boolean; overrides: string[] }> {
+    return apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/enable?scope=${scope}`,
+      { method: 'POST' },
+    );
+  },
+
+  async disableGeminiExtension(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    name: string,
+    scope: 'workspace' | 'user',
+  ): Promise<{ workspaceId: string; name: string; enabledHere: boolean; overrides: string[] }> {
+    return apiRequest(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/disable?scope=${scope}`,
+      { method: 'POST' },
     );
   },
 
@@ -973,7 +1065,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
   async listSkills(
     runtimeBaseUrl: string,
     workspaceId: string,
-    scope?: 'project' | 'user' | 'plugin',
+    scope?: 'project' | 'user' | 'plugin' | 'extension',
   ): Promise<AgentFileCollectionResponse> {
     const path = scope
       ? `workspaces/${workspaceId}/${apiPrefix}/skills/tree?scope=${scope}`
@@ -992,7 +1084,7 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     filePath: string,
-    scope: 'project' | 'user' | 'plugin' = 'project',
+    scope: 'project' | 'user' | 'plugin' | 'extension' = 'project',
   ): Promise<AgentFileResponse> {
     return apiRequest<AgentFileResponse>(
       runtimeBaseUrl,

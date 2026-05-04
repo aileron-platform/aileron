@@ -58,9 +58,13 @@ describe('AGENT_TOOL_CONFIGS', () => {
     expect(AGENT_TOOL_CONFIGS.opencode.capabilities.slashCommands?.format).toBe('markdown');
   });
 
-  it('opens Gemini subagents and memory placeholder navigation', () => {
+  it('opens Gemini subagents and extensions navigation without memory', () => {
     expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.supported).toBe(true);
     expect(AGENT_TOOL_CONFIGS.gemini.capabilities.agentDefinitions?.format).toBe('markdown');
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.mcp?.scopes).toContain('extension');
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.hooks?.scopes).toContain('extension');
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.slashCommands?.scopes).toContain('extension');
+    expect(AGENT_TOOL_CONFIGS.gemini.capabilities.skills?.readOnlyScopes).toContain('extension');
     expect(actionableSubViews(AGENT_TOOL_CONFIGS.gemini)).toEqual([
       'gemini-md',
       'mcp',
@@ -68,7 +72,7 @@ describe('AGENT_TOOL_CONFIGS', () => {
       'slash-commands',
       'subagents',
       'hooks',
-      'memory',
+      'extensions',
     ]);
   });
 });

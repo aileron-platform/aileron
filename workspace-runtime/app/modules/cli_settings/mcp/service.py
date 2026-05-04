@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from app.config.settings import get_workspace_path
 from app.modules.cli_settings.codex_paths import CodexLayer, CodexResource, get_codex_path_resolver
 from app.modules.cli_settings.codex.plugin_resources import CodexPluginResourceResolver
+from app.modules.cli_settings.gemini.extension_resources import GeminiExtensionResourceResolver, resolve_workspace_root
 from app.modules.cli_settings.toml_utils import parse_toml
 
 from .config_strategies import ConfigFileStrategy, JsonConfigStrategy, TomlConfigStrategy
@@ -145,6 +146,10 @@ class CliMcpService:
         scopes = [scope] if scope else [CliMcpScope.PROJECT, CliMcpScope.USER]
         if not scope and self._config.tool == McpTool.CODEX:
             scopes.append(CliMcpScope.PLUGIN)
+        if not scope and self._config.tool == McpTool.GEMINI:
+            extension_servers = self._load_gemini_extension_servers(workspace_id)
+            if extension_servers:
+                scopes.append(CliMcpScope.EXTENSION)
         groups: List[CliMcpScopeServers] = []
         for s in scopes:
             servers = self._load_servers(workspace_id, s)
@@ -359,10 +364,14 @@ class CliMcpService:
     def _ensure_mutable_scope(scope: CliMcpScope) -> None:
         if scope == CliMcpScope.PLUGIN:
             raise CliMcpReadOnlyScopeError("Plugin MCP servers are controlled by plugin enablement")
+        if scope == CliMcpScope.EXTENSION:
+            raise CliMcpReadOnlyScopeError("Extension MCP servers are controlled by Gemini extension enablement")
 
     def _scope_file(self, workspace_id: str, scope: CliMcpScope) -> Path:
         if scope == CliMcpScope.PLUGIN:
             raise CliMcpScopeNotSupportedError("Plugin MCP servers are read-only package sources")
+        if scope == CliMcpScope.EXTENSION:
+            raise CliMcpScopeNotSupportedError("Extension MCP servers are read-only package sources")
         if scope == CliMcpScope.PROJECT:
             return Path(get_workspace_path()) / self._config.project_file
         return self._config.user_file_path
@@ -372,6 +381,8 @@ class CliMcpService:
     ) -> Dict[str, Dict[str, Any]]:
         if scope == CliMcpScope.PLUGIN and self._config.tool == McpTool.CODEX:
             return self._load_codex_plugin_servers()
+        if scope == CliMcpScope.EXTENSION and self._config.tool == McpTool.GEMINI:
+            return self._load_gemini_extension_servers(workspace_id)
         path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(path)
         raw = data.get(self._config.servers_key)
@@ -387,6 +398,8 @@ class CliMcpService:
     ) -> None:
         if scope == CliMcpScope.PLUGIN:
             raise CliMcpScopeNotSupportedError("Plugin MCP servers are read-only package sources")
+        if scope == CliMcpScope.EXTENSION:
+            raise CliMcpScopeNotSupportedError("Extension MCP servers are read-only package sources")
         path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(path)
         data[self._config.servers_key] = servers
@@ -473,6 +486,9 @@ class CliMcpService:
                 "marketplaceName": server.plugin.marketplace_name or "",
             }
         return servers
+
+    def _load_gemini_extension_servers(self, workspace_id: str) -> Dict[str, Dict[str, Any]]:
+        return GeminiExtensionResourceResolver().enabled_mcp_servers(resolve_workspace_root())
 
     @staticmethod
     def _enabled_codex_plugin_ids() -> set[str]:

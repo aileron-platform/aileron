@@ -37,6 +37,7 @@ class CliHookScope(str, Enum):
 
     PROJECT = "project"
     USER = "user"
+    EXTENSION = "extension"
 
 
 class CliHookScopeDocument(BaseModel):

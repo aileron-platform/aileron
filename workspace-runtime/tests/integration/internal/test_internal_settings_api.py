@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import stat
 from typing import Any, Dict
 
 from app.modules.internal.dependencies import get_internal_service, verify_internal_token
+from app.modules.internal.models import GeminiRequest
+from app.modules.internal.service import InternalService
 
 from .helpers import override_dependency
 
@@ -319,3 +323,87 @@ def test_in_015_get_workspace_setup_status_failure(client):
 
     assert response.status_code == 500
     assert "Failed to fetch setup status" in response.json()["detail"]
+
+
+def _gemini_service_with_home(tmp_path):
+    service = InternalService()
+    service.home_dir = tmp_path
+    service.gemini_dir = tmp_path / ".gemini"
+    return service
+
+
+def _read_json(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _file_mode(path):
+    return stat.S_IMODE(path.stat().st_mode)
+
+
+async def test_in_018_sync_gemini_login_writes_cli_config_files(tmp_path):
+    """Gemini login sync writes OAuth credentials and CLI initialization files."""
+    service = _gemini_service_with_home(tmp_path)
+
+    await service.setup_gemini(
+        GeminiRequest(
+            authMethod="subscription",
+            accountEmail="user@example.com",
+            accessToken="access-token",
+            refreshToken="refresh-token",
+            idToken="id-token",
+            expiresAt=1234567890,
+            scope="openid email profile",
+        )
+    )
+
+    oauth_creds = service.gemini_dir / "oauth_creds.json"
+    google_accounts = service.gemini_dir / "google_accounts.json"
+    settings = service.gemini_dir / "settings.json"
+    trusted_folders = service.gemini_dir / "trustedFolders.json"
+    projects = service.gemini_dir / "projects.json"
+
+    assert _read_json(oauth_creds) == {
+        "access_token": "access-token",
+        "refresh_token": "refresh-token",
+        "scope": "openid email profile",
+        "token_type": "Bearer",
+        "id_token": "id-token",
+        "expiry_date": 1234567890,
+    }
+    assert _read_json(google_accounts) == {"active": "user@example.com", "old": []}
+    assert _read_json(settings) == {
+        "security": {"auth": {"selectedType": "oauth-personal"}}
+    }
+    assert _read_json(trusted_folders) == {"/workspace": "TRUST_FOLDER"}
+    assert _read_json(projects) == {"projects": {"/workspace": "workspace"}}
+
+    assert _file_mode(oauth_creds) == 0o600
+    assert _file_mode(google_accounts) == 0o644
+    assert _file_mode(settings) == 0o644
+    assert _file_mode(trusted_folders) == 0o644
+    assert _file_mode(projects) == 0o644
+
+
+async def test_in_019_sync_gemini_disconnect_removes_account_files_only(tmp_path):
+    """Gemini disconnect sync removes account files while preserving workspace files."""
+    service = _gemini_service_with_home(tmp_path)
+    service.gemini_dir.mkdir(parents=True)
+    account_files = [
+        service.gemini_dir / "oauth_creds.json",
+        service.gemini_dir / "google_accounts.json",
+        service.gemini_dir / "settings.json",
+    ]
+    for path in account_files:
+        path.write_text("{}", encoding="utf-8")
+
+    trusted_folders = service.gemini_dir / "trustedFolders.json"
+    projects = service.gemini_dir / "projects.json"
+    trusted_folders.write_text(json.dumps({"/workspace": "TRUST_FOLDER"}), encoding="utf-8")
+    projects.write_text(json.dumps({"projects": {"/workspace": "workspace"}}), encoding="utf-8")
+
+    await service.setup_gemini(GeminiRequest(authMethod="subscription"))
+
+    for path in account_files:
+        assert not path.exists()
+    assert _read_json(trusted_folders) == {"/workspace": "TRUST_FOLDER"}
+    assert _read_json(projects) == {"projects": {"/workspace": "workspace"}}

@@ -106,7 +106,7 @@ USER root
 # Install global tools as developer.
 ARG OPENSPEC_VERSION=1.3.0
 ARG CLAUDE_CLI_VERSION=stable
-ARG GEMINI_VERSION=latest
+ARG GEMINI_VERSION=0.40.0
 ARG AGENT_BROWSER_CLI_VERSION=latest
 ARG CODEX_CLI_VERSION=latest
 RUN printf '%s\n' \
@@ -145,6 +145,7 @@ RUN if command -v mise >/dev/null 2>&1; then mise use -g node@lts; fi && \
     npm config set fetch-retry-maxtimeout 120000
 RUN bash /usr/local/bin/install-npm-global.sh "@fission-ai/openspec@${OPENSPEC_VERSION}"
 RUN bash /usr/local/bin/install-npm-global.sh "@google/gemini-cli@${GEMINI_VERSION}"
+RUN gemini --version | grep -F "${GEMINI_VERSION}"
 RUN bash /usr/local/bin/install-npm-global.sh "agent-browser@${AGENT_BROWSER_CLI_VERSION}"
 RUN curl -fsSL https://opencode.ai/install | bash
 RUN bash /usr/local/bin/install-npm-global.sh "@openai/codex@${CODEX_CLI_VERSION}"

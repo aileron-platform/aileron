@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List
 
 from app.config.settings import get_workspace_path
+from app.modules.cli_settings.gemini.extension_resources import GeminiExtensionResourceResolver, resolve_workspace_root
 
 from .config import DocumentFormat, SlashCommandScope, SlashCommandToolConfig
 from .format_strategies import (
@@ -47,6 +48,10 @@ class CliSlashCommandAmbiguousError(RuntimeError):
     """Found multiple slash commands with the same name"""
 
 
+class CliSlashCommandReadOnlyScopeError(ValueError):
+    """Slash command scope is read-only"""
+
+
 # === Utility functions ===================================================
 
 
@@ -82,6 +87,8 @@ class CliSlashCommandService:
     # --- Directory resolution ----------------------------------------------
 
     def _scope_dir(self, workspace_id: str, scope: SlashCommandScope) -> Path:
+        if scope == SlashCommandScope.EXTENSION:
+            raise CliSlashCommandReadOnlyScopeError("Extension slash commands are controlled by Gemini extension enablement")
         if scope == SlashCommandScope.USER:
             return self._config.user_root
         # PROJECT: workspace_root / .gemini/commands etc.
@@ -124,10 +131,13 @@ class CliSlashCommandService:
     def list_scopes(
         self, workspace_id: str, scope: SlashCommandScope | None = None
     ) -> CliSlashCommandScopesResponse:
-        scopes = [scope] if scope else list(SlashCommandScope)
+        scopes = [scope] if scope else [SlashCommandScope.PROJECT, SlashCommandScope.USER]
+        extension_documents = self._list_extension_documents(workspace_id)
+        if not scope and extension_documents:
+            scopes.append(SlashCommandScope.EXTENSION)
         groups: List[CliSlashCommandScopeGroup] = []
         for s in scopes:
-            documents = self._list_documents(workspace_id, s)
+            documents = extension_documents if s == SlashCommandScope.EXTENSION else self._list_documents(workspace_id, s)
             documents.sort(key=lambda d: d.file_name)
             groups.append(CliSlashCommandScopeGroup(scope=s, documents=documents))
         return CliSlashCommandScopesResponse(workspaceId=workspace_id, scopes=groups)
@@ -135,7 +145,7 @@ class CliSlashCommandService:
     def get_scope(
         self, workspace_id: str, scope: SlashCommandScope
     ) -> CliSlashCommandScopeResponse:
-        documents = self._list_documents(workspace_id, scope)
+        documents = self._list_extension_documents(workspace_id) if scope == SlashCommandScope.EXTENSION else self._list_documents(workspace_id, scope)
         documents.sort(key=lambda d: d.file_name)
         return CliSlashCommandScopeResponse(
             workspaceId=workspace_id, scope=scope, documents=documents
@@ -144,6 +154,8 @@ class CliSlashCommandService:
     def get_document(
         self, workspace_id: str, scope: SlashCommandScope, file_name: str
     ) -> CliSlashCommandDocumentResponse:
+        if scope == SlashCommandScope.EXTENSION:
+            return self._get_extension_document(workspace_id, file_name)
         directory = self._scope_dir(workspace_id, scope)
         file_path = self._resolve_file_path(directory, file_name, namespace=None)
         if file_path is None or not file_path.exists():
@@ -172,6 +184,7 @@ class CliSlashCommandService:
         scope: SlashCommandScope,
         payload: CliSlashCommandCreateRequest,
     ) -> CliSlashCommandDocumentResponse:
+        self._ensure_mutable_scope(scope)
         directory = self._scope_dir(workspace_id, scope)
         normalized = self._normalize_file_name(payload.file_name)
 
@@ -216,6 +229,7 @@ class CliSlashCommandService:
         file_name: str,
         payload: CliSlashCommandUpdateRequest,
     ) -> CliSlashCommandDocumentResponse:
+        self._ensure_mutable_scope(scope)
         directory = self._scope_dir(workspace_id, scope)
         file_path = self._resolve_file_path(
             directory, file_name, namespace=payload.namespace
@@ -245,6 +259,7 @@ class CliSlashCommandService:
     def delete_document(
         self, workspace_id: str, scope: SlashCommandScope, file_name: str
     ) -> CliSlashCommandDeleteResponse:
+        self._ensure_mutable_scope(scope)
         directory = self._scope_dir(workspace_id, scope)
         file_path = self._resolve_file_path(directory, file_name, namespace=None)
         if file_path is None or not file_path.exists():
@@ -256,6 +271,11 @@ class CliSlashCommandService:
         )
 
     # --- Internal utilities -----------------------------------------------
+
+    @staticmethod
+    def _ensure_mutable_scope(scope: SlashCommandScope) -> None:
+        if scope == SlashCommandScope.EXTENSION:
+            raise CliSlashCommandReadOnlyScopeError("Extension slash commands are controlled by Gemini extension enablement")
 
     def _list_documents(
         self, workspace_id: str, scope: SlashCommandScope
@@ -286,3 +306,47 @@ class CliSlashCommandService:
                 logger.warning("Failed to parse slash command: %s", file_path)
 
         return documents
+
+    def _list_extension_documents(self, workspace_id: str) -> List[CliSlashCommandDocumentSummary]:
+        documents: List[CliSlashCommandDocumentSummary] = []
+        for package, command in GeminiExtensionResourceResolver().enabled_slash_commands(resolve_workspace_root()):
+            documents.append(
+                CliSlashCommandDocumentSummary(
+                    fileName=command.fileName,
+                    namespace=command.namespace,
+                    description=command.description,
+                    scope=SlashCommandScope.EXTENSION,
+                    size=_humanize_size(len(command.content.encode("utf-8"))),
+                    format=self._config.format,
+                    extensionName=package.name,
+                    extensionVersion=package.version,
+                )
+            )
+        return documents
+
+    def _get_extension_document(self, workspace_id: str, file_name: str) -> CliSlashCommandDocumentResponse:
+        matches = [
+            (package, command)
+            for package, command in GeminiExtensionResourceResolver().enabled_slash_commands(resolve_workspace_root())
+            if command.fileName == file_name
+        ]
+        if not matches:
+            raise CliSlashCommandNotFoundError(file_name)
+        if len(matches) > 1:
+            raise CliSlashCommandAmbiguousError(file_name)
+        package, command = matches[0]
+        summary = CliSlashCommandDocumentSummary(
+            fileName=command.fileName,
+            namespace=command.namespace,
+            description=command.description,
+            scope=SlashCommandScope.EXTENSION,
+            size=_humanize_size(len(command.content.encode("utf-8"))),
+            format=self._config.format,
+            extensionName=package.name,
+            extensionVersion=package.version,
+        )
+        return CliSlashCommandDocumentResponse(
+            workspaceId=workspace_id,
+            scope=SlashCommandScope.EXTENSION,
+            document=CliSlashCommandDocumentDetail(**summary.model_dump(by_alias=True), content=command.content),
+        )

@@ -19,7 +19,7 @@ from codex_app_server.generated.v2_all import (
 )
 from jinja2 import Template
 
-from app.config.settings import get_settings
+from app.config.settings import get_settings, get_workspace_path
 from app.modules.claude_code.common import DocumentScope
 from app.modules.claude_code.settings import (
     ClaudeCodeSettingsUpdateRequest,
@@ -724,9 +724,42 @@ class InternalService:
                 creds_path.write_text(json.dumps(creds_data, indent=2))
                 creds_path.chmod(0o600)
                 logger.info("Gemini oauth_creds.json written")
-            elif not request.access_token and creds_path.exists():
-                creds_path.unlink()
-                logger.info("Gemini oauth_creds.json removed (disconnect)")
+                workspace_path = get_workspace_path()
+                config_files = {
+                    "google_accounts.json": {
+                        "active": request.account_email,
+                        "old": [],
+                    },
+                    "settings.json": {
+                        "security": {
+                            "auth": {
+                                "selectedType": "oauth-personal",
+                            },
+                        },
+                    },
+                    "trustedFolders.json": {
+                        workspace_path: "TRUST_FOLDER",
+                    },
+                    "projects.json": {
+                        "projects": {
+                            workspace_path: "workspace",
+                        },
+                    },
+                }
+                for filename, data in config_files.items():
+                    path = self.gemini_dir / filename
+                    path.write_text(json.dumps(data, indent=2))
+                    path.chmod(0o644)
+                logger.info("Gemini CLI config files written")
+            elif not request.access_token:
+                for path in (
+                    creds_path,
+                    self.gemini_dir / "google_accounts.json",
+                    self.gemini_dir / "settings.json",
+                ):
+                    if path.exists():
+                        path.unlink()
+                logger.info("Gemini account-specific files removed (disconnect)")
 
             # Write environment variables to .bashrc
             bashrc_path = self.home_dir / ".bashrc"

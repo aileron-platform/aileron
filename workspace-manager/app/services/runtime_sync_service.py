@@ -282,6 +282,7 @@ class RuntimeSyncService:
 
         payload = {
             "authMethod": gemini_data.get("authMethod"),
+            "accountEmail": gemini_data.get("account", {}).get("email"),
             "accessToken": gemini_data.get("accessToken"),
             "refreshToken": gemini_data.get("refreshToken"),
             "idToken": gemini_data.get("idToken"),

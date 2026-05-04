@@ -26,6 +26,7 @@ class SlashCommandScope(str, Enum):
 
     PROJECT = "project"
     USER = "user"
+    EXTENSION = "extension"
 
 
 class DocumentFormat(str, Enum):

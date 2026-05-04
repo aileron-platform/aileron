@@ -79,6 +79,9 @@ workspace-runtime/
 - `RUNTIME_BASE=universal`: published `ailerondocker/codex-universal:<channel>-<arch>` image from Docker Hub
 - `RUNTIME_BASE=lite`: slimmer `workspace-runtime/base-lite`
 
+The runtime image pins `@google/gemini-cli` to `0.40.0` so Gemini extension
+subprocess tests exercise a stable extension enable/disable CLI contract.
+
 Build commands:
 
 ```bash

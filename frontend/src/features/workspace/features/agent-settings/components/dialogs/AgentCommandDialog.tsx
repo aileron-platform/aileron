@@ -66,7 +66,9 @@ export const AgentCommandDialog: React.FC<AgentCommandDialogProps> = ({
       { value: 'project' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.project`) },
       { value: 'user' as AgentScope, label: t(`${i18nNamespace}.documents.scope.values.user`) },
     ];
-    return availableScopes ? allOptions.filter((option) => availableScopes.includes(option.value)) : allOptions;
+    return availableScopes
+      ? allOptions.filter((option) => availableScopes.includes(option.value))
+      : allOptions;
   }, [availableScopes, i18nNamespace, t]);
 
   const buildInitialState = useCallback(() => {

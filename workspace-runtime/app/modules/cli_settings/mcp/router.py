@@ -88,7 +88,11 @@ def _toggle_not_supported(error: CliMcpToggleNotSupportedError) -> HTTPException
 def _read_only_scope(error: CliMcpReadOnlyScopeError) -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail={"error": "PLUGIN_SCOPE_READ_ONLY", "message": str(error)},
+        detail={
+            "error": "READ_ONLY_SCOPE",
+            "messageKey": "workspace.agentSettings.common.errors.readOnlyScope",
+            "message": str(error),
+        },
     )
 
 

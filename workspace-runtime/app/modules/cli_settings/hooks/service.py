@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, List
 from fastapi import HTTPException, status
 
 from app.config.settings import get_workspace_path
+from app.modules.cli_settings.gemini.extension_resources import GeminiExtensionResourceResolver, resolve_workspace_root
 
 from ...claude_code.hooks.models import HookRule
 from .config import CliHookScope, CliHookToolConfig
@@ -47,6 +48,10 @@ class CliHookService:
         self, workspace_id: str, scope: CliHookScope | None = None
     ) -> CliHookScopesResponse:
         scopes = [scope] if scope else list(self._config.supported_scopes)
+        if not scope:
+            extension_document = self._load_extension_scope_document(workspace_id)
+            if extension_document.hooks:
+                scopes.append(CliHookScope.EXTENSION)
         documents = [
             self._load_scope_document(workspace_id, s) for s in scopes
         ]
@@ -70,6 +75,7 @@ class CliHookService:
         payload: CliHookScopeUpsertRequest,
     ) -> CliHookScopeResponse:
         self._validate_scope(scope)
+        self._ensure_mutable_scope(scope)
         hooks_dict: Dict[str, List[HookRule]] = {}
         for event, rules in payload.hooks.items():
             converted_rules = []
@@ -91,6 +97,7 @@ class CliHookService:
         self, workspace_id: str, scope: CliHookScope
     ) -> CliHookDeleteResponse:
         self._validate_scope(scope)
+        self._ensure_mutable_scope(scope)
         file_path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(file_path)
         if data:
@@ -132,6 +139,7 @@ class CliHookService:
         skipped = 0
         for document in request.scopes:
             self._validate_scope(document.scope)
+            self._ensure_mutable_scope(document.scope)
             existing = self._load_scope_document(workspace_id, document.scope)
             if request.mode == CliHookImportMode.MERGE:
                 merged = self._merge_hooks(existing.hooks, document.hooks)
@@ -160,6 +168,8 @@ class CliHookService:
     # --- Internal methods --------------------------------------------------
 
     def _validate_scope(self, scope: CliHookScope) -> None:
+        if scope == CliHookScope.EXTENSION:
+            return
         if scope not in self._config.supported_scopes:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
@@ -169,7 +179,24 @@ class CliHookService:
                 },
             )
 
+    @staticmethod
+    def _ensure_mutable_scope(scope: CliHookScope) -> None:
+        if scope == CliHookScope.EXTENSION:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": "READ_ONLY_SCOPE",
+                    "messageKey": "workspace.agentSettings.common.errors.readOnlyScope",
+                    "message": "Extension hooks are controlled by Gemini extension enablement",
+                },
+            )
+
     def _scope_file(self, workspace_id: str, scope: CliHookScope) -> Path:
+        if scope == CliHookScope.EXTENSION:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "READ_ONLY_SCOPE"},
+            )
         if scope == CliHookScope.PROJECT:
             return Path(get_workspace_path()) / self._config.project_file
         return self._config.user_file_path
@@ -177,6 +204,8 @@ class CliHookService:
     def _load_scope_document(
         self, workspace_id: str, scope: CliHookScope
     ) -> CliHookScopeDocument:
+        if scope == CliHookScope.EXTENSION:
+            return self._load_extension_scope_document(workspace_id)
         file_path = self._scope_file(workspace_id, scope)
         data = self._config.strategy.read(file_path)
         if not data:
@@ -192,6 +221,33 @@ class CliHookService:
             if isinstance(rules, list)
         }
         return CliHookScopeDocument(scope=scope, hooks=hooks)
+
+    def _load_extension_scope_document(self, workspace_id: str) -> CliHookScopeDocument:
+        hooks: Dict[str, List[HookRule]] = {}
+        resolver = GeminiExtensionResourceResolver()
+        for package in resolver.enabled_hook_documents(resolve_workspace_root()):
+            for document in package.hooks:
+                for event, rules in document.hooks.items():
+                    if not isinstance(rules, list):
+                        continue
+                    for rule in rules:
+                        if not isinstance(rule, dict):
+                            continue
+                        data = {
+                            **rule,
+                            "source": {
+                                "type": "extension",
+                                "extensionName": package.name,
+                                "extensionVersion": package.version,
+                            },
+                            "extensionName": package.name,
+                            "extensionVersion": package.version,
+                        }
+                        try:
+                            hooks.setdefault(event, []).append(HookRule.model_validate(data))
+                        except Exception:
+                            logger.warning("Failed to parse Gemini extension hook: %s", package.name)
+        return CliHookScopeDocument(scope=CliHookScope.EXTENSION, hooks=hooks)
 
     def _write_hooks(
         self,

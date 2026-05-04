@@ -7,6 +7,7 @@ from fastapi import APIRouter
 from .hooks import HookTool, create_hooks_router
 from .agents_md import AgentsMdTool, create_agents_md_router
 from .codex import router as codex_router
+from .gemini import router as gemini_extensions_router
 from .mcp import McpTool, create_mcp_router
 from .skills import SkillTool, create_skills_router
 from .slash_commands import SlashCommandTool, create_slash_commands_router
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/workspaces/{workspace_id}")
 
 # Codex settings API group
 router.include_router(codex_router)
+router.include_router(gemini_extensions_router)
 
 # Agents MD routes
 router.include_router(create_agents_md_router(AgentsMdTool.CLAUDE))

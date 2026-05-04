@@ -266,13 +266,12 @@ const CodexHooksPage: React.FC = () => {
   }, [codexHookItems, scopeFilter, search]);
 
   const scopeFilterOptions = useMemo<Array<[string, typeof Layers]>>(() => {
-    const hasPluginHooks = codexHookItems.some((hook) => hook.scope === 'plugin' || hook.layer === 'plugin');
     const hasBuiltInHooks = codexHookItems.some((hook) => hook.scope === 'built_in' || hook.layer === 'built_in');
     return [
       ['all', Layers],
       ['project', FolderGit],
       ['user', User],
-      ...(hasPluginHooks ? [['plugin', Puzzle] as [string, typeof Layers]] : []),
+      ['plugin', Puzzle],
       ...(hasBuiltInHooks ? [['built_in', Puzzle] as [string, typeof Layers]] : []),
     ];
   }, [codexHookItems]);

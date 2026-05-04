@@ -56,7 +56,7 @@ describe('AgentFileManager Codex plugin scope', () => {
     apiMock.listCodexPlugins.mockResolvedValue({ plugins: [] });
   });
 
-  it('hides plugin scope until Codex has enabled plugins', async () => {
+  it('shows plugin scope whenever Codex skills support plugins', async () => {
     render(
       <AgentFileManager
         config={AGENT_TOOL_CONFIGS.codex}
@@ -67,18 +67,11 @@ describe('AgentFileManager Codex plugin scope', () => {
     );
 
     expect(await screen.findByText('workspace.agentSettings.common.skills.scope.project')).toBeInTheDocument();
-    expect(screen.queryByText('workspace.agentSettings.common.skills.scope.plugin')).not.toBeInTheDocument();
-    expect(apiMock.listCodexPlugins).toHaveBeenCalledWith(
-      'http://runtime.test',
-      'ws-1',
-    );
+    expect(screen.getByText('workspace.agentSettings.common.skills.scope.plugin')).toBeInTheDocument();
+    expect(apiMock.listCodexPlugins).not.toHaveBeenCalled();
   });
 
-  it('shows plugin scope when Codex has enabled plugins', async () => {
-    apiMock.listCodexPlugins.mockResolvedValue({
-      plugins: [{ id: 'demo@local', enabled: true }],
-    });
-
+  it('does not show extension scope for non-Gemini skills', async () => {
     render(
       <AgentFileManager
         config={AGENT_TOOL_CONFIGS.codex}
@@ -89,9 +82,6 @@ describe('AgentFileManager Codex plugin scope', () => {
     );
 
     expect(await screen.findByText('workspace.agentSettings.common.skills.scope.plugin')).toBeInTheDocument();
-    expect(apiMock.listCodexPlugins).toHaveBeenCalledWith(
-      'http://runtime.test',
-      'ws-1',
-    );
+    expect(screen.queryByText('workspace.agentSettings.common.skills.scope.extension')).not.toBeInTheDocument();
   });
 });

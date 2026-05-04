@@ -306,4 +306,3 @@ describe('CodexDocumentResourcePage', () => {
     expect(apiMock.saveCodexSubagent).not.toHaveBeenCalled();
   });
 });
-});

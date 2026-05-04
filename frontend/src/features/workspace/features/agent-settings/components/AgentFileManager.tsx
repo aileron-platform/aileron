@@ -26,6 +26,7 @@ const scopeIcons = {
   project: FolderGit,
   user: User,
   plugin: Puzzle,
+  extension: Puzzle,
 };
 
 const AgentFileManager: React.FC<AgentFileManagerProps> = ({
@@ -63,27 +64,12 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
 
   const pluginSkills = pluginSkillsData?.plugins ?? [];
 
-  const { data: codexPluginsData } = useQuery({
-    queryKey: ['codex-skills-scope-availability', workspaceRuntime.runtimeBaseUrl, workspaceId, refreshToken],
-    queryFn: () => api.listCodexPlugins(
-      workspaceRuntime.runtimeBaseUrl || '',
-      workspaceId,
-    ),
-    enabled: Boolean(
-      workspaceId
-      && workspaceRuntime.runtimeBaseUrl
-      && config.apiPathPrefix === 'codex'
-      && collectionType === 'skills',
-    ),
-  });
-
   const effectiveScopes = useMemo(() => {
     if (config.apiPathPrefix !== 'codex' || collectionType !== 'skills') {
-      return scopes;
+      return scopes.filter((scopeValue) => scopeValue !== 'extension');
     }
-    const hasEnabledPlugins = codexPluginsData?.plugins.some((plugin) => plugin.enabled) ?? false;
-    return scopes.filter((scopeValue) => scopeValue !== 'plugin' || hasEnabledPlugins);
-  }, [codexPluginsData?.plugins, collectionType, config.apiPathPrefix, scopes]);
+    return scopes;
+  }, [collectionType, config.apiPathPrefix, scopes]);
 
   React.useEffect(() => {
     if (!effectiveScopes.includes(scope)) {

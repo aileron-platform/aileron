@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 
 export type AgentToolType = 'claude' | 'gemini' | 'opencode' | 'codex';
-export type AgentScope = 'project' | 'user' | 'local' | 'plugin';
+export type AgentScope = 'project' | 'user' | 'local' | 'plugin' | 'extension';
 export type AgentHookScope = AgentScope;
 export type AgentMdScope = 'project' | 'user' | 'plugin';
 export type AgentFileCollection = 'skills' | 'scripts';
@@ -19,6 +19,8 @@ export interface AgentDocument {
   metadata?: Record<string, unknown>;
   pluginName?: string;
   marketplaceName?: string;
+  extensionName?: string;
+  extensionVersion?: string;
 }
 
 export interface AgentMcpServer {
@@ -34,6 +36,8 @@ export interface AgentMcpServer {
   enabled?: boolean;
   pluginName?: string;
   marketplaceName?: string;
+  extensionName?: string;
+  extensionVersion?: string;
 }
 
 export interface AgentHookActionConfig {
@@ -48,6 +52,10 @@ export interface AgentHookActionConfig {
 export interface AgentHookRuleConfig {
   matcher: string;
   hooks: AgentHookActionConfig[];
+  pluginName?: string | null;
+  marketplaceName?: string | null;
+  extensionName?: string | null;
+  extensionVersion?: string | null;
 }
 
 export type AgentHookRuleMap = Record<string, AgentHookRuleConfig[]>;
@@ -102,6 +110,8 @@ export interface AgentHookWithEvent {
   matchers: AgentHookMatcher[];
   pluginName?: string;
   marketplaceName?: string;
+  extensionName?: string;
+  extensionVersion?: string;
 }
 
 export interface AgentHookExportResponse {
@@ -172,7 +182,7 @@ export interface AgentPluginSkillsResponse {
 
 export interface AgentSelectedFile {
   path: string;
-  scope: Extract<AgentScope, 'project' | 'user' | 'plugin'>;
+  scope: Extract<AgentScope, 'project' | 'user' | 'plugin' | 'extension'>;
   pluginId?: string;
   pluginName?: string;
   marketplaceName?: string;
@@ -224,14 +234,14 @@ export interface AgentHooksCapability extends AgentCapabilityBase {
 
 export interface AgentFileCollectionCapability extends AgentCapabilityBase {
   collection: AgentFileCollection;
-  scopes: Extract<AgentScope, 'project' | 'user' | 'plugin'>[];
+  scopes: Extract<AgentScope, 'project' | 'user' | 'plugin' | 'extension'>[];
   supportsPlugin: boolean;
   readOnlyScopes?: AgentScope[];
   extensions?: string[];
 }
 
 export interface AgentCommandCapability extends AgentCapabilityBase {
-  scopes: Extract<AgentScope, 'project' | 'user'>[];
+  scopes: Extract<AgentScope, 'project' | 'user' | 'extension'>[];
   format: AgentDocumentFormat;
   supportsNamespace: boolean;
 }

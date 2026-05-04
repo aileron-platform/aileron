@@ -13,6 +13,7 @@ class SettingsSourceType(str, Enum):
     USER = "user"
     PROJECT = "project"
     PLUGIN = "plugin"
+    EXTENSION = "extension"
     BUILT_IN = "built_in"
     MANAGED = "managed"
     INLINE_CONFIG = "inline_config"
@@ -33,6 +34,8 @@ class SettingsSourceMetadata:
     layer: SettingsLayer | None = None
     label: str | None = None
     plugin_id: str | None = None
+    extension_name: str | None = None
+    extension_version: str | None = None
     marketplace: str | None = None
     path: str | None = None
     readonly: bool = False
@@ -99,6 +102,24 @@ def plugin_source_metadata(
         path=str(path) if path is not None else None,
         readonly=True,
         requires_new_thread=requires_new_thread,
+    )
+
+
+def extension_source_metadata(
+    *,
+    extension_name: str,
+    extension_version: str | None = None,
+    path: Path | str | None = None,
+) -> SettingsSourceMetadata:
+    """Create read-only Gemini extension source metadata."""
+
+    return SettingsSourceMetadata(
+        type=SettingsSourceType.EXTENSION,
+        label=extension_name,
+        extension_name=extension_name,
+        extension_version=extension_version,
+        path=str(path) if path is not None else None,
+        readonly=True,
     )
 
 

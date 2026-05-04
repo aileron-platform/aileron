@@ -18,6 +18,8 @@ export interface AgentSettingsSourceDescriptor {
   label: string;
   pluginName?: string;
   marketplaceName?: string;
+  extensionName?: string;
+  extensionVersion?: string;
 }
 
 export interface AgentSettingsLayerSelectorProps<TValue extends string = string> {
@@ -45,6 +47,7 @@ const SOURCE_ICONS: Record<AgentSettingsSourceType, React.ComponentType<{ classN
   user: User,
   local: Building,
   plugin: Puzzle,
+  extension: Puzzle,
   'built-in': Info,
   'inline-config': Info,
 };
@@ -80,7 +83,9 @@ export const AgentSettingsSourceBadge: React.FC<{
   const Icon = SOURCE_ICONS[source.type];
   const label = source.type === 'plugin' && source.pluginName
     ? `${source.pluginName}@${source.marketplaceName ?? source.label}`
-    : source.label;
+    : source.type === 'extension' && source.extensionName
+      ? [source.extensionName, source.extensionVersion].filter(Boolean).join('@')
+      : source.label;
 
   return (
     <Badge

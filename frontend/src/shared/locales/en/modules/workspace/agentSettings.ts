@@ -93,6 +93,53 @@ const agentSettings = {
       },
     },
   },
+  geminiExtensions: {
+    title: 'Gemini Extensions',
+    loading: 'Loading extensions...',
+    unknownVersion: 'Unknown version',
+    actions: {
+      refresh: 'Refresh',
+      toggleWorkspace: 'Toggle for this workspace',
+      toggleUser: 'Toggle for user',
+      details: 'Details',
+    },
+    status: {
+      enabledHere: 'Enabled here',
+      disabledHere: 'Disabled here',
+    },
+    counts: {
+      mcp: '{{count}} MCP',
+      commands: '{{count}} commands',
+      skills: '{{count}} skills',
+      hooks: '{{count}} hooks',
+      policies: '{{count}} policies',
+      excludeTools: '{{count}} excluded tools',
+    },
+    advanced: {
+      overrides: 'Advanced overrides',
+      noOverrides: 'No overrides configured',
+    },
+    empty: {
+      title: 'No Gemini extensions',
+      description: 'Installed Gemini extensions will appear here.',
+      installHint: 'Install extensions from a terminal with gemini extensions install <source>.',
+    },
+    detail: {
+      title: '{{name}} details',
+      loading: 'Loading extension details...',
+      empty: 'Select an extension to inspect its contributed resources.',
+      noInstallSource: 'No install source recorded',
+      context: 'Contributed GEMINI.md',
+      noContext: 'No contributed context file.',
+      policies: 'Policies',
+      noPolicies: 'No policies contributed.',
+      excludeTools: 'Excluded tools',
+      noExcludeTools: 'No excluded tools.',
+    },
+    errors: {
+      commandFailed: 'Gemini extension command failed.',
+    },
+  },
   opencode: {
     agentsMd: 'AGENTS.md',
   },
@@ -472,6 +519,7 @@ const agentSettings = {
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
       plugins: 'Plugins',
+      extensions: 'Extensions',
       slashCommands: 'Slash Commands',
       prompts: 'Prompts',
       skills: 'Skills',
@@ -487,6 +535,9 @@ const agentSettings = {
       project: 'Project',
       user: 'User',
       global: 'Global',
+    },
+    errors: {
+      readOnlyScope: 'This scope is read-only.',
     },
     sourceNotices: {
       readOnly: {
@@ -549,6 +600,7 @@ const agentSettings = {
             user: 'User',
             local: 'Local',
             plugin: 'Plugin',
+            extension: 'Extension',
           },
         },
       },
@@ -566,6 +618,7 @@ const agentSettings = {
           user: 'User',
           local: 'Local',
           plugin: 'Plugin',
+          extension: 'Extension',
         },
       },
       events: {
@@ -665,6 +718,7 @@ const agentSettings = {
           user: 'User',
           local: 'Local',
           plugin: 'Plugin',
+          extension: 'Extension',
         },
       },
       serverDetails: {
@@ -678,7 +732,7 @@ const agentSettings = {
       list: { empty: 'No MCP servers match the current filters.', loading: 'Loading MCP servers...' },
       status: { runtimeUnavailable: 'Workspace runtime is unavailable: {{message}}' },
       actions: { showEnvValues: 'Show values', hideEnvValues: 'Hide values', edit: 'Edit server', delete: 'Delete server' },
-      plugin: { readonly: 'Plugin managed' },
+      plugin: { readonly: 'Package managed' },
       confirm: { delete: 'Delete MCP server "{{name}}"?' },
       messages: {
         runtimeNotReady: 'Workspace runtime is not ready.',
@@ -846,7 +900,7 @@ const agentSettings = {
       noSelection: 'Select a skill file from the list to preview its content.',
       title: 'Skills',
       searchPlaceholder: 'Search skills or files',
-      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin' },
+      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
       plugin: { label: 'Plugin', all: 'All plugins' },
     },
     scripts: {
@@ -854,7 +908,7 @@ const agentSettings = {
       noSelection: 'Select a script file from the list to preview its content.',
       title: 'Scripts',
       searchPlaceholder: 'Search scripts or files',
-      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin' },
+      scope: { label: 'Scope', project: 'Project', user: 'User', plugin: 'Plugin', extension: 'Extension' },
       plugin: { label: 'Plugin', all: 'All plugins' },
     },
     documents: {
@@ -867,7 +921,7 @@ const agentSettings = {
       stats: { total: '{{count}} item(s)' },
       scope: {
         badge: 'Scope: {{scope}}',
-        values: { project: 'Project', user: 'User', local: 'Local', plugin: 'Plugin' },
+        values: { project: 'Project', user: 'User', local: 'Local', plugin: 'Plugin', extension: 'Extension' },
       },
       size: { badge: 'Size: {{size}}' },
       confirmDelete: 'Are you sure you want to delete "{{title}}"?',

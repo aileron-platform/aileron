@@ -24,6 +24,7 @@ class CliHookScope(str, Enum):
 
     PROJECT = "project"
     USER = "user"
+    EXTENSION = "extension"
 
 
 @dataclass(frozen=True)

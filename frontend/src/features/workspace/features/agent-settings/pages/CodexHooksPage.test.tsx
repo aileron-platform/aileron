@@ -197,7 +197,7 @@ describe('CodexHooksPage', () => {
     expect(JSON.parse(content).PreToolUse[0].hooks[0].statusMessage).toBe('Reviewing Bash command');
   });
 
-  it('hides plugin scope filter when loaded hooks do not include plugin entries or enabled plugins', async () => {
+  it('shows plugin scope filter even when loaded hooks do not include plugin entries', async () => {
     const user = userEvent.setup();
     Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
       configurable: true,
@@ -238,7 +238,7 @@ describe('CodexHooksPage', () => {
     await user.click(screen.getAllByRole('combobox')[0]);
 
     expect(screen.getByText('workspace.agentSettings.codex.hooks.filters.scope.options.project')).toBeInTheDocument();
-    expect(screen.queryByText('workspace.agentSettings.codex.hooks.filters.scope.options.plugin')).not.toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.codex.hooks.filters.scope.options.plugin')).toBeInTheDocument();
     expect(screen.queryByText('workspace.agentSettings.codex.hooks.filters.scope.options.managed')).not.toBeInTheDocument();
   });
 

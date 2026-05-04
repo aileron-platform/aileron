@@ -46,6 +46,16 @@ class HookRule(BaseModel):
         alias="marketplaceName",
         description="Marketplace name (has value only when scope='plugin')"
     )
+    extension_name: str | None = Field(
+        None,
+        alias="extensionName",
+        description="Extension name (has value only when scope='extension')",
+    )
+    extension_version: str | None = Field(
+        None,
+        alias="extensionVersion",
+        description="Extension version (has value only when scope='extension')",
+    )
 
 
 class HookScopeDocument(BaseModel):

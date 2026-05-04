@@ -93,6 +93,53 @@ const agentSettings = {
       },
     },
   },
+  geminiExtensions: {
+    title: 'Gemini Extensions',
+    loading: '正在載入 extensions...',
+    unknownVersion: '未知版本',
+    actions: {
+      refresh: '重新整理',
+      toggleWorkspace: '切換此工作區',
+      toggleUser: '切換使用者',
+      details: '詳細資料',
+    },
+    status: {
+      enabledHere: '此處已啟用',
+      disabledHere: '此處已停用',
+    },
+    counts: {
+      mcp: '{{count}} 個 MCP',
+      commands: '{{count}} 個 commands',
+      skills: '{{count}} 個 skills',
+      hooks: '{{count}} 個 hooks',
+      policies: '{{count}} 個 policies',
+      excludeTools: '{{count}} 個排除工具',
+    },
+    advanced: {
+      overrides: '進階 overrides',
+      noOverrides: '未設定 overrides',
+    },
+    empty: {
+      title: '沒有 Gemini extensions',
+      description: '已安裝的 Gemini extensions 會顯示在這裡。',
+      installHint: '請在終端機使用 gemini extensions install <source> 安裝 extensions。',
+    },
+    detail: {
+      title: '{{name}} 詳細資料',
+      loading: '正在載入 extension 詳細資料...',
+      empty: '選擇 extension 以查看它提供的資源。',
+      noInstallSource: '沒有安裝來源紀錄',
+      context: '提供的 GEMINI.md',
+      noContext: '沒有提供 context 檔案。',
+      policies: 'Policies',
+      noPolicies: '沒有提供 policies。',
+      excludeTools: '排除工具',
+      noExcludeTools: '沒有排除工具。',
+    },
+    errors: {
+      commandFailed: 'Gemini extension 指令執行失敗。',
+    },
+  },
   opencode: {
     agentsMd: 'AGENTS.md',
   },
@@ -472,6 +519,7 @@ const agentSettings = {
       mcp: 'Model Context Protocol',
       hooks: 'Hooks',
       plugins: 'Plugins',
+      extensions: 'Extensions',
       slashCommands: 'Slash Commands',
       prompts: 'Prompts',
       skills: 'Skills',
@@ -487,6 +535,9 @@ const agentSettings = {
       project: '專案',
       user: '使用者',
       global: '全域',
+    },
+    errors: {
+      readOnlyScope: '此範圍為唯讀。',
     },
     sourceNotices: {
       readOnly: {
@@ -549,6 +600,7 @@ const agentSettings = {
             user: '個人',
             local: '本地',
             plugin: '外掛',
+            extension: 'Extension',
           },
         },
       },
@@ -566,6 +618,7 @@ const agentSettings = {
           user: '個人',
           local: '本地',
           plugin: '外掛',
+          extension: '擴充套件',
         },
       },
       events: {
@@ -665,6 +718,7 @@ const agentSettings = {
           user: '個人',
           local: '本地',
           plugin: '外掛',
+          extension: 'Extension',
         },
       },
       serverDetails: {
@@ -678,7 +732,7 @@ const agentSettings = {
       list: { empty: '未找到符合條件的服務器', loading: '正在載入 MCP 服務器...' },
       status: { runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}' },
       actions: { showEnvValues: '顯示值', hideEnvValues: '隱藏值', edit: '編輯 server', delete: '刪除 server' },
-      plugin: { readonly: '外掛管理' },
+      plugin: { readonly: '套件管理' },
       confirm: { delete: '確定要刪除 MCP 服務器「{{name}}」嗎？' },
       messages: {
         runtimeNotReady: 'Workspace Runtime 尚未就緒。',
@@ -846,7 +900,7 @@ const agentSettings = {
       noSelection: '請從左側選擇技能檔案以檢視內容。',
       title: 'Skills',
       searchPlaceholder: '搜尋技能或檔案',
-      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛' },
+      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
       plugin: { label: '外掛', all: '所有外掛' },
     },
     scripts: {
@@ -854,7 +908,7 @@ const agentSettings = {
       noSelection: '請從左側選擇腳本檔案以檢視內容。',
       title: 'Scripts',
       searchPlaceholder: '搜尋腳本或檔案',
-      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛' },
+      scope: { label: '範圍', project: '專案', user: '個人', plugin: '外掛', extension: '擴充套件' },
       plugin: { label: '外掛', all: '所有外掛' },
     },
     documents: {
@@ -867,7 +921,7 @@ const agentSettings = {
       stats: { total: '共 {{count}} 項' },
       scope: {
         badge: '範圍：{{scope}}',
-        values: { project: '專案', user: '個人', local: '本地', plugin: '外掛' },
+        values: { project: '專案', user: '個人', local: '本地', plugin: '外掛', extension: 'Extension' },
       },
       size: { badge: '大小：{{size}}' },
       confirmDelete: '確定要刪除「{{title}}」嗎？',

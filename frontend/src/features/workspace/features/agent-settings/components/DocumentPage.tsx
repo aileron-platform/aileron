@@ -45,7 +45,7 @@ const documentSourceType = (document: AgentDocument): AgentSettingsSourceType =>
   const source = document.metadata?.source;
   if (source === 'built_in') return 'built-in';
   if (source === 'inline-config') return 'inline-config';
-  if (source === 'project' || source === 'user' || source === 'local' || source === 'plugin') return source;
+  if (source === 'project' || source === 'user' || source === 'local' || source === 'plugin' || source === 'extension') return source;
   return document.scope;
 };
 
@@ -184,8 +184,8 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
       downloadLabel={t(`${i18nNamespace}.documents.actions.download`)}
       deleteLabel={t(`${i18nNamespace}.documents.actions.delete`)}
       loadingLabel={t(`${i18nNamespace}.documents.loading`)}
-      canEdit={(document) => document?.scope !== 'plugin'}
-      canDelete={(document) => document?.scope !== 'plugin'}
+      canEdit={(document) => document?.scope !== 'plugin' && document?.scope !== 'extension'}
+      canDelete={(document) => document?.scope !== 'plugin' && document?.scope !== 'extension'}
       confirmDelete={(document) => window.confirm(
         t(`${i18nNamespace}.documents.confirmDelete`, { title: document.title }),
       )}
@@ -216,6 +216,8 @@ export const DocumentPage: React.FC<DocumentPageProps> = ({
                 label: t(`${i18nNamespace}.documents.scope.values.${document.metadata?.source ?? document.scope}`, { defaultValue: String(document.metadata?.source ?? document.scope) }),
                 pluginName: document.pluginName,
                 marketplaceName: document.marketplaceName,
+                extensionName: document.extensionName,
+                extensionVersion: document.extensionVersion,
               }}
             />
           ) : null}

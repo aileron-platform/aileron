@@ -37,6 +37,7 @@ const createEmptyScopeDocuments = (): HookScopeState => ({
   user: { scope: 'user', hooks: {} },
   local: { scope: 'local', hooks: {} },
   plugin: { scope: 'plugin', hooks: {} },
+  extension: { scope: 'extension', hooks: {} },
 });
 
 const cloneRuleMap = (hooks: AgentHookRuleMap | undefined): AgentHookRuleMap => {
@@ -78,7 +79,7 @@ const removeHookFromMap = (hooks: AgentHookRuleMap, target: AgentHook): AgentHoo
   return next;
 };
 
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
+const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin', 'extension'];
 
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
@@ -142,16 +143,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
     }));
   }, [hookEvents, t]);
 
-  const scopeFilterOptions = useMemo(() => {
-    const options: Record<string, string> = {
-      all: t(`${i18nNamespace}.hooks.filters.scope.options.all`),
-    };
-    for (const s of availableScopes) {
-      options[s] = t(`${i18nNamespace}.hooks.filters.scope.options.${s}`);
-    }
-    return options;
-  }, [t, availableScopes, i18nNamespace]);
-
   const hooks = useMemo(
     () =>
       Object.values(scopeDocuments)
@@ -159,6 +150,24 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
         .sort((a, b) => a.eventName.localeCompare(b.eventName)),
     [scopeDocuments],
   );
+
+  const effectiveScopes = useMemo(() => availableScopes, [availableScopes]);
+
+  useEffect(() => {
+    if (scopeFilter !== 'all' && !effectiveScopes.includes(scopeFilter)) {
+      setScopeFilter('all');
+    }
+  }, [effectiveScopes, scopeFilter]);
+
+  const scopeFilterOptions = useMemo(() => {
+    const options: Record<string, string> = {
+      all: t(`${i18nNamespace}.hooks.filters.scope.options.all`),
+    };
+    for (const s of effectiveScopes) {
+      options[s] = t(`${i18nNamespace}.hooks.filters.scope.options.${s}`);
+    }
+    return options;
+  }, [t, effectiveScopes, i18nNamespace]);
 
   const filteredHooks = useMemo(() => {
     return hooks.filter((hook) => {
@@ -232,11 +241,11 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   const isBusy = loading || processing;
 
   const canEdit = (hook: AgentHook): boolean => {
-    return hook.scope !== 'plugin';
+    return hook.scope !== 'plugin' && hook.scope !== 'extension';
   };
 
   const canDelete = (hook: AgentHook): boolean => {
-    return hook.scope !== 'plugin';
+    return hook.scope !== 'plugin' && hook.scope !== 'extension';
   };
 
   const handleSubmit = async (payload: AgentHook) => {
@@ -409,6 +418,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
                       user: <User className="h-3 w-3" />,
                       local: <HardDrive className="h-3 w-3" />,
                       plugin: <Puzzle className="h-3 w-3" />,
+                      extension: <Puzzle className="h-3 w-3" />,
                     };
                     return (
                       <SelectItem key={value} value={value}>
@@ -487,6 +497,12 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
                           <Badge variant="outline" className="flex items-center gap-1 text-xs">
                             <Puzzle className="h-3 w-3" />
                             {hook.pluginName}@{hook.marketplaceName}
+                          </Badge>
+                        )}
+                        {hook.scope === 'extension' && hook.extensionName && (
+                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                            <Puzzle className="h-3 w-3" />
+                            {[hook.extensionName, hook.extensionVersion].filter(Boolean).join('@')}
                           </Badge>
                         )}
                       </div>
@@ -610,7 +626,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
         mode={dialogMode}
         hook={activeHook}
         existingHooks={hooks}
-        availableScopes={availableScopes}
+        availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
         eventOptions={dialogEventOptions}
         i18nNamespace={i18nNamespace}
         supportsActionMetadata={supportsActionMetadata}

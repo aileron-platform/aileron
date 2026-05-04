@@ -68,7 +68,7 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
 
   const handleSaveFile = async (content: string) => {
     if (!selectedFile) return;
-    if (selectedFile.scope === 'plugin') return;
+    if (selectedFile.scope === 'plugin' || selectedFile.scope === 'extension') return;
 
     setIsSaving(true);
     try {
@@ -98,7 +98,7 @@ const SkillsPage: React.FC<SkillsPageProps> = ({
     }
   };
 
-  const isPluginFile = selectedFile?.scope === 'plugin';
+  const isPluginFile = selectedFile?.scope === 'plugin' || selectedFile?.scope === 'extension';
   const fileName = selectedFile?.path.split('/').pop() || '';
   const FileIcon = collectionType === 'scripts' ? ScrollText : Wand2;
 
