@@ -22,7 +22,9 @@ def mock_workspace():
 def mock_settings():
     """Create a mock user settings"""
     settings = Mock()
-    settings.ssh_private_key = "-----BEGIN PRIVATE KEY-----\ntest_private_key\n-----END PRIVATE KEY-----"
+    settings.ssh_private_key = (
+        "-----BEGIN PRIVATE KEY-----\ntest_private_key\n-----END PRIVATE KEY-----"
+    )
     settings.ssh_public_key = "ssh-rsa AAAAB3... test@example.com"
     settings.git_user_name = "Test User"
     settings.git_user_email = "test@example.com"
@@ -33,7 +35,7 @@ def mock_settings():
             "authMethod": "api_key",
             "apiKey": "test_api_key",
             "model": "claude-3-5-sonnet-20241022",
-            "environmentVariables": []
+            "environmentVariables": [],
         },
         "codex": {
             "loginStatus": "connected",
@@ -41,7 +43,20 @@ def mock_settings():
             "environmentVariables": [
                 {"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"}
             ],
-        }
+            "cliState": {
+                "authJson": {
+                    "auth_mode": "chatgpt",
+                    "tokens": {
+                        "access_token": "access-token",
+                        "refresh_token": "refresh-token",
+                        "id_token": "id-token",
+                        "account_id": "codex-account-1",
+                    },
+                },
+                "configToml": '[projects."/workspace"]\ntrust_level = "trusted"\n',
+                "installationId": "installation-1",
+            },
+        },
     }
     return settings
 
@@ -64,7 +79,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test successful sync of all settings"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -82,6 +97,25 @@ class TestSyncService:
             assert result["gemini"]["success"] is True
             assert result["git"]["success"] is True
             assert mock_client.post.call_count == 5
+            codex_call = next(
+                call
+                for call in mock_client.post.call_args_list
+                if str(call.args[0]).endswith("/api/v1/internal/settings/codex")
+            )
+            assert (
+                codex_call.kwargs["json"]["cliState"]["authJson"]["tokens"][
+                    "refresh_token"
+                ]
+                == "refresh-token"
+            )
+            assert (
+                codex_call.kwargs["json"]["cliState"]["configToml"]
+                == '[projects."/workspace"]\ntrust_level = "trusted"\n'
+            )
+            assert (
+                codex_call.kwargs["json"]["cliState"]["installationId"]
+                == "installation-1"
+            )
 
     @pytest.mark.asyncio
     async def test_sync_settings_to_runtime_no_ssh_keys(
@@ -91,7 +125,7 @@ class TestSyncService:
         mock_settings.ssh_private_key = None
         mock_settings.ssh_public_key = None
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -117,7 +151,7 @@ class TestSyncService:
         mock_settings.git_user_name = None
         mock_settings.git_user_email = None
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -140,7 +174,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test SSH sync error handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -167,13 +201,17 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test Claude Code sync HTTP error handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
                 if "claude-code" in url:
-                    error_response = httpx_response_factory(status_code=500, text="Internal Server Error")
-                    raise httpx.HTTPStatusError("Error", request=Mock(), response=error_response)
+                    error_response = httpx_response_factory(
+                        status_code=500, text="Internal Server Error"
+                    )
+                    raise httpx.HTTPStatusError(
+                        "Error", request=Mock(), response=error_response
+                    )
                 return httpx_response_factory()
 
             mock_client.post = AsyncMock(side_effect=post_side_effect)
@@ -195,7 +233,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test Claude Code sync timeout handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -222,7 +260,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test Claude Code sync connection error handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -248,7 +286,11 @@ class TestSyncService:
     async def test_sync_to_all_workspaces_no_workspaces(self, mock_settings):
         """Test sync to all workspaces when no workspaces are running"""
         mock_db = Mock()
-        mock_db.execute = Mock(return_value=Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=[])))))
+        mock_db.execute = Mock(
+            return_value=Mock(
+                scalars=Mock(return_value=Mock(all=Mock(return_value=[])))
+            )
+        )
 
         result = await SyncService.sync_to_all_workspaces(
             "user_123", mock_settings, mock_db
@@ -264,9 +306,13 @@ class TestSyncService:
     ):
         """Test successful sync to all workspaces"""
         mock_db = Mock()
-        mock_db.execute = Mock(return_value=Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=[mock_workspace])))))
+        mock_db.execute = Mock(
+            return_value=Mock(
+                scalars=Mock(return_value=Mock(all=Mock(return_value=[mock_workspace])))
+            )
+        )
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -299,9 +345,15 @@ class TestSyncService:
         workspace2.runtime_internal_url = None  # This will cause an error
 
         mock_db = Mock()
-        mock_db.execute = Mock(return_value=Mock(scalars=Mock(return_value=Mock(all=Mock(return_value=[workspace1, workspace2])))))
+        mock_db.execute = Mock(
+            return_value=Mock(
+                scalars=Mock(
+                    return_value=Mock(all=Mock(return_value=[workspace1, workspace2]))
+                )
+            )
+        )
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             mock_client.post = AsyncMock(return_value=mock_response)
@@ -334,11 +386,11 @@ class TestSyncService:
                 "subscriptionExpiresAt": "2024-12-31T23:59:59Z",
                 "oauthAccount": "test@example.com",
                 "model": "claude-3-opus-20240229",
-                "environmentVariables": [{"name": "VAR1", "value": "value1"}]
+                "environmentVariables": [{"name": "VAR1", "value": "value1"}],
             }
         }
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
 
@@ -376,7 +428,7 @@ class TestSyncService:
             }
         }
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_response = httpx_response_factory()
             captured_payload = {}
@@ -391,7 +443,9 @@ class TestSyncService:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await SyncService.sync_settings_to_runtime(mock_workspace, mock_settings)
+            result = await SyncService.sync_settings_to_runtime(
+                mock_workspace, mock_settings
+            )
 
         assert result["claude_code"]["success"] is True
         assert captured_payload["apiKey"] == "fallback-key"
@@ -413,7 +467,7 @@ class TestSyncService:
             ),
         )
 
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -426,7 +480,9 @@ class TestSyncService:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await SyncService.sync_settings_to_runtime(mock_workspace, mock_settings)
+            result = await SyncService.sync_settings_to_runtime(
+                mock_workspace, mock_settings
+            )
 
         assert result["claude_code"]["success"] is False
         assert result["git"]["success"] is True
@@ -436,7 +492,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test unexpected Claude Code error falls back to generic failure handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -449,7 +505,9 @@ class TestSyncService:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await SyncService.sync_settings_to_runtime(mock_workspace, mock_settings)
+            result = await SyncService.sync_settings_to_runtime(
+                mock_workspace, mock_settings
+            )
 
         assert result["claude_code"]["success"] is False
         assert result["ssh"]["success"] is True
@@ -459,7 +517,7 @@ class TestSyncService:
         self, mock_workspace, mock_settings, httpx_response_factory
     ):
         """Test Git sync error handling"""
-        with patch('httpx.AsyncClient') as mock_client_class:
+        with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
 
             async def post_side_effect(url, **kwargs):
@@ -472,7 +530,9 @@ class TestSyncService:
             mock_client.__aexit__ = AsyncMock(return_value=None)
             mock_client_class.return_value = mock_client
 
-            result = await SyncService.sync_settings_to_runtime(mock_workspace, mock_settings)
+            result = await SyncService.sync_settings_to_runtime(
+                mock_workspace, mock_settings
+            )
 
         assert result["ssh"]["success"] is True
         assert result["claude_code"]["success"] is True

@@ -27,8 +27,11 @@ import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/Collapse
 import { Button } from '@/shared/components/ui/button';
 import { isImageFile } from '@/shared/utils/fileTypeUtils';
 import {
+  buildArchiveDownloadUrl,
   duplicateFile,
+  fetchArchiveDownloadStatus,
   fetchExtractArchiveStatus,
+  startArchiveDownload,
   startExtractArchive,
 } from '../../../services/workspaceRuntimeApi';
 import { refreshVersionControlQueries } from '../../version-control/lib/queryClient';
@@ -48,6 +51,30 @@ interface ExtractProgressState {
   errorMessage?: string | null;
 }
 
+interface ArchiveProgressState {
+  operationId: string;
+  archiveName: string;
+  paths: string[];
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'expired';
+  progress: number;
+  message: string;
+  downloadUrl?: string | null;
+  errorMessage?: string | null;
+}
+
+interface PersistedArchiveOperation {
+  operationId: string;
+  archiveName: string;
+  paths: string[];
+  workspaceId: string;
+  contextId: string | null;
+  runtimeBaseUrl: string;
+  startedAt: string;
+  downloadTriggeredAt?: string | null;
+}
+
+const ARCHIVE_OPERATIONS_STORAGE_KEY = 'workspace.fileManagement.archiveOperations.v1';
+
 const ensureLeadingSlash = (path: string) => {
   if (!path.startsWith('/')) {
     return `/${path}`;
@@ -65,6 +92,52 @@ const getParentPath = (path: string): string => {
     return '/';
   }
   return `/${segments.join('/')}`;
+};
+
+const loadPersistedArchiveOperations = (): PersistedArchiveOperation[] => {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(ARCHIVE_OPERATIONS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const savePersistedArchiveOperations = (operations: PersistedArchiveOperation[]) => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem(ARCHIVE_OPERATIONS_STORAGE_KEY, JSON.stringify(operations));
+};
+
+const upsertPersistedArchiveOperation = (operation: PersistedArchiveOperation) => {
+  const existing = loadPersistedArchiveOperations().filter(
+    (item) => item.operationId !== operation.operationId,
+  );
+  savePersistedArchiveOperations([...existing, operation]);
+};
+
+const removePersistedArchiveOperation = (operationId: string) => {
+  savePersistedArchiveOperations(
+    loadPersistedArchiveOperations().filter((item) => item.operationId !== operationId),
+  );
+};
+
+const markPersistedArchiveDownloadTriggered = (operationId: string) => {
+  savePersistedArchiveOperations(
+    loadPersistedArchiveOperations().map((item) => (
+      item.operationId === operationId
+        ? { ...item, downloadTriggeredAt: new Date().toISOString() }
+        : item
+    )),
+  );
 };
 
 export const FileManagementView: React.FC = () => {
@@ -88,6 +161,7 @@ export const FileManagementView: React.FC = () => {
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const [extractProgress, setExtractProgress] = useState<ExtractProgressState | null>(null);
+  const [archiveProgress, setArchiveProgress] = useState<ArchiveProgressState | null>(null);
   const selectedGitContextId = workspaceState.versionControl.selectedGitContextId;
   const showHiddenEntries = workspaceState.fileTreeShowHiddenEntries;
 
@@ -274,6 +348,181 @@ export const FileManagementView: React.FC = () => {
     });
   }, [loadTree, requireRuntimeBaseUrl, t, toast]);
 
+  const triggerArchiveBrowserDownload = useCallback((downloadUrl: string, operationId: string) => {
+    const fullUrl = buildArchiveDownloadUrl(requireRuntimeBaseUrl(), downloadUrl);
+    if (typeof window !== 'undefined') {
+      window.open(fullUrl, '_blank', 'noopener');
+      markPersistedArchiveDownloadTriggered(operationId);
+    }
+  }, [requireRuntimeBaseUrl]);
+
+  const waitForArchiveCompletion = useCallback(async (
+    operationId: string,
+    options?: { restored?: boolean },
+  ) => {
+    const baseUrl = requireRuntimeBaseUrl();
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const status = await fetchArchiveDownloadStatus(baseUrl, operationId);
+      setArchiveProgress(current => current ? {
+        ...current,
+        status: status.status,
+        progress: status.progress,
+        message: status.message,
+        downloadUrl: status.result?.downloadUrl ?? current.downloadUrl ?? null,
+        errorMessage: status.error ?? null,
+      } : current);
+
+      if (status.status === 'completed' && status.result) {
+        setArchiveProgress(current => current ? {
+          ...current,
+          status: 'completed',
+          progress: 1,
+          message: status.message,
+          archiveName: status.result?.archiveName ?? current.archiveName,
+          downloadUrl: status.result?.downloadUrl ?? null,
+        } : current);
+        toast({
+          title: t('workspace.fileManagement.tree.notifications.archiveReady'),
+          description: t('workspace.fileManagement.tree.notifications.archiveReadyDescription', {
+            name: status.result.archiveName,
+          }),
+        });
+        const persisted = loadPersistedArchiveOperations().find((item) => item.operationId === operationId);
+        if (!persisted?.downloadTriggeredAt) {
+          triggerArchiveBrowserDownload(status.result.downloadUrl, operationId);
+        }
+        if (!options?.restored && typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            removePersistedArchiveOperation(operationId);
+            setArchiveProgress(null);
+          }, 3000);
+        }
+        return;
+      }
+
+      if (status.status === 'failed' || status.status === 'expired') {
+        removePersistedArchiveOperation(operationId);
+        setArchiveProgress(current => current ? {
+          ...current,
+          status: status.status,
+          errorMessage: status.error ?? status.message,
+          message: status.error ?? status.message,
+        } : current);
+        toast({
+          title: status.status === 'expired'
+            ? t('workspace.fileManagement.tree.notifications.archiveExpired')
+            : t('workspace.fileManagement.tree.notifications.archiveFailed'),
+          description: status.error ?? status.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      await new Promise(resolve => globalThis.setTimeout(resolve, 1000));
+    }
+
+    toast({
+      title: t('workspace.fileManagement.tree.notifications.archiveFailed'),
+      description: t('common.messages.cannotGetSyncStatus'),
+      variant: 'destructive',
+    });
+  }, [requireRuntimeBaseUrl, t, toast, triggerArchiveBrowserDownload]);
+
+  const handleArchiveOperationNotFound = useCallback((operationId: string) => {
+    removePersistedArchiveOperation(operationId);
+    setArchiveProgress(null);
+    toast({
+      title: t('workspace.fileManagement.tree.notifications.archiveExpired'),
+      description: t('workspace.fileManagement.tree.notifications.archiveExpiredDescription'),
+      variant: 'destructive',
+    });
+  }, [t, toast]);
+
+  useEffect(() => {
+    if (!workspaceRuntime.runtimeBaseUrl || !workspaceRuntime.workspaceId) {
+      return;
+    }
+
+    const persisted = loadPersistedArchiveOperations()
+      .filter((item) => (
+        item.workspaceId === workspaceRuntime.workspaceId
+        && item.contextId === (selectedGitContextId ?? null)
+        && item.runtimeBaseUrl === workspaceRuntime.runtimeBaseUrl
+      ))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+
+    if (!persisted || archiveProgress) {
+      return;
+    }
+
+    let cancelled = false;
+    const restore = async () => {
+      try {
+        const status = await fetchArchiveDownloadStatus(
+          workspaceRuntime.runtimeBaseUrl!,
+          persisted.operationId,
+        );
+        if (cancelled) {
+          return;
+        }
+        setArchiveProgress({
+          operationId: persisted.operationId,
+          archiveName: status.result?.archiveName ?? persisted.archiveName,
+          paths: persisted.paths,
+          status: status.status,
+          progress: status.progress,
+          message: status.message,
+          downloadUrl: status.result?.downloadUrl ?? null,
+          errorMessage: status.error ?? null,
+        });
+        if (status.status === 'completed' && status.result) {
+          toast({
+            title: t('workspace.fileManagement.tree.notifications.archiveReady'),
+            description: t('workspace.fileManagement.tree.notifications.archiveReadyDescription', {
+              name: status.result.archiveName,
+            }),
+          });
+          if (!persisted.downloadTriggeredAt) {
+            triggerArchiveBrowserDownload(status.result.downloadUrl, persisted.operationId);
+          }
+          return;
+        }
+        if (status.status === 'failed' || status.status === 'expired') {
+          removePersistedArchiveOperation(persisted.operationId);
+          toast({
+            title: status.status === 'expired'
+              ? t('workspace.fileManagement.tree.notifications.archiveExpired')
+              : t('workspace.fileManagement.tree.notifications.archiveFailed'),
+            description: status.error ?? status.message,
+            variant: 'destructive',
+          });
+          return;
+        }
+        void waitForArchiveCompletion(persisted.operationId, { restored: true });
+      } catch {
+        if (!cancelled) {
+          handleArchiveOperationNotFound(persisted.operationId);
+        }
+      }
+    };
+
+    void restore();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    archiveProgress,
+    handleArchiveOperationNotFound,
+    selectedGitContextId,
+    t,
+    toast,
+    triggerArchiveBrowserDownload,
+    waitForArchiveCompletion,
+    workspaceRuntime.runtimeBaseUrl,
+    workspaceRuntime.workspaceId,
+  ]);
+
   const handleExtractArchive = useCallback(async (node: FileTreeNode) => {
     if (!ensureRuntimeReady()) {
       return;
@@ -318,6 +567,80 @@ export const FileManagementView: React.FC = () => {
       setExtractProgress(null);
     }
   }, [ensureRuntimeReady, extractProgress, requireRuntimeBaseUrl, selectedGitContextId, t, toast, waitForExtractCompletion]);
+
+  const handleDownloadEntries = useCallback(async (node: FileTreeNode, paths: string[]) => {
+    if (!ensureRuntimeReady()) {
+      return;
+    }
+
+    const selectedPaths = Array.from(new Set(paths.length > 0 ? paths : [node.path]));
+    const shouldArchive = node.type === 'directory' || selectedPaths.length > 1;
+
+    try {
+      if (!shouldArchive) {
+        await fileTreeAdapter.download({ path: node.path, fileName: node.name });
+        toast({
+          title: t('workspace.fileManagement.tree.notifications.downloadSuccess'),
+          description: t('workspace.fileManagement.tree.notifications.downloadSuccessDescription', { count: 1 }),
+        });
+        return;
+      }
+
+      const archiveName = selectedPaths.length === 1
+        ? `${node.name.replace(/\.zip$/i, '')}.zip`
+        : undefined;
+      const accepted = await startArchiveDownload(requireRuntimeBaseUrl(), {
+        paths: selectedPaths,
+        archiveName,
+        archiveFormat: 'zip',
+        contextId: selectedGitContextId,
+      });
+      const resolvedArchiveName = archiveName ?? 'workspace-selection.zip';
+
+      upsertPersistedArchiveOperation({
+        operationId: accepted.operationId,
+        archiveName: resolvedArchiveName,
+        paths: selectedPaths,
+        workspaceId: workspaceRuntime.workspaceId ?? 'pending-workspace',
+        contextId: selectedGitContextId ?? null,
+        runtimeBaseUrl: requireRuntimeBaseUrl(),
+        startedAt: accepted.startedAt,
+      });
+
+      setArchiveProgress({
+        operationId: accepted.operationId,
+        archiveName: resolvedArchiveName,
+        paths: selectedPaths,
+        status: accepted.status,
+        progress: 0,
+        message: accepted.message,
+        downloadUrl: null,
+        errorMessage: null,
+      });
+      toast({
+        title: t('workspace.fileManagement.tree.notifications.archiveStarted'),
+        description: resolvedArchiveName,
+      });
+      await waitForArchiveCompletion(accepted.operationId);
+    } catch (error) {
+      toast({
+        title: shouldArchive
+          ? t('workspace.fileManagement.tree.notifications.archiveFailed')
+          : t('workspace.fileManagement.tree.notifications.downloadFailed'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+    }
+  }, [
+    ensureRuntimeReady,
+    fileTreeAdapter,
+    requireRuntimeBaseUrl,
+    selectedGitContextId,
+    t,
+    toast,
+    waitForArchiveCompletion,
+    workspaceRuntime.workspaceId,
+  ]);
 
   const getDirectoryNodeForPath = useCallback(
     (path?: string | null): FileTreeNode | undefined => {
@@ -800,6 +1123,7 @@ export const FileManagementView: React.FC = () => {
       extractArchive: true,
       copy: true,
       copyPath: true,
+      download: true,
       paste: true,
       rename: true,
       delete: true,
@@ -844,6 +1168,9 @@ export const FileManagementView: React.FC = () => {
       onCopy: (node) => handleClipboardCopy(node),
       onCopyPath: (path) => {
         void handleCopyPath(path);
+      },
+      onDownload: (node, paths) => {
+        void handleDownloadEntries(node, paths);
       },
       onPaste: () => {
         const node = managerState.contextMenu?.node;
@@ -1032,6 +1359,43 @@ export const FileManagementView: React.FC = () => {
                 <span className="max-w-[320px] text-center text-xs text-muted-foreground">
                   {extractProgress.message}
                 </span>
+              </div>
+            )}
+
+            {archiveProgress && (
+              <div className="absolute bottom-3 left-3 right-3 z-10 rounded-md border border-border bg-background/95 p-3 text-sm shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 font-medium text-foreground">
+                      {(archiveProgress.status === 'pending' || archiveProgress.status === 'running') && (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      )}
+                      <span className="truncate">
+                        {archiveProgress.status === 'completed'
+                          ? t('workspace.fileManagement.tree.notifications.archiveReady')
+                          : t('workspace.fileManagement.tree.pending.archive', { name: archiveProgress.archiveName })}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {t('workspace.fileManagement.tree.pending.progress', {
+                        value: Math.round(Math.min(1, Math.max(0, archiveProgress.progress)) * 100),
+                      })}
+                    </div>
+                    <div className="mt-1 truncate text-xs text-muted-foreground">
+                      {archiveProgress.errorMessage ?? archiveProgress.message}
+                    </div>
+                  </div>
+                  {archiveProgress.status === 'completed' && archiveProgress.downloadUrl && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => triggerArchiveBrowserDownload(archiveProgress.downloadUrl!, archiveProgress.operationId)}
+                    >
+                      {t('common.fileTree.contextMenu.download')}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
 

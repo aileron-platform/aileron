@@ -1,13 +1,26 @@
 import { render, screen, waitFor } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import SettingsPage from './SettingsPage';
-import { apiClient } from '@/shared/api/apiClient';
+import { ApiError, apiClient } from '@/shared/api/apiClient';
 
 vi.mock('@/app/components/navigation/GlobalNavigation', () => ({
   default: () => <div data-testid="global-navigation" />,
 }));
 
 vi.mock('@/shared/api/apiClient', () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    errorCode?: string;
+    reason?: string;
+
+    constructor(message: string, status: number, errorCode?: string, reason?: string) {
+      super(message);
+      this.name = 'ApiError';
+      this.status = status;
+      this.errorCode = errorCode;
+      this.reason = reason;
+    }
+  },
   apiClient: {
     get: vi.fn(),
     put: vi.fn(),
@@ -42,9 +55,11 @@ vi.mock('@/app/providers/AppProvider', () => ({
   }),
 }));
 
+const toastMock = vi.fn();
+
 vi.mock('@/shared/components/ui/use-toast', () => ({
   useToast: () => ({
-    toast: vi.fn(),
+    toast: toastMock,
   }),
 }));
 
@@ -234,6 +249,33 @@ describe('SettingsPage Codex tab', () => {
     await waitFor(() => {
       expect(window.open).toHaveBeenCalledWith('about:blank', '_blank');
       expect(openedWindow.location.href).toBe('https://auth.openai.com/device');
+    });
+  });
+
+  it('shows manager-owned Codex service errors without workspace runtime wording', async () => {
+    const user = userEvent.setup();
+    vi.mocked(apiClient.get).mockResolvedValueOnce(notConnectedSettingsResponse);
+    vi.mocked(apiClient.post).mockRejectedValueOnce(
+      new ApiError('Codex binary is not available', 503, 'codex_login_service_unavailable')
+    );
+
+    render(<SettingsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'pages.settings.tabs.codex' })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole('tab', { name: 'pages.settings.tabs.codex' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'pages.settings.sections.codex.login.connectButton' })
+    );
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'pages.settings.sections.codex.login.errors.serviceUnavailableDescription',
+        })
+      );
     });
   });
 });

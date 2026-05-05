@@ -89,6 +89,22 @@ class Settings(BaseSettings):
         default=1000,
         description="Archive entry count limit"
     )
+    ARCHIVE_DOWNLOAD_MAX_SELECTED_ROOTS: int = Field(
+        default=100,
+        description="Archive download selected root path count limit"
+    )
+    ARCHIVE_DOWNLOAD_MAX_ENTRY_COUNT: int = Field(
+        default=5000,
+        description="Archive download file entry count limit"
+    )
+    ARCHIVE_DOWNLOAD_MAX_TOTAL_SIZE_BYTES: int = Field(
+        default=250 * 1024 * 1024,
+        description="Archive download total uncompressed size limit"
+    )
+    ARCHIVE_DOWNLOAD_TTL_SECONDS: int = Field(
+        default=1800,
+        description="Archive download temporary file TTL seconds"
+    )
 
     # === File monitoring settings ===
     WATCH_PATTERNS: List[str] = Field(

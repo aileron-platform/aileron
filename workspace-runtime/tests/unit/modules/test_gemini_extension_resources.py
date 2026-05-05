@@ -13,13 +13,11 @@ from app.modules.cli_settings.gemini.extension_resources import (
     disable,
     enable,
     is_enabled_for,
-    resolve_toggle_cwd,
 )
 from app.modules.cli_settings.gemini.models import (
     GeminiExtensionCommandError,
-    GeminiExtensionToggleScope,
 )
-from app.modules.cli_settings.gemini.router import _summary
+from app.modules.cli_settings.gemini.router import _summary, disable_extension, enable_extension
 
 
 def test_is_enabled_for_uses_glob_negation_last_match_and_realpath(tmp_path: Path) -> None:
@@ -158,12 +156,12 @@ def test_toggle_wrapper_uses_expected_argv_and_cwd(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(extension_resources.subprocess, "run", fake_run)
 
-    enable("demo", GeminiExtensionToggleScope.WORKSPACE, tmp_path)
-    disable("demo", GeminiExtensionToggleScope.USER, tmp_path)
+    enable("demo", tmp_path)
+    disable("demo", tmp_path)
 
     assert calls == [
         (["gemini", "extensions", "enable", "demo", "--scope=workspace"], str(tmp_path)),
-        (["gemini", "extensions", "disable", "demo", "--scope=user"], str(tmp_path)),
+        (["gemini", "extensions", "disable", "demo", "--scope=workspace"], str(tmp_path)),
     ]
 
 
@@ -174,10 +172,17 @@ def test_toggle_wrapper_surfaces_stderr(monkeypatch: pytest.MonkeyPatch, tmp_pat
     monkeypatch.setattr(extension_resources.subprocess, "run", fake_run)
 
     with pytest.raises(GeminiExtensionCommandError) as error:
-        enable("demo", GeminiExtensionToggleScope.WORKSPACE, tmp_path)
+        enable("demo", tmp_path)
 
     assert error.value.stderr == "boom"
     assert error.value.command == ["gemini", "extensions", "enable", "demo", "--scope=workspace"]
+
+
+def test_toggle_routes_default_scope_to_workspace() -> None:
+    for endpoint in (enable_extension, disable_extension):
+        scope_parameter = inspect.signature(endpoint).parameters["scope"]
+
+        assert scope_parameter.default.default == "workspace"
 
 
 def test_extension_resource_module_does_not_directly_write_cli_owned_files() -> None:
@@ -186,14 +191,3 @@ def test_extension_resource_module_does_not_directly_write_cli_owned_files() -> 
     assert "extension_integrity.json" not in source
     assert ".write_text(" not in source
     assert ".open(" not in source
-
-
-def test_resolve_toggle_cwd_uses_workspace_realpath_and_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setattr(extension_resources.Path, "home", lambda: home)
-
-    assert resolve_toggle_cwd(GeminiExtensionToggleScope.WORKSPACE, workspace) == workspace
-    assert resolve_toggle_cwd(GeminiExtensionToggleScope.USER, workspace) == home

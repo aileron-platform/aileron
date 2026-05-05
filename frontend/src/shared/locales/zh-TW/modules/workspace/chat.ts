@@ -461,18 +461,15 @@ const chat = {
         },
       },
       codex: {
-        sandbox: {
-          label: 'Sandbox 模式',
-          readOnly: '不允許寫入檔案系統',
-          workspaceWrite: '僅允許寫入工作區檔案（封鎖 .git/）',
-          fullAccess: '完整檔案系統存取（包含 .git/）',
-        },
-        approval: {
-          label: '批准政策',
-          untrusted: '每次操作都詢問',
-          onRequest: '模型決定何時詢問（推薦）',
-          onFailure: '只在失敗時詢問',
-          never: '自動批准所有操作',
+        scope: {
+          once: {
+            label: '僅批准本次',
+            description: '只允許這一次 Codex 請求。',
+          },
+          session: {
+            label: '批准本次對話',
+            description: '僅在目前對話中允許同類型的 Codex 工具請求；對話結束後即失效。',
+          },
         },
       },
       gemini: {

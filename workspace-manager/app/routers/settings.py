@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -20,9 +18,13 @@ from app.models.settings import SSHKeyPairResponse
 from app.services import get_settings_service
 from app.services.settings_service import SettingsService
 from app.services.runtime_sync_service import RuntimeSyncService
+from app.services.codex_login_service import (
+    CodexLoginError,
+    CodexLoginService,
+    get_codex_login_service,
+)
 
 router = APIRouter(tags=["settings"])
-INTERNAL_API_TOKEN = "dev-internal-token"
 
 
 def _translate_settings_error(translate, error: str, *, operation: str) -> str:
@@ -48,7 +50,7 @@ def get_settings(
     if not settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("user.not_found")
+            detail=request.state.translate("user.not_found"),
         )
     return UserSettingsResponse(data=settings)
 
@@ -71,7 +73,7 @@ async def update_settings(
     if not old_settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("user.not_found")
+            detail=request.state.translate("user.not_found"),
         )
 
     # 2. Update database settings (sync, complete immediately)
@@ -79,7 +81,7 @@ async def update_settings(
     if not updated_settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("user.not_found")
+            detail=request.state.translate("user.not_found"),
         )
 
     # 3. Detect actual changes
@@ -118,7 +120,7 @@ async def sync_settings_to_workspaces(
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=request.state.translate("access_denied")
+            detail=request.state.translate("access_denied"),
         )
 
     # Get user settings
@@ -126,14 +128,16 @@ async def sync_settings_to_workspaces(
     if not user or not user.settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("user.settings_not_found")
+            detail=request.state.translate("user.settings_not_found"),
         )
 
     # Get language settings
     language = getattr(request.state, "language", "zh-TW")
 
     try:
-        result = await SyncService.sync_to_all_workspaces(user_id, user.settings, db, language)
+        result = await SyncService.sync_to_all_workspaces(
+            user_id, user.settings, db, language
+        )
         return {
             "success": result["success"],
             "message": result["message"],
@@ -142,7 +146,9 @@ async def sync_settings_to_workspaces(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_translate_settings_error(request.state.translate, str(e), operation="sync")
+            detail=_translate_settings_error(
+                request.state.translate, str(e), operation="sync"
+            ),
         )
 
 
@@ -167,7 +173,7 @@ async def sync_settings_to_workspace(
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=request.state.translate("access_denied")
+            detail=request.state.translate("access_denied"),
         )
 
     # Get user settings
@@ -175,7 +181,7 @@ async def sync_settings_to_workspace(
     if not user or not user.settings:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("user.settings_not_found")
+            detail=request.state.translate("user.settings_not_found"),
         )
 
     # Get workspace and check permissions
@@ -183,20 +189,22 @@ async def sync_settings_to_workspace(
     if not workspace:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found")
+            detail=request.state.translate("workspace.not_found"),
         )
 
     if workspace.owner_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=request.state.translate("access_denied")
+            detail=request.state.translate("access_denied"),
         )
 
     # Get language settings
     language = getattr(request.state, "language", "zh-TW")
 
     try:
-        sync_result = await SyncService.sync_settings_to_runtime(workspace, user.settings, language)
+        sync_result = await SyncService.sync_settings_to_runtime(
+            workspace, user.settings, language
+        )
 
         # Check sync result
         return {
@@ -208,7 +216,9 @@ async def sync_settings_to_workspace(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_translate_settings_error(request.state.translate, str(e), operation="sync")
+            detail=_translate_settings_error(
+                request.state.translate, str(e), operation="sync"
+            ),
         )
 
 
@@ -222,8 +232,9 @@ async def start_codex_login(
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    codex_login_service: CodexLoginService = Depends(get_codex_login_service),
 ):
-    """Start Codex login through the user's first running workspace runtime."""
+    """Start Codex login through workspace-manager-owned login state."""
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -237,33 +248,10 @@ async def start_codex_login(
             detail=request.state.translate("user.settings_not_found"),
         )
 
-    workspace = _get_first_running_workspace(db, user_id)
-    if not workspace:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found"),
-        )
-
-    runtime_url = (workspace.runtime_internal_url or workspace.runtime_external_url or "").rstrip("/")
-    if not runtime_url:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=request.state.translate("workspace.not_found"),
-        )
-
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(
-                f"{runtime_url}/api/v1/internal/settings/codex/login/start",
-                headers={"Authorization": f"Bearer {INTERNAL_API_TOKEN}"},
-            )
-            response.raise_for_status()
-            details = response.json().get("details") or {}
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_translate_settings_error(request.state.translate, str(exc), operation="sync"),
-        )
+        details = await codex_login_service.start_login(user_id)
+    except CodexLoginError as exc:
+        raise _codex_login_http_exception(exc) from exc
 
     _update_codex_settings(
         user.settings,
@@ -288,10 +276,12 @@ async def start_codex_login(
 async def get_codex_login_status(
     user_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    codex_login_service: CodexLoginService = Depends(get_codex_login_service),
 ):
-    """Get Codex login status from the user's first running workspace runtime."""
+    """Get Codex login status from workspace-manager-owned login state."""
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -305,29 +295,30 @@ async def get_codex_login_status(
             detail=request.state.translate("user.settings_not_found"),
         )
 
-    workspace = _get_first_running_workspace(db, user_id)
-    if workspace and (workspace.runtime_internal_url or workspace.runtime_external_url):
-        runtime_url = (workspace.runtime_internal_url or workspace.runtime_external_url).rstrip("/")
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"{runtime_url}/api/v1/internal/settings/codex/login/status",
-                    headers={"Authorization": f"Bearer {INTERNAL_API_TOKEN}"},
-                )
-                response.raise_for_status()
-                details = response.json().get("details") or {}
-            if details.get("loginStatus") == "connected":
-                _update_codex_settings(
-                    user.settings,
-                    {
-                        "loginStatus": "connected",
-                        "account": details.get("account"),
-                        "authFlow": None,
-                    },
-                )
-                db.commit()
-        except Exception:
-            pass
+    codex = _get_codex_settings(user.settings, include_cli_state=True)
+    login_id = (codex.get("authFlow") or {}).get("loginId")
+    try:
+        details = await codex_login_service.get_status(user_id, login_id)
+    except CodexLoginError as exc:
+        raise _codex_login_http_exception(exc) from exc
+
+    if details.get("loginStatus") == "connected":
+        updates = {
+            "loginStatus": "connected",
+            "account": details.get("account"),
+            "cliState": details.get("cliState"),
+            "authFlow": None,
+        }
+        _update_codex_settings(user.settings, updates)
+        db.commit()
+        background_tasks.add_task(
+            _sync_settings_to_runtimes,
+            user_id,
+            {"codex": _get_codex_settings(user.settings, include_cli_state=True)},
+        )
+    elif details.get("loginStatus") == "pending":
+        _update_codex_settings(user.settings, {"loginStatus": "pending"})
+        db.commit()
 
     return {"success": True, "codex": _get_codex_settings(user.settings)}
 
@@ -342,8 +333,9 @@ async def cancel_codex_login(
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    codex_login_service: CodexLoginService = Depends(get_codex_login_service),
 ):
-    """Cancel pending Codex login."""
+    """Cancel pending manager-owned Codex login."""
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -357,16 +349,12 @@ async def cancel_codex_login(
             detail=request.state.translate("user.settings_not_found"),
         )
 
-    codex = _get_codex_settings(user.settings)
+    codex = _get_codex_settings(user.settings, include_cli_state=True)
     login_id = (codex.get("authFlow") or {}).get("loginId")
-    workspace = _get_first_running_workspace(db, user_id)
-    if login_id and workspace and (workspace.runtime_internal_url or workspace.runtime_external_url):
-        runtime_url = (workspace.runtime_internal_url or workspace.runtime_external_url).rstrip("/")
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            await client.post(
-                f"{runtime_url}/api/v1/internal/settings/codex/login/cancel/{login_id}",
-                headers={"Authorization": f"Bearer {INTERNAL_API_TOKEN}"},
-            )
+    try:
+        await codex_login_service.cancel_login(user_id, login_id)
+    except CodexLoginError as exc:
+        raise _codex_login_http_exception(exc) from exc
 
     _update_codex_settings(
         user.settings,
@@ -387,10 +375,12 @@ async def cancel_codex_login(
 async def logout_codex(
     user_id: str,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(get_current_user_id),
     db: Session = Depends(get_db),
+    codex_login_service: CodexLoginService = Depends(get_codex_login_service),
 ):
-    """Logout Codex from manager state and running runtimes."""
+    """Logout Codex from manager source state and converge running runtimes by sync."""
     if user_id != current_user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -404,24 +394,7 @@ async def logout_codex(
             detail=request.state.translate("user.settings_not_found"),
         )
 
-    runtimes = db.execute(
-        select(db_models.Workspace).where(
-            db_models.Workspace.owner_id == user_id,
-            db_models.Workspace.runtime_status == "running",
-        )
-    ).scalars().all()
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        for workspace in runtimes:
-            runtime_url = (workspace.runtime_internal_url or workspace.runtime_external_url or "").rstrip("/")
-            if not runtime_url:
-                continue
-            try:
-                await client.post(
-                    f"{runtime_url}/api/v1/internal/settings/codex/logout",
-                    headers={"Authorization": f"Bearer {INTERNAL_API_TOKEN}"},
-                )
-            except Exception:
-                continue
+    await codex_login_service.logout(user_id)
 
     _update_codex_settings(
         user.settings,
@@ -429,9 +402,15 @@ async def logout_codex(
             "loginStatus": "notConnected",
             "account": None,
             "authFlow": None,
+            "cliState": None,
         },
     )
     db.commit()
+    background_tasks.add_task(
+        _sync_settings_to_runtimes,
+        user_id,
+        {"codex": _get_codex_settings(user.settings, include_cli_state=True)},
+    )
     return {"success": True, "codex": _get_codex_settings(user.settings)}
 
 
@@ -452,7 +431,7 @@ def generate_ssh_keys(
         if not ssh_keys:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("user.not_found")
+                detail=request.state.translate("user.not_found"),
             )
         return ssh_keys
     except Exception as e:
@@ -460,7 +439,7 @@ def generate_ssh_keys(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_translate_settings_error(
                 request.state.translate, str(e), operation="ssh_key_generate"
-            )
+            ),
         )
 
 
@@ -469,7 +448,9 @@ async def _sync_settings_to_runtimes(user_id: str, changes: dict):
     import logging
 
     logger = logging.getLogger(__name__)
-    logger.info(f"Starting background settings sync - user_id: {user_id}, changes: {list(changes.keys())}")
+    logger.info(
+        f"Starting background settings sync - user_id: {user_id}, changes: {list(changes.keys())}"
+    )
 
     db = SessionLocal()
     try:
@@ -478,31 +459,30 @@ async def _sync_settings_to_runtimes(user_id: str, changes: dict):
         result = await sync_service.sync_settings_to_runtimes(user_id, changes)
 
         if result["success"]:
-            logger.info(f"Settings sync succeeded - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}")
+            logger.info(
+                f"Settings sync succeeded - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}"
+            )
         else:
-            logger.error(f"Settings sync had errors - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}")
+            logger.error(
+                f"Settings sync had errors - user_id: {user_id}, Success: {result['success_count']}, Failed: {result['error_count']}"
+            )
 
     except Exception as e:
-        logger.error(f"Background settings sync failed - user_id: {user_id}, error: {e}")
+        logger.error(
+            f"Background settings sync failed - user_id: {user_id}, error: {e}"
+        )
     finally:
         db.close()
 
 
-def _get_first_running_workspace(db: Session, user_id: str):
-    return db.execute(
-        select(db_models.Workspace)
-        .where(db_models.Workspace.owner_id == user_id)
-        .where(db_models.Workspace.runtime_status == "running")
-        .order_by(db_models.Workspace.updated_at.desc())
-    ).scalars().first()
-
-
-def _get_codex_settings(settings) -> dict:
+def _get_codex_settings(settings, *, include_cli_state: bool = False) -> dict:
     additional_settings = settings.additional_settings or {}
     codex = dict(additional_settings.get("codex", {}))
     codex.setdefault("loginStatus", "notConnected")
     codex.setdefault("model", "gpt-5.3-codex")
     codex.setdefault("environmentVariables", [])
+    if not include_cli_state:
+        codex.pop("cliState", None)
     return codex
 
 
@@ -513,6 +493,20 @@ def _update_codex_settings(settings, updates: dict) -> None:
     additional_settings["codex"] = codex
     settings.additional_settings = additional_settings
     flag_modified(settings, "additional_settings")
+
+
+def _codex_login_http_exception(exc: CodexLoginError) -> HTTPException:
+    return HTTPException(
+        status_code=(
+            status.HTTP_503_SERVICE_UNAVAILABLE
+            if exc.code == "codex_login_service_unavailable"
+            else status.HTTP_502_BAD_GATEWAY
+        ),
+        detail={
+            "code": exc.code,
+            "message": str(exc),
+        },
+    )
 
 
 __all__ = ["router"]

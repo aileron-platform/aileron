@@ -59,6 +59,63 @@ import { syncCanvas } from '../../services/workspaceRuntimeApi';
 // ChatPanel Component
 // ============================================================================
 
+export const resolveToolDecisionOption = (
+  allow: boolean,
+  scope: PermissionScope | undefined,
+  options?: ToolDecisionOption[]
+) => {
+  if (!options || options.length === 0) return undefined;
+
+  if (allow) {
+    if (scope && scope !== 'once') {
+      const allowAlways = options.find(o => o.kind === 'allow_always');
+      if (allowAlways) {
+        return allowAlways.option_id || allowAlways.optionId;
+      }
+    }
+    const allowOnce = options.find(o => o.kind === 'allow_once');
+    if (allowOnce) {
+      return allowOnce.option_id || allowOnce.optionId;
+    }
+    const fallbackAllow = options.find(o => o.kind?.startsWith('allow'));
+    return fallbackAllow?.option_id || fallbackAllow?.optionId;
+  }
+
+  const rejectOnce = options.find(o => o.kind === 'reject_once');
+  if (rejectOnce) {
+    return rejectOnce.option_id || rejectOnce.optionId;
+  }
+  const rejectAlways = options.find(o => o.kind === 'reject_always');
+  return rejectAlways?.option_id || rejectAlways?.optionId;
+};
+
+export const buildPermissionToolDecision = ({
+  requestId,
+  taskId,
+  allow,
+  scope,
+  options,
+}: {
+  requestId: string;
+  taskId: string;
+  allow: boolean;
+  scope?: PermissionScope;
+  options?: ToolDecisionOption[];
+}) => {
+  const optionId = resolveToolDecisionOption(allow, scope, options);
+  const outcome = allow ? 'selected' : (optionId ? 'selected' : 'cancelled');
+
+  return {
+    request_id: requestId,
+    task_id: taskId,
+    decision_type: 'permission' as const,
+    outcome,
+    option_id: optionId,
+    scope: allow ? (scope || 'once') : undefined,
+    decided_by: 'user',
+  };
+};
+
 export const ChatPanel: React.FC = () => {
   const { state: workspaceState, dispatch, fileTreeActions, workspaceRuntime } = useWorkspace();
   const { t } = useI18n();
@@ -158,53 +215,19 @@ export const ChatPanel: React.FC = () => {
     void ensureOpenSpecLoaded();
   }, [ensureOpenSpecLoaded, uiState.isOpenSpecDialogOpen]);
 
-  const resolveDecisionOption = useCallback((
-    allow: boolean,
-    scope: PermissionScope | undefined,
-    options?: ToolDecisionOption[]
-  ) => {
-    if (!options || options.length === 0) return undefined;
-
-    if (allow) {
-      if (scope && scope !== 'once') {
-        const allowAlways = options.find(o => o.kind === 'allow_always');
-        if (allowAlways) {
-          return allowAlways.option_id || allowAlways.optionId;
-        }
-      }
-      const allowOnce = options.find(o => o.kind === 'allow_once');
-      if (allowOnce) {
-        return allowOnce.option_id || allowOnce.optionId;
-      }
-      const fallbackAllow = options.find(o => o.kind?.startsWith('allow'));
-      return fallbackAllow?.option_id || fallbackAllow?.optionId;
-    }
-
-    const rejectOnce = options.find(o => o.kind === 'reject_once');
-    if (rejectOnce) {
-      return rejectOnce.option_id || rejectOnce.optionId;
-    }
-    const rejectAlways = options.find(o => o.kind === 'reject_always');
-    return rejectAlways?.option_id || rejectAlways?.optionId;
-  }, []);
+  const resolveDecisionOption = useCallback(resolveToolDecisionOption, []);
 
   const handlePermissionDecision = useCallback((requestId: string, allow: boolean, scope?: PermissionScope) => {
     const pending = agentState.pendingPermission;
     const taskId = pending?.task_id || agentState.activeTask?.task_id || '';
-    const optionId = resolveDecisionOption(allow, scope, pending?.options);
-
-    const outcome = allow ? 'selected' : (optionId ? 'selected' : 'cancelled');
-
-    handleToolDecision({
-      request_id: requestId,
-      task_id: taskId,
-      decision_type: 'permission',
-      outcome,
-      option_id: optionId,
-      scope: allow ? (scope || 'once') : undefined,
-      decided_by: 'user',
-    });
-  }, [handleToolDecision, agentState.pendingPermission, agentState.activeTask, resolveDecisionOption]);
+    handleToolDecision(buildPermissionToolDecision({
+      requestId,
+      taskId,
+      allow,
+      scope,
+      options: pending?.options,
+    }));
+  }, [handleToolDecision, agentState.pendingPermission, agentState.activeTask]);
 
   const handleAcpDecision = useCallback((payload: {
     requestId: string;

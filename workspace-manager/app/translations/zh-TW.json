@@ -15,6 +15,7 @@
   "workspace.access_denied": "工作區權限不足",
   "workspace.owner_not_found": "工作區擁有者不存在",
   "workspace.firewall_unavailable": "目前工作區 provisioner 不支援防火牆設定",
+  "workspace.invalid_request": "工作區請求格式不正確",
   "workspace.invalid_namespace": "無效的 Kubernetes namespace: {namespace}",
   "workspace.runtime_resources_unsupported": "runtimeResources 僅支援 Kubernetes 工作區",
   "workspace.port_mappings_removed": "工作區端口映射設定已不再支援",

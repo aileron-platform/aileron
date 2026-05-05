@@ -44,7 +44,6 @@ const I18N_PREFIX = 'workspace.agentSettings.geminiExtensions';
 const EXTENSIONS_PER_PAGE = 6;
 
 type DisplayMode = 'enabled' | 'all';
-type ToggleScope = 'workspace' | 'user';
 type CardResourceCountKey = 'mcp' | 'commands' | 'skills' | 'hooks';
 
 const cardResourceKeys: CardResourceCountKey[] = ['mcp', 'commands', 'skills', 'hooks'];
@@ -85,11 +84,11 @@ const GeminiExtensionsPage: React.FC = () => {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ name, scope, enabledHere }: { name: string; scope: ToggleScope; enabledHere: boolean }) => {
+    mutationFn: ({ name, enabledHere }: { name: string; enabledHere: boolean }) => {
       setError(null);
       return enabledHere
-        ? api.disableGeminiExtension(runtimeBaseUrl || '', workspaceId || '', name, scope)
-        : api.enableGeminiExtension(runtimeBaseUrl || '', workspaceId || '', name, scope);
+        ? api.disableGeminiExtension(runtimeBaseUrl || '', workspaceId || '', name)
+        : api.enableGeminiExtension(runtimeBaseUrl || '', workspaceId || '', name);
     },
     onSuccess: async (_result, variables) => {
       await queryClient.invalidateQueries({ queryKey: ['gemini-extensions', runtimeBaseUrl, workspaceId] });
@@ -100,7 +99,7 @@ const GeminiExtensionsPage: React.FC = () => {
         title: variables.enabledHere
           ? t(`${I18N_PREFIX}.notifications.disabled.title`)
           : t(`${I18N_PREFIX}.notifications.enabled.title`),
-        description: t(`${I18N_PREFIX}.notifications.scope.${variables.scope}`, { name: variables.name }),
+        description: t(`${I18N_PREFIX}.notifications.scope.workspace`, { name: variables.name }),
       });
     },
     onError: (err) => {
@@ -142,8 +141,8 @@ const GeminiExtensionsPage: React.FC = () => {
     setDetailOpen(true);
   };
 
-  const toggleExtension = (extension: GeminiExtensionSummary, scope: ToggleScope) => {
-    toggleMutation.mutate({ name: extension.name, scope, enabledHere: extension.enabledHere });
+  const toggleExtension = (extension: GeminiExtensionSummary) => {
+    toggleMutation.mutate({ name: extension.name, enabledHere: extension.enabledHere });
   };
 
   const modeControls = (
@@ -264,8 +263,7 @@ const GeminiExtensionsPage: React.FC = () => {
                 key={extension.name}
                 extension={extension}
                 pending={toggleMutation.isPending}
-                onToggleWorkspace={() => toggleExtension(extension, 'workspace')}
-                onToggleUser={() => toggleExtension(extension, 'user')}
+                onToggle={() => toggleExtension(extension)}
                 onDetails={() => openDetail(extension.name)}
               />
             ))}
@@ -389,16 +387,14 @@ const ExtensionPagination: React.FC<ExtensionPaginationProps> = ({
 interface ExtensionCardProps {
   extension: GeminiExtensionSummary;
   pending: boolean;
-  onToggleWorkspace: () => void;
-  onToggleUser: () => void;
+  onToggle: () => void;
   onDetails: () => void;
 }
 
 const ExtensionCard: React.FC<ExtensionCardProps> = ({
   extension,
   pending,
-  onToggleWorkspace,
-  onToggleUser,
+  onToggle,
   onDetails,
 }) => {
   const { t } = useI18n();
@@ -435,17 +431,11 @@ const ExtensionCard: React.FC<ExtensionCardProps> = ({
                 {t(`${I18N_PREFIX}.actions.details`)}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={pending} onClick={onToggleWorkspace}>
+              <DropdownMenuItem disabled={pending} onClick={onToggle}>
                 <Power className="mr-2 h-4 w-4" />
                 {extension.enabledHere
                   ? t(`${I18N_PREFIX}.actions.disableWorkspace`)
                   : t(`${I18N_PREFIX}.actions.enableWorkspace`)}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={pending} onClick={onToggleUser}>
-                <Power className="mr-2 h-4 w-4" />
-                {extension.enabledHere
-                  ? t(`${I18N_PREFIX}.actions.disableUser`)
-                  : t(`${I18N_PREFIX}.actions.enableUser`)}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

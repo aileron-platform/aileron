@@ -12,6 +12,7 @@ import {
   Edit,
   Copy,
   ClipboardPaste,
+  Download,
   Trash2,
   RefreshCw,
   Upload,
@@ -45,6 +46,7 @@ export interface FileTreeContextMenuConfig {
     createFolder?: boolean;
     copy?: boolean;
     copyPath?: boolean;
+    download?: boolean;
     paste?: boolean;
     rename?: boolean;
     delete?: boolean;
@@ -61,6 +63,7 @@ export interface FileTreeContextMenuConfig {
     onCreateFolder?: () => void;
     onCopy?: (node: FileTreeNode) => void;
     onCopyPath?: (path: string) => void;
+    onDownload?: (node: FileTreeNode, paths: string[]) => void;
     onPaste?: () => void;
     onRename?: (node: FileTreeNode) => void;
     onDelete?: (node: FileTreeNode) => void;
@@ -112,6 +115,7 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
       createFolder: true,
       copy: true,
       copyPath: false,
+      download: false,
       paste: true,
       rename: true,
       delete: true,
@@ -246,6 +250,25 @@ export function useFileTreeContextMenu(config: FileTreeContextMenuConfig): FileT
         onSelect: () => {
           callbacks.onClose();
           callbacks.onExtractArchive(node);
+        },
+      });
+    }
+
+    if (defaultFeatures.download && callbacks.onDownload) {
+      items.push({
+        key: 'download',
+        label: multipleSelected
+          ? t('common.fileTree.contextMenu.downloadSelected', { count: selectedCount })
+          : isDirectory
+            ? t('common.fileTree.contextMenu.downloadAsZip')
+            : t('common.fileTree.contextMenu.download'),
+        icon: Download,
+        onSelect: () => {
+          callbacks.onClose();
+          callbacks.onDownload(
+            node,
+            multipleSelected && selectedIds ? Array.from(selectedIds) : [node.path],
+          );
         },
       });
     }

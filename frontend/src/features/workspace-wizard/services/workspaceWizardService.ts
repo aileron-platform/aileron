@@ -25,6 +25,7 @@ export interface CreateWorkspaceResult {
 
 const API_BASE = '/workspaces';
 const DEFAULT_BRANCH = 'main';
+const DEFAULT_RUNTIME = 'universal';
 const POLL_INTERVAL_MS = 1500;
 const MAX_POLL_ATTEMPTS = 10;
 
@@ -60,7 +61,7 @@ export const workspaceWizardService = {
       name: payload.name,
       description: payload.description,
       gitUrl: payload.gitUrl,
-      runtime: payload.runtime,
+      runtime: payload.runtime || DEFAULT_RUNTIME,
       targetNamespace: payload.targetNamespace,
       setupScript: payload.setupScript,
       envVars: payload.envVars,

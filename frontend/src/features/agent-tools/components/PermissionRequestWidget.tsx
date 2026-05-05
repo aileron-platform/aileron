@@ -6,7 +6,7 @@
  *
  * Supports permission options for different agent SDKs:
  * - Claude Code: PermissionScope (ONCE, PROJECT, USER, LOCAL)
- * - Codex: SandboxMode + ApprovalPolicy
+ * - Codex: PermissionScope (ONCE, SESSION)
  * - Gemini: ApprovalMode (default, autoEdit, yolo)
  * - OpenCode: ApprovalMode (default, acceptEdits, bypassPermissions)
  */
@@ -62,9 +62,6 @@ export const PermissionScopeValues = {
   LOCAL: 'local' as const,
 };
 
-export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
-export type CodexApprovalPolicy = 'untrusted' | 'on-request' | 'on-failure' | 'never';
-
 export type GeminiPermissionMode = 'default' | 'autoEdit' | 'yolo';
 export type OpenCodePermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
 
@@ -114,44 +111,20 @@ const claudeCodeScopeOptions = [
   },
 ];
 
-const codexSandboxOptions = [
+const codexScopeOptions = [
   {
-    value: 'read-only' as CodexSandboxMode,
-    label: 'read-only',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.sandbox.readOnly',
+    value: PermissionScopeValues.ONCE,
+    labelKey: 'workspace.chat.widgets.permission.codex.scope.once.label',
+    descriptionKey: 'workspace.chat.widgets.permission.codex.scope.once.description',
+    icon: Lock,
+    color: 'text-red-500'
   },
   {
-    value: 'workspace-write' as CodexSandboxMode,
-    label: 'workspace-write',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.sandbox.workspaceWrite',
-  },
-  {
-    value: 'danger-full-access' as CodexSandboxMode,
-    label: 'full-access',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.sandbox.fullAccess',
-  },
-];
-
-const codexApprovalOptions = [
-  {
-    value: 'untrusted' as CodexApprovalPolicy,
-    label: 'untrusted',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.approval.untrusted',
-  },
-  {
-    value: 'on-request' as CodexApprovalPolicy,
-    label: 'on-request',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.approval.onRequest',
-  },
-  {
-    value: 'on-failure' as CodexApprovalPolicy,
-    label: 'on-failure',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.approval.onFailure',
-  },
-  {
-    value: 'never' as CodexApprovalPolicy,
-    label: 'never',
-    descriptionKey: 'workspace.chat.widgets.permission.codex.approval.never',
+    value: PermissionScopeValues.SESSION,
+    labelKey: 'workspace.chat.widgets.permission.codex.scope.session.label',
+    descriptionKey: 'workspace.chat.widgets.permission.codex.scope.session.description',
+    icon: Clock,
+    color: 'text-blue-500'
   },
 ];
 
@@ -215,7 +188,7 @@ export interface PermissionRequestWidgetProps extends WidgetProps {
   agentTool?: AgentToolType;
   isWaiting?: boolean;
   onApprove?: (messageId: string, scope: PermissionScope) => void;
-  onCodexApprove?: (messageId: string, sandbox: CodexSandboxMode, approval: CodexApprovalPolicy) => void;
+  onCodexApprove?: (messageId: string, scope: PermissionScope) => void;
   onGeminiApprove?: (messageId: string, mode: GeminiPermissionMode) => void;
   onOpenCodeApprove?: (messageId: string, mode: OpenCodePermissionMode) => void;
   onDeny?: (messageId: string) => void;
@@ -236,8 +209,7 @@ export const PermissionRequestWidget: React.FC<PermissionRequestWidgetProps> = (
   const { t } = useI18n();
   const [rememberChoice, setRememberChoice] = useState<boolean>(false);
   const [selectedScope, setSelectedScope] = useState<PermissionScope>(PermissionScopeValues.ONCE);
-  const [codexSandbox, setCodexSandbox] = useState<CodexSandboxMode>('workspace-write');
-  const [codexApproval, setCodexApproval] = useState<CodexApprovalPolicy>('on-request');
+  const [codexScope, setCodexScope] = useState<PermissionScope>(PermissionScopeValues.ONCE);
   const [geminiMode, setGeminiMode] = useState<GeminiPermissionMode>('autoEdit');
   const [opencodeMode, setOpencodeMode] = useState<OpenCodePermissionMode>('acceptEdits');
   const [showDetails, setShowDetails] = useState<boolean>(true);
@@ -346,7 +318,7 @@ export const PermissionRequestWidget: React.FC<PermissionRequestWidgetProps> = (
         break;
       case 'codex':
         if (onCodexApprove) {
-          onCodexApprove(message_id, codexSandbox, codexApproval);
+          onCodexApprove(message_id, codexScope);
         }
         break;
       case 'gemini':
@@ -425,52 +397,25 @@ export const PermissionRequestWidget: React.FC<PermissionRequestWidgetProps> = (
   );
 
   const renderCodexOptions = () => (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        {/* Sandbox Mode */}
-        <div className="flex-1">
-          <Label className="text-[11px] text-muted-foreground mb-1 block">
-            {t('workspace.chat.widgets.permission.codex.sandbox.label')}
-          </Label>
-          <Select value={codexSandbox} onValueChange={(v: CodexSandboxMode) => setCodexSandbox(v)}>
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {codexSandboxOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value} className="text-xs">
-                  <div>
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-[10px] text-muted-foreground">{t(option.descriptionKey)}</div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Approval Policy */}
-        <div className="flex-1">
-          <Label className="text-[11px] text-muted-foreground mb-1 block">
-            {t('workspace.chat.widgets.permission.codex.approval.label')}
-          </Label>
-          <Select value={codexApproval} onValueChange={(v: CodexApprovalPolicy) => setCodexApproval(v)}>
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {codexApprovalOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value} className="text-xs">
-                  <div>
-                    <div className="font-medium">{option.label}</div>
-                    <div className="text-[10px] text-muted-foreground">{t(option.descriptionKey)}</div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+    <div className="space-y-2">
+      <RadioGroup
+        value={codexScope}
+        onValueChange={(v: PermissionScope) => setCodexScope(v)}
+        className="space-y-1"
+      >
+        {codexScopeOptions.map((option) => (
+          <div key={option.value} className="flex items-start space-x-2">
+            <RadioGroupItem value={option.value} id={`codex-${option.value}`} className="h-3.5 w-3.5 mt-0.5" />
+            <Label htmlFor={`codex-${option.value}`} className="cursor-pointer">
+              <div className="flex items-center gap-1.5">
+                <option.icon className={cn("h-3.5 w-3.5", option.color)} />
+                <span className="text-xs font-medium">{t(option.labelKey)}</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">{t(option.descriptionKey)}</p>
+            </Label>
+          </div>
+        ))}
+      </RadioGroup>
     </div>
   );
 

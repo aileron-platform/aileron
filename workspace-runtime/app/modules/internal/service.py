@@ -7,7 +7,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from codex_app_server import AsyncCodex
 from codex_app_server.client import AppServerConfig
@@ -25,6 +25,7 @@ from app.modules.claude_code.settings import (
     ClaudeCodeSettingsUpdateRequest,
     SettingsService,
 )
+from app.modules.cli_settings.toml_utils import dump_toml, merge_known_values, parse_toml
 
 from .models import (
     ClaudeCodeRequest,
@@ -159,6 +160,8 @@ class InternalService:
 
             if request.clear_auth:
                 self._clear_codex_auth_state()
+            elif request.cli_state:
+                self._write_codex_cli_state(request.cli_state.model_dump(by_alias=True))
             elif request.auth_tokens and request.auth_tokens.access_token:
                 self._write_codex_auth_state(request)
 
@@ -194,6 +197,8 @@ class InternalService:
                 "codex_home": str(self.codex_auth_dir),
                 "session_state_dir": str(self.codex_sessions_dir),
                 "has_cli_auth": auth_path.is_file(),
+                "has_config": (self.codex_auth_dir / "config.toml").is_file(),
+                "has_installation_id": (self.codex_auth_dir / "installation_id").is_file(),
                 "environment_variables_set": synced_keys,
                 "model": request.model or "",
             }
@@ -258,13 +263,18 @@ class InternalService:
                 return {"loginStatus": "notConnected", "account": None}
             account_type = getattr(account, "type", None)
             if account_type != "chatgpt":
-                return {"loginStatus": "connected", "account": {"type": account_type}}
+                return {
+                    "loginStatus": "connected",
+                    "account": {"type": account_type},
+                    "cliState": self._read_codex_cli_state(),
+                }
             return {
                 "loginStatus": "connected",
                 "account": {
                     "email": getattr(account, "email", None),
                     "planType": getattr(getattr(account, "plan_type", None), "value", None),
                 },
+                "cliState": self._read_codex_cli_state(),
             }
         finally:
             await codex.close()
@@ -572,11 +582,71 @@ class InternalService:
         auth_path.write_text(json.dumps(auth_data, indent=2))
         auth_path.chmod(0o600)
 
+    def _write_codex_cli_state(self, cli_state: dict[str, Any]) -> None:
+        """Write synchronized Codex CLI files."""
+        auth_json = cli_state.get("authJson")
+        auth_path = self.codex_auth_dir / "auth.json"
+        if isinstance(auth_json, dict):
+            auth_path.write_text(json.dumps(auth_json, indent=2))
+            auth_path.chmod(0o600)
+        elif auth_path.exists():
+            auth_path.unlink()
+
+        config_toml = cli_state.get("configToml")
+        config_path = self.codex_auth_dir / "config.toml"
+        if isinstance(config_toml, str):
+            config_path.write_text(self._merged_codex_config_toml(config_path, config_toml))
+            config_path.chmod(0o600)
+
+        installation_id = cli_state.get("installationId")
+        installation_path = self.codex_auth_dir / "installation_id"
+        if isinstance(installation_id, str) and installation_id.strip():
+            installation_path.write_text(installation_id.strip() + "\n")
+            installation_path.chmod(0o600)
+        elif installation_path.exists():
+            installation_path.unlink()
+
+    def _read_codex_cli_state(self) -> dict[str, Any]:
+        """Read Codex CLI files that are safe and necessary to synchronize."""
+        cli_state: dict[str, Any] = {}
+
+        auth_path = self.codex_auth_dir / "auth.json"
+        if auth_path.is_file():
+            try:
+                auth_json = json.loads(auth_path.read_text())
+                if isinstance(auth_json, dict):
+                    cli_state["authJson"] = auth_json
+            except Exception as exc:
+                logger.warning("Failed to read Codex auth.json for synchronization: %s", exc)
+
+        config_path = self.codex_auth_dir / "config.toml"
+        if config_path.is_file():
+            cli_state["configToml"] = config_path.read_text()
+
+        installation_path = self.codex_auth_dir / "installation_id"
+        if installation_path.is_file():
+            cli_state["installationId"] = installation_path.read_text().strip()
+
+        return cli_state
+
+    @staticmethod
+    def _merged_codex_config_toml(config_path: Path, incoming_toml: str) -> str:
+        """Merge synchronized Codex config into an existing config.toml."""
+        incoming_config = parse_toml(incoming_toml)
+        if not config_path.is_file():
+            return dump_toml(incoming_config)
+
+        existing_config = parse_toml(config_path.read_text())
+        return dump_toml(merge_known_values(existing_config, incoming_config))
+
     def _clear_codex_auth_state(self) -> None:
         """Remove Codex CLI auth state while preserving settings such as env vars."""
         auth_path = self.codex_auth_dir / "auth.json"
         if auth_path.exists():
             auth_path.unlink()
+        installation_path = self.codex_auth_dir / "installation_id"
+        if installation_path.exists():
+            installation_path.unlink()
         os.environ[self._codex_login_status_env] = "notConnected"
 
     def _sync_codex_environment_variables(

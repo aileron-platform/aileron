@@ -16,6 +16,7 @@ from app.services.runtime_sync_service import RuntimeSyncService
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_db_session():
     """Mock Database Session"""
@@ -100,6 +101,19 @@ def codex_changes():
         "environmentVariables": [
             {"key": "OPENAI_BASE_URL", "value": "https://api.openai.com/v1"},
         ],
+        "cliState": {
+            "authJson": {
+                "auth_mode": "chatgpt",
+                "tokens": {
+                    "access_token": "access-token",
+                    "refresh_token": "refresh-token",
+                    "id_token": "id-token",
+                    "account_id": "codex-account-1",
+                },
+            },
+            "configToml": '[projects."/workspace"]\ntrust_level = "trusted"\n',
+            "installationId": "installation-1",
+        },
         "authFlow": None,
     }
 
@@ -116,11 +130,13 @@ def git_changes():
 @pytest.fixture
 def mock_async_client():
     """Create mock httpx client supporting async context manager"""
+
     def _create_mock_client():
         mock_client = AsyncMock()
         mock_client.__aenter__.return_value = mock_client
         mock_client.__aexit__.return_value = None
         return mock_client
+
     return _create_mock_client
 
 
@@ -143,6 +159,7 @@ def sync_service(mock_db_session):
 # ============================================================================
 # RuntimeSyncService Tests - Basic Operations
 # ============================================================================
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -202,18 +219,20 @@ class TestRuntimeSyncServiceBasic:
 # RuntimeSyncService Tests - SSH Keys Sync
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestSSHKeysSynchronization:
     """SSH Keys Synchronization Tests"""
 
-    async def test_sync_ssh_keys_success(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_ssh_keys_success(self, sync_service, ssh_changes):
         """Test: Successfully Sync SSH Keys"""
         # Arrange
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": True, "message": "SSH keys updated"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "SSH keys updated",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -226,9 +245,7 @@ class TestSSHKeysSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_ssh_keys(
-                "http://localhost:8080",
-                ssh_changes,
-                "workspace-123"
+                "http://localhost:8080", ssh_changes, "workspace-123"
             )
 
         # Assert
@@ -237,9 +254,7 @@ class TestSSHKeysSynchronization:
         assert result["workspace_id"] == "workspace-123"
         mock_client.post.assert_called_once()
 
-    async def test_sync_ssh_keys_network_error(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_ssh_keys_network_error(self, sync_service, ssh_changes):
         """Test: SSH Keys sync network error"""
         # Arrange
         mock_client = AsyncMock()
@@ -251,21 +266,17 @@ class TestSSHKeysSynchronization:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
-    async def test_sync_ssh_keys_http_error(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_ssh_keys_http_error(self, sync_service, ssh_changes):
         """Test: SSH Keys sync HTTP error"""
         # Arrange
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "Internal Server Error",
             request=MagicMock(),
-            response=MagicMock(status_code=500)
+            response=MagicMock(status_code=500),
         )
 
         mock_client = AsyncMock()
@@ -277,9 +288,7 @@ class TestSSHKeysSynchronization:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
 
@@ -287,18 +296,20 @@ class TestSSHKeysSynchronization:
 # RuntimeSyncService Tests - Claude Code Sync
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestClaudeCodeSynchronization:
     """Claude Code SettingsSyncTest"""
 
-    async def test_sync_claude_code_success(
-        self, sync_service, claude_code_changes
-    ):
+    async def test_sync_claude_code_success(self, sync_service, claude_code_changes):
         """Test: successfully sync Claude Code settings"""
         # Arrange
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": True, "message": "Claude Code updated"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "Claude Code updated",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -309,9 +320,7 @@ class TestClaudeCodeSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_claude_code(
-                "http://localhost:8080",
-                claude_code_changes,
-                "workspace-123"
+                "http://localhost:8080", claude_code_changes, "workspace-123"
             )
 
         # Assert
@@ -320,9 +329,7 @@ class TestClaudeCodeSynchronization:
         assert result["workspace_id"] == "workspace-123"
         mock_client.post.assert_called_once()
 
-    async def test_sync_claude_code_with_api_key(
-        self, sync_service
-    ):
+    async def test_sync_claude_code_with_api_key(self, sync_service):
         """Test: sync Claude Code using API Key"""
         # Arrange
         changes = {
@@ -342,9 +349,7 @@ class TestClaudeCodeSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_claude_code(
-                "http://localhost:8080",
-                changes,
-                "workspace-123"
+                "http://localhost:8080", changes, "workspace-123"
             )
 
         # Assert
@@ -354,9 +359,7 @@ class TestClaudeCodeSynchronization:
         assert call_kwargs["json"]["authMethod"] == "apiKey"
         assert call_kwargs["json"]["apiKey"] == "sk-ant-api-key-123"
 
-    async def test_sync_claude_code_timeout(
-        self, sync_service, claude_code_changes
-    ):
+    async def test_sync_claude_code_timeout(self, sync_service, claude_code_changes):
         """Test: Claude Code Sync Timeout"""
         # Arrange
         mock_client = AsyncMock()
@@ -368,15 +371,14 @@ class TestClaudeCodeSynchronization:
             # Act & Assert
             with pytest.raises(Exception, match="Claude Code sync failed"):
                 await sync_service._sync_claude_code(
-                    "http://localhost:8080",
-                    claude_code_changes,
-                    "workspace-123"
+                    "http://localhost:8080", claude_code_changes, "workspace-123"
                 )
 
 
 # ============================================================================
 # RuntimeSyncService Tests - Codex Sync
 # ============================================================================
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -398,9 +400,7 @@ class TestCodexSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_codex(
-                "http://localhost:8080",
-                codex_changes,
-                "workspace-123"
+                "http://localhost:8080", codex_changes, "workspace-123"
             )
 
         # Assert
@@ -410,7 +410,18 @@ class TestCodexSynchronization:
         assert call_kwargs["json"]["loginStatus"] == "connected"
         assert call_kwargs["json"]["authMethod"] == "subscription"
         assert call_kwargs["json"]["model"] == "gpt-5.3-codex"
-        assert call_kwargs["json"]["environmentVariables"][0]["key"] == "OPENAI_BASE_URL"
+        assert (
+            call_kwargs["json"]["environmentVariables"][0]["key"] == "OPENAI_BASE_URL"
+        )
+        assert (
+            call_kwargs["json"]["cliState"]["authJson"]["tokens"]["refresh_token"]
+            == "refresh-token"
+        )
+        assert (
+            call_kwargs["json"]["cliState"]["configToml"]
+            == '[projects."/workspace"]\ntrust_level = "trusted"\n'
+        )
+        assert call_kwargs["json"]["cliState"]["installationId"] == "installation-1"
         assert call_kwargs["json"]["clearAuth"] is False
         assert "authTokens" not in call_kwargs["json"]
 
@@ -438,6 +449,7 @@ class TestCodexSynchronization:
         assert result["success"] is True
         call_kwargs = mock_client.post.call_args[1]
         assert call_kwargs["json"]["clearAuth"] is True
+        assert call_kwargs["json"]["cliState"] is None
 
     async def test_sync_codex_timeout(self, sync_service, codex_changes):
         """Test: Codex sync timeout"""
@@ -451,9 +463,7 @@ class TestCodexSynchronization:
             # Act & Assert
             with pytest.raises(Exception, match="Codex sync failed"):
                 await sync_service._sync_codex(
-                    "http://localhost:8080",
-                    codex_changes,
-                    "workspace-123"
+                    "http://localhost:8080", codex_changes, "workspace-123"
                 )
 
 
@@ -461,18 +471,20 @@ class TestCodexSynchronization:
 # RuntimeSyncService Tests - Git SettingsSync
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestGitSettingsSynchronization:
     """Git Settings Synchronization Tests"""
 
-    async def test_sync_git_settings_success(
-        self, sync_service, git_changes
-    ):
+    async def test_sync_git_settings_success(self, sync_service, git_changes):
         """Test: Successfully Sync Git Settings"""
         # Arrange
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": True, "message": "Git settings updated"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "Git settings updated",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -483,9 +495,7 @@ class TestGitSettingsSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_git_settings(
-                "http://localhost:8080",
-                git_changes,
-                "workspace-123"
+                "http://localhost:8080", git_changes, "workspace-123"
             )
 
         # Assert
@@ -494,9 +504,7 @@ class TestGitSettingsSynchronization:
         assert result["workspace_id"] == "workspace-123"
         mock_client.post.assert_called_once()
 
-    async def test_sync_git_settings_partial_data(
-        self, sync_service
-    ):
+    async def test_sync_git_settings_partial_data(self, sync_service):
         """Test: Partial Git Settings Sync"""
         # Arrange
         changes = {
@@ -516,9 +524,7 @@ class TestGitSettingsSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_git_settings(
-                "http://localhost:8080",
-                changes,
-                "workspace-123"
+                "http://localhost:8080", changes, "workspace-123"
             )
 
         # Assert
@@ -532,18 +538,20 @@ class TestGitSettingsSynchronization:
 # RuntimeSyncService Tests - Firewall Settings Sync
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestFirewallSynchronization:
     """Firewall Settings Synchronization Tests"""
 
-    async def test_sync_firewall_success(
-        self, sync_service, firewall_changes
-    ):
+    async def test_sync_firewall_success(self, sync_service, firewall_changes):
         """Test: Successfully Sync Firewall Settings"""
         # Arrange
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": True, "message": "Firewall updated"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "Firewall updated",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -554,9 +562,7 @@ class TestFirewallSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_firewall(
-                "http://localhost:8080",
-                firewall_changes,
-                "workspace-123"
+                "http://localhost:8080", firewall_changes, "workspace-123"
             )
 
         # Assert
@@ -571,7 +577,10 @@ class TestFirewallSynchronization:
         self, sync_service
     ):
         mock_response = MagicMock()
-        mock_response.json.return_value = {"success": True, "message": "Firewall updated"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "Firewall updated",
+        }
         mock_response.raise_for_status = MagicMock()
 
         mock_client = AsyncMock()
@@ -614,11 +623,10 @@ class TestFirewallSynchronization:
     ):
         """Test: Sync Firewall When Runtime Not Running"""
         # Arrange
-        with patch.object(sync_service, '_get_running_runtimes', return_value=[]):
+        with patch.object(sync_service, "_get_running_runtimes", return_value=[]):
             # Act
             result = await sync_service.sync_firewall_to_runtime(
-                "workspace-123",
-                firewall_changes
+                "workspace-123", firewall_changes
             )
 
         # Assert
@@ -639,21 +647,20 @@ class TestFirewallSynchronization:
         mock_client.__aexit__.return_value = None
         mock_client.post.return_value = mock_response
 
-        with patch.object(sync_service, '_get_running_runtimes', return_value=sample_runtimes):
+        with patch.object(
+            sync_service, "_get_running_runtimes", return_value=sample_runtimes
+        ):
             with patch("httpx.AsyncClient", return_value=mock_client):
                 # Act
                 result = await sync_service.sync_firewall_to_runtime(
-                    "workspace-123",
-                    firewall_changes
+                    "workspace-123", firewall_changes
                 )
 
         # Assert
         assert result["success"] is True
         assert result["workspace_id"] == "workspace-123"
 
-    async def test_sync_firewall_with_disabled_network_access(
-        self, sync_service
-    ):
+    async def test_sync_firewall_with_disabled_network_access(self, sync_service):
         """Test: Firewall Sync with Disabled Network Access"""
         # Arrange
         changes = {
@@ -674,9 +681,7 @@ class TestFirewallSynchronization:
         with patch("httpx.AsyncClient", return_value=mock_client):
             # Act
             result = await sync_service._sync_firewall(
-                "http://localhost:8080",
-                changes,
-                "workspace-123"
+                "http://localhost:8080", changes, "workspace-123"
             )
 
         # Assert
@@ -688,6 +693,7 @@ class TestFirewallSynchronization:
 # ============================================================================
 # RuntimeSyncService Tests - SettingsBatchSync
 # ============================================================================
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -745,8 +751,14 @@ class TestBatchSettingsSynchronization:
         assert len(result["results"]) == 0
 
     async def test_sync_settings_to_runtimes_multiple_settings(
-        self, sync_service, mock_db_session, sample_workspace,
-        ssh_changes, claude_code_changes, codex_changes, git_changes
+        self,
+        sync_service,
+        mock_db_session,
+        sample_workspace,
+        ssh_changes,
+        claude_code_changes,
+        codex_changes,
+        git_changes,
     ):
         """Test: Sync Multiple Types of Settings"""
         # Arrange
@@ -782,8 +794,12 @@ class TestBatchSettingsSynchronization:
         assert result["error_count"] == 0
 
     async def test_sync_settings_to_runtimes_partial_failure(
-        self, sync_service, mock_db_session, sample_workspace,
-        ssh_changes, claude_code_changes
+        self,
+        sync_service,
+        mock_db_session,
+        sample_workspace,
+        ssh_changes,
+        claude_code_changes,
     ):
         """Test: Partial Sync Failure"""
         # Arrange
@@ -801,7 +817,9 @@ class TestBatchSettingsSynchronization:
         # SSH Success, Claude Code Failed
         mock_client.post.side_effect = [
             mock_response_success,  # SSH Success
-            httpx.HTTPStatusError("Error", request=MagicMock(), response=MagicMock(status_code=500)),  # Claude Code Failed
+            httpx.HTTPStatusError(
+                "Error", request=MagicMock(), response=MagicMock(status_code=500)
+            ),  # Claude Code Failed
         ]
 
         changes = {
@@ -844,6 +862,7 @@ class TestBatchSettingsSynchronization:
 # RuntimeSyncService Tests - Conflict Handling
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestConflictResolution:
@@ -862,7 +881,7 @@ class TestConflictResolution:
         mock_response.json.return_value = {
             "success": True,
             "conflict": True,
-            "resolved": "local_wins"
+            "resolved": "local_wins",
         }
         mock_response.raise_for_status = MagicMock()
 
@@ -881,21 +900,17 @@ class TestConflictResolution:
         assert result["success"] is True
         # Should successfully handle conflicts
 
-    async def test_sync_with_version_mismatch(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_version_mismatch(self, sync_service, ssh_changes):
         """Test: Sync When Version Mismatch"""
         # Arrange
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "success": False,
             "error": "version_mismatch",
-            "message": "Configuration version conflict"
+            "message": "Configuration version conflict",
         }
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Conflict",
-            request=MagicMock(),
-            response=MagicMock(status_code=409)
+            "Conflict", request=MagicMock(), response=MagicMock(status_code=409)
         )
 
         mock_client = AsyncMock()
@@ -907,15 +922,14 @@ class TestConflictResolution:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
 
 # ============================================================================
 # RuntimeSyncService Tests - Incremental Sync
 # ============================================================================
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -1001,14 +1015,13 @@ class TestIncrementalSync:
 # RuntimeSyncService Tests - Error Handling and Edge Cases
 # ============================================================================
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestErrorHandlingAndEdgeCases:
     """Error Handling and Edge Cases Tests"""
 
-    async def test_sync_with_invalid_url(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_invalid_url(self, sync_service, ssh_changes):
         """Test: Invalid URL"""
         # Arrange
         mock_client = AsyncMock()
@@ -1020,14 +1033,10 @@ class TestErrorHandlingAndEdgeCases:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "invalid-url",
-                    ssh_changes,
-                    "workspace-123"
+                    "invalid-url", ssh_changes, "workspace-123"
                 )
 
-    async def test_sync_with_timeout_retry(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_timeout_retry(self, sync_service, ssh_changes):
         """Test: Timeout Retry"""
         # Arrange
         mock_client = AsyncMock()
@@ -1039,9 +1048,7 @@ class TestErrorHandlingAndEdgeCases:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
     async def test_sync_with_empty_changes(
@@ -1060,9 +1067,7 @@ class TestErrorHandlingAndEdgeCases:
         assert result["success"] is True
         assert result["total_tasks"] == 0
 
-    async def test_sync_with_malformed_response(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_malformed_response(self, sync_service, ssh_changes):
         """Test: Malformed Response"""
         # Arrange
         mock_response = MagicMock()
@@ -1078,21 +1083,15 @@ class TestErrorHandlingAndEdgeCases:
             # Act & Assert
             with pytest.raises(Exception):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
-    async def test_sync_with_authentication_failure(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_authentication_failure(self, sync_service, ssh_changes):
         """Test: authentication failure during sync"""
         # Arrange
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "Unauthorized",
-            request=MagicMock(),
-            response=MagicMock(status_code=401)
+            "Unauthorized", request=MagicMock(), response=MagicMock(status_code=401)
         )
 
         mock_client = AsyncMock()
@@ -1104,9 +1103,7 @@ class TestErrorHandlingAndEdgeCases:
             # Act & Assert
             with pytest.raises(Exception, match="SSH sync failed"):
                 await sync_service._sync_ssh_keys(
-                    "http://localhost:8080",
-                    ssh_changes,
-                    "workspace-123"
+                    "http://localhost:8080", ssh_changes, "workspace-123"
                 )
 
     async def test_sync_service_initialization(self, mock_db_session):
@@ -1119,9 +1116,7 @@ class TestErrorHandlingAndEdgeCases:
         assert service.internal_api_token == "dev-internal-token"
         assert service.timeout == 30.0
 
-    async def test_sync_with_custom_timeout(
-        self, sync_service, ssh_changes
-    ):
+    async def test_sync_with_custom_timeout(self, sync_service, ssh_changes):
         """Test: Custom Timeout"""
         # Arrange
         sync_service.timeout = 5.0
@@ -1140,9 +1135,7 @@ class TestErrorHandlingAndEdgeCases:
 
             # Act
             await sync_service._sync_ssh_keys(
-                "http://localhost:8080",
-                ssh_changes,
-                "workspace-123"
+                "http://localhost:8080", ssh_changes, "workspace-123"
             )
 
             # Assert
@@ -1150,8 +1143,13 @@ class TestErrorHandlingAndEdgeCases:
             mock_async_client.assert_called_with(timeout=5.0)
 
     async def test_sync_all_settings_types(
-        self, sync_service, mock_db_session, sample_workspace,
-        ssh_changes, claude_code_changes, git_changes
+        self,
+        sync_service,
+        mock_db_session,
+        sample_workspace,
+        ssh_changes,
+        claude_code_changes,
+        git_changes,
     ):
         """Test: Sync All Types of Settings"""
         # Arrange

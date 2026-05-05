@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { AgentContentBlockRenderer } from './AgentContentBlockRenderer';
-import type { AgentMessage, PermissionRequest } from './agentSessionTypes';
+import { ChatMessageArea } from './ChatMessageArea';
+import type { PermissionRequest } from './agentSessionTypes';
 
 const translations: Record<string, string> = {
   'workspace.chat.widgets.permission.title.active': 'Permission required',
@@ -16,6 +16,9 @@ const translations: Record<string, string> = {
   'workspace.chat.widgets.permission.toolLabel': 'Tool:',
   'workspace.chat.widgets.permission.approve': 'Approve',
   'workspace.chat.widgets.permission.deny': 'Deny',
+  'workspace.chat.empty.title': 'Start chatting',
+  'workspace.chat.empty.description': 'Ask a question.',
+  'workspace.chat.empty.action': 'Create new message',
 };
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -30,34 +33,21 @@ vi.mock('@/shared/hooks/useI18n', () => ({
   }),
 }));
 
-vi.mock('@/features/workspace/components/MarkdownRenderer', () => ({
-  MarkdownRenderer: ({ content }: { content: string }) => <div>{content}</div>,
+vi.mock('./ChatMessageItem', () => ({
+  ChatMessageItem: () => <div data-testid="chat-message-item" />,
 }));
 
 vi.mock('@/features/agent-tools/components/AcpDecisionWidget', () => ({
   default: () => <div data-testid="acp-decision-widget" />,
 }));
 
-const permissionMessage = {
-  message_id: 'msg-1',
-  session_id: 'session-1',
-  task_id: 'task-1',
-  created_at: '2026-05-03T00:00:00Z',
-  index: 0,
-  role: 'system',
-  type: 'permission_request',
-  content: {
-    request_id: 'request-1',
-    tool_name: 'write_file',
-    tool_input: {
-      path: '/workspace/test.html',
-    },
-    decision_type: 'permission',
-    status: 'pending',
-  },
-  content_blocks: [],
-  queued: false,
-} as AgentMessage;
+const t = (key: string, params?: Record<string, string | number>) => {
+  const template = translations[key] ?? key;
+  return Object.entries(params ?? {}).reduce(
+    (result, [paramKey, value]) => result.replace(`{{${paramKey}}}`, String(value)),
+    template,
+  );
+};
 
 const pendingPermission: PermissionRequest = {
   request_id: 'request-1',
@@ -66,33 +56,41 @@ const pendingPermission: PermissionRequest = {
   tool_input: {
     path: '/workspace/test.html',
   },
+  options: [
+    { option_id: 'allow_once', name: 'Allow once', kind: 'allow_once', scope: 'once' },
+    { option_id: 'allow_session', name: 'Allow for session', kind: 'allow_always', scope: 'session' },
+    { option_id: 'reject_once', name: 'Reject', kind: 'reject_once', scope: 'once' },
+  ],
 };
 
-describe('AgentContentBlockRenderer', () => {
-  it('renders Codex permission requests with the Codex permission widget', async () => {
+describe('ChatMessageArea', () => {
+  beforeAll(() => {
+    Element.prototype.scrollTo = vi.fn();
+  });
+
+  it('forwards the Codex widget-selected session scope to permission decisions', async () => {
     const user = userEvent.setup();
-    const onApprove = vi.fn();
+    const onPermissionDecision = vi.fn();
 
     render(
-      <AgentContentBlockRenderer
-        message={permissionMessage}
-        allMessages={[permissionMessage]}
-        agentTool="codex"
-        pendingPermission={pendingPermission}
-        onApprove={onApprove}
-        onDeny={vi.fn()}
-      />,
+      <div style={{ height: 600 }}>
+        <ChatMessageArea
+          messages={[]}
+          hasActiveRequests={false}
+          hasActiveConversation
+          onNewSession={vi.fn()}
+          typingIndicator={null}
+          t={t}
+          agentTool="codex"
+          pendingPermission={pendingPermission}
+          onPermissionDecision={onPermissionDecision}
+        />
+      </div>,
     );
-
-    expect(screen.queryByTestId('acp-decision-widget')).not.toBeInTheDocument();
-    expect(screen.getByText('Approve once')).toBeInTheDocument();
-    expect(screen.getByText('Approve for this session')).toBeInTheDocument();
-    expect(screen.queryByText('Sandbox mode')).not.toBeInTheDocument();
-    expect(screen.queryByText('Approval policy')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: /Approve for this session/i }));
     await user.click(screen.getByRole('button', { name: 'Approve' }));
 
-    expect(onApprove).toHaveBeenCalledWith('request-1', 'session');
+    expect(onPermissionDecision).toHaveBeenCalledWith('request-1', true, 'session');
   });
 });

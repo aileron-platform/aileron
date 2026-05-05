@@ -16,6 +16,7 @@ import {
 } from '../config/runtimeProvisioning';
 
 const logger = createLogger('useWorkspaceWizard');
+const DEFAULT_RUNTIME = 'universal';
 
 interface UseWorkspaceWizardOptions {
   onReset?: () => void;
@@ -42,7 +43,7 @@ const initialState: WorkspaceWizardState = {
     cliType: 'claude-code',
   },
   runtimeConfig: {
-    runtime: 'universal',
+    runtime: DEFAULT_RUNTIME,
     provisioner: DEPLOYED_RUNTIME_PROVISIONER,
     targetNamespace:
       DEPLOYED_RUNTIME_PROVISIONER === 'kubernetes'
@@ -161,7 +162,7 @@ export const useWorkspaceWizard = ({ onReset, onCompleted }: UseWorkspaceWizardO
         description: state.basicInfo.description,
         gitUrl: state.basicInfo.gitUrl || undefined,
         branch: state.basicInfo.branch || undefined,
-        runtime: state.runtimeConfig.runtime,
+        runtime: state.runtimeConfig.runtime || DEFAULT_RUNTIME,
         targetNamespace:
           state.runtimeConfig.provisioner === 'kubernetes'
             ? state.runtimeConfig.targetNamespace || KUBERNETES_DEFAULT_NAMESPACE

@@ -105,14 +105,11 @@ const agentSettings = {
     actions: {
       refresh: '重新整理',
       toggleWorkspace: '切換此工作區',
-      toggleUser: '切換使用者',
       details: '詳細資料',
       more: '更多 extension 操作',
       showAll: '顯示全部 extensions',
       enableWorkspace: '啟用於此工作區',
       disableWorkspace: '停用於此工作區',
-      enableUser: '啟用於使用者層級',
-      disableUser: '停用於使用者層級',
       clearSearch: '清除搜尋',
     },
     search: {

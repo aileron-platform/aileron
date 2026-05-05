@@ -461,18 +461,15 @@ const chat = {
         },
       },
       codex: {
-        sandbox: {
-          label: 'Sandbox mode',
-          readOnly: 'Do not allow filesystem writes',
-          workspaceWrite: 'Allow writes only in workspace files (blocks .git/)',
-          fullAccess: 'Full filesystem access (includes .git/)',
-        },
-        approval: {
-          label: 'Approval policy',
-          untrusted: 'Ask for every operation',
-          onRequest: 'Let the model decide when to ask (recommended)',
-          onFailure: 'Ask only after failures',
-          never: 'Automatically approve all operations',
+        scope: {
+          once: {
+            label: 'Approve once',
+            description: 'Allow only this Codex request.',
+          },
+          session: {
+            label: 'Approve for this session',
+            description: 'Allow the same kind of Codex tool request for the current conversation only. The approval ends when the conversation ends.',
+          },
         },
       },
       gemini: {

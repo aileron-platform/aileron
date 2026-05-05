@@ -301,7 +301,9 @@ const pages = {
           },
           errors: {
             startFailedTitle: 'Unable to start Codex login',
-            startFailedDescription: 'Make sure the workspace runtime is running and the Codex login service is available, then try again.',
+            startFailedDescription: 'Please try again later.',
+            serviceUnavailableDescription: 'Make sure the Codex login service is available, then try again.',
+            providerFailedDescription: 'The Codex login provider could not complete authentication. Please try again later.',
             logoutFailedTitle: 'Unable to disconnect Codex',
             logoutFailedDescription: 'Please try again later.',
           },

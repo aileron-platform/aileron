@@ -312,6 +312,8 @@ class TestSetupCodex:
         internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
         tmp_paths["codex"].mkdir(parents=True)
         (tmp_paths["codex"] / "auth.json").write_text("{}")
+        (tmp_paths["codex"] / "installation_id").write_text("installation-1\n")
+        (tmp_paths["codex"] / "config.toml").write_text("model = \"gpt-5.3-codex\"\n")
 
         request = CodexSettingsRequest(
             clear_auth=True,
@@ -324,7 +326,133 @@ class TestSetupCodex:
 
         assert result["has_cli_auth"] is False
         assert not (tmp_paths["codex"] / "auth.json").exists()
+        assert not (tmp_paths["codex"] / "installation_id").exists()
+        assert (tmp_paths["codex"] / "config.toml").exists()
         assert "OPENAI_BASE_URL" in (tmp_paths["home"] / ".bashrc").read_text()
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_writes_synchronized_cli_state(self, internal_service, tmp_paths):
+        """Test synchronized Codex CLI files are written to CODEX_HOME."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        request = CodexSettingsRequest(
+            login_status="connected",
+            cliState={
+                "authJson": {
+                    "auth_mode": "chatgpt",
+                    "OPENAI_API_KEY": None,
+                    "tokens": {
+                        "access_token": "access-token",
+                        "refresh_token": "refresh-token",
+                        "id_token": "id-token",
+                        "account_id": "account-1",
+                    },
+                    "last_refresh": "2026-05-05T00:53:48Z",
+                },
+                "configToml": '[projects."/workspace"]\ntrust_level = "trusted"\n',
+                "installationId": "installation-1",
+            },
+        )
+
+        result = await internal_service.setup_codex(request)
+
+        auth_json = json.loads((tmp_paths["codex"] / "auth.json").read_text())
+        assert auth_json["auth_mode"] == "chatgpt"
+        assert auth_json["tokens"]["refresh_token"] == "refresh-token"
+        assert (tmp_paths["codex"] / "config.toml").read_text() == '[projects."/workspace"]\ntrust_level = "trusted"\n'
+        assert (tmp_paths["codex"] / "installation_id").read_text() == "installation-1\n"
+        assert result["has_cli_auth"] is True
+        assert result["has_config"] is True
+        assert result["has_installation_id"] is True
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_cli_state_replaces_auth_and_preserves_unprovided_config(self, internal_service, tmp_paths):
+        """Test synchronized Codex CLI state replaces auth and preserves unprovided config."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        tmp_paths["codex"].mkdir(parents=True)
+        (tmp_paths["codex"] / "auth.json").write_text('{"auth_mode":"chatgpt"}')
+        (tmp_paths["codex"] / "config.toml").write_text("stale = true\n")
+        (tmp_paths["codex"] / "installation_id").write_text("stale-installation\n")
+
+        request = CodexSettingsRequest(
+            login_status="connected",
+            cliState={
+                "authJson": {
+                    "auth_mode": "chatgpt",
+                    "tokens": {"access_token": "new-access"},
+                },
+                "configToml": None,
+                "installationId": "new-installation",
+            },
+        )
+
+        result = await internal_service.setup_codex(request)
+
+        auth_json = json.loads((tmp_paths["codex"] / "auth.json").read_text())
+        assert auth_json["tokens"]["access_token"] == "new-access"
+        assert (tmp_paths["codex"] / "config.toml").read_text() == "stale = true\n"
+        assert (tmp_paths["codex"] / "installation_id").read_text() == "new-installation\n"
+        assert result["has_cli_auth"] is True
+        assert result["has_config"] is True
+        assert result["has_installation_id"] is True
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_cli_state_merges_existing_config(self, internal_service, tmp_paths):
+        """Test synchronized Codex config merges into existing config.toml."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+        tmp_paths["codex"].mkdir(parents=True)
+        (tmp_paths["codex"] / "config.toml").write_text(
+            'model = "gpt-5.3-codex"\n'
+            'approval_policy = "on-request"\n\n'
+            '[projects."/workspace"]\n'
+            'trust_level = "untrusted"\n'
+            'existing = "keep"\n\n'
+            "[features]\n"
+            "codex_hooks = true\n"
+        )
+
+        request = CodexSettingsRequest(
+            login_status="connected",
+            cliState={
+                "configToml": (
+                    'model = "gpt-5.5"\n\n'
+                    '[projects."/workspace"]\n'
+                    'trust_level = "trusted"\n'
+                ),
+            },
+        )
+
+        await internal_service.setup_codex(request)
+
+        config = (tmp_paths["codex"] / "config.toml").read_text()
+        assert 'model = "gpt-5.5"' in config
+        assert 'approval_policy = "on-request"' in config
+        assert 'trust_level = "trusted"' in config
+        assert 'existing = "keep"' in config
+        assert "codex_hooks = true" in config
+
+    @pytest.mark.asyncio
+    async def test_setup_codex_cli_state_does_not_require_codex_binary(self, internal_service, tmp_paths):
+        """Test synchronized Codex CLI state can be applied without Codex binary."""
+        internal_service.codex_auth_dir = tmp_paths["codex"]
+        internal_service.codex_sessions_dir = tmp_paths["codex_sessions"]
+
+        request = CodexSettingsRequest(
+            login_status="connected",
+            cliState={
+                "authJson": {
+                    "auth_mode": "chatgpt",
+                    "tokens": {"refresh_token": "refresh-token"},
+                },
+            },
+        )
+
+        result = await internal_service.setup_codex(request)
+
+        assert result["has_cli_auth"] is True
+        assert json.loads((tmp_paths["codex"] / "auth.json").read_text())["tokens"]["refresh_token"] == "refresh-token"
 
     def test_check_codex_status_reports_success_for_auth(self, internal_service, tmp_paths):
         """Test setup status reports Codex auth."""

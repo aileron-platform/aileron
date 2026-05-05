@@ -5,7 +5,16 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
+from pydantic import ValidationError
 
 from app.core.openapi import build_responses
 from app.db import models as db_models
@@ -33,7 +42,9 @@ from app.services import (
     get_runtime_provision_service,
     get_workspace_service,
 )
-from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
+from app.services.knowledge_base_attachment_service import (
+    KnowledgeBaseAttachmentService,
+)
 from app.services.knowledge_base_attachment_service import (
     KB_ALREADY_ATTACHED_MESSAGE,
     KB_ATTACHMENT_NOT_FOUND_MESSAGE,
@@ -187,7 +198,9 @@ def _build_workspace_share_responses(*status_codes: int) -> dict[int, dict]:
     )
 
 
-def _build_workspace_kb_error_detail(*, code: str, message: str, details: dict | None = None) -> dict:
+def _build_workspace_kb_error_detail(
+    *, code: str, message: str, details: dict | None = None
+) -> dict:
     return {
         "code": code,
         "message": message,
@@ -198,7 +211,9 @@ def _build_workspace_kb_error_detail(*, code: str, message: str, details: dict |
 def _translate_workspace_share_message(translate, code: str) -> str:
     mapping = {
         "WORKSPACE_NOT_FOUND": translate("workspace.not_found"),
-        "WORKSPACE_SHARE_TARGET_NOT_FOUND": translate("workspace.share.target_not_found"),
+        "WORKSPACE_SHARE_TARGET_NOT_FOUND": translate(
+            "workspace.share.target_not_found"
+        ),
         "WORKSPACE_INVALID_SHARE_TARGET": translate("workspace.share.owner_forbidden"),
         "WORKSPACE_SHARE_CONFLICT": translate("workspace.share.conflict"),
         "WORKSPACE_SHARE_NOT_FOUND": translate("workspace.share.not_found"),
@@ -234,7 +249,9 @@ def _translate_workspace_kb_message(translate, code: str) -> str:
     return mapping.get(code, translate("knowledge_base.invalid.request"))
 
 
-def _translate_workspace_value_error(translate, code: str, params: dict | None = None) -> str:
+def _translate_workspace_value_error(
+    translate, code: str, params: dict | None = None
+) -> str:
     params = params or {}
     if code == "WORKSPACE_OWNER_NOT_FOUND":
         return translate("workspace.owner_not_found")
@@ -243,7 +260,9 @@ def _translate_workspace_value_error(translate, code: str, params: dict | None =
     if code == "WORKSPACE_RUNTIME_RESOURCES_UNSUPPORTED":
         return translate("workspace.runtime_resources_unsupported")
     if code == "WORKSPACE_INVALID_NAMESPACE":
-        return translate("workspace.invalid_namespace", namespace=params.get("namespace", ""))
+        return translate(
+            "workspace.invalid_namespace", namespace=params.get("namespace", "")
+        )
     return translate("knowledge_base.invalid.request")
 
 
@@ -270,6 +289,7 @@ def _workspace_kb_conflict_detail(code: str, translate) -> dict:
         message=_translate_workspace_kb_message(translate, code),
         details={"resource": mapping.get(code, "knowledge_base_attachment")},
     )
+
 
 _RUNTIME_LOG_STAGE_KEYS = {
     "queued": "workspace.runtime_log.queued",
@@ -346,7 +366,11 @@ def _require_current_user_id(request: Request) -> str | None:
 def _should_schedule_kb_runtime_sync(workspace: object) -> bool:
     provisioner = getattr(workspace, "provisioner", None)
     runtime_container_id = getattr(workspace, "runtime_container_id", None)
-    return provisioner == "docker" and isinstance(runtime_container_id, str) and bool(runtime_container_id)
+    return (
+        provisioner == "docker"
+        and isinstance(runtime_container_id, str)
+        and bool(runtime_container_id)
+    )
 
 
 def _reject_removed_port_configuration(translate, payload: object) -> None:
@@ -404,10 +428,20 @@ async def create_workspace(
 
         workspace = service.create(payload)
         if workspace.provisioner == "kubernetes":
-            background_tasks.add_task(run_apply_workspace_custom_resource_task, workspace.id)
+            background_tasks.add_task(
+                run_apply_workspace_custom_resource_task, workspace.id
+            )
         else:
             background_tasks.add_task(run_runtime_provision_task, workspace.id)
         return workspace
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "message": request.state.translate("workspace.invalid_request"),
+                "errors": exc.errors(include_input=False),
+            },
+        ) from exc
     except WorkspaceError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -436,7 +470,7 @@ def get_workspace(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found")
+                detail=request.state.translate("workspace.not_found"),
             )
         return workspace
     except WorkspaceAccessDeniedError as exc:
@@ -466,7 +500,7 @@ def get_workspace_runtime_logs(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found")
+                detail=request.state.translate("workspace.not_found"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -485,7 +519,9 @@ def get_workspace_runtime_logs(
             id=log.id,
             workspace_id=log.workspace_id,
             stage=log.stage,
-            message=_translate_runtime_log_message(log.stage, log.message, request.state.translate),
+            message=_translate_runtime_log_message(
+                log.stage, log.message, request.state.translate
+            ),
             metadata=log.log_metadata,  # Map log_metadata to metadata
             created_at=log.created_at,
         )
@@ -522,19 +558,25 @@ async def update_workspace(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found")
+                detail=request.state.translate("workspace.not_found"),
             )
 
         # Docker workspace firewall is applied through runtime internal API.
-        if firewall_changed and workspace.firewall and workspace.provisioner == "docker":
+        if (
+            firewall_changed
+            and workspace.firewall
+            and workspace.provisioner == "docker"
+        ):
             background_tasks.add_task(
                 _sync_firewall_to_runtime,
                 workspace_id,
-                workspace.firewall.model_dump(by_alias=True)
+                workspace.firewall.model_dump(by_alias=True),
             )
 
         if workspace.provisioner == "kubernetes":
-            background_tasks.add_task(run_apply_workspace_custom_resource_task, workspace.id)
+            background_tasks.add_task(
+                run_apply_workspace_custom_resource_task, workspace.id
+            )
 
         return workspace
     except WorkspaceAccessDeniedError as exc:
@@ -555,20 +597,31 @@ async def update_workspace(
 
 async def _sync_firewall_to_runtime(workspace_id: str, firewall_config: dict):
     """Background task: Sync firewall settings to workspace-runtime"""
-    logger.info(f"Starting background firewall settings sync - workspace_id: {workspace_id}")
+    logger.info(
+        f"Starting background firewall settings sync - workspace_id: {workspace_id}"
+    )
 
     db = SessionLocal()
     try:
         sync_service = RuntimeSyncService(db)
-        result = await sync_service.sync_firewall_to_runtime(workspace_id, firewall_config)
+        result = await sync_service.sync_firewall_to_runtime(
+            workspace_id, firewall_config
+        )
 
         if result.get("success"):
-            logger.info(f"Firewall settings sync succeeded - workspace_id: {workspace_id}")
+            logger.info(
+                f"Firewall settings sync succeeded - workspace_id: {workspace_id}"
+            )
         else:
-            logger.warning(f"Firewall settings sync skipped - workspace_id: {workspace_id}, reason: {result.get('message')}")
+            logger.warning(
+                f"Firewall settings sync skipped - workspace_id: {workspace_id}, reason: {result.get('message')}"
+            )
 
     except Exception as e:
-        logger.error(f"Firewall settings sync failed - workspace_id: {workspace_id}, error: {e}", exc_info=True)
+        logger.error(
+            f"Firewall settings sync failed - workspace_id: {workspace_id}, error: {e}",
+            exc_info=True,
+        )
     finally:
         db.close()
 
@@ -610,7 +663,9 @@ def delete_workspace(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+                detail=request.state.translate(
+                    "workspace.not_found_with_id", workspace_id=workspace_id
+                ),
             )
 
         if not service.mark_workspace_deleting(
@@ -619,7 +674,7 @@ def delete_workspace(
         ):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=request.state.translate("workspace.deletion_failed")
+                detail=request.state.translate("workspace.deletion_failed"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -633,7 +688,7 @@ def delete_workspace(
     return {
         "message": request.state.translate("workspace.deletion_started"),
         "workspaceId": workspace_id,
-        "status": "deleting"
+        "status": "deleting",
     }
 
 
@@ -673,7 +728,9 @@ def rebuild_workspace(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+                detail=request.state.translate(
+                    "workspace.not_found_with_id", workspace_id=workspace_id
+                ),
             )
 
         if not service.mark_workspace_rebuilding(
@@ -682,7 +739,7 @@ def rebuild_workspace(
         ):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=request.state.translate("workspace.restart_failed")
+                detail=request.state.translate("workspace.restart_failed"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -696,7 +753,7 @@ def rebuild_workspace(
     return {
         "message": request.state.translate("workspace.restart_started"),
         "workspaceId": workspace_id,
-        "status": "restarting"
+        "status": "restarting",
     }
 
 
@@ -736,7 +793,9 @@ def restart_browser(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+                detail=request.state.translate(
+                    "workspace.not_found_with_id", workspace_id=workspace_id
+                ),
             )
 
         if (
@@ -745,7 +804,7 @@ def restart_browser(
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=request.state.translate("workspace.browser.not_found")
+                detail=request.state.translate("workspace.browser.not_found"),
             )
 
         if not service.mark_browser_restarting(
@@ -754,7 +813,7 @@ def restart_browser(
         ):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=request.state.translate("workspace.browser.restart_failed")
+                detail=request.state.translate("workspace.browser.restart_failed"),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -768,7 +827,7 @@ def restart_browser(
     return {
         "message": request.state.translate("workspace.browser.restart_started"),
         "workspaceId": workspace_id,
-        "status": "restarting"
+        "status": "restarting",
     }
 
 
@@ -800,7 +859,9 @@ def restart_canvas(
         if not workspace:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=request.state.translate("workspace.not_found_with_id", workspace_id=workspace_id)
+                detail=request.state.translate(
+                    "workspace.not_found_with_id", workspace_id=workspace_id
+                ),
             )
 
         if (
@@ -831,7 +892,7 @@ def restart_canvas(
     return {
         "message": request.state.translate("workspace.canvas.restart_started"),
         "workspaceId": workspace_id,
-        "status": "restarting"
+        "status": "restarting",
     }
 
 
@@ -860,7 +921,9 @@ def list_workspace_shares(
     except WorkspaceNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_workspace_share_error_detail(getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate),
+            detail=_workspace_share_error_detail(
+                getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate
+            ),
         ) from exc
 
 
@@ -897,9 +960,11 @@ def create_workspace_share(
         status_code = (
             status.HTTP_404_NOT_FOUND
             if code in {"WORKSPACE_NOT_FOUND", "WORKSPACE_SHARE_TARGET_NOT_FOUND"}
-            else status.HTTP_409_CONFLICT
-            if code == "WORKSPACE_SHARE_CONFLICT"
-            else status.HTTP_400_BAD_REQUEST
+            else (
+                status.HTTP_409_CONFLICT
+                if code == "WORKSPACE_SHARE_CONFLICT"
+                else status.HTTP_400_BAD_REQUEST
+            )
         )
         raise HTTPException(
             status_code=status_code,
@@ -931,7 +996,9 @@ def update_workspace_share(
         if not result:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=_workspace_share_error_detail("WORKSPACE_SHARE_NOT_FOUND", request.state.translate),
+                detail=_workspace_share_error_detail(
+                    "WORKSPACE_SHARE_NOT_FOUND", request.state.translate
+                ),
             )
         return result
     except WorkspaceAccessDeniedError as exc:
@@ -945,7 +1012,9 @@ def update_workspace_share(
     except WorkspaceNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_workspace_share_error_detail(getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate),
+            detail=_workspace_share_error_detail(
+                getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate
+            ),
         ) from exc
 
 
@@ -971,7 +1040,9 @@ def delete_workspace_share(
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=_workspace_share_error_detail("WORKSPACE_SHARE_NOT_FOUND", request.state.translate),
+                detail=_workspace_share_error_detail(
+                    "WORKSPACE_SHARE_NOT_FOUND", request.state.translate
+                ),
             )
     except WorkspaceAccessDeniedError as exc:
         raise HTTPException(
@@ -984,7 +1055,9 @@ def delete_workspace_share(
     except WorkspaceNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_workspace_share_error_detail(getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate),
+            detail=_workspace_share_error_detail(
+                getattr(exc, "code", "WORKSPACE_NOT_FOUND"), request.state.translate
+            ),
         ) from exc
 
 
@@ -997,7 +1070,9 @@ def delete_workspace_share(
 def list_workspace_knowledge_bases(
     workspace_id: str,
     request: Request,
-    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+    service: KnowledgeBaseAttachmentService = Depends(
+        get_knowledge_base_attachment_service
+    ),
 ) -> WorkspaceKnowledgeBaseAttachmentListResponse:
     current_user_id = _require_current_user_id(request)
     try:
@@ -1022,7 +1097,11 @@ def list_workspace_knowledge_bases(
                 for attachment in attachments
             ]
         )
-    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+    except (
+        WorkspaceAccessDeniedError,
+        KnowledgeBaseAccessDeniedError,
+        PermissionError,
+    ) as exc:
         code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1051,7 +1130,9 @@ def create_workspace_knowledge_base_attachment(
     payload: WorkspaceKnowledgeBaseAttachmentCreateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+    service: KnowledgeBaseAttachmentService = Depends(
+        get_knowledge_base_attachment_service
+    ),
 ) -> WorkspaceKnowledgeBaseAttachment:
     current_user_id = _require_current_user_id(request)
     try:
@@ -1077,7 +1158,11 @@ def create_workspace_knowledge_base_attachment(
             created_at=attachment.created_at,
             updated_at=attachment.updated_at,
         )
-    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+    except (
+        WorkspaceAccessDeniedError,
+        KnowledgeBaseAccessDeniedError,
+        PermissionError,
+    ) as exc:
         code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1096,7 +1181,8 @@ def create_workspace_knowledge_base_attachment(
         code = getattr(exc, "code", "KB_INVALID_REQUEST")
         status_code = (
             status.HTTP_404_NOT_FOUND
-            if code in {"WORKSPACE_NOT_FOUND", "KB_NOT_FOUND", "KB_ATTACHMENT_NOT_FOUND"}
+            if code
+            in {"WORKSPACE_NOT_FOUND", "KB_NOT_FOUND", "KB_ATTACHMENT_NOT_FOUND"}
             else status.HTTP_400_BAD_REQUEST
         )
         detail = (
@@ -1104,11 +1190,15 @@ def create_workspace_knowledge_base_attachment(
             if status_code == status.HTTP_404_NOT_FOUND
             else _build_workspace_kb_error_detail(
                 code=code,
-                message=_translate_workspace_value_error(
-                    request.state.translate,
-                    code,
-                    getattr(exc, "params", {}),
-                ) if code.startswith("WORKSPACE_") else _translate_workspace_kb_message(request.state.translate, code),
+                message=(
+                    _translate_workspace_value_error(
+                        request.state.translate,
+                        code,
+                        getattr(exc, "params", {}),
+                    )
+                    if code.startswith("WORKSPACE_")
+                    else _translate_workspace_kb_message(request.state.translate, code)
+                ),
             )
         )
         raise HTTPException(status_code=status_code, detail=detail) from exc
@@ -1126,7 +1216,9 @@ def update_workspace_knowledge_base_attachment(
     payload: WorkspaceKnowledgeBaseAttachmentUpdateRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+    service: KnowledgeBaseAttachmentService = Depends(
+        get_knowledge_base_attachment_service
+    ),
 ) -> WorkspaceKnowledgeBaseAttachment:
     current_user_id = _require_current_user_id(request)
     try:
@@ -1151,7 +1243,11 @@ def update_workspace_knowledge_base_attachment(
             created_at=attachment.created_at,
             updated_at=attachment.updated_at,
         )
-    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+    except (
+        WorkspaceAccessDeniedError,
+        KnowledgeBaseAccessDeniedError,
+        PermissionError,
+    ) as exc:
         code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1185,7 +1281,9 @@ def delete_workspace_knowledge_base_attachment(
     attachment_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    service: KnowledgeBaseAttachmentService = Depends(get_knowledge_base_attachment_service),
+    service: KnowledgeBaseAttachmentService = Depends(
+        get_knowledge_base_attachment_service
+    ),
 ) -> None:
     current_user_id = _require_current_user_id(request)
     try:
@@ -1193,7 +1291,11 @@ def delete_workspace_knowledge_base_attachment(
         workspace = service.db.get(db_models.Workspace, workspace_id)
         if workspace is not None and _should_schedule_kb_runtime_sync(workspace):
             background_tasks.add_task(run_runtime_provision_task, workspace_id)
-    except (WorkspaceAccessDeniedError, KnowledgeBaseAccessDeniedError, PermissionError) as exc:
+    except (
+        WorkspaceAccessDeniedError,
+        KnowledgeBaseAccessDeniedError,
+        PermissionError,
+    ) as exc:
         code = getattr(exc, "code", "KB_ACCESS_DENIED")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

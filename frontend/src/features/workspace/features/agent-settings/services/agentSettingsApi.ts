@@ -729,11 +729,10 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     name: string,
-    scope: 'workspace' | 'user',
   ): Promise<{ workspaceId: string; name: string; enabledHere: boolean; overrides: string[] }> {
     return apiRequest(
       runtimeBaseUrl,
-      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/enable?scope=${scope}`,
+      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/enable`,
       { method: 'POST' },
     );
   },
@@ -742,11 +741,10 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     runtimeBaseUrl: string,
     workspaceId: string,
     name: string,
-    scope: 'workspace' | 'user',
   ): Promise<{ workspaceId: string; name: string; enabledHere: boolean; overrides: string[] }> {
     return apiRequest(
       runtimeBaseUrl,
-      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/disable?scope=${scope}`,
+      `workspaces/${workspaceId}/gemini/extensions/${encodeURIComponent(name)}/disable`,
       { method: 'POST' },
     );
   },

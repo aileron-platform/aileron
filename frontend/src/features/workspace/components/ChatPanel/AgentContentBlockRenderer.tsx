@@ -446,7 +446,7 @@ const PermissionRequestMessageRenderer: React.FC<{
         requested_at={message.created_at}
         onApprove={agentTool === 'claude-code' && isActivePermission ? onApprove : undefined}
         onCodexApprove={agentTool === 'codex' && isActivePermission
-          ? (messageId) => onApprove?.(messageId, 'once')
+          ? (messageId, scope) => onApprove?.(messageId, scope)
           : undefined}
         onDeny={isActivePermission ? onDeny : undefined}
         collapsible={false}

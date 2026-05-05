@@ -15,6 +15,7 @@
   "workspace.access_denied": "Workspace permission denied",
   "workspace.owner_not_found": "Workspace owner not found",
   "workspace.firewall_unavailable": "Firewall is unavailable for the current workspace provisioner",
+  "workspace.invalid_request": "Workspace request is invalid",
   "workspace.invalid_namespace": "Invalid Kubernetes namespace: {namespace}",
   "workspace.runtime_resources_unsupported": "runtimeResources is only supported for Kubernetes workspaces",
   "workspace.port_mappings_removed": "Workspace port mapping configuration is no longer supported",

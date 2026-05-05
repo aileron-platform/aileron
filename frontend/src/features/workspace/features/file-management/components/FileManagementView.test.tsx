@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { waitFor } from '@testing-library/react';
 import { render } from '@/__tests__/utils/render';
 import { FileManagementView } from './FileManagementView';
 
@@ -7,11 +8,13 @@ const {
   useWorkspaceMock,
   useFileTreeManagerMock,
   useFileOperationsWithDialogMock,
+  fetchArchiveDownloadStatusMock,
   queryClientMock,
 } = vi.hoisted(() => ({
   useWorkspaceMock: vi.fn(),
   useFileTreeManagerMock: vi.fn(),
   useFileOperationsWithDialogMock: vi.fn(),
+  fetchArchiveDownloadStatusMock: vi.fn(),
   queryClientMock: {},
 }));
 
@@ -59,9 +62,14 @@ vi.mock('@/shared/components/layout/CollapsedSidebarPlaceholder', () => ({
 }));
 
 vi.mock('lucide-react', () => ({
+  Eye: () => null,
+  EyeOff: () => null,
+  FilePlus: () => null,
   Folder: () => null,
+  FolderPlus: () => null,
   Loader2: () => null,
   RefreshCw: () => null,
+  Upload: () => null,
 }));
 
 vi.mock('@/shared/utils/fileTypeUtils', () => ({
@@ -69,8 +77,11 @@ vi.mock('@/shared/utils/fileTypeUtils', () => ({
 }));
 
 vi.mock('../../../services/workspaceRuntimeApi', () => ({
+  buildArchiveDownloadUrl: vi.fn((base: string, path: string) => `${base}${path}`),
   duplicateFile: vi.fn(),
+  fetchArchiveDownloadStatus: fetchArchiveDownloadStatusMock,
   fetchExtractArchiveStatus: vi.fn(),
+  startArchiveDownload: vi.fn(),
   startExtractArchive: vi.fn(),
 }));
 
@@ -83,7 +94,9 @@ describe('FileManagementView', () => {
     useWorkspaceMock.mockReset();
     useFileTreeManagerMock.mockReset();
     useFileOperationsWithDialogMock.mockReset();
+    fetchArchiveDownloadStatusMock.mockReset();
     dispatchMock.mockReset();
+    window.localStorage.clear();
 
     useWorkspaceMock.mockReturnValue({
       workspace: {
@@ -238,5 +251,54 @@ describe('FileManagementView', () => {
         adapterKey: expect.stringContaining('"includeHidden":true'),
       })
     );
+  });
+
+  it('restores an active archive operation from localStorage after refresh', async () => {
+    fetchArchiveDownloadStatusMock.mockResolvedValue({
+      operationId: 'archive-123',
+      status: 'running',
+      progress: 0.5,
+      message: 'Packaging files...',
+      startedAt: '2026-01-01T00:00:00Z',
+      result: null,
+    });
+    window.localStorage.setItem('workspace.fileManagement.archiveOperations.v1', JSON.stringify([
+      {
+        operationId: 'archive-123',
+        archiveName: 'selection.zip',
+        paths: ['/src'],
+        workspaceId: 'ws-1',
+        contextId: 'worktree:feature-auth',
+        runtimeBaseUrl: 'http://runtime.local',
+        startedAt: '2026-01-01T00:00:00Z',
+      },
+    ]));
+
+    render(<FileManagementView />);
+
+    await waitFor(() => {
+      expect(fetchArchiveDownloadStatusMock).toHaveBeenCalledWith('http://runtime.local', 'archive-123');
+    });
+  });
+
+  it('clears persisted archive metadata when restore cannot find the operation', async () => {
+    fetchArchiveDownloadStatusMock.mockRejectedValue(new Error('not found'));
+    window.localStorage.setItem('workspace.fileManagement.archiveOperations.v1', JSON.stringify([
+      {
+        operationId: 'archive-missing',
+        archiveName: 'selection.zip',
+        paths: ['/src'],
+        workspaceId: 'ws-1',
+        contextId: 'worktree:feature-auth',
+        runtimeBaseUrl: 'http://runtime.local',
+        startedAt: '2026-01-01T00:00:00Z',
+      },
+    ]));
+
+    render(<FileManagementView />);
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem('workspace.fileManagement.archiveOperations.v1')).toBe('[]');
+    });
   });
 });

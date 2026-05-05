@@ -2,17 +2,9 @@
 
 from __future__ import annotations
 
-from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-
-class GeminiExtensionToggleScope(str, Enum):
-    """Gemini extension enablement mutation scopes."""
-
-    WORKSPACE = "workspace"
-    USER = "user"
 
 
 class GeminiExtensionInstallInfo(BaseModel):
@@ -126,7 +118,6 @@ class GeminiExtensionToggleResponse(BaseModel):
 
     workspaceId: str
     name: str
-    scope: GeminiExtensionToggleScope
     enabledHere: bool
     overrides: list[str] = Field(default_factory=list)
 

@@ -1,6 +1,5 @@
 /**
- * Workspace Runtime API 服務
- * 處理與 Workspace Runtime 相關的 API 操作
+ * Workspace Runtime API service.
  */
 
 import { ApiClient, apiClient } from '@/shared/api/apiClient';
@@ -9,7 +8,6 @@ import { resolvePreferredWorkspaceUrl } from './workspacePublicUrl';
 
 const logger = createLogger('workspaceRuntimeApi');
 import type {
-  RuntimeArchiveTicketResponse,
   WorkspaceListResponse,
   WorkspaceDetailResponse,
   RuntimeFileTreeResponse,
@@ -78,8 +76,40 @@ export interface RuntimeExtractArchiveStatusResponse {
   result?: RuntimeExtractArchiveResult | null;
 }
 
+export interface RuntimeArchiveDownloadRequest {
+  paths: string[];
+  archiveName?: string;
+  archiveFormat?: 'zip';
+  contextId?: string | null;
+}
+
+export interface RuntimeArchiveDownloadAcceptedResponse {
+  operationId: string;
+  status: 'pending' | 'running';
+  message: string;
+  startedAt: string;
+}
+
+export interface RuntimeArchiveDownloadResult {
+  archiveName: string;
+  size: number;
+  downloadUrl: string;
+  expiresAt: string;
+}
+
+export interface RuntimeArchiveDownloadStatusResponse {
+  operationId: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'expired';
+  progress: number;
+  message: string;
+  startedAt: string;
+  completedAt?: string | null;
+  error?: string | null;
+  result?: RuntimeArchiveDownloadResult | null;
+}
+
 /**
- * 映射 Runtime 節點到 FileNode
+ * Map Runtime nodes to FileNode.
  */
 export const mapRuntimeNodeToFileNode = (node: RuntimeFileTreeNode, parentDepth: number = -1): FileNode => {
   const actualDepth = parentDepth + 1;
@@ -99,7 +129,7 @@ export const mapRuntimeNodeToFileNode = (node: RuntimeFileTreeNode, parentDepth:
 };
 
 /**
- * 建構 Runtime URL
+ * Build a Runtime URL.
  */
 export const buildRuntimeUrl = (base: string, path: string): string => {
   const normalizedBase = base.endsWith('/') ? base : `${base}/`;
@@ -109,14 +139,14 @@ export const buildRuntimeUrl = (base: string, path: string): string => {
 };
 
 /**
- * 創建帶認證的 Runtime API Client
+ * Create a Runtime API client.
  */
 const createRuntimeClient = (runtimeBaseUrl: string): ApiClient => {
   return new ApiClient({ baseUrl: runtimeBaseUrl });
 };
 
 /**
- * 解析錯誤回應
+ * Parse an error response.
  */
 export const parseErrorResponse = async (
   response: Response
@@ -138,13 +168,13 @@ export const parseErrorResponse = async (
       return { message: payload.message };
     }
   } catch (error) {
-    logger.warn('解析錯誤回應失敗', { error });
+    logger.warn('Failed to parse error response', { error });
   }
   return { message: `${response.status} ${response.statusText}` };
 };
 
 /**
- * 與 Runtime 保持一致的檔名正規化
+ * Normalize upload filenames consistently with Runtime.
  */
 const sanitizeUploadPathSegment = (filename: string): string => {
   if (!filename) {
@@ -179,13 +209,13 @@ const withContextId = (path: string, contextId?: string | null): string => {
 };
 
 /**
- * 獲取預設工作區 ID
+ * Fetch the default workspace ID.
  */
 export const fetchDefaultWorkspaceId = async (): Promise<string> => {
   const data = await apiClient.get<WorkspaceListResponse>('/workspaces/?page=1&pageSize=1');
   const firstWorkspace = data.items?.[0];
   if (!firstWorkspace?.id) {
-    throw new Error('尚未建立任何工作區');
+    throw new Error('No workspace has been created');
   }
   return firstWorkspace.id;
 };
@@ -195,14 +225,14 @@ export const fetchWorkspaceList = async (pageSize: number = 50): Promise<Workspa
 };
 
 /**
- * 解析 Runtime Base URL
+ * Resolve the Runtime base URL.
  */
 export const resolveRuntimeBaseUrl = async (
   workspaceId: string,
   cache: Map<string, string>
 ): Promise<string> => {
   if (!workspaceId) {
-    throw new Error('workspaceId 缺失');
+    throw new Error('workspaceId is required');
   }
 
   const cached = cache.get(workspaceId);
@@ -216,30 +246,28 @@ export const resolveRuntimeBaseUrl = async (
     detail.runtimeStatus?.internalUrl
   );
   if (!runtimeUrl) {
-    throw new Error('Workspace Runtime 尚未啟動或尚未提供 URL');
+    throw new Error('Workspace Runtime is not started or has no URL');
   }
   cache.set(workspaceId, runtimeUrl);
   return runtimeUrl;
 };
 
 /**
- * 獲取工作區詳情（包含 cliType）
+ * Fetch workspace detail.
  */
 export const fetchWorkspaceDetail = async (workspaceId: string): Promise<WorkspaceDetailResponse> => {
   return await apiClient.get<WorkspaceDetailResponse>(`/workspaces/${workspaceId}`);
 };
 
 /**
- * 一次 API 呼叫同時解析 Runtime Base URL 與工作區詳情。
- * 原本 resolveRuntimeBaseUrl + fetchWorkspaceDetail 會對同一端點打兩次；
- * 此函式合為一次請求，URL 成功後才寫入 cache。
+ * Resolve Runtime base URL and workspace detail in one API call.
  */
 export const resolveRuntimeBaseUrlWithDetail = async (
   workspaceId: string,
   cache: Map<string, string>
 ): Promise<{ url: string; detail: WorkspaceDetailResponse | null }> => {
   if (!workspaceId) {
-    throw new Error('workspaceId 缺失');
+    throw new Error('workspaceId is required');
   }
 
   let detail: WorkspaceDetailResponse | null = null;
@@ -261,7 +289,7 @@ export const resolveRuntimeBaseUrlWithDetail = async (
   }
 
   if (!runtimeUrl) {
-    throw new Error('Workspace Runtime 尚未啟動或尚未提供 URL');
+    throw new Error('Workspace Runtime is not started or has no URL');
   }
 
   cache.set(workspaceId, runtimeUrl);
@@ -269,8 +297,7 @@ export const resolveRuntimeBaseUrlWithDetail = async (
 };
 
 /**
- * 載入檔案樹
- * 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
+ * Load the file tree. Runtime applies FILE_TREE_MAX_DEPTH when maxDepth is omitted.
  */
 export const fetchFileTree = async (
   runtimeBaseUrl: string,
@@ -288,8 +315,7 @@ export const fetchFileTree = async (
 };
 
 /**
- * 載入節點子項
- * 不指定 maxDepth，讓後端使用環境設定檔的 FILE_TREE_MAX_DEPTH
+ * Load child nodes. Runtime applies FILE_TREE_MAX_DEPTH when maxDepth is omitted.
  */
 export const fetchNodeChildren = async (
   runtimeBaseUrl: string,
@@ -308,7 +334,7 @@ export const fetchNodeChildren = async (
 };
 
 /**
- * 讀取檔案內容
+ * Read file content.
  */
 export const fetchFileContent = async (
   runtimeBaseUrl: string,
@@ -324,7 +350,7 @@ export const fetchFileContent = async (
 };
 
 /**
- * 儲存檔案內容
+ * Save file content.
  */
 export const saveFileContent = async (
   runtimeBaseUrl: string,
@@ -337,7 +363,7 @@ export const saveFileContent = async (
 };
 
 /**
- * 建立檔案或資料夾
+ * Create a file or folder.
  */
 export const createFileOrFolder = async (
   runtimeBaseUrl: string,
@@ -356,7 +382,7 @@ export const createFileOrFolder = async (
 };
 
 /**
- * 重新命名檔案
+ * Rename a file.
  */
 export const renameFile = async (
   runtimeBaseUrl: string,
@@ -373,7 +399,7 @@ export const renameFile = async (
 };
 
 /**
- * 刪除檔案
+ * Delete a file.
  */
 export const deleteFile = async (
   runtimeBaseUrl: string,
@@ -393,7 +419,7 @@ export const deleteFile = async (
 };
 
 /**
- * 批次刪除檔案
+ * Delete files in a batch.
  */
 export const batchDeleteFiles = async (
   runtimeBaseUrl: string,
@@ -406,7 +432,7 @@ export const batchDeleteFiles = async (
 };
 
 /**
- * 複製檔案
+ * Duplicate a file.
  */
 export const duplicateFile = async (
   runtimeBaseUrl: string,
@@ -425,7 +451,7 @@ export const duplicateFile = async (
 };
 
 /**
- * 移動檔案或資料夾
+ * Move a file or folder.
  */
 export const moveFile = async (
   runtimeBaseUrl: string,
@@ -443,7 +469,7 @@ export const moveFile = async (
 };
 
 /**
- * 上傳檔案
+ * Upload files.
  */
 export const uploadFiles = async (
   runtimeBaseUrl: string,
@@ -525,8 +551,7 @@ export const fetchExtractArchiveStatus = async (
 };
 
 /**
- * 下載檔案
- * 返回下載 URL，前端可以使用 window.open 或 <a> 標籤觸發下載
+ * Download a single file.
  */
 export const downloadFile = async (
   runtimeBaseUrl: string,
@@ -539,22 +564,37 @@ export const downloadFile = async (
     url.searchParams.set('contextId', contextId);
   }
 
-  // 直接返回下載 URL，讓瀏覽器處理下載
   return url.toString();
 };
 
-/**
- * 批次下載檔案（打包成 ZIP）
- * 返回操作票據，可用於查詢打包狀態
- */
-export const batchDownloadFiles = async (
+export const startArchiveDownload = async (
   runtimeBaseUrl: string,
-  paths: string[],
-  archiveFormat: 'zip' | 'tar' = 'zip',
-  contextId?: string | null
-): Promise<RuntimeArchiveTicketResponse> => {
+  request: RuntimeArchiveDownloadRequest
+): Promise<RuntimeArchiveDownloadAcceptedResponse> => {
   const client = createRuntimeClient(runtimeBaseUrl);
-  return await client.post(withContextId('/api/v1/files/batch-download', contextId), { paths, archiveFormat });
+  return await client.post(withContextId('/api/v1/files/archive', request.contextId), {
+    paths: request.paths,
+    archiveName: request.archiveName,
+    archiveFormat: request.archiveFormat ?? 'zip',
+  });
+};
+
+export const fetchArchiveDownloadStatus = async (
+  runtimeBaseUrl: string,
+  operationId: string
+): Promise<RuntimeArchiveDownloadStatusResponse> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.get(`/api/v1/files/archive/${encodeURIComponent(operationId)}`);
+};
+
+export const buildArchiveDownloadUrl = (
+  runtimeBaseUrl: string,
+  downloadUrl: string
+): string => {
+  if (downloadUrl.startsWith('http')) {
+    return downloadUrl;
+  }
+  return buildRuntimeUrl(runtimeBaseUrl, downloadUrl.replace(/^\/api\/v1\//, ''));
 };
 
 export type CanvasType = 'html' | 'nextjs' | 'default';

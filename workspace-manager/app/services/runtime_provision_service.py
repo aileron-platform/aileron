@@ -25,9 +25,11 @@ from app.services.orchestrator import (
     VolumeMount,
     PortMapping,
     NetworkConfig,
-    ResourceRequirements
+    ResourceRequirements,
 )
-from app.services.knowledge_base_attachment_service import KnowledgeBaseAttachmentService
+from app.services.knowledge_base_attachment_service import (
+    KnowledgeBaseAttachmentService,
+)
 from app.utils.path_resolver import PathResolver
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,7 @@ PORT_RANGE_MIN = 30000
 PORT_RANGE_MAX = 60000
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent / "jinja_templates" / "runtime"
+
 
 class RuntimeProvisionService:
     """Service responsible for scheduling workspace runtime provisioning."""
@@ -52,17 +55,23 @@ class RuntimeProvisionService:
         ranges: list[tuple[int, int]] = []
         for item in self.settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES:
             if "-" not in item:
-                logger.warning("Ignoring invalid browser WebRTC reserved UDP range: %s", item)
+                logger.warning(
+                    "Ignoring invalid browser WebRTC reserved UDP range: %s", item
+                )
                 continue
             start_text, end_text = item.split("-", 1)
             try:
                 start = int(start_text.strip())
                 end = int(end_text.strip())
             except ValueError:
-                logger.warning("Ignoring invalid browser WebRTC reserved UDP range: %s", item)
+                logger.warning(
+                    "Ignoring invalid browser WebRTC reserved UDP range: %s", item
+                )
                 continue
             if start > end:
-                logger.warning("Ignoring descending browser WebRTC reserved UDP range: %s", item)
+                logger.warning(
+                    "Ignoring descending browser WebRTC reserved UDP range: %s", item
+                )
                 continue
             ranges.append((start, end))
         return tuple(ranges)
@@ -82,14 +91,18 @@ class RuntimeProvisionService:
         except OSError:
             return False
 
-    def _find_available_browser_webrtc_port(self, exclude: set[int] | None = None) -> int:
+    def _find_available_browser_webrtc_port(
+        self, exclude: set[int] | None = None
+    ) -> int:
         exclude = exclude or set()
 
         for _ in range(100):
             port = random.randint(PORT_RANGE_MIN, PORT_RANGE_MAX)
             if port in exclude or self._is_reserved_browser_webrtc_udp_port(port):
                 continue
-            if self._is_port_available(port, "tcp") and self._is_port_available(port, "udp"):
+            if self._is_port_available(port, "tcp") and self._is_port_available(
+                port, "udp"
+            ):
                 return port
 
         raise RuntimeError(
@@ -120,7 +133,9 @@ class RuntimeProvisionService:
         self.db.add(job)
         self.db.flush()
 
-        self._log_event(workspace.id, "queued", "Queued runtime provision", {"jobId": job.id})
+        self._log_event(
+            workspace.id, "queued", "Queued runtime provision", {"jobId": job.id}
+        )
         workspace.runtime_status = "starting"
         self.db.commit()
 
@@ -132,13 +147,17 @@ class RuntimeProvisionService:
             workspace = self._get_workspace(workspace_id)
             job = self._get_runtime_job(job.id)
             if not workspace or not job:
-                logger.error("Cannot find workspace or job after rollback, cannot update failed status")
+                logger.error(
+                    "Cannot find workspace or job after rollback, cannot update failed status"
+                )
                 return
             self._handle_failure(workspace, job, exc)
         finally:
             self.db.commit()
 
-    def _perform_job(self, workspace: db_models.Workspace, job: db_models.WorkspaceRuntimeJob) -> None:
+    def _perform_job(
+        self, workspace: db_models.Workspace, job: db_models.WorkspaceRuntimeJob
+    ) -> None:
         job.status = "provisioning"
         job.started_at = datetime.utcnow()
         self._log_event(workspace.id, "provisioning", "BeginCreate Workspace Runtime")
@@ -152,7 +171,9 @@ class RuntimeProvisionService:
             "preparing",
             "Generated provision script and environment settings",
             {
-                "environment": {k: v for k, v in context.environment.items() if "KEY" not in k}, # Hide sensitive keys
+                "environment": {
+                    k: v for k, v in context.environment.items() if "KEY" not in k
+                },  # Hide sensitive keys
                 "ports": [p.__dict__ for p in context.ports],
             },
         )
@@ -176,19 +197,29 @@ class RuntimeProvisionService:
 
         # 5. Start Browser Container
         try:
-            self._log_event(workspace.id, "browser_starting", "BeginCreate Browser Container")
+            self._log_event(
+                workspace.id, "browser_starting", "BeginCreate Browser Container"
+            )
             browser_context = self._build_browser_runtime_context(workspace)
-            browser_result = orchestrator.create_chrome_runtime(workspace, browser_context)
+            browser_result = orchestrator.create_chrome_runtime(
+                workspace, browser_context
+            )
             self._update_browser_runtime(workspace, browser_result)
             self._log_event(
                 workspace.id,
                 "browser_ready",
                 "Browser container is ready",
-                {"browser_identifier": browser_result.identifier, "browser_webrtc_port": workspace.browser_webrtc_external_port},
+                {
+                    "browser_identifier": browser_result.identifier,
+                    "browser_webrtc_port": workspace.browser_webrtc_external_port,
+                },
             )
         except Exception as exc:
             # Browser container startup failure should not affect main runtime
-            logger.error(f"Workspace {workspace.id}: Browser ContainerStartFailed: {exc}", exc_info=True)
+            logger.error(
+                f"Workspace {workspace.id}: Browser ContainerStartFailed: {exc}",
+                exc_info=True,
+            )
             workspace.browser_status = "error"
             self._log_event(
                 workspace.id,
@@ -198,19 +229,29 @@ class RuntimeProvisionService:
 
         # 6. Start Canvas Container
         try:
-            self._log_event(workspace.id, "canvas_starting", "BeginCreate Canvas Container")
+            self._log_event(
+                workspace.id, "canvas_starting", "BeginCreate Canvas Container"
+            )
             canvas_context = self._build_canvas_runtime_context(workspace)
-            canvas_result = orchestrator.create_canvas_runtime(workspace, canvas_context)
+            canvas_result = orchestrator.create_canvas_runtime(
+                workspace, canvas_context
+            )
             self._update_canvas_runtime(workspace, canvas_result)
             self._log_event(
                 workspace.id,
                 "canvas_ready",
                 "Canvas container is ready",
-                {"canvas_identifier": canvas_result.identifier, "canvas_port": workspace.canvas_external_port},
+                {
+                    "canvas_identifier": canvas_result.identifier,
+                    "canvas_port": workspace.canvas_external_port,
+                },
             )
         except Exception as exc:
             # Canvas container startup failure should not affect main runtime
-            logger.error(f"Workspace {workspace.id}: Canvas ContainerStartFailed: {exc}", exc_info=True)
+            logger.error(
+                f"Workspace {workspace.id}: Canvas ContainerStartFailed: {exc}",
+                exc_info=True,
+            )
             workspace.canvas_status = "error"
             self._log_event(
                 workspace.id,
@@ -234,7 +275,7 @@ class RuntimeProvisionService:
 
         # Port configuration (now using fixed allocated port)
         ports_config = self._build_ports_config(workspace)
-        
+
         # Render startup.sh
         self.template_engine.render_to_file(
             "docker/startup.sh.j2",
@@ -242,7 +283,7 @@ class RuntimeProvisionService:
             {
                 "workspace": {"id": workspace.id, "name": workspace.name},
                 "environment": environment,
-                "ports": ports_config, # Port configuration passed to template
+                "ports": ports_config,  # Port configuration passed to template
                 "git": {"url": workspace.git_url, "branch": workspace.branch},
             },
             executable=True,
@@ -250,38 +291,44 @@ class RuntimeProvisionService:
 
         # 2. Build volume mounts
         volumes = self._build_volumes(workspace)
-        
+
         # 3. Build port mappings
         port_mappings = []
         for p in ports_config["mappings"]:
-            port_mappings.append(PortMapping(
-                container_port=p["container_port"],
-                host_port=p["host_port"],
-                protocol=p["protocol"]
-            ))
-            
+            port_mappings.append(
+                PortMapping(
+                    container_port=p["container_port"],
+                    host_port=p["host_port"],
+                    protocol=p["protocol"],
+                )
+            )
+
         # Add default port
-        port_mappings.append(PortMapping(
-            container_port=ports_config["default_internal_port"],
-            host_port=workspace.runtime_external_port # If exists, use it
-        ))
+        port_mappings.append(
+            PortMapping(
+                container_port=ports_config["default_internal_port"],
+                host_port=workspace.runtime_external_port,  # If exists, use it
+            )
+        )
         # Note: Canvas render server (3003) moved to separate workspace-canvas container
-        port_mappings.append(PortMapping(
-            container_port=ports_config["terminal_internal_port"],
-            host_port=workspace.terminal_external_port
-        ))
+        port_mappings.append(
+            PortMapping(
+                container_port=ports_config["terminal_internal_port"],
+                host_port=workspace.terminal_external_port,
+            )
+        )
 
         # 4. Build network configuration
         network = NetworkConfig(
-            network_name=self.settings.DOCKER_NETWORK,
-            network_mode="bridge"
+            network_name=self.settings.DOCKER_NETWORK, network_mode="bridge"
         )
-        
+
         # 5. Get Image
         from app.services.container_image_service import get_container_image_service
+
         image_service = get_container_image_service()
         docker_image = image_service.get_docker_image_name(workspace.runtime)
-        
+
         return RuntimeContext(
             environment=environment,
             volumes=volumes,
@@ -290,8 +337,8 @@ class RuntimeProvisionService:
             labels={
                 "image": docker_image,
                 "command": "/start_services.sh",
-                "working_dir": "/workspace-runtime"
-            }
+                "working_dir": "/workspace-runtime",
+            },
         )
 
     def _build_environment(self, workspace: db_models.Workspace) -> dict[str, str]:
@@ -311,7 +358,8 @@ class RuntimeProvisionService:
             "INTERNAL_API_TOKEN": self.settings.INTERNAL_API_TOKEN,
             # Browser container connection information
             "BROWSER_CONTAINER_NAME": browser_container_name,
-            "BROWSER_WEBRTC_INTERNAL_URL": workspace.browser_webrtc_internal_url or f"http://{browser_container_name}:6080",
+            "BROWSER_WEBRTC_INTERNAL_URL": workspace.browser_webrtc_internal_url
+            or f"http://{browser_container_name}:6080",
             "BROWSER_CDP_URL": f"http://{browser_container_name}:9223",
             # Keycloak JWT authentication (workspace-runtime needs to verify access token from frontend)
             "KEYCLOAK_SERVER_URL": self.settings.KEYCLOAK_SERVER_URL,
@@ -319,7 +367,8 @@ class RuntimeProvisionService:
             "KEYCLOAK_CLIENT_ID": self.settings.KEYCLOAK_CLIENT_ID,
             # Canvas container connection information (for service discovery)
             "CANVAS_CONTAINER_NAME": f"workspace-canvas-{workspace.id}",
-            "CANVAS_INTERNAL_URL": workspace.canvas_internal_url or f"http://workspace-canvas-{workspace.id}:3003",
+            "CANVAS_INTERNAL_URL": workspace.canvas_internal_url
+            or f"http://workspace-canvas-{workspace.id}:3003",
             "CANVAS_API_URL": f"http://workspace-canvas-{workspace.id}:3013",
         }
 
@@ -368,13 +417,26 @@ class RuntimeProvisionService:
         }
 
     def _build_volumes(self, workspace: db_models.Workspace) -> list[VolumeMount]:
-        safe_workspace_id = workspace.id.replace('-', '_')
+        safe_workspace_id = workspace.id.replace("-", "_")
 
-        host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
-        host_scripts = Path(self.settings.HOST_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
-        host_claude = Path(self.settings.HOST_CLAUDE_DATA_DIR) / safe_workspace_id
-        manager_workspace = Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
-        manager_scripts = Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        host_workspace = (
+            self._resolve_host_mount_path(self.settings.HOST_WORKSPACES_DIR)
+            / safe_workspace_id
+        )
+        host_scripts = (
+            self._resolve_host_mount_path(self.settings.HOST_WORKSPACE_SCRIPTS_DIR)
+            / safe_workspace_id
+        )
+        host_claude = (
+            self._resolve_host_mount_path(self.settings.HOST_CLAUDE_DATA_DIR)
+            / safe_workspace_id
+        )
+        manager_workspace = (
+            Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
+        )
+        manager_scripts = (
+            Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
+        )
         manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
         manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
@@ -396,28 +458,81 @@ class RuntimeProvisionService:
             # Docker socket
             VolumeMount(source="/var/run/docker.sock", target="/var/run/docker.sock"),
         ]
-        
+
         # Development mode volumes
         node_env = os.environ.get("NODE_ENV", "production")
         if node_env.lower() in ["development", "dev"]:
             host_workspace_runtime_dir = os.environ.get("HOST_WORKSPACE_RUNTIME_DIR")
             if host_workspace_runtime_dir:
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/app", target="/workspace-runtime/app"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/scripts", target="/workspace-runtime/scripts"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/tests", target="/workspace-runtime/tests"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/vendor", target="/workspace-runtime/vendor"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/pyproject.toml", target="/workspace-runtime/pyproject.toml"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/uv.lock", target="/workspace-runtime/uv.lock"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/supervisord.conf", target="/workspace-runtime/supervisord.conf"))
-                volumes.append(VolumeMount(source=f"{host_workspace_runtime_dir}/supervisord.dev.conf", target="/workspace-runtime/supervisord.dev.conf"))
-                
+                host_workspace_runtime = self._resolve_host_mount_path(
+                    host_workspace_runtime_dir
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "app"),
+                        target="/workspace-runtime/app",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "scripts"),
+                        target="/workspace-runtime/scripts",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "tests"),
+                        target="/workspace-runtime/tests",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "vendor"),
+                        target="/workspace-runtime/vendor",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "pyproject.toml"),
+                        target="/workspace-runtime/pyproject.toml",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "uv.lock"),
+                        target="/workspace-runtime/uv.lock",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "supervisord.conf"),
+                        target="/workspace-runtime/supervisord.conf",
+                    )
+                )
+                volumes.append(
+                    VolumeMount(
+                        source=str(host_workspace_runtime / "supervisord.dev.conf"),
+                        target="/workspace-runtime/supervisord.dev.conf",
+                    )
+                )
+
                 host_project_root = os.environ.get("HOST_PROJECT_ROOT")
                 if host_project_root:
-                    volumes.append(VolumeMount(source=f"{host_project_root}/workspace-terminal", target="/workspace-terminal"))
+                    host_project_root_path = self._resolve_host_mount_path(
+                        host_project_root
+                    )
+                    volumes.append(
+                        VolumeMount(
+                            source=str(host_project_root_path / "workspace-terminal"),
+                            target="/workspace-terminal",
+                        )
+                    )
 
         raw_attachments = getattr(workspace, "knowledge_base_attachments", [])
         if isinstance(raw_attachments, list):
-            host_kb_root = Path(self.settings.HOST_KNOWLEDGE_BASES_DIR)
+            host_kb_root = self._resolve_host_mount_path(
+                self.settings.HOST_KNOWLEDGE_BASES_DIR
+            )
             for attachment in raw_attachments:
                 kb = getattr(attachment, "knowledge_base", None)
                 kb_id = getattr(kb, "id", None) or getattr(attachment, "kb_id", None)
@@ -435,6 +550,19 @@ class RuntimeProvisionService:
                 )
 
         return volumes
+
+    def _resolve_host_mount_path(self, value: str) -> Path:
+        path = Path(value).expanduser()
+        if path.is_absolute():
+            return path
+
+        host_project_root = Path(os.environ.get("HOST_PROJECT_ROOT", "")).expanduser()
+        if not host_project_root.is_absolute():
+            raise ValueError(
+                "HOST_PROJECT_ROOT must be an absolute path when host mount paths are relative"
+            )
+
+        return host_project_root / path
 
     def _allocate_ports_if_needed(self, workspace: db_models.Workspace) -> None:
         """Allocate fixed port for workspace (if not yet allocated)"""
@@ -455,50 +583,80 @@ class RuntimeProvisionService:
         # Terminal port
         if not workspace.terminal_external_port:
             workspace.terminal_external_port = self._find_available_port(
-                exclude={workspace.runtime_external_port, workspace.canvas_external_port}
+                exclude={
+                    workspace.runtime_external_port,
+                    workspace.canvas_external_port,
+                }
             )
             allocated.append(workspace.terminal_external_port)
 
         # Browser WebRTC (neko) port
         if not workspace.browser_webrtc_external_port:
-            workspace.browser_webrtc_external_port = self._find_available_browser_webrtc_port(
-                exclude={workspace.runtime_external_port, workspace.canvas_external_port,
-                         workspace.terminal_external_port}
+            workspace.browser_webrtc_external_port = (
+                self._find_available_browser_webrtc_port(
+                    exclude={
+                        workspace.runtime_external_port,
+                        workspace.canvas_external_port,
+                        workspace.terminal_external_port,
+                    }
+                )
             )
             allocated.append(workspace.browser_webrtc_external_port)
 
         # Browser CDP port
         if not workspace.browser_cdp_external_port:
             workspace.browser_cdp_external_port = self._find_available_port(
-                exclude={workspace.runtime_external_port, workspace.canvas_external_port,
-                         workspace.terminal_external_port, workspace.browser_webrtc_external_port}
+                exclude={
+                    workspace.runtime_external_port,
+                    workspace.canvas_external_port,
+                    workspace.terminal_external_port,
+                    workspace.browser_webrtc_external_port,
+                }
             )
             allocated.append(workspace.browser_cdp_external_port)
 
         # Collect allocated ports to avoid conflicts
-        all_allocated = {workspace.runtime_external_port, workspace.canvas_external_port,
-                         workspace.terminal_external_port, workspace.browser_webrtc_external_port,
-                         workspace.browser_cdp_external_port}
+        all_allocated = {
+            workspace.runtime_external_port,
+            workspace.canvas_external_port,
+            workspace.terminal_external_port,
+            workspace.browser_webrtc_external_port,
+            workspace.browser_cdp_external_port,
+        }
 
         # Canvas management API port
         if not workspace.canvas_api_external_port:
-            workspace.canvas_api_external_port = self._find_available_port(exclude=all_allocated)
+            workspace.canvas_api_external_port = self._find_available_port(
+                exclude=all_allocated
+            )
             allocated.append(workspace.canvas_api_external_port)
 
         # Update URL
-        workspace.runtime_external_url = f"http://localhost:{workspace.runtime_external_port}"
-        workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
-        workspace.browser_webrtc_external_url = f"http://localhost:{workspace.browser_webrtc_external_port}"
-        workspace.canvas_external_url = f"http://localhost:{workspace.canvas_external_port}"
+        workspace.runtime_external_url = (
+            f"http://localhost:{workspace.runtime_external_port}"
+        )
+        workspace.terminal_external_url = (
+            f"http://localhost:{workspace.terminal_external_port}"
+        )
+        workspace.browser_webrtc_external_url = (
+            f"http://localhost:{workspace.browser_webrtc_external_port}"
+        )
+        workspace.canvas_external_url = (
+            f"http://localhost:{workspace.canvas_external_port}"
+        )
 
         if allocated:
-            logger.info(f"Workspace {workspace.id}: allocated fixed ports: runtime={workspace.runtime_external_port}, "
-                       f"canvas={workspace.canvas_external_port}, terminal={workspace.terminal_external_port}, "
-                       f"browser_webrtc={workspace.browser_webrtc_external_port}, browser_cdp={workspace.browser_cdp_external_port}, "
-                       f"canvas_api={workspace.canvas_api_external_port}")
+            logger.info(
+                f"Workspace {workspace.id}: allocated fixed ports: runtime={workspace.runtime_external_port}, "
+                f"canvas={workspace.canvas_external_port}, terminal={workspace.terminal_external_port}, "
+                f"browser_webrtc={workspace.browser_webrtc_external_port}, browser_cdp={workspace.browser_cdp_external_port}, "
+                f"canvas_api={workspace.canvas_api_external_port}"
+            )
             self.db.flush()
 
-    def _find_available_port(self, exclude: set[int] = None, protocol: str = "tcp") -> int:
+    def _find_available_port(
+        self, exclude: set[int] = None, protocol: str = "tcp"
+    ) -> int:
         """Randomly find an available port"""
         exclude = exclude or set()
         socket_type = socket.SOCK_STREAM if protocol == "tcp" else socket.SOCK_DGRAM
@@ -514,7 +672,9 @@ class RuntimeProvisionService:
             except OSError:
                 continue
 
-        raise RuntimeError(f"Cannot find available port in range {PORT_RANGE_MIN}-{PORT_RANGE_MAX}")
+        raise RuntimeError(
+            f"Cannot find available port in range {PORT_RANGE_MIN}-{PORT_RANGE_MAX}"
+        )
 
     def _handle_failure(
         self,
@@ -542,15 +702,19 @@ class RuntimeProvisionService:
         limit: int = 100,
         stage: Optional[str] = None,
     ) -> list[db_models.WorkspaceRuntimeLog]:
-        stmt: Select[tuple[db_models.WorkspaceRuntimeLog]] = select(db_models.WorkspaceRuntimeLog).where(
-            db_models.WorkspaceRuntimeLog.workspace_id == workspace_id
-        )
+        stmt: Select[tuple[db_models.WorkspaceRuntimeLog]] = select(
+            db_models.WorkspaceRuntimeLog
+        ).where(db_models.WorkspaceRuntimeLog.workspace_id == workspace_id)
         if stage:
             stmt = stmt.where(db_models.WorkspaceRuntimeLog.stage == stage)
-        stmt = stmt.order_by(db_models.WorkspaceRuntimeLog.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(db_models.WorkspaceRuntimeLog.created_at.desc()).limit(
+            limit
+        )
         return list(self.db.execute(stmt).scalars().all())
 
-    def get_latest_job(self, workspace_id: str) -> Optional[db_models.WorkspaceRuntimeJob]:
+    def get_latest_job(
+        self, workspace_id: str
+    ) -> Optional[db_models.WorkspaceRuntimeJob]:
         stmt = (
             select(db_models.WorkspaceRuntimeJob)
             .where(db_models.WorkspaceRuntimeJob.workspace_id == workspace_id)
@@ -565,7 +729,13 @@ class RuntimeProvisionService:
     def _get_runtime_job(self, job_id: str) -> Optional[db_models.WorkspaceRuntimeJob]:
         return self.db.get(db_models.WorkspaceRuntimeJob, job_id)
 
-    def _log_event(self, workspace_id: str, stage: str, message: str, metadata: Optional[dict[str, Any]] = None) -> None:
+    def _log_event(
+        self,
+        workspace_id: str,
+        stage: str,
+        message: str,
+        metadata: Optional[dict[str, Any]] = None,
+    ) -> None:
         log_entry = db_models.WorkspaceRuntimeLog(
             id=str(uuid4()),
             workspace_id=workspace_id,
@@ -577,7 +747,9 @@ class RuntimeProvisionService:
         self.db.add(log_entry)
         logger.info("[workspace:%s][%s] %s", workspace_id, stage, message)
 
-    def _update_workspace_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
+    def _update_workspace_runtime(
+        self, workspace: db_models.Workspace, runtime_info: RuntimeInfo
+    ) -> None:
         workspace.runtime_id = runtime_info.identifier
         workspace.runtime_internal_url = runtime_info.internal_url
 
@@ -608,7 +780,9 @@ class RuntimeProvisionService:
         terminal_port = 3004
         term_key = f"{terminal_port}/tcp"
         if term_key in ports_mapping and not workspace.terminal_external_url:
-            workspace.terminal_external_url = f"http://localhost:{workspace.terminal_external_port}"
+            workspace.terminal_external_url = (
+                f"http://localhost:{workspace.terminal_external_port}"
+            )
 
         attachment_service = KnowledgeBaseAttachmentService(self.db)
         workspace.runtime_mounted_kb_signature = attachment_service.reconcile_on_start(
@@ -617,12 +791,15 @@ class RuntimeProvisionService:
         workspace.runtime_status = "running"
         workspace.runtime_last_seen = datetime.utcnow()
 
-    def _build_browser_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
+    def _build_browser_runtime_context(
+        self, workspace: db_models.Workspace
+    ) -> RuntimeContext:
         """Build browser runtime context"""
         from app.services.container_image_service import get_container_image_service
+
         image_service = get_container_image_service()
 
-        safe_workspace_id = workspace.id.replace('-', '_')
+        safe_workspace_id = workspace.id.replace("-", "_")
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
 
         # Ensure workspace directory exists
@@ -636,9 +813,19 @@ class RuntimeProvisionService:
 
         # Port mappings for Browser (neko WebRTC + CDP + UDP media)
         port_mappings = [
-            PortMapping(container_port=6080, host_port=workspace.browser_webrtc_external_port, protocol="tcp"),  # neko WebRTC (HTTP + WS signaling)
-            PortMapping(container_port=9223, host_port=workspace.browser_cdp_external_port, protocol="tcp"),  # CDP proxy
-            PortMapping(container_port=udp_port, host_port=udp_port, protocol="udp"),  # WebRTC media (UDPMUX)
+            PortMapping(
+                container_port=6080,
+                host_port=workspace.browser_webrtc_external_port,
+                protocol="tcp",
+            ),  # neko WebRTC (HTTP + WS signaling)
+            PortMapping(
+                container_port=9223,
+                host_port=workspace.browser_cdp_external_port,
+                protocol="tcp",
+            ),  # CDP proxy
+            PortMapping(
+                container_port=udp_port, host_port=udp_port, protocol="udp"
+            ),  # WebRTC media (UDPMUX)
         ]
 
         # Browser container mounts the same workspace directory
@@ -647,8 +834,7 @@ class RuntimeProvisionService:
         ]
 
         network = NetworkConfig(
-            network_name=self.settings.DOCKER_NETWORK,
-            network_mode="bridge"
+            network_name=self.settings.DOCKER_NETWORK, network_mode="bridge"
         )
 
         return RuntimeContext(
@@ -671,11 +857,13 @@ class RuntimeProvisionService:
             labels={
                 "image": image_service.get_browser_image_name(),
                 "command": None,
-                "working_dir": "/workspace"
-            }
+                "working_dir": "/workspace",
+            },
         )
 
-    def _update_browser_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
+    def _update_browser_runtime(
+        self, workspace: db_models.Workspace, runtime_info: RuntimeInfo
+    ) -> None:
         """Update Browser Runtime Status"""
         workspace.browser_container_id = runtime_info.identifier
         workspace.browser_webrtc_internal_url = runtime_info.internal_url
@@ -683,12 +871,15 @@ class RuntimeProvisionService:
         workspace.browser_status = "running"
         workspace.browser_last_seen = datetime.utcnow()
 
-    def _build_canvas_runtime_context(self, workspace: db_models.Workspace) -> RuntimeContext:
+    def _build_canvas_runtime_context(
+        self, workspace: db_models.Workspace
+    ) -> RuntimeContext:
         """Build canvas runtime context"""
         from app.services.container_image_service import get_container_image_service
+
         image_service = get_container_image_service()
 
-        safe_workspace_id = workspace.id.replace('-', '_')
+        safe_workspace_id = workspace.id.replace("-", "_")
         host_workspace = Path(self.settings.HOST_WORKSPACES_DIR) / safe_workspace_id
 
         # Ensure workspace directory exists
@@ -698,8 +889,16 @@ class RuntimeProvisionService:
 
         # Port mappings: 3003 (render server) + 3013 (management API)
         port_mappings = [
-            PortMapping(container_port=3003, host_port=workspace.canvas_external_port, protocol="tcp"),
-            PortMapping(container_port=3013, host_port=workspace.canvas_api_external_port, protocol="tcp"),
+            PortMapping(
+                container_port=3003,
+                host_port=workspace.canvas_external_port,
+                protocol="tcp",
+            ),
+            PortMapping(
+                container_port=3013,
+                host_port=workspace.canvas_api_external_port,
+                protocol="tcp",
+            ),
         ]
 
         # Mount the same workspace directory
@@ -708,8 +907,7 @@ class RuntimeProvisionService:
         ]
 
         network = NetworkConfig(
-            network_name=self.settings.DOCKER_NETWORK,
-            network_mode="bridge"
+            network_name=self.settings.DOCKER_NETWORK, network_mode="bridge"
         )
 
         return RuntimeContext(
@@ -727,15 +925,20 @@ class RuntimeProvisionService:
             labels={
                 "image": image_service.get_canvas_image_name(),
                 "command": None,
-                "working_dir": "/workspace"
-            }
+                "working_dir": "/workspace",
+            },
         )
 
-    def _update_canvas_runtime(self, workspace: db_models.Workspace, runtime_info: RuntimeInfo) -> None:
+    def _update_canvas_runtime(
+        self, workspace: db_models.Workspace, runtime_info: RuntimeInfo
+    ) -> None:
         """Update Canvas Runtime Status"""
         workspace.canvas_container_id = runtime_info.identifier
         workspace.canvas_internal_url = runtime_info.internal_url
-        workspace.canvas_external_url = runtime_info.external_url or f"http://localhost:{workspace.canvas_external_port}"
+        workspace.canvas_external_url = (
+            runtime_info.external_url
+            or f"http://localhost:{workspace.canvas_external_port}"
+        )
         workspace.canvas_status = "running"
         workspace.canvas_last_seen = datetime.utcnow()
         workspace.canvas_created_at = datetime.utcnow()

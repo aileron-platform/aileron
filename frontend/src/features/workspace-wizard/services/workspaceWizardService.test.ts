@@ -76,4 +76,30 @@ describe('workspaceWizardService.createWorkspace', () => {
       cliType: 'claude-code',
     });
   });
+
+  it('uses the default runtime when runtime selection is empty', async () => {
+    postMock.mockResolvedValue({ id: 'ws-789' });
+
+    await workspaceWizardService.createWorkspace({
+      name: 'Default Runtime Workspace',
+      description: 'test',
+      branch: 'main',
+      runtime: '',
+      setupScript: '',
+      envVars: [],
+      cliType: 'claude-code',
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/workspaces/', {
+      name: 'Default Runtime Workspace',
+      description: 'test',
+      gitUrl: undefined,
+      runtime: 'universal',
+      targetNamespace: undefined,
+      setupScript: '',
+      envVars: [],
+      branch: 'main',
+      cliType: 'claude-code',
+    });
+  });
 });

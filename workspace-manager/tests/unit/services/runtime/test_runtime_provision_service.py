@@ -17,13 +17,14 @@ from app.services.orchestrator import (
     RuntimeStatusType,
     VolumeMount,
     PortMapping,
-    NetworkConfig
+    NetworkConfig,
 )
 from app.db import models as db_models
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_db_session():
@@ -37,6 +38,7 @@ def mock_db_session():
     session.execute = MagicMock()
     session.scalar = MagicMock(return_value=None)
     return session
+
 
 @pytest.fixture
 def mock_settings():
@@ -64,12 +66,14 @@ def mock_settings():
     settings.KEYCLOAK_CLIENT_ID = "aileron-web"
     return settings
 
+
 @pytest.fixture
 def mock_template_engine():
     """Mock ScriptTemplateEngine"""
     engine = MagicMock()
     engine.render_to_file.return_value = Path("/tmp/startup.sh")
     return engine
+
 
 @pytest.fixture
 def sample_workspace():
@@ -94,14 +98,22 @@ def sample_workspace():
     workspace.knowledge_base_attachments = []
     return workspace
 
+
 @pytest.fixture
 def provision_service(mock_db_session, mock_settings, mock_template_engine):
     """RuntimeProvisionService Instance"""
-    with patch("app.services.runtime_provision_service.get_settings", return_value=mock_settings):
-        with patch("app.services.runtime_provision_service.ScriptTemplateEngine", return_value=mock_template_engine):
+    with patch(
+        "app.services.runtime_provision_service.get_settings",
+        return_value=mock_settings,
+    ):
+        with patch(
+            "app.services.runtime_provision_service.ScriptTemplateEngine",
+            return_value=mock_template_engine,
+        ):
             service = RuntimeProvisionService(mock_db_session)
             service.template_engine = mock_template_engine
             return service
+
 
 @pytest.fixture
 def mock_orchestrator():
@@ -109,24 +121,28 @@ def mock_orchestrator():
     orchestrator = MagicMock()
     return orchestrator
 
+
 # ============================================================================
 # Tests
 # ============================================================================
 
+
 @pytest.mark.unit
 class TestRuntimeProvisionService:
-    
+
     def test_execute_runtime_provision_success(
         self, provision_service, mock_db_session, sample_workspace, mock_orchestrator
     ):
         """Test: Successfully Execute Build Flow"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
-        
+
         # Mock OrchestratorFactory
-        with patch("app.services.runtime_provision_service.OrchestratorFactory") as mock_factory:
+        with patch(
+            "app.services.runtime_provision_service.OrchestratorFactory"
+        ) as mock_factory:
             mock_factory.get_orchestrator.return_value = mock_orchestrator
-            
+
             # Mock create_workspace_runtime return value
             mock_orchestrator.create_workspace_runtime.return_value = RuntimeInfo(
                 identifier="container-123",
@@ -139,60 +155,62 @@ class TestRuntimeProvisionService:
                 platform="docker",
                 extra_info={
                     "container_name": "ws-123",
-                    "ports": {
-                        "3002/tcp": 8080,
-                        "3003/tcp": 8081,
-                        "3004/tcp": 8082
-                    }
-                }
+                    "ports": {"3002/tcp": 8080, "3003/tcp": 8081, "3004/tcp": 8082},
+                },
             )
-            
+
             # Act
             provision_service.execute_runtime_provision("workspace-123")
-            
+
             # Assert
             # 1. Job created
-            assert mock_db_session.add.call_count >= 2 # Job + Logs
-            
+            assert mock_db_session.add.call_count >= 2  # Job + Logs
+
             # 2. Orchestrator called
             mock_orchestrator.create_workspace_runtime.assert_called_once()
             call_args = mock_orchestrator.create_workspace_runtime.call_args
             assert call_args[0][0] == sample_workspace
             assert isinstance(call_args[0][1], RuntimeContext)
-            
+
             # 3. Workspace updated
             assert sample_workspace.runtime_id == "container-123"
             assert sample_workspace.runtime_status == "running"
             assert sample_workspace.runtime_external_url == "http://localhost:8080"
             assert sample_workspace.terminal_external_url == "http://localhost:8082"
 
-    def test_build_runtime_context(self, provision_service, sample_workspace, mock_template_engine):
+    def test_build_runtime_context(
+        self, provision_service, sample_workspace, mock_template_engine
+    ):
         """Test: Build RuntimeContext"""
         # Arrange
-        with patch("app.services.container_image_service.get_container_image_service") as mock_image_service_getter:
+        with patch(
+            "app.services.container_image_service.get_container_image_service"
+        ) as mock_image_service_getter:
             mock_image_service = MagicMock()
-            mock_image_service.get_docker_image_name.return_value = "workspace-image:latest"
+            mock_image_service.get_docker_image_name.return_value = (
+                "workspace-image:latest"
+            )
             mock_image_service_getter.return_value = mock_image_service
-            
+
             # Act
             context = provision_service._build_runtime_context(sample_workspace)
-            
+
             # Assert
             assert isinstance(context, RuntimeContext)
             assert context.labels["image"] == "workspace-image:latest"
-            
+
             # Environment
             assert context.environment["WORKSPACE_ID"] == "workspace-123"
             assert context.environment["NODE_ENV"] == "production"
-            
+
             # Volumes
-            assert len(context.volumes) >= 3 # workspace, scripts, docker.sock
+            assert len(context.volumes) >= 3  # workspace, scripts, docker.sock
             assert any(v.target == "/workspace" for v in context.volumes)
-            
+
             # Ports
             # Only the runtime and terminal ports are published by this context.
             assert len(context.ports) == 2
-            
+
             # Template rendered
             mock_template_engine.render_to_file.assert_called_once()
 
@@ -204,17 +222,79 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
-        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "mounted-workspace-scripts")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
+            tmp_path / "mounted-workspace-scripts"
+        )
         mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
-        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(tmp_path / "mounted-knowledge-bases")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
+            tmp_path / "mounted-knowledge-bases"
+        )
 
         volumes = provision_service._build_volumes(sample_workspace)
 
         sources = {volume.target: volume.source for volume in volumes}
         assert sources["/workspace"] == str(tmp_path / "workspaces" / "workspace_123")
-        assert sources["/scripts"] == str(tmp_path / "workspace-scripts" / "workspace_123")
-        assert sources["/home/developer/.claude"] == str(tmp_path / "claude-data" / "workspace_123")
-        assert (tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh").is_file()
+        assert sources["/scripts"] == str(
+            tmp_path / "workspace-scripts" / "workspace_123"
+        )
+        assert sources["/home/developer/.claude"] == str(
+            tmp_path / "claude-data" / "workspace_123"
+        )
+        assert (
+            tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh"
+        ).is_file()
+
+    def test_build_volumes_resolves_relative_host_mount_paths(
+        self,
+        provision_service,
+        sample_workspace,
+        mock_settings,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
+        mock_settings.HOST_WORKSPACES_DIR = "data/workspace-data"
+        mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = "data/workspace-scripts"
+        mock_settings.HOST_CLAUDE_DATA_DIR = "data/claude-data"
+        mock_settings.HOST_KNOWLEDGE_BASES_DIR = "data/knowledge-bases"
+        mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
+            tmp_path / "mounted-workspace-scripts"
+        )
+        mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
+            tmp_path / "mounted-knowledge-bases"
+        )
+        monkeypatch.setenv("HOST_PROJECT_ROOT", str(tmp_path / "project-root"))
+
+        volumes = provision_service._build_volumes(sample_workspace)
+
+        sources = {volume.target: volume.source for volume in volumes}
+        assert sources["/workspace"] == str(
+            tmp_path / "project-root" / "data" / "workspace-data" / "workspace_123"
+        )
+        assert sources["/scripts"] == str(
+            tmp_path / "project-root" / "data" / "workspace-scripts" / "workspace_123"
+        )
+        assert sources["/home/developer/.claude"] == str(
+            tmp_path / "project-root" / "data" / "claude-data" / "workspace_123"
+        )
+
+    def test_build_volumes_rejects_relative_host_paths_without_absolute_project_root(
+        self,
+        provision_service,
+        sample_workspace,
+        mock_settings,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
+        mock_settings.HOST_WORKSPACES_DIR = "data/workspace-data"
+        mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
+        monkeypatch.setenv("HOST_PROJECT_ROOT", ".")
+
+        with pytest.raises(
+            ValueError, match="HOST_PROJECT_ROOT must be an absolute path"
+        ):
+            provision_service._build_volumes(sample_workspace)
 
     def test_build_volumes_mounts_runtime_vendor_in_development(
         self,
@@ -224,19 +304,31 @@ class TestRuntimeProvisionService:
         tmp_path: Path,
     ):
         monkeypatch.setenv("NODE_ENV", "development")
-        monkeypatch.setenv("HOST_WORKSPACE_RUNTIME_DIR", str(tmp_path / "workspace-runtime"))
+        monkeypatch.setenv(
+            "HOST_WORKSPACE_RUNTIME_DIR", str(tmp_path / "workspace-runtime")
+        )
 
         volumes = provision_service._build_volumes(sample_workspace)
 
         sources = {volume.target: volume.source for volume in volumes}
-        assert sources["/workspace-runtime/app"] == str(tmp_path / "workspace-runtime" / "app")
-        assert sources["/workspace-runtime/scripts"] == str(tmp_path / "workspace-runtime" / "scripts")
-        assert sources["/workspace-runtime/tests"] == str(tmp_path / "workspace-runtime" / "tests")
-        assert sources["/workspace-runtime/vendor"] == str(tmp_path / "workspace-runtime" / "vendor")
+        assert sources["/workspace-runtime/app"] == str(
+            tmp_path / "workspace-runtime" / "app"
+        )
+        assert sources["/workspace-runtime/scripts"] == str(
+            tmp_path / "workspace-runtime" / "scripts"
+        )
+        assert sources["/workspace-runtime/tests"] == str(
+            tmp_path / "workspace-runtime" / "tests"
+        )
+        assert sources["/workspace-runtime/vendor"] == str(
+            tmp_path / "workspace-runtime" / "vendor"
+        )
         assert sources["/workspace-runtime/pyproject.toml"] == str(
             tmp_path / "workspace-runtime" / "pyproject.toml"
         )
-        assert sources["/workspace-runtime/uv.lock"] == str(tmp_path / "workspace-runtime" / "uv.lock")
+        assert sources["/workspace-runtime/uv.lock"] == str(
+            tmp_path / "workspace-runtime" / "uv.lock"
+        )
 
     def test_build_volumes_adds_knowledge_base_mounts(
         self, provision_service, sample_workspace, mock_settings, tmp_path: Path
@@ -246,9 +338,13 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
-        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "mounted-workspace-scripts")
+        mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
+            tmp_path / "mounted-workspace-scripts"
+        )
         mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
-        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(tmp_path / "mounted-knowledge-bases")
+        mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
+            tmp_path / "mounted-knowledge-bases"
+        )
         sample_workspace.setup_script = None
         sample_workspace.knowledge_base_attachments = [
             Mock(
@@ -267,15 +363,25 @@ class TestRuntimeProvisionService:
 
         volumes = provision_service._build_volumes(sample_workspace)
 
-        kb_mounts = {volume.target: volume for volume in volumes if volume.target.startswith("/knowledge/")}
-        assert kb_mounts["/knowledge/docs"].source == str(tmp_path / "knowledge-bases" / "kb-1")
+        kb_mounts = {
+            volume.target: volume
+            for volume in volumes
+            if volume.target.startswith("/knowledge/")
+        }
+        assert kb_mounts["/knowledge/docs"].source == str(
+            tmp_path / "knowledge-bases" / "kb-1"
+        )
         assert kb_mounts["/knowledge/docs"].read_only is False
-        assert kb_mounts["/knowledge/readonly-docs"].source == str(tmp_path / "knowledge-bases" / "kb-2")
+        assert kb_mounts["/knowledge/readonly-docs"].source == str(
+            tmp_path / "knowledge-bases" / "kb-2"
+        )
         assert kb_mounts["/knowledge/readonly-docs"].read_only is True
         assert (tmp_path / "mounted-knowledge-bases" / "kb-1").is_dir()
         assert (tmp_path / "mounted-knowledge-bases" / "kb-2").is_dir()
 
-    def test_find_available_port_uses_requested_protocol(self, provision_service, monkeypatch: pytest.MonkeyPatch):
+    def test_find_available_port_uses_requested_protocol(
+        self, provision_service, monkeypatch: pytest.MonkeyPatch
+    ):
         socket_types: list[int] = []
         ports_tried: list[int] = []
 
@@ -295,8 +401,13 @@ class TestRuntimeProvisionService:
                     raise OSError("port unavailable")
 
         candidate_ports = iter([41001, 41002])
-        monkeypatch.setattr("app.services.runtime_provision_service.random.randint", lambda _a, _b: next(candidate_ports))
-        monkeypatch.setattr("app.services.runtime_provision_service.socket.socket", FakeSocket)
+        monkeypatch.setattr(
+            "app.services.runtime_provision_service.random.randint",
+            lambda _a, _b: next(candidate_ports),
+        )
+        monkeypatch.setattr(
+            "app.services.runtime_provision_service.socket.socket", FakeSocket
+        )
 
         port = provision_service._find_available_port(protocol="udp")
 
@@ -313,16 +424,25 @@ class TestRuntimeProvisionService:
         sample_workspace.browser_webrtc_external_port = 52330
         sample_workspace.browser_cdp_external_port = 9223
 
-        with patch("app.services.container_image_service.get_container_image_service") as mock_image_service_getter:
+        with patch(
+            "app.services.container_image_service.get_container_image_service"
+        ) as mock_image_service_getter:
             mock_image_service = MagicMock()
-            mock_image_service.get_browser_image_name.return_value = "workspace-browser:latest"
+            mock_image_service.get_browser_image_name.return_value = (
+                "workspace-browser:latest"
+            )
             mock_image_service_getter.return_value = mock_image_service
             context = provision_service._build_browser_runtime_context(sample_workspace)
 
         assert context.environment["NEKO_WEBRTC_UDPMUX"] == "52330"
         assert context.environment["NEKO_WEBRTC_NAT1TO1"] == "127.0.0.1"
-        assert any(port.protocol == "udp" and port.host_port == 52330 for port in context.ports)
-        assert any(port.protocol == "udp" and port.container_port == 52330 for port in context.ports)
+        assert any(
+            port.protocol == "udp" and port.host_port == 52330 for port in context.ports
+        )
+        assert any(
+            port.protocol == "udp" and port.container_port == 52330
+            for port in context.ports
+        )
 
     def test_allocate_ports_uses_shared_browser_webrtc_port_for_tcp_and_udp(
         self, provision_service, sample_workspace
@@ -336,7 +456,11 @@ class TestRuntimeProvisionService:
         sample_workspace.canvas_api_external_port = None
 
         ports = iter([31002, 31003, 31004, 52330, 39223, 33003, 33013])
-        with patch.object(provision_service, "_find_available_port", side_effect=lambda *args, **kwargs: next(ports)):
+        with patch.object(
+            provision_service,
+            "_find_available_port",
+            side_effect=lambda *args, **kwargs: next(ports),
+        ):
             with patch.object(
                 provision_service,
                 "_find_available_browser_webrtc_port",
@@ -363,7 +487,9 @@ class TestRuntimeProvisionService:
             checks.append((port, protocol))
             return not (port == 52330 and protocol == "udp")
 
-        monkeypatch.setattr(provision_service, "_is_port_available", fake_is_port_available)
+        monkeypatch.setattr(
+            provision_service, "_is_port_available", fake_is_port_available
+        )
 
         port = provision_service._find_available_browser_webrtc_port(exclude={52329})
 
@@ -393,16 +519,18 @@ class TestRuntimeProvisionService:
         # Arrange
         job = Mock(spec=db_models.WorkspaceRuntimeJob)
         error = Exception("Test Error")
-        
+
         # Act
         provision_service._handle_failure(sample_workspace, job, error)
-        
+
         # Assert
         assert job.status == "failed"
         assert job.error_message == "Test Error"
         assert sample_workspace.runtime_status == "error"
 
-    def test_update_workspace_runtime(self, provision_service, sample_workspace, mock_db_session):
+    def test_update_workspace_runtime(
+        self, provision_service, sample_workspace, mock_db_session
+    ):
         """Test: update workspace runtime info"""
         # Arrange
         mock_db_session.get.return_value = sample_workspace
@@ -425,17 +553,13 @@ class TestRuntimeProvisionService:
             platform="docker",
             extra_info={
                 "container_name": "ws-123",
-                "ports": {
-                    "3002/tcp": 8080,
-                    "3003/tcp": 8081,
-                    "3004/tcp": 8082
-                }
-            }
+                "ports": {"3002/tcp": 8080, "3003/tcp": 8081, "3004/tcp": 8082},
+            },
         )
-        
+
         # Act
         provision_service._update_workspace_runtime(sample_workspace, info)
-        
+
         # Assert
         assert sample_workspace.runtime_id == "c-123"
         assert sample_workspace.runtime_external_port == 8080

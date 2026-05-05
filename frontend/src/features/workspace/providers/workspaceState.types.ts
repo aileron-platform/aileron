@@ -393,13 +393,6 @@ export interface RuntimeDuplicateResponse {
   destinationPath: string;
 }
 
-export interface RuntimeArchiveTicketResponse {
-  operationId: string;
-  status: 'succeeded';
-  statusUrl: string;
-  archiveFormat: 'zip' | 'tar';
-}
-
 export interface RuntimeSaveFileResponse {
   versionId: string;
 }

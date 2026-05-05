@@ -33,8 +33,10 @@ class SyncService:
             Sync result dictionary
         """
         if not workspace.runtime_internal_url:
-            raise ValueError(f"Workspace {workspace.id} does not have runtime_internal_url")
-        
+            raise ValueError(
+                f"Workspace {workspace.id} does not have runtime_internal_url"
+            )
+
         results = {
             "ssh": {"success": False, "message": ""},
             "claude_code": {"success": False, "message": ""},
@@ -42,7 +44,7 @@ class SyncService:
             "gemini": {"success": False, "message": ""},
             "git": {"success": False, "message": ""},
         }
-        
+
         base_url = workspace.runtime_internal_url.rstrip("/")
 
         # Internal API Authentication token
@@ -56,26 +58,32 @@ class SyncService:
             if settings.ssh_private_key and settings.ssh_public_key:
                 try:
                     logger.info(f"Sync SSH keys to workspace {workspace.id}")
-                    logger.info(f"Request URL: {base_url}/api/v1/internal/settings/ssh-keys")
+                    logger.info(
+                        f"Request URL: {base_url}/api/v1/internal/settings/ssh-keys"
+                    )
                     response = await client.post(
                         f"{base_url}/api/v1/internal/settings/ssh-keys",
                         json={
                             "privateKey": settings.ssh_private_key,
                             "publicKey": settings.ssh_public_key,
-                        }
+                        },
                     )
                     logger.info(f"SSH keys response status: {response.status_code}")
                     logger.info(f"SSH keys response content: {response.text}")
                     response.raise_for_status()
                     results["ssh"]["success"] = True
-                    results["ssh"]["message"] = i18n.translate("sync.ssh.success", language=language)
+                    results["ssh"]["message"] = i18n.translate(
+                        "sync.ssh.success", language=language
+                    )
                     logger.info(f"SSH keys sync succeeded: {workspace.id}")
                 except Exception as e:
                     logger.error(f"SSH keys sync failed: {e}", exc_info=True)
-                    results["ssh"]["message"] = i18n.translate("sync.ssh.failed", language=language)
+                    results["ssh"]["message"] = i18n.translate(
+                        "sync.ssh.failed", language=language
+                    )
             else:
                 results["ssh"]["message"] = "No SSH keys need to sync"
-            
+
             # 2. Sync Claude Code settings
             try:
                 logger.info(f"Sync Claude Code settings to workspace {workspace.id}")
@@ -94,13 +102,21 @@ class SyncService:
 
                 claude_payload = {
                     "authMethod": auth_method,
-                    "subscriptionAccessToken": claude_settings.get("subscriptionAccessToken"),
-                    "subscriptionRefreshToken": claude_settings.get("subscriptionRefreshToken"),
-                    "subscriptionExpiresAt": claude_settings.get("subscriptionExpiresAt"),
+                    "subscriptionAccessToken": claude_settings.get(
+                        "subscriptionAccessToken"
+                    ),
+                    "subscriptionRefreshToken": claude_settings.get(
+                        "subscriptionRefreshToken"
+                    ),
+                    "subscriptionExpiresAt": claude_settings.get(
+                        "subscriptionExpiresAt"
+                    ),
                     "oauthAccount": claude_settings.get("oauthAccount"),
                     "apiKey": api_key,
                     "model": model,
-                    "environmentVariables": claude_settings.get("environmentVariables", []),
+                    "environmentVariables": claude_settings.get(
+                        "environmentVariables", []
+                    ),
                 }
 
                 logger.info(
@@ -109,7 +125,9 @@ class SyncService:
                     model,
                     len(claude_payload["environmentVariables"]),
                 )
-                logger.info(f"Request URL: {base_url}/api/v1/internal/settings/claude-code")
+                logger.info(
+                    f"Request URL: {base_url}/api/v1/internal/settings/claude-code"
+                )
 
                 response = await client.post(
                     f"{base_url}/api/v1/internal/settings/claude-code",
@@ -122,27 +140,41 @@ class SyncService:
 
                 if response.status_code != 200:
                     response_text = response.text
-                    logger.error(f"Claude Code sync failed, status code: {response.status_code}, response content: {response_text}")
+                    logger.error(
+                        f"Claude Code sync failed, status code: {response.status_code}, response content: {response_text}"
+                    )
                     response.raise_for_status()
                 else:
                     response_data = response.json()
                     logger.info(f"Claude Code sync response: {response_data}")
 
                 results["claude_code"]["success"] = True
-                results["claude_code"]["message"] = i18n.translate("sync.claude_code.success", language=language)
+                results["claude_code"]["message"] = i18n.translate(
+                    "sync.claude_code.success", language=language
+                )
                 logger.info(f"Claude Code settings sync succeeded: {workspace.id}")
             except httpx.HTTPStatusError as e:
-                logger.error(f"Claude Code HTTP Error: {e.response.status_code} - {e.response.text}")
-                results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
+                logger.error(
+                    f"Claude Code HTTP Error: {e.response.status_code} - {e.response.text}"
+                )
+                results["claude_code"]["message"] = i18n.translate(
+                    "sync.claude_code.failed", language=language
+                )
             except httpx.TimeoutException as e:
                 logger.error(f"Claude Code request timeout: {e}")
-                results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
+                results["claude_code"]["message"] = i18n.translate(
+                    "sync.claude_code.failed", language=language
+                )
             except httpx.ConnectError as e:
                 logger.error(f"Claude Code connection error: {e}")
-                results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
+                results["claude_code"]["message"] = i18n.translate(
+                    "sync.claude_code.failed", language=language
+                )
             except Exception as e:
                 logger.error(f"Claude Code settings sync failed: {e}")
-                results["claude_code"]["message"] = i18n.translate("sync.claude_code.failed", language=language)
+                results["claude_code"]["message"] = i18n.translate(
+                    "sync.claude_code.failed", language=language
+                )
 
             # 3. Sync Codex settings
             try:
@@ -151,13 +183,19 @@ class SyncService:
                 additional_settings = settings.additional_settings or {}
                 codex_settings = additional_settings.get("codex", {})
 
+                is_not_connected = codex_settings.get("loginStatus") == "notConnected"
                 codex_payload = {
                     "loginStatus": codex_settings.get("loginStatus", "notConnected"),
                     "account": codex_settings.get("account"),
                     "model": codex_settings.get("model", "gpt-5.3-codex"),
                     "authFlow": codex_settings.get("authFlow"),
-                    "environmentVariables": codex_settings.get("environmentVariables", []),
-                    "clearAuth": codex_settings.get("loginStatus") == "notConnected",
+                    "cliState": (
+                        None if is_not_connected else codex_settings.get("cliState")
+                    ),
+                    "environmentVariables": codex_settings.get(
+                        "environmentVariables", []
+                    ),
+                    "clearAuth": is_not_connected,
                 }
 
                 logger.info(
@@ -172,21 +210,33 @@ class SyncService:
                 )
                 response.raise_for_status()
                 results["codex"]["success"] = True
-                results["codex"]["message"] = i18n.translate("sync.codex.success", language=language)
+                results["codex"]["message"] = i18n.translate(
+                    "sync.codex.success", language=language
+                )
                 logger.info(f"Codex settings sync succeeded: {workspace.id}")
             except httpx.HTTPStatusError as e:
-                logger.error(f"Codex HTTP Error: {e.response.status_code} - {e.response.text}")
-                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+                logger.error(
+                    f"Codex HTTP Error: {e.response.status_code} - {e.response.text}"
+                )
+                results["codex"]["message"] = i18n.translate(
+                    "sync.codex.failed", language=language
+                )
             except httpx.TimeoutException as e:
                 logger.error(f"Codex request timeout: {e}")
-                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+                results["codex"]["message"] = i18n.translate(
+                    "sync.codex.failed", language=language
+                )
             except httpx.ConnectError as e:
                 logger.error(f"Codex connection error: {e}")
-                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
+                results["codex"]["message"] = i18n.translate(
+                    "sync.codex.failed", language=language
+                )
             except Exception as e:
                 logger.error(f"Codex settings sync failed: {e}")
-                results["codex"]["message"] = i18n.translate("sync.codex.failed", language=language)
-            
+                results["codex"]["message"] = i18n.translate(
+                    "sync.codex.failed", language=language
+                )
+
             # 4. Sync Gemini settings
             try:
                 logger.info(f"Sync Gemini settings to workspace {workspace.id}")
@@ -202,7 +252,9 @@ class SyncService:
                     "idToken": gemini_settings.get("idToken"),
                     "expiresAt": gemini_settings.get("expiresAt"),
                     "scope": gemini_settings.get("scope"),
-                    "environmentVariables": gemini_settings.get("environmentVariables", []),
+                    "environmentVariables": gemini_settings.get(
+                        "environmentVariables", []
+                    ),
                 }
 
                 logger.info(
@@ -218,20 +270,32 @@ class SyncService:
                 )
                 response.raise_for_status()
                 results["gemini"]["success"] = True
-                results["gemini"]["message"] = i18n.translate("sync.gemini.success", language=language)
+                results["gemini"]["message"] = i18n.translate(
+                    "sync.gemini.success", language=language
+                )
                 logger.info(f"Gemini settings sync succeeded: {workspace.id}")
             except httpx.HTTPStatusError as e:
-                logger.error(f"Gemini HTTP Error: {e.response.status_code} - {e.response.text}")
-                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+                logger.error(
+                    f"Gemini HTTP Error: {e.response.status_code} - {e.response.text}"
+                )
+                results["gemini"]["message"] = i18n.translate(
+                    "sync.gemini.failed", language=language
+                )
             except httpx.TimeoutException as e:
                 logger.error(f"Gemini request timeout: {e}")
-                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+                results["gemini"]["message"] = i18n.translate(
+                    "sync.gemini.failed", language=language
+                )
             except httpx.ConnectError as e:
                 logger.error(f"Gemini connection error: {e}")
-                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+                results["gemini"]["message"] = i18n.translate(
+                    "sync.gemini.failed", language=language
+                )
             except Exception as e:
                 logger.error(f"Gemini settings sync failed: {e}")
-                results["gemini"]["message"] = i18n.translate("sync.gemini.failed", language=language)
+                results["gemini"]["message"] = i18n.translate(
+                    "sync.gemini.failed", language=language
+                )
 
             # 5. Sync Git settings
             if settings.git_user_name and settings.git_user_email:
@@ -242,22 +306,28 @@ class SyncService:
                         json={
                             "userName": settings.git_user_name,
                             "userEmail": settings.git_user_email,
-                        }
+                        },
                     )
                     response.raise_for_status()
                     results["git"]["success"] = True
-                    results["git"]["message"] = i18n.translate("sync.git.success", language=language)
+                    results["git"]["message"] = i18n.translate(
+                        "sync.git.success", language=language
+                    )
                     logger.info(f"Git settings sync succeeded: {workspace.id}")
                 except Exception as e:
                     logger.error(f"Git settings sync failed: {e}")
-                    results["git"]["message"] = i18n.translate("sync.git.failed", language=language)
+                    results["git"]["message"] = i18n.translate(
+                        "sync.git.failed", language=language
+                    )
             else:
                 results["git"]["message"] = "No Git settings need to sync"
-        
+
         return results
 
     @staticmethod
-    async def sync_to_all_workspaces(user_id: str, settings: UserSetting, db, language: str = "en") -> dict:
+    async def sync_to_all_workspaces(
+        user_id: str, settings: UserSetting, db, language: str = "en"
+    ) -> dict:
         """
         Sync settings to all running workspaces of user
 
@@ -271,54 +341,63 @@ class SyncService:
             Sync result dictionary
         """
         from sqlalchemy import select
-        
+
         # Query all running workspaces for user
         query = select(Workspace).where(
-            Workspace.owner_id == user_id,
-            Workspace.runtime_status == "running"
+            Workspace.owner_id == user_id, Workspace.runtime_status == "running"
         )
         workspaces = db.execute(query).scalars().all()
-        
+
         if not workspaces:
             return {
                 "success": True,
                 "message": "No running workspaces need to sync",
-                "workspaces": []
+                "workspaces": [],
             }
-        
+
         results = []
         for workspace in workspaces:
             try:
-                sync_result = await SyncService.sync_settings_to_runtime(workspace, settings, language)
+                sync_result = await SyncService.sync_settings_to_runtime(
+                    workspace, settings, language
+                )
                 # Check if any actual sync operations succeeded
                 # If no items need sync, still consider as success
-                results.append({
-                    "workspace_id": workspace.id,
-                    "workspace_name": workspace.name,
-                    "success": not any(
-                        not r["success"]
-                        and "no" not in r["message"]
-                        and "not have" not in r["message"]
-                        and "missing" not in r["message"]
-                        for r in sync_result.values()
-                    ),
-                    "details": sync_result,
-                })
+                results.append(
+                    {
+                        "workspace_id": workspace.id,
+                        "workspace_name": workspace.name,
+                        "success": not any(
+                            not r["success"]
+                            and "no" not in r["message"]
+                            and "not have" not in r["message"]
+                            and "missing" not in r["message"]
+                            for r in sync_result.values()
+                        ),
+                        "details": sync_result,
+                    }
+                )
             except Exception as e:
                 logger.error(f"Sync to workspace {workspace.id} failed: {e}")
-                results.append({
-                    "workspace_id": workspace.id,
-                    "workspace_name": workspace.name,
-                    "success": False,
-                    "error": str(e),
-                })
+                results.append(
+                    {
+                        "workspace_id": workspace.id,
+                        "workspace_name": workspace.name,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
 
         all_success = all(r["success"] for r in results)
 
         if all_success:
-            message = i18n.translate("sync.success", language=language, count=len(results))
+            message = i18n.translate(
+                "sync.success", language=language, count=len(results)
+            )
         else:
-            message = i18n.translate("sync.partial_failed", language=language, count=len(results))
+            message = i18n.translate(
+                "sync.partial_failed", language=language, count=len(results)
+            )
 
         return {
             "success": all_success,

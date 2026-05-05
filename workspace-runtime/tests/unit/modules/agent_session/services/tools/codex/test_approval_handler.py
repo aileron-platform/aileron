@@ -51,6 +51,7 @@ def test_resolve_decision_maps_option_kind_and_scope(option, outcome, expected) 
             "request_id": "approval-1",
             "outcome": outcome,
             "option_id": option["option_id"],
+            "scope": option["scope"],
         }
     )
     assert handler._results["approval-1"] == expected

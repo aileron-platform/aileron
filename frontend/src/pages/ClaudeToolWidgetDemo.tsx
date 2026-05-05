@@ -398,7 +398,7 @@ Today, we're excited to announce Claude 3.5 Sonnet, our newest, most intelligent
                   "permission_status": "pending"
                 }}
                 requested_at={new Date().toISOString()}
-                onCodexApprove={(msgId, sandbox, approval) => console.log(`Codex Approved: ${msgId}, Sandbox: ${sandbox}, Approval: ${approval}`)}
+                onCodexApprove={(msgId, scope) => console.log(`Codex Approved: ${msgId}, Scope: ${scope}`)}
                 onDeny={(msgId) => console.log(`Denied: ${msgId}`)}
               />
             </div>

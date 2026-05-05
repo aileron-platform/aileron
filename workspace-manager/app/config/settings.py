@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     """Application settings class"""
 
     # === Application basic settings ===
-    APP_NAME: str = Field(default="Aileron - Workspace Manager", description="Application name")
+    APP_NAME: str = Field(
+        default="Aileron - Workspace Manager", description="Application name"
+    )
     VERSION: str = Field(default="1.0.0", description="Application version")
     DEBUG: bool = Field(default=False, description="Debug mode")
     ENV: str = Field(default="production", description="Execution environment")
@@ -29,29 +31,38 @@ class Settings(BaseSettings):
     # === DatabaseSettings ===
     DATABASE_URL: str = Field(
         default="postgresql://postgres:password@localhost:5432/aileron",
-        description="Database connection URL"
+        description="Database connection URL",
     )
-    DATABASE_ECHO: bool = Field(default=False, description="Whether to echo SQL queries")
-    DATABASE_POOL_SIZE: int = Field(default=10, description="Database connection pool size")
-    DATABASE_MAX_OVERFLOW: int = Field(default=20, description="Database connection pool max overflow")
+    DATABASE_ECHO: bool = Field(
+        default=False, description="Whether to echo SQL queries"
+    )
+    DATABASE_POOL_SIZE: int = Field(
+        default=10, description="Database connection pool size"
+    )
+    DATABASE_MAX_OVERFLOW: int = Field(
+        default=20, description="Database connection pool max overflow"
+    )
 
     # === Redis Settings ===
     REDIS_URL: str = Field(
-        default="redis://localhost:6379/0",
-        description="Redis connection URL"
+        default="redis://localhost:6379/0", description="Redis connection URL"
     )
-    REDIS_CACHE_TTL: int = Field(default=3600, description="Redis cache expiry time (seconds)")
+    REDIS_CACHE_TTL: int = Field(
+        default=3600, description="Redis cache expiry time (seconds)"
+    )
 
     # === CORS Settings ===
     ALLOWED_ORIGINS: str = Field(
         default="http://localhost:3000,http://localhost:3001,http://localhost:8082,http://localhost:8083",
-        description="Allowed CORS origins (comma-separated)"
+        description="Allowed CORS origins (comma-separated)",
     )
 
     # === Docker Settings ===
     DOCKER_HOST: Optional[str] = Field(default=None, description="Docker host")
     DOCKER_NETWORK: str = Field(default="aileron", description="Docker network name")
-    WORKSPACE_IMAGE_PREFIX: str = Field(default="aidh-workspace", description="Workspace image prefix")
+    WORKSPACE_IMAGE_PREFIX: str = Field(
+        default="aidh-workspace", description="Workspace image prefix"
+    )
 
     # === Runtime provisioning settings ===
     RUNTIME_PROVISIONER: Literal["docker", "kubernetes"] = Field(
@@ -61,7 +72,8 @@ class Settings(BaseSettings):
         default="linux", description="Runtime platform (linux/mac/windows)"
     )
     RUNTIME_SCRIPT_ROOT: str = Field(
-        default="/data/init-scripts", description="Runtime generated scripts output root directory"
+        default="/data/init-scripts",
+        description="Runtime generated scripts output root directory",
     )
     HOST_WORKSPACES_DIR: str = Field(
         default="/var/lib/aileron/workspaces",
@@ -100,13 +112,20 @@ class Settings(BaseSettings):
         description="Knowledge base data directory mounted inside workspace-manager",
     )
     RUNTIME_RESERVED_PORTS: Annotated[List[int], NoDecode] = Field(
-        default_factory=lambda: [3002], description="Reserved container ports that cannot be used"
+        default_factory=lambda: [3002],
+        description="Reserved container ports that cannot be used",
     )
-    RUNTIME_AUTO_RETRY: bool = Field(default=True, description="Auto-retry on provisioning failure")
-    RUNTIME_MAX_RETRIES: int = Field(default=3, description="Maximum retry count for background tasks")
+    RUNTIME_AUTO_RETRY: bool = Field(
+        default=True, description="Auto-retry on provisioning failure"
+    )
+    RUNTIME_MAX_RETRIES: int = Field(
+        default=3, description="Maximum retry count for background tasks"
+    )
 
     # === Kubernetes policy related settings ===
-    RUNTIME_K8S_NAMESPACE: str = Field(default="default", description="Deploy namespace")
+    RUNTIME_K8S_NAMESPACE: str = Field(
+        default="default", description="Deploy namespace"
+    )
     RUNTIME_K8S_CR_NAMESPACE: Optional[str] = Field(
         default=None,
         description="Namespace for workspace custom resource creation; defaults to deploy namespace if not set",
@@ -229,34 +248,42 @@ class Settings(BaseSettings):
         description="Bootstrap default workspace target namespace; defaults to RUNTIME_K8S_NAMESPACE if not set",
     )
 
+    # === Codex login settings ===
+    CODEX_BIN: str = Field(
+        default="/usr/local/bin/codex",
+        description="Codex CLI binary used by workspace-manager for manager-owned login",
+    )
+    CODEX_MANAGER_STATE_DIR: str = Field(
+        default="/data/codex-login",
+        description="Directory for manager-owned per-user Codex login state",
+    )
+
     # === Celery Settings ===
     CELERY_BROKER_URL: str = Field(
-        default="redis://localhost:6379/1",
-        description="Celery broker URL"
+        default="redis://localhost:6379/1", description="Celery broker URL"
     )
     CELERY_RESULT_BACKEND: str = Field(
-        default="redis://localhost:6379/1",
-        description="Celery result backend"
+        default="redis://localhost:6379/1", description="Celery result backend"
     )
 
     # === FileSaveSettings ===
     UPLOAD_DIR: str = Field(default="./uploads", description="File upload directory")
-    MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="Maximum file size (bytes)")
+    MAX_FILE_SIZE: int = Field(
+        default=100 * 1024 * 1024, description="Maximum file size (bytes)"
+    )
     ALLOWED_FILE_TYPES: str = Field(
         default=".zip,.tar.gz,.tar,.py,.js,.ts,.json,.md",
-        description="Allowed file types (comma-separated)"
+        description="Allowed file types (comma-separated)",
     )
 
     # === Template center settings ===
     TEMPLATE_STORAGE_PATH: str = Field(
-        default="/data/template-center",
-        description="Template storage path"
+        default="/data/template-center", description="Template storage path"
     )
 
     # === File management settings ===
     FILE_TREE_MAX_DEPTH: int = Field(
-        default=10,
-        description="Maximum depth for file tree scan (default 10 levels)"
+        default=10, description="Maximum depth for file tree scan (default 10 levels)"
     )
     DEFAULT_USER_KB_QUOTA_BYTES: int = Field(
         default=5 * 1024 * 1024 * 1024,
@@ -316,30 +343,27 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = Field(default="INFO", description="Log level")
     LOG_FORMAT: str = Field(
         default="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        description="Log format"
+        description="Log format",
     )
 
     # === Monitoring and health check settings ===
-    HEALTH_CHECK_TIMEOUT: int = Field(default=30, description="Health check timeout (seconds)")
+    HEALTH_CHECK_TIMEOUT: int = Field(
+        default=30, description="Health check timeout (seconds)"
+    )
 
     # === Internal API Settings ===
     INTERNAL_API_TOKEN: str = Field(
-        default="dev-internal-token",
-        description="Internal API authentication token"
+        default="dev-internal-token", description="Internal API authentication token"
     )
 
     # === Keycloak Settings ===
     KEYCLOAK_SERVER_URL: str = Field(
         default="http://aileron-keycloak-dev:8080",
-        description="Keycloak server URL (internal Docker network address)"
+        description="Keycloak server URL (internal Docker network address)",
     )
-    KEYCLOAK_REALM: str = Field(
-        default="aileron",
-        description="Keycloak realm name"
-    )
+    KEYCLOAK_REALM: str = Field(default="aileron", description="Keycloak realm name")
     KEYCLOAK_CLIENT_ID: str = Field(
-        default="aileron-frontend",
-        description="Keycloak client ID"
+        default="aileron-frontend", description="Keycloak client ID"
     )
     GEMINI_GOOGLE_CLIENT_ID: str = Field(
         default="",
@@ -363,14 +387,17 @@ class Settings(BaseSettings):
             # Remove possible quotes
             v = self.ALLOWED_ORIGINS.strip().strip('"').strip("'")
             # Check if is JSON format
-            if v.startswith('[') and v.endswith(']'):
+            if v.startswith("[") and v.endswith("]"):
                 import json
+
                 try:
                     origins.extend(json.loads(v))
                 except json.JSONDecodeError:
                     pass
-            elif ',' in v:
-                origins.extend(origin.strip() for origin in v.split(",") if origin.strip())
+            elif "," in v:
+                origins.extend(
+                    origin.strip() for origin in v.split(",") if origin.strip()
+                )
             elif v:
                 origins.append(v)
 
@@ -378,11 +405,13 @@ class Settings(BaseSettings):
         origins.append(public_frontend_origin)
 
         if not origins:
-            origins.extend([
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:8082",
-            ])
+            origins.extend(
+                [
+                    "http://localhost:3000",
+                    "http://localhost:3001",
+                    "http://localhost:8082",
+                ]
+            )
 
         # Deduplicate while preserving order
         return list(dict.fromkeys(origins))
@@ -391,7 +420,11 @@ class Settings(BaseSettings):
     def allowed_file_types_list(self) -> List[str]:
         """Get allowed file type list"""
         if isinstance(self.ALLOWED_FILE_TYPES, str):
-            return [file_type.strip() for file_type in self.ALLOWED_FILE_TYPES.split(",") if file_type.strip()]
+            return [
+                file_type.strip()
+                for file_type in self.ALLOWED_FILE_TYPES.split(",")
+                if file_type.strip()
+            ]
         return [".zip", ".tar.gz", ".tar", ".py", ".js", ".ts", ".json", ".md"]
 
     @field_validator("RUNTIME_RESERVED_PORTS", mode="before")
@@ -415,7 +448,9 @@ class Settings(BaseSettings):
     def parse_k8s_allowed_namespaces(cls, v):
         """Parse allowed Kubernetes namespace list"""
         if isinstance(v, str):
-            namespaces = [namespace.strip() for namespace in v.split(",") if namespace.strip()]
+            namespaces = [
+                namespace.strip() for namespace in v.split(",") if namespace.strip()
+            ]
             return namespaces or ["default"]
         return v
 
@@ -446,7 +481,11 @@ class Settings(BaseSettings):
             raise ValueError("PUBLIC_SCHEME must be either 'http' or 'https'")
         return normalized
 
-    @field_validator("PUBLIC_RUNTIME_HOST_PATTERN", "PUBLIC_BROWSER_HOST_PATTERN", "PUBLIC_CANVAS_HOST_PATTERN")
+    @field_validator(
+        "PUBLIC_RUNTIME_HOST_PATTERN",
+        "PUBLIC_BROWSER_HOST_PATTERN",
+        "PUBLIC_CANVAS_HOST_PATTERN",
+    )
     @classmethod
     def validate_workspace_host_patterns(cls, v: str) -> str:
         """Verify workspace host pattern must include workspaceId."""
@@ -471,9 +510,17 @@ class Settings(BaseSettings):
     def parse_kb_allowed_extensions(cls, v):
         """Parse KB allowed extension list."""
         if isinstance(v, str):
-            return [extension.strip().lower() for extension in v.split(",") if extension.strip()]
+            return [
+                extension.strip().lower()
+                for extension in v.split(",")
+                if extension.strip()
+            ]
         if isinstance(v, list):
-            return [str(extension).strip().lower() for extension in v if str(extension).strip()]
+            return [
+                str(extension).strip().lower()
+                for extension in v
+                if str(extension).strip()
+            ]
         return v
 
     @field_validator(
@@ -498,17 +545,25 @@ class Settings(BaseSettings):
         self.resolve_public_host(self.PUBLIC_FRONTEND_HOST)
         self.resolve_public_host(self.PUBLIC_WORKSPACE_MANAGER_HOST)
         self.resolve_public_host(self.PUBLIC_KEYCLOAK_HOST)
-        self.resolve_public_host(self.PUBLIC_RUNTIME_HOST_PATTERN, workspace_id="sample")
-        self.resolve_public_host(self.PUBLIC_BROWSER_HOST_PATTERN, workspace_id="sample")
+        self.resolve_public_host(
+            self.PUBLIC_RUNTIME_HOST_PATTERN, workspace_id="sample"
+        )
+        self.resolve_public_host(
+            self.PUBLIC_BROWSER_HOST_PATTERN, workspace_id="sample"
+        )
         self.resolve_public_host(self.PUBLIC_CANVAS_HOST_PATTERN, workspace_id="sample")
         return self
 
-    def resolve_public_host(self, template: str, workspace_id: Optional[str] = None) -> str:
+    def resolve_public_host(
+        self, template: str, workspace_id: Optional[str] = None
+    ) -> str:
         """Resolve public host template to actual host."""
         host = template.replace("{baseDomain}", self.PUBLIC_BASE_DOMAIN)
         if "{workspaceId}" in host:
             if not workspace_id:
-                raise ValueError("workspace_id is required to resolve workspace host pattern")
+                raise ValueError(
+                    "workspace_id is required to resolve workspace host pattern"
+                )
             host = host.replace("{workspaceId}", workspace_id)
 
         if "{" in host or "}" in host:
@@ -517,7 +572,9 @@ class Settings(BaseSettings):
             raise ValueError("Resolved public host must not be empty")
         return host
 
-    def build_public_url(self, template: str, workspace_id: Optional[str] = None) -> str:
+    def build_public_url(
+        self, template: str, workspace_id: Optional[str] = None
+    ) -> str:
         """Build complete public URL."""
         return f"{self.PUBLIC_SCHEME}://{self.resolve_public_host(template, workspace_id=workspace_id)}"
 
@@ -548,7 +605,7 @@ class Settings(BaseSettings):
         extra="ignore",
         env_ignore_empty=True,
         # Disable automatic JSON parsing, let validators handle it
-        env_parse_none_str="null"
+        env_parse_none_str="null",
     )
 
 

@@ -92,6 +92,7 @@ const fileManagement = {
     pending: {
       copy: '正在複製 {{name}}...',
       extract: '正在解壓 {{name}}...',
+      archive: '正在準備 {{name}}...',
       generic: '檔案操作處理中...',
       progress: '進度 {{value}}%',
       itemFallback: '項目'
@@ -136,6 +137,12 @@ const fileManagement = {
       downloadSuccessDescription: '已開始下載 {{count}} 個檔案',
       downloadFailed: '下載失敗',
       downloadError: '下載檔案時發生錯誤',
+      archiveStarted: '正在準備 ZIP 下載',
+      archiveReady: 'ZIP 下載已準備好',
+      archiveReadyDescription: '{{name}} 已可下載',
+      archiveFailed: 'ZIP 準備失敗',
+      archiveExpired: 'ZIP 任務已過期',
+      archiveExpiredDescription: 'ZIP 任務已過期，請重新開始下載。',
       saveSuccess: '儲存成功',
       saveFailed: '儲存失敗',
     },

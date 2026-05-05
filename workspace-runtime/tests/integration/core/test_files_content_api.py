@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import importlib
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
 from app.modules.file_system.exceptions import ReadonlyScopeException
@@ -11,6 +14,8 @@ from app.modules.file_system.router import get_new_file_service
 from app.modules.file_system.service import FileService
 
 from .helpers import override_dependency
+
+file_router = importlib.import_module("app.modules.file_system.router")
 
 
 class ReadonlyFileServiceStub:
@@ -483,3 +488,150 @@ def test_fl_023_extract_zip_status_reports_failure(client, tmp_path):
     status_payload = status_response.json()
     assert status_payload["status"] == "failed"
     assert "File not found" in status_payload["error"]
+
+
+def test_fl_024_download_single_file(client, tmp_path):
+    """FL-024 Single file download returns an attachment"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "report.txt").write_text("hello", encoding="utf-8")
+    service = FileService(root_path=workspace)
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.get("/api/v1/files/download", params={"path": "/report.txt"})
+
+    assert response.status_code == 200
+    assert response.content == b"hello"
+    assert "attachment" in response.headers["content-disposition"]
+    assert "report.txt" in response.headers["content-disposition"]
+
+
+def test_fl_025_archive_download_runs_as_background_operation(client, tmp_path):
+    """FL-025 Directory archive download can be created, polled, and downloaded"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "docs").mkdir()
+    (workspace / "docs" / "guide.md").write_text("guide", encoding="utf-8")
+    (workspace / "docs" / "notes.md").write_text("notes", encoding="utf-8")
+    service = FileService(root_path=workspace)
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.post(
+            "/api/v1/files/archive",
+            json={"paths": ["/docs"], "archiveName": "docs.zip"},
+        )
+        assert response.status_code == 202
+        operation_id = response.json()["operationId"]
+
+        status_response = client.get(f"/api/v1/files/archive/{operation_id}")
+        download_response = client.get(f"/api/v1/files/archive/{operation_id}/download")
+
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["status"] == "completed"
+    assert status_payload["result"]["archiveName"] == "docs.zip"
+    assert status_payload["result"]["downloadUrl"].endswith(f"/archive/{operation_id}/download")
+    assert download_response.status_code == 200
+
+    archive_buffer = BytesIO(download_response.content)
+    with zipfile.ZipFile(archive_buffer, "r") as archive:
+        assert sorted(archive.namelist()) == ["docs/guide.md", "docs/notes.md"]
+        assert archive.read("docs/guide.md") == b"guide"
+
+
+def test_fl_026_archive_download_removes_redundant_child_selection(client, tmp_path):
+    """FL-026 Archive download does not duplicate child paths selected under a parent"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "src").mkdir()
+    (workspace / "src" / "app.ts").write_text("app", encoding="utf-8")
+    service = FileService(root_path=workspace)
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.post(
+            "/api/v1/files/archive",
+            json={"paths": ["/src", "/src/app.ts"], "archiveName": "src.zip"},
+        )
+        operation_id = response.json()["operationId"]
+        download_response = client.get(f"/api/v1/files/archive/{operation_id}/download")
+
+    assert response.status_code == 202
+    assert download_response.status_code == 200
+    with zipfile.ZipFile(BytesIO(download_response.content), "r") as archive:
+        assert archive.namelist() == ["src/app.ts"]
+
+
+def test_fl_027_archive_download_rejects_missing_path(client, tmp_path):
+    """FL-027 Archive download status reports missing path failure"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    service = FileService(root_path=workspace)
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.post(
+            "/api/v1/files/archive",
+            json={"paths": ["/missing"], "archiveName": "missing.zip"},
+        )
+        assert response.status_code == 202
+        operation_id = response.json()["operationId"]
+        status_response = client.get(f"/api/v1/files/archive/{operation_id}")
+
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["status"] == "failed"
+    assert "File not found" in payload["error"]
+
+
+def test_fl_028_archive_download_expired_operation_is_not_found(client, tmp_path):
+    """FL-028 Expired archive operations are cleaned up"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "file.txt").write_text("hello", encoding="utf-8")
+    service = FileService(root_path=workspace)
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.post(
+            "/api/v1/files/archive",
+            json={"paths": ["/file.txt"], "archiveName": "file.zip"},
+        )
+        operation_id = response.json()["operationId"]
+
+        operation = file_router._archive_download_operations[operation_id]
+        operation.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        status_response = client.get(f"/api/v1/files/archive/{operation_id}")
+
+    assert response.status_code == 202
+    assert status_response.status_code == 404
+
+
+def test_fl_029_archive_download_reports_limit_failure(client, tmp_path, monkeypatch):
+    """FL-029 Archive download fails when configured entry limit is exceeded"""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "one.txt").write_text("one", encoding="utf-8")
+    (workspace / "two.txt").write_text("two", encoding="utf-8")
+    service = FileService(root_path=workspace)
+
+    monkeypatch.setattr(
+        file_router,
+        "get_settings",
+        lambda: SimpleNamespace(
+            ARCHIVE_DOWNLOAD_MAX_SELECTED_ROOTS=10,
+            ARCHIVE_DOWNLOAD_MAX_ENTRY_COUNT=1,
+            ARCHIVE_DOWNLOAD_MAX_TOTAL_SIZE_BYTES=1024,
+            ARCHIVE_DOWNLOAD_TTL_SECONDS=1800,
+        ),
+    )
+
+    with override_dependency(get_new_file_service, lambda: service):
+        response = client.post(
+            "/api/v1/files/archive",
+            json={"paths": ["/one.txt", "/two.txt"], "archiveName": "files.zip"},
+        )
+        operation_id = response.json()["operationId"]
+        status_response = client.get(f"/api/v1/files/archive/{operation_id}")
+
+    assert response.status_code == 202
+    payload = status_response.json()
+    assert payload["status"] == "failed"
+    assert "entry count exceeds limit" in payload["error"]

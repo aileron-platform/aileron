@@ -202,7 +202,6 @@ describe('GeminiExtensionsPage', () => {
         'http://runtime.test',
         'workspace-1',
         'enabled-extension',
-        'workspace',
       );
     });
 
@@ -215,29 +214,18 @@ describe('GeminiExtensionsPage', () => {
         'http://runtime.test',
         'workspace-1',
         'disabled-extension',
-        'workspace',
       );
     });
   });
 
-  it('exposes secondary user-scope actions and opens details', async () => {
+  it('does not expose user-scope actions and opens details', async () => {
     const user = userEvent.setup();
     renderWithQuery(<GeminiExtensionsPage />);
 
     await screen.findByText('enabled-extension');
     await user.click(screen.getAllByRole('button', { name: 'workspace.agentSettings.geminiExtensions.actions.more' })[0]);
-    await user.click(screen.getByText('workspace.agentSettings.geminiExtensions.actions.disableUser'));
-
-    await waitFor(() => {
-      expect(api.disableGeminiExtension).toHaveBeenCalledWith(
-        'http://runtime.test',
-        'workspace-1',
-        'enabled-extension',
-        'user',
-      );
-    });
-
-    await user.click(screen.getAllByRole('button', { name: 'workspace.agentSettings.geminiExtensions.actions.more' })[0]);
+    expect(screen.queryByText('workspace.agentSettings.geminiExtensions.actions.disableUser')).not.toBeInTheDocument();
+    expect(screen.queryByText('workspace.agentSettings.geminiExtensions.actions.enableUser')).not.toBeInTheDocument();
     await user.click(screen.getByText('workspace.agentSettings.geminiExtensions.actions.details'));
 
     expect(await screen.findByText('Context preview')).toBeInTheDocument();

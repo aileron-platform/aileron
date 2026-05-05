@@ -143,6 +143,91 @@ describe('useFileTreeContextMenu', () => {
     expect(textResult.current.some(item => item.key === 'extract-archive')).toBe(false);
   });
 
+  it('shows download action for a single file', () => {
+    const onClose = vi.fn();
+    const onDownload = vi.fn();
+
+    const { result } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: '/uploads/demo.txt',
+          name: 'demo.txt',
+          path: '/uploads/demo.txt',
+          type: 'file',
+        },
+        features: {
+          download: true,
+        },
+        callbacks: {
+          onDownload,
+          onClose,
+        },
+        t,
+      })
+    );
+
+    const item = result.current.find(action => action.key === 'download');
+    expect(item?.label).toBe('common.fileTree.contextMenu.download');
+    item?.onSelect();
+    expect(onDownload).toHaveBeenCalledWith(expect.objectContaining({ path: '/uploads/demo.txt' }), ['/uploads/demo.txt']);
+  });
+
+  it('shows ZIP download label for a directory', () => {
+    const { result } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: '/uploads',
+          name: 'uploads',
+          path: '/uploads',
+          type: 'directory',
+        },
+        features: {
+          download: true,
+        },
+        callbacks: {
+          onDownload: vi.fn(),
+          onClose: vi.fn(),
+        },
+        t,
+      })
+    );
+
+    expect(result.current.find(action => action.key === 'download')?.label)
+      .toBe('common.fileTree.contextMenu.downloadAsZip');
+  });
+
+  it('passes selected paths for multi-select download', () => {
+    const onDownload = vi.fn();
+    const selectedIds = new Set(['/a.txt', '/b.txt']);
+
+    const { result } = renderHook(() =>
+      useFileTreeContextMenu({
+        node: {
+          id: '/a.txt',
+          name: 'a.txt',
+          path: '/a.txt',
+          type: 'file',
+        },
+        enableMultiSelect: true,
+        selectedCount: 2,
+        selectedIds,
+        features: {
+          download: true,
+        },
+        callbacks: {
+          onDownload,
+          onClose: vi.fn(),
+        },
+        t,
+      })
+    );
+
+    const item = result.current.find(action => action.key === 'download');
+    expect(item?.label).toBe('common.fileTree.contextMenu.downloadSelected');
+    item?.onSelect();
+    expect(onDownload).toHaveBeenCalledWith(expect.objectContaining({ path: '/a.txt' }), ['/a.txt', '/b.txt']);
+  });
+
   it('keeps write actions enabled by default and disables them when the writable rule rejects the node', () => {
     const callbacks = {
       onUpload: vi.fn(),

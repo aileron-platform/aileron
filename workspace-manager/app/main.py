@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         try:
             from app.db.seed import load_seed_data
+
             load_seed_data()
         except Exception as seed_error:
             logger.warning(f"Seed data loading failed: {seed_error}")
@@ -75,14 +76,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 from app.services.workspace_custom_resource_service import (
                     run_apply_workspace_custom_resource_task,
                 )
+
                 if ensure_bootstrap_default_workspace():
                     run_apply_workspace_custom_resource_task(
                         settings.BOOTSTRAP_DEFAULT_WORKSPACE_ID
                     )
                 else:
-                    logger.warning("Default workspace bootstrap retry completed but still not created")
+                    logger.warning(
+                        "Default workspace bootstrap retry completed but still not created"
+                    )
             except Exception as bootstrap_error:
-                logger.warning(f"Default workspace CR bootstrap failed: {bootstrap_error}")
+                logger.warning(
+                    f"Default workspace CR bootstrap failed: {bootstrap_error}"
+                )
 
         logger.info("✅ Workspace Manager started")
         yield
@@ -235,16 +241,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
-
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(I18nMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
@@ -253,6 +249,16 @@ app.add_middleware(
     JWTAuthenticationMiddleware,
     exclude_paths=["/health", "/api/v1/health", "/docs", "/redoc", "/metrics"],
     exclude_patterns=["/oauth2/*", "/api/v1/oauth2/*"],
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
 app.include_router(health_router)
@@ -276,7 +282,11 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     """Global exception handler"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     translate = getattr(request.state, "translate", None)
-    error_message = translate("main.internal_server_error") if translate else "Internal server error, please try again later"
+    error_message = (
+        translate("main.internal_server_error")
+        if translate
+        else "Internal server error, please try again later"
+    )
     return JSONResponse(
         status_code=500,
         content={
@@ -291,7 +301,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 async def root(request: Request):
     """Root path redirects to API documentation"""
     translate = getattr(request.state, "translate", None)
-    app_title = translate("main.app_title") if translate else "Aileron - Workspace Manager"
+    app_title = (
+        translate("main.app_title") if translate else "Aileron - Workspace Manager"
+    )
     return {
         "message": app_title,
         "version": "1.0.0",

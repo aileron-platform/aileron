@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
 
@@ -46,6 +46,10 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create base
 Base = declarative_base()
 
+REMOVED_COLUMNS: dict[str, set[str]] = {
+    "workspaces": {"port_mappings"},
+}
+
 
 def get_db() -> Generator[Session, None, None]:
     """GetDatabase session"""
@@ -62,7 +66,37 @@ def create_tables() -> None:
 
     try:
         Base.metadata.create_all(bind=engine)
+        drop_removed_columns(engine)
         logger.info("Database tables created successfully")
     except Exception as exc:  # pragma: no cover - Real errors need to be raised
         logger.error("Database table creation failed: %s", exc)
         raise
+
+
+def drop_removed_columns(target_engine: Engine) -> list[str]:
+    """Drop columns that were intentionally removed from the current schema."""
+
+    inspector = inspect(target_engine)
+    dropped: list[str] = []
+    preparer = target_engine.dialect.identifier_preparer
+
+    with target_engine.begin() as conn:
+        for table_name, removed_columns in REMOVED_COLUMNS.items():
+            if not inspector.has_table(table_name):
+                continue
+
+            existing_columns = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+            for column_name in sorted(removed_columns & existing_columns):
+                table_identifier = preparer.quote(table_name)
+                column_identifier = preparer.quote(column_name)
+                conn.exec_driver_sql(
+                    f"ALTER TABLE {table_identifier} DROP COLUMN {column_identifier}"
+                )
+                dropped.append(f"{table_name}.{column_name}")
+
+    if dropped:
+        logger.info("Dropped removed database columns: %s", ", ".join(dropped))
+
+    return dropped

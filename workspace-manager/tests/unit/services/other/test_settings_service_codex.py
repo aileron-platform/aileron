@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from app.models.settings import (
     CodexAccountInfo,
+    CodexCliState,
     CodexEnvironmentVariable,
     CodexSettings,
     UserSettings,
@@ -27,7 +28,9 @@ def test_detect_setting_changes_includes_codex_model_and_env_vars():
             ),
             model="gpt-5.2-codex",
             environment_variables=[
-                CodexEnvironmentVariable(key="OPENAI_BASE_URL", value="https://old.example.com")
+                CodexEnvironmentVariable(
+                    key="OPENAI_BASE_URL", value="https://old.example.com"
+                )
             ],
         )
     )
@@ -77,7 +80,9 @@ def test_detect_setting_changes_ignores_unchanged_codex_settings():
             login_status="connected",
             model="gpt-5.3-codex",
             environment_variables=[
-                CodexEnvironmentVariable(key="OPENAI_BASE_URL", value="https://api.openai.com/v1")
+                CodexEnvironmentVariable(
+                    key="OPENAI_BASE_URL", value="https://api.openai.com/v1"
+                )
             ],
         )
     )
@@ -100,3 +105,19 @@ def test_detect_setting_changes_ignores_unchanged_codex_settings():
     )
 
     assert "codex" not in changes
+
+
+def test_codex_settings_public_dump_excludes_cli_state():
+    """Public settings serialization does not expose raw Codex CLI state."""
+    settings = CodexSettings(
+        login_status="connected",
+        cli_state=CodexCliState(
+            auth_json={"tokens": {"refresh_token": "refresh-token"}},
+            config_toml='model = "gpt-5.3-codex"\n',
+            installation_id="installation-1",
+        ),
+    )
+
+    dumped = settings.model_dump(by_alias=True)
+
+    assert "cliState" not in dumped

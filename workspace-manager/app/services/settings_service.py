@@ -197,6 +197,7 @@ class SettingsService:
                 "model",
                 "environmentVariables",
                 "authFlow",
+                "cliState",
                 "lastSyncedAt",
                 "lastSyncError",
             ):
@@ -473,6 +474,12 @@ class SettingsService:
         if codex_auth_flow_data:
             codex_auth_flow = CodexAuthFlow(**codex_auth_flow_data)
 
+        codex_cli_state = None
+        codex_cli_state_data = codex_additional.get("cliState")
+        if codex_cli_state_data:
+            from app.models.settings import CodexCliState
+            codex_cli_state = CodexCliState(**codex_cli_state_data)
+
         codex_model = CodexSettings(
             auth_method=codex_additional.get("authMethod", "subscription"),
             login_status=codex_additional.get("loginStatus", "notConnected"),
@@ -480,6 +487,7 @@ class SettingsService:
             model=codex_additional.get("model") or "gpt-5.3-codex",
             environment_variables=codex_additional.get("environmentVariables", []),
             auth_flow=codex_auth_flow,
+            cli_state=codex_cli_state,
             last_synced_at=codex_additional.get("lastSyncedAt"),
             last_sync_error=codex_additional.get("lastSyncError"),
         )

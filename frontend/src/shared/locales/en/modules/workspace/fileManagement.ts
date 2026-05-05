@@ -92,6 +92,7 @@ const fileManagement = {
     pending: {
       copy: 'Copying {{name}}...',
       extract: 'Extracting {{name}}...',
+      archive: 'Preparing {{name}}...',
       generic: 'Processing file operation...',
       progress: 'Progress {{value}}%',
       itemFallback: 'item'
@@ -136,6 +137,12 @@ const fileManagement = {
       downloadSuccessDescription: 'Downloading {{count}} file(s)',
       downloadFailed: 'Download failed',
       downloadError: 'An error occurred while downloading files',
+      archiveStarted: 'Preparing ZIP download',
+      archiveReady: 'ZIP download ready',
+      archiveReadyDescription: '{{name}} is ready to download',
+      archiveFailed: 'ZIP preparation failed',
+      archiveExpired: 'ZIP task expired',
+      archiveExpiredDescription: 'The ZIP task expired. Start the download again.',
       saveSuccess: 'Save completed',
       saveFailed: 'Save failed',
     },

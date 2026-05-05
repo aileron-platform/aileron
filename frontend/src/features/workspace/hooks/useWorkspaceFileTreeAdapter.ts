@@ -21,7 +21,7 @@ import type {
   SelectionModifier,
 } from '../features/file-management/types';
 import {
-  buildRuntimeUrl,
+  buildArchiveDownloadUrl,
   createFileOrFolder,
   renameFile as renameRuntimeFile,
   deleteFile as deleteRuntimeFile,
@@ -30,7 +30,8 @@ import {
   moveFile as moveRuntimeFile,
   uploadFiles as uploadRuntimeFiles,
   downloadFile as downloadRuntimeFile,
-  batchDownloadFiles,
+  fetchArchiveDownloadStatus,
+  startArchiveDownload,
   fetchFileContent,
   saveFileContent,
 } from '../services/workspaceRuntimeApi';
@@ -502,17 +503,26 @@ export function useWorkspaceFileTreeAdapter(
     }
 
     try {
-      const ticket = await batchDownloadFiles(runtimeBaseUrl!, filePaths, 'zip', contextId);
-      if (ticket.status === 'succeeded') {
-        const downloadUrl = ticket.statusUrl.startsWith('http')
-          ? ticket.statusUrl
-          : buildRuntimeUrl(runtimeBaseUrl!, ticket.statusUrl.replace(/^\/api\/v1\//, ''));
-        if (typeof window !== 'undefined') {
-          window.open(downloadUrl, '_blank', 'noopener');
+      const accepted = await startArchiveDownload(runtimeBaseUrl!, {
+        paths: filePaths,
+        archiveFormat: 'zip',
+        contextId,
+      });
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const status = await fetchArchiveDownloadStatus(runtimeBaseUrl!, accepted.operationId);
+        if (status.status === 'completed' && status.result) {
+          const downloadUrl = buildArchiveDownloadUrl(runtimeBaseUrl!, status.result.downloadUrl);
+          if (typeof window !== 'undefined') {
+            window.open(downloadUrl, '_blank', 'noopener');
+          }
+          return;
         }
-      } else {
-        throw new Error(t('common.fileOperations.error.packageTaskFailed'));
+        if (status.status === 'failed' || status.status === 'expired') {
+          throw new Error(status.error ?? status.message);
+        }
+        await new Promise(resolve => globalThis.setTimeout(resolve, 1000));
       }
+      throw new Error(t('common.fileOperations.error.packageTaskFailed'));
     } catch (error) {
       logger.error('Batch download files failed', { error });
       throw error;

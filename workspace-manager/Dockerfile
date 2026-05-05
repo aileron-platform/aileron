@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     git \
+    nodejs \
+    npm \
     docker.io \
     supervisor \
     redis-tools \
@@ -22,6 +24,10 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Install uv
 RUN pip install uv
+
+ARG CODEX_CLI_VERSION=latest
+RUN npm install -g "@openai/codex@${CODEX_CLI_VERSION}" && \
+    codex --version
 
 # Development stage: mount code instead of copying it.
 FROM base AS development

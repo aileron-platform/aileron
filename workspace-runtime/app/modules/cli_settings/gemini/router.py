@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Path, Query, status
 
 from app.core.openapi import build_responses
@@ -10,7 +12,6 @@ from .extension_resources import (
     GeminiExtensionResourceResolver,
     disable,
     enable,
-    resolve_toggle_cwd,
     resolve_workspace_root,
 )
 from .models import (
@@ -19,7 +20,6 @@ from .models import (
     GeminiExtensionListResponse,
     GeminiExtensionSummary,
     GeminiExtensionToggleResponse,
-    GeminiExtensionToggleScope,
 )
 
 router = APIRouter(prefix="/gemini/extensions", tags=["gemini - Extensions"])
@@ -92,11 +92,11 @@ async def get_extension(
 async def enable_extension(
     name: str = Path(..., description="Extension name"),
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: GeminiExtensionToggleScope = Query(..., description="Toggle scope"),
+    scope: Literal["workspace"] = Query("workspace", description="Toggle scope"),
 ) -> GeminiExtensionToggleResponse:
     workspace_root = resolve_workspace_root()
     try:
-        enable(name, scope, resolve_toggle_cwd(scope, workspace_root))
+        enable(name, workspace_root)
     except GeminiExtensionCommandError as error:
         raise _command_error(error) from error
     extension = _resolver().get_extension(name, workspace_root)
@@ -105,7 +105,6 @@ async def enable_extension(
     return GeminiExtensionToggleResponse(
         workspaceId=workspace_id,
         name=name,
-        scope=scope,
         enabledHere=extension.enabledHere,
         overrides=extension.overrides,
     )
@@ -115,11 +114,11 @@ async def enable_extension(
 async def disable_extension(
     name: str = Path(..., description="Extension name"),
     workspace_id: str = Path(..., description="Workspace ID"),
-    scope: GeminiExtensionToggleScope = Query(..., description="Toggle scope"),
+    scope: Literal["workspace"] = Query("workspace", description="Toggle scope"),
 ) -> GeminiExtensionToggleResponse:
     workspace_root = resolve_workspace_root()
     try:
-        disable(name, scope, resolve_toggle_cwd(scope, workspace_root))
+        disable(name, workspace_root)
     except GeminiExtensionCommandError as error:
         raise _command_error(error) from error
     extension = _resolver().get_extension(name, workspace_root)
@@ -128,7 +127,6 @@ async def disable_extension(
     return GeminiExtensionToggleResponse(
         workspaceId=workspace_id,
         name=name,
-        scope=scope,
         enabledHere=extension.enabledHere,
         overrides=extension.overrides,
     )

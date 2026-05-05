@@ -9,8 +9,10 @@ const translations: Record<string, string> = {
   'workspace.chat.widgets.permission.scope.project.label': 'Allow for project (.claude/)',
   'workspace.chat.widgets.permission.onceOnly': 'Allow this time only',
   'workspace.chat.widgets.permission.rememberChoice': 'Remember this choice and save to',
-  'workspace.chat.widgets.permission.codex.sandbox.label': 'Sandbox mode',
-  'workspace.chat.widgets.permission.codex.approval.label': 'Approval policy',
+  'workspace.chat.widgets.permission.codex.scope.once.label': 'Approve once',
+  'workspace.chat.widgets.permission.codex.scope.once.description': 'Allow only this Codex request.',
+  'workspace.chat.widgets.permission.codex.scope.session.label': 'Approve for this session',
+  'workspace.chat.widgets.permission.codex.scope.session.description': 'Allow Codex requests for this conversation only.',
   'workspace.chat.widgets.permission.parameterDetails': 'Parameter details',
   'workspace.chat.widgets.permission.toolLabel': 'Tool:',
   'workspace.chat.widgets.permission.approve': 'Approve',
@@ -67,7 +69,7 @@ describe('PermissionRequestWidget', () => {
     expect(onDeny).not.toHaveBeenCalled();
   });
 
-  it('renders localized Codex selector labels without changing callback payloads', async () => {
+  it('approves Codex requests once by default', async () => {
     const user = userEvent.setup();
     const onCodexApprove = vi.fn();
 
@@ -82,11 +84,34 @@ describe('PermissionRequestWidget', () => {
       />,
     );
 
-    expect(screen.getByText('Sandbox mode')).toBeInTheDocument();
-    expect(screen.getByText('Approval policy')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Approve once/i })).toBeChecked();
+    expect(screen.getByText('Allow only this Codex request.')).toBeInTheDocument();
+    expect(screen.queryByText('Sandbox mode')).not.toBeInTheDocument();
+    expect(screen.queryByText('Approval policy')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Approve/i }));
 
-    expect(onCodexApprove).toHaveBeenCalledWith('msg-1', 'workspace-write', 'on-request');
+    expect(onCodexApprove).toHaveBeenCalledWith('msg-1', 'once');
+  });
+
+  it('approves Codex requests for the session when session scope is selected', async () => {
+    const user = userEvent.setup();
+    const onCodexApprove = vi.fn();
+
+    render(
+      <PermissionRequestWidget
+        status="completed"
+        isExpanded={false}
+        agentTool="codex"
+        input={baseInput}
+        onCodexApprove={onCodexApprove}
+        onDeny={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole('radio', { name: /Approve for this session/i }));
+    await user.click(screen.getByRole('button', { name: /Approve/i }));
+
+    expect(onCodexApprove).toHaveBeenCalledWith('msg-1', 'session');
   });
 });

@@ -23,16 +23,25 @@ class RuntimeSyncService:
         self.internal_api_token = "dev-internal-token"  # TODO: Read from settings file
         self.timeout = 30.0
 
-    async def sync_settings_to_runtimes(self, user_id: str, changes: dict) -> Dict[str, any]:
+    async def sync_settings_to_runtimes(
+        self, user_id: str, changes: dict
+    ) -> Dict[str, any]:
         """Sync settings to all related workspace-runtimes"""
-        logger.info(f"Begin syncing settings to runtime, user_id: {user_id}, changes: {list(changes.keys())}")
+        logger.info(
+            f"Begin syncing settings to runtime, user_id: {user_id}, changes: {list(changes.keys())}"
+        )
 
         # Get all workspace-runtimes for user
         runtimes = await self._get_user_workspace_runtimes(user_id)
 
         if not runtimes:
             logger.warning(f"No workspace-runtime found for user {user_id}")
-            return {"success": True, "synced_runtimes": 0, "total_tasks": 0, "results": []}
+            return {
+                "success": True,
+                "synced_runtimes": 0,
+                "total_tasks": 0,
+                "results": [],
+            }
 
         # Concurrently call all runtimes
         tasks = []
@@ -41,27 +50,37 @@ class RuntimeSyncService:
 
             if "ssh" in changes:
                 runtime_tasks.append(
-                    self._sync_ssh_keys(runtime["url"], changes["ssh"], runtime["workspace_id"])
+                    self._sync_ssh_keys(
+                        runtime["url"], changes["ssh"], runtime["workspace_id"]
+                    )
                 )
 
             if "claudeCode" in changes:
                 runtime_tasks.append(
-                    self._sync_claude_code(runtime["url"], changes["claudeCode"], runtime["workspace_id"])
+                    self._sync_claude_code(
+                        runtime["url"], changes["claudeCode"], runtime["workspace_id"]
+                    )
                 )
 
             if "codex" in changes:
                 runtime_tasks.append(
-                    self._sync_codex(runtime["url"], changes["codex"], runtime["workspace_id"])
+                    self._sync_codex(
+                        runtime["url"], changes["codex"], runtime["workspace_id"]
+                    )
                 )
 
             if "git" in changes:
                 runtime_tasks.append(
-                    self._sync_git_settings(runtime["url"], changes["git"], runtime["workspace_id"])
+                    self._sync_git_settings(
+                        runtime["url"], changes["git"], runtime["workspace_id"]
+                    )
                 )
 
             if "gemini" in changes:
                 runtime_tasks.append(
-                    self._sync_gemini(runtime["url"], changes["gemini"], runtime["workspace_id"])
+                    self._sync_gemini(
+                        runtime["url"], changes["gemini"], runtime["workspace_id"]
+                    )
                 )
 
             # Combine all tasks from each runtime
@@ -70,7 +89,12 @@ class RuntimeSyncService:
 
         if not tasks:
             logger.info("No changes to sync")
-            return {"success": True, "synced_runtimes": len(runtimes), "total_tasks": 0, "results": []}
+            return {
+                "success": True,
+                "synced_runtimes": len(runtimes),
+                "total_tasks": 0,
+                "results": [],
+            }
 
         # Wait for all syncs to complete
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -84,19 +108,15 @@ class RuntimeSyncService:
             if isinstance(result, Exception):
                 logger.error(f"Sync task {i} failed: {result}")
                 error_count += 1
-                detailed_results.append({
-                    "task_index": i,
-                    "success": False,
-                    "error": str(result)
-                })
+                detailed_results.append(
+                    {"task_index": i, "success": False, "error": str(result)}
+                )
             else:
                 logger.info(f"Sync task {i} succeeded: {result}")
                 success_count += 1
-                detailed_results.append({
-                    "task_index": i,
-                    "success": True,
-                    "result": result
-                })
+                detailed_results.append(
+                    {"task_index": i, "success": True, "result": result}
+                )
 
         return {
             "success": error_count == 0,
@@ -104,26 +124,27 @@ class RuntimeSyncService:
             "total_tasks": len(tasks),
             "success_count": success_count,
             "error_count": error_count,
-            "results": detailed_results
+            "results": detailed_results,
         }
 
     async def _get_running_runtimes(self) -> List[Dict[str, str]]:
         """Get all running workspace-runtime information"""
         # Query all running workspaces
-        stmt = (
-            select(db_models.Workspace)
-            .where(db_models.Workspace.runtime_status == "running")
+        stmt = select(db_models.Workspace).where(
+            db_models.Workspace.runtime_status == "running"
         )
         workspaces = self.db.execute(stmt).scalars().all()
 
         runtimes = []
         for workspace in workspaces:
             if workspace.runtime_external_url:
-                runtimes.append({
-                    "workspace_id": workspace.id,
-                    "workspace_name": workspace.name,
-                    "url": workspace.runtime_external_url
-                })
+                runtimes.append(
+                    {
+                        "workspace_id": workspace.id,
+                        "workspace_name": workspace.name,
+                        "url": workspace.runtime_external_url,
+                    }
+                )
 
         logger.info(f"Found {len(runtimes)} running workspace-runtimes")
         return runtimes
@@ -141,23 +162,27 @@ class RuntimeSyncService:
         runtimes = []
         for workspace in workspaces:
             if workspace.runtime_external_url:
-                runtimes.append({
-                    "workspace_id": workspace.id,
-                    "workspace_name": workspace.name,
-                    "url": workspace.runtime_external_url
-                })
+                runtimes.append(
+                    {
+                        "workspace_id": workspace.id,
+                        "workspace_name": workspace.name,
+                        "url": workspace.runtime_external_url,
+                    }
+                )
 
         logger.info(f"Found {len(runtimes)} running workspace-runtimes")
         return runtimes
 
-    async def _sync_ssh_keys(self, runtime_url: str, ssh_data: dict, workspace_id: str) -> Dict[str, any]:
+    async def _sync_ssh_keys(
+        self, runtime_url: str, ssh_data: dict, workspace_id: str
+    ) -> Dict[str, any]:
         """Sync SSH keys to specified runtime"""
         url = f"{runtime_url}/internal/settings/ssh-keys"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
         payload = {
             "privateKey": ssh_data.get("privateKey"),
-            "publicKey": ssh_data.get("publicKey")
+            "publicKey": ssh_data.get("publicKey"),
         }
 
         try:
@@ -172,14 +197,18 @@ class RuntimeSyncService:
                 "workspace_id": workspace_id,
                 "runtime_url": runtime_url,
                 "success": True,
-                "response": result
+                "response": result,
             }
 
         except Exception as e:
-            logger.error(f"SSH keys sync failed - workspace: {workspace_id}, error: {e}")
+            logger.error(
+                f"SSH keys sync failed - workspace: {workspace_id}, error: {e}"
+            )
             raise Exception(f"SSH sync failed for {workspace_id}: {e}")
 
-    async def _sync_claude_code(self, runtime_url: str, claude_data: dict, workspace_id: str) -> Dict[str, any]:
+    async def _sync_claude_code(
+        self, runtime_url: str, claude_data: dict, workspace_id: str
+    ) -> Dict[str, any]:
         """Sync Claude Code settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/claude-code"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
@@ -190,7 +219,7 @@ class RuntimeSyncService:
             "subscriptionRefreshToken": claude_data.get("subscriptionRefreshToken"),
             "subscriptionExpiresAt": claude_data.get("subscriptionExpiresAt"),
             "apiKey": claude_data.get("authKey"),
-            "environmentVariables": claude_data.get("environmentVariables", [])
+            "environmentVariables": claude_data.get("environmentVariables", []),
         }
 
         try:
@@ -205,26 +234,32 @@ class RuntimeSyncService:
                 "workspace_id": workspace_id,
                 "runtime_url": runtime_url,
                 "success": True,
-                "response": result
+                "response": result,
             }
 
         except Exception as e:
-            logger.error(f"Claude Code sync failed - workspace: {workspace_id}, error: {e}")
+            logger.error(
+                f"Claude Code sync failed - workspace: {workspace_id}, error: {e}"
+            )
             raise Exception(f"Claude Code sync failed for {workspace_id}: {e}")
 
-    async def _sync_codex(self, runtime_url: str, codex_data: dict, workspace_id: str) -> Dict[str, any]:
+    async def _sync_codex(
+        self, runtime_url: str, codex_data: dict, workspace_id: str
+    ) -> Dict[str, any]:
         """Sync Codex settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/codex"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
+        is_not_connected = codex_data.get("loginStatus") == "notConnected"
         payload = {
             "authMethod": codex_data.get("authMethod"),
             "loginStatus": codex_data.get("loginStatus"),
             "account": codex_data.get("account"),
             "model": codex_data.get("model"),
             "authFlow": codex_data.get("authFlow"),
+            "cliState": None if is_not_connected else codex_data.get("cliState"),
             "environmentVariables": codex_data.get("environmentVariables", []),
-            "clearAuth": codex_data.get("loginStatus") == "notConnected",
+            "clearAuth": is_not_connected,
         }
 
         try:
@@ -239,21 +274,23 @@ class RuntimeSyncService:
                 "workspace_id": workspace_id,
                 "runtime_url": runtime_url,
                 "success": True,
-                "response": result
+                "response": result,
             }
 
         except Exception as e:
             logger.error(f"Codex sync failed - workspace: {workspace_id}, error: {e}")
             raise Exception(f"Codex sync failed for {workspace_id}: {e}")
 
-    async def _sync_git_settings(self, runtime_url: str, git_data: dict, workspace_id: str) -> Dict[str, any]:
+    async def _sync_git_settings(
+        self, runtime_url: str, git_data: dict, workspace_id: str
+    ) -> Dict[str, any]:
         """Sync Git settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/git"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
 
         payload = {
             "userName": git_data.get("userName"),
-            "userEmail": git_data.get("userEmail")
+            "userEmail": git_data.get("userEmail"),
         }
 
         try:
@@ -268,14 +305,18 @@ class RuntimeSyncService:
                 "workspace_id": workspace_id,
                 "runtime_url": runtime_url,
                 "success": True,
-                "response": result
+                "response": result,
             }
 
         except Exception as e:
-            logger.error(f"Git settings sync failed - workspace: {workspace_id}, error: {e}")
+            logger.error(
+                f"Git settings sync failed - workspace: {workspace_id}, error: {e}"
+            )
             raise Exception(f"Git sync failed for {workspace_id}: {e}")
 
-    async def _sync_gemini(self, runtime_url: str, gemini_data: dict, workspace_id: str) -> Dict[str, any]:
+    async def _sync_gemini(
+        self, runtime_url: str, gemini_data: dict, workspace_id: str
+    ) -> Dict[str, any]:
         """Sync Gemini settings to specified runtime"""
         url = f"{runtime_url}/internal/settings/gemini"
         headers = {"Authorization": f"Bearer {self.internal_api_token}"}
@@ -323,12 +364,14 @@ class RuntimeSyncService:
         )
 
         if not target_runtime:
-            logger.warning(f"Runtime of workspace {workspace_id} is not running, skip sync")
+            logger.warning(
+                f"Runtime of workspace {workspace_id} is not running, skip sync"
+            )
             return {
                 "type": "firewall",
                 "workspace_id": workspace_id,
                 "success": False,
-                "message": "Runtime not running"
+                "message": "Runtime not running",
             }
 
         return await self._sync_firewall(
@@ -350,9 +393,11 @@ class RuntimeSyncService:
         unenforced_scopes = ["browser"] if "browser" in firewall_data else []
 
         payload = {
-            "networkAccessEnabled": workspace_firewall.get("networkAccessEnabled", True),
+            "networkAccessEnabled": workspace_firewall.get(
+                "networkAccessEnabled", True
+            ),
             "domainAccessMode": workspace_firewall.get("domainAccessMode", "all"),
-            "allowedDomains": workspace_firewall.get("allowedDomains", [])
+            "allowedDomains": workspace_firewall.get("allowedDomains", []),
         }
 
         try:
@@ -373,7 +418,9 @@ class RuntimeSyncService:
             }
 
         except Exception as e:
-            logger.error(f"Firewall settings sync failed - workspace: {workspace_id}, error: {e}")
+            logger.error(
+                f"Firewall settings sync failed - workspace: {workspace_id}, error: {e}"
+            )
             raise Exception(f"Firewall sync failed for {workspace_id}: {e}")
 
 

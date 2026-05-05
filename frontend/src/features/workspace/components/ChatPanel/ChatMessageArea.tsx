@@ -488,7 +488,7 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
                   }}
                   requested_at={new Date().toISOString()}
                   onApprove={handlePendingApprove}
-                  onCodexApprove={(messageId) => handlePendingApprove(messageId, 'once')}
+                  onCodexApprove={(messageId, scope) => handlePendingApprove(messageId, scope)}
                   onDeny={handlePendingDeny}
                 />
               )}

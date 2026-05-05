@@ -105,14 +105,11 @@ const agentSettings = {
     actions: {
       refresh: 'Refresh',
       toggleWorkspace: 'Toggle for this workspace',
-      toggleUser: 'Toggle for user',
       details: 'Details',
       more: 'More extension actions',
       showAll: 'Show all extensions',
       enableWorkspace: 'Enable for workspace',
       disableWorkspace: 'Disable for workspace',
-      enableUser: 'Enable for user',
-      disableUser: 'Disable for user',
       clearSearch: 'Clear search',
     },
     search: {

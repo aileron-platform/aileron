@@ -43,8 +43,6 @@ import {
 } from './PermissionRequestWidget';
 import type {
   AgentToolType,
-  CodexSandboxMode,
-  CodexApprovalPolicy,
   GeminiPermissionMode,
   OpenCodePermissionMode
 } from './PermissionRequestWidget';
@@ -95,7 +93,7 @@ export interface ClaudeToolWidgetProps {
   /** PermissionRequest: Claude Code approve callback. */
   onApprove?: (messageId: string, scope: PermissionScope) => void;
   /** PermissionRequest: Codex approve callback. */
-  onCodexApprove?: (messageId: string, sandbox: CodexSandboxMode, approval: CodexApprovalPolicy) => void;
+  onCodexApprove?: (messageId: string, scope: PermissionScope) => void;
   /** PermissionRequest: Gemini approve callback. */
   onGeminiApprove?: (messageId: string, mode: GeminiPermissionMode) => void;
   /** PermissionRequest: OpenCode approve callback. */
@@ -438,8 +436,6 @@ export { PermissionScopeEnum as PermissionScope, PermissionStatusValues as Permi
 export type { PermissionScope, PermissionStatus } from './PermissionRequestWidget';
 export type {
   AgentToolType,
-  CodexSandboxMode,
-  CodexApprovalPolicy,
   GeminiPermissionMode,
   OpenCodePermissionMode,
   PermissionRequestWidgetProps,

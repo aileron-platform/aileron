@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -81,11 +81,14 @@ class CodexEnvironmentVariable(CamelModel):
 
 class OAuthAccountInfo(CamelModel):
     """OAuth account information"""
+
     account_uuid: Optional[str] = Field(None, alias="accountUuid")
     email_address: Optional[str] = Field(None, alias="emailAddress")
     organization_uuid: Optional[str] = Field(None, alias="organizationUuid")
     display_name: Optional[str] = Field(None, alias="displayName")
-    organization_billing_type: Optional[str] = Field(None, alias="organizationBillingType")
+    organization_billing_type: Optional[str] = Field(
+        None, alias="organizationBillingType"
+    )
     organization_role: Optional[str] = Field(None, alias="organizationRole")
     workspace_role: Optional[str] = Field(None, alias="workspaceRole")
     organization_name: Optional[str] = Field(None, alias="organizationName")
@@ -97,14 +100,24 @@ class ClaudeCodeSettings(CamelModel):
 
     # Subscription authentication related
     subscription_auth_code: Optional[str] = Field(None, alias="subscriptionAuthCode")
-    subscription_access_token: Optional[str] = Field(None, alias="subscriptionAccessToken")
-    subscription_refresh_token: Optional[str] = Field(None, alias="subscriptionRefreshToken")
-    subscription_expires_at: Optional[int] = Field(None, alias="subscriptionExpiresAt", description="Expiration time (millisecond timestamp)")
+    subscription_access_token: Optional[str] = Field(
+        None, alias="subscriptionAccessToken"
+    )
+    subscription_refresh_token: Optional[str] = Field(
+        None, alias="subscriptionRefreshToken"
+    )
+    subscription_expires_at: Optional[int] = Field(
+        None,
+        alias="subscriptionExpiresAt",
+        description="Expiration time (millisecond timestamp)",
+    )
     oauth_account: Optional[OAuthAccountInfo] = Field(None, alias="oauthAccount")
 
     # API key authentication related
     auth_key: Optional[str] = Field(None, alias="authKey")
-    api_provider: Optional[str] = Field(None, alias="apiProvider")  # Anthropic, AWS Bedrock, Google Vertex AI, Other
+    api_provider: Optional[str] = Field(
+        None, alias="apiProvider"
+    )  # Anthropic, AWS Bedrock, Google Vertex AI, Other
 
     # Unified model selection field (used by both subscription and apikey)
     model: Optional[str] = Field(None, alias="model")
@@ -116,7 +129,9 @@ class ClaudeCodeSettings(CamelModel):
 
     # Legacy settings for backward compatibility
     selected_provider: Optional[str] = Field(None, alias="selectedProvider")
-    available_models: list[ClaudeModelInfo] = Field(default_factory=list, alias="availableModels")
+    available_models: list[ClaudeModelInfo] = Field(
+        default_factory=list, alias="availableModels"
+    )
     available_providers: list[ClaudeProviderInfo] = Field(
         default_factory=list, alias="availableProviders"
     )
@@ -136,6 +151,12 @@ class CodexAuthFlow(CamelModel):
     expires_at: Optional[int] = Field(None, alias="expiresAt")
 
 
+class CodexCliState(CamelModel):
+    auth_json: Optional[dict[str, Any]] = Field(None, alias="authJson")
+    config_toml: Optional[str] = Field(None, alias="configToml")
+    installation_id: Optional[str] = Field(None, alias="installationId")
+
+
 class CodexSettings(CamelModel):
     auth_method: str = Field("subscription", alias="authMethod")
     login_status: str = Field("notConnected", alias="loginStatus")
@@ -145,6 +166,7 @@ class CodexSettings(CamelModel):
         default_factory=list, alias="environmentVariables"
     )
     auth_flow: Optional[CodexAuthFlow] = Field(None, alias="authFlow")
+    cli_state: Optional[CodexCliState] = Field(None, alias="cliState", exclude=True)
     last_synced_at: Optional[int] = Field(None, alias="lastSyncedAt")
     last_sync_error: Optional[str] = Field(None, alias="lastSyncError")
 
@@ -170,7 +192,9 @@ class GeminiSettings(CamelModel):
     access_token: Optional[str] = Field(None, alias="accessToken")
     refresh_token: Optional[str] = Field(None, alias="refreshToken")
     id_token: Optional[str] = Field(None, alias="idToken")
-    expires_at: Optional[int] = Field(None, alias="expiresAt", description="Expiration time (millisecond timestamp)")
+    expires_at: Optional[int] = Field(
+        None, alias="expiresAt", description="Expiration time (millisecond timestamp)"
+    )
     scope: Optional[str] = None
     account: Optional[GeminiAccountInfo] = None
     environment_variables: list[GeminiEnvironmentVariable] = Field(
@@ -181,7 +205,9 @@ class GeminiSettings(CamelModel):
 class UserSettings(CamelModel):
     general: GeneralSettings = Field(default_factory=GeneralSettings)
     ssh: SSHSettings = Field(default_factory=SSHSettings)
-    claude_code: ClaudeCodeSettings = Field(default_factory=ClaudeCodeSettings, alias="claudeCode")
+    claude_code: ClaudeCodeSettings = Field(
+        default_factory=ClaudeCodeSettings, alias="claudeCode"
+    )
     codex: CodexSettings = Field(default_factory=CodexSettings)
     git: GitSettings = Field(default_factory=GitSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
@@ -206,6 +232,7 @@ class UserSettingsUpdate(CamelModel):
 
 class SSHKeyPairResponse(CamelModel):
     """SSH key pair generation response"""
+
     public_key: str = Field(..., alias="publicKey")
     private_key: str = Field(..., alias="privateKey")
     fingerprint: str

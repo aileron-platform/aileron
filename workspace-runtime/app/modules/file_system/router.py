@@ -1,17 +1,20 @@
 """Refactored file API routes"""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import mimetypes
+import os
 import posixpath
+import re
+import tempfile
 from pathlib import Path
 from typing import Callable, List, Optional
 from uuid import uuid4
 import zipfile
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Path as ApiPath, Query, UploadFile, status
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from app.config.settings import get_settings
 from app.core.openapi import build_responses
@@ -26,6 +29,10 @@ from .exceptions import (
 )
 from .dependencies import get_file_service_sync
 from .models import (
+    ArchiveDownloadAcceptedResponse,
+    ArchiveDownloadRequest,
+    ArchiveDownloadResult,
+    ArchiveDownloadStatusResponse,
     BatchDeleteRequest,
     BatchOperationResponse,
     ExtractArchiveAcceptedResponse,
@@ -49,6 +56,7 @@ router = APIRouter(prefix="/files", tags=["File Management"])
 
 ARCHIVE_ACTIONS = {"store", "extract"}
 CONFLICT_STRATEGIES = {"rename", "overwrite", "reject"}
+ARCHIVE_DOWNLOAD_TEMP_DIR = Path(tempfile.gettempdir()) / "aileron-archive-downloads"
 
 
 @dataclass
@@ -76,6 +84,42 @@ class ExtractArchiveOperation:
 
 
 _extract_operations: dict[str, ExtractArchiveOperation] = {}
+
+
+@dataclass
+class ArchiveFileEntry:
+    fs_path: Path
+    archive_path: str
+    size: int
+
+
+@dataclass
+class ArchiveDownloadOperation:
+    operation_id: str
+    status: str
+    progress: float
+    message: str
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    error: Optional[str] = None
+    result: Optional[ArchiveDownloadResult] = None
+    temp_path: Optional[Path] = None
+    expires_at: Optional[datetime] = None
+
+    def to_response(self) -> ArchiveDownloadStatusResponse:
+        return ArchiveDownloadStatusResponse(
+            operationId=self.operation_id,
+            status=self.status,
+            progress=self.progress,
+            message=self.message,
+            startedAt=self.started_at,
+            completedAt=self.completed_at,
+            error=self.error,
+            result=self.result,
+        )
+
+
+_archive_download_operations: dict[str, ArchiveDownloadOperation] = {}
 
 
 def _resolve_file_service_root(context_id: str | None) -> Path:
@@ -467,6 +511,312 @@ def _resolve_extract_target_path(archive_path: str, target_path: Optional[str]) 
         return target_path
     return _get_archive_parent_path(archive_path)
 
+
+def _sanitize_archive_name(archive_name: Optional[str], paths: List[str]) -> str:
+    if archive_name:
+        candidate = Path(archive_name).name.strip()
+    else:
+        candidate = ""
+
+    if not candidate:
+        if len(paths) == 1:
+            base = posixpath.basename(paths[0].rstrip("/")) or "workspace"
+            candidate = f"{base}.zip"
+        else:
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            candidate = f"workspace-selection-{timestamp}.zip"
+
+    candidate = re.sub(r"[^A-Za-z0-9._ -]+", "_", candidate).strip(" .")
+    if not candidate:
+        candidate = "archive.zip"
+    if not candidate.lower().endswith(".zip"):
+        candidate = f"{candidate}.zip"
+    return candidate
+
+
+def _normalize_archive_request_path(path: str) -> str:
+    normalized = path.strip()
+    if not normalized:
+        raise InvalidPathException(path, "Archive path is required")
+    return normalized if normalized.startswith("/") else f"/{normalized}"
+
+
+def _ensure_path_within_root(root_path: Path, fs_path: Path, request_path: str) -> Path:
+    resolved_root = root_path.resolve()
+    resolved_path = fs_path.resolve()
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError as exc:
+        raise InvalidPathException(request_path, "Path escapes workspace root") from exc
+    return resolved_path
+
+
+def _remove_redundant_archive_roots(paths: List[Path]) -> List[Path]:
+    selected: List[Path] = []
+    for path in sorted(paths, key=lambda item: len(item.parts)):
+        if any(_is_relative_to(path, parent) for parent in selected):
+            continue
+        selected.append(path)
+    return selected
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _common_archive_base(paths: List[Path]) -> Path:
+    parent_paths = [path.parent for path in paths]
+    return Path(os.path.commonpath([str(path) for path in parent_paths]))
+
+
+def _zip_entry_name(file_path: Path, base_path: Path) -> str:
+    entry_name = file_path.relative_to(base_path).as_posix()
+    normalized = posixpath.normpath(entry_name)
+    if normalized in {"", ".", ".."} or normalized.startswith("../") or normalized.startswith("/"):
+        raise InvalidPathException(str(file_path), "Invalid archive entry path")
+    return normalized
+
+
+def _build_archive_download_plan(
+    service: FileService,
+    paths: List[str],
+) -> tuple[List[ArchiveFileEntry], List[str]]:
+    settings = get_settings()
+    if len(paths) > settings.ARCHIVE_DOWNLOAD_MAX_SELECTED_ROOTS:
+        raise FileManagementException(
+            "ARCHIVE_DOWNLOAD_LIMIT_EXCEEDED",
+            "Archive selected root count exceeds limit",
+            {
+                "selectedRootCount": len(paths),
+                "maxSelectedRootCount": settings.ARCHIVE_DOWNLOAD_MAX_SELECTED_ROOTS,
+            },
+            400,
+        )
+
+    root_path = service.resolve_scope_path(None, "/").resolve()
+    resolved_roots: List[Path] = []
+    seen_roots: set[str] = set()
+    normalized_request_paths: List[str] = []
+
+    for raw_path in paths:
+        request_path = _normalize_archive_request_path(raw_path)
+        fs_path = _ensure_path_within_root(root_path, service.resolve_scope_path(None, request_path), request_path)
+        if not fs_path.exists():
+            raise FileNotFoundException(request_path)
+        root_key = str(fs_path)
+        if root_key in seen_roots:
+            continue
+        seen_roots.add(root_key)
+        resolved_roots.append(fs_path)
+        normalized_request_paths.append(request_path)
+
+    selected_roots = _remove_redundant_archive_roots(resolved_roots)
+    base_path = _common_archive_base(selected_roots)
+    entries: List[ArchiveFileEntry] = []
+    seen_entries: set[str] = set()
+    total_size = 0
+
+    for root in selected_roots:
+        if root.is_symlink():
+            continue
+
+        if root.is_file():
+            candidates = [root]
+        elif root.is_dir():
+            candidates = []
+            for current_dir, dirnames, filenames in os.walk(root, followlinks=False):
+                dirnames[:] = [
+                    dirname
+                    for dirname in dirnames
+                    if not (Path(current_dir) / dirname).is_symlink()
+                ]
+                for filename in filenames:
+                    candidates.append(Path(current_dir) / filename)
+        else:
+            continue
+
+        for candidate in candidates:
+            if candidate.is_symlink() or not candidate.is_file():
+                continue
+            resolved_candidate = _ensure_path_within_root(root_path, candidate, str(candidate))
+            stat = resolved_candidate.stat()
+            total_size += stat.st_size
+
+            if len(entries) + 1 > settings.ARCHIVE_DOWNLOAD_MAX_ENTRY_COUNT:
+                raise FileManagementException(
+                    "ARCHIVE_DOWNLOAD_LIMIT_EXCEEDED",
+                    "Archive file entry count exceeds limit",
+                    {
+                        "entryCount": len(entries) + 1,
+                        "maxEntryCount": settings.ARCHIVE_DOWNLOAD_MAX_ENTRY_COUNT,
+                    },
+                    400,
+                )
+            if total_size > settings.ARCHIVE_DOWNLOAD_MAX_TOTAL_SIZE_BYTES:
+                raise FileManagementException(
+                    "ARCHIVE_DOWNLOAD_LIMIT_EXCEEDED",
+                    "Archive total size exceeds limit",
+                    {
+                        "totalSize": total_size,
+                        "maxTotalSize": settings.ARCHIVE_DOWNLOAD_MAX_TOTAL_SIZE_BYTES,
+                    },
+                    400,
+                )
+
+            entry_name = _zip_entry_name(resolved_candidate, base_path)
+            if entry_name in seen_entries:
+                continue
+            seen_entries.add(entry_name)
+            entries.append(ArchiveFileEntry(fs_path=resolved_candidate, archive_path=entry_name, size=stat.st_size))
+
+    return entries, normalized_request_paths
+
+
+def _create_archive_download_operation(message: str = "Preparing ZIP download...") -> ArchiveDownloadOperation:
+    _cleanup_expired_archive_operations()
+    operation_id = f"archive-{uuid4().hex[:12]}"
+    operation = ArchiveDownloadOperation(
+        operation_id=operation_id,
+        status="pending",
+        progress=0.0,
+        message=message,
+        started_at=datetime.now(timezone.utc),
+    )
+    _archive_download_operations[operation_id] = operation
+    return operation
+
+
+def _update_archive_download_operation(
+    operation_id: str,
+    *,
+    status_value: Optional[str] = None,
+    progress: Optional[float] = None,
+    message: Optional[str] = None,
+    error: Optional[str] = None,
+    result: Optional[ArchiveDownloadResult] = None,
+    temp_path: Optional[Path] = None,
+    expires_at: Optional[datetime] = None,
+) -> None:
+    operation = _archive_download_operations.get(operation_id)
+    if operation is None:
+        return
+
+    if status_value is not None:
+        operation.status = status_value
+    if progress is not None:
+        operation.progress = min(1.0, max(0.0, progress))
+    if message is not None:
+        operation.message = message
+    if error is not None:
+        operation.error = error
+    if result is not None:
+        operation.result = result
+    if temp_path is not None:
+        operation.temp_path = temp_path
+    if expires_at is not None:
+        operation.expires_at = expires_at
+    if status_value in {"completed", "failed", "expired"}:
+        operation.completed_at = datetime.now(timezone.utc)
+
+
+def _cleanup_expired_archive_operations() -> None:
+    now = datetime.now(timezone.utc)
+    expired_ids: List[str] = []
+    ARCHIVE_DOWNLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    for operation_id, operation in list(_archive_download_operations.items()):
+        if operation.expires_at and operation.expires_at <= now:
+            if operation.temp_path and operation.temp_path.exists():
+                try:
+                    operation.temp_path.unlink()
+                except OSError:
+                    pass
+            expired_ids.append(operation_id)
+
+    for operation_id in expired_ids:
+        del _archive_download_operations[operation_id]
+
+
+def _run_archive_download_operation(
+    operation_id: str,
+    service: FileService,
+    paths: List[str],
+    archive_name: str,
+) -> None:
+    try:
+        _update_archive_download_operation(
+            operation_id,
+            status_value="running",
+            progress=0.02,
+            message="Scanning selected files...",
+        )
+
+        entries, _ = _build_archive_download_plan(service, paths)
+        if not entries:
+            raise FileManagementException(
+                "ARCHIVE_DOWNLOAD_EMPTY",
+                "No files are available to package",
+                {"paths": paths},
+                400,
+            )
+
+        _update_archive_download_operation(
+            operation_id,
+            status_value="running",
+            progress=0.1,
+            message=f"Packaging 0/{len(entries)} files...",
+        )
+
+        ARCHIVE_DOWNLOAD_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path = ARCHIVE_DOWNLOAD_TEMP_DIR / f"{operation_id}.zip"
+
+        with zipfile.ZipFile(temp_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for index, entry in enumerate(entries, start=1):
+                archive.write(entry.fs_path, entry.archive_path)
+                _update_archive_download_operation(
+                    operation_id,
+                    status_value="running",
+                    progress=0.1 + (index / len(entries)) * 0.85,
+                    message=f"Packaging {index}/{len(entries)} files...",
+                )
+
+        settings = get_settings()
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.ARCHIVE_DOWNLOAD_TTL_SECONDS)
+        result = ArchiveDownloadResult(
+            archiveName=archive_name,
+            size=temp_path.stat().st_size,
+            downloadUrl=f"/api/v1/files/archive/{operation_id}/download",
+            expiresAt=expires_at,
+        )
+        _update_archive_download_operation(
+            operation_id,
+            status_value="completed",
+            progress=1.0,
+            message=f"Archive ready, {len(entries)} files packaged",
+            result=result,
+            temp_path=temp_path,
+            expires_at=expires_at,
+        )
+    except FileManagementException as exc:
+        _update_archive_download_operation(
+            operation_id,
+            status_value="failed",
+            message=exc.message,
+            error=exc.message,
+        )
+    except Exception as exc:  # pragma: no cover - guarded by integration tests
+        _update_archive_download_operation(
+            operation_id,
+            status_value="failed",
+            message=f"Archive packaging failed: {exc}",
+            error=str(exc),
+        )
+
+
 @router.get(
     "/tree",
     response_model=FileTreeResponse,
@@ -592,6 +942,43 @@ async def read_file(
     except FileManagementException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=e.to_dict()
+        )
+
+
+@router.get(
+    "/download",
+    summary="Download file",
+    responses=build_responses(400, 404, 422, 500),
+)
+async def download_file(
+    path: str = Query(..., description="File path"),
+    service: FileService = Depends(get_new_file_service),
+):
+    """Download a single file as an attachment."""
+    try:
+        fs_path = service.resolve_scope_path(None, path).resolve()
+        root_path = service.resolve_scope_path(None, "/").resolve()
+        _ensure_path_within_root(root_path, fs_path, path)
+
+        if not fs_path.exists():
+            raise FileNotFoundException(path)
+        if not fs_path.is_file():
+            raise InvalidPathException(path, "Not a file")
+
+        return FileResponse(
+            path=fs_path,
+            filename=fs_path.name,
+            media_type="application/octet-stream",
+        )
+    except FileNotFoundException as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=e.to_dict()
+        )
+    except FileManagementException as e:
+        raise HTTPException(
+            status_code=e.status_code,
             detail=e.to_dict()
         )
 
@@ -860,6 +1247,108 @@ async def get_extract_archive_status(
             },
         )
     return operation.to_response()
+
+
+@router.post(
+    "/archive",
+    response_model=ArchiveDownloadAcceptedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Background package selected files as ZIP",
+    responses=build_responses(400, 404, 422, 500),
+)
+async def create_archive_download(
+    payload: ArchiveDownloadRequest,
+    background_tasks: BackgroundTasks,
+    service: FileService = Depends(get_new_file_service),
+) -> ArchiveDownloadAcceptedResponse:
+    """Create a background archive download task."""
+    try:
+        archive_name = _sanitize_archive_name(payload.archiveName, payload.paths)
+        operation = _create_archive_download_operation()
+        background_tasks.add_task(
+            _run_archive_download_operation,
+            operation.operation_id,
+            service,
+            payload.paths,
+            archive_name,
+        )
+        return ArchiveDownloadAcceptedResponse(
+            operationId=operation.operation_id,
+            status=operation.status,
+            message=operation.message,
+            startedAt=operation.started_at,
+        )
+    except FileManagementException as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.to_dict())
+
+
+@router.get(
+    "/archive/{operation_id}",
+    response_model=ArchiveDownloadStatusResponse,
+    summary="Query background ZIP packaging status",
+    responses=build_responses(404, 500),
+)
+async def get_archive_download_status(
+    operation_id: str = ApiPath(..., description="Background archive operation ID"),
+) -> ArchiveDownloadStatusResponse:
+    """Query background archive packaging task progress."""
+    _cleanup_expired_archive_operations()
+    operation = _archive_download_operations.get(operation_id)
+    if operation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ARCHIVE_OPERATION_NOT_FOUND",
+                "message": f"Archive operation not found: {operation_id}",
+                "details": {"operationId": operation_id},
+            },
+        )
+    return operation.to_response()
+
+
+@router.get(
+    "/archive/{operation_id}/download",
+    summary="Download completed ZIP archive",
+    responses=build_responses(400, 404, 409, 500),
+)
+async def download_archive(
+    operation_id: str = ApiPath(..., description="Background archive operation ID"),
+):
+    """Download a completed archive operation result."""
+    _cleanup_expired_archive_operations()
+    operation = _archive_download_operations.get(operation_id)
+    if operation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ARCHIVE_OPERATION_NOT_FOUND",
+                "message": f"Archive operation not found: {operation_id}",
+                "details": {"operationId": operation_id},
+            },
+        )
+    if operation.status != "completed" or not operation.result or not operation.temp_path:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "ARCHIVE_OPERATION_NOT_READY",
+                "message": f"Archive operation is not ready: {operation_id}",
+                "details": {"operationId": operation_id, "status": operation.status},
+            },
+        )
+    if not operation.temp_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "ARCHIVE_FILE_NOT_FOUND",
+                "message": f"Archive file not found: {operation_id}",
+                "details": {"operationId": operation_id},
+            },
+        )
+    return FileResponse(
+        path=operation.temp_path,
+        filename=operation.result.archiveName,
+        media_type="application/zip",
+    )
 
 
 @router.post(

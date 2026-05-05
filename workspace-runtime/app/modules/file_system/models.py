@@ -237,3 +237,38 @@ class ExtractArchiveStatusResponse(BaseModel):
     completedAt: Optional[datetime] = Field(default=None, description="Completion time")
     error: Optional[str] = Field(default=None, description="Failure message")
     result: Optional[ExtractArchiveResult] = Field(default=None, description="Success result")
+
+
+class ArchiveDownloadRequest(BaseModel):
+    """Archive download request"""
+    paths: List[str] = Field(min_length=1, description="File or directory paths to package")
+    archiveName: Optional[str] = Field(default=None, description="Preferred archive file name")
+    archiveFormat: Literal["zip"] = Field(default="zip", description="Archive format")
+
+
+class ArchiveDownloadAcceptedResponse(BaseModel):
+    """Accept background archive download request response"""
+    operationId: str = Field(description="Background archive operation ID")
+    status: Literal["pending", "running"] = Field(description="Current status")
+    message: str = Field(description="Status message")
+    startedAt: datetime = Field(description="Creation time")
+
+
+class ArchiveDownloadResult(BaseModel):
+    """Background archive download result"""
+    archiveName: str = Field(description="Archive file name")
+    size: int = Field(description="Archive file size in bytes")
+    downloadUrl: str = Field(description="Archive download URL")
+    expiresAt: datetime = Field(description="Archive expiration time")
+
+
+class ArchiveDownloadStatusResponse(BaseModel):
+    """Background archive download status response"""
+    operationId: str = Field(description="Background archive operation ID")
+    status: Literal["pending", "running", "completed", "failed", "expired"] = Field(description="Current status")
+    progress: float = Field(default=0.0, description="Progress 0.0-1.0", ge=0.0, le=1.0)
+    message: str = Field(description="Status message")
+    startedAt: datetime = Field(description="Creation time")
+    completedAt: Optional[datetime] = Field(default=None, description="Completion time")
+    error: Optional[str] = Field(default=None, description="Failure message")
+    result: Optional[ArchiveDownloadResult] = Field(default=None, description="Success result")

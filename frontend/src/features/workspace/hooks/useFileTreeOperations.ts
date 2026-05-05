@@ -1,6 +1,5 @@
 /**
- * useFileTreeOperations Hook
- * 處理檔案樹的所有操作邏輯
+ * useFileTreeOperations hook.
  */
 
 import { useCallback } from 'react';
@@ -20,7 +19,7 @@ import type {
   FileContent,
 } from '../features/file-management/types';
 import {
-  buildRuntimeUrl,
+  buildArchiveDownloadUrl,
   fetchFileTree,
   fetchNodeChildren,
   fetchFileContent,
@@ -32,7 +31,8 @@ import {
   duplicateFile,
   uploadFiles as uploadFilesApi,
   downloadFile as downloadFileApi,
-  batchDownloadFiles as batchDownloadFilesApi,
+  fetchArchiveDownloadStatus,
+  startArchiveDownload,
   moveFile as moveFileApi,
 } from '../services/workspaceRuntimeApi';
 
@@ -51,7 +51,7 @@ export const useFileTreeOperations = ({
 }: UseFileTreeOperationsProps) => {
   const { t } = useI18n();
 
-  // 載入檔案樹
+  // Load the file tree.
   const loadFileTree = useCallback(async () => {
     if (!runtimeBaseUrl) {
       if (workspaceRuntimeError) {
@@ -81,7 +81,7 @@ export const useFileTreeOperations = ({
     }
   }, [customRefreshFileTree, loadFileTree]);
 
-  // 載入節點子項
+  // Load child nodes.
   const loadNodeChildren = useCallback(
     async (nodePath: string, parentDepth: number): Promise<void> => {
       if (!runtimeBaseUrl) {
@@ -95,14 +95,14 @@ export const useFileTreeOperations = ({
         dispatch({ type: 'SET_NODE_CHILDREN', payload: { path: nodePath, children } });
         dispatch({ type: 'EXPAND_NODE', payload: nodePath });
       } catch (error) {
-        logger.error('載入子節點失敗', { error });
+        logger.error('Failed to load child nodes', { error });
         dispatch({ type: 'SET_NODE_LOADING', payload: { path: nodePath, isLoading: false } });
       }
     },
     [runtimeBaseUrl, dispatch]
   );
 
-  // 建立檔案
+  // Create a file.
   const createFile = useCallback(
     async (request: CreateFileRequest): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -124,7 +124,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 建立資料夾
+  // Create a folder.
   const createFolder = useCallback(
     async (request: CreateFileRequest): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -146,7 +146,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 重新命名檔案
+  // Rename a file.
   const renameFile = useCallback(
     async (request: RenameFileRequest): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -168,7 +168,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 刪除檔案
+  // Delete a file.
   const deleteFile = useCallback(
     async (request: DeleteFileRequest): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -190,7 +190,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 批次刪除檔案
+  // Delete files in a batch.
   const deleteFiles = useCallback(
     async (paths: string[], options?: { recursive?: boolean }): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -225,7 +225,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 複製節點
+  // Copy a node.
   const copyNode = useCallback(
     async (sourcePath: string, targetDirectory: string): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -298,7 +298,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, dispatch, t]
   );
 
-  // 上傳檔案
+  // Upload files.
   const uploadFiles = useCallback(
     async (request: UploadFileRequest): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -323,7 +323,7 @@ export const useFileTreeOperations = ({
         await refreshFileTree();
         const extractedCount = uploadResult.extractedPaths.length;
         const message = extractedCount > 0
-          ? `已解壓 ${extractedCount} 個項目`
+          ? t('workspace.fileManagement.tree.notifications.extractSuccessDescription', { count: extractedCount })
           : t('workspace.fileManagement.tree.notifications.uploadSuccess');
         return {
           success: true,
@@ -342,7 +342,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 下載檔案
+  // Download a file.
   const downloadFile = useCallback(
     async (filePath: string): Promise<void> => {
       if (!runtimeBaseUrl) {
@@ -355,13 +355,13 @@ export const useFileTreeOperations = ({
           window.open(downloadUrl, '_blank', 'noopener');
         }
       } catch (error) {
-        logger.error('下載檔案失敗', { error });
+        logger.error('Download file failed', { error });
       }
     },
     [runtimeBaseUrl, workspaceRuntimeError, t]
   );
 
-  // 批次下載檔案
+  // Download files in a batch.
   const downloadFiles = useCallback(
     async (filePaths: string[]): Promise<void> => {
       if (!runtimeBaseUrl) {
@@ -372,36 +372,39 @@ export const useFileTreeOperations = ({
         return;
       }
 
-      // 如果只有一個檔案，直接下載
       if (filePaths.length === 1) {
         return downloadFile(filePaths[0]);
       }
 
-      // 多個檔案，使用批次下載（打包成 ZIP）
       try {
-        // 1. 建立打包任務
-        const ticket = await batchDownloadFilesApi(runtimeBaseUrl, filePaths, 'zip');
-
-        // 2. 檢查任務狀態
-        if (ticket.status === 'succeeded') {
-          const downloadUrl = ticket.statusUrl.startsWith('http')
-            ? ticket.statusUrl
-            : buildRuntimeUrl(runtimeBaseUrl, ticket.statusUrl.replace(/^\/api\/v1\//, ''));
-          if (typeof window !== 'undefined') {
-            window.open(downloadUrl, '_blank', 'noopener');
+        const accepted = await startArchiveDownload(runtimeBaseUrl, {
+          paths: filePaths,
+          archiveFormat: 'zip',
+        });
+        for (let attempt = 0; attempt < 120; attempt += 1) {
+          const status = await fetchArchiveDownloadStatus(runtimeBaseUrl, accepted.operationId);
+          if (status.status === 'completed' && status.result) {
+            const downloadUrl = buildArchiveDownloadUrl(runtimeBaseUrl, status.result.downloadUrl);
+            if (typeof window !== 'undefined') {
+              window.open(downloadUrl, '_blank', 'noopener');
+            }
+            return;
           }
-        } else {
-          throw new Error(t('workspace.fileManagement.tree.notifications.downloadFailed'));
+          if (status.status === 'failed' || status.status === 'expired') {
+            throw new Error(status.error ?? status.message);
+          }
+          await new Promise(resolve => globalThis.setTimeout(resolve, 1000));
         }
+        throw new Error(t('workspace.fileManagement.tree.notifications.downloadFailed'));
       } catch (error) {
-        logger.error('批次下載檔案失敗', { error });
+        logger.error('Batch download files failed', { error });
         throw error;
       }
     },
     [runtimeBaseUrl, workspaceRuntimeError, downloadFile, t]
   );
 
-  // 讀取檔案內容
+  // Read file content.
   const readFileContent = useCallback(
     async (filePath: string): Promise<FileContent> => {
       if (!runtimeBaseUrl) {
@@ -422,7 +425,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, t]
   );
 
-  // 儲存檔案內容
+  // Save file content.
   const saveFileContentHandler = useCallback(
     async (filePath: string, content: string): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -447,7 +450,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, t]
   );
 
-  // 移動檔案或資料夾
+  // Move a file or folder.
   const moveNode = useCallback(
     async (sourcePath: string, targetPath: string): Promise<FileOperationResult> => {
       if (!runtimeBaseUrl) {
@@ -469,7 +472,7 @@ export const useFileTreeOperations = ({
     [runtimeBaseUrl, workspaceRuntimeError, refreshFileTree, t]
   );
 
-  // 設定拖曳節點
+  // Set the dragged node.
   const setDraggedNode = useCallback(
     (nodePath: string | null) => {
       dispatch({ type: 'SET_DRAGGED_NODE', payload: nodePath });
@@ -477,7 +480,7 @@ export const useFileTreeOperations = ({
     [dispatch]
   );
 
-  // 設定放置目標
+  // Set the drop target.
   const setDropTarget = useCallback(
     (nodePath: string | null) => {
       dispatch({ type: 'SET_DROP_TARGET', payload: nodePath });

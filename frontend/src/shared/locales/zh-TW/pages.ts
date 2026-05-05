@@ -301,7 +301,9 @@ const pages = {
           },
           errors: {
             startFailedTitle: '無法開始 Codex 登入',
-            startFailedDescription: '請確認 workspace runtime 已啟動且 Codex 登入服務可用，然後再試一次。',
+            startFailedDescription: '請稍後再試。',
+            serviceUnavailableDescription: '請確認 Codex 登入服務可用，然後再試一次。',
+            providerFailedDescription: 'Codex 登入提供者暫時無法完成驗證，請稍後再試。',
             logoutFailedTitle: '無法取消連結 Codex',
             logoutFailedDescription: '請稍後再試。',
           },

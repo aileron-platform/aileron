@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -117,6 +117,16 @@ class CodexAuthTokens(BaseModel):
         populate_by_name = True
 
 
+class CodexCliState(BaseModel):
+    """Codex CLI files synchronized from a logged-in workspace."""
+    auth_json: Optional[dict[str, Any]] = Field(None, alias="authJson")
+    config_toml: Optional[str] = Field(None, alias="configToml")
+    installation_id: Optional[str] = Field(None, alias="installationId")
+
+    class Config:
+        populate_by_name = True
+
+
 class CodexSettingsRequest(BaseModel):
     """Codex configuration request."""
     auth_method: Optional[str] = Field(
@@ -137,6 +147,11 @@ class CodexSettingsRequest(BaseModel):
         None,
         alias="authTokens",
         description="Optional runtime-only token bootstrap payload",
+    )
+    cli_state: Optional[CodexCliState] = Field(
+        None,
+        alias="cliState",
+        description="Optional Codex CLI files synchronized from a logged-in workspace",
     )
     clear_auth: bool = Field(False, alias="clearAuth")
 
@@ -209,6 +224,7 @@ __all__ = [
     "CodexAccountInfo",
     "CodexAuthFlow",
     "CodexAuthTokens",
+    "CodexCliState",
     "CodexSettingsRequest",
     "GeminiRequest",
     "GitSettingsRequest",

@@ -21,7 +21,6 @@ from .models import (
     GeminiExtensionPolicy,
     GeminiExtensionSkill,
     GeminiExtensionSlashCommand,
-    GeminiExtensionToggleScope,
 )
 
 GEMINI_COMMAND = "gemini"
@@ -33,24 +32,16 @@ def gemini_extensions_dir(home: Path | None = None) -> Path:
     return (home or Path.home()) / ".gemini" / "extensions"
 
 
-def enable(name: str, scope: GeminiExtensionToggleScope, cwd: Path) -> subprocess.CompletedProcess[str]:
+def enable(name: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     """Enable a Gemini extension through the Gemini CLI."""
 
-    return _run_toggle("enable", name, scope, cwd)
+    return _run_toggle("enable", name, cwd)
 
 
-def disable(name: str, scope: GeminiExtensionToggleScope, cwd: Path) -> subprocess.CompletedProcess[str]:
+def disable(name: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     """Disable a Gemini extension through the Gemini CLI."""
 
-    return _run_toggle("disable", name, scope, cwd)
-
-
-def resolve_toggle_cwd(scope: GeminiExtensionToggleScope, workspace_root: Path) -> Path:
-    """Resolve the cwd required by Gemini extension toggles."""
-
-    if scope == GeminiExtensionToggleScope.USER:
-        return Path.home()
-    return workspace_root.resolve(strict=True)
+    return _run_toggle("disable", name, cwd)
 
 
 def resolve_workspace_root() -> Path:
@@ -62,10 +53,9 @@ def resolve_workspace_root() -> Path:
 def _run_toggle(
     action: str,
     name: str,
-    scope: GeminiExtensionToggleScope,
     cwd: Path,
 ) -> subprocess.CompletedProcess[str]:
-    command = [GEMINI_COMMAND, "extensions", action, name, f"--scope={scope.value}"]
+    command = [GEMINI_COMMAND, "extensions", action, name, "--scope=workspace"]
     result = subprocess.run(
         command,
         cwd=str(cwd),

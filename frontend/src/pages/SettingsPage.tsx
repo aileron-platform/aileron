@@ -31,7 +31,7 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useApp } from '@/app/providers/AppProvider';
 import type { SupportedLanguage } from '@/app/providers/I18nProvider';
-import { apiClient } from '@/shared/api/apiClient';
+import { ApiError, apiClient } from '@/shared/api/apiClient';
 import { OAuthService } from '@/shared/services/oauthService';
 import { OAuthApiService } from '@/shared/services/oauthApiService';
 import { GeminiOAuthService } from '@/shared/services/geminiOauthService';
@@ -745,9 +745,15 @@ export const SettingsPage: React.FC = () => {
     } catch (err) {
       authWindow?.close();
       logger.error('codex login start failed', { error: err });
+      const errorCode = err instanceof ApiError ? err.errorCode : undefined;
+      const descriptionKey = errorCode === 'codex_login_service_unavailable'
+        ? 'pages.settings.sections.codex.login.errors.serviceUnavailableDescription'
+        : errorCode === 'codex_login_provider_error'
+          ? 'pages.settings.sections.codex.login.errors.providerFailedDescription'
+          : 'pages.settings.sections.codex.login.errors.startFailedDescription';
       toast({
         title: t('pages.settings.sections.codex.login.errors.startFailedTitle'),
-        description: t('pages.settings.sections.codex.login.errors.startFailedDescription'),
+        description: t(descriptionKey),
         variant: 'destructive',
       });
     } finally {

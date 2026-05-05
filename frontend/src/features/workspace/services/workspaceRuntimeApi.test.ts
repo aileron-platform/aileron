@@ -31,11 +31,14 @@ import {
   fetchFileTree,
   fetchNodeChildren,
   fetchExtractArchiveStatus,
+  fetchArchiveDownloadStatus,
   createCanvasReviewNote,
   deleteCanvasReviewNote,
   fetchCanvasReviewNotes,
   resolveRuntimeBaseUrl,
+  startArchiveDownload,
   startExtractArchive,
+  buildArchiveDownloadUrl,
   updateCanvasReviewNoteStatus,
   uploadFiles,
 } from './workspaceRuntimeApi';
@@ -192,6 +195,54 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     expect(clientGetMock).toHaveBeenCalledWith('/api/v1/files/extract/extract-123');
     expect(result.status).toBe('completed');
     expect(result.result?.extractedPaths).toEqual(['/uploads/demo/app.ts']);
+  });
+
+  it('starts an archive download operation with context id', async () => {
+    postMock.mockResolvedValue({
+      operationId: 'archive-123',
+      status: 'pending',
+      message: 'Preparing ZIP download...',
+      startedAt: '2026-01-01T00:00:00Z',
+    });
+
+    const result = await startArchiveDownload('http://runtime.local', {
+      paths: ['/src', '/README.md'],
+      archiveName: 'selection.zip',
+      contextId: 'worktree:feature-auth',
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/api/v1/files/archive?contextId=worktree%3Afeature-auth', {
+      paths: ['/src', '/README.md'],
+      archiveName: 'selection.zip',
+      archiveFormat: 'zip',
+    });
+    expect(result.operationId).toBe('archive-123');
+  });
+
+  it('fetches archive download status', async () => {
+    clientGetMock.mockResolvedValue({
+      operationId: 'archive-123',
+      status: 'completed',
+      progress: 1,
+      message: 'Archive ready',
+      startedAt: '2026-01-01T00:00:00Z',
+      result: {
+        archiveName: 'selection.zip',
+        size: 123,
+        downloadUrl: '/api/v1/files/archive/archive-123/download',
+        expiresAt: '2026-01-01T00:30:00Z',
+      },
+    });
+
+    const result = await fetchArchiveDownloadStatus('http://runtime.local', 'archive-123');
+
+    expect(clientGetMock).toHaveBeenCalledWith('/api/v1/files/archive/archive-123');
+    expect(result.result?.archiveName).toBe('selection.zip');
+  });
+
+  it('builds archive download URLs from API paths', () => {
+    expect(buildArchiveDownloadUrl('http://runtime.local', '/api/v1/files/archive/archive-123/download'))
+      .toBe('http://runtime.local/api/v1/files/archive/archive-123/download');
   });
 
   it('會呼叫 Canvas review note API', async () => {

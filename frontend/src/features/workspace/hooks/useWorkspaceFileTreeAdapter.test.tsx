@@ -53,7 +53,7 @@ vi.mock('@/shared/components/file-workbench', () => ({
 }));
 
 vi.mock('../services/workspaceRuntimeApi', () => ({
-  buildRuntimeUrl: vi.fn(),
+  buildArchiveDownloadUrl: vi.fn(),
   createFileOrFolder: vi.fn(),
   renameFile: vi.fn(),
   deleteFile: vi.fn(),
@@ -62,7 +62,8 @@ vi.mock('../services/workspaceRuntimeApi', () => ({
   moveFile: vi.fn(),
   uploadFiles: vi.fn(),
   downloadFile: vi.fn(),
-  batchDownloadFiles: vi.fn(),
+  fetchArchiveDownloadStatus: vi.fn(),
+  startArchiveDownload: vi.fn(),
   fetchFileContent: vi.fn(),
   saveFileContent: saveFileContentMock,
 }));
