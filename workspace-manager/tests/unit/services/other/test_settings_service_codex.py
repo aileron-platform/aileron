@@ -5,10 +5,12 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from app.models.settings import (
+    ClaudeCodeSettings,
     CodexAccountInfo,
     CodexCliState,
     CodexEnvironmentVariable,
     CodexSettings,
+    OAuthAccountInfo,
     UserSettings,
 )
 from app.services.settings_service import SettingsService
@@ -121,3 +123,54 @@ def test_codex_settings_public_dump_excludes_cli_state():
     dumped = settings.model_dump(by_alias=True)
 
     assert "cliState" not in dumped
+
+
+def test_detect_setting_changes_includes_claude_oauth_account_and_model():
+    """Claude OAuth account and model changes are emitted for runtime sync."""
+    service = SettingsService(MagicMock())
+    old_settings = UserSettings(
+        claude_code=ClaudeCodeSettings(
+            auth_method="subscription",
+            subscription_access_token="old-access-token",
+            subscription_refresh_token="old-refresh-token",
+            subscription_expires_at=123,
+            oauth_account=OAuthAccountInfo(
+                account_uuid="account-1",
+                email_address="old@example.com",
+                organization_uuid="org-1",
+            ),
+            model="claude-sonnet-4-20250514",
+        )
+    )
+
+    changes = service.detect_setting_changes(
+        old_settings,
+        {
+            "claudeCode": {
+                "authMethod": "subscription",
+                "subscriptionAccessToken": "new-access-token",
+                "subscriptionRefreshToken": "new-refresh-token",
+                "subscriptionExpiresAt": 456,
+                "oauthAccount": {
+                    "accountUuid": "account-2",
+                    "emailAddress": "new@example.com",
+                    "organizationUuid": "org-1",
+                },
+                "model": "claude-opus-4-20250514",
+            }
+        },
+    )
+
+    assert changes == {
+        "claudeCode": {
+            "subscriptionAccessToken": "new-access-token",
+            "subscriptionRefreshToken": "new-refresh-token",
+            "subscriptionExpiresAt": 456,
+            "oauthAccount": {
+                "accountUuid": "account-2",
+                "emailAddress": "new@example.com",
+                "organizationUuid": "org-1",
+            },
+            "model": "claude-opus-4-20250514",
+        }
+    }

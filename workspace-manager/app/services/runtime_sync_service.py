@@ -218,12 +218,23 @@ class RuntimeSyncService:
             "subscriptionAccessToken": claude_data.get("subscriptionAccessToken"),
             "subscriptionRefreshToken": claude_data.get("subscriptionRefreshToken"),
             "subscriptionExpiresAt": claude_data.get("subscriptionExpiresAt"),
+            "oauthAccount": claude_data.get("oauthAccount"),
             "apiKey": claude_data.get("authKey"),
+            "model": claude_data.get("model"),
             "environmentVariables": claude_data.get("environmentVariables", []),
         }
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
+                logger.info(
+                    "Claude Code sync payload prepared - workspace: %s auth_method=%s model=%s env_count=%s has_oauth_account=%s has_subscription_token=%s",
+                    workspace_id,
+                    payload.get("authMethod"),
+                    payload.get("model"),
+                    len(payload["environmentVariables"]),
+                    bool(payload.get("oauthAccount")),
+                    bool(payload.get("subscriptionAccessToken")),
+                )
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()
                 result = response.json()

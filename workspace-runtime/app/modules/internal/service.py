@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -326,11 +328,14 @@ class InternalService:
         try:
             logger.info("Starting Claude Code setup")
 
-            # Debug: Log received request data
-            logger.info(f"Received request: auth_method={request.auth_method}")
-            logger.info(f"subscription_access_token exists: {bool(request.subscription_access_token)}")
-            logger.info(f"subscription_refresh_token exists: {bool(request.subscription_refresh_token)}")
-            logger.info(f"subscription_expires_at: {request.subscription_expires_at}")
+            logger.info(
+                "Received Claude Code setup request: auth_method=%s model=%s env_count=%s has_oauth_account=%s has_subscription_token=%s",
+                request.auth_method,
+                request.model,
+                len(request.environment_variables),
+                bool(request.oauth_account),
+                bool(request.subscription_access_token),
+            )
 
             # Ensure .claude directory exists
             self.claude_dir.mkdir(mode=0o755, parents=True, exist_ok=True)
@@ -358,8 +363,15 @@ class InternalService:
                         "accessToken": request.subscription_access_token,
                         "refreshToken": request.subscription_refresh_token,
                         "expiresAt": expires_at_ms,
-                        "scopes": ["user:inference", "user:profile"],
-                        "subscriptionType": "pro"
+                        "scopes": [
+                            "user:file_upload",
+                            "user:inference",
+                            "user:mcp_servers",
+                            "user:profile",
+                            "user:sessions:claude_code",
+                        ],
+                        "subscriptionType": "pro",
+                        "rateLimitTier": "default_claude_ai",
                     }
                 }
 
@@ -368,34 +380,9 @@ class InternalService:
                 logger.debug(f"Credentials file created: {credentials_path}")
                 logger.info("Stored Subscription OAuth Token (Claude Code format)")
 
-                # Write oauthAccount info to ~/.claude.json
                 if request.oauth_account:
-                    claude_json_path = self.home_dir / ".claude.json"
-                    claude_json_data = {}
-
-                    # Read existing .claude.json (if exists)
-                    if claude_json_path.exists():
-                        try:
-                            claude_json_data = json.loads(claude_json_path.read_text())
-                            logger.debug(f"Read existing .claude.json: {len(claude_json_data)} fields")
-                        except Exception as e:
-                            logger.warning(f"Failed to read existing .claude.json: {e}, will create new file")
-
-                    # Update oauthAccount field
-                    claude_json_data["oauthAccount"] = {
-                        "accountUuid": request.oauth_account.account_uuid,
-                        "emailAddress": request.oauth_account.email_address,
-                        "organizationUuid": request.oauth_account.organization_uuid,
-                        "displayName": request.oauth_account.display_name,
-                        "organizationBillingType": request.oauth_account.organization_billing_type,
-                        "organizationRole": request.oauth_account.organization_role,
-                        "workspaceRole": request.oauth_account.workspace_role,
-                        "organizationName": request.oauth_account.organization_name,
-                    }
-
-                    # Write .claude.json
-                    claude_json_path.write_text(json.dumps(claude_json_data, indent=2))
-                    logger.info(f"Stored OAuth account info to ~/.claude.json: {request.oauth_account.email_address} ({request.oauth_account.display_name})")
+                    self._write_claude_user_state(request.oauth_account)
+                    logger.info("Stored Claude Code OAuth account state to ~/.claude.json")
             elif resolved_auth_method == "api_key" and request.api_key:
                 credentials_data = {
                     "authMethod": "api_key",
@@ -446,7 +433,7 @@ class InternalService:
                             escaped_value = env_var.value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$").replace("`", "\\`")
                             new_env_lines.append(f'export {env_var.key}="{escaped_value}"\n')
                             synced_keys.append(env_var.key)
-                            env_vars_set.append(f"{env_var.key}={env_var.value}")
+                            env_vars_set.append(env_var.key)
                             logger.debug(f"Environment variable set: {env_var.key}")
                         else:
                             logger.warning(f"Skipping empty environment variable: key={env_var.key}, value={'<empty>' if not env_var.value else '<set>'}")
@@ -488,8 +475,10 @@ class InternalService:
             logger.info(f"Claude Code setup completed, set {len(env_vars_set)} environment variables")
             return {
                 "credentials_path": str(credentials_path),
+                "claude_json_path": str(self.home_dir / ".claude.json"),
                 "auth_method": resolved_auth_method or "none",
                 "has_credentials": bool(credentials_data),
+                "has_claude_json": (self.home_dir / ".claude.json").is_file(),
                 "environment_variables_set": env_vars_set,
                 "claude_dir_permissions": oct(self.claude_dir.stat().st_mode)[-3:],
             }
@@ -557,6 +546,96 @@ class InternalService:
 
         claude_json_data.pop("oauthAccount", None)
         claude_json_path.write_text(json.dumps(claude_json_data, indent=2))
+        claude_json_path.chmod(0o600)
+
+    def _write_claude_user_state(self, oauth_account: Any) -> None:
+        """Write stable Claude Code user state required by CLI login."""
+        claude_json_path = self.home_dir / ".claude.json"
+        claude_json_data: dict[str, Any] = {}
+
+        if claude_json_path.exists():
+            try:
+                existing_data = json.loads(claude_json_path.read_text())
+                if isinstance(existing_data, dict):
+                    claude_json_data = existing_data
+                    logger.debug(
+                        "Read existing .claude.json with %d top-level fields",
+                        len(claude_json_data),
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to read existing .claude.json, rebuilding minimal state: %s",
+                    exc,
+                )
+
+        account_data = oauth_account.model_dump(by_alias=True, exclude_none=True)
+        user_identity = (
+            account_data.get("accountUuid")
+            or account_data.get("emailAddress")
+            or "claude-code"
+        )
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+        claude_json_data.setdefault(
+            "firstStartTime",
+            datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        )
+        claude_json_data["opusProMigrationComplete"] = True
+        claude_json_data.setdefault("opusProMigrationTimestamp", now_ms)
+        claude_json_data["sonnet1m45MigrationComplete"] = True
+        claude_json_data["migrationVersion"] = 12
+        claude_json_data["userID"] = hashlib.sha256(
+            str(user_identity).encode("utf-8")
+        ).hexdigest()
+        claude_json_data["oauthAccount"] = account_data
+        claude_json_data["hasCompletedOnboarding"] = True
+        claude_json_data.setdefault("lastOnboardingVersion", "2.1.119")
+
+        projects = claude_json_data.get("projects")
+        if not isinstance(projects, dict):
+            projects = {}
+        workspace_state = projects.get("/workspace")
+        if not isinstance(workspace_state, dict):
+            workspace_state = {}
+        project_onboarding_seen_count = (
+            workspace_state.get("projectOnboardingSeenCount") or 0
+        )
+        try:
+            project_onboarding_seen_count = int(project_onboarding_seen_count)
+        except (TypeError, ValueError):
+            project_onboarding_seen_count = 0
+
+        workspace_state.update(
+            {
+                "allowedTools": workspace_state.get("allowedTools", []),
+                "mcpContextUris": workspace_state.get("mcpContextUris", []),
+                "mcpServers": workspace_state.get("mcpServers", {}),
+                "enabledMcpjsonServers": workspace_state.get(
+                    "enabledMcpjsonServers", []
+                ),
+                "disabledMcpjsonServers": workspace_state.get(
+                    "disabledMcpjsonServers", []
+                ),
+                "hasTrustDialogAccepted": True,
+                "projectOnboardingSeenCount": max(project_onboarding_seen_count, 1),
+                "hasClaudeMdExternalIncludesApproved": bool(
+                    workspace_state.get("hasClaudeMdExternalIncludesApproved", False)
+                ),
+                "hasClaudeMdExternalIncludesWarningShown": bool(
+                    workspace_state.get("hasClaudeMdExternalIncludesWarningShown", False)
+                ),
+                "lastGracefulShutdown": bool(
+                    workspace_state.get("lastGracefulShutdown", False)
+                ),
+            }
+        )
+        projects["/workspace"] = workspace_state
+        claude_json_data["projects"] = projects
+
+        claude_json_path.write_text(
+            json.dumps(claude_json_data, indent=2, ensure_ascii=False)
+        )
+        claude_json_path.chmod(0o600)
 
     def _write_codex_auth_state(self, request: CodexSettingsRequest) -> None:
         """Write Codex CLI auth state using the current CLI-readable format."""
@@ -966,9 +1045,19 @@ class InternalService:
                     auth_method = "subscription"
 
             if auth_method == "subscription":
-                if credentials_path and credentials_path.stat().st_size > 0:
-                    return {"status": "success", "message": "Claude Code subscription credentials synced"}
-                return {"status": "pending", "message": "Claude Code subscription credentials not yet synced"}
+                if (
+                    credentials_path
+                    and credentials_path.stat().st_size > 0
+                    and self._has_claude_user_state()
+                ):
+                    return {
+                        "status": "success",
+                        "message": "Claude Code subscription credentials synced",
+                    }
+                return {
+                    "status": "pending",
+                    "message": "Claude Code subscription credentials not yet synced",
+                }
 
             # API Key mode, check user-configured environment variables
             if recorded_env_keys:
@@ -988,6 +1077,33 @@ class InternalService:
         except Exception as exc:
             logger.error(f"Failed to check Claude Code status: {exc}")
             return {"status": "failed", "message": f"Check failed: {exc}"}
+
+    def _has_claude_user_state(self) -> bool:
+        """Check if .claude.json contains minimal login-ready user state."""
+        claude_json_path = self.home_dir / ".claude.json"
+        if not claude_json_path.is_file() or claude_json_path.stat().st_size <= 0:
+            return False
+
+        try:
+            claude_json_data = json.loads(claude_json_path.read_text())
+        except Exception as exc:
+            logger.warning("Failed to read .claude.json for status check: %s", exc)
+            return False
+
+        if not isinstance(claude_json_data, dict):
+            return False
+
+        oauth_account = claude_json_data.get("oauthAccount")
+        projects = claude_json_data.get("projects")
+        workspace_state = (
+            projects.get("/workspace") if isinstance(projects, dict) else None
+        )
+        return (
+            isinstance(oauth_account, dict)
+            and bool(oauth_account.get("emailAddress") or oauth_account.get("accountUuid"))
+            and isinstance(workspace_state, dict)
+            and workspace_state.get("hasTrustDialogAccepted") is True
+        )
 
     def _check_codex_status(self) -> Dict[str, str]:
         try:

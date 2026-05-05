@@ -100,10 +100,14 @@ async def sync_claude_code(
 ) -> InternalApiResponse:
     """Sync Claude Code settings to workspace-runtime"""
     try:
-        logger.info("Received Claude Code sync request")
-        logger.info(f"Original request object: {request}")
-        logger.info(f"Request model_dump: {request.model_dump()}")
-        logger.info(f"Request model_dump(by_alias=True): {request.model_dump(by_alias=True)}")
+        logger.info(
+            "Received Claude Code sync request: auth_method=%s model=%s env_count=%s has_oauth_account=%s has_subscription_token=%s",
+            request.auth_method,
+            request.model,
+            len(request.environment_variables),
+            bool(request.oauth_account),
+            bool(request.subscription_access_token),
+        )
 
         details = await service.setup_claude_code(request)
 

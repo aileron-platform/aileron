@@ -258,11 +258,24 @@ class TestSetupClaudeCode:
         assert credentials["authMethod"] == "subscription"
         assert credentials["claudeAiOauth"]["accessToken"] == "test-access-token"
         assert credentials["claudeAiOauth"]["refreshToken"] == "test-refresh-token"
+        assert credentials["claudeAiOauth"]["scopes"] == [
+            "user:file_upload",
+            "user:inference",
+            "user:mcp_servers",
+            "user:profile",
+            "user:sessions:claude_code",
+        ]
+        assert credentials["claudeAiOauth"]["rateLimitTier"] == "default_claude_ai"
+        assert oct((tmp_paths["claude"] / ".credentials.json").stat().st_mode)[-3:] == "600"
 
         # Verify .claude.json content
         claude_json = json.loads((tmp_paths["home"] / ".claude.json").read_text())
         assert "oauthAccount" in claude_json
         assert claude_json["oauthAccount"]["emailAddress"] == "test@example.com"
+        assert claude_json["hasCompletedOnboarding"] is True
+        assert claude_json["projects"]["/workspace"]["hasTrustDialogAccepted"] is True
+        assert "test-access-token" not in (tmp_paths["home"] / ".claude.json").read_text()
+        assert result["has_claude_json"] is True
 
 
 class TestSetupCodex:
@@ -540,6 +553,75 @@ class TestSetupCodex:
         claude_json = json.loads((tmp_paths["home"] / ".claude.json").read_text())
         assert claude_json["existing"] == "value"
         assert claude_json["oauthAccount"]["emailAddress"] == "test@example.com"
+        assert claude_json["projects"]["/workspace"]["hasTrustDialogAccepted"] is True
+
+    @pytest.mark.asyncio
+    async def test_setup_claude_code_subscription_preserves_unrelated_claude_json_fields(
+        self, internal_service, tmp_paths
+    ):
+        """Test subscription mode preserves unrelated ~/.claude.json fields."""
+        internal_service.claude_dir = tmp_paths["claude"]
+        internal_service.home_dir = tmp_paths["home"]
+        (tmp_paths["home"] / ".claude.json").write_text(
+            json.dumps(
+                {
+                    "existing": "value",
+                    "projects": {
+                        "/other": {"hasTrustDialogAccepted": False},
+                        "/workspace": {
+                            "custom": "keep",
+                            "hasTrustDialogAccepted": False,
+                            "projectOnboardingSeenCount": 0,
+                        },
+                    },
+                }
+            )
+        )
+
+        request = ClaudeCodeRequest(
+            auth_method="subscription",
+            subscription_access_token="test-token",
+            subscription_refresh_token="refresh-token",
+            subscription_expires_at=1234567890000,
+            oauth_account=OAuthAccountInfo(
+                account_uuid="acct-123",
+                email_address="test@example.com",
+            ),
+        )
+
+        await internal_service.setup_claude_code(request)
+
+        claude_json = json.loads((tmp_paths["home"] / ".claude.json").read_text())
+        assert claude_json["existing"] == "value"
+        assert claude_json["projects"]["/other"]["hasTrustDialogAccepted"] is False
+        assert claude_json["projects"]["/workspace"]["custom"] == "keep"
+        assert claude_json["projects"]["/workspace"]["hasTrustDialogAccepted"] is True
+        assert claude_json["projects"]["/workspace"]["projectOnboardingSeenCount"] == 1
+
+    @pytest.mark.asyncio
+    async def test_setup_claude_code_subscription_does_not_create_volatile_cli_files(
+        self, internal_service, tmp_paths
+    ):
+        """Test login sync only materializes stable Claude CLI login files."""
+        internal_service.claude_dir = tmp_paths["claude"]
+        internal_service.home_dir = tmp_paths["home"]
+        request = ClaudeCodeRequest(
+            auth_method="subscription",
+            subscription_access_token="test-token",
+            subscription_refresh_token="refresh-token",
+            subscription_expires_at=1234567890000,
+            oauth_account=OAuthAccountInfo(
+                account_uuid="acct-123",
+                email_address="test@example.com",
+            ),
+        )
+
+        await internal_service.setup_claude_code(request)
+
+        assert not (tmp_paths["claude"] / "sessions").exists()
+        assert not (tmp_paths["claude"] / "cache").exists()
+        assert not (tmp_paths["claude"] / "mcp-needs-auth-cache.json").exists()
+        assert not (tmp_paths["claude"] / "plugins" / "marketplaces").exists()
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_environment_variables(self, internal_service, tmp_paths):
@@ -601,6 +683,34 @@ class TestSetupCodex:
         if bashrc_path.exists():
             bashrc_content = bashrc_path.read_text()
             assert "TEST_VAR" not in bashrc_content
+
+    def test_check_claude_status_requires_credentials_and_user_state(
+        self, internal_service, tmp_paths
+    ):
+        """Test subscription status requires credentials and .claude.json markers."""
+        internal_service.claude_dir = tmp_paths["claude"]
+        internal_service.home_dir = tmp_paths["home"]
+        tmp_paths["claude"].mkdir(parents=True)
+        (tmp_paths["claude"] / ".credentials.json").write_text(
+            json.dumps({"claudeAiOauth": {"accessToken": "token"}})
+        )
+
+        status = internal_service._check_claude_status()
+
+        assert status["status"] == "pending"
+
+        (tmp_paths["home"] / ".claude.json").write_text(
+            json.dumps(
+                {
+                    "oauthAccount": {"emailAddress": "test@example.com"},
+                    "projects": {"/workspace": {"hasTrustDialogAccepted": True}},
+                }
+            )
+        )
+
+        status = internal_service._check_claude_status()
+
+        assert status["status"] == "success"
 
     @pytest.mark.asyncio
     async def test_setup_claude_code_auto_detect_auth_method(self, internal_service, tmp_paths):
@@ -1485,9 +1595,10 @@ class TestCheckClaudeStatusEdgeCases:
                     os.environ[key] = value
 
     def test_check_claude_status_legacy_oauth_format(self, internal_service, tmp_paths):
-        """Test old OAuth format (only claudeAiOauth field)"""
+        """Test legacy OAuth credentials require rebuilt user state markers."""
         # Arrange
         internal_service.claude_dir = tmp_paths["claude"]
+        internal_service.home_dir = tmp_paths["home"]
         tmp_paths["claude"].mkdir(parents=True, exist_ok=True)
 
         credentials = {"claudeAiOauth": {"accessToken": "token"}}
@@ -1500,6 +1611,21 @@ class TestCheckClaudeStatusEdgeCases:
             env_backup[key] = os.environ.pop(key, None)
 
         try:
+            result = internal_service._check_claude_status()
+
+            assert result["status"] == "pending"
+
+            (tmp_paths["home"] / ".claude.json").write_text(
+                json.dumps(
+                    {
+                        "oauthAccount": {"emailAddress": "test@example.com"},
+                        "projects": {
+                            "/workspace": {"hasTrustDialogAccepted": True}
+                        },
+                    }
+                )
+            )
+
             result = internal_service._check_claude_status()
 
             assert result["status"] == "success"

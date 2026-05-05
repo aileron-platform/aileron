@@ -79,6 +79,13 @@ def claude_code_changes():
         "subscriptionRefreshToken": "refresh-token-456",
         "subscriptionExpiresAt": "2025-12-31T23:59:59Z",
         "authKey": "api-key-789",
+        "oauthAccount": {
+            "accountUuid": "account-1",
+            "emailAddress": "claude@example.com",
+            "organizationUuid": "org-1",
+            "displayName": "Claude User",
+        },
+        "model": "claude-opus-4-20250514",
         "environmentVariables": [
             {"key": "VAR1", "value": "value1"},
             {"key": "VAR2", "value": "value2"},
@@ -328,6 +335,9 @@ class TestClaudeCodeSynchronization:
         assert result["success"] is True
         assert result["workspace_id"] == "workspace-123"
         mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args[1]
+        assert call_kwargs["json"]["oauthAccount"]["emailAddress"] == "claude@example.com"
+        assert call_kwargs["json"]["model"] == "claude-opus-4-20250514"
 
     async def test_sync_claude_code_with_api_key(self, sync_service):
         """Test: sync Claude Code using API Key"""

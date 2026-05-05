@@ -276,11 +276,29 @@ class SettingsService:
                 claude_changes["authMethod"] = claude_data.get("authMethod")
 
             # Compare OAuth tokens
-            if claude_data.get("subscriptionAccessToken") != old_claude.subscription_access_token:
+            if (
+                claude_data.get("subscriptionAccessToken") != old_claude.subscription_access_token
+                or claude_data.get("subscriptionRefreshToken") != old_claude.subscription_refresh_token
+                or claude_data.get("subscriptionExpiresAt") != old_claude.subscription_expires_at
+            ):
                 has_changes = True
                 claude_changes["subscriptionAccessToken"] = claude_data.get("subscriptionAccessToken")
                 claude_changes["subscriptionRefreshToken"] = claude_data.get("subscriptionRefreshToken")
                 claude_changes["subscriptionExpiresAt"] = claude_data.get("subscriptionExpiresAt")
+
+            if "oauthAccount" in claude_data:
+                old_oauth_account = (
+                    old_claude.oauth_account.model_dump(by_alias=True)
+                    if old_claude.oauth_account
+                    else None
+                )
+                if claude_data.get("oauthAccount") != old_oauth_account:
+                    has_changes = True
+                    claude_changes["oauthAccount"] = claude_data.get("oauthAccount")
+
+            if "model" in claude_data and claude_data.get("model") != old_claude.model:
+                has_changes = True
+                claude_changes["model"] = claude_data.get("model")
 
             # Compare API Key
             if claude_data.get("authKey") != old_claude.auth_key:
