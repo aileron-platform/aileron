@@ -8,8 +8,9 @@ const { postMock } = vi.hoisted(() => ({
   postMock: vi.fn(),
 }));
 
-const { clientGetMock, patchMock, deleteMock } = vi.hoisted(() => ({
+const { clientGetMock, clientGetBlobMock, patchMock, deleteMock } = vi.hoisted(() => ({
   clientGetMock: vi.fn(),
+  clientGetBlobMock: vi.fn(),
   patchMock: vi.fn(),
   deleteMock: vi.fn(),
 }));
@@ -21,6 +22,7 @@ vi.mock('@/shared/api/apiClient', () => ({
   ApiClient: class {
     post = postMock;
     get = clientGetMock;
+    getBlob = clientGetBlobMock;
     patch = patchMock;
     delete = deleteMock;
   },
@@ -39,6 +41,7 @@ import {
   startArchiveDownload,
   startExtractArchive,
   buildArchiveDownloadUrl,
+  downloadArchiveBlob,
   updateCanvasReviewNoteStatus,
   uploadFiles,
 } from './workspaceRuntimeApi';
@@ -48,6 +51,7 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
     getMock.mockReset();
     postMock.mockReset();
     clientGetMock.mockReset();
+    clientGetBlobMock.mockReset();
     patchMock.mockReset();
     deleteMock.mockReset();
   });
@@ -243,6 +247,13 @@ describe('workspaceRuntimeApi.resolveRuntimeBaseUrl', () => {
   it('builds archive download URLs from API paths', () => {
     expect(buildArchiveDownloadUrl('http://runtime.local', '/api/v1/files/archive/archive-123/download'))
       .toBe('http://runtime.local/api/v1/files/archive/archive-123/download');
+  });
+
+  it('downloads archive with authenticated blob request', async () => {
+    clientGetBlobMock.mockResolvedValue(new Blob(['zip-content'], { type: 'application/zip' }));
+
+    await downloadArchiveBlob('http://runtime.local', '/api/v1/files/archive/archive-123/download');
+    expect(clientGetBlobMock).toHaveBeenCalledWith('/api/v1/files/archive/archive-123/download');
   });
 
   it('會呼叫 Canvas review note API', async () => {

@@ -109,6 +109,9 @@ ARG CLAUDE_CLI_VERSION=stable
 ARG GEMINI_VERSION=latest
 ARG AGENT_BROWSER_CLI_VERSION=latest
 ARG CODEX_CLI_VERSION=latest
+
+ENV PATH="/home/developer/.opencode/bin:/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
+
 RUN printf '%s\n' \
     '#!/bin/sh' \
     'set -eu' \
@@ -161,8 +164,6 @@ RUN chown -R developer:developer /workspace-runtime /workspace /workspace-termin
     chmod 755 /workspace /workspace-runtime /workspace-terminal /knowledge
 
 # Anthropic settings are injected at runtime, not baked into the image.
-
-ENV PATH="/home/developer/.opencode/bin:/home/developer/.local/bin:/home/developer/.npm-global/bin:$PATH"
 
 ENV PYTHONPATH="/workspace-runtime:/workspace"
 ENV DISABLE_AUTOUPDATER=1

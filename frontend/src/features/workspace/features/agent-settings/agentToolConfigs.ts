@@ -69,7 +69,7 @@ const claudeCapabilities: AgentToolCapabilities = {
   },
   mcp: { supported: true, scopes: ['project', 'user', 'local', 'plugin'], supportsToggle: true },
   hooks: { supported: true, scopes: ['project', 'user', 'local', 'plugin'], events: claudeHookEvents },
-  slashCommands: { supported: true, scopes: ['project', 'user'], format: 'markdown', supportsNamespace: true },
+  slashCommands: { supported: true, scopes: ['project', 'user', 'plugin'], format: 'markdown', supportsNamespace: true },
   agentDefinitions: {
     supported: true,
     endpoint: 'subagents',

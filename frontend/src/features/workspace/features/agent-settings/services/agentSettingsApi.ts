@@ -79,7 +79,7 @@ const apiRequest = async <T>(
   }
 };
 
-type CliSlashCommandScope = 'project' | 'user' | 'extension';
+type CliSlashCommandScope = 'project' | 'user' | 'plugin' | 'extension';
 
 interface CliSlashCommandSummary {
   fileName: string;
@@ -87,7 +87,9 @@ interface CliSlashCommandSummary {
   description?: string | null;
   scope: CliSlashCommandScope;
   size: string;
-  format: 'markdown' | 'toml';
+  format?: 'markdown' | 'toml';
+  pluginName?: string | null;
+  marketplaceName?: string | null;
   extensionName?: string | null;
   extensionVersion?: string | null;
 }
@@ -141,7 +143,9 @@ const mapCliSlashCommandDocument = (
   detail: CliSlashCommandDetail,
 ): AgentDocument => {
   const namespace = detail.namespace ?? undefined;
-  const title = buildSlashCommandDisplayName(detail.fileName, namespace);
+  const pluginName = detail.pluginName ?? undefined;
+  const marketplaceName = detail.marketplaceName ?? undefined;
+  const title = buildSlashCommandDisplayName(detail.fileName, namespace, pluginName);
 
   return {
     id: buildCliDocumentId(scope, detail.fileName),
@@ -150,12 +154,17 @@ const mapCliSlashCommandDocument = (
     content: detail.content,
     scope,
     size: detail.size,
+    pluginName,
+    marketplaceName,
     extensionName: detail.extensionName ?? undefined,
     extensionVersion: detail.extensionVersion ?? undefined,
     metadata: {
       fileName: detail.fileName,
       namespace,
-      format: detail.format,
+      source: scope,
+      format: detail.format ?? 'markdown',
+      pluginName,
+      marketplaceName,
       extensionName: detail.extensionName ?? undefined,
       extensionVersion: detail.extensionVersion ?? undefined,
     },

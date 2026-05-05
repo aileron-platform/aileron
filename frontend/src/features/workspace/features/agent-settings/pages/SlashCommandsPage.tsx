@@ -104,7 +104,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
         <AgentCommandDialog
         {...props}
         format={format}
-        availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
+        availableScopes={effectiveScopes.filter((scope) => scope !== 'extension' && scope !== 'plugin')}
         i18nNamespace={i18nNamespace}
       />
     );

@@ -59,7 +59,15 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
     case 'mcp':
       return <MCPSettingsPage />;
     case 'hooks':
-      return <HooksSettingsPage />;
+      return (
+        <HooksSettingsPage
+          apiPrefix={AGENT_TOOL_CONFIGS.claude.apiPathPrefix}
+          availableScopes={AGENT_TOOL_CONFIGS.claude.availableScopes}
+          hookEvents={AGENT_TOOL_CONFIGS.claude.hookEvents}
+          i18nNamespace={AGENT_TOOL_CONFIGS.claude.i18nNamespace}
+          supportsActionMetadata={AGENT_TOOL_CONFIGS.claude.capabilities.hooks?.supportsActionMetadata}
+        />
+      );
     case 'settings':
       return <SettingsPage />;
     case 'slash-commands':

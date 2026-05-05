@@ -83,7 +83,7 @@ const removeHookFromMap = (hooks: AgentHookRuleMap, target: AgentHook): AgentHoo
   return next;
 };
 
-const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'extension', 'plugin'];
+const DEFAULT_HOOK_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
@@ -95,7 +95,7 @@ export interface HooksSettingsPageProps {
 
 const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   apiPrefix = 'claude-code',
-  availableScopes = ALL_SCOPES,
+  availableScopes = DEFAULT_HOOK_SCOPES,
   hookEvents,
   i18nNamespace = 'workspace.agentSettings.common',
   supportsActionMetadata = false,

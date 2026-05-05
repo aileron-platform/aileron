@@ -27,7 +27,7 @@ import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/Collapse
 import { Button } from '@/shared/components/ui/button';
 import { isImageFile } from '@/shared/utils/fileTypeUtils';
 import {
-  buildArchiveDownloadUrl,
+  downloadArchiveBlob,
   duplicateFile,
   fetchArchiveDownloadStatus,
   fetchExtractArchiveStatus,
@@ -348,13 +348,36 @@ export const FileManagementView: React.FC = () => {
     });
   }, [loadTree, requireRuntimeBaseUrl, t, toast]);
 
-  const triggerArchiveBrowserDownload = useCallback((downloadUrl: string, operationId: string) => {
-    const fullUrl = buildArchiveDownloadUrl(requireRuntimeBaseUrl(), downloadUrl);
-    if (typeof window !== 'undefined') {
-      window.open(fullUrl, '_blank', 'noopener');
-      markPersistedArchiveDownloadTriggered(operationId);
+  const triggerArchiveBrowserDownload = useCallback(async (
+    downloadUrl: string,
+    operationId: string,
+    archiveName?: string,
+  ): Promise<boolean> => {
+    if (typeof window === 'undefined') {
+      return false;
     }
-  }, [requireRuntimeBaseUrl]);
+    try {
+      const baseUrl = requireRuntimeBaseUrl();
+      const blob = await downloadArchiveBlob(baseUrl, downloadUrl);
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = archiveName ?? 'archive.zip';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(objectUrl);
+      markPersistedArchiveDownloadTriggered(operationId);
+      return true;
+    } catch (error) {
+      toast({
+        title: t('workspace.fileManagement.tree.notifications.downloadFailed'),
+        description: error instanceof Error ? error.message : String(error),
+        variant: 'destructive',
+      });
+      return false;
+    }
+  }, [requireRuntimeBaseUrl, t, toast]);
 
   const waitForArchiveCompletion = useCallback(async (
     operationId: string,
@@ -389,10 +412,15 @@ export const FileManagementView: React.FC = () => {
           }),
         });
         const persisted = loadPersistedArchiveOperations().find((item) => item.operationId === operationId);
+        let downloadTriggered = Boolean(persisted?.downloadTriggeredAt);
         if (!persisted?.downloadTriggeredAt) {
-          triggerArchiveBrowserDownload(status.result.downloadUrl, operationId);
+          downloadTriggered = await triggerArchiveBrowserDownload(
+            status.result.downloadUrl,
+            operationId,
+            status.result.archiveName,
+          );
         }
-        if (!options?.restored && typeof window !== 'undefined') {
+        if (downloadTriggered && !options?.restored && typeof window !== 'undefined') {
           window.setTimeout(() => {
             removePersistedArchiveOperation(operationId);
             setArchiveProgress(null);
@@ -484,7 +512,11 @@ export const FileManagementView: React.FC = () => {
             }),
           });
           if (!persisted.downloadTriggeredAt) {
-            triggerArchiveBrowserDownload(status.result.downloadUrl, persisted.operationId);
+            await triggerArchiveBrowserDownload(
+              status.result.downloadUrl,
+              persisted.operationId,
+              status.result.archiveName,
+            );
           }
           return;
         }
@@ -1390,7 +1422,13 @@ export const FileManagementView: React.FC = () => {
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => triggerArchiveBrowserDownload(archiveProgress.downloadUrl!, archiveProgress.operationId)}
+                      onClick={() => {
+                        void triggerArchiveBrowserDownload(
+                          archiveProgress.downloadUrl!,
+                          archiveProgress.operationId,
+                          archiveProgress.archiveName,
+                        );
+                      }}
                     >
                       {t('common.fileTree.contextMenu.download')}
                     </Button>

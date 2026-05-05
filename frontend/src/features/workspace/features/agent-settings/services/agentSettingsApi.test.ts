@@ -1,8 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const apiGetMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/shared/api/apiClient', () => ({
+  ApiClient: class MockApiClient {
+    get = apiGetMock;
+  },
+}));
+
 import {
   buildHookRulesFromAgentHook,
+  createAgentSettingsApi,
   mapHookScopeDocumentToAgentHooks,
 } from './agentSettingsApi';
+
+beforeEach(() => {
+  apiGetMock.mockReset();
+});
 
 describe('agentSettingsApi hook mapping', () => {
   it('preserves hook action name and description when loading scope documents', () => {
@@ -107,6 +121,72 @@ describe('agentSettingsApi hook mapping', () => {
           },
         ],
       },
+    ]);
+  });
+});
+
+describe('agentSettingsApi slash command mapping', () => {
+  it('preserves Claude plugin slash command source metadata', async () => {
+    apiGetMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [
+          {
+            scope: 'plugin',
+            documents: [
+              {
+                fileName: 'review.md',
+                description: 'Review selected code',
+                scope: 'plugin',
+                size: '120B',
+                pluginName: 'quality',
+                marketplaceName: 'team-tools',
+              },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scope: 'plugin',
+        document: {
+          fileName: 'review.md',
+          description: 'Review selected code',
+          scope: 'plugin',
+          size: '120B',
+          content: '# Review',
+          pluginName: 'quality',
+          marketplaceName: 'team-tools',
+        },
+      });
+
+    const api = createAgentSettingsApi('claude-code');
+    const documents = await api.listSlashCommands('http://runtime.test', 'ws-1');
+
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      1,
+      '/api/v1/workspaces/ws-1/claude-code/slash-commands',
+      undefined,
+    );
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/workspaces/ws-1/claude-code/slash-commands/plugin/review.md',
+      undefined,
+    );
+    expect(documents).toEqual([
+      expect.objectContaining({
+        id: 'plugin:review.md',
+        title: 'quality:review',
+        scope: 'plugin',
+        pluginName: 'quality',
+        marketplaceName: 'team-tools',
+        metadata: expect.objectContaining({
+          source: 'plugin',
+          pluginName: 'quality',
+          marketplaceName: 'team-tools',
+          format: 'markdown',
+        }),
+      }),
     ]);
   });
 });

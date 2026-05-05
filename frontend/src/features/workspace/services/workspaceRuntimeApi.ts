@@ -597,6 +597,25 @@ export const buildArchiveDownloadUrl = (
   return buildRuntimeUrl(runtimeBaseUrl, downloadUrl.replace(/^\/api\/v1\//, ''));
 };
 
+const normalizeArchiveDownloadPath = (downloadUrl: string): string => {
+  if (!downloadUrl) {
+    return '/api/v1/files/archive';
+  }
+  if (downloadUrl.startsWith('http')) {
+    const parsed = new URL(downloadUrl);
+    return `${parsed.pathname}${parsed.search}`;
+  }
+  return downloadUrl.startsWith('/') ? downloadUrl : `/${downloadUrl}`;
+};
+
+export const downloadArchiveBlob = async (
+  runtimeBaseUrl: string,
+  downloadUrl: string
+): Promise<Blob> => {
+  const client = createRuntimeClient(runtimeBaseUrl);
+  return await client.getBlob(normalizeArchiveDownloadPath(downloadUrl));
+};
+
 export type CanvasType = 'html' | 'nextjs' | 'default';
 export type CanvasManifestStatus = 'missing' | 'valid' | 'invalid';
 

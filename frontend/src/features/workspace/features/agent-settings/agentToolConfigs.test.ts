@@ -53,6 +53,7 @@ describe('AGENT_TOOL_CONFIGS', () => {
 
   it('configures slash command formats per tool', () => {
     expect(AGENT_TOOL_CONFIGS.claude.capabilities.slashCommands?.format).toBe('markdown');
+    expect(AGENT_TOOL_CONFIGS.claude.capabilities.slashCommands?.scopes).toContain('plugin');
     expect(AGENT_TOOL_CONFIGS.gemini.capabilities.slashCommands?.format).toBe('toml');
     expect(AGENT_TOOL_CONFIGS.codex.capabilities.slashCommands?.format).toBe('markdown');
     expect(AGENT_TOOL_CONFIGS.opencode.capabilities.slashCommands?.format).toBe('markdown');

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { act, waitFor } from '@testing-library/react';
 import { render } from '@/__tests__/utils/render';
 import { FileManagementView } from './FileManagementView';
 
@@ -9,12 +9,18 @@ const {
   useFileTreeManagerMock,
   useFileOperationsWithDialogMock,
   fetchArchiveDownloadStatusMock,
+  downloadArchiveBlobMock,
+  startArchiveDownloadMock,
+  useFileTreeContextMenuMock,
   queryClientMock,
 } = vi.hoisted(() => ({
   useWorkspaceMock: vi.fn(),
   useFileTreeManagerMock: vi.fn(),
   useFileOperationsWithDialogMock: vi.fn(),
   fetchArchiveDownloadStatusMock: vi.fn(),
+  downloadArchiveBlobMock: vi.fn(),
+  startArchiveDownloadMock: vi.fn(),
+  useFileTreeContextMenuMock: vi.fn(),
   queryClientMock: {},
 }));
 
@@ -50,7 +56,10 @@ vi.mock('@/shared/components/file-workbench', () => ({
   FileTreePanel: () => <div data-testid="file-tree-panel" />,
   StandardFileTreeLayout: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   FileTreeContextMenu: () => null,
-  useFileTreeContextMenu: () => [],
+  useFileTreeContextMenu: (config: unknown) => {
+    useFileTreeContextMenuMock(config);
+    return [];
+  },
   FileCreateDialog: () => null,
   FileRenameDialog: () => null,
   FileDeleteDialog: () => null,
@@ -77,11 +86,11 @@ vi.mock('@/shared/utils/fileTypeUtils', () => ({
 }));
 
 vi.mock('../../../services/workspaceRuntimeApi', () => ({
-  buildArchiveDownloadUrl: vi.fn((base: string, path: string) => `${base}${path}`),
+  downloadArchiveBlob: downloadArchiveBlobMock,
   duplicateFile: vi.fn(),
   fetchArchiveDownloadStatus: fetchArchiveDownloadStatusMock,
   fetchExtractArchiveStatus: vi.fn(),
-  startArchiveDownload: vi.fn(),
+  startArchiveDownload: startArchiveDownloadMock,
   startExtractArchive: vi.fn(),
 }));
 
@@ -95,8 +104,12 @@ describe('FileManagementView', () => {
     useFileTreeManagerMock.mockReset();
     useFileOperationsWithDialogMock.mockReset();
     fetchArchiveDownloadStatusMock.mockReset();
+    downloadArchiveBlobMock.mockReset();
+    startArchiveDownloadMock.mockReset();
+    useFileTreeContextMenuMock.mockReset();
     dispatchMock.mockReset();
     window.localStorage.clear();
+    downloadArchiveBlobMock.mockResolvedValue(new Blob(['ok'], { type: 'application/zip' }));
 
     useWorkspaceMock.mockReturnValue({
       workspace: {
@@ -300,5 +313,82 @@ describe('FileManagementView', () => {
     await waitFor(() => {
       expect(window.localStorage.getItem('workspace.fileManagement.archiveOperations.v1')).toBe('[]');
     });
+  });
+
+  it('keeps archive metadata available for retry when automatic download fails', async () => {
+    useFileTreeManagerMock.mockReturnValue({
+      state: {
+        isLoading: false,
+        error: null,
+        nodes: [],
+        flatNodes: [],
+        searchQuery: '',
+        selectedId: null,
+        selectedIds: new Set<string>(),
+        contextMenu: {
+          node: {
+            id: '/src',
+            name: 'src',
+            path: '/src',
+            type: 'directory',
+            children: [],
+          },
+          x: 0,
+          y: 0,
+        },
+        closeContextMenu: vi.fn(),
+        clearSelection: vi.fn(),
+        setSearchQuery: vi.fn(),
+        clearSearch: vi.fn(),
+        selectNodeWithModifier: vi.fn(),
+        toggleNode: vi.fn(),
+      },
+      loadTree: vi.fn(),
+      operations: {
+        createFile: vi.fn(),
+        createDirectory: vi.fn(),
+        renameFile: vi.fn(),
+        deleteFile: vi.fn(),
+        batchDelete: vi.fn(),
+        uploadFiles: vi.fn(),
+        moveFile: vi.fn(),
+      },
+    });
+    startArchiveDownloadMock.mockResolvedValue({
+      operationId: 'archive-failed-download',
+      status: 'running',
+      message: 'Packaging files...',
+      startedAt: '2026-01-01T00:00:00Z',
+    });
+    fetchArchiveDownloadStatusMock.mockResolvedValue({
+      operationId: 'archive-failed-download',
+      status: 'completed',
+      progress: 1,
+      message: 'Archive ready',
+      startedAt: '2026-01-01T00:00:00Z',
+      result: {
+        archiveName: 'src.zip',
+        downloadUrl: '/api/workspaces/ws-1/archive-downloads/archive-failed-download/file',
+      },
+    });
+    downloadArchiveBlobMock.mockRejectedValue(new Error('Unauthorized'));
+
+    render(<FileManagementView />);
+
+    const contextMenuConfig = useFileTreeContextMenuMock.mock.calls.at(-1)?.[0];
+    await act(async () => {
+      await contextMenuConfig.callbacks.onDownload(contextMenuConfig.node, ['/src']);
+    });
+
+    const persisted = JSON.parse(
+      window.localStorage.getItem('workspace.fileManagement.archiveOperations.v1') ?? '[]',
+    );
+    expect(persisted).toEqual([
+      expect.objectContaining({
+        operationId: 'archive-failed-download',
+        archiveName: 'src.zip',
+      }),
+    ]);
+    expect(persisted[0].downloadTriggeredAt).toBeUndefined();
   });
 });
