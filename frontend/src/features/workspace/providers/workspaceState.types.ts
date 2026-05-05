@@ -99,7 +99,7 @@ export interface WorkspaceState {
   };
 
   claudeCodeSettings: {
-    subView: 'claude-md' | 'mcp' | 'hooks' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'scripts' | 'memory' | 'settings';
+    subView: 'claude-md' | 'mcp' | 'hooks' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'memory' | 'settings';
   };
 
   agentToolSettings: {

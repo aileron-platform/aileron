@@ -133,15 +133,6 @@ DEFAULT_TEMPLATE_FEATURES = [
         "sort_order": 7,
         "cli_types": ["claude-code", "codex", "gemini"],
     },
-    {
-        "id": "feature-scripts",
-        "feature_key": "scripts",
-        "feature_name": "Scripts",
-        "description": "Executable scripts and helper files",
-        "icon": "terminal",
-        "sort_order": 8,
-        "cli_types": ["claude-code", "codex", "gemini"],
-    },
 ]
 
 
@@ -514,7 +505,6 @@ def create_default_template_features(db: Session) -> None:
         "outputStyle",
         "files",
         "skills",
-        "scripts",
     }
 
     created_count = 0

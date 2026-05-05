@@ -17,7 +17,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'template.common.features.agentsMd': 'AGENTS.md',
         'template.common.features.agents': 'Agents',
         'template.common.features.outputStyle': 'Output Style',
-        'template.common.features.scripts': 'Scripts',
         'template.common.features.skills': 'Skills',
         'template.center.install.title': `安裝模板 ${String(params?.name ?? '')}`,
         'template.center.install.description': '安裝描述',
@@ -31,7 +30,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'template.center.install.options.agentsMd.description': 'AGENTS.md 描述',
         'template.center.install.options.agents.description': 'Agents 描述',
         'template.center.install.options.outputStyle.description': 'Output Style 描述',
-        'template.center.install.options.scripts.description': 'Scripts 描述',
         'template.center.install.options.skills.description': 'Skills 描述',
         'template.center.install.actions.cancel': '取消',
         'template.center.install.actions.confirm': `安裝到 ${String(params?.workspace ?? '')}`,
@@ -63,7 +61,6 @@ vi.mock('@/features/template-management/utils/templateSelectors', () => ({
     hasAgentsMd: true,
     hasAgents: true,
     hasOutputStyle: true,
-    hasScripts: false,
     hasSkills: true,
   }),
 }));

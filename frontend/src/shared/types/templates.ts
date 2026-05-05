@@ -9,8 +9,7 @@ export type TemplateFeatureKey =
   | 'agentsMd'
   | 'agents'
   | 'outputStyle'
-  | 'skills'
-  | 'scripts';
+  | 'skills';
 
 export type CliType = 'claude-code' | 'codex' | 'gemini' | 'opencode';
 
@@ -34,7 +33,6 @@ export const FEATURE_DISPLAY_ORDER: TemplateFeatureKey[] = [
   'agents',
   'outputStyle',
   'skills',
-  'scripts',
 ];
 
 export const FEATURE_CLI_MAP: Record<TemplateFeatureKey, CliType[]> = {
@@ -45,7 +43,6 @@ export const FEATURE_CLI_MAP: Record<TemplateFeatureKey, CliType[]> = {
   agents: ['claude-code', 'codex', 'gemini', 'opencode'],
   outputStyle: ['claude-code', 'codex', 'gemini', 'opencode'],
   skills: ['claude-code', 'codex', 'gemini', 'opencode'],
-  scripts: ['claude-code', 'codex', 'gemini', 'opencode'],
 };
 
 export function listFeaturesForCli(cli: 'all' | CliType): TemplateFeatureKey[] {
@@ -124,7 +121,6 @@ export interface TemplateFeatureFlags {
   hasAgents: boolean;
   hasOutputStyle: boolean;
   hasSkills: boolean;
-  hasScripts: boolean;
 }
 
 export interface Template {
@@ -164,7 +160,6 @@ export interface TemplateInstallOptions {
   agents: boolean;
   outputStyle: boolean;
   skills: boolean;
-  scripts: boolean;
 }
 
 export const TEMPLATE_INSTALLABLE_FEATURE_KEYS: TemplateFeatureKey[] = [
@@ -175,7 +170,6 @@ export const TEMPLATE_INSTALLABLE_FEATURE_KEYS: TemplateFeatureKey[] = [
   'agents',
   'outputStyle',
   'skills',
-  'scripts',
 ];
 
 export function listEnabledTemplateFeatures(options: TemplateInstallOptions): TemplateFeatureKey[] {

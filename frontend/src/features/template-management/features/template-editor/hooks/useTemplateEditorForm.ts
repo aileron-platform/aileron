@@ -5,7 +5,6 @@ import type {
   CommandFormValue,
   HookFormValue,
   AgentFormValue,
-  FileEntryFormValue,
 } from '../formTypes';
 import { useI18n } from '@/shared/hooks/useI18n';
 
@@ -15,7 +14,6 @@ export type TemplateEditorErrors = Partial<Record<keyof TemplateFormValues, Fiel
   commands?: Record<string, FieldError | undefined>;
   hooks?: Record<string, FieldError | undefined>;
   agents?: Record<string, FieldError | undefined>;
-  scripts?: Record<string, FieldError | undefined>;
 };
 
 export interface UseTemplateEditorFormOptions {
@@ -68,14 +66,6 @@ export function useTemplateEditorForm(options: UseTemplateEditorFormOptions) {
       v.agents.forEach((item: AgentFormValue) => {
         if (!item.fileName?.trim()) next.agents![item.localId] = t('template.editor.validation.agentFile');
         else if (!item.content?.trim()) next.agents![item.localId] = t('template.editor.validation.agentContent');
-      });
-    }
-
-    // Files - path required
-    if (v.scripts?.length) {
-      next.scripts = {};
-      v.scripts.forEach((item: FileEntryFormValue) => {
-        if (!item.path?.trim()) next.scripts![item.localId] = t('template.editor.validation.filePath');
       });
     }
 

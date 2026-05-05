@@ -155,13 +155,7 @@ export function useTemplateApi(options: UseTemplateApiOptions = {}) {
             type: 'file',
             content: item.content,
           })),
-          scripts: values.scripts.map(item => ({
-            id: item.localId,
-            name: item.path.split('/').pop() || item.path,
-            path: item.path,
-            type: 'file',
-            content: item.content,
-          })),
+          scripts: [],
           isActive: values.isActive,
         });
 

@@ -17,8 +17,6 @@ export interface AgentSettingsFeatureProps {
   subView: string;
   skillSelectedFile?: AgentSelectedFile | null;
   onSkillSelect?: (file: AgentSelectedFile | null) => void;
-  scriptSelectedFile?: AgentSelectedFile | null;
-  onScriptSelect?: (file: AgentSelectedFile | null) => void;
   documentSelectedId?: string | null;
   onDocumentSelect?: (id: string | null) => void;
 }
@@ -28,16 +26,13 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
   cliType,
   subView,
   skillSelectedFile,
-  scriptSelectedFile,
   documentSelectedId,
   onDocumentSelect,
 }) => {
   const { t } = useI18n();
   const config = getAgentToolConfig(cliType);
   const [internalSkillFile] = useState<AgentSelectedFile | null>(null);
-  const [internalScriptFile] = useState<AgentSelectedFile | null>(null);
   const selectedSkillFile = skillSelectedFile !== undefined ? skillSelectedFile : internalSkillFile;
-  const selectedScriptFile = scriptSelectedFile !== undefined ? scriptSelectedFile : internalScriptFile;
   const loadingFallback = (
     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
       {t('workspace.agentSettings.common.loading')}
@@ -66,7 +61,6 @@ const AgentSettingsFeature: React.FC<AgentSettingsFeatureProps> = ({
     subView,
     loadingFallback,
     selectedSkillFile,
-    selectedScriptFile,
     documentSelectedId: documentSelectedId ?? null,
     onDocumentSelect,
   });

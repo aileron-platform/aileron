@@ -37,7 +37,6 @@ export const TemplateCard: React.FC<TemplateCardProps> = ({
       { key: 'hasAgentsMd', label: t('template.common.features.agentsMd') },
       { key: 'hasAgents', label: t('template.common.features.agents') },
       { key: 'hasOutputStyle', label: t('template.common.features.outputStyle') },
-      { key: 'hasScripts', label: t('template.common.features.scripts') },
       { key: 'hasSkills', label: t('template.common.features.skills') },
     ],
     [t],

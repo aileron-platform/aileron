@@ -1,7 +1,6 @@
 import React from 'react';
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import ScriptsSection from './ScriptsSection';
 import SkillsSection from './SkillsSection';
 
 const templateFileManagerMock = vi.fn();
@@ -11,7 +10,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
     t: (key: string) => {
       const translations: Record<string, string> = {
         'template.common.features.skills': 'Skills',
-        'template.common.features.scripts': 'Scripts',
       };
       return translations[key] ?? key;
     },
@@ -68,48 +66,6 @@ describe('TemplateFile sections', () => {
         fileName: 'alpha.md',
         content: 'A',
         path: '/alpha.md',
-      }),
-    ]);
-  });
-
-  it('ScriptsSection 將腳本檔案掛到 TemplateFileManager', () => {
-    const onScriptsChange = vi.fn();
-    render(
-      <ScriptsSection
-        scripts={[]}
-        onScriptsChange={onScriptsChange}
-        templateId="tpl-2"
-      />
-    );
-
-    expect(templateFileManagerMock).toHaveBeenCalledTimes(1);
-    expect(templateFileManagerMock.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        templateId: 'tpl-2',
-        basePath: 'scripts',
-        title: 'Scripts',
-        onFilesChange: expect.any(Function),
-      }),
-    );
-
-    const onFilesChange = templateFileManagerMock.mock.calls[0][0].onFilesChange as (files: Array<{
-      type: 'file' | 'directory';
-      name: string;
-      content?: string;
-      path: string;
-    }>) => void;
-
-    onFilesChange([
-      { type: 'file', name: 'build.sh', content: 'echo hi', path: '/build.sh' },
-      { type: 'directory', name: 'nested', path: '/nested' },
-    ]);
-
-    expect(onScriptsChange).toHaveBeenCalledTimes(1);
-    expect(onScriptsChange.mock.calls[0][0]).toEqual([
-      expect.objectContaining({
-        fileName: 'build.sh',
-        content: 'echo hi',
-        path: '/build.sh',
       }),
     ]);
   });

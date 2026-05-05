@@ -89,7 +89,7 @@ export const TemplateCenterView: React.FC = () => {
         const data = await apiClient.get<{ items: string[] }>(`/templates/features${qs}`);
         if (aborted) return;
         // 簡單的型別守衛：僅接受已知鍵
-        const allowed: TemplateFeatureKey[] = ['mcp','commands','hooks','agentsMd','agents','outputStyle','skills','scripts'];
+        const allowed: TemplateFeatureKey[] = ['mcp','commands','hooks','agentsMd','agents','outputStyle','skills'];
         const keys = data.items.filter((k): k is TemplateFeatureKey => (allowed as string[]).includes(k));
         setRemoteFeatureKeys(keys);
       } catch (err) {
@@ -170,8 +170,6 @@ export const TemplateCenterView: React.FC = () => {
           return t('template.common.features.outputStyle');
         case 'skills':
           return t('template.common.features.skills');
-        case 'scripts':
-          return t('template.common.features.scripts');
         default:
           return k;
       }

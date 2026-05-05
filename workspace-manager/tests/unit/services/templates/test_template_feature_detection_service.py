@@ -278,21 +278,6 @@ class TestFeatureDetection:
         # Assert
         assert result["outputStyle"] is True
 
-    def test_detect_scripts_exists(self, feature_detection_service, tmp_path):
-        """Test: Successfully Detect When Scripts Directory Has Files"""
-        # Arrange
-        template_dir = tmp_path / "templates" / "test-template"
-        template_dir.mkdir(parents=True)
-        scripts_dir = template_dir / "resources" / "scripts"
-        scripts_dir.mkdir(parents=True)
-        (scripts_dir / "script.sh").write_text("#!/bin/bash")
-
-        # Act
-        result = feature_detection_service.detect_features("test-template")
-
-        # Assert
-        assert result["scripts"] is True
-
     def test_detect_skills_exists(self, feature_detection_service, tmp_path):
         """Test: Successfully Detect When Skills Directory Has Files"""
         # Arrange
@@ -352,11 +337,6 @@ class TestFeatureDetection:
 
         # Output Styles
         (template_dir / "output-style.yaml").write_text("tone: concise\n", encoding="utf-8")
-
-        # Scripts
-        scripts_dir = template_dir / "resources" / "scripts"
-        scripts_dir.mkdir(parents=True)
-        (scripts_dir / "script.sh").write_text("#!/bin/bash")
 
         # Skills
         skills_dir = template_dir / "skills"

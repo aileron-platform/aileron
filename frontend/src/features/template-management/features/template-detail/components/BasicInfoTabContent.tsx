@@ -257,15 +257,6 @@ export const BasicInfoTabContent: React.FC<BasicInfoTabContentProps> = ({ templa
                 </div>
               </div>
 
-              {/* Scripts */}
-              <div className="flex flex-col items-center p-4 border rounded-lg">
-                <div className="text-2xl font-bold text-primary">
-                  {template.scripts.length}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {t('template.common.features.scripts')}
-                </div>
-              </div>
             </div>
           </CardContent>
         </Card>

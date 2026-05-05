@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent } from '@/shared/components/ui/tabs';
 import { TemplateFormValues } from './formTypes';
-import { Info, File as FileIcon } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { CLAUDE_CODE_ICONS } from '@/features/workspace/components/navigation-constants';
 import { TopTabsBar, TopTabsCountBadge, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
@@ -14,7 +14,6 @@ import AgentsSection from './sections/AgentsSection';
 import OutputStyleSection from './sections/OutputStyleSection';
 import DocsSection from './sections/DocsSection';
 import SkillsSection from './sections/SkillsSection';
-import ScriptsSection from './sections/ScriptsSection';
 
 
 export interface TemplateFormProps {
@@ -68,7 +67,6 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
     { value: 'command', label: t('template.common.features.commands'), icon: CommandsIcon, count: values.commands.length },
     { value: 'output-style', label: t('template.common.features.outputStyle'), icon: OutputStyleIcon, count: values.outputStyle.length },
     { value: 'skills', label: t('template.common.features.skills'), icon: SkillsIcon, count: values.skills.length },
-    { value: 'scripts', label: t('template.common.features.scripts'), icon: FileIcon, count: values.scripts.length },
   ] as const;
 
   return (
@@ -146,14 +144,6 @@ export const TemplateForm: React.FC<TemplateFormProps> = ({
               templateId={templateId}
               skills={values.skills}
               onSkillsChange={items => updateCollection('skills', items)}
-            />
-          </TabsContent>
-
-          <TabsContent value="scripts" className="flex-1 overflow-auto !p-0 !m-0">
-            <ScriptsSection
-              templateId={templateId}
-              scripts={values.scripts}
-              onScriptsChange={items => updateCollection('scripts', items)}
             />
           </TabsContent>
 

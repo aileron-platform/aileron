@@ -34,10 +34,6 @@ vi.mock('./pages/SkillsPage', () => ({
   default: () => <div data-testid="skills-page" />,
 }));
 
-vi.mock('./pages/ScriptsPage', () => ({
-  default: () => <div data-testid="scripts-page" />,
-}));
-
 vi.mock('./pages/CodexAgentsMdPage', () => ({
   default: () => <div data-testid="codex-agents-md-page" />,
 }));
@@ -67,10 +63,10 @@ vi.mock('./pages/GeminiExtensionsPage', () => ({
 }));
 
 describe('AgentSettingsFeature shared rendering', () => {
-  it('renders Claude Code settings through the shared feature surface', async () => {
+  it('does not render removed Claude scripts settings through the shared feature surface', async () => {
     render(<AgentSettingsFeature cliType="claude" subView="scripts" />);
 
-    expect(await screen.findByTestId('scripts-page')).toBeInTheDocument();
+    expect(await screen.findByText('workspace.agentSettings.common.comingSoon.title')).toBeInTheDocument();
   });
 
   it('renders Gemini settings after shared component extraction', async () => {

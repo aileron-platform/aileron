@@ -146,7 +146,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
     startWidth: number;
   } | null>(null);
   const [skillSelectedFile, setSkillSelectedFile] = useState<AgentSelectedFile | null>(null);
-  const [scriptSelectedFile, setScriptSelectedFile] = useState<AgentSelectedFile | null>(null);
   const [codexDocumentSelectedId, setCodexDocumentSelectedId] = useState<string | null>(null);
   const resolveDeleteFallback = useWorkspaceDeleteFallback();
 
@@ -230,7 +229,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   const isOutputStylesView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'output-styles';
   const isSubagentsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'subagents';
   const isSkillsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'skills';
-  const isScriptsView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'scripts';
   const isMemoryView = state.currentFeature === 'claude-code' && state.claudeCodeSettings.subView === 'memory';
 
   // Other agent tool subviews that use four-column mode.
@@ -247,7 +245,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
   );
   const isAgentToolSkillsView = isAgentToolFeatureActive && state.agentToolSettings.subView === 'skills';
 
-  const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isScriptsView || isMemoryView || isAgentToolFourColumn;
+  const isFourColumnView = isSlashCommandsView || isOutputStylesView || isSubagentsView || isSkillsView || isMemoryView || isAgentToolFourColumn;
   const isFileManagementEditorExpanded =
     state.currentFeature === 'file-management' && state.fileManagementEditorExpanded;
 
@@ -256,12 +254,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
       setSkillSelectedFile(null);
     }
   }, [isAgentToolSkillsView, isSkillsView]);
-
-  useEffect(() => {
-    if (!isScriptsView) {
-      setScriptSelectedFile(null);
-    }
-  }, [isScriptsView]);
 
   useEffect(() => {
     setCodexDocumentSelectedId(null);
@@ -355,31 +347,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
         );
       }
 
-      if (subView === 'scripts') {
-        if (!workspaceRuntime.workspaceId) {
-          return (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              {workspaceRuntime.isLoading ? t('workspace.layout.loading.workspace') : t('workspace.layout.loading.workspaceUnavailable')}
-            </div>
-          );
-        }
-        return (
-          <React.Suspense
-            fallback={
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {t('workspace.layout.loading.scriptsTree')}
-              </div>
-            }
-          >
-            <AgentFileManager
-              config={cliConfig}
-              collectionType="scripts"
-              onSelect={setScriptSelectedFile}
-              workspaceId={workspaceRuntime.workspaceId}
-            />
-          </React.Suspense>
-        );
-      }
       if (subView === 'slash-commands' || subView === 'output-styles' || subView === 'subagents' || subView === 'memory') {
         return (
           <React.Suspense
@@ -567,10 +534,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
             subView={state.claudeCodeSettings.subView}
             skillSelectedFile={skillSelectedFile}
             onSkillSelect={setSkillSelectedFile}
-            scriptSelectedFile={scriptSelectedFile}
-            onScriptSelect={setScriptSelectedFile}
-            documentSelectedId={codexDocumentSelectedId}
-            onDocumentSelect={setCodexDocumentSelectedId}
           />
         </React.Suspense>
       );
@@ -589,8 +552,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
             subView={state.agentToolSettings.subView}
             skillSelectedFile={skillSelectedFile}
             onSkillSelect={setSkillSelectedFile}
-            scriptSelectedFile={scriptSelectedFile}
-            onScriptSelect={setScriptSelectedFile}
             documentSelectedId={codexDocumentSelectedId}
             onDocumentSelect={setCodexDocumentSelectedId}
           />

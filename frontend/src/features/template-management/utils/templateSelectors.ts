@@ -7,7 +7,6 @@ export const buildFeatureFlags = (template: Template): TemplateFeatureFlags => (
   hasAgentsMd: Boolean(template.agentsMd && template.agentsMd.trim().length > 0),
   hasAgents: template.agents.length > 0,
   hasOutputStyle: template.outputStyle.length > 0,
-  hasScripts: template.scripts.length > 0,
   hasSkills: template.skills.length > 0,
 });
 
@@ -29,8 +28,6 @@ export const templateSupportsFeature = (
       return flags.hasAgents;
     case 'outputStyle':
       return flags.hasOutputStyle;
-    case 'scripts':
-      return flags.hasScripts;
     case 'skills':
       return flags.hasSkills;
     default:

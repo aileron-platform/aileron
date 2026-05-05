@@ -15,7 +15,6 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'template.common.features.commands': 'Commands',
         'template.common.features.outputStyle': 'Output Style',
         'template.common.features.skills': 'Skills',
-        'template.common.features.scripts': 'Scripts',
       };
       return translations[key] ?? key;
     },
@@ -52,10 +51,6 @@ vi.mock('./sections/DocsSection', () => ({
 
 vi.mock('./sections/SkillsSection', () => ({
   default: () => <div>skills-section</div>,
-}));
-
-vi.mock('./sections/ScriptsSection', () => ({
-  default: () => <div>scripts-section</div>,
 }));
 
 const values: TemplateFormValues = {
@@ -102,6 +97,7 @@ describe('TemplateForm', () => {
     expect(screen.getByRole('tab', { name: /agents 1/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /output style 1/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /skills 1/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /scripts/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
   });
 });

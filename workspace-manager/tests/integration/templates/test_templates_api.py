@@ -336,7 +336,7 @@ class TestTemplatesAPI:
         assert "items" in data
         assert isinstance(data["items"], list)
         assert "skills" in data["items"]
-        assert "scripts" in data["items"]
+        assert "scripts" not in data["items"]
         assert "files" not in data["items"]
 
         # Test features for a specific CLI type
@@ -347,7 +347,7 @@ class TestTemplatesAPI:
         assert "items" in data_claude
         assert isinstance(data_claude["items"], list)
         assert "skills" in data_claude["items"]
-        assert "scripts" in data_claude["items"]
+        assert "scripts" not in data_claude["items"]
 
     @pytest.mark.integration
     def test_tpl_018_template_mcp_config_success(self, authenticated_client, test_data_factory):
@@ -2505,7 +2505,7 @@ MIIEpAIBAAKCAQEATest1234567890Test1234567890Test1234567890Test
         assert isinstance(stats_data["stats"], dict)
 
         # Verify statistics data structure
-        # Possible feature types: mcp, commands, hooks, agentsMd, agents, outputStyle, scripts, skills
+        # Possible feature types: mcp, commands, hooks, agentsMd, agents, outputStyle, skills
         for feature_name, stat_item in stats_data["stats"].items():
             assert "name" in stat_item, f"{feature_name} statistics should contain name field"
             assert "count" in stat_item, f"{feature_name} statistics should contain count field"

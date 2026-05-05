@@ -142,7 +142,6 @@ export const getClaudeCodeSubView = (pathname: string): WorkspaceState['claudeCo
   if (pathname.includes('/output-styles')) return 'output-styles';
   if (pathname.includes('/subagents')) return 'subagents';
   if (pathname.includes('/skills')) return 'skills';
-  if (pathname.includes('/scripts')) return 'scripts';
   if (pathname.includes('/memory')) return 'memory';
   if (pathname.includes('/claude-code/settings')) return 'settings';
   if (pathname.includes('/claude-code/permissions')) return 'settings';

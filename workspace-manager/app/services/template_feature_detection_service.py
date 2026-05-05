@@ -80,11 +80,6 @@ class TemplateFeatureDetectionService:
             'type': 'file',
             'validator': '_validate_output_style_yaml'
         },
-        'scripts': {
-            'path': 'resources/scripts',
-            'type': 'directory',
-            'validator': '_has_valid_files_in_directory'
-        },
         'skills': {
             'path': 'skills',
             'type': 'directory',

@@ -11,7 +11,6 @@ import AgentsMdPage from '../agent-settings/pages/AgentsMdPage';
 import MCPSettingsPage from '../agent-settings/pages/MCPSettingsPage';
 import HooksSettingsPage from '../agent-settings/pages/HooksSettingsPage';
 import SkillsPage from '../agent-settings/pages/SkillsPage';
-import ScriptsPage from '../agent-settings/pages/ScriptsPage';
 import SubagentsPage from '../agent-settings/pages/SubagentsPage';
 import { AGENT_TOOL_CONFIGS } from '../agent-settings/agentToolConfigs';
 import { getAgentToolConfig } from '../agent-settings/utils';
@@ -19,30 +18,22 @@ import type { AgentSelectedFile } from '../agent-settings/types';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 export interface ClaudeCodeFeatureProps {
-  subView: 'claude-md' | 'mcp' | 'hooks' | 'settings' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'scripts' | 'memory';
+  subView: 'claude-md' | 'mcp' | 'hooks' | 'settings' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'memory';
   skillSelectedFile?: AgentSelectedFile | null;
   onSkillSelect?: (file: AgentSelectedFile | null) => void;
-  scriptSelectedFile?: AgentSelectedFile | null;
-  onScriptSelect?: (file: AgentSelectedFile | null) => void;
 }
 
 const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
   subView,
   skillSelectedFile,
   onSkillSelect,
-  scriptSelectedFile,
-  onScriptSelect
 }) => {
   const { t } = useI18n();
   // Use external selection state when provided, otherwise keep local state.
   const [internalSkillFile, setInternalSkillFile] = React.useState<AgentSelectedFile | null>(null);
-  const [internalScriptFile, setInternalScriptFile] = React.useState<AgentSelectedFile | null>(null);
 
   const selectedSkillFileValue = skillSelectedFile !== undefined ? skillSelectedFile : internalSkillFile;
   const setSelectedSkillFile = onSkillSelect || setInternalSkillFile;
-
-  const selectedScriptFileValue = scriptSelectedFile !== undefined ? scriptSelectedFile : internalScriptFile;
-  const setSelectedScriptFile = onScriptSelect || setInternalScriptFile;
 
   if (!subView) {
     return (
@@ -84,8 +75,6 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
       );
     case 'skills':
       return <SkillsPage selectedFile={selectedSkillFileValue} onSelect={setSelectedSkillFile} />;
-    case 'scripts':
-      return <ScriptsPage selectedFile={selectedScriptFileValue} onSelect={setSelectedScriptFile} />;
     case 'memory':
       return <MemoryPage />;
     default:

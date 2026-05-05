@@ -41,11 +41,8 @@ describe('AGENT_TOOL_CONFIGS', () => {
     ]);
   });
 
-  it('keeps scripts as an agent-settings capability but only exposes Claude initially', () => {
-    expect(AGENT_TOOL_CONFIGS.claude.capabilities.scripts?.supported).toBe(true);
-    expect(actionableSubViews(AGENT_TOOL_CONFIGS.claude)).toContain('scripts');
-
-    for (const tool of ['gemini', 'codex', 'opencode'] as const) {
+  it('keeps scripts unsupported for every agent settings surface', () => {
+    for (const tool of ['claude', 'gemini', 'codex', 'opencode'] as const) {
       expect(AGENT_TOOL_CONFIGS[tool].capabilities.scripts?.supported).toBe(false);
       expect(actionableSubViews(AGENT_TOOL_CONFIGS[tool])).not.toContain('scripts');
     }

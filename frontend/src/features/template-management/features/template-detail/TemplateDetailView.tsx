@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   PenSquare,
   Play,
-  FolderOpen,
   Bot,
   Network,
   Zap,
@@ -47,7 +46,6 @@ export const TemplateDetailView: React.FC = () => {
   const { templateId } = useParams<{ templateId: string }>();
   const { templates, isLoading } = useTemplateManagementContext();
   const [activeTab, setActiveTab] = useState('basic-info');
-  const [scriptsCount, setScriptsCount] = useState(0);
   const [skillsCount, setSkillsCount] = useState(0);
   const { t } = useI18n();
 
@@ -62,7 +60,6 @@ export const TemplateDetailView: React.FC = () => {
   useEffect(() => {
     if (!templateId) return;
 
-    setScriptsCount(0);
     setSkillsCount(0);
 
     const countFiles = (nodes: Array<{ type: 'file' | 'directory'; children?: any[] }>): number => {
@@ -92,7 +89,6 @@ export const TemplateDetailView: React.FC = () => {
       }
     };
 
-    fetchCount('scripts', setScriptsCount);
     fetchCount('skills', setSkillsCount);
   }, [templateId]);
 
@@ -111,11 +107,9 @@ export const TemplateDetailView: React.FC = () => {
       },
       { id: 'output-style', name: t('template.common.features.outputStyle'), icon: CLAUDE_CODE_ICONS['output-styles'], count: template?.outputStyle.length || 0 },
       { id: 'skills', name: t('template.common.features.skills'), icon: CLAUDE_CODE_ICONS['skills'], count: skillsCount },
-      { id: 'scripts', name: t('template.common.features.scripts'), icon: FolderOpen, count: scriptsCount },
       { id: 'target-preview', name: t('template.detail.tabs.targetPreview'), icon: Sparkles, count: 0 },
     ],
     [
-      scriptsCount,
       skillsCount,
       t,
       template?.hooks.length,
@@ -291,15 +285,6 @@ export const TemplateDetailView: React.FC = () => {
                 />
               )}
 
-              {/* Files Tab */}
-              {activeTab === 'scripts' && templateId && (
-                <TemplateDetailFileViewer
-                  templateId={templateId}
-                  basePath="scripts"
-                  title={t('template.common.features.scripts')}
-                  onTreeUpdate={(_, count) => setScriptsCount(count)}
-                />
-              )}
             </div>
           </div>
         </div>

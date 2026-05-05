@@ -237,11 +237,7 @@ export const mapTemplateToFormValues = (template: Template): TemplateFormValues 
     path: entry.path,
     content: entry.content ?? '',
   })),
-  scripts: flattenFileTree(template.scripts).map<FileEntryFormValue>(entry => ({
-    localId: generateLocalId(),
-    path: entry.path,
-    content: entry.content ?? '',
-  })),
+  scripts: [],
 });
 
 export const createEmptyFormValues = (categories: TemplateCategory[]): TemplateFormValues => ({
@@ -339,10 +335,5 @@ export const mapFormValuesToPayload = (values: TemplateFormValues): TemplateUpse
       content: item.content,
     })),
   ),
-  scripts: buildFileTreeFromEntries(
-    values.scripts.map(item => ({
-      path: item.path,
-      content: item.content,
-    })),
-  ),
+  scripts: [],
 });

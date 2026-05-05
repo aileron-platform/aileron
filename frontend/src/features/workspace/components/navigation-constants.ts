@@ -24,7 +24,6 @@ import {
   Clock,
   AlertTriangle,
   Wand2,
-  FileCode,
   Globe,
   Brain,
   CheckCircle2,
@@ -44,7 +43,6 @@ export const CLAUDE_CODE_ICONS = {
   'slash-commands': Command,
   'output-styles': Sparkles,
   'skills': Wand2,
-  'scripts': FileCode,
   'memory': Brain,
   'rules': Shield,
 } as const;
@@ -269,12 +267,6 @@ export const MAIN_NAVIGATION_ITEMS: NavigationConfig[] = [
         parentId: 'claude-code',
       },
       {
-        id: 'scripts',
-        labelKey: 'workspace.navigation.sub.claudeCodeSettings.scripts',
-        icon: CLAUDE_CODE_ICONS['scripts'],
-        parentId: 'claude-code',
-      },
-      {
         id: 'memory',
         labelKey: 'workspace.navigation.sub.claudeCodeSettings.memory',
         icon: CLAUDE_CODE_ICONS['memory'],
@@ -306,7 +298,6 @@ const AGENT_SETTINGS_ICONS: Record<string, LucideIcon> = {
   'agents-md': FileText,
   'output-styles': Sparkles,
   'subagents': Bot,
-  'scripts': FileCode,
   'settings': Settings,
   'memory': Brain,
 };
@@ -326,7 +317,6 @@ const SUB_VIEW_LABEL_KEYS: Record<string, string> = {
   'output-styles': 'workspace.navigation.sub.claudeCodeSettings.outputStyles',
   'subagents': 'workspace.agentSettings.common.subViews.subagents',
   'skills': 'workspace.navigation.sub.claudeCodeSettings.skills',
-  'scripts': 'workspace.navigation.sub.claudeCodeSettings.scripts',
   'settings': 'workspace.navigation.sub.claudeCodeSettings.settings',
   'memory': 'workspace.agentSettings.common.subViews.memory',
 };

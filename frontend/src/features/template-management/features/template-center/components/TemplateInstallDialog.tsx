@@ -35,7 +35,6 @@ const defaultOptions: TemplateInstallOptions = {
   agentsMd: true,
   agents: true,
   outputStyle: true,
-  scripts: true,
   skills: true,
 };
 
@@ -94,11 +93,6 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
         description: t('template.center.install.options.outputStyle.description'),
       },
       {
-        key: 'scripts',
-        label: t('template.common.features.scripts'),
-        description: t('template.center.install.options.scripts.description'),
-      },
-      {
         key: 'skills',
         label: t('template.common.features.skills'),
         description: t('template.center.install.options.skills.description'),
@@ -126,8 +120,6 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
           return flags.hasAgents;
         case 'outputStyle':
           return flags.hasOutputStyle;
-        case 'scripts':
-          return flags.hasScripts;
         case 'skills':
           return flags.hasSkills;
         default:
@@ -161,7 +153,6 @@ export const TemplateInstallDialog: React.FC<TemplateInstallDialogProps> = ({
       agentsMd: flags.hasAgentsMd,
       agents: flags.hasAgents,
       outputStyle: flags.hasOutputStyle,
-      scripts: flags.hasScripts,
       skills: flags.hasSkills,
     });
   }, [template]);

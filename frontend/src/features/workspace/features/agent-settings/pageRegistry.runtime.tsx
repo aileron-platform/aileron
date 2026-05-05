@@ -11,7 +11,6 @@ const MCPSettingsPage = React.lazy(() => import('./pages/MCPSettingsPage'));
 const HooksSettingsPage = React.lazy(() => import('./pages/HooksSettingsPage'));
 const SlashCommandsPage = React.lazy(() => import('./pages/SlashCommandsPage'));
 const SkillsPage = React.lazy(() => import('./pages/SkillsPage'));
-const ScriptsPage = React.lazy(() => import('./pages/ScriptsPage'));
 const CodexAgentsMdPage = React.lazy(() => import('./pages/CodexAgentsMdPage'));
 const CodexRulesPage = React.lazy(() => import('./pages/CodexRulesPage'));
 const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
@@ -28,7 +27,6 @@ export interface PageRenderContext {
   subView: string;
   loadingFallback: React.ReactNode;
   selectedSkillFile: AgentSelectedFile | null;
-  selectedScriptFile: AgentSelectedFile | null;
   documentSelectedId: string | null;
   onDocumentSelect?: (id: string | null) => void;
 }
@@ -117,18 +115,6 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
           />,
         ),
       requiresCapability: 'agentDefinitions',
-    },
-    scripts: {
-      render: ({ loadingFallback, config, selectedScriptFile }) =>
-        renderWithSuspense(
-          loadingFallback,
-          <ScriptsPage
-            selectedFile={selectedScriptFile}
-            apiPrefix={config.apiPathPrefix}
-            i18nNamespace={config.i18nNamespace}
-          />,
-        ),
-      requiresCapability: 'scripts',
     },
   },
   gemini: {

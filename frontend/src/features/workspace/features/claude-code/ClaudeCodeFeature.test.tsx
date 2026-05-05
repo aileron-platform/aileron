@@ -17,8 +17,8 @@ vi.mock('../agent-settings/pages/AgentsMdPage', () => ({
   default: () => <div data-testid="claude-agents-md-page" />,
 }));
 
-vi.mock('../agent-settings/pages/ScriptsPage', () => ({
-  default: () => <div data-testid="claude-scripts-page" />,
+vi.mock('../agent-settings/pages/SkillsPage', () => ({
+  default: () => <div data-testid="claude-skills-page" />,
 }));
 
 vi.mock('../agent-settings/pages/HooksSettingsPage', () => ({
@@ -34,9 +34,9 @@ describe('ClaudeCodeFeature', () => {
 
     expect(screen.getByTestId('claude-agents-md-page')).toBeInTheDocument();
 
-    rerender(<ClaudeCodeFeature subView="scripts" />);
+    rerender(<ClaudeCodeFeature subView="skills" />);
 
-    expect(screen.getByTestId('claude-scripts-page')).toBeInTheDocument();
+    expect(screen.getByTestId('claude-skills-page')).toBeInTheDocument();
   });
 
   it('passes Claude hook scopes without the Gemini extension scope', () => {
