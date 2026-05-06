@@ -1259,6 +1259,47 @@ class TestLoadPluginSkillsForPlugin:
         # Assert
         assert result == []
 
+    @patch.object(PluginComponentsLoader, '_parse_plugin_id')
+    @patch.object(PluginComponentsLoader, '_get_marketplace_path')
+    @patch.object(PluginComponentsLoader, '_read_json_file')
+    @patch.object(PluginComponentsLoader, '_find_plugin_in_marketplace')
+    @patch.object(PluginComponentsLoader, '_get_marketplace_base_path')
+    def test_load_plugin_skills_for_plugin_scans_default_skills_directory(
+        self,
+        mock_get_base,
+        mock_find,
+        mock_read,
+        mock_get_path,
+        mock_parse,
+        plugin_loader,
+        tmp_path
+    ):
+        """Test loading skills from default skills directory when registry omits skills."""
+        # Arrange
+        plugin_root = tmp_path / "plugins" / "test-plugin"
+        skill_root = plugin_root / "skills" / "frontend-design"
+        skill_root.mkdir(parents=True)
+        (skill_root / "SKILL.md").write_text("---\nname: frontend-design\n---\n", encoding="utf-8")
+        mock_parse.return_value = ("test-plugin", "test-marketplace")
+        mock_get_path.return_value = Path("/path/to/marketplace.json")
+        mock_read.return_value = {"plugins": []}
+        mock_find.return_value = {
+            "name": "test-plugin",
+            "source": "./plugins/test-plugin",
+        }
+        mock_get_base.return_value = tmp_path
+
+        # Act
+        result = plugin_loader._load_plugin_skills_for_plugin(
+            "workspace-1",
+            "test-plugin@test-marketplace"
+        )
+
+        # Assert
+        assert len(result) == 1
+        assert result[0].skill_name == "frontend-design"
+        assert result[0].directory_path == str(skill_root)
+
 
 class TestErrorHandling:
     """Test error handling."""

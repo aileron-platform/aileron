@@ -37,6 +37,13 @@ from .models import (
     CodexOverviewTrustState,
     CodexFileListResponse,
     CodexFileSummary,
+    CodexPluginAppDetail,
+    CodexPluginDetail,
+    CodexPluginDetailResponse,
+    CodexPluginHookDetail,
+    CodexPluginLayerState,
+    CodexPluginMcpServerDetail,
+    CodexPluginSkillDetail,
     CodexPluginSummary,
     CodexPluginToggleResponse,
     CodexPluginsResponse,
@@ -572,25 +579,83 @@ class CodexSettingsService:
 
     def list_plugins(self, workspace_id: str) -> CodexPluginsResponse:
         configured = self._configured_plugins()
+        configured_by_layer = self._configured_plugins_by_layer()
         discovered = self._discovered_plugins()
         all_ids = sorted(set(configured) | set(discovered))
         plugins = [
             CodexPluginSummary(
                 id=plugin_id,
-                name=str(discovered.get(plugin_id, {}).get("name") or plugin_id.split("@", 1)[0]),
-                marketplace=str(discovered.get(plugin_id, {}).get("marketplace") or plugin_id.split("@", 1)[1])
+                name=str(self._plugin_data(discovered, plugin_id).get("name") or plugin_id.split("@", 1)[0]),
+                displayName=str(self._plugin_data(discovered, plugin_id).get("displayName") or self._plugin_data(discovered, plugin_id).get("name") or plugin_id.split("@", 1)[0]),
+                shortDescription=self._optional_str(self._plugin_data(discovered, plugin_id).get("shortDescription")),
+                version=self._optional_str(self._plugin_data(discovered, plugin_id).get("version")),
+                authorName=self._optional_str(self._plugin_data(discovered, plugin_id).get("authorName")),
+                category=self._optional_str(self._plugin_data(discovered, plugin_id).get("category")),
+                capabilities=self._string_list(self._plugin_data(discovered, plugin_id).get("capabilities")),
+                brandColor=self._optional_str(self._plugin_data(discovered, plugin_id).get("brandColor")),
+                homepage=self._optional_str(self._plugin_data(discovered, plugin_id).get("homepage")),
+                marketplace=str(self._plugin_data(discovered, plugin_id).get("marketplace") or plugin_id.split("@", 1)[1])
                 if "@" in plugin_id
                 else None,
-                listed=bool(discovered.get(plugin_id, {}).get("listed")),
-                installed=bool(discovered.get(plugin_id, {}).get("installed")),
-                enabled=bool(_as_table(configured.get(plugin_id)).get("enabled")),
-                path=discovered.get(plugin_id, {}).get("path"),
-                sourcePath=discovered.get(plugin_id, {}).get("sourcePath"),
-                bundled=_as_table(discovered.get(plugin_id, {}).get("bundled")),
+                listed=bool(self._plugin_data(discovered, plugin_id).get("listed")),
+                installed=bool(self._plugin_data(discovered, plugin_id).get("installed")),
+                effectiveEnabled=self._effective_plugin_enabled(plugin_id, configured_by_layer),
+                layers=self._plugin_layer_states(plugin_id, configured_by_layer),
+                path=self._plugin_data(discovered, plugin_id).get("path"),
+                sourcePath=self._plugin_data(discovered, plugin_id).get("sourcePath"),
+                resourceCounts=self._resource_counts(self._plugin_data(discovered, plugin_id)),
             )
             for plugin_id in all_ids
         ]
         return CodexPluginsResponse(workspaceId=workspace_id, plugins=plugins)
+
+    @staticmethod
+    def _plugin_data(discovered: dict[str, dict[str, Any]], plugin_id: str) -> dict[str, Any]:
+        return discovered.get(plugin_id, {})
+
+    def get_plugin_detail(self, workspace_id: str, plugin_id: str) -> CodexPluginDetailResponse:
+        self._validate_plugin_id(plugin_id)
+        package = next((item for item in self._plugin_resolver.packages() if item.plugin_id == plugin_id), None)
+        if package is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail={"error": "PLUGIN_NOT_FOUND", "message": plugin_id},
+            )
+
+        manifest = package.manifest
+        interface = _as_table(manifest.get("interface"))
+        metadata = self._codex_plugin_metadata(manifest, package.plugin_id, package.name, package.marketplace_name)
+        configured_by_layer = self._configured_plugins_by_layer()
+        readme_path = package.package_root / "README.md"
+        detail = CodexPluginDetail(
+            id=package.plugin_id,
+            name=package.name,
+            displayName=metadata["displayName"],
+            marketplace=package.marketplace_name,
+            version=metadata.get("version"),
+            authorName=metadata.get("authorName"),
+            shortDescription=metadata.get("shortDescription"),
+            longDescription=self._optional_str(interface.get("longDescription") or manifest.get("longDescription")),
+            category=metadata.get("category"),
+            capabilities=self._string_list(metadata.get("capabilities")),
+            brandColor=metadata.get("brandColor"),
+            homepage=metadata.get("homepage"),
+            keywords=self._string_list(interface.get("keywords") or manifest.get("keywords")),
+            license=self._optional_str(manifest.get("license")),
+            repository=self._optional_str(manifest.get("repository")),
+            websiteURL=self._optional_str(manifest.get("websiteURL") or manifest.get("websiteUrl")),
+            privacyPolicyURL=self._optional_str(manifest.get("privacyPolicyURL") or manifest.get("privacyPolicyUrl")),
+            termsOfServiceURL=self._optional_str(manifest.get("termsOfServiceURL") or manifest.get("termsOfServiceUrl")),
+            defaultPrompt=self._optional_str(manifest.get("defaultPrompt")),
+            readme=readme_path.read_text(encoding="utf-8") if readme_path.is_file() else None,
+            skills=self._codex_plugin_skill_details(package),
+            mcpServers=self._codex_plugin_mcp_details(package),
+            apps=self._codex_plugin_app_details(package),
+            hooks=self._codex_plugin_hook_details(package),
+            effectiveEnabled=self._effective_plugin_enabled(package.plugin_id, configured_by_layer),
+            layers=self._plugin_layer_states(package.plugin_id, configured_by_layer),
+        )
+        return CodexPluginDetailResponse(workspaceId=workspace_id, plugin=detail)
 
     def set_plugin_enabled(
         self,
@@ -599,11 +664,7 @@ class CodexSettingsService:
         plugin_id: str,
         enabled: bool,
     ) -> CodexPluginToggleResponse:
-        if not plugin_id or "/" in plugin_id or ".." in plugin_id:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                detail={"error": "INVALID_PLUGIN_ID", "message": plugin_id},
-            )
+        self._validate_plugin_id(plugin_id)
         codex_layer = CodexLayer(layer)
         path = self._resolver.resolve(codex_layer, CodexResource.CONFIG)
         config = _read_toml(path)
@@ -1119,6 +1180,43 @@ class CodexSettingsService:
             merged.update(_as_table(config.get("plugins")))
         return merged
 
+    def _configured_plugins_by_layer(self) -> dict[CodexLayer, dict[str, Any]]:
+        return {
+            CodexLayer.USER: _as_table(self._user_config().get("plugins")),
+            CodexLayer.PROJECT: _as_table(self._project_config().get("plugins")),
+        }
+
+    def _plugin_layer_states(
+        self,
+        plugin_id: str,
+        configured_by_layer: dict[CodexLayer, dict[str, Any]],
+    ) -> list[CodexPluginLayerState]:
+        states: list[CodexPluginLayerState] = []
+        for layer in (CodexLayer.USER, CodexLayer.PROJECT):
+            layer_plugins = configured_by_layer.get(layer, {})
+            config = _as_table(layer_plugins.get(plugin_id))
+            has_enabled = "enabled" in config
+            states.append(
+                CodexPluginLayerState(
+                    layer=layer.value,
+                    configured=plugin_id in layer_plugins,
+                    enabled=bool(config.get("enabled")) if has_enabled else None,
+                )
+            )
+        return states
+
+    def _effective_plugin_enabled(
+        self,
+        plugin_id: str,
+        configured_by_layer: dict[CodexLayer, dict[str, Any]],
+    ) -> bool:
+        enabled = False
+        for layer in (CodexLayer.USER, CodexLayer.PROJECT):
+            config = _as_table(configured_by_layer.get(layer, {}).get(plugin_id))
+            if "enabled" in config:
+                enabled = config.get("enabled") is True
+        return enabled
+
     def _enabled_plugin_ids(self) -> set[str]:
         return {
             plugin_id
@@ -1130,20 +1228,28 @@ class CodexSettingsService:
         discovered: dict[str, dict[str, Any]] = {}
         self._collect_marketplace_plugins(discovered)
         for package in self._plugin_resolver.packages():
+            metadata = self._codex_plugin_metadata(
+                package.manifest,
+                package.plugin_id,
+                package.name,
+                package.marketplace_name,
+            )
             current = discovered.setdefault(package.plugin_id, {})
             current.update(
                 {
                     "name": package.name,
+                    **metadata,
                     "marketplace": package.marketplace_name,
                     "installed": True,
                     "path": str(package.package_root),
                     "sourcePath": str(package.manifest_path),
-                    "bundled": self._plugin_resolver.bundled_summary(package),
+                    "resourceCounts": self._codex_plugin_resource_counts(package),
                 },
             )
         return discovered
 
     def _collect_marketplace_plugins(self, discovered: dict[str, dict[str, Any]]) -> None:
+        # Keep every codex-cli write target documented in OpenSpec Decision 10.
         marketplace_paths = [
             self._resolver.codex_home / ".tmp" / "plugins" / ".agents" / "plugins" / "marketplace.json",
             *sorted((self._resolver.codex_home / ".tmp").glob("plugins-clone-*/.agents/plugins/marketplace.json")),
@@ -1158,17 +1264,25 @@ class CodexSettingsService:
                 if not plugin_id:
                     continue
                 current = discovered.setdefault(plugin_id, {})
+                metadata = self._codex_plugin_metadata(
+                    entry,
+                    plugin_id,
+                    str(entry.get("name") or entry.get("id") or plugin_id),
+                    entry.get("marketplace") if isinstance(entry.get("marketplace"), str) else marketplace_name,
+                )
                 current.update(
                     {
                         "name": entry.get("name") or entry.get("id") or plugin_id,
+                        **metadata,
                         "marketplace": entry.get("marketplace") or self._marketplace_from_plugin_id(plugin_id),
                         "listed": True,
                         "sourcePath": str(marketplace_path),
-                        "bundled": self._plugin_bundles(entry, None),
+                        "resourceCounts": {"skills": 0, "mcpServers": 0, "apps": 0, "hooks": 0},
                     },
                 )
 
     def _plugin_manifest_paths(self) -> list[Path]:
+        # Keep every codex-cli write target documented in OpenSpec Decision 10.
         roots = [
             self._resolver.codex_home / "plugins" / "cache",
             self._resolver.codex_home / ".tmp" / "plugins" / "plugins",
@@ -1227,6 +1341,146 @@ class CodexSettingsService:
     @staticmethod
     def _marketplace_from_plugin_id(plugin_id: str) -> str | None:
         return plugin_id.split("@", 1)[1] if "@" in plugin_id else None
+
+    @staticmethod
+    def _validate_plugin_id(plugin_id: str) -> None:
+        if not plugin_id or plugin_id.startswith("/") or ".." in Path(plugin_id).parts:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail={"error": "INVALID_PLUGIN_ID", "message": plugin_id},
+            )
+
+    @classmethod
+    def _codex_plugin_metadata(
+        cls,
+        manifest: dict[str, Any],
+        plugin_id: str,
+        fallback_name: str,
+        fallback_marketplace: str | None,
+    ) -> dict[str, Any]:
+        interface = _as_table(manifest.get("interface"))
+        author = _as_table(manifest.get("author"))
+        raw_capabilities = interface.get("capabilities") or manifest.get("capabilities")
+        return {
+            "displayName": cls._optional_str(interface.get("displayName")) or fallback_name or plugin_id.split("@", 1)[0],
+            "shortDescription": cls._optional_str(interface.get("shortDescription") or manifest.get("description")),
+            "version": cls._optional_str(interface.get("version") or manifest.get("version")),
+            "authorName": cls._optional_str(author.get("name") or manifest.get("authorName")),
+            "category": cls._optional_str(interface.get("category") or manifest.get("category")),
+            "capabilities": cls._string_list(raw_capabilities),
+            "brandColor": cls._optional_str(interface.get("brandColor") or manifest.get("brandColor")),
+            "homepage": cls._optional_str(interface.get("homepage") or manifest.get("homepage") or manifest.get("websiteURL")),
+            "marketplace": fallback_marketplace,
+        }
+
+    @staticmethod
+    def _optional_str(value: Any) -> str | None:
+        return value if isinstance(value, str) and value else None
+
+    @staticmethod
+    def _string_list(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, str) and item]
+        if isinstance(value, str) and value:
+            return [value]
+        return []
+
+    @staticmethod
+    def _resource_counts(data: dict[str, Any]) -> dict[str, int]:
+        counts = _as_table(data.get("resourceCounts"))
+        return {
+            "skills": int(counts.get("skills") or 0),
+            "mcpServers": int(counts.get("mcpServers") or 0),
+            "apps": int(counts.get("apps") or 0),
+            "hooks": int(counts.get("hooks") or 0),
+        }
+
+    def _codex_plugin_resource_counts(self, package: Any) -> dict[str, int]:
+        return {
+            "skills": len(self._codex_plugin_skill_details(package)),
+            "mcpServers": len(self._codex_plugin_mcp_details(package)),
+            "apps": len(self._codex_plugin_app_details(package)),
+            "hooks": len(self._codex_plugin_hook_details(package)),
+        }
+
+    def _codex_plugin_skill_details(self, package: Any) -> list[CodexPluginSkillDetail]:
+        details: list[CodexPluginSkillDetail] = []
+        for skill in self._plugin_resolver.skills():
+            if skill.plugin.plugin_id != package.plugin_id:
+                continue
+            content = skill.path.read_text(encoding="utf-8")
+            frontmatter = self._markdown_frontmatter(content)
+            details.append(
+                CodexPluginSkillDetail(
+                    name=str(frontmatter.get("name") or skill.name),
+                    description=self._optional_str(frontmatter.get("description")),
+                    path=skill.relative_path,
+                ),
+            )
+        return sorted(details, key=lambda item: item.path)
+
+    def _codex_plugin_mcp_details(self, package: Any) -> list[CodexPluginMcpServerDetail]:
+        details: list[CodexPluginMcpServerDetail] = []
+        for server in self._plugin_resolver.mcp_servers():
+            if server.plugin.plugin_id != package.plugin_id:
+                continue
+            details.append(
+                CodexPluginMcpServerDetail(
+                    name=server.name,
+                    command=self._optional_str(server.config.get("command")),
+                    url=self._optional_str(server.config.get("url")),
+                    config=server.config,
+                ),
+            )
+        return sorted(details, key=lambda item: item.name)
+
+    def _codex_plugin_app_details(self, package: Any) -> list[CodexPluginAppDetail]:
+        app_file = package.package_root / ".app.json"
+        data = self._read_json_file(app_file)
+        raw_apps = data.get("apps", data)
+        if isinstance(raw_apps, dict):
+            return [
+                CodexPluginAppDetail(name=str(name), config=dict(config) if isinstance(config, dict) else {"value": config})
+                for name, config in sorted(raw_apps.items())
+            ]
+        if isinstance(raw_apps, list):
+            details: list[CodexPluginAppDetail] = []
+            for index, item in enumerate(raw_apps):
+                if isinstance(item, dict):
+                    details.append(CodexPluginAppDetail(name=str(item.get("name") or f"app-{index + 1}"), config=item))
+            return details
+        return []
+
+    def _codex_plugin_hook_details(self, package: Any) -> list[CodexPluginHookDetail]:
+        details: list[CodexPluginHookDetail] = []
+        for document in self._plugin_resolver.hook_documents():
+            if document.plugin.plugin_id != package.plugin_id:
+                continue
+            for name, config in sorted(document.content.items()):
+                details.append(
+                    CodexPluginHookDetail(
+                        name=str(name),
+                        path=str(document.source_path.relative_to(package.package_root)),
+                        config=dict(config) if isinstance(config, dict) else {"value": config},
+                    ),
+                )
+        return details
+
+    @staticmethod
+    def _markdown_frontmatter(content: str) -> dict[str, Any]:
+        if not content.startswith("---\n"):
+            return {}
+        end = content.find("\n---", 4)
+        if end == -1:
+            return {}
+        result: dict[str, Any] = {}
+        for line in content[4:end].splitlines():
+            if ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            clean_value = value.strip().strip('"').strip("'")
+            result[key.strip()] = clean_value
+        return result
 
     def _marketplace_from_cache_path(self, manifest_path: Path) -> str | None:
         try:

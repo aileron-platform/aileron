@@ -37,6 +37,7 @@ ENV TZ=${TZ}
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt-get update && apt-get install -y --fix-missing \
+    bubblewrap \
     docker.io \
     openssh-server \
     supervisor \

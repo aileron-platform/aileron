@@ -10,7 +10,6 @@ from .dependencies import get_settings_service
 from .models import (
     ClaudeCodeSettings,
     ClaudeCodeSettingsUpdateRequest,
-    MarketplaceListResponse,
 )
 from .service import SettingsService
 
@@ -32,19 +31,6 @@ async def get_settings(
     service: SettingsService = Depends(get_settings_service),
 ) -> ClaudeCodeSettings:
     return service.get_settings(workspace_id, scope)
-
-
-@router.get(
-    "/marketplaces",
-    response_model=MarketplaceListResponse,
-    summary="Get all marketplaces",
-    responses=build_responses(401, 404, 500),
-)
-async def get_marketplaces(
-    workspace_id: str = Path(..., description="Workspace ID"),
-    service: SettingsService = Depends(get_settings_service),
-) -> MarketplaceListResponse:
-    return service.get_marketplaces(workspace_id)
 
 
 @router.put(

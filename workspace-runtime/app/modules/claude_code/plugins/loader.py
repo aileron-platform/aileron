@@ -297,6 +297,8 @@ class PluginComponentsLoader:
         source_path: Path,
         skills_raw: Any,
     ) -> tuple[Any, ...]:
+        if not skills_raw:
+            return self._path_tree_signature(source_path / "skills")
         if isinstance(skills_raw, str):
             skills_raw = [skills_raw]
         if not isinstance(skills_raw, list):
@@ -539,12 +541,24 @@ class PluginComponentsLoader:
 
         skills_raw = plugin_config.get("skills", [])
 
-        if not skills_raw:
-            return []
-
         base_path = self._get_marketplace_base_path(marketplace_path)
         source = plugin_config.get("source", "./")
         plugin_base_path = self._resolve_path(base_path, source)
+
+        if not skills_raw:
+            skills_dir = plugin_base_path / "skills"
+            if not skills_dir.is_dir():
+                return []
+            return [
+                SkillDirectoryInfo(
+                    directory_path=str(skill_file.parent),
+                    skill_name=skill_file.parent.name,
+                    plugin_name=plugin_name,
+                    marketplace_name=marketplace_name,
+                )
+                for skill_file in sorted(skills_dir.glob("*/SKILL.md"))
+                if skill_file.is_file()
+            ]
 
         result = []
         for skill_relative_path in skills_raw:

@@ -10,10 +10,6 @@ from app.modules.claude_code.settings.dependencies import get_settings_service
 from app.modules.claude_code.settings.models import (
     ClaudeCodeSettings,
     ClaudeCodeSettingsUpdateRequest,
-    Marketplace,
-    MarketplaceListResponse,
-    MarketplaceMetadata,
-    MarketplaceOwner,
     PermissionMode,
     PermissionRules,
 )
@@ -24,7 +20,6 @@ from .helpers import WORKSPACE_ID, override_dependency
 @dataclass
 class StubSettingsService:
     settings: Optional[ClaudeCodeSettings] = None
-    marketplaces: Optional[MarketplaceListResponse] = None
     updated: list[tuple[str, ClaudeCodeSettingsUpdateRequest, DocumentScope]] = field(
         default_factory=list
     )
@@ -34,10 +29,6 @@ class StubSettingsService:
     ) -> ClaudeCodeSettings:
         assert self.settings is not None
         return self.settings
-
-    def get_marketplaces(self, workspace_id: str) -> MarketplaceListResponse:
-        assert self.marketplaces is not None
-        return self.marketplaces
 
     def update_settings(
         self,
@@ -96,32 +87,12 @@ def test_cset_002_get_scope_settings(client):
     assert response.json()["mode"] == "acceptEdits"
 
 
-def test_cset_003_list_marketplaces(client):
-    marketplaces_response = MarketplaceListResponse(
-        marketplaces=[
-            Marketplace(
-                name="test-marketplace",
-                owner=MarketplaceOwner(name="Test Owner"),
-                metadata=MarketplaceMetadata(
-                    description="Test marketplace", version="1.0.0"
-                ),
-                plugins=[],
-            )
-        ]
-    )
-    service = StubSettingsService(
-        settings=_sample_settings(),
-        marketplaces=marketplaces_response,
+def test_cset_003_marketplaces_endpoint_removed(client):
+    response = client.get(
+        f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/marketplaces"
     )
 
-    with override_dependency(get_settings_service, lambda: service):
-        response = client.get(
-            f"/api/v1/workspaces/{WORKSPACE_ID}/claude-code/settings/marketplaces"
-        )
-
-    assert response.status_code == 200
-    assert len(response.json()["marketplaces"]) == 1
-    assert response.json()["marketplaces"][0]["name"] == "test-marketplace"
+    assert response.status_code in {404, 405}
 
 
 def test_cset_004_update_settings_project(client):

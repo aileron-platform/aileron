@@ -15,6 +15,7 @@ const CodexAgentsMdPage = React.lazy(() => import('./pages/CodexAgentsMdPage'));
 const CodexRulesPage = React.lazy(() => import('./pages/CodexRulesPage'));
 const CodexHooksPage = React.lazy(() => import('./pages/CodexHooksPage'));
 const CodexPluginsPage = React.lazy(() => import('./pages/CodexPluginsPage'));
+const ClaudePluginsPage = React.lazy(() => import('./pages/ClaudePluginsPage'));
 const CodexDocumentResourcePage = React.lazy(() => import('./pages/CodexDocumentResourcePage'));
 const SubagentsPage = React.lazy(() => import('./pages/SubagentsPage'));
 const GeminiExtensionsPage = React.lazy(() => import('./pages/GeminiExtensionsPage'));
@@ -115,6 +116,10 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
           />,
         ),
       requiresCapability: 'agentDefinitions',
+    },
+    plugins: {
+      render: ({ loadingFallback }) => renderWithSuspense(loadingFallback, <ClaudePluginsPage />),
+      requiresCapability: 'plugins',
     },
   },
   gemini: {

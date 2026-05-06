@@ -28,6 +28,10 @@ vi.mock('../agent-settings/pages/HooksSettingsPage', () => ({
   },
 }));
 
+vi.mock('../agent-settings/pages/ClaudePluginsPage', () => ({
+  default: () => <div data-testid="claude-plugins-page" />,
+}));
+
 describe('ClaudeCodeFeature', () => {
   it('keeps Claude-only routing in the legacy dispatcher for shared pages', () => {
     const { rerender } = render(<ClaudeCodeFeature subView="claude-md" />);
@@ -37,6 +41,12 @@ describe('ClaudeCodeFeature', () => {
     rerender(<ClaudeCodeFeature subView="skills" />);
 
     expect(screen.getByTestId('claude-skills-page')).toBeInTheDocument();
+  });
+
+  it('routes Claude plugins from the dynamic extensions submenu', () => {
+    render(<ClaudeCodeFeature subView="plugins" />);
+
+    expect(screen.getByTestId('claude-plugins-page')).toBeInTheDocument();
   });
 
   it('passes Claude hook scopes without the Gemini extension scope', () => {

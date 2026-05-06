@@ -228,7 +228,9 @@ describe('GeminiExtensionsPage', () => {
     expect(screen.queryByText('workspace.agentSettings.geminiExtensions.actions.enableUser')).not.toBeInTheDocument();
     await user.click(screen.getByText('workspace.agentSettings.geminiExtensions.actions.details'));
 
+    await user.click(await screen.findByRole('tab', { name: 'workspace.agentSettings.geminiExtensions.detail.tabs.context' }));
     expect(await screen.findByText('Context preview')).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'workspace.agentSettings.geminiExtensions.detail.tabs.policies' }));
     expect(screen.getByText('allow = true')).toBeInTheDocument();
   });
 });

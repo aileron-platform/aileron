@@ -12,13 +12,14 @@ import MCPSettingsPage from '../agent-settings/pages/MCPSettingsPage';
 import HooksSettingsPage from '../agent-settings/pages/HooksSettingsPage';
 import SkillsPage from '../agent-settings/pages/SkillsPage';
 import SubagentsPage from '../agent-settings/pages/SubagentsPage';
+import ClaudePluginsPage from '../agent-settings/pages/ClaudePluginsPage';
 import { AGENT_TOOL_CONFIGS } from '../agent-settings/agentToolConfigs';
 import { getAgentToolConfig } from '../agent-settings/utils';
 import type { AgentSelectedFile } from '../agent-settings/types';
 import { useI18n } from '@/shared/hooks/useI18n';
 
 export interface ClaudeCodeFeatureProps {
-  subView: 'claude-md' | 'mcp' | 'hooks' | 'settings' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'memory';
+  subView: 'claude-md' | 'mcp' | 'hooks' | 'settings' | 'slash-commands' | 'output-styles' | 'subagents' | 'skills' | 'memory' | 'plugins';
   skillSelectedFile?: AgentSelectedFile | null;
   onSkillSelect?: (file: AgentSelectedFile | null) => void;
 }
@@ -77,6 +78,8 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
       return <SkillsPage selectedFile={selectedSkillFileValue} onSelect={setSelectedSkillFile} />;
     case 'memory':
       return <MemoryPage />;
+    case 'plugins':
+      return <ClaudePluginsPage />;
     default:
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

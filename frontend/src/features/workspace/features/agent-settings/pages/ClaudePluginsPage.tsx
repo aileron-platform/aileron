@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   Boxes,
   Building,
+  ExternalLink,
   FileText,
+  FolderGit,
   Layers,
   MoreHorizontal,
   Package,
@@ -13,6 +16,8 @@ import {
   Server,
   Sparkles,
   Tags,
+  TerminalSquare,
+  User,
   Wrench,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
@@ -33,13 +38,9 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
+import { AgentSettingsLayerSelector, AgentSettingsSourceFilter } from '../components/SettingsSourcePrimitives';
 import {
-  AgentSettingsLayerSelector,
-  AgentSettingsSourceFilter,
-  getAgentSettingsSourceIcon,
-  NewThreadNotice,
-} from '../components/SettingsSourcePrimitives';
-import {
+  DetailSection,
   PluginCard,
   PluginCardGrid,
   PluginDetailDialog,
@@ -51,70 +52,81 @@ import {
   ResourceSummary,
   type PluginDisplayMode,
 } from '../components/plugin-list';
-import { createAgentSettingsApi, type CodexPluginDetail, type CodexPluginSummary } from '../services/agentSettingsApi';
+import {
+  createAgentSettingsApi,
+  type ClaudePluginDetail,
+  type ClaudePluginScope,
+  type ClaudePluginSummary,
+} from '../services/agentSettingsApi';
 
-type CodexLayer = 'user' | 'project';
-type CodexLayerFilter = 'all' | CodexLayer;
-type CodexResourceKey = 'skills' | 'mcpServers' | 'apps' | 'hooks';
+type ClaudeResourceKey = 'commands' | 'agents' | 'hooks' | 'mcpServers' | 'skills' | 'lspServers';
+type ClaudeScopeFilter = 'all' | ClaudePluginScope;
 
-const I18N_PREFIX = 'workspace.agentSettings.codex.plugins';
+const I18N_PREFIX = 'workspace.agentSettings.claude.plugins';
 const COMMON_PREFIX = 'workspace.agentSettings.common.plugins';
 const PLUGINS_PER_PAGE = 6;
-const resourceKeys: CodexResourceKey[] = ['skills', 'mcpServers', 'apps', 'hooks'];
+const scopes: ClaudeScopeFilter[] = ['all', 'project', 'user', 'local'];
+const resourceKeys: ClaudeResourceKey[] = ['commands', 'agents', 'hooks', 'mcpServers', 'skills', 'lspServers'];
 
-const resourceIcons: Record<CodexResourceKey, React.ComponentType<{ className?: string }>> = {
-  skills: Sparkles,
-  mcpServers: Server,
-  apps: Package,
-  hooks: Wrench,
+const scopeIcons: Record<ClaudeScopeFilter, React.ComponentType<{ className?: string }>> = {
+  all: Layers,
+  project: FolderGit,
+  user: User,
+  local: Building,
 };
 
-const CodexPluginsPage: React.FC = () => {
+const resourceIcons: Record<ClaudeResourceKey, React.ComponentType<{ className?: string }>> = {
+  commands: TerminalSquare,
+  agents: Package,
+  hooks: Wrench,
+  mcpServers: Server,
+  skills: Sparkles,
+  lspServers: Boxes,
+};
+
+const ClaudePluginsPage: React.FC = () => {
   const { t } = useI18n();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { workspaceRuntime } = useWorkspace();
-  const api = useMemo(() => createAgentSettingsApi('codex'), []);
-  const [layer, setLayer] = useState<CodexLayerFilter>('all');
+  const api = useMemo(() => createAgentSettingsApi('claude'), []);
+  const [scope, setScope] = useState<ClaudeScopeFilter>('all');
   const [displayMode, setDisplayMode] = useState<PluginDisplayMode>('enabled');
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [marketplaceFilter, setMarketplaceFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [showNewThreadNotice, setShowNewThreadNotice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const runtimeBaseUrl = workspaceRuntime.runtimeBaseUrl;
   const workspaceId = workspaceRuntime.workspaceId;
   const enabled = Boolean(runtimeBaseUrl && workspaceId);
 
   const pluginsQuery = useQuery({
-    queryKey: ['codex-plugins', runtimeBaseUrl, workspaceId],
-    queryFn: () => api.listCodexPlugins(runtimeBaseUrl || '', workspaceId || ''),
+    queryKey: ['claude-plugins', runtimeBaseUrl, workspaceId],
+    queryFn: () => api.listClaudePlugins(runtimeBaseUrl || '', workspaceId || ''),
     enabled,
   });
 
   const detailQuery = useQuery({
-    queryKey: ['codex-plugin-detail', runtimeBaseUrl, workspaceId, selectedId],
-    queryFn: () => api.getCodexPlugin(runtimeBaseUrl || '', workspaceId || '', selectedId || ''),
+    queryKey: ['claude-plugin-detail', runtimeBaseUrl, workspaceId, selectedId],
+    queryFn: () => api.getClaudePlugin(runtimeBaseUrl || '', workspaceId || '', selectedId || ''),
     enabled: enabled && detailOpen && Boolean(selectedId),
   });
 
   const toggleMutation = useMutation({
     mutationFn: ({ pluginId, nextEnabled }: { pluginId: string; nextEnabled: boolean }) => {
       setError(null);
-      if (layer === 'all') {
+      if (scope === 'all') {
         throw new Error(t(`${I18N_PREFIX}.errors.selectConcreteScope`));
       }
-      return api.setCodexPluginEnabled(runtimeBaseUrl || '', workspaceId || '', pluginId, layer, nextEnabled);
+      return api.setClaudePluginEnabled(runtimeBaseUrl || '', workspaceId || '', pluginId, scope, nextEnabled);
     },
     onSuccess: async (_result, variables) => {
-      setShowNewThreadNotice(true);
-      await queryClient.invalidateQueries({ queryKey: ['codex-plugins', runtimeBaseUrl, workspaceId] });
-      await queryClient.invalidateQueries({ queryKey: ['codex-plugin-detail', runtimeBaseUrl, workspaceId] });
-      await queryClient.invalidateQueries({ queryKey: ['codex-hooks-workflow', runtimeBaseUrl, workspaceId] });
-      await queryClient.invalidateQueries({ queryKey: ['codex-skills-scope-availability', runtimeBaseUrl, workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['claude-plugins', runtimeBaseUrl, workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['claude-plugin-detail', runtimeBaseUrl, workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['agent-document-sidebar', runtimeBaseUrl, workspaceId, 'claude'] });
       await queryClient.invalidateQueries({ queryKey: ['agent-file-tree'] });
       toast({
         title: variables.nextEnabled
@@ -131,27 +143,9 @@ const CodexPluginsPage: React.FC = () => {
   });
 
   const plugins = useMemo(() => pluginsQuery.data?.plugins ?? [], [pluginsQuery.data]);
-  const layerOptions = useMemo(
-    () => [
-      {
-        value: 'all',
-        label: t(`${I18N_PREFIX}.layers.all`),
-        icon: <Layers className="h-3 w-3" />,
-      },
-      ...(['project', 'user'] as CodexLayer[]).map((scopeValue) => {
-        const Icon = getAgentSettingsSourceIcon(scopeValue);
-        return {
-          value: scopeValue,
-          label: t(`${I18N_PREFIX}.layers.${scopeValue}`),
-          icon: <Icon className="h-3 w-3" />,
-        };
-      }),
-    ],
-    [t],
-  );
   const marketplaces = useMemo(
-    () => Array.from(new Set(plugins.map((plugin) => plugin.marketplace).filter((value): value is string => Boolean(value)))).sort(),
-    [plugins],
+    () => (pluginsQuery.data?.marketplaces ?? []).filter((marketplace) => marketplace.pluginCount > 0),
+    [pluginsQuery.data],
   );
   const marketplaceOptions = useMemo(
     () => [
@@ -161,8 +155,8 @@ const CodexPluginsPage: React.FC = () => {
         icon: <Boxes className="h-3 w-3" />,
       },
       ...marketplaces.map((marketplace) => ({
-        value: marketplace,
-        label: marketplace,
+        value: marketplace.name,
+        label: marketplace.name,
         icon: <Building className="h-3 w-3" />,
       })),
     ],
@@ -187,7 +181,18 @@ const CodexPluginsPage: React.FC = () => {
     ],
     [categories, t],
   );
-  const visiblePlugins = useFilteredPlugins(plugins, displayMode, searchQuery, marketplaceFilter, categoryFilter, layer);
+  const scopeOptions = useMemo(
+    () => scopes.map((scopeValue) => {
+      const Icon = scopeIcons[scopeValue];
+      return {
+        value: scopeValue,
+        label: t(`${I18N_PREFIX}.scopes.${scopeValue}`),
+        icon: <Icon className="h-3 w-3" />,
+      };
+    }),
+    [t],
+  );
+  const visiblePlugins = useFilteredPlugins(plugins, displayMode, searchQuery, marketplaceFilter, categoryFilter, scope);
   const totalPages = Math.max(1, Math.ceil(visiblePlugins.length / PLUGINS_PER_PAGE));
   const currentPageClamped = Math.min(currentPage, totalPages);
   const paginatedPlugins = useMemo(() => {
@@ -198,14 +203,14 @@ const CodexPluginsPage: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [categoryFilter, displayMode, layer, marketplaceFilter, searchQuery]);
+  }, [categoryFilter, displayMode, marketplaceFilter, searchQuery, scope]);
 
   useEffect(() => {
     if (marketplaces.length === 1 && marketplaceFilter === 'all') {
-      setMarketplaceFilter(marketplaces[0]);
+      setMarketplaceFilter(marketplaces[0].name);
       return;
     }
-    if (marketplaceFilter !== 'all' && !marketplaces.includes(marketplaceFilter)) {
+    if (marketplaceFilter !== 'all' && !marketplaces.some((marketplace) => marketplace.name === marketplaceFilter)) {
       setMarketplaceFilter('all');
     }
   }, [marketplaceFilter, marketplaces]);
@@ -234,10 +239,10 @@ const CodexPluginsPage: React.FC = () => {
       headerActions={
         <div className="flex flex-wrap items-center gap-2">
           <AgentSettingsLayerSelector
-            value={layer}
-            onChange={setLayer}
-            options={layerOptions}
-            label={t(`${I18N_PREFIX}.layers.label`)}
+            value={scope}
+            onChange={setScope}
+            options={scopeOptions}
+            label={t(`${I18N_PREFIX}.scopes.label`)}
             className="rounded-lg bg-muted/60 px-3 py-1"
           />
           <PluginDisplayModeToggle
@@ -283,7 +288,7 @@ const CodexPluginsPage: React.FC = () => {
             options={marketplaceOptions}
             label={t(`${I18N_PREFIX}.filters.marketplaceLabel`)}
             disabled={marketplaces.length <= 1}
-            width={200}
+            width={220}
           />
           <AgentSettingsSourceFilter
             value={categoryFilter}
@@ -304,7 +309,6 @@ const CodexPluginsPage: React.FC = () => {
       emptyDescription={t(`${I18N_PREFIX}.empty.description`)}
       contentClassName="p-6"
     >
-      {showNewThreadNotice ? <div className="mb-4"><NewThreadNotice /></div> : null}
       {visiblePlugins.length === 0 ? (
         <PluginEmptyState
           icon={<Boxes className="h-8 w-8" />}
@@ -322,16 +326,16 @@ const CodexPluginsPage: React.FC = () => {
         <>
           <PluginCardGrid>
             {paginatedPlugins.map((plugin) => (
-              <CodexPluginCard
+              <ClaudePluginCard
                 key={plugin.id}
                 plugin={plugin}
                 pending={toggleMutation.isPending}
-                layer={layer}
+                scope={scope}
                 onDetails={() => {
                   setSelectedId(plugin.id);
                   setDetailOpen(true);
                 }}
-                onToggle={() => toggleMutation.mutate({ pluginId: plugin.id, nextEnabled: getNextLayerEnabled(plugin, layer) })}
+                onToggle={() => toggleMutation.mutate({ pluginId: plugin.id, nextEnabled: getNextScopeEnabled(plugin, scope) })}
               />
             ))}
           </PluginCardGrid>
@@ -352,11 +356,11 @@ const CodexPluginsPage: React.FC = () => {
       <PluginDetailDialog
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        title={detail ? t(`${I18N_PREFIX}.detail.title`, { name: detail.displayName || detail.name }) : t(`${I18N_PREFIX}.detail.fallbackTitle`)}
-        description={detail?.shortDescription ?? undefined}
+        title={detail ? t(`${I18N_PREFIX}.detail.title`, { name: detail.name }) : t(`${I18N_PREFIX}.detail.fallbackTitle`)}
+        description={detail?.description ?? undefined}
         icon={<Package className="h-5 w-5" />}
       >
-        <CodexPluginDetailPanel detail={detail} loading={detailQuery.isLoading} />
+        <ClaudePluginDetailPanel detail={detail} loading={detailQuery.isLoading} />
       </PluginDetailDialog>
     </SettingsWorkflowShell>
   );
@@ -369,19 +373,19 @@ const AlertMessage: React.FC<{ message: string }> = ({ message }) => (
 );
 
 const useFilteredPlugins = (
-  plugins: CodexPluginSummary[],
+  plugins: ClaudePluginSummary[],
   displayMode: PluginDisplayMode,
   searchQuery: string,
   marketplaceFilter: string,
   categoryFilter: string,
-  layer: CodexLayerFilter,
-): CodexPluginSummary[] => useMemo(() => {
+  scope: ClaudeScopeFilter,
+): ClaudePluginSummary[] => useMemo(() => {
   const normalizedQuery = searchQuery.trim().toLowerCase();
   return plugins
-    .filter((plugin) => displayMode === 'all' || plugin.effectiveEnabled)
+    .filter((plugin) => displayMode === 'all' || plugin.enabled)
     .filter((plugin) => marketplaceFilter === 'all' || plugin.marketplace === marketplaceFilter)
     .filter((plugin) => categoryFilter === 'all' || plugin.category === categoryFilter)
-    .filter((plugin) => layer === 'all' || getLayerState(plugin, layer)?.configured)
+    .filter((plugin) => scope === 'all' || plugin.installations.some((installation) => installation.scope === scope))
     .filter((plugin) => {
       if (!normalizedQuery) {
         return true;
@@ -389,62 +393,55 @@ const useFilteredPlugins = (
       return [
         plugin.id,
         plugin.name,
-        plugin.displayName,
-        plugin.shortDescription,
+        plugin.description,
         plugin.version,
-        plugin.authorName,
+        plugin.author,
         plugin.category,
         plugin.marketplace,
       ]
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(normalizedQuery));
     });
-}, [categoryFilter, displayMode, layer, marketplaceFilter, plugins, searchQuery]);
+}, [categoryFilter, displayMode, marketplaceFilter, plugins, scope, searchQuery]);
 
-const getLayerState = (plugin: CodexPluginSummary, layer: CodexLayer) => (
-  plugin.layers.find((item) => item.layer === layer)
+const getScopeInstallation = (plugin: ClaudePluginSummary, scope: ClaudePluginScope) => (
+  plugin.installations.find((installation) => installation.scope === scope)
 );
 
-const getNextLayerEnabled = (plugin: CodexPluginSummary, layer: CodexLayerFilter): boolean => {
-  if (layer === 'all') {
-    return !plugin.effectiveEnabled;
+const getNextScopeEnabled = (plugin: ClaudePluginSummary, scope: ClaudeScopeFilter): boolean => {
+  if (scope === 'all') {
+    return !plugin.enabled;
   }
-  const state = getLayerState(plugin, layer);
-  return state?.configured ? state.enabled !== true : true;
+  return getScopeInstallation(plugin, scope)?.enabled !== true;
 };
 
-const isLayerOverridden = (plugin: CodexPluginSummary, layer: CodexLayerFilter): boolean => {
-  if (layer !== 'user') {
-    return false;
-  }
-  const user = getLayerState(plugin, 'user');
-  const project = getLayerState(plugin, 'project');
-  return Boolean(user?.configured && project?.configured && user.enabled !== plugin.effectiveEnabled);
-};
-
-const CodexPluginCard: React.FC<{
-  plugin: CodexPluginSummary;
+const ClaudePluginCard: React.FC<{
+  plugin: ClaudePluginSummary;
   pending: boolean;
-  layer: CodexLayerFilter;
+  scope: ClaudeScopeFilter;
   onDetails: () => void;
   onToggle: () => void;
-}> = ({ plugin, pending, layer, onDetails, onToggle }) => {
+}> = ({ plugin, pending, scope, onDetails, onToggle }) => {
   const { t } = useI18n();
-  const description = plugin.shortDescription?.trim() || t(`${I18N_PREFIX}.descriptionFallback`);
-  const toggleDisabled = pending || !plugin.installed || layer === 'all';
-  const selectedLayerState = layer === 'all' ? undefined : getLayerState(plugin, layer);
-  const selectedLayerEnabled = selectedLayerState?.enabled === true;
-  const overridden = isLayerOverridden(plugin, layer);
+  const description = plugin.description?.trim() || t(`${I18N_PREFIX}.descriptionFallback`);
+  const toggleDisabled = pending || scope === 'all';
+  const selectedScopeEnabled = scope !== 'all' && getScopeInstallation(plugin, scope)?.enabled === true;
 
   return (
     <PluginCard
-      title={plugin.displayName || plugin.name}
+      title={plugin.name}
       subtitle={plugin.marketplace ?? plugin.version ?? plugin.id}
       description={description}
       onTitleClick={onDetails}
+      warningBadge={plugin.errors.length ? (
+        <Badge variant="destructive" className="gap-1">
+          <AlertTriangle className="h-3.5 w-3.5" />
+          {plugin.errors.length}
+        </Badge>
+      ) : null}
       statusBadge={
         <PluginStatusPill
-          enabled={plugin.effectiveEnabled}
+          enabled={plugin.enabled}
           enabledLabel={t(`${COMMON_PREFIX}.status.enabled`)}
           disabledLabel={t(`${COMMON_PREFIX}.status.disabled`)}
         />
@@ -465,9 +462,9 @@ const CodexPluginCard: React.FC<{
             <DropdownMenuSeparator />
             <DropdownMenuItem disabled={toggleDisabled} onClick={onToggle}>
               <Power className="mr-2 h-4 w-4" />
-              {layer === 'all'
+              {scope === 'all'
                 ? t(`${I18N_PREFIX}.actions.selectScopeToToggle`)
-                : selectedLayerEnabled
+                : selectedScopeEnabled
                   ? t(`${COMMON_PREFIX}.actions.disable`)
                   : t(`${COMMON_PREFIX}.actions.enable`)}
             </DropdownMenuItem>
@@ -476,20 +473,13 @@ const CodexPluginCard: React.FC<{
       }
     >
       <div className="flex flex-wrap gap-2">
-        {plugin.installed ? <Badge variant="secondary">{t(`${I18N_PREFIX}.status.installed`)}</Badge> : null}
-        {plugin.listed ? <Badge variant="outline">{t(`${I18N_PREFIX}.status.listed`)}</Badge> : null}
-        {selectedLayerState?.configured ? (
-          <Badge variant="outline">
-            {t(`${I18N_PREFIX}.layers.configured`, { layer: t(`${I18N_PREFIX}.layers.${selectedLayerState.layer}`) })}
+        {plugin.installations.map((installation) => (
+          <Badge key={`${installation.scope}:${installation.installPath}`} variant="outline">
+            {t(`${I18N_PREFIX}.scopes.${installation.scope}`)}
           </Badge>
-        ) : null}
+        ))}
         {plugin.category ? <Badge variant="outline">{plugin.category}</Badge> : null}
       </div>
-      {overridden ? (
-        <Alert className="border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-          <AlertDescription>{t(`${I18N_PREFIX}.layers.projectOverride`)}</AlertDescription>
-        </Alert>
-      ) : null}
       <div className="flex flex-wrap gap-2">
         {resourceKeys.map((key) => (
           <ResourceBadge
@@ -503,7 +493,7 @@ const CodexPluginCard: React.FC<{
   );
 };
 
-const CodexPluginDetailPanel: React.FC<{ detail?: CodexPluginDetail; loading: boolean }> = ({
+const ClaudePluginDetailPanel: React.FC<{ detail?: ClaudePluginDetail; loading: boolean }> = ({
   detail,
   loading,
 }) => {
@@ -529,10 +519,16 @@ const CodexPluginDetailPanel: React.FC<{ detail?: CodexPluginDetail; loading: bo
           <TabsTrigger value="resources" className="h-9 rounded-none border-b-2 border-transparent px-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
             {t(`${I18N_PREFIX}.detail.tabs.resources`)}
           </TabsTrigger>
+          <TabsTrigger value="diagnostics" className="h-9 rounded-none border-b-2 border-transparent px-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+            {t(`${I18N_PREFIX}.detail.tabs.diagnostics`)}
+          </TabsTrigger>
+          <TabsTrigger value="registry" className="h-9 rounded-none border-b-2 border-transparent px-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none">
+            {t(`${I18N_PREFIX}.detail.tabs.registry`)}
+          </TabsTrigger>
         </TabsList>
       </div>
       <TabsContent value="overview" className="mt-0 min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5">
-        <CodexPluginOverview detail={detail} />
+        <ClaudePluginOverview detail={detail} />
       </TabsContent>
       <TabsContent value="readme" className="mt-0 min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5">
         {detail.readme ? (
@@ -542,60 +538,198 @@ const CodexPluginDetailPanel: React.FC<{ detail?: CodexPluginDetail; loading: bo
         )}
       </TabsContent>
       <TabsContent value="resources" className="mt-0 min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5">
-        <CodexPluginResources detail={detail} />
+        <ClaudePluginResources detail={detail} />
+      </TabsContent>
+      <TabsContent value="diagnostics" className="mt-0 min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5">
+        <ClaudePluginDiagnostics detail={detail} />
+      </TabsContent>
+      <TabsContent value="registry" className="mt-0 min-h-0 flex-1 overflow-auto px-6 pb-6 pt-5">
+        <RegistryMetadataPanel detail={detail} />
       </TabsContent>
     </Tabs>
   );
 };
 
-const CodexPluginOverview: React.FC<{ detail: CodexPluginDetail }> = ({ detail }) => {
+const ClaudePluginOverview: React.FC<{ detail: ClaudePluginDetail }> = ({ detail }) => {
   const { t } = useI18n();
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
-        <Badge variant={detail.effectiveEnabled ? 'default' : 'secondary'}>
-          {detail.effectiveEnabled ? t(`${COMMON_PREFIX}.status.enabled`) : t(`${COMMON_PREFIX}.status.disabled`)}
+        <Badge variant={detail.enabled ? 'default' : 'secondary'}>
+          {detail.enabled ? t(`${COMMON_PREFIX}.status.enabled`) : t(`${COMMON_PREFIX}.status.disabled`)}
         </Badge>
         {detail.version ? <Badge variant="outline">{detail.version}</Badge> : null}
         {detail.license ? <Badge variant="outline">{detail.license}</Badge> : null}
         {detail.marketplace ? <Badge variant="outline">{detail.marketplace}</Badge> : null}
       </div>
-      <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-        {detail.longDescription || detail.shortDescription || t(`${I18N_PREFIX}.descriptionFallback`)}
-      </p>
-      <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-        <div className="text-xs font-medium text-muted-foreground">{t(`${I18N_PREFIX}.layers.stateTitle`)}</div>
-        <div className="flex flex-wrap gap-2">
-          {detail.layers.map((layerState) => (
-            <Badge key={layerState.layer} variant={layerState.enabled ? 'default' : 'outline'}>
-              {t(`${I18N_PREFIX}.layers.state`, {
-                layer: t(`${I18N_PREFIX}.layers.${layerState.layer}`),
-                state: layerState.configured
-                  ? layerState.enabled
-                    ? t(`${COMMON_PREFIX}.status.enabled`)
-                    : t(`${COMMON_PREFIX}.status.disabled`)
-                  : t(`${I18N_PREFIX}.layers.unconfigured`),
-              })}
-            </Badge>
+      <DetailSection title={t(`${COMMON_PREFIX}.detail.description`)}>
+        <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+          {detail.description || t(`${I18N_PREFIX}.descriptionFallback`)}
+        </p>
+      </DetailSection>
+      <DetailSection title={t(`${I18N_PREFIX}.detail.installations`)}>
+        <div className="overflow-hidden rounded border border-border">
+          {detail.installations.map((installation) => (
+            <div
+              key={`${installation.scope}:${installation.installPath}`}
+              className="grid gap-2 border-b border-border p-3 text-sm last:border-b-0 sm:grid-cols-[120px_1fr_100px]"
+            >
+              <span className="font-medium">{t(`${I18N_PREFIX}.scopes.${installation.scope}`)}</span>
+              <span className="min-w-0 truncate text-muted-foreground">{installation.installPath}</span>
+              <Badge variant={installation.enabled ? 'default' : 'secondary'} className="justify-self-start">
+                {installation.enabled ? t(`${COMMON_PREFIX}.status.enabled`) : t(`${COMMON_PREFIX}.status.disabled`)}
+              </Badge>
+            </div>
           ))}
         </div>
-      </div>
+      </DetailSection>
+      <DetailSection title={t(`${I18N_PREFIX}.detail.dependencies`)}>
+        <div className="flex flex-wrap gap-2">
+          {detail.dependencies.length
+            ? detail.dependencies.map((dependency) => (
+              <Badge key={`${dependency.marketplace ?? ''}:${dependency.name}:${dependency.version ?? ''}`} variant="outline">
+                {dependency.version ? `${dependency.name}@${dependency.version}` : dependency.name}
+              </Badge>
+            ))
+            : <span className="text-xs text-muted-foreground">{t(`${I18N_PREFIX}.detail.noDependencies`)}</span>}
+        </div>
+      </DetailSection>
     </div>
   );
 };
 
-const CodexPluginResources: React.FC<{ detail: CodexPluginDetail }> = ({ detail }) => {
+const ClaudePluginResources: React.FC<{ detail: ClaudePluginDetail }> = ({ detail }) => {
   const { t } = useI18n();
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.skills`)} count={detail.skills.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.mcpServers`)} count={detail.mcpServers.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.apps`)} count={detail.apps.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.hooks`)} count={detail.hooks.length} />
+      {resourceKeys.map((key) => (
+        <ResourceSummary
+          key={key}
+          label={t(`${I18N_PREFIX}.detail.${key}`)}
+          count={detail.resourceCounts?.[key] ?? 0}
+        />
+      ))}
     </div>
   );
 };
 
-export default CodexPluginsPage;
+const ClaudePluginDiagnostics: React.FC<{ detail: ClaudePluginDetail }> = ({ detail }) => {
+  const { t } = useI18n();
+
+  return (
+    <div className="space-y-2">
+      {detail.errors.length
+        ? detail.errors.map((error) => (
+          <pre key={error} className="overflow-auto whitespace-pre-wrap rounded bg-destructive/10 p-3 text-xs text-destructive">
+            {error}
+          </pre>
+        ))
+        : <span className="text-xs text-muted-foreground">{t(`${I18N_PREFIX}.detail.noErrors`)}</span>}
+    </div>
+  );
+};
+
+const RegistryMetadataPanel: React.FC<{ detail: ClaudePluginDetail }> = ({ detail }) => {
+  const { t } = useI18n();
+  const manifest = detail.manifest ?? {};
+  const metadataItems = [
+    { key: 'id', label: t(`${I18N_PREFIX}.detail.metadata.id`), value: detail.id },
+    { key: 'name', label: t(`${I18N_PREFIX}.detail.metadata.name`), value: getStringValue(manifest.name) || detail.name },
+    { key: 'version', label: t(`${I18N_PREFIX}.detail.metadata.version`), value: getStringValue(manifest.version) || detail.version },
+    { key: 'author', label: t(`${I18N_PREFIX}.detail.metadata.author`), value: getAuthorValue(manifest.author) || detail.author },
+    { key: 'category', label: t(`${I18N_PREFIX}.detail.metadata.category`), value: getStringValue(manifest.category) || detail.category },
+    { key: 'marketplace', label: t(`${I18N_PREFIX}.detail.metadata.marketplace`), value: detail.marketplace },
+    { key: 'homepage', label: t(`${I18N_PREFIX}.detail.metadata.homepage`), value: getStringValue(manifest.homepage) || detail.homepage },
+    { key: 'repository', label: t(`${I18N_PREFIX}.detail.metadata.repository`), value: getStringValue(manifest.repository) || detail.repository },
+    { key: 'license', label: t(`${I18N_PREFIX}.detail.metadata.license`), value: getStringValue(manifest.license) || detail.license },
+  ].filter((item): item is { key: string; label: string; value: string } => Boolean(item.value));
+  const sourceItems = getSourceItems(manifest.source, t);
+
+  return (
+    <div className="space-y-3">
+      {metadataItems.length ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {metadataItems.map((item) => (
+            <MetadataItem key={item.key} label={item.label} value={item.value} />
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-muted-foreground">{t(`${I18N_PREFIX}.detail.metadata.empty`)}</span>
+      )}
+      {sourceItems.length ? (
+        <div className="rounded-lg border border-border">
+          <div className="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground">
+            {t(`${I18N_PREFIX}.detail.metadata.source`)}
+          </div>
+          <div className="grid gap-2 p-3 sm:grid-cols-2">
+            {sourceItems.map((item) => (
+              <MetadataItem key={item.key} label={item.label} value={item.value} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const MetadataItem: React.FC<{ label: string; value: string }> = ({ label, value }) => {
+  const isLink = /^https?:\/\//i.test(value);
+  return (
+    <div className="min-w-0 rounded-lg border border-border bg-muted/30 px-3 py-2">
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      {isLink ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 flex min-w-0 items-center gap-1 text-sm text-primary hover:underline"
+        >
+          <span className="truncate">{value}</span>
+          <ExternalLink className="h-3 w-3 shrink-0" />
+        </a>
+      ) : (
+        <div className="mt-1 truncate text-sm">{value}</div>
+      )}
+    </div>
+  );
+};
+
+const getStringValue = (value: unknown): string | undefined => (
+  typeof value === 'string' && value.trim() ? value.trim() : undefined
+);
+
+const getAuthorValue = (value: unknown): string | undefined => {
+  if (typeof value === 'string') {
+    return getStringValue(value);
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return getStringValue(record.name) || getStringValue(record.email);
+  }
+  return undefined;
+};
+
+const getSourceItems = (
+  value: unknown,
+  t: ReturnType<typeof useI18n>['t'],
+): Array<{ key: string; label: string; value: string }> => {
+  if (typeof value === 'string' && value.trim()) {
+    return [{ key: 'source', label: t(`${I18N_PREFIX}.detail.metadata.sourcePath`), value: value.trim() }];
+  }
+  if (!value || typeof value !== 'object') {
+    return [];
+  }
+  const source = value as Record<string, unknown>;
+  return [
+    { key: 'type', label: t(`${I18N_PREFIX}.detail.metadata.sourceType`), value: getStringValue(source.source) },
+    { key: 'repo', label: t(`${I18N_PREFIX}.detail.metadata.sourceRepo`), value: getStringValue(source.repo) },
+    { key: 'url', label: t(`${I18N_PREFIX}.detail.metadata.sourceUrl`), value: getStringValue(source.url) },
+    { key: 'path', label: t(`${I18N_PREFIX}.detail.metadata.sourcePath`), value: getStringValue(source.path) },
+    { key: 'branch', label: t(`${I18N_PREFIX}.detail.metadata.sourceBranch`), value: getStringValue(source.branch) },
+    { key: 'ref', label: t(`${I18N_PREFIX}.detail.metadata.sourceRef`), value: getStringValue(source.ref) },
+  ].filter((item): item is { key: string; label: string; value: string } => Boolean(item.value));
+};
+
+export default ClaudePluginsPage;

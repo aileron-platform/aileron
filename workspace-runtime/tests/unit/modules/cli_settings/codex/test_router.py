@@ -576,8 +576,60 @@ def test_codex_plugins_parse_registry_cache_and_toggle_config(tmp_path) -> None:
     assert plugin["id"] == "demo@local"
     assert plugin["listed"] is True
     assert plugin["installed"] is True
-    assert plugin["enabled"] is True
-    assert plugin["bundled"]["skills"] == ["review"]
+    assert plugin["effectiveEnabled"] is True
+    assert "enabled" not in plugin
+    assert plugin["layers"] == [
+        {"layer": "user", "configured": True, "enabled": True},
+        {"layer": "project", "configured": False, "enabled": None},
+    ]
+    assert plugin["resourceCounts"]["skills"] == 0
+    assert "bundled" not in plugin
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/plugins/demo@local")
+    assert response.status_code == 200
+    detail = response.json()["plugin"]
+    assert detail["effectiveEnabled"] is True
+    assert detail["layers"] == plugin["layers"]
+
+
+def test_codex_plugins_report_layer_state_and_project_override(tmp_path) -> None:
+    client, resolver = _client(tmp_path)
+    manifest = resolver.codex_home / "plugins" / "cache" / "local" / "demo" / "abc" / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"id":"demo","marketplace":"local","name":"Demo"}', encoding="utf-8")
+    user_config = resolver.resolve("user", "config")
+    project_config = resolver.resolve("project", "config")
+    user_config.parent.mkdir(parents=True, exist_ok=True)
+    project_config.parent.mkdir(parents=True, exist_ok=True)
+    user_config.write_text('[plugins."demo@local"]\nenabled = true\n', encoding="utf-8")
+    project_config.write_text('[plugins."demo@local"]\nenabled = false\n', encoding="utf-8")
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/plugins")
+
+    assert response.status_code == 200
+    plugin = response.json()["plugins"][0]
+    assert plugin["effectiveEnabled"] is False
+    assert plugin["layers"] == [
+        {"layer": "user", "configured": True, "enabled": True},
+        {"layer": "project", "configured": True, "enabled": False},
+    ]
+
+
+def test_codex_plugins_effective_enabled_defaults_to_false_without_config(tmp_path) -> None:
+    client, resolver = _client(tmp_path)
+    manifest = resolver.codex_home / "plugins" / "cache" / "local" / "demo" / "abc" / ".codex-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    manifest.write_text('{"id":"demo","marketplace":"local","name":"Demo"}', encoding="utf-8")
+
+    response = client.get("/api/v1/workspaces/ws-1/codex/plugins")
+
+    assert response.status_code == 200
+    plugin = response.json()["plugins"][0]
+    assert plugin["effectiveEnabled"] is False
+    assert plugin["layers"] == [
+        {"layer": "user", "configured": False, "enabled": None},
+        {"layer": "project", "configured": False, "enabled": None},
+    ]
 
 
 def test_codex_file_resources_manage_editable_files_and_read_only_sources(tmp_path) -> None:

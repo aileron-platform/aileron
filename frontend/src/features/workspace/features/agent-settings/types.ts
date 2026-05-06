@@ -262,6 +262,7 @@ export interface AgentToolCapabilities {
   slashCommands?: AgentCommandCapability;
   agentDefinitions?: AgentDefinitionCapability;
   memory?: AgentCapabilityBase;
+  plugins?: AgentCapabilityBase;
 }
 
 export interface AgentToolConfig {

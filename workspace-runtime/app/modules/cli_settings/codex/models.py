@@ -315,18 +315,105 @@ class CodexFeatureEnableResponse(BaseModel):
     featureEnabled: bool
 
 
+class CodexPluginLayerState(BaseModel):
+    """Codex plugin enabled state for one config layer."""
+
+    layer: CodexEditableLayer
+    configured: bool = False
+    enabled: bool | None = None
+
+
 class CodexPluginSummary(BaseModel):
     """Local Codex plugin registry summary."""
 
     id: str
     name: str
+    displayName: str
+    shortDescription: str | None = None
+    version: str | None = None
+    authorName: str | None = None
+    category: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    brandColor: str | None = None
+    homepage: str | None = None
     marketplace: str | None = None
     listed: bool = False
     installed: bool = False
-    enabled: bool = False
+    effectiveEnabled: bool = False
+    layers: list[CodexPluginLayerState] = Field(default_factory=list)
     path: str | None = None
     sourcePath: str | None = None
-    bundled: dict[str, Any] = Field(default_factory=dict)
+    resourceCounts: dict[str, int] = Field(default_factory=dict)
+
+
+class CodexPluginSkillDetail(BaseModel):
+    """Skill bundled in a Codex plugin."""
+
+    name: str
+    description: str | None = None
+    path: str
+
+
+class CodexPluginMcpServerDetail(BaseModel):
+    """MCP server bundled in a Codex plugin."""
+
+    name: str
+    command: str | None = None
+    url: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CodexPluginAppDetail(BaseModel):
+    """App bundled in a Codex plugin."""
+
+    name: str
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CodexPluginHookDetail(BaseModel):
+    """Hook bundled in a Codex plugin."""
+
+    name: str
+    path: str | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class CodexPluginDetail(BaseModel):
+    """Codex plugin detail response."""
+
+    id: str
+    name: str
+    displayName: str
+    marketplace: str | None = None
+    version: str | None = None
+    authorName: str | None = None
+    shortDescription: str | None = None
+    longDescription: str | None = None
+    category: str | None = None
+    capabilities: list[str] = Field(default_factory=list)
+    brandColor: str | None = None
+    homepage: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    license: str | None = None
+    repository: str | None = None
+    websiteURL: str | None = None
+    privacyPolicyURL: str | None = None
+    termsOfServiceURL: str | None = None
+    defaultPrompt: str | None = None
+    readme: str | None = None
+    skills: list[CodexPluginSkillDetail] = Field(default_factory=list)
+    mcpServers: list[CodexPluginMcpServerDetail] = Field(default_factory=list)
+    apps: list[CodexPluginAppDetail] = Field(default_factory=list)
+    hooks: list[CodexPluginHookDetail] = Field(default_factory=list)
+    effectiveEnabled: bool = False
+    layers: list[CodexPluginLayerState] = Field(default_factory=list)
+
+
+class CodexPluginDetailResponse(BaseModel):
+    """Codex plugin detail response wrapper."""
+
+    workspaceId: str
+    plugin: CodexPluginDetail
 
 
 class CodexPluginsResponse(BaseModel):

@@ -7,6 +7,10 @@ describe('Claude Code Memory navigation wiring', () => {
     expect(getClaudeCodeSubView('/workspaces/ws-1/claude-code/memory')).toBe('memory');
   });
 
+  it('resolves /claude-code/plugins to the plugins subview', () => {
+    expect(getClaudeCodeSubView('/workspaces/ws-1/claude-code/plugins')).toBe('plugins');
+  });
+
   it('registers memory under the Claude Code Settings submenu', () => {
     const claudeCodeItem = MAIN_NAVIGATION_ITEMS.find((item) => item.id === 'claude-code');
 

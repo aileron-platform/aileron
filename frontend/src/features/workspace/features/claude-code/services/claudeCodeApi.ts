@@ -173,43 +173,6 @@ export interface ClaudeCodeSettingsUpdateRequest {
   deniedMcpServers?: ClaudeMcpServerPolicy[];
 }
 
-// Marketplace & Plugin Types
-export interface PluginMetadata {
-  name: string;
-  description: string;
-  version: string;
-  author?: { name: string };
-  license?: string;
-  keywords?: string[];
-  source?: string;
-  strict?: boolean;
-  commands?: string[];
-  agents?: string[];
-  mcpServers?: string[];
-}
-
-export interface MarketplaceOwner {
-  name: string;
-  email?: string;
-  url?: string;
-}
-
-export interface MarketplaceMetadata {
-  description: string;
-  version: string;
-}
-
-export interface Marketplace {
-  name: string;
-  owner: MarketplaceOwner;
-  metadata: MarketplaceMetadata;
-  plugins: PluginMetadata[];
-}
-
-export interface MarketplaceListResponse {
-  marketplaces: Marketplace[];
-}
-
 const cloneHookRuleMap = (hooks: ClaudeHookRuleMap | undefined): ClaudeHookRuleMap => {
   if (!hooks) {
     return {};
@@ -1162,13 +1125,6 @@ export const claudeCodeApi = {
     );
   },
 
-  // ============ Marketplaces ============
-  async getMarketplaces(runtimeBaseUrl: string, workspaceId: string): Promise<MarketplaceListResponse> {
-    return apiRequest<MarketplaceListResponse>(
-      runtimeBaseUrl,
-      `workspaces/${workspaceId}/claude-code/settings/marketplaces`,
-    );
-  },
 };
 
 export type ClaudeCodeApi = typeof claudeCodeApi;

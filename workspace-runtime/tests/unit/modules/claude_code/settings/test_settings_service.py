@@ -224,55 +224,6 @@ class TestSettingsAggregation:
         assert result.mode == PermissionMode.ACCEPT_EDITS
 
 
-class TestGetMarketplaces:
-    """Test reading marketplaces functionality."""
-
-    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
-    def test_get_marketplaces_empty(self, mock_resolve, settings_service, mock_workspace):
-        """Test reading empty marketplaces."""
-        # Arrange
-        workspace_id, tmp_path, user_root, project_root = mock_workspace
-        mock_resolve.return_value = user_root
-
-        # Act
-        result = settings_service.get_marketplaces(workspace_id)
-
-        # Assert
-        assert result is not None
-        assert len(result.marketplaces) == 0
-
-    @patch("app.modules.claude_code.settings.service.resolve_scope_root")
-    def test_get_marketplaces_with_data(self, mock_resolve, settings_service, mock_workspace):
-        """Test reading marketplaces with data."""
-        # Arrange
-        workspace_id, tmp_path, user_root, project_root = mock_workspace
-        mock_resolve.return_value = user_root
-
-        # Create marketplace directory and files
-        marketplace_dir = user_root / "plugins" / "marketplaces" / "test-marketplace"
-        marketplace_dir.mkdir(parents=True, exist_ok=True)
-
-        claude_plugin_dir = marketplace_dir / ".claude-plugin"
-        claude_plugin_dir.mkdir(parents=True, exist_ok=True)
-
-        marketplace_json = claude_plugin_dir / "marketplace.json"
-        marketplace_data = {
-            "name": "Test Marketplace",
-            "owner": {"name": "Test Owner", "url": "https://example.com"},
-            "description": "Test Description",
-            "version": "1.0.0",
-            "plugins": []
-        }
-        marketplace_json.write_text(json.dumps(marketplace_data))
-
-        # Act
-        result = settings_service.get_marketplaces(workspace_id)
-
-        # Assert
-        assert len(result.marketplaces) == 1
-        assert result.marketplaces[0].name == "Test Marketplace"
-
-
 class TestPrivateMethods:
     """Test private methods."""
 

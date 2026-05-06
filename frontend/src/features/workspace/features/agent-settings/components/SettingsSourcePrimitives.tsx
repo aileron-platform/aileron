@@ -32,6 +32,8 @@ export interface AgentSettingsLayerSelectorProps<TValue extends string = string>
   onChange: (value: TValue) => void;
   options: AgentSettingsSourceOption<TValue>[];
   label: string;
+  disabled?: boolean;
+  width?: string | number;
   className?: string;
 }
 
@@ -40,6 +42,8 @@ export interface AgentSettingsSourceFilterProps<TValue extends string = string> 
   onChange: (value: TValue) => void;
   options: AgentSettingsSourceOption<TValue>[];
   label: string;
+  disabled?: boolean;
+  width?: string | number;
   className?: string;
 }
 
@@ -120,6 +124,8 @@ export const AgentSettingsLayerSelector = <TValue extends string = string>({
   onChange,
   options,
   label,
+  disabled,
+  width,
   className,
 }: AgentSettingsLayerSelectorProps<TValue>) => {
   const mappedOptions: ScopeOption[] = sortAgentSettingsSourceOptions(options).map((option) => ({
@@ -134,6 +140,8 @@ export const AgentSettingsLayerSelector = <TValue extends string = string>({
       onChange={(nextValue) => onChange(nextValue as TValue)}
       options={mappedOptions}
       label={label}
+      disabled={disabled}
+      width={width}
       className={className}
     />
   );
@@ -144,6 +152,8 @@ export const AgentSettingsSourceFilter = <TValue extends string = string>({
   onChange,
   options,
   label,
+  disabled,
+  width,
   className,
 }: AgentSettingsSourceFilterProps<TValue>) => {
   const mappedOptions: ScopeOption[] = sortAgentSettingsSourceOptions(options).map((option) => ({
@@ -158,6 +168,8 @@ export const AgentSettingsSourceFilter = <TValue extends string = string>({
       onChange={(nextValue) => onChange(nextValue as TValue)}
       options={mappedOptions}
       label={label}
+      disabled={disabled}
+      width={width}
       className={className}
     />
   );

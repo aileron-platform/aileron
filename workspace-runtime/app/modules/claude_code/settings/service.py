@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -12,14 +12,9 @@ from ..common import DocumentScope, read_json_file, resolve_scope_root, write_js
 from .models import (
     ClaudeCodeSettings,
     ClaudeCodeSettingsUpdateRequest,
-    Marketplace,
-    MarketplaceListResponse,
-    MarketplaceMetadata,
-    MarketplaceOwner,
     McpServerPolicy,
     PermissionMode,
     PermissionRules,
-    PluginMetadata,
 )
 
 
@@ -429,98 +424,3 @@ class SettingsService:
             seen.add(text)
             normalized.append(text)
         return normalized
-
-    def get_marketplaces(self, workspace_id: str) -> MarketplaceListResponse:
-        """Read all available marketplaces"""
-        # Get workspace home directory (already includes .claude)
-        user_root = resolve_scope_root(workspace_id, DocumentScope.USER)
-        marketplaces_dir = user_root / "plugins" / "marketplaces"
-
-        marketplaces: List[Marketplace] = []
-
-        if not marketplaces_dir.exists():
-            return MarketplaceListResponse(marketplaces=[])
-
-        # Iterate through all marketplace directories
-        for marketplace_path in marketplaces_dir.iterdir():
-            if not marketplace_path.is_dir():
-                continue
-
-            # Read marketplace.json
-            marketplace_json = (
-                marketplace_path / ".claude-plugin" / "marketplace.json"
-            )
-            if not marketplace_json.exists():
-                continue
-
-            try:
-                with open(marketplace_json, "r", encoding="utf-8") as f:
-                    data = f.read()
-                    import json
-
-                    marketplace_data = json.loads(data)
-
-                # Parse marketplace
-                # description and version may be at top level or in metadata object
-                metadata_obj = marketplace_data.get("metadata", {})
-
-                # Parse plugins, handle validation errors for each plugin separately
-                plugins_data: List[PluginMetadata] = []
-                for plugin in marketplace_data.get("plugins", []):
-                    try:
-                        plugins_data.append(PluginMetadata(**plugin))
-                    except Exception as e:
-                        # Only skip invalid plugin, don't affect entire marketplace
-                        plugin_name = plugin.get("name", "unknown")
-                        logger.warning(
-                            "Failed to parse plugin '%s' in marketplace %s: %s",
-                            plugin_name,
-                            marketplace_path.name,
-                            e,
-                        )
-                        continue
-
-                marketplace = Marketplace(
-                    name=marketplace_data.get("name", ""),
-                    owner=MarketplaceOwner(**marketplace_data.get("owner", {})),
-                    metadata=MarketplaceMetadata(
-                        description=marketplace_data.get("description") or metadata_obj.get("description", ""),
-                        version=marketplace_data.get("version") or metadata_obj.get("version", "1.0.0"),
-                    ),
-                    plugins=plugins_data,
-                )
-                marketplaces.append(marketplace)
-            except FileNotFoundError:
-                logger.debug("Marketplace file not found: %s", marketplace_json)
-                continue
-            except PermissionError as e:
-                logger.error(
-                    "Permission denied reading marketplace file",
-                    extra={"file_path": str(marketplace_json), "error": str(e)}
-                )
-                continue
-            except json.JSONDecodeError as e:
-                logger.error(
-                    "Invalid JSON in marketplace file",
-                    extra={
-                        "file_path": str(marketplace_json),
-                        "line": e.lineno,
-                        "column": e.colno,
-                        "error": e.msg
-                    }
-                )
-                continue
-            except Exception as e:
-                logger.error(
-                    "Failed to parse marketplace %s: %s",
-                    marketplace_path.name,
-                    e,
-                    extra={
-                        "marketplace_path": str(marketplace_path),
-                        "error_type": type(e).__name__,
-                        "error": str(e)
-                    }
-                )
-                continue
-
-        return MarketplaceListResponse(marketplaces=marketplaces)

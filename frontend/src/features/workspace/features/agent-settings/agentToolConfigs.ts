@@ -54,6 +54,7 @@ const buildAvailableSubViews = (instructionSubView: string, capabilities: AgentT
   ...(capabilities.slashCommands?.supported === false || !capabilities.slashCommands ? [] : ['slash-commands']),
   ...(capabilities.agentDefinitions?.supported === false || !capabilities.agentDefinitions ? [] : ['subagents']),
   ...(capabilities.hooks?.supported === false || !capabilities.hooks ? [] : ['hooks']),
+  ...(capabilities.plugins?.supported === false || !capabilities.plugins ? [] : ['plugins']),
   ...extra,
 ];
 
@@ -77,6 +78,7 @@ const claudeCapabilities: AgentToolCapabilities = {
     format: 'markdown',
   },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'plugin'], supportsPlugin: true, readOnlyScopes: ['plugin'] },
+  plugins: { supported: true },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },
 };
 

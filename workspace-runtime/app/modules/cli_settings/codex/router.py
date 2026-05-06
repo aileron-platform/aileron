@@ -24,6 +24,7 @@ from .models import (
     CodexHooksScopesResponse,
     CodexManagedRequirementsResponse,
     CodexOverviewResponse,
+    CodexPluginDetailResponse,
     CodexPluginToggleRequest,
     CodexPluginToggleResponse,
     CodexPluginsResponse,
@@ -328,6 +329,17 @@ async def list_codex_plugins(
     """Return local Codex plugin marketplace/cache/config state."""
 
     return service.list_plugins(workspace_id)
+
+
+@router.get("/plugins/{plugin_id:path}", response_model=CodexPluginDetailResponse, responses=build_responses(400, 401, 404, 422, 500))
+async def get_codex_plugin(
+    plugin_id: str = Path(..., description="Plugin ID"),
+    workspace_id: str = Path(..., description="Workspace ID"),
+    service: CodexSettingsService = Depends(get_codex_settings_service),
+) -> CodexPluginDetailResponse:
+    """Return detailed Codex plugin metadata and bundled resources."""
+
+    return service.get_plugin_detail(workspace_id, plugin_id)
 
 
 @router.patch("/plugins/{plugin_id:path}", response_model=CodexPluginToggleResponse, responses=build_responses(400, 401, 422, 500))

@@ -10,7 +10,6 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import {
   claudeCodeApi,
   type ClaudeCodeSettingsScope,
-  type Marketplace,
 } from '../services/claudeCodeApi';
 import {
   normalizeRules,
@@ -24,6 +23,21 @@ import {
 import { createLogger } from '@/shared/services/logger';
 
 const logger = createLogger('useSettingsState');
+
+interface MarketplacePlugin {
+  name: string;
+  description: string;
+  version: string;
+}
+
+interface Marketplace {
+  name: string;
+  metadata: {
+    description: string;
+    version: string;
+  };
+  plugins: MarketplacePlugin[];
+}
 
 export interface SettingsState {
   // UI state
@@ -419,20 +433,6 @@ export function useSettingsState(): UseSettingsStateReturn {
     }
   }, [runtimeBaseUrl, runtimeError, scope, workspaceId]);
 
-  // Load marketplaces
-  const fetchMarketplaces = useCallback(async () => {
-    if (!runtimeBaseUrl || !workspaceId || runtimeError) {
-      return;
-    }
-
-    try {
-      const response = await claudeCodeApi.getMarketplaces(runtimeBaseUrl, workspaceId);
-      setMarketplaces(response.marketplaces);
-    } catch (error) {
-      logger.error('Failed to load marketplaces', { error });
-    }
-  }, [runtimeBaseUrl, runtimeError, workspaceId]);
-
   // Initial load
   useEffect(() => {
     if (!isRuntimeReady) {
@@ -441,8 +441,7 @@ export function useSettingsState(): UseSettingsStateReturn {
       return;
     }
     void fetchSettings();
-    void fetchMarketplaces();
-  }, [fetchSettings, fetchMarketplaces, isRuntimeReady, resetState]);
+  }, [fetchSettings, isRuntimeReady, resetState]);
 
   // Scope change
   const handleScopeChange = useCallback(

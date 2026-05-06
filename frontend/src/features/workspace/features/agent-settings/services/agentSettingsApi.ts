@@ -374,19 +374,121 @@ export interface CodexHooksScopesResponse {
 export interface CodexPluginSummary {
   id: string;
   name: string;
+  displayName: string;
+  shortDescription?: string | null;
+  version?: string | null;
+  authorName?: string | null;
+  category?: string | null;
+  capabilities: string[];
+  brandColor?: string | null;
+  homepage?: string | null;
   marketplace?: string | null;
   listed: boolean;
   installed: boolean;
-  enabled: boolean;
+  effectiveEnabled: boolean;
+  layers: CodexPluginLayerState[];
   path?: string | null;
   sourcePath?: string | null;
-  bundled: Record<string, unknown>;
+  resourceCounts: Record<string, number>;
+}
+
+export type CodexPluginLayer = 'user' | 'project';
+
+export interface CodexPluginLayerState {
+  layer: CodexPluginLayer;
+  configured: boolean;
+  enabled?: boolean | null;
+}
+
+export interface CodexPluginDetail extends CodexPluginSummary {
+  longDescription?: string | null;
+  keywords: string[];
+  license?: string | null;
+  repository?: string | null;
+  websiteURL?: string | null;
+  privacyPolicyURL?: string | null;
+  termsOfServiceURL?: string | null;
+  defaultPrompt?: string | null;
+  readme?: string | null;
+  skills: Array<{ name: string; description?: string | null; path: string }>;
+  mcpServers: Array<{ name: string; command?: string | null; url?: string | null; config: Record<string, unknown> }>;
+  apps: Array<{ name: string; config: Record<string, unknown> }>;
+  hooks: Array<{ name: string; path?: string | null; config: Record<string, unknown> }>;
 }
 
 export interface CodexPluginsResponse {
   workspaceId: string;
   plugins: CodexPluginSummary[];
   installReserved: boolean;
+}
+
+export interface CodexPluginDetailResponse {
+  workspaceId: string;
+  plugin: CodexPluginDetail;
+}
+
+export type ClaudePluginScope = 'user' | 'project' | 'local';
+export type ClaudePluginScopeFilter = 'all' | ClaudePluginScope;
+
+export interface ClaudePluginInstallation {
+  scope: ClaudePluginScope;
+  enabled: boolean;
+  installPath: string;
+  projectPath?: string | null;
+  version?: string | null;
+  installedAt?: string | null;
+  lastUpdated?: string | null;
+}
+
+export interface ClaudePluginResourceCounts {
+  commands: number;
+  agents: number;
+  hooks: number;
+  mcpServers: number;
+  skills: number;
+  lspServers: number;
+}
+
+export interface ClaudePluginMarketplaceSummary {
+  name: string;
+  owner?: string | null;
+  pluginCount: number;
+  source?: string | null;
+}
+
+export interface ClaudePluginSummary {
+  id: string;
+  name: string;
+  marketplace?: string | null;
+  version?: string | null;
+  description?: string | null;
+  author?: string | null;
+  category?: string | null;
+  homepage?: string | null;
+  enabled: boolean;
+  installations: ClaudePluginInstallation[];
+  errors: string[];
+  resourceCounts: ClaudePluginResourceCounts;
+}
+
+export interface ClaudePluginsResponse {
+  workspaceId: string;
+  plugins: ClaudePluginSummary[];
+  marketplaces: ClaudePluginMarketplaceSummary[];
+}
+
+export interface ClaudePluginDetail extends ClaudePluginSummary {
+  repository?: string | null;
+  license?: string | null;
+  readme?: string | null;
+  dependencies: Array<{ name: string; version?: string | null; marketplace?: string | null }>;
+  resources: Record<string, Array<Record<string, unknown>>>;
+  manifest: Record<string, unknown>;
+}
+
+export interface ClaudePluginDetailResponse {
+  workspaceId: string;
+  plugin: ClaudePluginDetail;
 }
 
 export interface CodexFileSummary {
@@ -709,6 +811,13 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     return apiRequest<CodexPluginsResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/codex/plugins`);
   },
 
+  async getCodexPlugin(runtimeBaseUrl: string, workspaceId: string, pluginId: string): Promise<CodexPluginDetailResponse> {
+    return apiRequest<CodexPluginDetailResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/codex/plugins/${encodeURIComponent(pluginId)}`,
+    );
+  },
+
   async setCodexPluginEnabled(
     runtimeBaseUrl: string,
     workspaceId: string,
@@ -720,6 +829,31 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
       runtimeBaseUrl,
       `workspaces/${workspaceId}/codex/plugins/${encodeURIComponent(pluginId)}`,
       { method: 'PATCH', body: { layer, enabled } },
+    );
+  },
+
+  async listClaudePlugins(runtimeBaseUrl: string, workspaceId: string): Promise<ClaudePluginsResponse> {
+    return apiRequest<ClaudePluginsResponse>(runtimeBaseUrl, `workspaces/${workspaceId}/claude-code/plugins`);
+  },
+
+  async getClaudePlugin(runtimeBaseUrl: string, workspaceId: string, pluginId: string): Promise<ClaudePluginDetailResponse> {
+    return apiRequest<ClaudePluginDetailResponse>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/claude-code/plugins/${encodeURIComponent(pluginId)}`,
+    );
+  },
+
+  async setClaudePluginEnabled(
+    runtimeBaseUrl: string,
+    workspaceId: string,
+    pluginId: string,
+    scope: ClaudePluginScope,
+    enabled: boolean,
+  ): Promise<{ workspaceId: string; pluginId: string; scope: ClaudePluginScope; enabled: boolean }> {
+    return apiRequest<{ workspaceId: string; pluginId: string; scope: ClaudePluginScope; enabled: boolean }>(
+      runtimeBaseUrl,
+      `workspaces/${workspaceId}/claude-code/plugins/${encodeURIComponent(pluginId)}`,
+      { method: 'PATCH', body: { scope, enabled } },
     );
   },
 
