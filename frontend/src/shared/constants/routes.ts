@@ -12,12 +12,12 @@ export const ROUTES = {
   WORKSPACE_WIZARD: '/workspaces/workspace-wizard',
   WORKSPACE_DETAIL: (id: string) => `/workspaces/${id}`,
 
-  // Template Management
-  TEMPLATE_MANAGEMENT: '/templates',
-  TEMPLATE_CENTER: '/templates/templates',
-  TEMPLATE_CENTER_SETTINGS: '/templates/templates/settings',
-  TEMPLATE_DETAIL: (id: string) => `/templates/templates/${id}`,
-  TEMPLATE_EDIT: (id: string) => `/templates/templates/${id}/edit`,
+  // Marketplace
+  MARKETPLACE: '/marketplace',
+  MARKETPLACE_PACKAGES: '/marketplace/packages',
+  MARKETPLACE_SETTINGS: '/marketplace/packages/settings',
+  MARKETPLACE_PACKAGE_DETAIL: (provider: string, id: string) => `/marketplace/packages/${provider}/${id}`,
+  MARKETPLACE_PACKAGE_EDIT: (provider: string, id: string) => `/marketplace/packages/${provider}/${id}/edit`,
 
   // Automation
   AUTOMATION: '/automation',

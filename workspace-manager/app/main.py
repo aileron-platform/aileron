@@ -26,6 +26,7 @@ from app.routers import (
     gemini_oauth_router,
     health_router,
     knowledge_bases_router,
+    marketplace_router,
     oauth_router,
     settings_router,
     teams_router,
@@ -268,6 +269,7 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(teams_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")
 app.include_router(knowledge_bases_router, prefix="/api/v1")
+app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(workspace_setup_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
 app.include_router(templates_router, prefix="/api/v1")

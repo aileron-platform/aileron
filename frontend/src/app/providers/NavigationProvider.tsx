@@ -26,7 +26,7 @@ export interface NavigationItem {
 }
 
 // 模組類型
-export type ModuleType = 'workspace' | 'template' | 'automation' | 'knowledge-base';
+export type ModuleType = 'workspace' | 'marketplace' | 'automation' | 'knowledge-base';
 
 // 導航狀態
 export interface NavigationState {
@@ -301,10 +301,10 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({ children
 
     // 根據路徑判斷當前模組
     if (
-      location.pathname === ROUTES.TEMPLATE_MANAGEMENT ||
-      location.pathname.startsWith(`${ROUTES.TEMPLATE_MANAGEMENT}/`)
+      location.pathname === ROUTES.MARKETPLACE ||
+      location.pathname.startsWith(`${ROUTES.MARKETPLACE}/`)
     ) {
-      dispatch({ type: 'SET_CURRENT_MODULE', payload: 'template' });
+      dispatch({ type: 'SET_CURRENT_MODULE', payload: 'marketplace' });
     } else if (
       location.pathname === ROUTES.AUTOMATION ||
       location.pathname.startsWith(`${ROUTES.AUTOMATION}/`)

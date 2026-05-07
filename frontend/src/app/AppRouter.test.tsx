@@ -18,8 +18,8 @@ vi.mock('../features/workspace/WorkspaceModule', () => ({
   default: () => <div>workspace-module</div>,
 }));
 
-vi.mock('../features/template-management/TemplateManagementModule', () => ({
-  default: () => <div>template-module</div>,
+vi.mock('../features/marketplace/MarketplaceModule', () => ({
+  default: () => <div>marketplace-module</div>,
 }));
 
 vi.mock('../features/workspace-wizard/WorkspaceWizardPage', () => ({
@@ -59,14 +59,14 @@ vi.mock('../pages/ClaudeToolWidgetDemo', () => ({
 }));
 
 describe('AppRouter', () => {
-  it('renders template management on the new root path', async () => {
+  it('renders marketplace on the new root path', async () => {
     render(
-      <MemoryRouter initialEntries={['/templates/templates/abc/edit']}>
+      <MemoryRouter initialEntries={['/marketplace/packages/codex/abc/edit']}>
         <AppRouter />
       </MemoryRouter>
     );
 
-    expect(await screen.findByText('template-module')).toBeInTheDocument();
+    expect(await screen.findByText('marketplace-module')).toBeInTheDocument();
   });
 
   it('renders automation on the new root path', async () => {

@@ -95,6 +95,13 @@ describe('MarkdownContent', () => {
     expect(a?.getAttribute('href')).toBe('https://example.com');
   });
 
+  it('外部連結帶有安全的新視窗屬性', () => {
+    const { container } = render(<MarkdownContent content="[Link](https://example.com)" />);
+    const a = container.querySelector('a');
+    expect(a?.getAttribute('target')).toBe('_blank');
+    expect(a?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
   it('className prop 附加到根容器', () => {
     const { container } = render(<MarkdownContent content="Hello" className="custom-class" />);
     const root = container.firstChild as HTMLElement;

@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,8 @@ from .models import (
     FirewallConfigRequest,
     GeminiRequest,
     GitSettingsRequest,
+    MarketplaceInstallExecutionRequest,
+    MarketplaceInstallExecutionResult,
     SSHKeysRequest,
 )
 
@@ -143,6 +146,128 @@ class InternalService:
         except Exception as e:
             logger.error(f"SSH Keys setup failed: {e}")
             raise
+
+    async def execute_marketplace_install(
+        self,
+        request: MarketplaceInstallExecutionRequest,
+    ) -> MarketplaceInstallExecutionResult:
+        """Execute a provider CLI install command and return a blocking result."""
+        started_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        cwd = Path(request.cwd)
+        if not cwd.exists() or not cwd.is_dir():
+            completed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            return MarketplaceInstallExecutionResult(
+                status="failed",
+                exitCode=None,
+                startedAt=started_at,
+                completedAt=completed_at,
+                stderr="Invalid working directory",
+                errorCode="marketplace.install.runtime_invalid_cwd",
+            )
+
+        env = os.environ.copy()
+        env.update(request.env)
+        try:
+            result = subprocess.run(
+                request.argv,
+                cwd=str(cwd),
+                env=env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=request.timeout_ms / 1000,
+            )
+            completed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            stdout, stderr, truncated = self._sanitize_marketplace_install_output(
+                stdout=result.stdout,
+                stderr=result.stderr,
+                stdout_limit_bytes=request.stdout_limit_bytes,
+                stderr_limit_bytes=request.stderr_limit_bytes,
+                redact_patterns=request.redact_patterns,
+            )
+            return MarketplaceInstallExecutionResult(
+                status="success" if result.returncode == 0 else "failed",
+                exitCode=result.returncode,
+                startedAt=started_at,
+                completedAt=completed_at,
+                stdout=stdout,
+                stderr=stderr,
+                truncated=truncated,
+                errorCode=None if result.returncode == 0 else "marketplace.install.command_failed",
+            )
+        except subprocess.TimeoutExpired as exc:
+            completed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            stdout, stderr, truncated = self._sanitize_marketplace_install_output(
+                stdout=self._decode_process_output(exc.stdout),
+                stderr=self._decode_process_output(exc.stderr),
+                stdout_limit_bytes=request.stdout_limit_bytes,
+                stderr_limit_bytes=request.stderr_limit_bytes,
+                redact_patterns=request.redact_patterns,
+            )
+            return MarketplaceInstallExecutionResult(
+                status="timeout",
+                exitCode=None,
+                startedAt=started_at,
+                completedAt=completed_at,
+                stdout=stdout,
+                stderr=stderr,
+                truncated=truncated,
+                errorCode="marketplace.install.timeout",
+            )
+        except OSError as exc:
+            completed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            return MarketplaceInstallExecutionResult(
+                status="failed",
+                exitCode=None,
+                startedAt=started_at,
+                completedAt=completed_at,
+                stderr=str(exc),
+                errorCode="marketplace.install.command_failed",
+            )
+
+    def _sanitize_marketplace_install_output(
+        self,
+        *,
+        stdout: str | None,
+        stderr: str | None,
+        stdout_limit_bytes: int,
+        stderr_limit_bytes: int,
+        redact_patterns: list[str],
+    ) -> tuple[str | None, str | None, bool]:
+        sanitized_stdout = self._redact_marketplace_install_output(stdout, redact_patterns)
+        sanitized_stderr = self._redact_marketplace_install_output(stderr, redact_patterns)
+        limited_stdout, stdout_truncated = self._limit_marketplace_install_output(
+            sanitized_stdout,
+            stdout_limit_bytes,
+        )
+        limited_stderr, stderr_truncated = self._limit_marketplace_install_output(
+            sanitized_stderr,
+            stderr_limit_bytes,
+        )
+        return limited_stdout, limited_stderr, stdout_truncated or stderr_truncated
+
+    def _redact_marketplace_install_output(self, output: str | None, patterns: list[str]) -> str | None:
+        if output is None:
+            return None
+        redacted = output
+        for pattern in patterns:
+            redacted = re.sub(pattern, "[REDACTED]", redacted)
+        return redacted
+
+    def _limit_marketplace_install_output(self, output: str | None, limit_bytes: int) -> tuple[str | None, bool]:
+        if output is None:
+            return None, False
+        encoded = output.encode("utf-8")
+        if len(encoded) <= limit_bytes:
+            return output, False
+        return encoded[:limit_bytes].decode("utf-8", errors="ignore"), True
+
+    def _decode_process_output(self, output: str | bytes | None) -> str | None:
+        if output is None:
+            return None
+        if isinstance(output, bytes):
+            return output.decode("utf-8", errors="ignore")
+        return output
 
     async def setup_codex(self, request: CodexSettingsRequest) -> Dict[str, str | list[str] | bool]:
         """Setup Codex CLI auth state and environment variables."""
@@ -1048,7 +1173,10 @@ class InternalService:
                 if (
                     credentials_path
                     and credentials_path.stat().st_size > 0
-                    and self._has_claude_user_state()
+                    and (
+                        self._has_claude_subscription_credentials(credentials_data)
+                        or self._has_claude_user_state()
+                    )
                 ):
                     return {
                         "status": "success",
@@ -1077,6 +1205,15 @@ class InternalService:
         except Exception as exc:
             logger.error(f"Failed to check Claude Code status: {exc}")
             return {"status": "failed", "message": f"Check failed: {exc}"}
+
+    def _has_claude_subscription_credentials(self, credentials_data: Any) -> bool:
+        """Check if .credentials.json contains subscription OAuth token material."""
+        if not isinstance(credentials_data, dict):
+            return False
+        if credentials_data.get("authMethod") != "subscription":
+            return False
+        oauth_data = credentials_data.get("claudeAiOauth")
+        return isinstance(oauth_data, dict) and bool(oauth_data.get("accessToken"))
 
     def _has_claude_user_state(self) -> bool:
         """Check if .claude.json contains minimal login-ready user state."""

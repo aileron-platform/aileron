@@ -17,6 +17,12 @@ role_mappings:
       - "user:manage"
       - "settings:manage"
       - "template:manage"
+      - "marketplace:view"
+      - "marketplace:edit"
+      - "marketplace:delete"
+      - "marketplace:import"
+      - "marketplace:install"
+      - "marketplace:manage_registry"
     description: "System administrator with all permissions"
 
   # Developer role.
@@ -27,6 +33,10 @@ role_mappings:
       - "workspace:update"
       - "workspace:share"
       - "template:read"
+      - "marketplace:view"
+      - "marketplace:edit"
+      - "marketplace:import"
+      - "marketplace:install"
     description: "Developer who can manage workspaces and templates"
 
   # General user role.
@@ -34,12 +44,17 @@ role_mappings:
     permissions:
       - "workspace:read"
       - "workspace:create"  # User-owned personal workspaces.
+      - "marketplace:view"
+      - "marketplace:edit"
+      - "marketplace:import"
+      - "marketplace:install"
     description: "General user with basic workspace permissions"
 
   # Read-only user.
   viewer:
     permissions:
       - "workspace:read"
+      - "marketplace:view"
     description: "Read-only user who can only view"
 
 # Default role if the user has no Keycloak roles.
@@ -143,6 +158,27 @@ resource_access:
       - "read"
     viewer:
       - "read"
+
+  # Marketplace resources.
+  marketplace:
+    admin:
+      - "view"
+      - "edit"
+      - "delete"
+      - "import"
+      - "install"
+      - "manage_registry"
+    developer:
+      - "view"
+      - "edit"
+      - "import"
+      - "install"
+    user:
+      - "view"
+      - "import"
+      - "install"
+    viewer:
+      - "view"
 
 # Custom permission rules for advanced configuration.
 custom_rules:

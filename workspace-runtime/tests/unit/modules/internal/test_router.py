@@ -10,10 +10,13 @@ from app.modules.internal.models import (
     CodexSettingsRequest,
     FirewallConfigRequest,
     GitSettingsRequest,
+    MarketplaceInstallExecutionRequest,
+    MarketplaceInstallExecutionResult,
     SSHKeysRequest,
 )
 from app.modules.internal.router import (
     cancel_codex_login,
+    execute_marketplace_install,
     get_workspace_setup_status,
     get_codex_login_status,
     install_claude_md,
@@ -63,6 +66,15 @@ async def test_internal_basic_routes_success() -> None:
     service.logout_codex.return_value = {"status": "loggedOut"}
     service.setup_git_settings.return_value = {"ok": True}
     service.apply_firewall_settings.return_value = {"status": "success"}
+    service.execute_marketplace_install.return_value = MarketplaceInstallExecutionResult(
+        status="success",
+        exitCode=0,
+        startedAt="2026-05-07T00:00:00Z",
+        completedAt="2026-05-07T00:00:01Z",
+        stdout="ok",
+        stderr="",
+        truncated=False,
+    )
     service.get_setup_status.return_value = {"ssh": {"status": "success", "message": "ok"}}
 
     assert (await sync_ssh_keys(SSHKeysRequest(private_key="k", public_key="p"), service)).success is True
@@ -80,6 +92,15 @@ async def test_internal_basic_routes_success() -> None:
         )
     ).success is True
     assert (await internal_health_check()).success is True
+    execution = await execute_marketplace_install(
+        MarketplaceInstallExecutionRequest(
+            provider="codex",
+            argv=["echo", "ok"],
+            cwd="/workspace",
+        ),
+        service,
+    )
+    assert execution.status == "success"
     assert (await get_workspace_setup_status(service)).checks["ssh"].status == "success"
 
 

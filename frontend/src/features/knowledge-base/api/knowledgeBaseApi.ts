@@ -36,7 +36,17 @@ import type {
   KnowledgeBaseWikiPageResponse,
   KnowledgeBaseWikiPagesResponse,
 } from '@/shared/types/knowledgeBase';
-import type { TemplateCheckoutRequest, TemplateRemoteRequest } from '@/features/template-management/api/templateGitApi';
+
+interface KnowledgeBaseCheckoutRequest {
+  create?: boolean;
+  startPoint?: string;
+  stash?: boolean;
+}
+
+interface KnowledgeBaseRemoteRequest {
+  remote?: string;
+  branch?: string;
+}
 
 export async function listKnowledgeBases(): Promise<KnowledgeBaseSummary[]> {
   const response = await apiClient.get<KnowledgeBaseListResponse>('/knowledge-bases');
@@ -122,7 +132,7 @@ export const knowledgeBaseVersionControlApi = {
     );
     return response.branches ?? [];
   },
-  checkoutBranch: (kbId: string, branch: string, payload: TemplateCheckoutRequest) =>
+  checkoutBranch: (kbId: string, branch: string, payload: KnowledgeBaseCheckoutRequest) =>
     apiClient.post<{ branch: string; created: boolean; stashedChanges?: string | null }>(
       `${knowledgeBaseVersionControlBase(kbId)}/branches/${encodeURIComponent(branch)}/checkout`,
       payload,
@@ -167,17 +177,17 @@ export const knowledgeBaseVersionControlApi = {
     }
     return apiClient.get<VersionControlBlobResponse>(`${knowledgeBaseVersionControlBase(kbId)}/blob?${params}`);
   },
-  fetch: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+  fetch: (kbId: string, payload: KnowledgeBaseRemoteRequest = {}) =>
     apiClient.post<{ remote: string; branch?: string | null; message: string }>(
       `${knowledgeBaseVersionControlBase(kbId)}/fetch`,
       payload,
     ),
-  pull: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+  pull: (kbId: string, payload: KnowledgeBaseRemoteRequest = {}) =>
     apiClient.post<{ remote: string; branch?: string | null; message: string }>(
       `${knowledgeBaseVersionControlBase(kbId)}/pull`,
       payload,
     ),
-  push: (kbId: string, payload: TemplateRemoteRequest = {}) =>
+  push: (kbId: string, payload: KnowledgeBaseRemoteRequest = {}) =>
     apiClient.post<{ remote: string; branch?: string | null; message: string }>(
       `${knowledgeBaseVersionControlBase(kbId)}/push`,
       payload,

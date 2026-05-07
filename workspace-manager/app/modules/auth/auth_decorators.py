@@ -40,7 +40,7 @@ def load_role_mapping() -> dict:
         return yaml.safe_load(f)
 
 
-def get_user_permissions(roles: List[str]) -> List[str]:
+def get_user_permissions(roles: List[str] | None) -> List[str]:
     """Get permission list based on user role
 
     Args:
@@ -51,6 +51,10 @@ def get_user_permissions(roles: List[str]) -> List[str]:
     """
     role_mapping = load_role_mapping()
     role_mappings = role_mapping.get("role_mappings", {})
+    normalized_roles = [role for role in (roles or []) if isinstance(role, str)]
+    if not normalized_roles:
+        default_role = role_mapping.get("default_role")
+        normalized_roles = [default_role] if isinstance(default_role, str) else []
 
     # Collect permissions from all roles
     permissions = set()
@@ -76,8 +80,13 @@ def get_user_permissions(roles: List[str]) -> List[str]:
                     add_role_permissions(parent_role)
 
     # Add permissions from all roles
-    for role in roles:
+    for role in normalized_roles:
         add_role_permissions(role)
+
+    if not permissions:
+        default_role = role_mapping.get("default_role")
+        if isinstance(default_role, str):
+            add_role_permissions(default_role)
 
     # Application custom rules (optional)
     # TODO: Implement custom_rules logic

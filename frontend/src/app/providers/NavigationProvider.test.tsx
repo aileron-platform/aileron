@@ -10,9 +10,9 @@ const ModuleProbe = () => {
 };
 
 describe('NavigationProvider', () => {
-  it('treats templates root paths as the template module', async () => {
+  it('treats marketplace root paths as the marketplace module', async () => {
     render(
-      <MemoryRouter initialEntries={['/templates/templates']}>
+      <MemoryRouter initialEntries={['/marketplace/packages']}>
         <NavigationProvider>
           <ModuleProbe />
         </NavigationProvider>
@@ -20,7 +20,7 @@ describe('NavigationProvider', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('current-module')).toHaveTextContent('template');
+      expect(screen.getByTestId('current-module')).toHaveTextContent('marketplace');
     });
   });
 

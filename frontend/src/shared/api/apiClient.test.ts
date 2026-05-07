@@ -29,7 +29,7 @@ describe('ApiClient', () => {
   it('相對 API root 也應以完整 root 形式注入', () => {
     const client = new ApiClient({ baseUrl: '/api/v1/' });
 
-    expect((client as any).buildUrl('/templates/')).toBe('/api/v1/templates/');
+    expect((client as any).buildUrl('/marketplace/packages')).toBe('/api/v1/marketplace/packages');
   });
 
   it('使用已註冊的語言 provider 附加 X-Language header', () => {

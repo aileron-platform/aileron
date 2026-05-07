@@ -22,7 +22,7 @@ import {
   FolderPlus,
   User,
   Clock,
-  FileText,
+  Store,
   Library,
   Settings,
   LogOut,
@@ -181,8 +181,8 @@ export const GlobalNavigation: React.FC = () => {
       case 'workspace':
         navigate(ROUTES.WORKSPACES);
         break;
-      case 'template':
-        navigate(ROUTES.TEMPLATE_MANAGEMENT);
+      case 'marketplace':
+        navigate(ROUTES.MARKETPLACE);
         break;
       case 'automation':
         navigate(ROUTES.AUTOMATION);
@@ -476,17 +476,17 @@ export const GlobalNavigation: React.FC = () => {
             </Button>
 
             <Button
-              variant={state.currentModule === 'template' ? 'default' : 'ghost'}
+              variant={state.currentModule === 'marketplace' ? 'default' : 'ghost'}
               size="sm"
               className={`gap-1 transition-all duration-300 h-7 px-2 text-xs ${
-                state.currentModule === 'template'
+                state.currentModule === 'marketplace'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'hover:bg-muted text-muted-foreground hover:text-foreground'
               }`}
-              onClick={() => setActiveModule('template')}
+              onClick={() => setActiveModule('marketplace')}
             >
-              <FileText className="h-3 w-3" />
-              {t('navigation.templateCenter')}
+              <Store className="h-3 w-3" />
+              {t('navigation.marketplace')}
             </Button>
 
             <Button

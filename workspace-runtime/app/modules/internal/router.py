@@ -19,6 +19,8 @@ from .models import (
     GeminiRequest,
     GitSettingsRequest,
     InternalApiResponse,
+    MarketplaceInstallExecutionRequest,
+    MarketplaceInstallExecutionResult,
     SSHKeysRequest,
     WorkspaceSetupStatusResponse,
 )
@@ -364,6 +366,20 @@ async def internal_health_check() -> InternalApiResponse:
             "version": "1.0.0"
         }
     )
+
+
+@router.post(
+    "/marketplace/install/execute",
+    response_model=MarketplaceInstallExecutionResult,
+    summary="Execute Marketplace provider CLI install",
+    description="Run a provider CLI install command and return a blocking sanitized result",
+)
+async def execute_marketplace_install(
+    request: MarketplaceInstallExecutionRequest,
+    service: Annotated[InternalService, Depends(get_internal_service)],
+) -> MarketplaceInstallExecutionResult:
+    """Execute a Marketplace provider CLI install command."""
+    return await service.execute_marketplace_install(request)
 
 
 @router.get(

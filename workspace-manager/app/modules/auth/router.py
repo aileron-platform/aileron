@@ -383,7 +383,7 @@ async def get_current_user(
     try:
         # Validate and decode token
         jwt_utils = get_jwt_utils()
-        payload = jwt_utils.decode_token(token)
+        payload = await jwt_utils.decode_token_async(token)
 
         # Extract roles (from realm_access.roles)
         realm_access = payload.get("realm_access", {})

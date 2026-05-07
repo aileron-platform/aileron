@@ -1,6 +1,6 @@
 const navigation = {
   workspace: '工作區',
-  templateCenter: '模板中心',
+  marketplace: 'Marketplace',
   automation: '自動化中心',
   knowledgeBaseCenter: '知識庫中心',
   brand: {
@@ -50,7 +50,7 @@ const navigation = {
     modules: {
       workspace: '工作區',
       automation: '自動化中心',
-      template: '模板中心',
+      marketplace: 'Marketplace',
       knowledgeBase: '知識庫中心',
     },
     separator: '›',

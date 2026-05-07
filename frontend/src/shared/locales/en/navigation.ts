@@ -1,6 +1,6 @@
 const navigation = {
   workspace: 'Workspace',
-  templateCenter: 'Template Center',
+  marketplace: 'Marketplace',
   automation: 'Automation',
   knowledgeBaseCenter: 'Knowledge Base Center',
   brand: {
@@ -50,7 +50,7 @@ const navigation = {
     modules: {
       workspace: 'Workspace',
       automation: 'Automation',
-      template: 'Template Center',
+      marketplace: 'Marketplace',
       knowledgeBase: 'Knowledge Base Center',
     },
     separator: '›',

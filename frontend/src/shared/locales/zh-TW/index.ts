@@ -8,7 +8,7 @@ import pages from './pages';
 import workspace from './modules/workspace';
 import knowledgeBase from './modules/knowledgeBase';
 import automation from './modules/automation';
-import template from './modules/template';
+import marketplace from './modules/marketplace';
 import dialogs from './dialogs';
 import shared from './shared';
 
@@ -19,7 +19,7 @@ export default {
   workspace,
   knowledgeBase,
   automation,
-  template,
+  marketplace,
   dialogs,
   shared,
 };

@@ -6,7 +6,7 @@ import { RequireAuth, PublicRoute } from '../features/auth/components/RequireAut
 import { useI18n } from '@/shared/hooks/useI18n';
 
 const WorkspaceModule = React.lazy(() => import('../features/workspace/WorkspaceModule'));
-const TemplateManagementModule = React.lazy(() => import('../features/template-management/TemplateManagementModule'));
+const MarketplaceModule = React.lazy(() => import('../features/marketplace/MarketplaceModule'));
 const WorkspaceWizardPage = React.lazy(() => import('../features/workspace-wizard/WorkspaceWizardPage'));
 const AutomationModule = React.lazy(() => import('../features/automation/AutomationModule'));
 const KnowledgeBaseModule = React.lazy(() => import('../features/knowledge-base/KnowledgeBaseModule'));
@@ -63,10 +63,10 @@ export const AppRouter: React.FC = () => {
           />
 
           <Route
-            path="/templates/*"
+            path="/marketplace/*"
             element={(
               <RequireAuth>
-                <TemplateManagementModule />
+                <MarketplaceModule />
               </RequireAuth>
             )}
           />

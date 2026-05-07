@@ -208,7 +208,7 @@ class TestAuthRouterEndpoints:
              patch("app.db.database.SessionLocal") as mock_session_local, \
              patch("app.services.user_service.UserService") as mock_user_service:
             mock_jwt_utils = Mock()
-            mock_jwt_utils.decode_token.return_value = payload
+            mock_jwt_utils.decode_token_async = AsyncMock(return_value=payload)
             mock_get_jwt_utils.return_value = mock_jwt_utils
 
             db = Mock()
@@ -237,7 +237,7 @@ class TestAuthRouterEndpoints:
         with patch("app.modules.auth.router.get_jwt_utils") as mock_get_jwt_utils, \
              patch("app.db.database.SessionLocal", side_effect=RuntimeError("db down")):
             mock_jwt_utils = Mock()
-            mock_jwt_utils.decode_token.return_value = payload
+            mock_jwt_utils.decode_token_async = AsyncMock(return_value=payload)
             mock_get_jwt_utils.return_value = mock_jwt_utils
 
             response = await get_current_user(request, config)
@@ -250,7 +250,7 @@ class TestAuthRouterEndpoints:
 
         with patch("app.modules.auth.router.get_jwt_utils") as mock_get_jwt_utils:
             mock_jwt_utils = Mock()
-            mock_jwt_utils.decode_token.side_effect = JWTValidationError("bad token")
+            mock_jwt_utils.decode_token_async = AsyncMock(side_effect=JWTValidationError("bad token"))
             mock_get_jwt_utils.return_value = mock_jwt_utils
 
             with pytest.raises(HTTPException) as exc_info:

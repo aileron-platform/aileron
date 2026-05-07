@@ -280,6 +280,9 @@ class Settings(BaseSettings):
     TEMPLATE_STORAGE_PATH: str = Field(
         default="/data/template-center", description="Template storage path"
     )
+    MARKETPLACE_STORAGE_PATH: str = Field(
+        default="/data/marketplace", description="Marketplace registry storage path"
+    )
 
     # === File management settings ===
     FILE_TREE_MAX_DEPTH: int = Field(

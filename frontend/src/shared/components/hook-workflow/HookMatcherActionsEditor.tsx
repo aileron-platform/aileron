@@ -1,8 +1,10 @@
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
+import { Checkbox } from '@/shared/components/ui/checkbox';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Textarea } from '@/shared/components/ui/textarea';
 
 export interface HookActionConfig {
@@ -12,11 +14,16 @@ export interface HookActionConfig {
   timeout: number;
   description?: string | null;
   statusMessage?: string | null;
+  if?: string | null;
+  async?: boolean;
+  asyncRewake?: boolean;
+  shell?: 'bash' | 'powershell' | null;
   raw?: Record<string, unknown>;
 }
 
 export interface HookMatcher {
   matcher: string;
+  sequential?: boolean;
   hooks: HookActionConfig[];
   raw?: Record<string, unknown>;
 }
@@ -27,6 +34,8 @@ export interface HookMatcherActionsLabels {
   matcherPatternLabel: string;
   matcherPatternPlaceholder: string;
   matcherPatternHelp: string[];
+  matcherSequentialLabel?: string;
+  matcherSequentialHelp?: string;
   matcherRemove: string;
   executionSectionTitle: string;
   executionAdd: string;
@@ -36,6 +45,10 @@ export interface HookMatcherActionsLabels {
   executionTimeoutLabel: string;
   executionTimeoutPlaceholder: string;
   executionTimeoutHelp: string;
+  executionTimeoutMax?: number;
+  executionConditionLabel?: string;
+  executionConditionPlaceholder?: string;
+  executionConditionHelp?: string;
   executionDescriptionLabel?: string;
   executionDescriptionPlaceholder?: string;
   executionDescriptionHelp?: string;
@@ -45,6 +58,11 @@ export interface HookMatcherActionsLabels {
   executionStatusMessageLabel?: string;
   executionStatusMessagePlaceholder?: string;
   executionStatusMessageHelp?: string;
+  executionAsyncLabel?: string;
+  executionAsyncRewakeLabel?: string;
+  executionShellLabel?: string;
+  executionShellPlaceholder?: string;
+  executionShellOptions?: Array<{ value: 'bash' | 'powershell'; label: string }>;
   executionRemove: string;
 }
 
@@ -74,11 +92,24 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
   matcherCardClassName = 'bg-card',
   onChange,
 }) => {
+  const supportsSequential = Boolean(labels.matcherSequentialLabel);
+  const supportsCondition = Boolean(labels.executionConditionLabel);
+  const supportsExecutionFlags = Boolean(
+    labels.executionAsyncLabel ||
+    labels.executionAsyncRewakeLabel ||
+    labels.executionShellLabel,
+  );
   const supportsStatusMessage = Boolean(labels.executionStatusMessageLabel);
   const supportsMetadata = Boolean(labels.executionNameLabel || labels.executionDescriptionLabel);
   const handleMatcherChange = (matcherIndex: number, value: string) => {
     onChange(matchers.map((item, index) => (
       index === matcherIndex ? { ...item, matcher: value } : item
+    )));
+  };
+
+  const handleMatcherSequentialChange = (matcherIndex: number, checked: boolean) => {
+    onChange(matchers.map((item, index) => (
+      index === matcherIndex ? { ...item, sequential: checked } : item
     )));
   };
 
@@ -168,6 +199,26 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
               ) : null}
             </div>
 
+            {supportsSequential ? (
+              <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id={`hook-matcher-${matcherIndex}-sequential`}
+                    checked={Boolean(matcher.sequential)}
+                    onCheckedChange={(checked) => handleMatcherSequentialChange(matcherIndex, checked === true)}
+                  />
+                  <div className="space-y-1">
+                    <Label htmlFor={`hook-matcher-${matcherIndex}-sequential`} className="text-sm">
+                      {labels.matcherSequentialLabel}
+                    </Label>
+                    {labels.matcherSequentialHelp ? (
+                      <p className="text-xs text-muted-foreground">{labels.matcherSequentialHelp}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">{labels.executionSectionTitle}</Label>
@@ -226,12 +277,28 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
                       </div>
                     ) : null}
 
+                    {supportsCondition ? (
+                      <div className="space-y-2">
+                        <Label className="text-sm">{labels.executionConditionLabel}</Label>
+                        <Input
+                          value={execution.if ?? ''}
+                          onChange={(event) =>
+                            updateHookExecution(matcherIndex, hookIndex, {
+                              if: event.target.value,
+                            })
+                          }
+                          placeholder={labels.executionConditionPlaceholder}
+                        />
+                        <p className="text-xs text-muted-foreground">{labels.executionConditionHelp}</p>
+                      </div>
+                    ) : null}
+
                     <div className="space-y-2">
                       <Label className="text-sm">{labels.executionTimeoutLabel}</Label>
                       <Input
                         type="number"
                         min={1}
-                        max={3600}
+                        max={labels.executionTimeoutMax ?? 3600}
                         value={execution.timeout}
                         onChange={(event) =>
                           updateHookExecution(matcherIndex, hookIndex, {
@@ -276,6 +343,53 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
                       </div>
                     ) : null}
 
+                    {supportsExecutionFlags ? (
+                      <div className="grid gap-3 rounded-md border border-border/70 bg-background p-3 md:grid-cols-2">
+                        {labels.executionAsyncLabel ? (
+                          <HookExecutionFlag
+                            id={`hook-${matcherIndex}-${hookIndex}-async`}
+                            label={labels.executionAsyncLabel}
+                            checked={Boolean(execution.async)}
+                            onCheckedChange={(checked) =>
+                              updateHookExecution(matcherIndex, hookIndex, { async: checked })
+                            }
+                          />
+                        ) : null}
+                        {labels.executionAsyncRewakeLabel ? (
+                          <HookExecutionFlag
+                            id={`hook-${matcherIndex}-${hookIndex}-async-rewake`}
+                            label={labels.executionAsyncRewakeLabel}
+                            checked={Boolean(execution.asyncRewake)}
+                            onCheckedChange={(checked) =>
+                              updateHookExecution(matcherIndex, hookIndex, { asyncRewake: checked })
+                            }
+                          />
+                        ) : null}
+                        {labels.executionShellLabel ? (
+                          <div className="space-y-2 md:col-span-2">
+                            <Label className="text-sm">{labels.executionShellLabel}</Label>
+                            <Select
+                              value={execution.shell ?? 'bash'}
+                              onValueChange={(shell: 'bash' | 'powershell') =>
+                                updateHookExecution(matcherIndex, hookIndex, { shell })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={labels.executionShellPlaceholder} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(labels.executionShellOptions ?? []).map(option => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     {matcher.hooks.length > 1 ? (
                       <div className="flex justify-end">
                         <Button
@@ -300,5 +414,30 @@ export const HookMatcherActionsEditor: React.FC<HookMatcherActionsEditorProps> =
     </div>
   );
 };
+
+interface HookExecutionFlagProps {
+  id: string;
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}
+
+const HookExecutionFlag: React.FC<HookExecutionFlagProps> = ({
+  id,
+  label,
+  checked,
+  onCheckedChange,
+}) => (
+  <div className="flex items-center gap-2">
+    <Checkbox
+      id={id}
+      checked={checked}
+      onCheckedChange={(nextChecked) => onCheckedChange(nextChecked === true)}
+    />
+    <Label htmlFor={id} className="text-sm">
+      {label}
+    </Label>
+  </div>
+);
 
 export default HookMatcherActionsEditor;

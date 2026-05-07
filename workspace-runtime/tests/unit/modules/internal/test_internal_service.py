@@ -17,6 +17,7 @@ from app.modules.internal.models import (
     GitSettingsRequest,
     FirewallConfigRequest,
     EnvironmentVariable,
+    MarketplaceInstallExecutionRequest,
     OAuthAccountInfo,
 )
 
@@ -215,6 +216,76 @@ class TestSetupSSHKeys:
             # Act & Assert
             with pytest.raises(PermissionError):
                 await internal_service.setup_ssh_keys(request)
+
+
+class TestMarketplaceInstallExecution:
+    """Test Marketplace provider CLI execution."""
+
+    @pytest.mark.asyncio
+    async def test_execute_marketplace_install_returns_sanitized_blocking_result(self, internal_service, tmp_path):
+        """Test provider CLI execution output redaction and limiting."""
+        with patch("app.modules.internal.service.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="token=secret-value\nvisible",
+                stderr="stderr-visible",
+            )
+
+            result = await internal_service.execute_marketplace_install(
+                MarketplaceInstallExecutionRequest(
+                    provider="codex",
+                    argv=["codex", "marketplace", "add", "demo"],
+                    cwd=str(tmp_path),
+                    env={"A": "B"},
+                    stdoutLimitBytes=17,
+                    redactPatterns=[r"token=\S+"],
+                )
+            )
+
+        assert result.status == "success"
+        assert result.exit_code == 0
+        assert result.stdout == "[REDACTED]\nvisible"[:17]
+        assert result.truncated is True
+        mock_run.assert_called_once()
+        assert mock_run.call_args.kwargs["cwd"] == str(tmp_path)
+        assert mock_run.call_args.kwargs["env"]["A"] == "B"
+        assert "shell" not in mock_run.call_args.kwargs
+
+    @pytest.mark.asyncio
+    async def test_execute_marketplace_install_maps_timeout_and_invalid_cwd(self, internal_service, tmp_path):
+        """Test timeout and invalid cwd result mapping."""
+        invalid = await internal_service.execute_marketplace_install(
+            MarketplaceInstallExecutionRequest(
+                provider="codex",
+                argv=["codex"],
+                cwd=str(tmp_path / "missing"),
+            )
+        )
+        assert invalid.status == "failed"
+        assert invalid.error_code == "marketplace.install.runtime_invalid_cwd"
+
+        with patch(
+            "app.modules.internal.service.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(
+                cmd=["codex"],
+                timeout=1,
+                output=b"partial stdout",
+                stderr=b"partial stderr",
+            ),
+        ):
+            timeout = await internal_service.execute_marketplace_install(
+                MarketplaceInstallExecutionRequest(
+                    provider="codex",
+                    argv=["codex"],
+                    cwd=str(tmp_path),
+                    timeoutMs=1,
+                )
+            )
+
+        assert timeout.status == "timeout"
+        assert timeout.error_code == "marketplace.install.timeout"
+        assert timeout.stdout == "partial stdout"
+        assert timeout.stderr == "partial stderr"
 
 
 class TestSetupClaudeCode:

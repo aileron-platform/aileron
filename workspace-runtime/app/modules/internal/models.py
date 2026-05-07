@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -202,6 +202,38 @@ class InternalApiResponse(BaseModel):
     details: Optional[dict] = Field(None, description="Detailed information")
 
 
+class MarketplaceInstallExecutionRequest(BaseModel):
+    """Blocking provider CLI execution request for Marketplace installs."""
+
+    provider: Literal["claude-code", "codex", "gemini"]
+    argv: List[str] = Field(..., min_length=1)
+    cwd: str
+    env: Dict[str, str] = Field(default_factory=dict)
+    timeout_ms: int = Field(120_000, alias="timeoutMs", ge=1)
+    stdout_limit_bytes: int = Field(65_536, alias="stdoutLimitBytes", ge=1)
+    stderr_limit_bytes: int = Field(65_536, alias="stderrLimitBytes", ge=1)
+    redact_patterns: List[str] = Field(default_factory=list, alias="redactPatterns")
+
+    class Config:
+        populate_by_name = True
+
+
+class MarketplaceInstallExecutionResult(BaseModel):
+    """Blocking provider CLI execution result for Marketplace installs."""
+
+    status: Literal["success", "failed", "timeout"]
+    exit_code: Optional[int] = Field(None, alias="exitCode")
+    started_at: str = Field(..., alias="startedAt")
+    completed_at: str = Field(..., alias="completedAt")
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    truncated: bool = False
+    error_code: Optional[str] = Field(None, alias="errorCode")
+
+    class Config:
+        populate_by_name = True
+
+
 class SetupCheckDetail(BaseModel):
     """Detailed status of initialization check items"""
 
@@ -230,6 +262,8 @@ __all__ = [
     "GitSettingsRequest",
     "FirewallConfigRequest",
     "InternalApiResponse",
+    "MarketplaceInstallExecutionRequest",
+    "MarketplaceInstallExecutionResult",
     "SetupCheckDetail",
     "WorkspaceSetupStatusResponse",
 ]
