@@ -14,30 +14,30 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import get_settings
 from app.db import models as db_models
-from app.models.template_git import (
+from app.models.version_control import (
+    BlobResponse,
+    BranchCommitInfo,
+    ChangesResponse,
+    CheckoutRequest,
+    CheckoutResponse,
+    CommitFilesResponse,
+    CommitListResponse,
+    CommitResponse,
+    CommitSummary,
+    DiffResponse,
+    DiscardRequest,
+    DiscardResponse,
+    FileChange,
     GitRepositoryStatus,
-    TemplateBlobResponse,
-    TemplateBranchCommitInfo,
-    TemplateChangesResponse,
-    TemplateCheckoutRequest,
-    TemplateCheckoutResponse,
-    TemplateCommitFilesResponse,
-    TemplateCommitListResponse,
-    TemplateCommitResponse,
-    TemplateCommitSummary,
-    TemplateDiffResponse,
-    TemplateDiscardRequest,
-    TemplateDiscardResponse,
-    TemplateFileChange,
-    TemplateRemoteRequest,
-    TemplateRemoteResponse,
-    TemplateStageRequest,
-    TemplateStageResponse,
-    TemplateUnstageRequest,
-    TemplateUnstageResponse,
-    TemplateVersionControlBranch,
-    TemplateVersionControlBranchListResponse,
-    TemplateVersionControlStatus,
+    RemoteRequest,
+    RemoteResponse,
+    StageRequest,
+    StageResponse,
+    UnstageRequest,
+    UnstageResponse,
+    VersionControlBranch,
+    VersionControlBranchListResponse,
+    VersionControlStatus,
 )
 from app.services.knowledge_base_service import KnowledgeBaseService
 from app.services.knowledge_base_wiki_service import KnowledgeBaseWikiService
@@ -144,13 +144,13 @@ class KnowledgeBaseGitService:
             clone_blocked_reason="GIT_REPOSITORY_ALREADY_INITIALIZED",
         )
 
-    def get_version_control_status(self, *, user_id: str, kb_id: str) -> TemplateVersionControlStatus:
+    def get_version_control_status(self, *, user_id: str, kb_id: str) -> VersionControlStatus:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer"))
         branch, detached = self._current_branch_name(repo)
         staged = self._staged_file_changes(repo)
         unstaged = repo.index.diff(None)
         ahead, behind = self._tracking_delta_for_branch(repo, branch) if not detached else (0, 0)
-        return TemplateVersionControlStatus(
+        return VersionControlStatus(
             branch=branch,
             ahead=ahead,
             behind=behind,
@@ -161,7 +161,7 @@ class KnowledgeBaseGitService:
             untrackedCount=len(repo.untracked_files),
         )
 
-    def get_file_changes(self, *, user_id: str, kb_id: str, page: int = 1, page_size: int = 100) -> TemplateChangesResponse:
+    def get_file_changes(self, *, user_id: str, kb_id: str, page: int = 1, page_size: int = 100) -> ChangesResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer"))
         staged = self._staged_file_changes(repo)
         unstaged = []
@@ -172,10 +172,10 @@ class KnowledgeBaseGitService:
         start = (page - 1) * page_size
         end = start + page_size
         untracked = [
-            TemplateFileChange(name=Path(path).name, path=path, status="??", type="untracked")
+            FileChange(name=Path(path).name, path=path, status="??", type="untracked")
             for path in repo.untracked_files[start:end]
         ]
-        return TemplateChangesResponse(
+        return ChangesResponse(
             staged=staged,
             unstaged=unstaged,
             untracked=untracked,
@@ -185,21 +185,21 @@ class KnowledgeBaseGitService:
             untrackedHasMore=end < len(repo.untracked_files),
         )
 
-    def stage(self, *, user_id: str, kb_id: str, payload: TemplateStageRequest) -> TemplateStageResponse:
+    def stage(self, *, user_id: str, kb_id: str, payload: StageRequest) -> StageResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         repo = self._require_repo(kb)
         paths = self._safe_repo_paths(kb.id, payload.paths)
         repo.index.add(paths)
-        return TemplateStageResponse(staged=paths, unstaged=[item.path for item in self.get_file_changes(user_id=user_id, kb_id=kb_id).unstaged])
+        return StageResponse(staged=paths, unstaged=[item.path for item in self.get_file_changes(user_id=user_id, kb_id=kb_id).unstaged])
 
-    def unstage(self, *, user_id: str, kb_id: str, payload: TemplateUnstageRequest) -> TemplateUnstageResponse:
+    def unstage(self, *, user_id: str, kb_id: str, payload: UnstageRequest) -> UnstageResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         repo = self._require_repo(kb)
         paths = self._safe_repo_paths(kb.id, payload.paths)
         repo.git.reset("HEAD", "--", *paths)
-        return TemplateUnstageResponse(unstaged=paths, remainingStaged=len(self.get_file_changes(user_id=user_id, kb_id=kb_id).staged))
+        return UnstageResponse(unstaged=paths, remainingStaged=len(self.get_file_changes(user_id=user_id, kb_id=kb_id).staged))
 
-    def discard(self, *, user_id: str, kb_id: str, payload: TemplateDiscardRequest) -> TemplateDiscardResponse:
+    def discard(self, *, user_id: str, kb_id: str, payload: DiscardRequest) -> DiscardResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         repo = self._require_repo(kb)
         paths = self._safe_repo_paths(kb.id, payload.paths)
@@ -214,36 +214,36 @@ class KnowledgeBaseGitService:
                     warnings.append(path)
                 continue
             repo.git.checkout("--", path)
-        return TemplateDiscardResponse(discarded=paths, warnings=warnings)
+        return DiscardResponse(discarded=paths, warnings=warnings)
 
-    def commit(self, *, user_id: str, kb_id: str, message: str, paths: Optional[list[str]] = None) -> TemplateCommitResponse:
+    def commit(self, *, user_id: str, kb_id: str, message: str, paths: Optional[list[str]] = None) -> CommitResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         repo = self._require_repo(kb)
         if paths:
             repo.index.add(self._safe_repo_paths(kb.id, paths))
         return self._commit_staged(kb, repo, message=message)
 
-    def commit_all(self, *, user_id: str, kb_id: str, message: str) -> TemplateCommitResponse:
+    def commit_all(self, *, user_id: str, kb_id: str, message: str) -> CommitResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor")
         repo = self._require_repo(kb)
         repo.git.add("--all")
         return self._commit_staged(kb, repo, message=message)
 
-    def list_commits(self, *, user_id: str, kb_id: str, page: int = 1, page_size: int = 20) -> TemplateCommitListResponse:
+    def list_commits(self, *, user_id: str, kb_id: str, page: int = 1, page_size: int = 20) -> CommitListResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer"))
         if not repo.head.is_valid():
-            return TemplateCommitListResponse(page=page, pageSize=page_size, total=0, items=[])
+            return CommitListResponse(page=page, pageSize=page_size, total=0, items=[])
         commits = list(repo.iter_commits("HEAD"))
         start = (page - 1) * page_size
         end = start + page_size
-        return TemplateCommitListResponse(
+        return CommitListResponse(
             page=page,
             pageSize=page_size,
             total=len(commits),
             items=[self._commit_summary(repo, commit) for commit in commits[start:end]],
         )
 
-    def get_commit_files(self, *, user_id: str, kb_id: str, commit_id: str) -> TemplateCommitFilesResponse:
+    def get_commit_files(self, *, user_id: str, kb_id: str, commit_id: str) -> CommitFilesResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer"))
         commit = repo.commit(commit_id)
         parent = f"{commit.hexsha}^" if commit.parents else "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -255,7 +255,7 @@ class KnowledgeBaseGitService:
             path = parts[2]
             patch = repo.git.diff(parent, commit.hexsha, "--", path)
             files.append(
-                TemplateFileChange(
+                FileChange(
                     name=Path(path).name,
                     path=path,
                     status="M",
@@ -266,35 +266,35 @@ class KnowledgeBaseGitService:
                     patch=patch,
                 )
             )
-        return TemplateCommitFilesResponse(commitId=commit_id, files=files)
+        return CommitFilesResponse(commitId=commit_id, files=files)
 
-    def diff(self, *, user_id: str, kb_id: str, path: str, head: str = "WORKTREE") -> TemplateDiffResponse:
+    def diff(self, *, user_id: str, kb_id: str, path: str, head: str = "WORKTREE") -> DiffResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
         repo = self._require_repo(kb)
         safe_path = self._safe_repo_path(kb.id, path)
         if head != "INDEX" and safe_path in repo.untracked_files:
             patch = self._untracked_file_diff(kb.id, safe_path)
-            return TemplateDiffResponse(path=safe_path, patch=patch, diff=patch, binary=False)
+            return DiffResponse(path=safe_path, patch=patch, diff=patch, binary=False)
         args = ["--cached"] if head == "INDEX" else []
         args.extend(["--", safe_path])
         patch = repo.git.diff(*args)
-        return TemplateDiffResponse(path=safe_path, patch=patch, diff=patch, binary="Binary files" in patch)
+        return DiffResponse(path=safe_path, patch=patch, diff=patch, binary="Binary files" in patch)
 
-    def blob(self, *, user_id: str, kb_id: str, path: str, revision: Optional[str] = None) -> TemplateBlobResponse:
+    def blob(self, *, user_id: str, kb_id: str, path: str, revision: Optional[str] = None) -> BlobResponse:
         kb = self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer")
         repo = self._require_repo(kb)
         safe_path = self._safe_repo_path(kb.id, path)
         content = repo.git.show(f"{revision}:{safe_path}") if revision else (self._kb_root(kb.id) / safe_path).read_text(encoding="utf-8")
-        return TemplateBlobResponse(path=safe_path, revision=revision, content=content)
+        return BlobResponse(path=safe_path, revision=revision, content=content)
 
-    def list_branches(self, *, user_id: str, kb_id: str) -> TemplateVersionControlBranchListResponse:
+    def list_branches(self, *, user_id: str, kb_id: str) -> VersionControlBranchListResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="viewer"))
         current, detached = self._current_branch_name(repo)
         branches = []
         for head in repo.heads:
             ahead, behind = self._tracking_delta_for_branch(repo, head.name)
             branches.append(
-                TemplateVersionControlBranch(
+                VersionControlBranch(
                     name=head.name,
                     displayName=head.name,
                     isActive=(not detached and head.name == current),
@@ -309,7 +309,7 @@ class KnowledgeBaseGitService:
                 if ref.remote_head == "HEAD" or any(branch.name == ref.remote_head for branch in branches):
                     continue
                 branches.append(
-                    TemplateVersionControlBranch(
+                    VersionControlBranch(
                         name=ref.remote_head,
                         displayName=ref.remote_head,
                         isActive=False,
@@ -317,9 +317,9 @@ class KnowledgeBaseGitService:
                         lastCommit=self._branch_commit_info(ref),
                     )
                 )
-        return TemplateVersionControlBranchListResponse(branches=branches)
+        return VersionControlBranchListResponse(branches=branches)
 
-    def checkout_branch(self, *, user_id: str, kb_id: str, branch_name: str, payload: TemplateCheckoutRequest) -> TemplateCheckoutResponse:
+    def checkout_branch(self, *, user_id: str, kb_id: str, branch_name: str, payload: CheckoutRequest) -> CheckoutResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor"))
         stashed = None
         if payload.stashChanges and self.get_version_control_status(user_id=user_id, kb_id=kb_id).unstagedCount:
@@ -330,7 +330,7 @@ class KnowledgeBaseGitService:
             created = True
         else:
             repo.git.checkout(branch_name)
-        return TemplateCheckoutResponse(branch=branch_name, created=created, stashedChanges=stashed)
+        return CheckoutResponse(branch=branch_name, created=created, stashedChanges=stashed)
 
     def set_remote_url(self, *, user_id: str, kb_id: str, url: str) -> None:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="manager"))
@@ -339,12 +339,12 @@ class KnowledgeBaseGitService:
         else:
             repo.create_remote("origin", url.strip())
 
-    def fetch(self, *, user_id: str, kb_id: str, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+    def fetch(self, *, user_id: str, kb_id: str, payload: RemoteRequest) -> RemoteResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor"))
         repo.remotes[payload.remote].fetch()
-        return TemplateRemoteResponse(remote=payload.remote, branch=payload.branch, message="GIT_FETCH_SUCCESS")
+        return RemoteResponse(remote=payload.remote, branch=payload.branch, message="GIT_FETCH_SUCCESS")
 
-    def pull(self, *, user_id: str, kb_id: str, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+    def pull(self, *, user_id: str, kb_id: str, payload: RemoteRequest) -> RemoteResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor"))
         branch, _ = self._current_branch_name(repo)
         target = payload.branch or branch
@@ -354,9 +354,9 @@ class KnowledgeBaseGitService:
         if payload.autostash:
             args.insert(0, "--autostash")
         repo.git.pull(*args)
-        return TemplateRemoteResponse(remote=payload.remote, branch=target, message="GIT_PULL_SUCCESS")
+        return RemoteResponse(remote=payload.remote, branch=target, message="GIT_PULL_SUCCESS")
 
-    def push(self, *, user_id: str, kb_id: str, payload: TemplateRemoteRequest) -> TemplateRemoteResponse:
+    def push(self, *, user_id: str, kb_id: str, payload: RemoteRequest) -> RemoteResponse:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor"))
         branch, _ = self._current_branch_name(repo)
         target = payload.branch or branch
@@ -364,7 +364,7 @@ class KnowledgeBaseGitService:
         if payload.force:
             args.insert(0, "--force")
         repo.remotes[payload.remote].push(*args)
-        return TemplateRemoteResponse(remote=payload.remote, branch=target, message="GIT_PUSH_SUCCESS")
+        return RemoteResponse(remote=payload.remote, branch=target, message="GIT_PUSH_SUCCESS")
 
     def revert_commit(self, *, user_id: str, kb_id: str, commit_id: str) -> None:
         repo = self._require_repo(self._require_enabled_kb(user_id=user_id, kb_id=kb_id, minimum_role="editor"))
@@ -502,9 +502,9 @@ class KnowledgeBaseGitService:
                 deletions += int(parts[1]) if parts[1].isdigit() else 0
         return additions, deletions
 
-    def _file_change(self, repo: Repo, path: str, status: str, *, cached: bool = False) -> TemplateFileChange:
+    def _file_change(self, repo: Repo, path: str, status: str, *, cached: bool = False) -> FileChange:
         additions, deletions = self._diff_stats(repo, path, cached=cached)
-        return TemplateFileChange(
+        return FileChange(
             name=Path(path).name,
             path=path,
             status=status,
@@ -513,7 +513,7 @@ class KnowledgeBaseGitService:
             deletions=deletions,
         )
 
-    def _staged_file_changes(self, repo: Repo) -> list[TemplateFileChange]:
+    def _staged_file_changes(self, repo: Repo) -> list[FileChange]:
         try:
             output = repo.git.diff("--cached", "--name-status")
         except GitCommandError:
@@ -534,7 +534,7 @@ class KnowledgeBaseGitService:
         repo: Repo,
         *,
         message: str,
-    ) -> TemplateCommitResponse:
+    ) -> CommitResponse:
         if not self._has_staged_changes(repo):
             raise ValueError("GIT_NO_CHANGES")
         commit = repo.index.commit(message)
@@ -542,12 +542,12 @@ class KnowledgeBaseGitService:
         kb.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(kb)
-        return TemplateCommitResponse(commit=self._commit_summary(repo, commit))
+        return CommitResponse(commit=self._commit_summary(repo, commit))
 
-    def _commit_summary(self, repo: Repo, commit: Any) -> TemplateCommitSummary:
+    def _commit_summary(self, repo: Repo, commit: Any) -> CommitSummary:
         stats = commit.stats.total
         branch, _ = self._current_branch_name(repo)
-        return TemplateCommitSummary(
+        return CommitSummary(
             id=commit.hexsha,
             message=commit.message.strip().splitlines()[0] if commit.message else "",
             author=commit.author.name,
@@ -559,10 +559,10 @@ class KnowledgeBaseGitService:
             files=stats.get("files", 0),
         )
 
-    def _branch_commit_info(self, ref: Any) -> Optional[TemplateBranchCommitInfo]:
+    def _branch_commit_info(self, ref: Any) -> Optional[BranchCommitInfo]:
         try:
             commit = ref.commit
-            return TemplateBranchCommitInfo(
+            return BranchCommitInfo(
                 id=commit.hexsha,
                 message=commit.message.strip().splitlines()[0] if commit.message else "",
                 author=commit.author.name,

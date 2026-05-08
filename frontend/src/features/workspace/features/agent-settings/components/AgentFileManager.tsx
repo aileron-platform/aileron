@@ -7,7 +7,6 @@ import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { createAgentFileTreeDataAdapter } from '../adapters/agentFileTreeDataAdapter';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentFileCollection, AgentSelectedFile, AgentToolConfig } from '../types';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsFileTreeWorkflow } from './SettingsFileTreeWorkflow';
 import { sortAgentSettingsScopeValues } from './SettingsSourcePrimitives';
 import type { AgentFileTreeScope, AgentFileTreeVisibleScope } from '../adapters/agentFileTreeDataAdapter';
@@ -103,15 +102,6 @@ const AgentFileManager: React.FC<AgentFileManagerProps> = ({
     }),
     [collectionType, config.apiPathPrefix, effectiveScopes, scope, workspaceId, workspaceRuntime.runtimeBaseUrl],
   );
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId,
-    features: [collectionType],
-    onRefresh: () => {
-      setRefreshToken((current) => current + 1);
-      return Promise.resolve();
-    },
-  });
 
   const scopeOptions = useMemo(() => (['all', ...effectiveScopes] as AgentFileTreeVisibleScope[]).map((scopeValue) => {
     const Icon = scopeIcons[scopeValue] ?? FolderGit;

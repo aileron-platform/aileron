@@ -16,6 +16,7 @@ from app.modules.cli_settings.slash_commands.config import (
     SlashCommandToolConfig,
 )
 from app.modules.cli_settings.slash_commands.service import (
+    CliSlashCommandAmbiguousError,
     CliSlashCommandDuplicateError,
     CliSlashCommandNotFoundError,
     CliSlashCommandService,
@@ -187,6 +188,45 @@ class TestGeminiToml:
         docs = scopes.scopes[0].documents
         assert any(d.namespace == "my-ns" for d in docs)
 
+    @patch("app.modules.cli_settings.slash_commands.service.get_workspace_path")
+    def test_get_document_uses_namespace_to_disambiguate_same_file_name(self, mock_ws, tmp_path: Path) -> None:
+        mock_ws.return_value = str(tmp_path / "workspace")
+        svc = self._service(tmp_path)
+
+        from app.modules.cli_settings.slash_commands.models import CliSlashCommandCreateRequest
+
+        svc.create_document(
+            WORKSPACE_ID,
+            SlashCommandScope.USER,
+            CliSlashCommandCreateRequest(
+                fileName="search.toml",
+                content='description = "Drive search"\nprompt = "drive"\n',
+                namespace="drive",
+            ),
+        )
+        svc.create_document(
+            WORKSPACE_ID,
+            SlashCommandScope.USER,
+            CliSlashCommandCreateRequest(
+                fileName="search.toml",
+                content='description = "Gmail search"\nprompt = "gmail"\n',
+                namespace="gmail",
+            ),
+        )
+
+        with pytest.raises(CliSlashCommandAmbiguousError):
+            svc.get_document(WORKSPACE_ID, SlashCommandScope.USER, "search.toml")
+
+        result = svc.get_document(
+            WORKSPACE_ID,
+            SlashCommandScope.USER,
+            "search.toml",
+            namespace="gmail",
+        )
+
+        assert result.document.namespace == "gmail"
+        assert 'prompt = "gmail"' in result.document.content
+
     @patch("app.modules.cli_settings.slash_commands.service.resolve_workspace_root")
     def test_lists_enabled_gemini_extension_commands(self, mock_workspace_root, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         workspace = tmp_path / "workspace"
@@ -308,6 +348,68 @@ class TestGeminiToml:
         assert result.document.content == 'description = "analyze"\nprompt = "scan"\n'
         assert result.document.extension_name == "gemini-cli-security"
         assert result.document.extension_version == "0.5.0"
+
+    @patch("app.modules.cli_settings.slash_commands.service.resolve_workspace_root")
+    def test_get_extension_document_uses_namespace_and_extension_name_to_disambiguate(
+        self,
+        mock_workspace_root,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        class FakeResolver:
+            def enabled_slash_commands(self, workspace_root: Path):
+                assert workspace_root == workspace
+                return [
+                    (
+                        SimpleNamespace(name="google-workspace", version="1.0.0"),
+                        SimpleNamespace(
+                            fileName="search.toml",
+                            namespace="drive",
+                            description="Drive search",
+                            content='description = "Drive search"\nprompt = "drive"\n',
+                        ),
+                    ),
+                    (
+                        SimpleNamespace(name="google-workspace", version="1.0.0"),
+                        SimpleNamespace(
+                            fileName="search.toml",
+                            namespace="gmail",
+                            description="Gmail search",
+                            content='description = "Gmail search"\nprompt = "gmail"\n',
+                        ),
+                    ),
+                    (
+                        SimpleNamespace(name="custom-search", version="2.0.0"),
+                        SimpleNamespace(
+                            fileName="search.toml",
+                            namespace="gmail",
+                            description="Custom search",
+                            content='description = "Custom search"\nprompt = "custom"\n',
+                        ),
+                    ),
+                ]
+
+        monkeypatch.setattr("app.modules.cli_settings.slash_commands.service.GeminiExtensionResourceResolver", FakeResolver)
+        mock_workspace_root.return_value = workspace
+        svc = self._service(tmp_path)
+
+        with pytest.raises(CliSlashCommandAmbiguousError):
+            svc.get_document(WORKSPACE_ID, SlashCommandScope.EXTENSION, "search.toml")
+
+        result = svc.get_document(
+            WORKSPACE_ID,
+            SlashCommandScope.EXTENSION,
+            "search.toml",
+            namespace="gmail",
+            extension_name="google-workspace",
+        )
+
+        assert result.document.namespace == "gmail"
+        assert result.document.extension_name == "google-workspace"
+        assert 'prompt = "gmail"' in result.document.content
 
 
 class TestCodexMarkdown:

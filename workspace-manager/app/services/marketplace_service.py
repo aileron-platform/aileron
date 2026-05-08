@@ -36,7 +36,6 @@ from app.models.marketplace import (
     MarketplaceCliPreflightResult,
     MarketplaceFeatureContent,
     MarketplaceFeatureContentItem,
-    MarketplaceImportBranchesResult,
     MarketplaceImportCandidate,
     MarketplaceImportFailedCandidate,
     MarketplaceImportRequest,
@@ -116,9 +115,8 @@ class MarketplaceService:
     _registry_lock = threading.RLock()
     _index_lock = threading.RLock()
     _package_index: dict[str, tuple[str, list[MarketplacePackageSummary]]] = {}
-    _package_id_pattern = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+    _package_id_pattern = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
     _git_scp_like_pattern = re.compile(r"^(?P<user>[A-Za-z0-9_.-]+)@(?P<host>[A-Za-z0-9_.-]+):(?P<path>.+)$")
-    _git_ref_pattern = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/@+-]*$")
     _version_pattern = re.compile(r"(?P<version>\d+(?:\.\d+){0,3})")
     _raw_private_key_pattern = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")
     _unsafe_readme_block_pattern = re.compile(
@@ -546,39 +544,6 @@ class MarketplaceService:
             for candidate in candidates
         ]
 
-    def list_import_branches(
-        self,
-        user_id: str,
-        source: MarketplaceImportSource,
-    ) -> MarketplaceImportBranchesResult:
-        """Return remote branches for a Git import source."""
-        if source.source_kind != "git":
-            raise MarketplaceImportSourceError("marketplace.import.validation.invalid_source_kind")
-        metadata = self.validate_import_source(user_id, source)
-        command = ["git", "ls-remote", "--heads", source.source]
-        try:
-            result = subprocess.run(
-                command,
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                env=self._git_ssh_env(metadata.get("sshKeyPath")),
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise MarketplaceImportSourceError("marketplace.import.validation.branch_list_failed") from exc
-        if result.returncode != 0:
-            raise MarketplaceImportSourceError("marketplace.import.validation.branch_list_failed")
-        branches = []
-        for line in result.stdout.splitlines():
-            parts = line.split()
-            if len(parts) != 2 or not parts[1].startswith("refs/heads/"):
-                continue
-            branch = parts[1].removeprefix("refs/heads/")
-            if branch:
-                branches.append(branch)
-        return MarketplaceImportBranchesResult(branches=sorted(set(branches)))
-
     def _with_duplicate_import_state(
         self,
         user_id: str,
@@ -644,7 +609,7 @@ class MarketplaceService:
                             for result in candidate.validation_results
                             if result.severity in {"warning", "info"}
                         ])
-                        imported.append(self._import_one_candidate(user_id, source_root, request.source, candidate))
+                        imported.append(self._import_one_candidate(user_id, source_root, request.source, candidate, metadata))
                     except (
                         MarketplaceImportSourceError,
                         MarketplacePathError,
@@ -707,11 +672,17 @@ class MarketplaceService:
         source_root: Path,
         source: MarketplaceImportSource,
         candidate: MarketplaceImportCandidate,
+        import_metadata: dict[str, Any],
     ) -> MarketplacePackageSummary:
         target_package_id = self._target_import_package_id(candidate)
         adapter = self._get_adapter(candidate.provider)
         registry_root = self.get_registry_root(user_id)
-        source_package_path = self._resolve_import_candidate_source(source_root, candidate)
+        source_package_path, cleanup_path = self._resolve_import_candidate_source(
+            user_id,
+            source_root,
+            candidate,
+            import_metadata,
+        )
         target_package_path = self.resolve_package_path(user_id, candidate.provider, target_package_id)
         target_parent = target_package_path.parent
         target_parent.mkdir(parents=True, exist_ok=True)
@@ -730,7 +701,12 @@ class MarketplaceService:
         backup_created = False
         try:
             staging_root.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(source_package_path, staging_path, symlinks=False)
+            shutil.copytree(
+                source_package_path,
+                staging_path,
+                symlinks=False,
+                ignore=shutil.ignore_patterns(".git"),
+            )
             self._rewrite_imported_manifest_name(adapter, staging_path, target_package_id)
             self._write_import_source_metadata(adapter, staging_path, source, candidate, target_package_id)
             self._raise_if_validation_blocks(adapter.validate_package(staging_path), "importCopy")
@@ -770,6 +746,9 @@ class MarketplaceService:
                 backup_created,
             )
             raise MarketplaceImportSourceError("marketplace.import.validation.copy_failed") from exc
+        finally:
+            if cleanup_path is not None:
+                shutil.rmtree(cleanup_path, ignore_errors=True)
 
         detail = self.get_package_detail(user_id, candidate.provider, target_package_id)
         if detail is None:
@@ -797,11 +776,27 @@ class MarketplaceService:
 
     def _resolve_import_candidate_source(
         self,
+        user_id: str,
         source_root: Path,
         candidate: MarketplaceImportCandidate,
-    ) -> Path:
+        import_metadata: dict[str, Any],
+    ) -> tuple[Path, Path | None]:
+        if candidate.source_metadata.get("kind") == "git":
+            return self._resolve_nested_remote_import_candidate_source(
+                user_id,
+                candidate,
+                import_metadata,
+            )
         if self._get_adapter(candidate.provider).is_remote_source_value(candidate.source_path):
-            raise MarketplaceImportSourceError("marketplace.import.validation.nested_remote_source_unsupported")
+            legacy_metadata = self._legacy_remote_source_metadata(candidate.source_path)
+            if legacy_metadata:
+                candidate = candidate.model_copy(update={"source_metadata": legacy_metadata})
+                return self._resolve_nested_remote_import_candidate_source(
+                    user_id,
+                    candidate,
+                    import_metadata,
+                )
+            raise MarketplaceImportSourceError("marketplace.import.validation.source_path_not_found")
         if candidate.source_path == ".":
             package_path = source_root.resolve()
         else:
@@ -812,12 +807,123 @@ class MarketplaceService:
             raise MarketplacePathError("marketplace.validation.path_escape") from exc
         if not package_path.exists() or not package_path.is_dir():
             raise MarketplaceImportSourceError("marketplace.import.validation.source_path_not_found")
-        return package_path
+        return package_path, None
+
+    def _resolve_nested_remote_import_candidate_source(
+        self,
+        user_id: str,
+        candidate: MarketplaceImportCandidate,
+        import_metadata: dict[str, Any],
+    ) -> tuple[Path, Path]:
+        url = candidate.source_metadata.get("url")
+        if not isinstance(url, str) or not url.strip():
+            raise MarketplaceImportSourceError("marketplace.import.validation.source_path_not_found")
+        checkout_parent = Path(tempfile.mkdtemp(prefix="nested-", dir=self._import_work_root(user_id)))
+        checkout_root = checkout_parent / "checkout"
+        try:
+            self._clone_nested_import_source(
+                url.strip(),
+                checkout_root,
+                ref=self._optional_string(candidate.source_metadata.get("ref")),
+                sha=self._optional_string(candidate.source_metadata.get("sha")),
+                ssh_key_path=self._nested_import_ssh_key_path(url.strip(), user_id, import_metadata),
+            )
+            raw_path = candidate.source_metadata.get("path")
+            relative_path = raw_path.strip() if isinstance(raw_path, str) and raw_path.strip() else "."
+            package_path = checkout_root.resolve() if relative_path == "." else (checkout_root / relative_path).resolve()
+            try:
+                package_path.relative_to(checkout_root.resolve())
+            except ValueError as exc:
+                raise MarketplacePathError("marketplace.validation.path_escape") from exc
+            if not package_path.exists() or not package_path.is_dir():
+                raise MarketplaceImportSourceError("marketplace.import.validation.source_path_not_found")
+            return package_path, checkout_parent
+        except Exception:
+            shutil.rmtree(checkout_parent, ignore_errors=True)
+            raise
+
+    def _legacy_remote_source_metadata(self, source_path: str) -> dict[str, Any] | None:
+        if ".git:" in source_path:
+            url, path = source_path.split(".git:", 1)
+            return {
+                "kind": "git",
+                "sourceType": "url",
+                "url": f"{url}.git",
+                "path": path,
+            }
+        return {
+            "kind": "git",
+            "sourceType": "url",
+            "url": source_path,
+        }
+
+    def _optional_string(self, value: Any) -> str | None:
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    def _nested_import_ssh_key_path(
+        self,
+        url: str,
+        user_id: str,
+        import_metadata: dict[str, Any],
+    ) -> str | None:
+        parsed = self._parse_git_import_source(url)
+        if parsed["scheme"] != "ssh":
+            return None
+        ssh_key_path = import_metadata.get("sshKeyPath")
+        if isinstance(ssh_key_path, str) and ssh_key_path:
+            return ssh_key_path
+        return str(self._validate_registry_ssh_key_for_import(user_id)["privateKeyPath"])
+
+    def _clone_nested_import_source(
+        self,
+        url: str,
+        checkout_root: Path,
+        *,
+        ref: str | None = None,
+        sha: str | None = None,
+        ssh_key_path: str | None = None,
+    ) -> None:
+        command = ["git", "clone"]
+        if ref:
+            command.extend(["--depth", "1", "--branch", ref])
+        elif not sha:
+            command.extend(["--depth", "1"])
+        command.extend([url, str(checkout_root)])
+        try:
+            result = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+                env=self._git_ssh_env(ssh_key_path),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise MarketplaceImportSourceError("marketplace.import.validation.clone_failed") from exc
+        if result.returncode != 0:
+            raise MarketplaceImportSourceError("marketplace.import.validation.clone_failed")
+        if sha:
+            checkout_result = subprocess.run(
+                ["git", "-C", str(checkout_root), "checkout", "--detach", sha],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=self._git_ssh_env(ssh_key_path),
+            )
+            if checkout_result.returncode != 0:
+                raise MarketplaceImportSourceError("marketplace.import.validation.clone_failed")
+        if not checkout_root.exists() or not checkout_root.is_dir():
+            raise MarketplaceImportSourceError("marketplace.import.validation.clone_failed")
 
     def _reject_import_symlinks(self, package_path: Path) -> None:
+        package_root = package_path.resolve()
         for path in package_path.rglob("*"):
             if path.is_symlink():
-                raise MarketplaceImportSourceError("marketplace.package.symlink_rejected")
+                try:
+                    path.resolve(strict=True).relative_to(package_root)
+                except (OSError, ValueError) as exc:
+                    raise MarketplaceImportSourceError("marketplace.package.symlink_rejected") from exc
 
     def _rewrite_imported_manifest_name(
         self,
@@ -845,10 +951,10 @@ class MarketplaceService:
             "provider": source.provider,
             "sourceKind": source.source_kind,
             "source": source.source,
-            "ref": source.ref,
             "packageId": candidate.package_id,
             "targetPackageId": target_package_id,
             "sourcePath": candidate.source_path,
+            "sourceMetadata": candidate.source_metadata,
             "importedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
         self._atomic_write_json(manifest_path, manifest)
@@ -888,8 +994,6 @@ class MarketplaceService:
     def validate_import_source(self, user_id: str, source: MarketplaceImportSource) -> dict[str, Any]:
         """Validate import source safety boundaries and return resolved source metadata."""
         self._reject_raw_secret_material(source)
-        if source.ref:
-            self._validate_import_ref(source.ref)
         if source.source_kind == "local":
             return {
                 "sourceKind": "local",
@@ -1261,9 +1365,7 @@ class MarketplaceService:
             package_revision=detail.revision,
             runtime_url=str(runtime["runtimeUrl"]),
         )
-        preflight = self.detect_cli(request.provider)
-        if preflight.error_code == "marketplace.install.cli_unavailable":
-            preflight = self._detect_cli_on_runtime(request.provider, str(runtime["runtimeUrl"]))
+        preflight = self._detect_cli_on_runtime(request.provider, str(runtime["runtimeUrl"]))
         if preflight.error_code == "marketplace.install.cli_unavailable":
             result = self._install_result(
                 request,
@@ -1569,6 +1671,17 @@ class MarketplaceService:
     def get_registry_git_status(self, user_id: str) -> MarketplaceGitStatus:
         """Return file-level Git status for the current user's Marketplace registry."""
         root = self.get_registry_root(user_id)
+        if not (root / ".git").exists():
+            if root.exists() and any(root.iterdir()):
+                self._run_git(root, ["init"])
+            else:
+                return MarketplaceGitStatus(
+                    branch="",
+                    is_git_repo=False,
+                    staged_count=0,
+                    unstaged_count=0,
+                    untracked_count=0,
+                )
         if not (root / ".git").exists():
             return MarketplaceGitStatus(
                 branch="",
@@ -2257,11 +2370,9 @@ class MarketplaceService:
         package_path: Path,
     ) -> Path:
         provider_root = package_path.parents[1]
-        manager_workspace = self._manager_workspace_path(workspace_id)
-        runtime_workspace = Path("/workspace")
-        stage_relative = Path(".marketplace-install") / provider
-        manager_stage_root = manager_workspace / stage_relative
-        runtime_stage_root = runtime_workspace / stage_relative
+        stage_relative = Path(provider)
+        manager_stage_root = self._manager_marketplace_install_path(workspace_id) / stage_relative
+        runtime_stage_root = Path("/marketplace-install") / stage_relative
 
         if manager_stage_root.exists():
             shutil.rmtree(manager_stage_root)
@@ -2269,6 +2380,8 @@ class MarketplaceService:
         shutil.copytree(provider_root, manager_stage_root)
         if provider == "claude-code":
             self._normalize_staged_claude_marketplace_manifest(manager_stage_root)
+        if provider == "codex":
+            self._normalize_staged_codex_marketplace_manifest(manager_stage_root)
 
         relative_package_path = package_path.relative_to(provider_root)
         return runtime_stage_root / relative_package_path
@@ -2279,6 +2392,14 @@ class MarketplaceService:
         if not manifest:
             return
         manifest["name"] = "local-marketplace"
+        self._atomic_write_json(manifest_path, manifest)
+
+    def _normalize_staged_codex_marketplace_manifest(self, staged_provider_root: Path) -> None:
+        manifest_path = staged_provider_root / ".agents" / "plugins" / "marketplace.json"
+        manifest = self._read_json(manifest_path)
+        if not manifest:
+            return
+        manifest["name"] = self._codex_marketplace_name(str(manifest.get("name") or "local-marketplace"))
         self._atomic_write_json(manifest_path, manifest)
 
     def _manager_workspace_path(self, workspace_id: str) -> Path:
@@ -2292,6 +2413,12 @@ class MarketplaceService:
                 return candidate
         candidates[0].mkdir(parents=True, exist_ok=True)
         return candidates[0]
+
+    def _manager_marketplace_install_path(self, workspace_id: str) -> Path:
+        base = Path(get_settings().MANAGER_MARKETPLACE_INSTALL_DIR)
+        candidate = base / workspace_id.replace("-", "_")
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
 
     def _execute_install_command_on_runtime(
         self,
@@ -2349,6 +2476,9 @@ class MarketplaceService:
         if runtime_status == "success":
             status: str = "success"
             error_code = None
+        elif self._is_install_already_satisfied(request, data):
+            status = "success"
+            error_code = None
         elif runtime_status == "timeout":
             status = "timeout"
             error_code = str(data.get("errorCode") or "marketplace.install.timeout")
@@ -2367,6 +2497,18 @@ class MarketplaceService:
             stderr_limit_bytes=command_plan.stderr_limit_bytes,
             redact_patterns=command_plan.redact_patterns,
         )
+
+    def _is_install_already_satisfied(
+        self,
+        request: MarketplaceInstallRequest,
+        data: dict[str, Any],
+    ) -> bool:
+        if request.provider != "gemini":
+            return False
+        stderr = data.get("stderr")
+        stdout = data.get("stdout")
+        output = "\n".join(part for part in [stdout, stderr] if isinstance(part, str))
+        return "already installed" in output.lower()
 
     def _execute_runtime_command_plan(
         self,
@@ -2455,9 +2597,7 @@ class MarketplaceService:
         ssh_key_path: str | None = None,
     ) -> None:
         command = ["git", "clone", "--depth", "1"]
-        if source.ref:
-            command.extend(["--branch", source.ref])
-        command.extend([source.source, str(checkout_root)])
+        command.extend([source.source.strip(), str(checkout_root)])
         try:
             result = subprocess.run(
                 command,
@@ -2514,16 +2654,6 @@ class MarketplaceService:
         values = [source.source]
         if any(self._raw_private_key_pattern.search(value) for value in values):
             raise MarketplaceImportSourceError("marketplace.import.validation.raw_private_key_unsupported")
-
-    def _validate_import_ref(self, ref: str) -> None:
-        if (
-            not self._git_ref_pattern.match(ref)
-            or ".." in ref
-            or ref.endswith(".")
-            or ref.endswith("/")
-            or ref.startswith("-")
-        ):
-            raise MarketplaceImportSourceError("marketplace.import.validation.invalid_ref")
 
     def _parse_git_import_source(self, source: str) -> dict[str, str]:
         if not source.strip():
@@ -2734,10 +2864,15 @@ class MarketplaceService:
 
     def _build_codex_manifest(self, metadata: MarketplaceRegistryRootMetadataSavePayload) -> dict[str, Any]:
         return {
-            "name": metadata.name,
+            "name": self._codex_marketplace_name(metadata.name),
             "description": metadata.description,
             "plugins": [],
         }
+
+    def _codex_marketplace_name(self, name: str) -> str:
+        normalized = re.sub(r"[^A-Za-z0-9_-]+", "-", name.strip())
+        normalized = re.sub(r"-+", "-", normalized).strip("-_")
+        return normalized or "local-marketplace"
 
     def _merge_root_manifest(self, path: Path, metadata_manifest: dict[str, Any]) -> dict[str, Any]:
         current = self._read_json(path) if path.exists() else {}

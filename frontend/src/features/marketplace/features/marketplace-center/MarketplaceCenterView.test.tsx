@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,16 +46,15 @@ const mockExportPackage = vi.fn();
 const mockGetRegistrySettings = vi.fn();
 const mockGetInstallPreflight = vi.fn();
 const mockInitializeRegistry = vi.fn();
-const mockListImportBranches = vi.fn();
 const mockListPackages = vi.fn();
 const mockScanImportSource = vi.fn();
 const mockImportCandidates = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock('../../api/marketplaceApi', () => ({
   getRegistrySettings: (...args: unknown[]) => mockGetRegistrySettings(...args),
   getInstallPreflight: (...args: unknown[]) => mockGetInstallPreflight(...args),
   initializeRegistry: (...args: unknown[]) => mockInitializeRegistry(...args),
-  listImportBranches: (...args: unknown[]) => mockListImportBranches(...args),
   listPackages: (...args: unknown[]) => mockListPackages(...args),
   scanImportSource: (...args: unknown[]) => mockScanImportSource(...args),
   importCandidates: (...args: unknown[]) => mockImportCandidates(...args),
@@ -73,20 +72,15 @@ vi.mock('@/features/workspace/services/workspaceRuntimeApi', () => ({
   })),
 }));
 
+vi.mock('@/shared/components/ui/use-toast', () => ({
+  useToast: () => ({ toast: mockToast }),
+}));
+
 const renderCenter = () => render(
   <MemoryRouter>
     <MarketplaceCenterView />
   </MemoryRouter>,
 );
-
-const chooseImportBranch = async (user: ReturnType<typeof userEvent.setup>, branch = 'main') => {
-  await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.loadBranches' }));
-  await waitFor(() => expect(mockListImportBranches).toHaveBeenCalled());
-  const branchSelect = screen.getAllByRole('combobox').at(-1);
-  expect(branchSelect).toBeTruthy();
-  await user.click(branchSelect!);
-  await user.click(await screen.findByRole('option', { name: branch }));
-};
 
 describe('MarketplaceCenterView', () => {
   beforeEach(() => {
@@ -100,13 +94,13 @@ describe('MarketplaceCenterView', () => {
     mockGetRegistrySettings.mockReset();
     mockGetInstallPreflight.mockReset();
     mockInitializeRegistry.mockReset();
-    mockListImportBranches.mockReset();
     mockListPackages.mockReset();
     mockInstallPackage.mockReset();
     mockDeletePackage.mockReset();
     mockExportPackage.mockReset();
     mockScanImportSource.mockReset();
     mockImportCandidates.mockReset();
+    mockToast.mockReset();
     mockGetRegistrySettings.mockResolvedValue({
       displayName: 'Local Marketplace Registry',
       rootPath: '~/.ai-developer-hub/marketplace',
@@ -125,7 +119,6 @@ describe('MarketplaceCenterView', () => {
       },
     });
     mockInitializeRegistry.mockResolvedValue({});
-    mockListImportBranches.mockResolvedValue({ branches: ['main', 'develop'] });
     mockListPackages.mockResolvedValue(mockListResult);
     mockInstallPackage.mockResolvedValue({
       status: 'success',
@@ -144,8 +137,12 @@ describe('MarketplaceCenterView', () => {
         sourcePath: 'plugins/review-assistant',
         duplicate: false,
         duplicateAction: 'skip',
-        validationSeverity: 'none',
-        validationResults: [],
+        validationSeverity: 'warning',
+        validationResults: [{
+          severity: 'warning',
+          code: 'marketplace.validation.metadata_conflict',
+          messageKey: 'marketplace.validation.metadata_conflict',
+        }],
       },
       {
         id: 'claude-code:existing-package',
@@ -309,7 +306,19 @@ describe('MarketplaceCenterView', () => {
     expect(screen.getByText('marketplace.export.result.ready')).toBeInTheDocument();
   });
 
-  it('allows HTTPS repository URLs to load branches', async () => {
+  it('shows action API errors in the center action dialog', async () => {
+    const user = userEvent.setup();
+    mockExportPackage.mockRejectedValue(new Error('你沒有權限執行此 Marketplace 操作'));
+    renderCenter();
+
+    await screen.findByText('Figma Context');
+    await user.click(screen.getByRole('button', { name: 'marketplace.center.card.actions.export' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.export.actions.export' }));
+
+    expect(await screen.findByText('你沒有權限執行此 Marketplace 操作')).toBeInTheDocument();
+  });
+
+  it('scans HTTPS repository URLs using the default branch', async () => {
     const user = userEvent.setup();
     renderCenter();
 
@@ -317,27 +326,28 @@ describe('MarketplaceCenterView', () => {
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
     await user.clear(screen.getByLabelText('marketplace.import.fields.source'));
     await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'https://github.com/example/marketplace.git');
-    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.loadBranches' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
 
     await waitFor(() => {
-      expect(mockListImportBranches).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockScanImportSource).toHaveBeenCalledWith(expect.objectContaining({
         source: 'https://github.com/example/marketplace.git',
       }));
     });
+    expect(mockScanImportSource).toHaveBeenCalledWith(expect.not.objectContaining({
+      ref: expect.any(String),
+    }));
   });
 
-  it('shows a backend branch lookup error when loading repository branches fails', async () => {
+  it('does not render branch selection in the import flow', async () => {
     const user = userEvent.setup();
-    mockListImportBranches.mockRejectedValueOnce(new Error('marketplace.import.validation.branchListFailed'));
     renderCenter();
 
     await screen.findByText('Figma Context');
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
-    await user.clear(screen.getByLabelText('marketplace.import.fields.source'));
-    await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@untrusted.example:team/marketplace.git');
-    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.loadBranches' }));
 
-    expect(await screen.findByText('marketplace.import.validation.branchListFailed')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getAllByRole('combobox')).toHaveLength(2);
+    expect(within(dialog).getByRole('button', { name: 'marketplace.import.actions.scan' })).toBeInTheDocument();
   });
 
   it('requires typing the package id before deleting a package from the list row', async () => {
@@ -383,19 +393,24 @@ describe('MarketplaceCenterView', () => {
     expect(await screen.findByText('marketplace.delete.result.failed')).toBeInTheDocument();
   });
 
-  it('scans import candidates, keeps duplicates unselected, and imports selected candidates', async () => {
+  it('scans import candidates without selecting them by default and imports selected candidates', async () => {
     const user = userEvent.setup();
     renderCenter();
 
     await screen.findByText('Figma Context');
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
     await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@github.com:example/marketplace.git');
-    await chooseImportBranch(user);
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
 
     expect(await screen.findByText('Review Assistant')).toBeInTheDocument();
     expect(screen.getByText('Existing Package')).toBeInTheDocument();
     expect(screen.getByText('marketplace.import.candidates.duplicate')).toBeInTheDocument();
+    expect(screen.queryByText('marketplace.validation.metadata_conflict')).not.toBeInTheDocument();
+    expect(screen.getByText('marketplace.import.validation.duplicate')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'marketplace.import.actions.import' })).toBeDisabled();
+    const candidateCheckboxes = screen.getAllByRole('checkbox').slice(-2);
+    expect(candidateCheckboxes).toHaveLength(2);
+    expect(candidateCheckboxes.every(checkbox => !(checkbox as HTMLInputElement).checked)).toBe(true);
 
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
     expect(screen.getByRole('button', { name: 'marketplace.import.actions.selectAll' })).toBeDisabled();
@@ -408,7 +423,9 @@ describe('MarketplaceCenterView', () => {
       expect(mockScanImportSource).toHaveBeenCalledWith(expect.objectContaining({
         provider: 'claude-code',
         sourceKind: 'git',
-        ref: 'main',
+      }));
+      expect(mockScanImportSource).toHaveBeenCalledWith(expect.not.objectContaining({
+        ref: expect.any(String),
       }));
       expect(mockImportCandidates).toHaveBeenCalledWith([
         expect.objectContaining({
@@ -421,7 +438,48 @@ describe('MarketplaceCenterView', () => {
         }),
       ]);
     });
-    expect(screen.getByText('marketplace.import.result.summary')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'marketplace.import.result.summary',
+        variant: 'success',
+      }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  it('reveals imported packages by clearing filters and switching to the imported provider', async () => {
+    const user = userEvent.setup();
+    mockImportCandidates.mockResolvedValue({
+      imported: [{
+        ...mockPackage,
+        provider: 'claude-code',
+        packageId: 'review-assistant',
+        displayName: 'Review Assistant',
+      }],
+      skipped: [],
+      failed: [],
+      warnings: [],
+    });
+    renderCenter();
+
+    await screen.findByText('Figma Context');
+    await user.click(screen.getByRole('button', { name: 'marketplace.providers.codex' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.features.mcp' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
+    await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@github.com:example/marketplace.git');
+    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
+    await user.click(await screen.findByRole('button', { name: 'marketplace.import.actions.selectAll' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.import' }));
+
+    await waitFor(() => {
+      expect(mockListPackages).toHaveBeenCalledWith(expect.objectContaining({
+        q: '',
+        provider: 'claude-code',
+        category: 'all',
+        features: [],
+        page: 1,
+      }));
+    });
   });
 
   it('imports a duplicate candidate as a new package id', async () => {
@@ -431,7 +489,6 @@ describe('MarketplaceCenterView', () => {
     await screen.findByText('Figma Context');
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
     await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@github.com:example/marketplace.git');
-    await chooseImportBranch(user);
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
 
     expect(await screen.findByText('Existing Package')).toBeInTheDocument();
@@ -464,10 +521,10 @@ describe('MarketplaceCenterView', () => {
     await screen.findByText('Figma Context');
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
     await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@github.com:example/marketplace.git');
-    await chooseImportBranch(user);
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
 
     expect(await screen.findByText('Review Assistant')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
     expect(await screen.findByText('marketplace.import.validation.cloneFailed')).toBeInTheDocument();
@@ -497,13 +554,19 @@ describe('MarketplaceCenterView', () => {
     await screen.findByText('Figma Context');
     await user.click(screen.getByRole('button', { name: 'marketplace.center.actions.import' }));
     await user.type(screen.getByLabelText('marketplace.import.fields.source'), 'git@github.com:example/marketplace.git');
-    await chooseImportBranch(user);
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.scan' }));
 
     expect(await screen.findByText('Review Assistant')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.selectAll' }));
     await user.click(screen.getByRole('button', { name: 'marketplace.import.actions.import' }));
 
-    expect(await screen.findByText('marketplace.import.result.failedDetails')).toBeInTheDocument();
-    expect(screen.getByText(/marketplace.validation.required_manifest_missing/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'marketplace.import.result.summary',
+        description: 'marketplace.import.result.failedDetailsDescription',
+        variant: 'destructive',
+      }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 });

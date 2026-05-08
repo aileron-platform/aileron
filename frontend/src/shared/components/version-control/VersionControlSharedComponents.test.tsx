@@ -85,6 +85,14 @@ describe('shared version-control components', () => {
     expect(onCommit).toHaveBeenCalledWith({ message: 'Update registry' });
   });
 
+  it('keeps read-only commit forms out of the submitting state', () => {
+    render(<VersionControlCommitForm onCommit={vi.fn()} stagedCount={1} disabled />);
+
+    expect(screen.getByPlaceholderText('Commit message')).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Commit' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Committing...' })).not.toBeInTheDocument();
+  });
+
   it('renders file change rows and stage actions without workspace context', async () => {
     const user = userEvent.setup();
     const onStageToggle = vi.fn();

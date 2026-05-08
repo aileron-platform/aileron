@@ -109,7 +109,23 @@ interface CliSlashCommandDocumentResponse {
   document: CliSlashCommandDetail;
 }
 
-const buildCliDocumentId = (scope: string, fileName: string) => `${scope}:${fileName}`;
+const buildCliDocumentId = (
+  scope: string,
+  fileName: string,
+  namespace?: string,
+  extensionName?: string,
+) => [scope, extensionName, namespace, fileName].filter(Boolean).join(':');
+
+const appendCliSlashCommandQuery = (
+  path: string,
+  source: Pick<CliSlashCommandSummary, 'namespace' | 'extensionName'> | undefined,
+): string => {
+  const params = new URLSearchParams();
+  if (source?.namespace) params.set('namespace', source.namespace);
+  if (source?.extensionName) params.set('extensionName', source.extensionName);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+};
 
 type CliSubagentScope = 'project' | 'user' | 'plugin';
 
@@ -144,11 +160,12 @@ const mapCliSlashCommandDocument = (
 ): AgentDocument => {
   const namespace = detail.namespace ?? undefined;
   const pluginName = detail.pluginName ?? undefined;
+  const extensionName = detail.extensionName ?? undefined;
   const marketplaceName = detail.marketplaceName ?? undefined;
   const title = buildSlashCommandDisplayName(detail.fileName, namespace, pluginName);
 
   return {
-    id: buildCliDocumentId(scope, detail.fileName),
+    id: buildCliDocumentId(scope, detail.fileName, namespace, scope === 'extension' ? extensionName : undefined),
     title,
     description: detail.description ?? '',
     content: detail.content,
@@ -156,7 +173,7 @@ const mapCliSlashCommandDocument = (
     size: detail.size,
     pluginName,
     marketplaceName,
-    extensionName: detail.extensionName ?? undefined,
+    extensionName,
     extensionVersion: detail.extensionVersion ?? undefined,
     metadata: {
       fileName: detail.fileName,
@@ -165,7 +182,7 @@ const mapCliSlashCommandDocument = (
       format: detail.format ?? 'markdown',
       pluginName,
       marketplaceName,
-      extensionName: detail.extensionName ?? undefined,
+      extensionName,
       extensionVersion: detail.extensionVersion ?? undefined,
     },
   };
@@ -1401,7 +1418,10 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
         // Fetch full document content.
         const detailRes = await apiRequest<CliSlashCommandDocumentResponse>(
           runtimeBaseUrl,
-          `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${group.scope}/${encodeURIComponent(summary.fileName)}`,
+          appendCliSlashCommandQuery(
+            `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${group.scope}/${encodeURIComponent(summary.fileName)}`,
+            summary,
+          ),
         );
         documents.push(mapCliSlashCommandDocument(group.scope, detailRes.document));
       }
@@ -1441,7 +1461,13 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     };
     const response = await apiRequest<CliSlashCommandDocumentResponse>(
       runtimeBaseUrl,
-      `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${scope}/${encodeURIComponent(fileName)}`,
+      appendCliSlashCommandQuery(
+        `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${scope}/${encodeURIComponent(fileName)}`,
+        {
+          namespace: (document.metadata?.namespace as string) ?? undefined,
+          extensionName: (document.metadata?.extensionName as string) ?? undefined,
+        },
+      ),
       { method: 'PUT', body: payload },
     );
     return mapCliSlashCommandDocument(response.scope, response.document);
@@ -1456,7 +1482,13 @@ export const createAgentSettingsApi = (apiPrefix: string, agentsMdEndpoint: stri
     const fileName = (document.metadata?.fileName as string) ?? document.title;
     await apiRequest(
       runtimeBaseUrl,
-      `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${scope}/${encodeURIComponent(fileName)}`,
+      appendCliSlashCommandQuery(
+        `workspaces/${workspaceId}/${apiPrefix}/slash-commands/${scope}/${encodeURIComponent(fileName)}`,
+        {
+          namespace: (document.metadata?.namespace as string) ?? undefined,
+          extensionName: (document.metadata?.extensionName as string) ?? undefined,
+        },
+      ),
       { method: 'DELETE' },
     );
   },

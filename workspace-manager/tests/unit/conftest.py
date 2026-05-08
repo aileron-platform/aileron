@@ -200,7 +200,6 @@ def workspace_factory():
             "visibility": kwargs.get("visibility", "private"),
             "status": kwargs.get("status", "active"),
             "runtime_id": kwargs.get("runtime_id"),
-            "template_id": kwargs.get("template_id"),
             "settings": kwargs.get("settings", {}),
             "created_at": kwargs.get("created_at", datetime.now()),
             "updated_at": kwargs.get("updated_at", datetime.now()),
@@ -210,34 +209,6 @@ def workspace_factory():
         return workspace
 
     return create_workspace
-
-
-@pytest.fixture
-def template_factory():
-    """TemplateFactory"""
-    _counter = 0
-
-    def create_template(**kwargs) -> db_models.Template:
-        nonlocal _counter
-        _counter += 1
-
-        defaults = {
-            "id": kwargs.get("id", f"template-{_counter}"),
-            "name": kwargs.get("name", f"Test Template {_counter}"),
-            "description": kwargs.get("description", "Test template description"),
-            "version": kwargs.get("version", "1.0.0"),
-            "owner_id": kwargs.get("owner_id", "user-1"),
-            "visibility": kwargs.get("visibility", "private"),
-            "category": kwargs.get("category", "general"),
-            "config": kwargs.get("config", {}),
-            "created_at": kwargs.get("created_at", datetime.now()),
-            "updated_at": kwargs.get("updated_at", datetime.now()),
-        }
-
-        template = db_models.Template(**defaults)
-        return template
-
-    return create_template
 
 
 @pytest.fixture
@@ -426,9 +397,6 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "workspace: marks tests as workspace tests"
-    )
-    config.addinivalue_line(
-        "markers", "template: marks tests as template tests"
     )
     config.addinivalue_line(
         "markers", "automation: marks tests as automation tests"

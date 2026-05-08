@@ -190,6 +190,9 @@ const marketplace = {
     viewer: {
       searchPlaceholder: 'Search files...',
       refresh: 'Refresh',
+      collapseSidebar: 'Collapse file list',
+      expandSidebar: 'Expand file list',
+      resizeSidebar: 'Resize file list',
       fileNameFallback: 'Untitled file',
       descriptionFallback: 'No description',
       copy: 'Copy',
@@ -332,7 +335,6 @@ const marketplace = {
       provider: 'Provider',
       sourceKind: 'Source type',
       source: 'Repository URL',
-      branch: 'Branch',
       localFile: 'Upload package archive',
       newPackageId: 'New package ID',
       newPackageIdPlaceholder: 'package-id-copy',
@@ -344,15 +346,11 @@ const marketplace = {
     localFile: {
       empty: 'No archive selected',
     },
-    branch: {
-      placeholder: 'Select a branch',
-    },
     actions: {
       scan: 'Scan source',
       import: 'Import selected',
       settings: 'SSH settings',
       chooseFile: 'Choose archive',
-      loadBranches: 'Load branches',
       selectAll: 'Select all',
       clearSelection: 'Clear selection',
     },
@@ -378,19 +376,23 @@ const marketplace = {
       httpsTokenUnsupported: 'HTTPS token authentication is not supported for Marketplace import in this version.',
       sshKeyRequired: 'Generate a Marketplace SSH key before importing from an SSH repository.',
       cloneFailed: 'Marketplace import source checkout failed.',
-      branchListFailed: 'Marketplace import source branch lookup failed.',
       invalidUploadArchive: 'Upload a valid ZIP archive.',
-      nestedRemoteSourceUnsupported: 'Nested remote package sources are not supported in this Marketplace version.',
-      nested_remote_source_unsupported: 'Nested remote package sources are not supported in this Marketplace version.',
     },
     result: {
       summary: 'Imported {{imported}}, skipped {{skipped}}, failed {{failed}}, duplicates {{duplicates}}, warnings {{warnings}}.',
       failedDetails: 'Failed items',
+      failedDetailsDescription: 'Failed items: {{details}}',
+      failedDetailItem: '{{displayName}} ({{packageId}}): {{message}}',
     },
   },
   install: {
     title: 'Install package',
-    description: 'Install this package by executing the provider CLI in the target workspace runtime.',
+    description: 'Install this package by executing the {{commandName}} command in the target workspace runtime.',
+    commandNames: {
+      'claude-code': 'Claude',
+      codex: 'Codex',
+      gemini: 'Gemini',
+    },
     fields: {
       provider: 'Provider',
       package: 'Package',
@@ -402,9 +404,9 @@ const marketplace = {
       currentWorkspace: 'Current workspace',
     },
     preflight: {
-      loading: 'Checking provider CLI availability...',
-      ready: 'Provider CLI is available ({{version}}).',
-      unavailable: 'Provider CLI is unavailable: {{code}}.',
+      loading: 'Checking {{commandName}} command availability...',
+      ready: '{{commandName}} command is available ({{version}}).',
+      unavailable: '{{commandName}} command is unavailable: {{code}}.',
       unknownVersion: 'version unknown',
     },
     commandPreview: 'Command preview',
@@ -420,11 +422,11 @@ const marketplace = {
     result: {
       success: 'Package installed successfully.',
       failed: 'Install failed with error code: {{code}}',
-      timeout: 'Install timed out before the provider CLI completed. Error code: {{code}}',
+      timeout: 'Install timed out before the {{commandName}} command completed. Error code: {{code}}',
       validation: 'Install was blocked by provider validation. Error code: {{code}}',
-      cliUnavailable: 'Provider CLI is unavailable in the target workspace. Error code: {{code}}',
-      cliVersionUnsupported: 'Provider CLI version is not supported. Error code: {{code}}',
-      cliCapabilityMissing: 'Provider CLI does not support the required install capability. Error code: {{code}}',
+      cliUnavailable: '{{commandName}} command is unavailable in the target workspace. Error code: {{code}}',
+      cliVersionUnsupported: '{{commandName}} command version is not supported. Error code: {{code}}',
+      cliCapabilityMissing: '{{commandName}} command does not support the required install capability. Error code: {{code}}',
       runtimeUnavailable: 'Workspace runtime is unavailable. Error code: {{code}}',
     },
   },
@@ -441,6 +443,7 @@ const marketplace = {
     },
     result: {
       ready: 'Export archive is ready.',
+      failed: 'Export failed with error code: {{code}}',
     },
   },
   delete: {
@@ -1180,6 +1183,7 @@ const marketplace = {
       errors: {
         conflict: 'Pull stopped because registry files have conflicts. Resolve conflicts outside Marketplace, then refresh.',
         unsupportedBranch: 'This repository requires an unsupported branch operation. Marketplace first version only supports current-branch fetch, pull, push, status, diff, commit, and history.',
+        permissionDenied: 'You can view Marketplace registry changes, but you do not have permission to stage, commit, or update the registry.',
       },
       setupRequired: {
         title: 'Git repository setup required',

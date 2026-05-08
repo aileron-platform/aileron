@@ -30,7 +30,6 @@ from app.routers import (
     oauth_router,
     settings_router,
     teams_router,
-    templates_router,
     users_router,
     workspaces_router,
     workspace_setup_router,
@@ -117,7 +116,7 @@ app = FastAPI(
     - **Workspace Management**: Create, configure, start, stop development environments
     - **Container Management**: Docker container lifecycle control
     - **Team Collaboration**: Multi-user workspace sharing and permission management
-    - **Template Hub**: Pre-configured project template management
+    - **Marketplace**: Package discovery, installation, and registry management
     - **Task Scheduling**: Automated task execution and management
 
     ### 🔧 Technical Features
@@ -185,14 +184,6 @@ app = FastAPI(
             "externalDocs": {
                 "description": "Workspace documentation",
                 "url": "https://docs.aileron.com/workspaces",
-            },
-        },
-        {
-            "name": "templates",
-            "description": "Project template management and custom templates",
-            "externalDocs": {
-                "description": "Template documentation",
-                "url": "https://docs.aileron.com/templates",
             },
         },
         {
@@ -272,7 +263,6 @@ app.include_router(knowledge_bases_router, prefix="/api/v1")
 app.include_router(marketplace_router, prefix="/api/v1")
 app.include_router(workspace_setup_router, prefix="/api/v1")
 app.include_router(settings_router, prefix="/api/v1")
-app.include_router(templates_router, prefix="/api/v1")
 app.include_router(automation_router, prefix="/api/v1")
 app.include_router(container_images_router, prefix="/api/v1")
 

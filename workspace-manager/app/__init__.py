@@ -5,7 +5,7 @@ Workspace management service providing:
 - Workspace lifecycle management
 - Container management
 - Team collaboration features
-- Template management
+- Marketplace package management
 - Scheduled task management
 """
 

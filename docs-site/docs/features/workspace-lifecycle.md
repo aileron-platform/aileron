@@ -42,19 +42,9 @@ curl -X POST http://localhost:3001/api/v1/workspaces \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-workspace",
-    "template_id": "...",
     "provisioner": "docker"
   }'
 ```
-
-### 從範本建立
-
-範本（Template）定義了 workspace 的：
-- 容器映像
-- 預設環境變數
-- 安裝步驟
-- 防火牆設定
-- 特徵標記
 
 ## 容器組成
 

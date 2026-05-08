@@ -6,7 +6,6 @@ import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import { sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentDocument, AgentScope } from '../types';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 
 export interface SubagentsPageProps {
   apiPrefix?: string;
@@ -57,12 +56,6 @@ const SubagentsPage: React.FC<SubagentsPageProps> = ({
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId,
-    features: ['subagents'],
-    onRefresh: loadDocuments,
-  });
 
   const handleCreate = useCallback(async (doc: AgentDocument): Promise<AgentDocument> => {
     const created = await api.createSubagent(runtimeBaseUrl, workspaceId, doc);

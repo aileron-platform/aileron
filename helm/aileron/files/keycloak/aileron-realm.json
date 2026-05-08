@@ -12,6 +12,26 @@
   "bruteForceProtected": false,
   "passwordPolicy": "length(8) and maxLength(128)",
   "accessTokenLifespan": 10800,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Aileron administrator"
+      },
+      {
+        "name": "developer",
+        "description": "Aileron developer"
+      },
+      {
+        "name": "user",
+        "description": "Aileron user"
+      },
+      {
+        "name": "viewer",
+        "description": "Aileron viewer"
+      }
+    ]
+  },
   "clients": [
     {
       "id": "7dfa9202-0807-43ab-9214-029512429a1c",
@@ -67,7 +87,7 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["default-roles-aileron"]
+      "realmRoles": ["admin"]
     }
   ]
 }

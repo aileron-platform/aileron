@@ -14,7 +14,6 @@ data/
 ├── claude-data/           # Claude Code related data
 ├── workspace-manager/
 │   └── projects/
-├── template-center/       # Template Center data
 ├── init-scripts/          # Initialization scripts
 └── ssh-keys/              # SSH keys
 ```
@@ -26,14 +25,13 @@ data/
 - `workspaces/`: one directory per workspace, including project code and config
 - `claude-data/`: MCP, hooks, subagents, and other Claude Code data
 - `workspace-manager/projects/`: project files managed by Workspace Manager
-- `template-center/`: stored templates and metadata
 - `init-scripts/`: SQL and other bootstrap scripts
 - `ssh-keys/`: keys used for Git and remote connections
 
 ## Important Notes
 
 1. Do not edit files inside `postgres/` or `redis/` manually.
-2. Back up `workspaces/` and `template-center/` regularly.
+2. Back up `workspaces/` regularly.
 3. Make sure container users have the expected read and write permissions.
 4. Data files under this directory are intentionally excluded from Git.
 
@@ -48,7 +46,6 @@ data/
 
 # Workspace Manager
 - ./data/workspace-manager/projects:/workspace-manager/projects
-- ./data/template-center:/data/templates
 - ./data/init-scripts:/data/init-scripts
 
 # Workspace Runtime

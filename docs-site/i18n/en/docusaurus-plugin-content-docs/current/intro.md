@@ -18,15 +18,15 @@ Today, **Claude Code** provides the most complete end-to-end experience in Ailer
 
 ### Governance-Aligned Workspaces
 
-Centralized configuration, templates, access controls, and standardized runtime capabilities make it easier to introduce agents in ways that fit enterprise operating models instead of bypassing them.
+Centralized Marketplace packages, access controls, and standardized runtime capabilities make it easier to introduce agents in ways that fit enterprise operating models instead of bypassing them.
 
 ### Simplified Workspace Setup
 
 Users do not need to manually assemble complex local environments before they can start. Aileron provides ready-to-use workspaces with preconfigured tools, services, and workflow integrations.
 
-### Standardized Templates and Tooling
+### Governed Marketplace Tooling
 
-A central **template catalog** lets you predefine Slash Commands, MCP Servers, install flows, and environment variables for different scenarios. Teams can spin up repeatable workspaces quickly while keeping tooling and workflow conventions consistent.
+A central **Marketplace** lets teams review, import, and install Slash Commands, MCP Servers, install flows, and environment variables while keeping tooling and workflow conventions consistent.
 
 ### Lower Adoption Barriers For Non-Technical Users
 
@@ -51,7 +51,7 @@ OpenSpec is now integrated as a built-in workspace capability rather than just a
 | Workspace Lifecycle | Create, start, stop, and delete workspaces across Docker Compose and Kubernetes (workspace-operator + CRDs) |
 | Multi-Agent Runtime Model | Claude Code is currently the most complete integration, with OpenCode, Gemini, and Codex support expanding over time |
 | OpenSpec Workflow | Browse OpenSpec documents natively in the workspace, track change state, and launch workflow actions from the chat composer |
-| Template-based Workspaces | Configure Slash Commands, MCP Servers, env vars, and install flows once, then reuse them across teams |
+| Marketplace Packages | Review, import, and install Slash Commands, MCP Servers, env vars, and install flows across teams |
 | Multi-form Runtimes | Terminal (Go-based PTY), Chrome/Browser, and Canvas Runtime — all usable as agent-controllable execution surfaces |
 | File Explorer & Git | Real-time file monitoring, version control operations, branch management |
 | Scheduler / Automation | Cron-based tasks can drive agent workflows; Claude Code currently has the most complete automation experience |
@@ -120,7 +120,7 @@ See [Deployment](/deployment/docker) for details.
                           │ REST / WebSocket
 ┌─────────────────────────▼────────────────────────┐
 │              Workspace Manager (FastAPI)         │
-│   Workspace CRUD │ Templates │ Automation        │
+│   Workspace CRUD │ Marketplace │ Automation      │
 │   Auth (Keycloak) │ Teams │ Docker/K8s Provisioner │
 └──────────┬──────────────────────┬────────────────┘
            │ HTTP                 │ Docker / K8s API

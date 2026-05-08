@@ -359,6 +359,31 @@ def test_gemini_scan_derives_manifest_metadata_and_command_names(tmp_path):
     }
 
 
+def test_gemini_adapter_accepts_extension_manifest_without_description(tmp_path):
+    adapter = GeminiExtensionAdapter()
+    adapter.ensure_roots(tmp_path)
+    package_path = adapter.package_path(tmp_path, "conductor")
+    package_path.mkdir(parents=True)
+    adapter.atomic_write_json(
+        adapter.manifest_path(package_path),
+        {
+            "name": "conductor",
+            "version": "0.4.1",
+            "contextFileName": "GEMINI.md",
+            "plan": {"directory": "conductor"},
+        },
+    )
+    (package_path / "GEMINI.md").write_text("# Conductor\n", encoding="utf-8")
+
+    validation = adapter.validate_package(package_path)
+    scanned = adapter.scan_external_source(package_path)
+
+    assert validation == []
+    assert scanned[0]["packageId"] == "conductor"
+    assert scanned[0]["validationSeverity"] == "none"
+    assert scanned[0]["validationResults"] == []
+
+
 def test_gemini_adapter_scans_extension_roots_without_marketplace_manifest(tmp_path):
     adapter = GeminiExtensionAdapter()
     adapter.ensure_roots(tmp_path)
@@ -430,10 +455,10 @@ def test_claude_adapter_scans_external_marketplace_candidates(tmp_path):
         "duplicate": False,
         "duplicateAction": "skip",
         "validationSeverity": "warning",
-        "validationResults": [{
-            "severity": "warning",
-            "code": "marketplace.validation.metadata_conflict",
-            "messageKey": "marketplace.validation.metadata_conflict",
+            "validationResults": [{
+                "severity": "warning",
+                "code": "marketplace.validation.metadata_conflict",
+                "messageKey": "marketplace.validation.metadata_conflict",
             "filePath": ".claude-plugin/marketplace.json",
             "details": {
                 "fields": {
@@ -442,9 +467,39 @@ def test_claude_adapter_scans_external_marketplace_candidates(tmp_path):
                         "manifest": "Manifest description",
                     },
                 },
-            },
-        }],
-    }]
+                },
+            }],
+            "sourceMetadata": {},
+        }]
+
+
+def test_claude_external_scan_validates_root_source_with_catalog_package_id(tmp_path):
+    adapter = ClaudeCodeMarketplaceAdapter()
+    manifest_path = tmp_path / ".claude-plugin" / "marketplace.json"
+    manifest_path.parent.mkdir(parents=True)
+    adapter.atomic_write_json(
+        manifest_path,
+        {
+            "plugins": [{
+                "name": "superpowers",
+                "source": "./",
+            }],
+        },
+    )
+    adapter.atomic_write_json(
+        tmp_path / ".claude-plugin" / "plugin.json",
+        {
+            "name": "superpowers",
+            "description": "Core skills library",
+        },
+    )
+
+    candidates = adapter.scan_external_source(tmp_path)
+
+    assert candidates[0]["packageId"] == "superpowers"
+    assert candidates[0]["sourcePath"] == "."
+    assert candidates[0]["validationSeverity"] == "none"
+    assert candidates[0]["validationResults"] == []
 
 
 def test_claude_external_scan_marks_source_path_escape(tmp_path):
@@ -469,7 +524,7 @@ def test_claude_external_scan_marks_source_path_escape(tmp_path):
     assert candidates[0]["validationResults"][0]["code"] == "marketplace.validation.path_escape"
 
 
-def test_claude_external_scan_marks_nested_remote_source_unsupported(tmp_path):
+def test_claude_external_scan_keeps_nested_remote_source_metadata(tmp_path):
     adapter = ClaudeCodeMarketplaceAdapter()
     manifest_path = tmp_path / ".claude-plugin" / "marketplace.json"
     manifest_path.parent.mkdir(parents=True)
@@ -487,13 +542,45 @@ def test_claude_external_scan_marks_nested_remote_source_unsupported(tmp_path):
 
     assert candidates[0]["packageId"] == "remote-plugin"
     assert candidates[0]["sourcePath"] == "https://example.com/org/remote-plugin.git"
-    assert candidates[0]["validationSeverity"] == "error"
-    assert candidates[0]["validationResults"][0]["code"] == (
-        "marketplace.import.validation.nested_remote_source_unsupported"
+    assert candidates[0]["validationSeverity"] == "none"
+    assert candidates[0]["validationResults"] == []
+    assert candidates[0]["sourceMetadata"] == {
+        "kind": "git",
+        "sourceType": "url",
+        "url": "https://example.com/org/remote-plugin.git",
+    }
+
+
+def test_claude_external_scan_allows_official_numeric_and_dot_package_ids(tmp_path):
+    adapter = ClaudeCodeMarketplaceAdapter()
+    manifest_path = tmp_path / ".claude-plugin" / "marketplace.json"
+    manifest_path.parent.mkdir(parents=True)
+    adapter.atomic_write_json(
+        manifest_path,
+        {
+            "plugins": [
+                {
+                    "name": "42crunch-api-security-testing",
+                    "source": "https://example.com/org/42crunch.git",
+                },
+                {
+                    "name": "wordpress.com",
+                    "source": "https://example.com/org/wordpress.git",
+                },
+            ],
+        },
     )
 
+    candidates = adapter.scan_external_source(tmp_path)
 
-def test_claude_external_scan_marks_structured_remote_source_unsupported(tmp_path):
+    assert [candidate["packageId"] for candidate in candidates] == [
+        "42crunch-api-security-testing",
+        "wordpress.com",
+    ]
+    assert [candidate["validationSeverity"] for candidate in candidates] == ["none", "none"]
+
+
+def test_claude_external_scan_keeps_structured_remote_source_metadata(tmp_path):
     adapter = ClaudeCodeMarketplaceAdapter()
     manifest_path = tmp_path / ".claude-plugin" / "marketplace.json"
     manifest_path.parent.mkdir(parents=True)
@@ -515,10 +602,14 @@ def test_claude_external_scan_marks_structured_remote_source_unsupported(tmp_pat
 
     assert candidates[0]["packageId"] == "remote-plugin"
     assert candidates[0]["sourcePath"] == "https://example.com/org/remote-plugin.git:plugins/remote-plugin"
-    assert candidates[0]["validationSeverity"] == "error"
-    assert candidates[0]["validationResults"][0]["code"] == (
-        "marketplace.import.validation.nested_remote_source_unsupported"
-    )
+    assert candidates[0]["validationSeverity"] == "none"
+    assert candidates[0]["validationResults"] == []
+    assert candidates[0]["sourceMetadata"] == {
+        "kind": "git",
+        "sourceType": "git-subdir",
+        "url": "https://example.com/org/remote-plugin.git",
+        "path": "plugins/remote-plugin",
+    }
 
 
 def test_codex_adapter_scans_external_marketplace_candidates(tmp_path):
@@ -561,10 +652,10 @@ def test_codex_adapter_scans_external_marketplace_candidates(tmp_path):
         "duplicate": False,
         "duplicateAction": "skip",
         "validationSeverity": "warning",
-        "validationResults": [{
-            "severity": "warning",
-            "code": "marketplace.validation.metadata_conflict",
-            "messageKey": "marketplace.validation.metadata_conflict",
+            "validationResults": [{
+                "severity": "warning",
+                "code": "marketplace.validation.metadata_conflict",
+                "messageKey": "marketplace.validation.metadata_conflict",
             "filePath": ".agents/plugins/marketplace.json",
             "details": {
                 "fields": {
@@ -573,9 +664,91 @@ def test_codex_adapter_scans_external_marketplace_candidates(tmp_path):
                         "manifest": "Manifest description",
                     },
                 },
-            },
-        }],
+                },
+            }],
+            "sourceMetadata": {},
+        }]
+
+
+def test_codex_external_scan_validates_root_source_with_catalog_package_id(tmp_path):
+    adapter = CodexMarketplaceAdapter()
+    manifest_path = tmp_path / ".agents" / "plugins" / "marketplace.json"
+    manifest_path.parent.mkdir(parents=True)
+    adapter.atomic_write_json(
+        manifest_path,
+        {
+            "plugins": [{
+                "name": "superpowers",
+                "source": {"source": "local", "path": "./"},
+            }],
+        },
+    )
+    adapter.atomic_write_json(
+        tmp_path / ".codex-plugin" / "plugin.json",
+        {
+            "name": "superpowers",
+            "version": "1.0.0",
+            "description": "Core skills library",
+        },
+    )
+
+    candidates = adapter.scan_external_source(tmp_path)
+
+    assert candidates[0]["packageId"] == "superpowers"
+    assert candidates[0]["sourcePath"] == "."
+    assert candidates[0]["validationSeverity"] == "none"
+    assert candidates[0]["validationResults"] == []
+
+
+def test_codex_external_scan_detects_root_plugin_without_marketplace_manifest(tmp_path):
+    adapter = CodexMarketplaceAdapter()
+    adapter.atomic_write_json(
+        tmp_path / ".codex-plugin" / "plugin.json",
+        {
+            "name": "superpowers",
+            "version": "1.0.0",
+            "description": "Core skills library",
+        },
+    )
+
+    candidates = adapter.scan_external_source(tmp_path)
+
+    assert candidates == [{
+        "id": "codex:superpowers",
+        "provider": "codex",
+        "packageId": "superpowers",
+        "displayName": "superpowers",
+        "sourcePath": ".",
+        "duplicate": False,
+        "duplicateAction": "skip",
+        "validationSeverity": "none",
+        "validationResults": [],
+        "sourceMetadata": {},
     }]
+
+
+def test_codex_import_listing_entry_falls_back_to_root_plugin_manifest(tmp_path):
+    adapter = CodexMarketplaceAdapter()
+    adapter.atomic_write_json(
+        tmp_path / ".codex-plugin" / "plugin.json",
+        {
+            "name": "superpowers",
+            "version": "1.0.0",
+            "description": "Core skills library",
+        },
+    )
+
+    listing = adapter.import_listing_entry(tmp_path, "superpowers", "superpowers")
+
+    assert listing == {
+        "name": "superpowers",
+        "description": "Core skills library",
+        "version": "1.0.0",
+        "source": {
+            "source": "local",
+            "path": "./plugins/superpowers",
+        },
+    }
 
 
 def test_codex_external_scan_marks_source_path_escape(tmp_path):
@@ -600,7 +773,7 @@ def test_codex_external_scan_marks_source_path_escape(tmp_path):
     assert candidates[0]["validationResults"][0]["code"] == "marketplace.validation.path_escape"
 
 
-def test_codex_external_scan_marks_nested_remote_source_unsupported(tmp_path):
+def test_codex_external_scan_keeps_nested_remote_source_metadata(tmp_path):
     adapter = CodexMarketplaceAdapter()
     manifest_path = tmp_path / ".agents" / "plugins" / "marketplace.json"
     manifest_path.parent.mkdir(parents=True)
@@ -617,11 +790,14 @@ def test_codex_external_scan_marks_nested_remote_source_unsupported(tmp_path):
     candidates = adapter.scan_external_source(tmp_path)
 
     assert candidates[0]["packageId"] == "remote-plugin"
-    assert candidates[0]["sourcePath"] == "github"
-    assert candidates[0]["validationSeverity"] == "error"
-    assert candidates[0]["validationResults"][0]["code"] == (
-        "marketplace.import.validation.nested_remote_source_unsupported"
-    )
+    assert candidates[0]["sourcePath"] == "https://github.com/example/remote-plugin.git"
+    assert candidates[0]["validationSeverity"] == "none"
+    assert candidates[0]["validationResults"] == []
+    assert candidates[0]["sourceMetadata"] == {
+        "kind": "git",
+        "sourceType": "github",
+        "url": "https://github.com/example/remote-plugin.git",
+    }
 
 
 def test_gemini_adapter_scans_external_extension_root(tmp_path):
@@ -813,7 +989,9 @@ def test_codex_install_command_uses_local_marketplace_registry_and_user_scope(tm
         "--user",
     ]
     assert plan.cwd == str(provider_root)
-    assert plan.env == {"WORKSPACE_ID": "workspace-1"}
+    assert plan.env == {
+        "WORKSPACE_ID": "workspace-1",
+    }
 
 
 def test_codex_install_command_uses_cli_default_scope_when_user_scope_missing(tmp_path):
@@ -842,6 +1020,9 @@ def test_codex_install_command_uses_cli_default_scope_when_user_scope_missing(tm
         str(tmp_path / "codex"),
     ]
     assert "--user" not in plan.argv
+    assert plan.env == {
+        "WORKSPACE_ID": "workspace-1",
+    }
 
 
 def test_gemini_install_command_uses_default_scope_when_user_scope_missing(tmp_path):
@@ -862,7 +1043,13 @@ def test_gemini_install_command_uses_default_scope_when_user_scope_missing(tmp_p
         ),
     )
 
-    assert plan.argv == ["/usr/bin/gemini", "extensions", "install", str(package_path)]
+    assert plan.argv == [
+        "/usr/bin/gemini",
+        "extensions",
+        "install",
+        str(package_path),
+        "--consent",
+    ]
     assert "--user" not in plan.argv
 
 
@@ -892,10 +1079,14 @@ def test_gemini_install_command_uses_local_extension_path_and_user_scope(tmp_pat
         "extensions",
         "install",
         str(package_path),
+        "--consent",
         "--user",
     ]
     assert plan.cwd == str(package_path.parent)
-    assert plan.env == {"WORKSPACE_ID": "workspace-1"}
+    assert plan.env == {
+        "WORKSPACE_ID": "workspace-1",
+        "GEMINI_CLI_TRUST_WORKSPACE": "true",
+    }
 
 
 def test_adapter_unsupported_future_methods_are_explicit(tmp_path):

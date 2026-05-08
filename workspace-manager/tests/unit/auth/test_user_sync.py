@@ -379,6 +379,16 @@ class TestPermissionChecks:
         user_permissions = ["workspace:read", "workspace:create"]
         assert has_permission("workspace:read", user_permissions) is True
 
+    def test_has_permission_resource_wildcard(self):
+        """Test Resource Wildcard Permission"""
+        user_permissions = ["workspace:all"]
+        assert has_permission("workspace:create", user_permissions) is True
+
+    def test_has_permission_global_wildcard(self):
+        """Test Global Wildcard Permission"""
+        user_permissions = ["*:all"]
+        assert has_permission("marketplace:manage_registry", user_permissions) is True
+
     def test_has_permission_false(self):
         """Test Does Not Have Permission"""
         user_permissions = ["workspace:read"]

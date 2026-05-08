@@ -21,8 +21,8 @@ Aileron aims to become the standard workspace orchestration layer for enterprise
 | Web Terminal | Agent Login |
 |---|---|
 | [![Web Terminal Demo](https://img.youtube.com/vi/7ddBnS7sr0M/hqdefault.jpg)](https://youtu.be/7ddBnS7sr0M) | [![Agent Login Demo](https://img.youtube.com/vi/FAUb1JKzJO8/hqdefault.jpg)](https://youtu.be/FAUb1JKzJO8) |
-| Create Workspace | Template Center & AI Chat |
-| [![Create Workspace Demo](https://img.youtube.com/vi/G8AXGd0_Xwo/hqdefault.jpg)](https://youtu.be/G8AXGd0_Xwo) | [![Template Center & AI Chat Demo](https://img.youtube.com/vi/pl0H4j07IsU/hqdefault.jpg)](https://youtu.be/pl0H4j07IsU) |
+| Create Workspace | Marketplace & AI Chat |
+| [![Create Workspace Demo](https://img.youtube.com/vi/G8AXGd0_Xwo/hqdefault.jpg)](https://youtu.be/G8AXGd0_Xwo) | [![Marketplace & AI Chat Demo](https://img.youtube.com/vi/pl0H4j07IsU/hqdefault.jpg)](https://youtu.be/pl0H4j07IsU) |
 
 ---
 
@@ -40,7 +40,7 @@ Aileron is built to solve both sides of that problem:
 ## Core Capabilities
 
 - **Governance-Aligned Workspaces**  
-  Centralized configuration, templates, permissions, and standardized capabilities help align agent usage with enterprise governance.
+  Centralized Marketplace packages, permissions, and standardized capabilities help align agent usage with enterprise governance.
 
 - **Simplified Workspace Setup**  
   Users can start from ready-to-use agent workspaces instead of assembling local environments from scratch.

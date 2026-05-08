@@ -59,16 +59,6 @@ GET /health
 | `GET` | `/api/v1/workspaces/{id}/setup/*` | 取得設定 |
 | `PUT` | `/api/v1/workspaces/{id}/setup/*` | 更新設定 |
 
-### 範本管理
-
-| Method | 路徑 | 說明 |
-|--------|------|------|
-| `GET` | `/api/v1/templates` | 列出範本 |
-| `POST` | `/api/v1/templates` | 建立範本 |
-| `GET` | `/api/v1/templates/{id}` | 取得範本 |
-| `PUT` | `/api/v1/templates/{id}` | 更新範本 |
-| `DELETE` | `/api/v1/templates/{id}` | 刪除範本 |
-
 ### 自動化任務
 
 | Method | 路徑 | 說明 |

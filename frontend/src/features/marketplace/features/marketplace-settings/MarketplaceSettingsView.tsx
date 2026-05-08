@@ -24,9 +24,10 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { TopTabsBar, TopTabsList, TopTabsTrigger } from '@/shared/components/navigation/TopTabs';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { useApp } from '@/app/providers/AppProvider';
-import { apiClient } from '@/shared/api/apiClient';
+import { ApiError, apiClient } from '@/shared/api/apiClient';
 import type {
   MarketplaceRegistryGitFileChange,
+  MarketplaceRegistryGitStatus,
   MarketplaceRegistryRepositoryStatus,
   MarketplaceRegistryRootMetadataSavePayload,
 } from '@/shared/types/marketplace';
@@ -497,6 +498,7 @@ const SettingsReadOnlyField: React.FC<SettingsReadOnlyFieldProps> = ({ label, va
 
 type MarketplaceVersionControlMode = 'changes' | 'history';
 type MarketplaceVersionControlFileGroup = 'staged' | 'unstaged';
+type MarketplaceVersionControlError = 'conflict' | 'unsupportedBranch' | 'permissionDenied';
 
 const toVersionControlFile = (file: MarketplaceRegistryGitFileChange): VersionControlFileChange => ({
   name: file.path.split('/').pop() ?? file.path,
@@ -504,6 +506,12 @@ const toVersionControlFile = (file: MarketplaceRegistryGitFileChange): VersionCo
   status: file.status,
   type: file.type,
   oldPath: file.oldPath,
+});
+
+const toVersionControlChanges = (status: MarketplaceRegistryGitStatus): VersionControlChangesResponse => ({
+  staged: status.staged.map(toVersionControlFile),
+  unstaged: status.unstaged.map(toVersionControlFile),
+  untracked: status.untracked.map(toVersionControlFile),
 });
 
 interface MarketplaceVersionControlTabProps {
@@ -531,22 +539,29 @@ const MarketplaceVersionControlTab: React.FC<MarketplaceVersionControlTabProps> 
   const [isSavingRemoteUrl, setIsSavingRemoteUrl] = React.useState(false);
   const [isInitializingRepository, setIsInitializingRepository] = React.useState(false);
   const [isCloningRepository, setIsCloningRepository] = React.useState(false);
-  const [operationError, setOperationError] = React.useState<'conflict' | 'unsupportedBranch' | null>(null);
+  const [operationError, setOperationError] = React.useState<MarketplaceVersionControlError | null>(null);
+  const [registryMutationAllowed, setRegistryMutationAllowed] = React.useState(true);
+  const autoInitAttemptedRef = React.useRef(false);
+  const statusRequestVersionRef = React.useRef(0);
 
   const loadRepository = React.useCallback(async () => {
     const nextRepository = await getRegistryRepository();
     onRepositoryChange(nextRepository);
     return nextRepository;
   }, [onRepositoryChange]);
-  const loadStatus = React.useCallback(async () => {
-    const status = await getRegistryGitStatus();
+  const applyRegistryGitStatus = React.useCallback((status: MarketplaceRegistryGitStatus) => {
     setCurrentBranch(status.branch);
-    setChanges({
-      staged: status.staged.map(toVersionControlFile),
-      unstaged: status.unstaged.map(toVersionControlFile),
-      untracked: status.untracked.map(toVersionControlFile),
-    });
+    setChanges(toVersionControlChanges(status));
   }, []);
+
+  const loadStatus = React.useCallback(async () => {
+    const requestVersion = ++statusRequestVersionRef.current;
+    const status = await getRegistryGitStatus();
+    if (requestVersion !== statusRequestVersionRef.current) {
+      return;
+    }
+    applyRegistryGitStatus(status);
+  }, [applyRegistryGitStatus]);
 
   const loadHistory = React.useCallback(async () => {
     const history = await getRegistryCommits(1, 50);
@@ -566,9 +581,43 @@ const MarketplaceVersionControlTab: React.FC<MarketplaceVersionControlTabProps> 
   }, [currentBranch]);
 
   React.useEffect(() => {
-    void loadStatus();
-    void loadRepository();
-  }, [loadRepository, loadStatus]);
+    let isActive = true;
+    const loadInitialState = async () => {
+      const nextRepository = await loadRepository();
+      if (!isActive) return;
+      if (
+        !autoInitAttemptedRef.current
+        && !nextRepository.isGitRepo
+        && nextRepository.hasLocalContent
+        && nextRepository.canInitSafely
+      ) {
+        autoInitAttemptedRef.current = true;
+        setIsInitializingRepository(true);
+        try {
+          const result = await initializeRegistryGit();
+          if (!isActive) return;
+          if (result.repository) {
+            onRepositoryChange(result.repository);
+          } else {
+            await loadRepository();
+          }
+        } catch {
+          // Status loading can initialize read-only local registries on the server.
+        } finally {
+          if (isActive) {
+            setIsInitializingRepository(false);
+          }
+        }
+      }
+      if (isActive) {
+        await loadStatus();
+      }
+    };
+    void loadInitialState();
+    return () => {
+      isActive = false;
+    };
+  }, [loadRepository, loadStatus, onRepositoryChange]);
 
   React.useEffect(() => {
     void loadHistory();
@@ -632,31 +681,58 @@ const MarketplaceVersionControlTab: React.FC<MarketplaceVersionControlTabProps> 
     setDiffContent('');
     fileSelection.clearSelection();
   }, [fileSelection]);
-  const mutateStatus = async (operation: () => Promise<unknown>) => {
+  const mutateStatus = async <TResult,>(
+    operation: () => Promise<TResult>,
+    applyResult?: (result: TResult) => void,
+  ) => {
+    const mutationVersion = ++statusRequestVersionRef.current;
     setIsMutating(true);
     try {
-      await operation();
-      await loadStatus();
+      const result = await operation();
+      if (applyResult) {
+        if (mutationVersion === statusRequestVersionRef.current) {
+          applyResult(result);
+        }
+      } else {
+        await loadStatus();
+      }
       await loadHistory();
       setOperationError(null);
       clearChangeSelection();
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setRegistryMutationAllowed(false);
+        setOperationError('permissionDenied');
+        await loadStatus();
+        return;
+      }
+      throw err;
     } finally {
       setIsMutating(false);
     }
   };
   const handleStageToggle = (file: VersionControlFileChange, group: MarketplaceVersionControlFileGroup) => {
     const paths = fileSelection.getActionPaths(file, group);
-    void mutateStatus(() => group === 'staged' ? unstageRegistryFiles(paths) : stageRegistryFiles(paths));
+    void mutateStatus(
+      () => group === 'staged' ? unstageRegistryFiles(paths) : stageRegistryFiles(paths),
+      applyRegistryGitStatus,
+    );
   };
   const handleDiscard = (_file: VersionControlFileChange) => {
     setOperationError('unsupportedBranch');
     clearChangeSelection();
   };
   const handleStageAll = () => {
-    void mutateStatus(() => stageRegistryFiles(unstagedFiles.map(file => file.path)));
+    void mutateStatus(
+      () => stageRegistryFiles(unstagedFiles.map(file => file.path)),
+      applyRegistryGitStatus,
+    );
   };
   const handleUnstageAll = () => {
-    void mutateStatus(() => unstageRegistryFiles(stagedFiles.map(file => file.path)));
+    void mutateStatus(
+      () => unstageRegistryFiles(stagedFiles.map(file => file.path)),
+      applyRegistryGitStatus,
+    );
   };
   const handleCommit = (data: { message: string }) => {
     void mutateStatus(() => commitRegistryChanges(data.message));
@@ -702,10 +778,10 @@ const MarketplaceVersionControlTab: React.FC<MarketplaceVersionControlTabProps> 
     { id: 'remoteSettings', onClick: () => {
       setOperationError(null);
       setIsRemoteDialogOpen(true);
-    } },
-    { id: 'fetch', onClick: () => void mutateStatus(fetchRegistry) },
-    { id: 'pull', onClick: () => void mutateStatus(pullRegistry) },
-    { id: 'push', onClick: () => void mutateStatus(pushRegistry) },
+    }, disabled: !registryMutationAllowed },
+    { id: 'fetch', onClick: () => void mutateStatus(fetchRegistry), disabled: !registryMutationAllowed },
+    { id: 'pull', onClick: () => void mutateStatus(pullRegistry), disabled: !registryMutationAllowed },
+    { id: 'push', onClick: () => void mutateStatus(pushRegistry), disabled: !registryMutationAllowed },
   ];
   const remoteDialogRepository: VersionControlRemoteSettingsState | null = repository ? {
     isRepositoryInitialized: repository.isGitRepo,
@@ -763,6 +839,7 @@ const MarketplaceVersionControlTab: React.FC<MarketplaceVersionControlTabProps> 
       selectedStagedPaths={fileSelection.selectedStagedPaths}
       selectedUnstagedPaths={fileSelection.selectedUnstagedPaths}
       isMutating={isMutating}
+      mutationDisabled={!registryMutationAllowed}
       onBranchChange={() => setOperationError('unsupportedBranch')}
       onCommit={handleCommit}
       onFileSelect={(file, group, event) => fileSelection.selectFile(file, group as VersionControlFileGroup, event)}

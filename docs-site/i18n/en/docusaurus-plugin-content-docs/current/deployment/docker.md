@@ -61,7 +61,7 @@ In Docker mode, `docker compose` manages the following services:
 | **postgres** | `postgres:15-alpine` | Main database for both platform and Keycloak data |
 | **redis** | `redis:7-alpine` | Task queue (Celery broker), result backend, session management |
 | **keycloak** | `keycloak:25.0.0` | OAuth2/OIDC authentication service with SSO support |
-| **workspace-manager** | Local build | Core management service: workspace CRUD, templates, automation scheduling |
+| **workspace-manager** | Local build | Core management service: workspace CRUD, Marketplace packages, automation scheduling |
 | **workspace-runtime** | Local build | Agent runtime: Claude Code is currently the most complete integration, alongside built-in OpenSpec CLI, file monitoring, Git, and system monitoring |
 | **workspace-browser** | Local build | WebRTC browser (based on neko) with CDP remote debugging support |
 | **workspace-canvas** | Local build | Canvas runtime service for live frontend previews |
@@ -203,7 +203,6 @@ See [Environment Variables Reference](./environment-variables) for the full list
 | `./data/keycloak` | `/opt/keycloak/data` | Keycloak data |
 | `./data/workspace-data` | `/workspace` | Workspace project files |
 | `./data/claude-data` | `/home/developer/.claude` | Claude Code session data |
-| `./data/template-center` | `/data/template-center` | Template storage |
 | `./data/workspace-scripts` | `/scripts` | Workspace scripts |
 
 ### Development Mounts
@@ -320,7 +319,7 @@ This script will:
 6. Optionally run `docker system prune`
 
 :::danger
-Full cleanup deletes all database data, including users, workspace settings, templates, etc. Back up before running.
+Full cleanup deletes all database data, including users, workspace settings, Marketplace data, etc. Back up before running.
 :::
 
 ### Start and Stop via the Cross-Platform CLI

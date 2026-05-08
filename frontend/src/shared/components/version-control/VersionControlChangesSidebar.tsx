@@ -23,6 +23,7 @@ interface VersionControlChangesSidebarProps {
   selectedStagedPaths?: Set<string>;
   selectedUnstagedPaths?: Set<string>;
   isMutating?: boolean;
+  mutationDisabled?: boolean;
   onBranchChange: (branch: string) => void;
   onCreateBranch?: () => void;
   onCommit: (data: { message: string }) => void;
@@ -46,6 +47,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
   selectedStagedPaths = new Set(),
   selectedUnstagedPaths = new Set(),
   isMutating = false,
+  mutationDisabled = false,
   onBranchChange,
   onCreateBranch,
   onCommit,
@@ -73,7 +75,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
         actionTitle={group === 'staged'
           ? t('shared.versionControl.fileChanges.unstageAllTooltip')
           : t('shared.versionControl.fileChanges.stageAllTooltip')}
-        actionDisabled={files.length === 0 || isMutating}
+        actionDisabled={files.length === 0 || isMutating || mutationDisabled}
         onAction={(event) => {
           event.stopPropagation();
           if (group === 'staged') {
@@ -99,6 +101,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
               onStageToggle={(nextFile) => onStageToggle(nextFile, group)}
               onDiscard={group === 'unstaged' ? onDiscard : undefined}
               selectedCount={selectedPaths.size}
+              readOnly={mutationDisabled}
             />
           ))
         )}
@@ -121,6 +124,7 @@ export const VersionControlChangesSidebar: React.FC<VersionControlChangesSidebar
       <VersionControlCommitForm
         onCommit={onCommit}
         isLoading={isMutating}
+        disabled={mutationDisabled}
         stagedCount={stagedFiles.length}
       />
       <VersionControlResizablePanels

@@ -24,7 +24,6 @@ import {
   type ChatDraftEventDetail,
   type ChatCodeReferenceEventDetail,
 } from './chatEvents';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { WorkspaceWizardModule } from '@/features/workspace-wizard/WorkspaceWizardModule';
 import { useAgentSession } from './useAgentSession';
 import { useAgentSessionStore } from './agentSessionStore';
@@ -702,12 +701,6 @@ export const ChatPanel: React.FC = () => {
     }
     uiActions.openSlashDialog();
   }, [loadSlashCommands, uiActions]);
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId: workspaceRuntime.workspaceId,
-    features: ['slashCommands', 'skills'],
-    onRefresh: loadSlashCommands,
-  });
 
   React.useEffect(() => {
     const handleAddReference = (event: Event) => {

@@ -19,7 +19,6 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 import { AgentSettingsSourceBadge, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 
@@ -122,12 +121,6 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     }
     void fetchServers();
   }, [isRuntimeReady, fetchServers]);
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId,
-    features: ['mcp'],
-    onRefresh: fetchServers,
-  });
 
   const canEdit = (server: AgentMcpServer): boolean => {
     return server.scope !== 'plugin' && server.scope !== 'extension';

@@ -19,11 +19,7 @@ os.environ["ENV"] = "testing"
 
 from app.db import models as db_models
 from app.db.database import Base, get_db
-from app.db.seed import (
-    create_default_model_configs,
-    create_default_template_categories,
-    create_default_template_features,
-)
+from app.db.seed import create_default_model_configs
 from app.main import app
 from app.config.settings import get_settings
 
@@ -41,30 +37,21 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
 
     Improvements:
     1. Use tmp_path as database path
-    2. Use tmp_path as template storage path
+    2. Use tmp_path for storage paths
     3. Ensure complete test isolation without polluting the real environment
     """
 
-    # Set up temporary template storage path
-    template_storage_path = tmp_path / "template-storage"
-    template_storage_path.mkdir(parents=True, exist_ok=True)
     marketplace_storage_path = tmp_path / "marketplace-storage"
     marketplace_storage_path.mkdir(parents=True, exist_ok=True)
     knowledge_bases_path = tmp_path / "knowledge-bases"
     knowledge_bases_path.mkdir(parents=True, exist_ok=True)
 
-    # Create plugins directory (required by template service)
-    plugins_dir = template_storage_path / "plugins"
-    plugins_dir.mkdir(parents=True, exist_ok=True)
-
     # Preserve original environment variables
-    original_template_path = os.environ.get("TEMPLATE_STORAGE_PATH")
     original_marketplace_path = os.environ.get("MARKETPLACE_STORAGE_PATH")
     original_manager_kb_path = os.environ.get("MANAGER_KNOWLEDGE_BASES_DIR")
     original_host_kb_path = os.environ.get("HOST_KNOWLEDGE_BASES_DIR")
 
     # Set up test environment variables
-    os.environ["TEMPLATE_STORAGE_PATH"] = str(template_storage_path)
     os.environ["MARKETPLACE_STORAGE_PATH"] = str(marketplace_storage_path)
     os.environ["MANAGER_KNOWLEDGE_BASES_DIR"] = str(knowledge_bases_path)
     os.environ["HOST_KNOWLEDGE_BASES_DIR"] = str(knowledge_bases_path)
@@ -83,8 +70,6 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
     # Preload necessary seed data for test database.
     with TestingSessionLocal() as seed_db:
         create_default_model_configs(seed_db)
-        create_default_template_categories(seed_db)
-        create_default_template_features(seed_db)
         seed_db.commit()
 
     def override_get_db() -> Iterator[Session]:
@@ -108,10 +93,6 @@ def test_app(tmp_path: Path) -> Iterator[tuple[TestClient, sessionmaker[Session]
         engine.dispose()
 
         # Restore original environment variables
-        if original_template_path is not None:
-            os.environ["TEMPLATE_STORAGE_PATH"] = original_template_path
-        else:
-            os.environ.pop("TEMPLATE_STORAGE_PATH", None)
         if original_marketplace_path is not None:
             os.environ["MARKETPLACE_STORAGE_PATH"] = original_marketplace_path
         else:
@@ -341,12 +322,6 @@ def sample_team_data(test_data_factory: TestDataFactory):
 def sample_workspace_data(test_data_factory: TestDataFactory):
     """Sample workspace data"""
     return test_data_factory.create_workspace_data()
-
-
-@pytest.fixture
-def sample_template_data(test_data_factory: TestDataFactory):
-    """Sample template data"""
-    return test_data_factory.create_template_data()
 
 
 @pytest.fixture

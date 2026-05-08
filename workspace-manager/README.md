@@ -17,12 +17,6 @@ Workspace Manager is the core backend service in Aileron. It manages the full wo
 - role-based access control
 - team and member management
 
-### Template Center
-
-- template CRUD
-- feature tags
-- template versioning
-
 ### Automation
 
 - cron-based scheduling
@@ -84,7 +78,7 @@ docker compose logs -f workspace-manager
 - `/api/v1/teams/*`
 - `/api/v1/workspaces/*`
 - `/api/v1/workspaces/{workspace_id}/setup/*`
-- `/api/v1/templates/*`
+- `/api/v1/marketplace/*`
 - `/api/v1/automation/*`
 - `/api/v1/container-images/*`
 - `/api/v1/settings`

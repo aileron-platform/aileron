@@ -22,7 +22,6 @@ import {
   initializeRegistryGit,
   installPackage,
   listActivity,
-  listImportBranches,
   listPackages,
   pullRegistry,
   pushRegistry,
@@ -182,17 +181,14 @@ describe('marketplaceApi backend boundary', () => {
       validationSeverity: 'none' as const,
       validationResults: [],
     }];
-    apiClientMock.post.mockResolvedValueOnce({ branches: ['main', 'develop'] });
     apiClientMock.post.mockResolvedValueOnce(candidates);
     apiClientMock.post.mockResolvedValueOnce({ imported: [], skipped: [], failed: [], warnings: [] });
 
-    await listImportBranches(source);
     await scanImportSource(source);
     await importCandidates(candidates);
 
-    expect(apiClientMock.post).toHaveBeenNthCalledWith(1, '/marketplace/import/branches', source);
-    expect(apiClientMock.post).toHaveBeenNthCalledWith(2, '/marketplace/import/scan', source);
-    expect(apiClientMock.post).toHaveBeenNthCalledWith(3, '/marketplace/import', { source, candidates });
+    expect(apiClientMock.post).toHaveBeenNthCalledWith(1, '/marketplace/import/scan', source);
+    expect(apiClientMock.post).toHaveBeenNthCalledWith(2, '/marketplace/import', { source, candidates });
   });
 
   it('uploads a local import archive as form data', async () => {

@@ -431,6 +431,10 @@ class RuntimeProvisionService:
             self._resolve_host_mount_path(self.settings.HOST_CLAUDE_DATA_DIR)
             / safe_workspace_id
         )
+        host_marketplace_install = (
+            self._resolve_host_mount_path(self.settings.HOST_MARKETPLACE_INSTALL_DIR)
+            / safe_workspace_id
+        )
         manager_workspace = (
             Path(self.settings.MANAGER_WORKSPACES_DIR) / safe_workspace_id
         )
@@ -438,11 +442,13 @@ class RuntimeProvisionService:
             Path(self.settings.MANAGER_WORKSPACE_SCRIPTS_DIR) / safe_workspace_id
         )
         manager_claude = Path(self.settings.MANAGER_CLAUDE_DATA_DIR) / safe_workspace_id
+        manager_marketplace_install = Path(self.settings.MANAGER_MARKETPLACE_INSTALL_DIR) / safe_workspace_id
         manager_knowledge_bases = Path(self.settings.MANAGER_KNOWLEDGE_BASES_DIR)
 
         manager_workspace.mkdir(parents=True, exist_ok=True)
         manager_scripts.mkdir(parents=True, exist_ok=True)
         manager_claude.mkdir(parents=True, exist_ok=True)
+        manager_marketplace_install.mkdir(parents=True, exist_ok=True)
         manager_knowledge_bases.mkdir(parents=True, exist_ok=True)
 
         if workspace.setup_script:
@@ -455,6 +461,7 @@ class RuntimeProvisionService:
             VolumeMount(source=str(host_scripts), target="/scripts"),
             # Persist ~/.claude (Claude Code session files, settings, etc.), avoid --resume failure after container restart
             VolumeMount(source=str(host_claude), target="/home/developer/.claude"),
+            VolumeMount(source=str(host_marketplace_install), target="/marketplace-install"),
             # Docker socket
             VolumeMount(source="/var/run/docker.sock", target="/var/run/docker.sock"),
         ]

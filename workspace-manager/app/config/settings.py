@@ -87,6 +87,10 @@ class Settings(BaseSettings):
         default="/var/lib/aileron/claude-data",
         description="Claude data host directory",
     )
+    HOST_MARKETPLACE_INSTALL_DIR: str = Field(
+        default="/var/lib/aileron/marketplace-install",
+        description="Marketplace install staging host directory",
+    )
     BROWSER_WEBRTC_RESERVED_UDP_RANGES: Annotated[List[str], NoDecode] = Field(
         default_factory=list,
         description="Reserved host UDP port ranges excluded from browser WebRTC allocation",
@@ -102,6 +106,10 @@ class Settings(BaseSettings):
     MANAGER_CLAUDE_DATA_DIR: str = Field(
         default="/host/claude-data",
         description="Claude data directory mounted inside workspace-manager",
+    )
+    MANAGER_MARKETPLACE_INSTALL_DIR: str = Field(
+        default="/host/marketplace-install",
+        description="Marketplace install staging directory mounted inside workspace-manager",
     )
     HOST_KNOWLEDGE_BASES_DIR: str = Field(
         default="/var/lib/aileron/knowledge-bases",
@@ -276,10 +284,6 @@ class Settings(BaseSettings):
         description="Allowed file types (comma-separated)",
     )
 
-    # === Template center settings ===
-    TEMPLATE_STORAGE_PATH: str = Field(
-        default="/data/template-center", description="Template storage path"
-    )
     MARKETPLACE_STORAGE_PATH: str = Field(
         default="/data/marketplace", description="Marketplace registry storage path"
     )
@@ -540,8 +544,8 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def validate_public_routing_templates(self) -> "Settings":
-        """Verify public routing required fields and templates."""
+    def validate_public_routing_hosts(self) -> "Settings":
+        """Verify public routing required fields and hosts."""
         if not self.PUBLIC_BASE_DOMAIN:
             raise ValueError("PUBLIC_BASE_DOMAIN must not be empty")
 

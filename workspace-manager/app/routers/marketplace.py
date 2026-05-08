@@ -12,7 +12,6 @@ from app.db.database import get_db
 from app.models import (
     MarketplaceActivityListResult,
     MarketplaceCliPreflightResult,
-    MarketplaceImportBranchesResult,
     MarketplaceImportCandidate,
     MarketplaceImportRequest,
     MarketplaceImportResult,
@@ -44,7 +43,7 @@ from app.models import (
     MarketplaceRegistrySettings,
     MarketplaceSettingsSaveResult,
 )
-from app.modules.auth.auth_decorators import get_user_permissions, has_permission
+from app.modules.auth.auth_decorators import get_user_permissions, has_permission, load_role_mapping
 from app.modules.auth import get_current_user_id
 from app.services.marketplace_service import (
     MarketplaceConflictError,
@@ -119,16 +118,68 @@ def _extract_current_user_roles(current_user: object) -> list[str]:
             if isinstance(access, dict) and isinstance(access.get("roles"), list):
                 roles.extend(role for role in access["roles"] if isinstance(role, str))
 
+    groups = current_user.get("groups") or []
+    if isinstance(groups, list):
+        group_mappings = (load_role_mapping().get("group_mappings") or {})
+        if isinstance(group_mappings, dict):
+            for group in groups:
+                if not isinstance(group, str):
+                    continue
+                mapped = group_mappings.get(group)
+                if isinstance(mapped, dict) and isinstance(mapped.get("role"), str):
+                    roles.append(mapped["role"])
+
     return list(dict.fromkeys(roles))
 
 
 def _extract_current_user_permissions(current_user: object) -> list[str]:
     if not isinstance(current_user, dict):
         return []
-    permissions = current_user.get("permissions") or []
-    if not isinstance(permissions, list):
+    permissions: list[str] = []
+
+    direct_permissions = current_user.get("permissions") or []
+    if isinstance(direct_permissions, list):
+        permissions.extend(permission for permission in direct_permissions if isinstance(permission, str))
+        for permission in direct_permissions:
+            if isinstance(permission, dict):
+                permissions.extend(_extract_keycloak_authorization_permission(permission))
+
+    authorization = current_user.get("authorization") or {}
+    if isinstance(authorization, dict):
+        authorization_permissions = authorization.get("permissions") or []
+        if isinstance(authorization_permissions, list):
+            for permission in authorization_permissions:
+                if isinstance(permission, str):
+                    permissions.append(permission)
+                elif isinstance(permission, dict):
+                    permissions.extend(_extract_keycloak_authorization_permission(permission))
+
+    for claim in ("scope", "scp"):
+        scope_value = current_user.get(claim)
+        if isinstance(scope_value, str):
+            permissions.extend(item for item in scope_value.split() if item)
+        elif isinstance(scope_value, list):
+            permissions.extend(item for item in scope_value if isinstance(item, str))
+
+    return list(dict.fromkeys(permissions))
+
+
+def _extract_keycloak_authorization_permission(permission: dict[str, object]) -> list[str]:
+    resource = permission.get("rsname") or permission.get("resource") or permission.get("resource_name")
+    scopes = permission.get("scopes") or permission.get("scope")
+    if not isinstance(resource, str):
         return []
-    return [permission for permission in permissions if isinstance(permission, str)]
+    if isinstance(scopes, str):
+        scope_items = [scopes]
+    elif isinstance(scopes, list):
+        scope_items = [scope for scope in scopes if isinstance(scope, str)]
+    else:
+        scope_items = []
+    return [
+        f"{resource}:{scope}"
+        for scope in scope_items
+        if resource == "marketplace" and scope
+    ]
 
 
 def _marketplace_permission_aliases(permission: str) -> set[str]:
@@ -413,31 +464,6 @@ def list_marketplace_activity(
 
 
 @router.post(
-    "/import/branches",
-    response_model=MarketplaceImportBranchesResult,
-    summary="List Marketplace import source branches",
-    responses=build_responses(400, 401, 403, 500),
-)
-def list_marketplace_import_branches(
-    payload: MarketplaceImportSource,
-    request: Request,
-    current_user_id: str = Depends(get_marketplace_user_id),
-    service: MarketplaceService = Depends(get_marketplace_service),
-) -> MarketplaceImportBranchesResult:
-    """List remote branches for a Git Marketplace import source."""
-    _require_marketplace_permission(request, MARKETPLACE_IMPORT_PERMISSION)
-    try:
-        return service.list_import_branches(current_user_id, payload)
-    except MarketplaceImportSourceError as exc:
-        translate = getattr(request.state, "translate", None)
-        message = translate(exc.code, **exc.params) if translate else exc.code
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": exc.code, "message": message},
-        ) from exc
-
-
-@router.post(
     "/import/scan",
     response_model=list[MarketplaceImportCandidate],
     summary="Scan Marketplace import source",
@@ -670,7 +696,7 @@ def get_marketplace_registry_git_status(
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> MarketplaceGitStatus:
     """Get current user's Marketplace registry file-level Git status."""
-    _require_marketplace_permission(request, MARKETPLACE_REGISTRY_MANAGE_PERMISSION)
+    _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     return service.get_registry_git_status(current_user_id)
 
 
@@ -688,7 +714,7 @@ def get_marketplace_registry_file_diff(
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> MarketplaceGitDiffResponse:
     """Get selected current user's Marketplace registry file diff."""
-    _require_marketplace_permission(request, MARKETPLACE_REGISTRY_MANAGE_PERMISSION)
+    _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     try:
         return service.get_registry_file_diff(current_user_id, path, head=head)
     except (MarketplacePathError, MarketplaceImportSourceError) as exc:
@@ -711,7 +737,7 @@ def get_marketplace_registry_commit_files(
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> MarketplaceGitCommitFilesResult:
     """Get selected current user's Marketplace registry commit file list."""
-    _require_marketplace_permission(request, MARKETPLACE_REGISTRY_MANAGE_PERMISSION)
+    _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     try:
         return service.get_registry_commit_files(current_user_id, commit_id)
     except MarketplaceImportSourceError as exc:
@@ -735,7 +761,7 @@ def get_marketplace_registry_commit_file_diff(
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> MarketplaceGitDiffResponse:
     """Get selected current user's Marketplace registry commit file diff."""
-    _require_marketplace_permission(request, MARKETPLACE_REGISTRY_MANAGE_PERMISSION)
+    _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     try:
         return service.get_registry_commit_file_diff(current_user_id, commit_id, path)
     except (MarketplacePathError, MarketplaceImportSourceError) as exc:
@@ -828,7 +854,7 @@ def list_marketplace_registry_commits(
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> MarketplaceGitCommitListResult:
     """List current user's Marketplace registry commit history."""
-    _require_marketplace_permission(request, MARKETPLACE_REGISTRY_MANAGE_PERMISSION)
+    _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     try:
         return service.list_registry_commits(current_user_id, page=page, page_size=page_size)
     except MarketplaceImportSourceError as exc:

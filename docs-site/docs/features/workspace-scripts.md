@@ -5,7 +5,7 @@ title: Workspace Scripts
 
 # Workspace Scripts
 
-Workspace scripts 用來把範本提供的輔助腳本、初始化腳本與團隊常用操作放進 workspace。它和專案程式碼分開管理，預設掛載到 runtime 的 `/scripts`。
+Workspace scripts 用來把輔助腳本、初始化腳本與團隊常用操作放進 workspace。它和專案程式碼分開管理，預設掛載到 runtime 的 `/scripts`。
 
 ## 啟動入口分工
 
@@ -54,23 +54,13 @@ Workspace scripts 是檔案集合，不限制只能放單一語言。常見內�
 | 副檔名 | 用途 |
 |--------|------|
 | `.sh` | Linux/macOS shell 腳本，適合 runtime 內執行 |
-| `.ps1` | PowerShell 腳本，適合 Windows 操作說明或跨平台範本內容 |
+| `.ps1` | PowerShell 腳本，適合 Windows 操作說明或跨平台內容 |
 | `.md` | 操作說明或 runbook |
 | `.json` / `.yaml` | 設定檔、範例 payload、工具設定 |
 
 :::tip
-runtime 容器以 Linux 為主，實際自動啟動或 runtime 內執行的腳本應優先使用 `.sh`。`.ps1` 適合 host-side Windows 操作或作為範本交付內容。
+runtime 容器以 Linux 為主，實際自動啟動或 runtime 內執行的腳本應優先使用 `.sh`。`.ps1` 適合 host-side Windows 操作或跨平台操作說明。
 :::
-
-## Template Scripts
-
-Template 可維護 `scripts` scope，安裝到 workspace 後會被複製到：
-
-```text
-/scripts/<templateName>/
-```
-
-Manager 的 template file API 使用 `scope=scripts` 管理範本腳本；Runtime 的 script API 則管理 workspace 內已安裝或使用者建立的 `/scripts` 內容。
 
 ## Runtime Script API
 
@@ -80,12 +70,11 @@ Runtime API 提供 `/api/v1/scripts` 檔案集合端點，可讀寫、搬移、�
 
 - 在 UI 中瀏覽 workspace scripts tree。
 - 編輯 shell script 或 runbook。
-- 將 template scripts 安裝到 workspace。
 - 讓 agent 在 `/scripts` 下找到團隊標準操作。
 
 ## 建議做法
 
-- 需要被 runtime 自動執行或 agent 使用的腳本，放在 `/scripts` 或 template 的 `scripts` scope。
+- 需要被 runtime 自動執行或 agent 使用的腳本，放在 `/scripts`。
 - 需要管理整個 Docker stack 時，使用 `python scripts/dev/docker/ops.py`。
 - 需要清理舊 workspace 資源時，可使用 `ops.py cleanup-workspaces`，或在特定 shell 環境使用 legacy `.sh` / `.ps1` wrapper。
 - 腳本內容應避免寫入機密；需要 token 或密碼時，透過環境變數或平台設定注入。

@@ -104,7 +104,16 @@ def has_permission(permission: str, user_permissions: List[str]) -> bool:
     Returns:
         True if user has the permission
     """
-    return permission in user_permissions
+    if permission in user_permissions:
+        return True
+    if "*:all" in user_permissions:
+        return True
+
+    resource, separator, _scope = permission.partition(":")
+    if separator and f"{resource}:all" in user_permissions:
+        return True
+
+    return False
 
 
 def has_role(role: str, user_roles: List[str]) -> bool:
@@ -143,7 +152,7 @@ def has_all_permissions(permissions: List[str], user_permissions: List[str]) -> 
     Returns:
         True if user has all permissions
     """
-    return all(perm in user_permissions for perm in permissions)
+    return all(has_permission(perm, user_permissions) for perm in permissions)
 
 
 def has_any_permission(permissions: List[str], user_permissions: List[str]) -> bool:
@@ -156,7 +165,7 @@ def has_any_permission(permissions: List[str], user_permissions: List[str]) -> b
     Returns:
         True if user has any of the permissions
     """
-    return any(perm in user_permissions for perm in permissions)
+    return any(has_permission(perm, user_permissions) for perm in permissions)
 
 
 # ============================================================================

@@ -27,8 +27,8 @@ Aileron 採用微服務架構，各服務職責明確、可獨立部署。
 ┌───────────────────────────────▼─────────────────────────────────┐
 │              Workspace Manager (Python / FastAPI)                │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐   │
-│  │ Workspace    │ │ Templates    │ │ Automation / Celery   │   │
-│  │ CRUD + Auth  │ │ + Members    │ │ Scheduler             │   │
+│  │ Workspace    │ │ Marketplace  │ │ Automation / Celery   │   │
+│  │ CRUD + Auth  │ │ + Settings   │ │ Scheduler             │   │
 │  └──────────────┘ └──────────────┘ └───────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │        Docker / Kubernetes / Podman Provisioner          │   │
@@ -73,7 +73,7 @@ React + Vite 前端應用，提供完整的 workspace 管理介面，包含：
 核心後端服務（FastAPI），負責：
 - Workspace CRUD 與生命週期管理
 - 多 provisioner 支援（Docker、Kubernetes、Podman）
-- 範本管理
+- Marketplace 套件管理
 - 團隊管理與治理能力
 - 自動化任務（Celery + Redis）
 - 認證（Keycloak JWT 驗證）

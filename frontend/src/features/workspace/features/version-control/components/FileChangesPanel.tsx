@@ -47,9 +47,10 @@ import {
   usePullMutation,
   usePushMutation,
 } from '../hooks/useVersionControlQueries';
-import { refreshVersionControlQueries } from '../lib/queryClient';
+import { refreshVersionControlQueries, versionControlKeys } from '../lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
 import { isVersionControlNotInitializedError } from '../utils';
+import type { VersionControlChangesResponse } from '../types';
 
 interface FileChangesPanelProps {
   onFileSelect?: (file: VersionControlFileChange | null) => void;
@@ -59,6 +60,44 @@ const DEFAULT_BRANCH = 'main';
 const getErrorDescription = (error: unknown) => (
   error instanceof Error ? error.message : undefined
 );
+
+export const applyStagePathsToChangesResponse = (
+  current: VersionControlChangesResponse | undefined,
+  paths: string[],
+): VersionControlChangesResponse | undefined => {
+  if (!current || paths.length === 0) {
+    return current;
+  }
+
+  const pathSet = new Set(paths);
+  const movedFromUnstaged = current.unstaged.filter(file => pathSet.has(file.path));
+  const movedFromUntracked = current.untracked.filter(file => pathSet.has(file.path));
+  const movedFiles = [...movedFromUnstaged, ...movedFromUntracked].map(file => ({
+    ...file,
+    status: file.status === '?' || file.status === '??' ? 'A' : file.status,
+    type: file.type === 'untracked' ? 'added' as const : file.type,
+    changeType: 'staged' as const,
+  }));
+
+  if (movedFiles.length === 0) {
+    return current;
+  }
+
+  const stagedByPath = new Map(current.staged.map(file => [file.path, file]));
+  for (const file of movedFiles) {
+    stagedByPath.set(file.path, file);
+  }
+
+  return {
+    ...current,
+    staged: Array.from(stagedByPath.values()),
+    unstaged: current.unstaged.filter(file => !pathSet.has(file.path)),
+    untracked: current.untracked.filter(file => !pathSet.has(file.path)),
+    untrackedTotal: current.untrackedTotal === undefined
+      ? current.untrackedTotal
+      : Math.max(0, current.untrackedTotal - movedFromUntracked.length),
+  };
+};
 
 /**
  * FileChangesPanel 組件
@@ -256,6 +295,15 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     }
   }, [queryClient, selectedGitContextId, t, toast, workspaceId]);
 
+  const applyStagePathsToCache = useCallback((paths: string[]) => {
+    queryClient.setQueriesData<VersionControlChangesResponse>(
+      { queryKey: versionControlKeys.changes(workspaceId, selectedGitContextId) },
+      current => applyStagePathsToChangesResponse(current, paths),
+    );
+    const pathSet = new Set(paths);
+    setAccumulatedUntrackedFiles(current => current.filter(file => !pathSet.has(file.path)));
+  }, [queryClient, selectedGitContextId, workspaceId]);
+
   // Git 操作（Fetch/Pull/Push）
   const handleGitAction = useCallback(async (action: 'fetch' | 'pull' | 'push') => {
     try {
@@ -330,6 +378,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         fileSelection.clearSelection('staged');
       } else {
         await stageMutation.mutateAsync(pathsToProcess);
+        applyStagePathsToCache(pathsToProcess);
         fileSelection.clearSelection('unstaged');
       }
       resetPagination();
@@ -345,7 +394,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [fileSelection, stageMutation, unstageMutation, resetPagination, t, toast]);
+  }, [applyStagePathsToCache, fileSelection, stageMutation, unstageMutation, resetPagination, t, toast]);
 
   // 暫存所有
   const handleStageAll = useCallback(async () => {
@@ -355,6 +404,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     try {
       fileSelection.selectAll('unstaged', allUnstagedFiles);
       await stageMutation.mutateAsync(pathsToStage);
+      applyStagePathsToCache(pathsToStage);
       fileSelection.clearSelection('unstaged');
       resetPagination();
     } catch (error) {
@@ -365,7 +415,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         variant: 'destructive',
       });
     }
-  }, [allUnstagedFiles, fileSelection, stageMutation, resetPagination, t, toast]);
+  }, [allUnstagedFiles, applyStagePathsToCache, fileSelection, stageMutation, resetPagination, t, toast]);
 
   // 取消暫存所有
   const handleUnstageAll = useCallback(async () => {

@@ -176,7 +176,6 @@ HOST_PROJECT_ROOT=/Users/yourname/aileron
 | `./data/keycloak` | `/opt/keycloak/data` | Keycloak 資料 |
 | `./data/workspace-data` | `/workspace` | 工作區專案檔案 |
 | `./data/claude-data` | `/home/developer/.claude` | Claude Code session 資料 |
-| `./data/template-center` | `/data/template-center` | 模板儲存 |
 | `./data/workspace-scripts` | `/scripts` | 工作區腳本 |
 
 ### 開發用掛載

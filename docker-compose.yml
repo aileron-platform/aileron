@@ -134,21 +134,21 @@ services:
       - REDIS_URL=redis://redis:6379
       - DEBUG=true
       - HOST=0.0.0.0
-      - WORKSPACE_RUNTIME_URL=http://workspace-runtime:3002
       - DOCKER_HOST=unix:///var/run/docker.sock
       - DEPLOYMENT_ENV=docker
       - DOCKER_NETWORK=aileron-network-dev
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aileron
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
       - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
-      - HOST_WORKSPACE_MANAGER_DIR=${HOST_WORKSPACE_MANAGER_DIR:-./workspace-manager}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
       - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
+      - HOST_MARKETPLACE_INSTALL_DIR=${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}
       - HOST_KNOWLEDGE_BASES_DIR=${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}
       - MANAGER_WORKSPACES_DIR=/host/workspace-data
       - MANAGER_WORKSPACE_SCRIPTS_DIR=/host/workspace-scripts
       - MANAGER_CLAUDE_DATA_DIR=/host/claude-data
+      - MANAGER_MARKETPLACE_INSTALL_DIR=/host/marketplace-install
       - MANAGER_KNOWLEDGE_BASES_DIR=/host/knowledge-bases
       # JWT Authentication Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=180
@@ -157,8 +157,6 @@ services:
       # Celery Configuration (時區由 TZ 環境變數控制)
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
-      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
       - CELERY_TASK_SERIALIZER=json
       - CELERY_RESULT_SERIALIZER=json
       - CELERY_ACCEPT_CONTENT=json
@@ -166,19 +164,17 @@ services:
       - KEYCLOAK_SERVER_URL=http://aileron-keycloak-dev:8080
       - KEYCLOAK_REALM=aileron
       - KEYCLOAK_CLIENT_ID=aileron-frontend
-      - KEYCLOAK_CLIENT_SECRET=
-      - KEYCLOAK_JWKS_CACHE_TTL=3600
     ports:
       - "3001:3001"  # FastAPI
       - "5555:5555"  # Celery Flower
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace-manager:/workspace-manager  # Mount 整個專案目錄
-      - ./data/template-center:/data/template-center  # Template storage volume
       - ./data/init-scripts:/data/init-scripts  # Init scripts storage volume
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}:/host/workspace-data  # Workspace data
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}:/host/workspace-scripts  # Workspace scripts
       - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}:/host/claude-data  # Claude data
+      - ${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}:/host/marketplace-install  # Marketplace install staging
       - ${HOST_KNOWLEDGE_BASES_DIR:-./data/knowledge-bases}:/host/knowledge-bases  # Knowledge bases
     networks:
       - aileron-network-dev
@@ -218,42 +214,24 @@ services:
       - NODE_ENV=development
       - ENV=development
       - WORKSPACE_ID=default-workspace
-      - WORKSPACE_MANAGER_URL=http://workspace-manager:3001
+      - MANAGER_URL=http://workspace-manager:3001
       - REDIS_URL=redis://redis:6379
       - DOCKER_HOST=unix:///var/run/docker.sock
       - DEPLOYMENT_ENV=docker
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aileron
       # Internal API Token (用於內部服務認證)
       - INTERNAL_API_TOKEN=dev-internal-token
-      # Redis 請求追蹤配置
-      - ENABLE_REDIS=true
-      - REDIS_MAX_CONNECTIONS=20
-      - REDIS_SOCKET_TIMEOUT=30
-      - REQUEST_TTL_SECONDS=3600
-      - CLEANUP_INTERVAL_SECONDS=300
-      - REDIS_RETRY_ATTEMPTS=3
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}
       - HOST_CLAUDE_DATA_DIR=${HOST_CLAUDE_DATA_DIR:-./data/claude-data}
-      - HOST_SSH_KEYS_DIR=${HOST_SSH_KEYS_DIR:-./data/ssh-keys}
-      # SSH Configuration
-      - SSH_PORT=22
-      - SSH_HOST_KEY_PATH=/etc/ssh/ssh_host_rsa_key
+      - HOST_MARKETPLACE_INSTALL_DIR=${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}
       # Git Configuration
       - GIT_USER_NAME=Developer
       - GIT_USER_EMAIL=developer@workspace.local
       # Java Configuration
       - JAVA_HOME=${WORKSPACE_RUNTIME_JAVA_HOME:-/usr/lib/jvm/openjdk-21}
-      # Terminal Service Configuration
-      - TERMINAL_PORT=3004
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=0
       - LOG_LEVEL=debug
-      - MAX_TABS_PER_WORKSPACE=10
-      - SESSION_TIMEOUT=300
-      - PTY_BUFFER_SIZE=1024
       # Anthropic Claude API Configuration
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
       - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-}
@@ -261,9 +239,6 @@ services:
       - KEYCLOAK_SERVER_URL=http://aileron-keycloak-dev:8080
       - KEYCLOAK_REALM=aileron
       - KEYCLOAK_CLIENT_ID=aileron-web
-      - KEYCLOAK_CLIENT_SECRET=
-      - KEYCLOAK_JWKS_CACHE_TTL=3600
-      - KEYCLOAK_JWKS_URL=http://aileron-keycloak-dev:8080/realms/aileron/protocol/openid-connect/certs
       # Browser Container Discovery (與 workspace-manager 注入的環境變數一致)
       - BROWSER_CONTAINER_NAME=workspace-browser-default-workspace
       - BROWSER_CDP_URL=http://workspace-browser-default-workspace:9223
@@ -280,11 +255,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace-runtime:/workspace-runtime  # Mount 整個專案目錄（包含 tests 目錄，用於整合測試）
       - /workspace-runtime/.venv  # 阻擋 host (macOS) venv 蓋過容器內 Linux venv
-      - /workspace-runtime/web-canvas/node_modules  # 避免 node_modules 被覆蓋
       - ./workspace-terminal:/workspace-terminal  # Mount Terminal Service 程式碼
       - ${HOST_WORKSPACES_DIR:-./data/workspace-data}/default-workspace:/workspace  # Workspace projects
       - ${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}/default-workspace:/scripts  # Scripts directory
       - ${HOST_CLAUDE_DATA_DIR:-./data/claude-data}/default_workspace:/home/developer/.claude  # Claude session 持久化
+      - ${HOST_MARKETPLACE_INSTALL_DIR:-./data/marketplace-install}/default_workspace:/marketplace-install  # Marketplace install staging
       - ./data/codex-auth/default-workspace:/home/developer/.codex  # Codex CLI login persistence
       - ./data/codex-sessions:/home/developer/.codex-sessions  # Codex session persistence
     networks:
@@ -375,7 +350,6 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
       args:
-        VITE_WORKSPACE_MANAGER_URL: http://localhost:3001
         TZ: ${TZ:-Asia/Taipei}  # 從主機環境變數讀取時區
     image: ${WORKSPACE_UI_IMAGE:-ailerondocker/workspace-ui:dev-arm64}
     container_name: aileron-frontend-dev

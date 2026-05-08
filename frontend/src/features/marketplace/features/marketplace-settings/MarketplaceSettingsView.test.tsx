@@ -312,6 +312,107 @@ describe('MarketplaceSettingsView', () => {
     expect(screen.getByText(/Adds Claude Code review workflows/)).toBeInTheDocument();
   });
 
+  it('moves unstaged registry files into staged changes from the stage response', async () => {
+    const user = userEvent.setup();
+    marketplaceApiMock.stageRegistryFiles.mockResolvedValueOnce({
+      branch: 'main',
+      isGitRepo: true,
+      staged: [
+        {
+          path: 'codex/plugins/figma-context/.codex-plugin/plugin.json',
+          status: 'M',
+          type: 'modified',
+        },
+        {
+          path: 'claude-code/plugins/review-assistant/README.md',
+          status: 'M',
+          type: 'modified',
+        },
+      ],
+      unstaged: [],
+      untracked: [],
+      stagedCount: 2,
+      unstagedCount: 0,
+      untrackedCount: 0,
+    });
+
+    render(
+      <MemoryRouter>
+        <MarketplaceSettingsView />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'marketplace.settings.tabs.versionControl' }));
+    await screen.findByText('claude-code/plugins/review-assistant/README.md');
+    expect(screen.getAllByTitle('shared.versionControl.fileItem.unstageTooltip')).toHaveLength(1);
+
+    await user.click(screen.getByTitle('shared.versionControl.fileItem.stageTooltip'));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.stageRegistryFiles).toHaveBeenCalledWith([
+        'claude-code/plugins/review-assistant/README.md',
+      ]);
+      expect(screen.getAllByTitle('shared.versionControl.fileItem.unstageTooltip')).toHaveLength(2);
+    });
+    expect(screen.queryByTitle('shared.versionControl.fileItem.stageTooltip')).not.toBeInTheDocument();
+  });
+
+  it('initializes Git for existing local registry content before showing version control changes', async () => {
+    const user = userEvent.setup();
+    const uninitializedRepository = {
+      isGitRepo: false,
+      currentBranch: null,
+      remoteUrl: null,
+      hasOrigin: false,
+      hasLocalContent: true,
+      canCloneSafely: false,
+      canInitSafely: true,
+    };
+    marketplaceApiMock.getRegistryRepository
+      .mockResolvedValueOnce(uninitializedRepository)
+      .mockResolvedValueOnce(uninitializedRepository);
+    marketplaceApiMock.initializeRegistryGit.mockResolvedValueOnce({
+      success: true,
+      messageKey: 'marketplace.git.init_success',
+      repository: {
+        isGitRepo: true,
+        currentBranch: 'main',
+        remoteUrl: null,
+        hasOrigin: false,
+        hasLocalContent: true,
+        canCloneSafely: false,
+        canInitSafely: false,
+      },
+    });
+    marketplaceApiMock.getRegistryGitStatus.mockResolvedValueOnce({
+      branch: 'main',
+      isGitRepo: true,
+      staged: [],
+      unstaged: [],
+      untracked: [{
+        path: 'claude-code/plugins/settings/README.md',
+        status: '??',
+        type: 'untracked',
+      }],
+      stagedCount: 0,
+      unstagedCount: 0,
+      untrackedCount: 1,
+    });
+
+    render(
+      <MemoryRouter>
+        <MarketplaceSettingsView />
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'marketplace.settings.tabs.versionControl' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.initializeRegistryGit).toHaveBeenCalled();
+    });
+    expect(await screen.findByText('claude-code/plugins/settings/README.md')).toBeInTheDocument();
+  });
+
   it('opens remote configuration from the version control action menu', async () => {
     const user = userEvent.setup();
     render(

@@ -23,7 +23,6 @@ import {
 import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
 
 const logger = createLogger('HooksSettingsPage');
@@ -234,12 +233,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   useEffect(() => {
     refreshHooks();
   }, [refreshHooks]);
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId,
-    features: ['hooks'],
-    onRefresh: refreshHooks,
-  });
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeLoading);
   const isBusy = loading || processing;

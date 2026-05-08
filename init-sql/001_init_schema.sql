@@ -105,7 +105,6 @@ COMMENT ON COLUMN model_configs.sort_order IS '顯示排序順序';
 CREATE TABLE IF NOT EXISTS workspaces (
     id varchar(64) PRIMARY KEY,
     owner_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    template_id varchar(64),
     name text NOT NULL,
     description text,
     git_url text,
@@ -183,7 +182,6 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 
 ALTER TABLE workspaces
-    ADD COLUMN IF NOT EXISTS template_id varchar(64),
     ADD COLUMN IF NOT EXISTS runtime_created_at timestamp with time zone,
     ADD COLUMN IF NOT EXISTS runtime_resources jsonb,
     ADD COLUMN IF NOT EXISTS runtime_mounted_kb_signature text,
@@ -195,7 +193,6 @@ ALTER TABLE workspaces
 COMMENT ON TABLE workspaces IS '開發工作區配置表';
 COMMENT ON COLUMN workspaces.id IS '工作區唯一識別碼';
 COMMENT ON COLUMN workspaces.owner_id IS '工作區擁有者用戶 ID';
-COMMENT ON COLUMN workspaces.template_id IS '使用的專案範本 ID';
 COMMENT ON COLUMN workspaces.name IS '工作區名稱';
 COMMENT ON COLUMN workspaces.description IS '工作區描述';
 COMMENT ON COLUMN workspaces.git_url IS 'Git 儲存庫 URL';
@@ -359,120 +356,6 @@ COMMENT ON COLUMN workspace_knowledge_base_attachments.mode IS 'Mount mode';
 COMMENT ON COLUMN workspace_knowledge_base_attachments.attached_by_id IS 'User ID that attached the knowledge base';
 COMMENT ON COLUMN workspace_knowledge_base_attachments.created_at IS 'Attachment creation time';
 COMMENT ON COLUMN workspace_knowledge_base_attachments.updated_at IS 'Attachment last update time';
-
--- Table: template_features
-CREATE TABLE IF NOT EXISTS template_features (
-    id varchar(64) PRIMARY KEY,
-    feature_key varchar(64) UNIQUE NOT NULL,
-    feature_name varchar(100) NOT NULL,
-    description text,
-    icon varchar(100),
-    sort_order integer DEFAULT 0,
-    is_active boolean DEFAULT TRUE,
-    created_at timestamp with time zone DEFAULT now()
-);
-
-COMMENT ON TABLE template_features IS '範本特徵定義表';
-COMMENT ON COLUMN template_features.id IS '特徵唯一識別碼';
-COMMENT ON COLUMN template_features.feature_key IS '特徵內部鍵值（如：mcp, slash_commands）';
-COMMENT ON COLUMN template_features.feature_name IS '特徵顯示名稱（如：MCP 工具, 斜線命令）';
-COMMENT ON COLUMN template_features.description IS '特徵描述說明';
-COMMENT ON COLUMN template_features.icon IS '特徵圖示標識';
-COMMENT ON COLUMN template_features.sort_order IS '顯示排序順序';
-COMMENT ON COLUMN template_features.is_active IS '特徵是否啟用';
-
--- Table: template_feature_cli_types (feature 與 CLI 類型多對多關聯)
-CREATE TABLE IF NOT EXISTS template_feature_cli_types (
-    feature_id varchar(64) NOT NULL REFERENCES template_features(id) ON DELETE CASCADE,
-    cli_type varchar(32) NOT NULL CHECK (cli_type IN ('claude-code','codex','gemini')),
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    PRIMARY KEY (feature_id, cli_type)
-);
-
-ALTER TABLE template_feature_cli_types
-    ADD COLUMN IF NOT EXISTS created_at timestamp with time zone DEFAULT now() NOT NULL;
-
-COMMENT ON TABLE template_feature_cli_types IS '特徵可用的 CLI 類型對應表';
-COMMENT ON COLUMN template_feature_cli_types.feature_id IS '特徵 ID';
-COMMENT ON COLUMN template_feature_cli_types.cli_type IS 'CLI 類型（claude-code / codex / gemini）';
-COMMENT ON COLUMN template_feature_cli_types.created_at IS '建立時間';
-
-
--- Table: template_categories
-CREATE TABLE IF NOT EXISTS template_categories (
-    id varchar(64) PRIMARY KEY,
-    name varchar(255) NOT NULL,
-    description text,
-    icon varchar(100),
-    sort_order integer DEFAULT 0 NOT NULL,
-    is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-COMMENT ON TABLE template_categories IS '模板分類表';
-COMMENT ON COLUMN template_categories.id IS '分類唯一識別碼';
-COMMENT ON COLUMN template_categories.name IS '分類名稱';
-COMMENT ON COLUMN template_categories.description IS '分類描述';
-COMMENT ON COLUMN template_categories.icon IS '圖示名稱';
-COMMENT ON COLUMN template_categories.sort_order IS '排序順序';
-COMMENT ON COLUMN template_categories.is_active IS '是否啟用';
-COMMENT ON COLUMN template_categories.created_at IS '建立時間';
-COMMENT ON COLUMN template_categories.updated_at IS '更新時間';
-
-
--- Table: templates
-CREATE TABLE IF NOT EXISTS templates (
-    id varchar(64) PRIMARY KEY,
-    name varchar(255) NOT NULL,
-    description text,
-    developer varchar(255) NOT NULL,
-    author_email varchar(255),
-    author_url varchar(255),
-    category varchar(100),
-    tags jsonb DEFAULT '[]'::jsonb,
-    version varchar(50) DEFAULT '1.0.0',
-    cli_type varchar(32) DEFAULT 'claude-code' NOT NULL CHECK (cli_type IN ('claude-code','codex','gemini')),
-    status varchar(20) DEFAULT 'draft' NOT NULL CHECK (status IN ('draft','released')),
-    readme_content text,
-    init_commands text,
-    created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
-);
-
-COMMENT ON TABLE templates IS '專案範本表';
-COMMENT ON COLUMN templates.id IS '範本唯一識別碼';
-COMMENT ON COLUMN templates.name IS '範本名稱';
-COMMENT ON COLUMN templates.description IS '範本描述';
-COMMENT ON COLUMN templates.developer IS '範本作者名稱';
-COMMENT ON COLUMN templates.author_email IS '範本作者聯絡信箱';
-COMMENT ON COLUMN templates.author_url IS '範本作者個人網址';
-COMMENT ON COLUMN templates.category IS '範本所屬分類';
-COMMENT ON COLUMN templates.tags IS '範本關鍵字（JSON陣列）';
-COMMENT ON COLUMN templates.version IS '範本版本號';
-COMMENT ON COLUMN templates.cli_type IS '此範本的 CLI 類型（claude-code / codex / gemini）';
-COMMENT ON COLUMN templates.status IS '範本狀態（draft: 草稿 / released: 已發布）';
-COMMENT ON COLUMN templates.readme_content IS 'README 說明文件內容';
-COMMENT ON COLUMN templates.created_at IS '範本建立時間';
-COMMENT ON COLUMN templates.updated_at IS '範本最後更新時間';
-
--- Table: template_feature_mappings
-CREATE TABLE IF NOT EXISTS template_feature_mappings (
-    id varchar(64) PRIMARY KEY,
-
-
-
-    template_id varchar(64) NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
-    feature_id varchar(64) NOT NULL REFERENCES template_features(id) ON DELETE CASCADE,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    UNIQUE (template_id, feature_id)
-);
-
-COMMENT ON TABLE template_feature_mappings IS '範本與特徵關聯表';
-COMMENT ON COLUMN template_feature_mappings.id IS '關聯記錄唯一識別碼';
-COMMENT ON COLUMN template_feature_mappings.template_id IS '範本 ID';
-COMMENT ON COLUMN template_feature_mappings.feature_id IS '特徵 ID';
-COMMENT ON COLUMN template_feature_mappings.created_at IS '關聯建立時間';
 
 -- Table: automation_jobs
 CREATE TABLE IF NOT EXISTS automation_jobs (
@@ -868,12 +751,4 @@ VALUES
     ('model-claude-sonnet-4', 'claude-sonnet-4-20250514', 'Claude 3.5 Sonnet (Latest)', 'claude-3-5-sonnet-20241022', true, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('model-claude-haiku', 'claude-haiku-20240307', 'Claude 3 Haiku', 'claude-3-haiku-20240307', true, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
     ('model-claude-opus', 'claude-opus-20240229', 'Claude 3 Opus', 'claude-3-opus-20240229', true, 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT DO NOTHING;
-
--- Default Template Categories
-INSERT INTO template_categories (id, name, description, icon, sort_order, is_active, created_at, updated_at)
-VALUES
-    ('automation', 'Automation', 'Automation deployment and CI/CD workflow templates', 'server', 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('documentation', 'Documentation', 'Technical documentation and writing templates', 'book-open', 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-    ('collaboration', 'Collaboration', 'Multi-agent collaboration and workspace management templates', 'users', 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT DO NOTHING;

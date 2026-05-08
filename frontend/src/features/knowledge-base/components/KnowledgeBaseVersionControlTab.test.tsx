@@ -297,7 +297,7 @@ describe('KnowledgeBaseVersionControlTab', () => {
     });
   });
 
-  it('uses the shared Template Center version control components for an enabled repository', async () => {
+  it('uses the shared version control components for an enabled repository', async () => {
     apiMocks.getKnowledgeBaseGitRepositoryStatus.mockResolvedValue({
       isGitRepo: true,
       currentBranch: 'main',

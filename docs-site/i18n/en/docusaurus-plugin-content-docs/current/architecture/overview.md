@@ -27,8 +27,8 @@ Today, Claude Code provides the most complete agent experience in the platform, 
 ┌───────────────────────────────▼─────────────────────────────────┐
 │              Workspace Manager (Python / FastAPI)                │
 │  ┌──────────────┐ ┌──────────────┐ ┌───────────────────────┐   │
-│  │ Workspace    │ │ Templates    │ │ Automation / Celery   │   │
-│  │ CRUD + Auth  │ │ + Members    │ │ Scheduler             │   │
+│  │ Workspace    │ │ Marketplace  │ │ Automation / Celery   │   │
+│  │ CRUD + Auth  │ │ + Settings   │ │ Scheduler             │   │
 │  └──────────────┘ └──────────────┘ └───────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │           Docker / Kubernetes Provisioner            │   │
@@ -73,7 +73,7 @@ A React + Vite frontend providing the complete workspace management UI:
 The core backend (FastAPI) responsible for:
 - Workspace CRUD and lifecycle management
 - Multi-provisioner support (Docker, Kubernetes)
-- Template management
+- Marketplace package management
 - Team management and governance features
 - Automation tasks (Celery + Redis)
 - Authentication (Keycloak JWT verification)

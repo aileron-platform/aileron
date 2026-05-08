@@ -674,7 +674,7 @@ const agentSettings = {
               markdown: 'Edit the full Markdown document, including frontmatter metadata.',
               toml: 'Edit the full TOML document. Required keys are name, description, and developer_instructions.',
             },
-            templates: {
+            defaults: {
               markdown: '---\nname: reviewer\ndescription: Reviews code for correctness and test gaps.\n---\n\nReview code like an owner.',
               toml: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""',
             },
@@ -794,8 +794,7 @@ const agentSettings = {
         runtimeMissing: 'Workspace runtime endpoint is not available yet. Please try again shortly.',
         runtimeUnavailable: 'Workspace runtime is unavailable: {{message}}',
         loading: 'Loading {{fileName}}...',
-        fallbackNotice: 'You are viewing the default template. Save to create a new {{fileName}}.',
-        staleTemplate: 'Template installation updated this file externally. Your unsaved content has not been overwritten; refresh to load the latest version.',
+        fallbackNotice: 'You are viewing default content. Save to create a new {{fileName}}.',
       },
       notifications: {
         saveSuccess: {
@@ -808,14 +807,11 @@ const agentSettings = {
         },
         loadFailed: {
           title: 'Failed to load {{fileName}}',
-          description: 'Unable to load the configuration file. Using the default template.',
+          description: 'Unable to load the configuration file. Using the default content.',
         },
         runtimeUnavailable: {
           title: 'Workspace runtime not ready',
           description: 'Check the runtime status and try again.',
-        },
-        templateUpdated: {
-          description: 'Template installation updated this file. Your unsaved content is preserved; save it or refresh manually to load the latest version.',
         },
       },
       confirmDiscard: 'You have unsaved changes. Discard them?',
@@ -1206,7 +1202,7 @@ const agentSettings = {
               markdown: 'Edit the full Markdown document, including frontmatter metadata.',
               toml: 'Edit the full TOML document.',
             },
-            templates: {
+            defaults: {
               markdown: '---\nname: reviewer\ndescription: Reviews code for correctness and test gaps.\n---\n\nReview code like an owner.',
               toml: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""',
             },

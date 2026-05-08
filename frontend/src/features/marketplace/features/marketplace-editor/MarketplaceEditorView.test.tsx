@@ -3,7 +3,10 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MarketplaceEditorView } from './MarketplaceEditorView';
+import {
+  MarketplaceEditorView,
+  shouldUpdateMarketplaceEditorFileContent,
+} from './MarketplaceEditorView';
 import type { MarketplacePackageDetail, MarketplaceProvider } from '@/shared/types/marketplace';
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -522,6 +525,7 @@ describe('MarketplaceEditorView', () => {
     const user = userEvent.setup();
     renderCodexEditor();
 
+    await screen.findByDisplayValue('Package description');
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.skills/ }));
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.fileManager.actions.create.trigger' }));
     await user.click(screen.getByRole('menuitem', { name: 'marketplace.editor.fileManager.sidebar.createFolder' }));
@@ -537,6 +541,13 @@ describe('MarketplaceEditorView', () => {
 
     expect(screen.getByText('extra.md')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
+  });
+
+  it('does not mark the package dirty when opening a skill file without content changes', async () => {
+    const content = '# Codebase map\n\nMap files, ownership boundaries, and likely test surfaces before changing code.';
+
+    expect(shouldUpdateMarketplaceEditorFileContent(content, content)).toBe(false);
+    expect(shouldUpdateMarketplaceEditorFileContent(`${content}\n`, content)).toBe(true);
   });
 
   it('keeps uploaded binary assets out of the text editor and shows safe preview actions', async () => {

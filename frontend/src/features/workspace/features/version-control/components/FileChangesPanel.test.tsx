@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/shared/api/apiClient';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileChangesPanel } from './FileChangesPanel';
+import { applyStagePathsToChangesResponse, FileChangesPanel } from './FileChangesPanel';
 
 const {
   onFileSelectMock,
@@ -203,6 +203,31 @@ describe('FileChangesPanel', () => {
     fireEvent.click(screen.getAllByTitle('Stage file')[1]);
 
     expect(stageMutationMock.mutateAsync).toHaveBeenCalledWith(['notes.md', 'draft.txt']);
+  });
+
+  it('applies staged paths to the visible changes cache immediately', () => {
+    const next = applyStagePathsToChangesResponse(
+      {
+        staged: [{ name: 'README.md', path: 'README.md', status: 'M', type: 'modified' }],
+        unstaged: [{ name: 'notes.md', path: 'notes.md', status: 'M', type: 'modified' }],
+        untracked: [{ name: 'draft.txt', path: 'draft.txt', status: '??', type: 'untracked' }],
+        untrackedTotal: 1,
+        untrackedPage: 1,
+        untrackedPageSize: 100,
+        untrackedHasMore: false,
+      },
+      ['notes.md', 'draft.txt'],
+    );
+
+    expect(next?.staged.map(file => file.path)).toEqual(['README.md', 'notes.md', 'draft.txt']);
+    expect(next?.staged.find(file => file.path === 'draft.txt')).toMatchObject({
+      status: 'A',
+      type: 'added',
+      changeType: 'staged',
+    });
+    expect(next?.unstaged).toEqual([]);
+    expect(next?.untracked).toEqual([]);
+    expect(next?.untrackedTotal).toBe(0);
   });
 
   it('wires refresh, fetch, pull, and push actions', async () => {

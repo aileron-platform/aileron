@@ -38,13 +38,13 @@ export const FeatureHeader: React.FC<FeatureHeaderProps> = ({
     )}>
       {/* 左側：標題區域（收折時隱藏） */}
       {!isCollapsed && (
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Icon className="h-4 w-4 text-primary flex-shrink-0" />
-          <h2 className="text-sm font-medium text-foreground flex-shrink-0">{title}</h2>
+          <h2 className="min-w-0 truncate text-sm font-medium text-foreground">{title}</h2>
 
           {/* 額外資訊 */}
           {info && (
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 overflow-hidden">
               {info}
             </div>
           )}

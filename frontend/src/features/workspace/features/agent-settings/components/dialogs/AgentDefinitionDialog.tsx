@@ -32,11 +32,11 @@ export const AgentDefinitionDialog: React.FC<AgentDefinitionDialogProps> = ({
   onSubmit,
 }) => {
   const { t } = useI18n();
-  const contentTemplateKey = `${i18nNamespace}.subagents.dialog.fields.content.templates.${format}`;
+  const contentDefaultKey = `${i18nNamespace}.subagents.dialog.fields.content.defaults.${format}`;
   const resolvedDefaultContent = useMemo(() => {
-    const translated = t(contentTemplateKey);
-    return translated === contentTemplateKey ? '' : translated;
-  }, [contentTemplateKey, t]);
+    const translated = t(contentDefaultKey);
+    return translated === contentDefaultKey ? '' : translated;
+  }, [contentDefaultKey, t]);
   const [formState, setFormState] = useState<AgentDefinitionFormState>(() => ({
     fileName: (initialValue?.metadata?.fileName as string | undefined)
       ?? (initialValue?.metadata?.relativePath as string | undefined)

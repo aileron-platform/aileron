@@ -9,7 +9,6 @@ from .gemini_oauth import router as gemini_oauth_router
 from .oauth import router as oauth_router
 from .settings import router as settings_router
 from .teams import router as teams_router
-from .templates import router as templates_router
 from .users import router as users_router
 from .workspaces import router as workspaces_router
 from .workspace_setup import router as workspace_setup_router
@@ -24,7 +23,6 @@ __all__ = [
     "oauth_router",
     "settings_router",
     "teams_router",
-    "templates_router",
     "users_router",
     "workspaces_router",
     "workspace_setup_router",

@@ -19,10 +19,6 @@ vi.mock('@/features/workspace/providers/WorkspaceProvider', () => ({
   }),
 }));
 
-vi.mock('@/features/workspace/events/templateInstallCoordinator', () => ({
-  useWorkspaceTemplateInstallRefresh: vi.fn(),
-}));
-
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
     t: (key: string, values?: Record<string, unknown>) => {

@@ -189,4 +189,87 @@ describe('agentSettingsApi slash command mapping', () => {
       }),
     ]);
   });
+
+  it('loads namespaced Gemini slash command details without ambiguous file lookups', async () => {
+    apiGetMock
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scopes: [
+          {
+            scope: 'extension',
+            documents: [
+              {
+                fileName: 'search.toml',
+                namespace: 'drive',
+                description: 'Drive search',
+                scope: 'extension',
+                size: '120B',
+                format: 'toml',
+                extensionName: 'google-workspace',
+                extensionVersion: '1.0.0',
+              },
+              {
+                fileName: 'search.toml',
+                namespace: 'gmail',
+                description: 'Gmail search',
+                scope: 'extension',
+                size: '130B',
+                format: 'toml',
+                extensionName: 'google-workspace',
+                extensionVersion: '1.0.0',
+              },
+            ],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scope: 'extension',
+        document: {
+          fileName: 'search.toml',
+          namespace: 'drive',
+          description: 'Drive search',
+          scope: 'extension',
+          size: '120B',
+          format: 'toml',
+          content: 'prompt = "drive"',
+          extensionName: 'google-workspace',
+          extensionVersion: '1.0.0',
+        },
+      })
+      .mockResolvedValueOnce({
+        workspaceId: 'ws-1',
+        scope: 'extension',
+        document: {
+          fileName: 'search.toml',
+          namespace: 'gmail',
+          description: 'Gmail search',
+          scope: 'extension',
+          size: '130B',
+          format: 'toml',
+          content: 'prompt = "gmail"',
+          extensionName: 'google-workspace',
+          extensionVersion: '1.0.0',
+        },
+      });
+
+    const api = createAgentSettingsApi('gemini');
+    const documents = await api.listSlashCommands('http://runtime.test', 'ws-1');
+
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/v1/workspaces/ws-1/gemini/slash-commands/extension/search.toml?namespace=drive&extensionName=google-workspace',
+      undefined,
+    );
+    expect(apiGetMock).toHaveBeenNthCalledWith(
+      3,
+      '/api/v1/workspaces/ws-1/gemini/slash-commands/extension/search.toml?namespace=gmail&extensionName=google-workspace',
+      undefined,
+    );
+    expect(documents.map((document) => document.id)).toEqual([
+      'extension:google-workspace:drive:search.toml',
+      'extension:google-workspace:gmail:search.toml',
+    ]);
+    expect(documents.map((document) => document.title)).toEqual(['drive/search', 'gmail/search']);
+  });
 });

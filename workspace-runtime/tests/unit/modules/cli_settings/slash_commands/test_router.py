@@ -15,6 +15,8 @@ from app.modules.cli_settings.slash_commands.service import (
 class FakeCliSlashCommandService:
     def __init__(self) -> None:
         self.fail_with = None
+        self.last_get_request = None
+        self.last_delete_request = None
 
     def _maybe_fail(self):
         if self.fail_with:
@@ -33,8 +35,15 @@ class FakeCliSlashCommandService:
             "documents": [{"fileName": "hello.md", "scope": scope, "size": "1KB", "format": "markdown"}],
         }
 
-    def get_document(self, workspace_id, scope, file_name):
+    def get_document(self, workspace_id, scope, file_name, *, namespace=None, extension_name=None):
         self._maybe_fail()
+        self.last_get_request = {
+            "workspace_id": workspace_id,
+            "scope": scope,
+            "file_name": file_name,
+            "namespace": namespace,
+            "extension_name": extension_name,
+        }
         return {
             "workspaceId": workspace_id,
             "scope": scope,
@@ -78,8 +87,14 @@ class FakeCliSlashCommandService:
             },
         }
 
-    def delete_document(self, workspace_id, scope, file_name):
+    def delete_document(self, workspace_id, scope, file_name, *, namespace=None):
         self._maybe_fail()
+        self.last_delete_request = {
+            "workspace_id": workspace_id,
+            "scope": scope,
+            "file_name": file_name,
+            "namespace": namespace,
+        }
         return {
             "workspaceId": workspace_id,
             "scope": scope,
@@ -99,11 +114,22 @@ def _client(service: FakeCliSlashCommandService, monkeypatch) -> TestClient:
 
 
 def test_cli_slash_commands_router_happy_paths(monkeypatch) -> None:
-    client = _client(FakeCliSlashCommandService(), monkeypatch)
+    service = FakeCliSlashCommandService()
+    client = _client(service, monkeypatch)
 
     assert client.get("/workspaces/ws-1/cli-settings/codex/slash-commands", params={"scope": "user"}).status_code == 200
     assert client.get("/workspaces/ws-1/cli-settings/codex/slash-commands/user").json()["scope"] == "user"
-    assert client.get("/workspaces/ws-1/cli-settings/codex/slash-commands/user/hello.md").json()["document"]["namespace"] == "team"
+    assert client.get(
+        "/workspaces/ws-1/cli-settings/codex/slash-commands/user/hello.md",
+        params={"namespace": "team", "extensionName": "google-workspace"},
+    ).json()["document"]["namespace"] == "team"
+    assert service.last_get_request == {
+        "workspace_id": "ws-1",
+        "scope": "user",
+        "file_name": "hello.md",
+        "namespace": "team",
+        "extension_name": "google-workspace",
+    }
 
     response = client.post(
         "/workspaces/ws-1/cli-settings/codex/slash-commands/user",
@@ -119,9 +145,18 @@ def test_cli_slash_commands_router_happy_paths(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["document"]["namespace"] == "core"
 
-    response = client.delete("/workspaces/ws-1/cli-settings/codex/slash-commands/user/hello.md")
+    response = client.delete(
+        "/workspaces/ws-1/cli-settings/codex/slash-commands/user/hello.md",
+        params={"namespace": "team"},
+    )
     assert response.status_code == 200
     assert response.json()["deleted"] is True
+    assert service.last_delete_request == {
+        "workspace_id": "ws-1",
+        "scope": "user",
+        "file_name": "hello.md",
+        "namespace": "team",
+    }
 
 
 def test_cli_slash_commands_router_maps_not_found_and_ambiguous(monkeypatch) -> None:

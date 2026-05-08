@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -131,6 +131,21 @@ describe('MarketplaceDetailView', () => {
     await user.click(screen.getByRole('button', { name: /marketplace\.features\.skills/ }));
 
     expect(screen.getByLabelText('config.toml')).toHaveValue('description = "Review config"');
+    const refreshButton = screen.getByRole('button', { name: 'marketplace.detail.viewer.refresh' });
+    const collapseButton = screen.getByRole('button', { name: 'marketplace.detail.viewer.collapseSidebar' });
+    expect(refreshButton.compareDocumentPosition(collapseButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await user.click(collapseButton);
+    expect(screen.getByRole('button', { name: 'marketplace.detail.viewer.expandSidebar' })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('marketplace.editor.fileManager.search.placeholder')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'marketplace.detail.viewer.expandSidebar' }));
+    expect(screen.getByPlaceholderText('marketplace.editor.fileManager.search.placeholder')).toBeInTheDocument();
+    const resizeHandle = screen.getByRole('separator', { name: 'marketplace.detail.viewer.resizeSidebar' });
+    fireEvent.mouseDown(resizeHandle, { clientX: 320 });
+    fireEvent.mouseMove(window, { clientX: 420 });
+    fireEvent.mouseUp(window);
+    expect(resizeHandle.parentElement).toHaveStyle({ width: '420px' });
   });
 
   it('blocks destructive delete until the package id confirmation matches', async () => {
@@ -309,6 +324,38 @@ describe('MarketplaceDetailView', () => {
               ],
             },
           },
+          {
+            id: 'native-hooks',
+            name: 'hooks',
+            path: 'hooks/hooks.json',
+            data: {
+              description: 'Optional stop-time review gate for Codex Companion.',
+              hooks: {
+                SessionStart: [
+                  {
+                    hooks: [
+                      {
+                        type: 'command',
+                        command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs" SessionStart',
+                        timeout: 5,
+                      },
+                    ],
+                  },
+                ],
+                Stop: [
+                  {
+                    hooks: [
+                      {
+                        type: 'command',
+                        command: 'node "${CLAUDE_PLUGIN_ROOT}/scripts/stop-review-gate-hook.mjs"',
+                        timeout: 900,
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
         ],
         mcpServers: [
           {
@@ -371,6 +418,11 @@ describe('MarketplaceDetailView', () => {
     expect(screen.getByText('npm test')).toBeInTheDocument();
     expect(screen.getByText('https://hooks.example.local')).toBeInTheDocument();
     expect(screen.getByText('marketplace.detail.hooks.card.moreActions')).toBeInTheDocument();
+    expect(screen.getByText('Optional stop-time review gate for Codex Companion.')).toBeInTheDocument();
+    expect(screen.getByText('SessionStart')).toBeInTheDocument();
+    expect(screen.getByText('node "${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs" SessionStart')).toBeInTheDocument();
+    expect(screen.getByText('Stop')).toBeInTheDocument();
+    expect(screen.getByText('node "${CLAUDE_PLUGIN_ROOT}/scripts/stop-review-gate-hook.mjs"')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /marketplace\.features\.mcp/ }));
     expect(screen.getByText('design-context')).toBeInTheDocument();

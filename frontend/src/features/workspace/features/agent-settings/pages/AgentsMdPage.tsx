@@ -20,7 +20,6 @@ import { ApiError } from '@/shared/api/apiClient';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import { sortAgentSettingsSourceOptions } from '../components/SettingsSourcePrimitives';
 import type { AgentToolConfig } from '../types';
-import { useWorkspaceTemplateInstallRefresh } from '@/features/workspace/events/templateInstallCoordinator';
 import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
 
 export interface AgentsMdPageProps {
@@ -54,7 +53,6 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
   const [saving, setSaving] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
   const [showFallbackNotice, setShowFallbackNotice] = useState(false);
-  const [isStale, setIsStale] = useState(false);
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
 
@@ -108,7 +106,6 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
         const nextContent = document.content ?? '';
         setContent(nextContent);
         setInitialContent(nextContent);
-        setIsStale(false);
       } catch (err) {
         if (!isMounted) return;
 
@@ -138,22 +135,6 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       isMounted = false;
     };
   }, [runtimeBaseUrl, workspaceId, runtimeError, scope, refreshToken, is404Error, toast, t, api, i18nNs]);
-
-  useWorkspaceTemplateInstallRefresh({
-    workspaceId,
-    features: ['claudeMd'],
-    onRefresh: () => {
-      setRefreshToken((token) => token + 1);
-    },
-    shouldDeferRefresh: () => hasChanges,
-    onDeferredRefresh: () => {
-      setIsStale(true);
-      toast({
-        title: headerTitle,
-        description: t(`${i18nNs}.agentsMd.notifications.templateUpdated.description`, fileNameInterp),
-      });
-    },
-  });
 
   const handleScopeChange = useCallback((value: string) => {
     if (value === scope) return;
@@ -189,7 +170,6 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       await api.updateAgentsMd(runtimeBaseUrl!, workspaceId!, { scope, content });
       setInitialContent(content);
       setShowFallbackNotice(false);
-      setIsStale(false);
       toast({
         title: t(`${i18nNs}.agentsMd.notifications.saveSuccess.title`, fileNameInterp),
         description: t(`${i18nNs}.agentsMd.notifications.saveSuccess.description`, fileNameInterp),
@@ -219,9 +199,7 @@ const AgentsMdPage: React.FC<AgentsMdPageProps> = ({ config }) => {
       isRuntimeReady={isRuntimeReady}
       isLoading={loading}
       isSaving={saving}
-      isStale={isStale}
       statusMessage={showFallbackNotice ? t(`${i18nNs}.agentsMd.status.fallbackNotice`, fileNameInterp) : null}
-      staleMessage={t(`${i18nNs}.agentsMd.status.staleTemplate`, fileNameInterp)}
       value={content}
       onChange={setContent}
       onRefresh={handleRefresh}

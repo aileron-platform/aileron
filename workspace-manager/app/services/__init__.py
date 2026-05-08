@@ -12,8 +12,6 @@ from .i18n_service import get_i18n_service
 from .runtime_provision_service import RuntimeProvisionService
 from .settings_service import SettingsService
 from .team_service import TeamService
-from .template_service import TemplateService
-from .template_install_service import TemplateInstallService
 from .user_service import UserService
 from .knowledge_base_service import (
     KnowledgeBaseAccessDeniedError,
@@ -166,11 +164,6 @@ def get_automation_service(db: Session = Depends(get_db)) -> AutomationService:
     return AutomationService(db)
 
 
-def get_template_install_service(db: Session = Depends(get_db)) -> TemplateInstallService:
-    """Get template installation service"""
-    return TemplateInstallService(db)
-
-
 def get_workspace_lifecycle_service(db: Session = Depends(get_db)) -> WorkspaceLifecycleService:
     """Get Workspace LifecycleService"""
     return WorkspaceLifecycleService(db)
@@ -185,8 +178,6 @@ __all__ = [
     "get_runtime_provision_service",
     "get_settings_service",
     "get_team_service",
-    "get_template_service",
-    "get_template_install_service",
     "get_user_service",
     "KnowledgeBaseAccessDeniedError",
     "KnowledgeBaseConflictError",

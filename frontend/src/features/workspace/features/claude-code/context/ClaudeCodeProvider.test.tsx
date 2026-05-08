@@ -27,10 +27,6 @@ vi.mock('../services/claudeCodeApi', () => ({
   claudeCodeApi: apiMock,
 }));
 
-vi.mock('@/features/workspace/events/templateInstallCoordinator', () => ({
-  useWorkspaceTemplateInstallRefresh: vi.fn(),
-}));
-
 const Probe: React.FC = () => {
   useClaudeCode();
   return null;

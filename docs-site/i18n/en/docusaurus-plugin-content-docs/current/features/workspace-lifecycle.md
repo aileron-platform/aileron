@@ -43,21 +43,9 @@ curl -X POST http://localhost:3001/api/v1/workspaces \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-workspace",
-    "template_id": "...",
     "provisioner": "docker"
   }'
 ```
-
-### Creating from a Template
-
-A Template defines the workspace's:
-- Container image
-- Default environment variables
-- Install steps
-- Firewall configuration
-- Feature tags
-
-This makes workspace creation repeatable and easier to align with team-wide conventions and internal requirements.
 
 ## Container Composition
 

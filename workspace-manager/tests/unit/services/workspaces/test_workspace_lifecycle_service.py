@@ -49,6 +49,7 @@ def mock_settings():
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
     settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
+    settings.MANAGER_MARKETPLACE_INSTALL_DIR = "/mnt/marketplace-install"
     return settings
 
 
@@ -575,6 +576,7 @@ class TestVolumeCleanup:
                     Path("/mnt/workspaces/workspace_123_456"),
                     Path("/mnt/workspace-scripts/workspace_123_456"),
                     Path("/mnt/claude-data/workspace_123_456"),
+                    Path("/mnt/marketplace-install/workspace_123_456"),
                 ]
 
     def test_cleanup_workspace_volumes_directory_not_exists(

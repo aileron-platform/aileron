@@ -14,18 +14,13 @@ Workspace Manager is the core service of Aileron, responsible for managing the f
 ### Workspace Management
 - **CRUD**: create, read, update, delete workspaces
 - **Container management**: Docker / Kubernetes container lifecycle control
-- **Template support**: quickly create workspaces from preset templates
+- **Marketplace support**: manage agent packages and provider settings
 - **Network configuration**: firewall rules and port mapping management
 
 ### Team Collaboration
 - **Multi-user support**: workspace member management
 - **Permission control**: role-based access control (RBAC)
 - **Team management**: team creation and member invitations
-
-### Template Center
-- **Template management**: create and manage project templates
-- **Feature tags**: classify and filter templates
-- **Version control**: template version management
 
 ### Automation Tasks
 - **Cron scheduling**: scheduled tasks using Cron expressions

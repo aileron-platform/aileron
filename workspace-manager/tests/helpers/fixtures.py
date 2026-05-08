@@ -54,7 +54,6 @@ class TestDataFactory:
         name: str | None = None,
         description: str | None = None,
         owner_id: uuid.UUID | None = None,
-        template_id: uuid.UUID | None = None,
         git_url: str | None = None,
         branch: str | None = None,
         runtime: str = "docker",
@@ -71,7 +70,6 @@ class TestDataFactory:
             "name": name or f"Test Workspace {uuid.uuid4().hex[:8]}",
             "description": description or "A test workspace for testing purposes",
             "ownerId": str(owner_id) if owner_id is not None else None,  # Use alias
-            "templateId": str(template_id) if template_id else None,  # Use alias
             "gitUrl": git_url,  # Use alias
             "branch": branch or "main",
             "runtime": runtime,
@@ -83,39 +81,6 @@ class TestDataFactory:
             "preferredCli": "claude-code",  # Use alias
             "fallbackEnabled": True,  # Use alias
             "workspacePath": "/workspace",  # Use alias
-        }
-
-    @staticmethod
-    def create_template_data(
-        name: str | None = None,
-        description: str | None = None,
-        author_name: str | None = None,
-        author_email: str | None = None,
-        keywords: list[str] | None = None,
-        version: str = "1.0.0",
-        cli_type: str = "claude-code",
-        status: str = "draft",
-        **kwargs: Any,
-    ) -> Dict[str, Any]:
-        """Create template test data
-
-        Supports additional kwargs for compatibility with legacy test code, such as is_public, category, owner_id, etc.
-        """
-        template_id = f"test-template-{uuid.uuid4().hex[:8]}"
-        return {
-            "templateId": template_id,  # Use alias
-            "name": name or f"Test Template {uuid.uuid4().hex[:8]}",
-            "description": description or "A test template for testing purposes",
-            "author": {
-                "name": author_name or "Test Author",
-                "email": author_email or f"author_{uuid.uuid4().hex[:8]}@example.com",
-                "url": None,
-            },
-            "keywords": keywords or ["test", "template"],
-            "version": version,
-            "cli_type": cli_type,
-            "status": status,
-            "initCommands": "echo 'Initializing template...'",  # Use alias
         }
 
     @staticmethod
@@ -230,13 +195,4 @@ TEST_WORKSPACE = {
     "owner_id": TEST_USER["id"],
     "team_id": TEST_TEAM["id"],
     "status": "stopped",
-}
-
-TEST_TEMPLATE = {
-    "id": str(uuid.uuid4()),
-    "name": "Test Template",
-    "description": "A test template",
-    "is_public": True,
-    "is_active": True,
-    "created_by": TEST_USER["id"],
 }

@@ -156,12 +156,23 @@ class CliSlashCommandService:
         )
 
     def get_document(
-        self, workspace_id: str, scope: SlashCommandScope, file_name: str
+        self,
+        workspace_id: str,
+        scope: SlashCommandScope,
+        file_name: str,
+        *,
+        namespace: str | None = None,
+        extension_name: str | None = None,
     ) -> CliSlashCommandDocumentResponse:
         if scope == SlashCommandScope.EXTENSION:
-            return self._get_extension_document(workspace_id, file_name)
+            return self._get_extension_document(
+                workspace_id,
+                file_name,
+                namespace=namespace,
+                extension_name=extension_name,
+            )
         directory = self._scope_dir(workspace_id, scope)
-        file_path = self._resolve_file_path(directory, file_name, namespace=None)
+        file_path = self._resolve_file_path(directory, file_name, namespace=namespace)
         if file_path is None or not file_path.exists():
             raise CliSlashCommandNotFoundError(file_name)
 
@@ -261,11 +272,16 @@ class CliSlashCommandService:
         )
 
     def delete_document(
-        self, workspace_id: str, scope: SlashCommandScope, file_name: str
+        self,
+        workspace_id: str,
+        scope: SlashCommandScope,
+        file_name: str,
+        *,
+        namespace: str | None = None,
     ) -> CliSlashCommandDeleteResponse:
         self._ensure_mutable_scope(scope)
         directory = self._scope_dir(workspace_id, scope)
-        file_path = self._resolve_file_path(directory, file_name, namespace=None)
+        file_path = self._resolve_file_path(directory, file_name, namespace=namespace)
         if file_path is None or not file_path.exists():
             raise CliSlashCommandNotFoundError(file_name)
 
@@ -335,11 +351,20 @@ class CliSlashCommandService:
             )
         return documents
 
-    def _get_extension_document(self, workspace_id: str, file_name: str) -> CliSlashCommandDocumentResponse:
+    def _get_extension_document(
+        self,
+        workspace_id: str,
+        file_name: str,
+        *,
+        namespace: str | None = None,
+        extension_name: str | None = None,
+    ) -> CliSlashCommandDocumentResponse:
         matches = [
             (package, command)
             for package, command in GeminiExtensionResourceResolver().enabled_slash_commands(resolve_workspace_root())
             if command.fileName == file_name
+            and (namespace is None or command.namespace == namespace)
+            and (extension_name is None or package.name == extension_name)
         ]
         if not matches:
             raise CliSlashCommandNotFoundError(file_name)

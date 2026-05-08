@@ -56,24 +56,24 @@ from app.models import (
     GitOperationResponse,
     GitRemoteUrlRequest,
     GitRepositoryStatus,
-    TemplateBlobResponse,
-    TemplateChangesResponse,
-    TemplateCheckoutRequest,
-    TemplateCheckoutResponse,
-    TemplateCommitFilesResponse,
-    TemplateCommitListResponse,
-    TemplateCommitResponse,
-    TemplateDiffResponse,
-    TemplateDiscardRequest,
-    TemplateDiscardResponse,
-    TemplateRemoteRequest,
-    TemplateRemoteResponse,
-    TemplateStageRequest,
-    TemplateStageResponse,
-    TemplateUnstageRequest,
-    TemplateUnstageResponse,
-    TemplateVersionControlBranchListResponse,
-    TemplateVersionControlStatus,
+    BlobResponse,
+    ChangesResponse,
+    CheckoutRequest,
+    CheckoutResponse,
+    CommitFilesResponse,
+    CommitListResponse,
+    CommitResponse,
+    DiffResponse,
+    DiscardRequest,
+    DiscardResponse,
+    RemoteRequest,
+    RemoteResponse,
+    StageRequest,
+    StageResponse,
+    UnstageRequest,
+    UnstageResponse,
+    VersionControlBranchListResponse,
+    VersionControlStatus,
 )
 from app.modules.auth import get_current_user_id
 from app.services import (
@@ -1290,7 +1290,7 @@ def set_knowledge_base_git_remote_url(
 
 @router.get(
     "/{kb_id}/git/version-control/status",
-    response_model=TemplateVersionControlStatus,
+    response_model=VersionControlStatus,
     summary="Get knowledge base Git file status",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1299,7 +1299,7 @@ def get_knowledge_base_version_control_status(
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateVersionControlStatus:
+) -> VersionControlStatus:
     try:
         return service.get_version_control_status(user_id=current_user_id, kb_id=kb_id)
     except Exception as exc:
@@ -1308,7 +1308,7 @@ def get_knowledge_base_version_control_status(
 
 @router.get(
     "/{kb_id}/git/version-control/changes",
-    response_model=TemplateChangesResponse,
+    response_model=ChangesResponse,
     summary="Get knowledge base Git file changes",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1319,7 +1319,7 @@ def get_knowledge_base_version_control_changes(
     page_size: int = Query(100, ge=1, le=500, alias="pageSize"),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateChangesResponse:
+) -> ChangesResponse:
     try:
         return service.get_file_changes(user_id=current_user_id, kb_id=kb_id, page=page, page_size=page_size)
     except Exception as exc:
@@ -1328,17 +1328,17 @@ def get_knowledge_base_version_control_changes(
 
 @router.post(
     "/{kb_id}/git/version-control/stage",
-    response_model=TemplateStageResponse,
+    response_model=StageResponse,
     summary="Stage knowledge base Git files",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def stage_knowledge_base_version_control_changes(
     kb_id: str,
     request: Request,
-    payload: TemplateStageRequest,
+    payload: StageRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateStageResponse:
+) -> StageResponse:
     try:
         return service.stage(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:
@@ -1347,17 +1347,17 @@ def stage_knowledge_base_version_control_changes(
 
 @router.post(
     "/{kb_id}/git/version-control/unstage",
-    response_model=TemplateUnstageResponse,
+    response_model=UnstageResponse,
     summary="Unstage knowledge base Git files",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def unstage_knowledge_base_version_control_changes(
     kb_id: str,
     request: Request,
-    payload: TemplateUnstageRequest,
+    payload: UnstageRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateUnstageResponse:
+) -> UnstageResponse:
     try:
         return service.unstage(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:
@@ -1366,17 +1366,17 @@ def unstage_knowledge_base_version_control_changes(
 
 @router.post(
     "/{kb_id}/git/version-control/discard",
-    response_model=TemplateDiscardResponse,
+    response_model=DiscardResponse,
     summary="Discard knowledge base Git file changes",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def discard_knowledge_base_version_control_changes(
     kb_id: str,
     request: Request,
-    payload: TemplateDiscardRequest,
+    payload: DiscardRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateDiscardResponse:
+) -> DiscardResponse:
     try:
         return service.discard(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:
@@ -1385,7 +1385,7 @@ def discard_knowledge_base_version_control_changes(
 
 @router.post(
     "/{kb_id}/git/version-control/commit",
-    response_model=TemplateCommitResponse,
+    response_model=CommitResponse,
     summary="Commit knowledge base Git changes",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1395,7 +1395,7 @@ def commit_knowledge_base_version_control_changes(
     payload: GitCommitRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateCommitResponse:
+) -> CommitResponse:
     try:
         return service.commit(user_id=current_user_id, kb_id=kb_id, message=payload.message, paths=payload.paths)
     except Exception as exc:
@@ -1404,7 +1404,7 @@ def commit_knowledge_base_version_control_changes(
 
 @router.get(
     "/{kb_id}/git/version-control/commits",
-    response_model=TemplateCommitListResponse,
+    response_model=CommitListResponse,
     summary="List knowledge base Git commits",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1415,7 +1415,7 @@ def list_knowledge_base_version_control_commits(
     page_size: int = Query(20, ge=1, le=100, alias="pageSize"),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateCommitListResponse:
+) -> CommitListResponse:
     try:
         return service.list_commits(user_id=current_user_id, kb_id=kb_id, page=page, page_size=page_size)
     except Exception as exc:
@@ -1424,7 +1424,7 @@ def list_knowledge_base_version_control_commits(
 
 @router.get(
     "/{kb_id}/git/version-control/commits/{commit_id}/files",
-    response_model=TemplateCommitFilesResponse,
+    response_model=CommitFilesResponse,
     summary="Get knowledge base Git commit files",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1434,7 +1434,7 @@ def get_knowledge_base_version_control_commit_files(
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateCommitFilesResponse:
+) -> CommitFilesResponse:
     try:
         return service.get_commit_files(user_id=current_user_id, kb_id=kb_id, commit_id=commit_id)
     except Exception as exc:
@@ -1443,7 +1443,7 @@ def get_knowledge_base_version_control_commit_files(
 
 @router.get(
     "/{kb_id}/git/version-control/diff",
-    response_model=TemplateDiffResponse,
+    response_model=DiffResponse,
     summary="Get knowledge base Git file diff",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1454,7 +1454,7 @@ def get_knowledge_base_version_control_diff(
     head: str = Query("WORKTREE"),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateDiffResponse:
+) -> DiffResponse:
     try:
         return service.diff(user_id=current_user_id, kb_id=kb_id, path=path, head=head)
     except Exception as exc:
@@ -1463,7 +1463,7 @@ def get_knowledge_base_version_control_diff(
 
 @router.get(
     "/{kb_id}/git/version-control/blob",
-    response_model=TemplateBlobResponse,
+    response_model=BlobResponse,
     summary="Read knowledge base Git file blob",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1474,7 +1474,7 @@ def get_knowledge_base_version_control_blob(
     revision: str | None = Query(None),
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateBlobResponse:
+) -> BlobResponse:
     try:
         return service.blob(user_id=current_user_id, kb_id=kb_id, path=path, revision=revision)
     except Exception as exc:
@@ -1483,7 +1483,7 @@ def get_knowledge_base_version_control_blob(
 
 @router.get(
     "/{kb_id}/git/version-control/branches",
-    response_model=TemplateVersionControlBranchListResponse,
+    response_model=VersionControlBranchListResponse,
     summary="List knowledge base Git branches",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1492,7 +1492,7 @@ def list_knowledge_base_version_control_branches(
     request: Request,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateVersionControlBranchListResponse:
+) -> VersionControlBranchListResponse:
     try:
         return service.list_branches(user_id=current_user_id, kb_id=kb_id)
     except Exception as exc:
@@ -1501,7 +1501,7 @@ def list_knowledge_base_version_control_branches(
 
 @router.post(
     "/{kb_id}/git/version-control/branches/{branch_name:path}/checkout",
-    response_model=TemplateCheckoutResponse,
+    response_model=CheckoutResponse,
     summary="Switch to or create a knowledge base Git branch",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
@@ -1509,10 +1509,10 @@ def checkout_knowledge_base_version_control_branch(
     kb_id: str,
     branch_name: str,
     request: Request,
-    payload: TemplateCheckoutRequest,
+    payload: CheckoutRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateCheckoutResponse:
+) -> CheckoutResponse:
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=_build_error_detail(
@@ -1524,17 +1524,17 @@ def checkout_knowledge_base_version_control_branch(
 
 @router.post(
     "/{kb_id}/git/version-control/fetch",
-    response_model=TemplateRemoteResponse,
+    response_model=RemoteResponse,
     summary="Fetch knowledge base Git remote references",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def fetch_knowledge_base_version_control(
     kb_id: str,
     request: Request,
-    payload: TemplateRemoteRequest,
+    payload: RemoteRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateRemoteResponse:
+) -> RemoteResponse:
     try:
         return service.fetch(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:
@@ -1543,17 +1543,17 @@ def fetch_knowledge_base_version_control(
 
 @router.post(
     "/{kb_id}/git/version-control/pull",
-    response_model=TemplateRemoteResponse,
+    response_model=RemoteResponse,
     summary="Pull knowledge base Git remote changes",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def pull_knowledge_base_version_control(
     kb_id: str,
     request: Request,
-    payload: TemplateRemoteRequest,
+    payload: RemoteRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateRemoteResponse:
+) -> RemoteResponse:
     try:
         return service.pull(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:
@@ -1562,17 +1562,17 @@ def pull_knowledge_base_version_control(
 
 @router.post(
     "/{kb_id}/git/version-control/push",
-    response_model=TemplateRemoteResponse,
+    response_model=RemoteResponse,
     summary="Push knowledge base Git changes",
     responses=_build_kb_responses(400, 401, 403, 404, 500),
 )
 def push_knowledge_base_version_control(
     kb_id: str,
     request: Request,
-    payload: TemplateRemoteRequest,
+    payload: RemoteRequest,
     current_user_id: str = Depends(get_current_user_id),
     service: KnowledgeBaseGitService = Depends(get_knowledge_base_git_service),
-) -> TemplateRemoteResponse:
+) -> RemoteResponse:
     try:
         return service.push(user_id=current_user_id, kb_id=kb_id, payload=payload)
     except Exception as exc:

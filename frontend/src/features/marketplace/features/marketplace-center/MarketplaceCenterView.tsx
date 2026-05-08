@@ -29,14 +29,18 @@ import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { LoadingSpinner } from '@/shared/components/ui/LoadingSpinner';
+import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ROUTES } from '@/shared/constants/routes';
 import { fetchWorkspaceList } from '@/features/workspace/services/workspaceRuntimeApi';
+import { ApiError } from '@/shared/api/apiClient';
 import type {
   MarketplaceFeatureKey,
   MarketplaceCliPreflight,
   MarketplaceImportCandidate,
+  MarketplaceImportResult,
   MarketplaceInstallResult,
+  MarketplaceListQuery,
   MarketplaceListResult,
   MarketplacePackageSummary,
   MarketplaceProvider,
@@ -51,7 +55,6 @@ import {
   importCandidates,
   initializeRegistry,
   installPackage,
-  listImportBranches,
   listPackages,
   scanImportSource,
   uploadImportSource,
@@ -72,6 +75,33 @@ import {
 
 const PAGE_SIZE_OPTIONS = [6, 12, 24];
 const MARKETPLACE_FEATURES: MarketplaceFeatureKey[] = ['mcp', 'commands', 'hooks', 'agentsMd', 'agents', 'outputStyle', 'skills'];
+const IMPORT_SCAN_HIDDEN_VALIDATION_CODES = new Set(['marketplace.validation.metadata_conflict']);
+
+const getMarketplaceInstallCommandName = (
+  provider: MarketplaceProvider,
+  t: (key: string) => string,
+) => t(`marketplace.install.commandNames.${provider}`);
+
+const getMarketplaceErrorCode = (err: unknown, fallback: string) => (
+  err instanceof ApiError
+    ? (err.errorCode ?? err.message ?? fallback)
+    : err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : fallback
+);
+
+const translateMarketplaceMessage = (
+  t: (key: string, params?: Record<string, unknown>) => string,
+  value: string,
+  params?: Record<string, unknown>,
+) => {
+  if (value.startsWith('marketplace.')) {
+    return t(value, params);
+  }
+  return value;
+};
 
 export const MarketplaceCenterView: React.FC = () => {
   const { t } = useI18n();
@@ -110,19 +140,19 @@ export const MarketplaceCenterView: React.FC = () => {
     return () => { isActive = false; };
   }, []);
 
-  const loadPackages = React.useCallback(async () => {
+  const loadPackages = React.useCallback(async (overrides: Partial<MarketplaceListQuery> = {}) => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await listPackages({
-        q: searchTerm,
-        provider,
-        category,
-        features: Array.from(activeFeatures),
+        q: overrides.q ?? searchTerm,
+        provider: overrides.provider ?? provider,
+        category: overrides.category ?? category,
+        features: overrides.features ?? Array.from(activeFeatures),
         sort: 'updatedAt',
         direction: 'desc',
-        page,
-        pageSize,
+        page: overrides.page ?? page,
+        pageSize: overrides.pageSize ?? pageSize,
       });
       setResult(data);
     } catch (err) {
@@ -177,6 +207,27 @@ export const MarketplaceCenterView: React.FC = () => {
     setActiveFeatures(new Set());
     setCategory('all');
     setPage(1);
+  };
+
+  const revealImportedPackages = (importResult: MarketplaceImportResult) => {
+    if (importResult.imported.length === 0) {
+      void loadPackages();
+      return;
+    }
+    const importedProviders = new Set(importResult.imported.map(item => item.provider));
+    const nextProvider = importedProviders.size === 1 ? importResult.imported[0].provider : 'all';
+    setSearchTerm('');
+    setProvider(nextProvider);
+    setActiveFeatures(new Set());
+    setCategory('all');
+    setPage(1);
+    void loadPackages({
+      q: '',
+      provider: nextProvider,
+      category: 'all',
+      features: [],
+      page: 1,
+    });
   };
 
   const totalPages = result?.totalPages ?? 1;
@@ -497,7 +548,7 @@ export const MarketplaceCenterView: React.FC = () => {
           </div>
         </ColumnsLayout.Content>
       </ColumnsLayout>
-      <MarketplaceImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} />
+      <MarketplaceImportDialog open={isImportOpen} onOpenChange={setIsImportOpen} onImported={revealImportedPackages} />
       <MarketplacePackageActionDialog
         action={packageAction}
         onOpenChange={open => {
@@ -564,16 +615,15 @@ const MarketplaceFirstRunOnboarding: React.FC<MarketplaceFirstRunOnboardingProps
 interface MarketplaceImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onImported: (result: MarketplaceImportResult) => void;
 }
 
-const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open, onOpenChange }) => {
+const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open, onOpenChange, onImported }) => {
   const { t } = useI18n();
+  const { toast } = useToast();
   const [provider, setProvider] = React.useState<MarketplaceProvider>('claude-code');
   const [sourceKind, setSourceKind] = React.useState<'git' | 'local'>('git');
   const [source, setSource] = React.useState('');
-  const [ref, setRef] = React.useState('');
-  const [branches, setBranches] = React.useState<string[]>([]);
-  const [isLoadingBranches, setIsLoadingBranches] = React.useState(false);
   const [localFile, setLocalFile] = React.useState<File | null>(null);
   const [uploadedLocalSource, setUploadedLocalSource] = React.useState('');
   const localFileInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -581,32 +631,11 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
   const [isImporting, setIsImporting] = React.useState(false);
   const [candidates, setCandidates] = React.useState<MarketplaceImportCandidate[]>([]);
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-  const [resultStatus, setResultStatus] = React.useState<'idle' | 'scanned' | 'imported'>('idle');
+  const [resultStatus, setResultStatus] = React.useState<'idle' | 'scanned'>('idle');
   const [scanErrorKey, setScanErrorKey] = React.useState<string | null>(null);
-  const [importSummary, setImportSummary] = React.useState<{
-    imported: number;
-    skipped: number;
-    failed: number;
-    duplicates: number;
-    warnings: number;
-    failedItems: Array<{
-      packageId: string;
-      displayName: string;
-      errorCode: string;
-    }>;
-  } | null>(null);
   const scanBlocked = sourceKind === 'git'
-    ? !source.trim() || !ref.trim()
+    ? !source.trim()
     : !localFile && !uploadedLocalSource;
-  const importSummaryText = importSummary
-    ? t('marketplace.import.result.summary', {
-        imported: importSummary.imported,
-        skipped: importSummary.skipped,
-        failed: importSummary.failed,
-        duplicates: importSummary.duplicates,
-        warnings: importSummary.warnings,
-      })
-    : null;
 
   React.useEffect(() => {
     if (!open) {
@@ -614,7 +643,6 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
       setSelectedIds(new Set());
       setResultStatus('idle');
       setScanErrorKey(null);
-      setImportSummary(null);
       return;
     }
   }, [open]);
@@ -624,33 +652,7 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
     setSelectedIds(new Set());
     setResultStatus('idle');
     setScanErrorKey(null);
-    setImportSummary(null);
   }, []);
-
-  const resetBranchState = React.useCallback(() => {
-    setBranches([]);
-    setRef('');
-  }, []);
-
-  const loadBranches = async () => {
-    setIsLoadingBranches(true);
-    setScanErrorKey(null);
-    resetScanState();
-    try {
-      const result = await listImportBranches({
-        provider,
-        sourceKind: 'git',
-        source,
-      });
-      setBranches(result.branches);
-      setRef('');
-    } catch (err) {
-      resetBranchState();
-      setScanErrorKey(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsLoadingBranches(false);
-    }
-  };
 
   const scan = async () => {
     setIsScanning(true);
@@ -663,19 +665,17 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
         : {
             provider,
             sourceKind,
-            source,
-            ref: ref.trim(),
+            source: source.trim(),
           };
       if (sourceKind === 'local') {
         setUploadedLocalSource(importSource.source);
       }
       const scanned = await scanImportSource(importSource);
       setCandidates(scanned);
-      setSelectedIds(new Set(scanned.filter(candidate => !candidate.duplicate).map(candidate => candidate.id)));
-      setImportSummary(null);
+      setSelectedIds(new Set());
       setResultStatus('scanned');
     } catch (err) {
-      setScanErrorKey(err instanceof Error ? err.message : String(err));
+      setScanErrorKey(getMarketplaceErrorCode(err, 'marketplace.import.validation.cloneFailed'));
     } finally {
       setIsScanning(false);
     }
@@ -684,25 +684,32 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
   const runImport = async () => {
     setIsImporting(true);
     setScanErrorKey(null);
-    setImportSummary(null);
     try {
       const selected = candidates.filter(candidate => selectedIds.has(candidate.id));
       const result = await importCandidates(selected);
-      setImportSummary({
+      const summary = {
         imported: result.imported.length,
         skipped: result.skipped.length,
         failed: result.failed.length,
         duplicates: selected.filter(candidate => candidate.duplicate).length,
         warnings: result.warnings.length,
-        failedItems: result.failed.map(candidate => ({
-          packageId: candidate.packageId,
-          displayName: candidate.displayName,
-          errorCode: candidate.errorCode,
-        })),
+      };
+      const failedDetails = result.failed.map(candidate => t('marketplace.import.result.failedDetailItem', {
+        displayName: candidate.displayName,
+        packageId: candidate.packageId,
+        message: translateMarketplaceMessage(t, candidate.errorCode),
+      }));
+      toast({
+        title: t('marketplace.import.result.summary', summary),
+        description: failedDetails.length
+          ? t('marketplace.import.result.failedDetailsDescription', { details: failedDetails.join('; ') })
+          : undefined,
+        variant: summary.failed > 0 ? 'destructive' : summary.warnings > 0 ? 'info' : 'success',
       });
-      setResultStatus('imported');
+      onImported(result);
+      onOpenChange(false);
     } catch (err) {
-      setScanErrorKey(err instanceof Error ? err.message : String(err));
+      setScanErrorKey(getMarketplaceErrorCode(err, 'marketplace.import.validation.cloneFailed'));
       setResultStatus('scanned');
     } finally {
       setIsImporting(false);
@@ -722,7 +729,6 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
               <Label>{t('marketplace.import.fields.provider')}</Label>
               <Select value={provider} onValueChange={value => {
                 setProvider(value as MarketplaceProvider);
-                resetBranchState();
                 resetScanState();
               }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -748,38 +754,23 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
             </div>
           </div>
           {sourceKind === 'git' ? (
-            <div className="grid gap-4 md:grid-cols-[1fr_220px_auto]">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <div className="space-y-2">
                 <Label htmlFor="marketplace-import-source">{t('marketplace.import.fields.source')}</Label>
                 <Input id="marketplace-import-source" value={source} onChange={event => {
                   setSource(event.target.value);
-                  resetBranchState();
                   resetScanState();
                 }} />
-              </div>
-              <div className="space-y-2">
-                <Label>{t('marketplace.import.fields.branch')}</Label>
-                <Select value={ref} onValueChange={value => {
-                  setRef(value);
-                  resetScanState();
-                }} disabled={branches.length === 0}>
-                  <SelectTrigger><SelectValue placeholder={t('marketplace.import.branch.placeholder')} /></SelectTrigger>
-                  <SelectContent>
-                    {branches.map(branch => (
-                      <SelectItem key={branch} value={branch}>{branch}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <Button
                 type="button"
                 variant="outline"
-                className="self-end"
-                onClick={loadBranches}
-                disabled={!source.trim() || isLoadingBranches}
+                className="w-full md:w-auto"
+                onClick={scan}
+                disabled={isScanning || scanBlocked}
               >
-                {isLoadingBranches ? <LoadingSpinner size="sm" className="mr-1.5" /> : null}
-                {t('marketplace.import.actions.loadBranches')}
+                {isScanning ? <LoadingSpinner size="sm" className="mr-1.5" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
+                {t('marketplace.import.actions.scan')}
               </Button>
             </div>
           ) : (
@@ -812,6 +803,17 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
                 <span className="min-w-0 truncate text-sm text-muted-foreground">
                   {localFile?.name ?? t('marketplace.import.localFile.empty')}
                 </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto h-8 px-3 text-xs"
+                  onClick={scan}
+                  disabled={isScanning || scanBlocked}
+                >
+                  {isScanning ? <LoadingSpinner size="sm" className="mr-1.5" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
+                  {t('marketplace.import.actions.scan')}
+                </Button>
               </div>
             </div>
           )}
@@ -841,101 +843,84 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
                     </Button>
                   </>
                 ) : null}
-                <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={scan} disabled={isScanning || scanBlocked}>
-                  {isScanning ? <LoadingSpinner size="sm" className="mr-1.5" /> : <Search className="mr-1.5 h-3.5 w-3.5" />}
-                  {t('marketplace.import.actions.scan')}
-                </Button>
               </div>
             </div>
             <div className="max-h-[min(34vh,320px)] space-y-2 overflow-y-auto rounded-md border border-border p-3">
               {candidates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t('marketplace.import.candidates.empty')}</p>
-              ) : candidates.map(candidate => (
-                <div key={candidate.id} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
-                  <Checkbox
-                    checked={selectedIds.has(candidate.id)}
-                    onCheckedChange={checked => {
-                      const next = new Set(selectedIds);
-                      if (checked) next.add(candidate.id);
-                      else next.delete(candidate.id);
-                      setSelectedIds(next);
-                    }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{candidate.displayName}</span>
-                      <span className="font-mono text-xs text-muted-foreground">{candidate.packageId}</span>
-                      {candidate.duplicate ? (
-                        <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
-                          {t('marketplace.import.candidates.duplicate')}
-                        </span>
+              ) : candidates.map(candidate => {
+                const visibleValidationResults = candidate.validationResults.filter(
+                  result => !IMPORT_SCAN_HIDDEN_VALIDATION_CODES.has(result.code),
+                );
+                return (
+                  <div key={candidate.id} className="flex items-start gap-3 rounded-md border border-border px-3 py-2">
+                    <Checkbox
+                      checked={selectedIds.has(candidate.id)}
+                      onCheckedChange={checked => {
+                        const next = new Set(selectedIds);
+                        if (checked) next.add(candidate.id);
+                        else next.delete(candidate.id);
+                        setSelectedIds(next);
+                      }}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{candidate.displayName}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{candidate.packageId}</span>
+                        {candidate.duplicate ? (
+                          <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+                            {t('marketplace.import.candidates.duplicate')}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1 font-mono text-xs text-muted-foreground">{candidate.sourcePath}</div>
+                      {visibleValidationResults.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          {visibleValidationResults.map(result => (
+                            <div key={`${candidate.id}-${result.code}`} className="text-xs text-amber-700">
+                              {t(result.messageKey)}
+                            </div>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
-                    <div className="mt-1 font-mono text-xs text-muted-foreground">{candidate.sourcePath}</div>
-                    {candidate.validationResults.length > 0 ? (
-                      <div className="mt-2 space-y-1">
-                        {candidate.validationResults.map(result => (
-                          <div key={`${candidate.id}-${result.code}`} className="text-xs text-amber-700">
-                            {t(result.messageKey)}
-                          </div>
-                        ))}
+                    {candidate.duplicate ? (
+                      <div className="w-48 space-y-2">
+                        <Select
+                          value={candidate.duplicateAction}
+                          onValueChange={value => setCandidates(items => items.map(item => (
+                            item.id === candidate.id ? { ...item, duplicateAction: value as MarketplaceImportCandidate['duplicateAction'] } : item
+                          )))}
+                        >
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="skip">{t('marketplace.import.duplicateActions.skip')}</SelectItem>
+                            <SelectItem value="overwrite">{t('marketplace.import.duplicateActions.overwrite')}</SelectItem>
+                            <SelectItem value="import-as-new">{t('marketplace.import.duplicateActions.importAsNew')}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {candidate.duplicateAction === 'import-as-new' ? (
+                          <Input
+                            value={candidate.newPackageId ?? ''}
+                            aria-label={t('marketplace.import.fields.newPackageId')}
+                            placeholder={t('marketplace.import.fields.newPackageIdPlaceholder')}
+                            onChange={event => setCandidates(items => items.map(item => (
+                              item.id === candidate.id ? { ...item, newPackageId: event.target.value } : item
+                            )))}
+                          />
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
-                  {candidate.duplicate ? (
-                    <div className="w-48 space-y-2">
-                      <Select
-                        value={candidate.duplicateAction}
-                        onValueChange={value => setCandidates(items => items.map(item => (
-                          item.id === candidate.id ? { ...item, duplicateAction: value as MarketplaceImportCandidate['duplicateAction'] } : item
-                        )))}
-                      >
-                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="skip">{t('marketplace.import.duplicateActions.skip')}</SelectItem>
-                          <SelectItem value="overwrite">{t('marketplace.import.duplicateActions.overwrite')}</SelectItem>
-                          <SelectItem value="import-as-new">{t('marketplace.import.duplicateActions.importAsNew')}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {candidate.duplicateAction === 'import-as-new' ? (
-                        <Input
-                          value={candidate.newPackageId ?? ''}
-                          aria-label={t('marketplace.import.fields.newPackageId')}
-                          placeholder={t('marketplace.import.fields.newPackageIdPlaceholder')}
-                          onChange={event => setCandidates(items => items.map(item => (
-                            item.id === candidate.id ? { ...item, newPackageId: event.target.value } : item
-                          )))}
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
         {scanErrorKey ? (
           <Alert variant="destructive" className="shrink-0">
             <Info className="h-4 w-4" />
-            <AlertDescription>{t(scanErrorKey)}</AlertDescription>
-          </Alert>
-        ) : null}
-        {resultStatus === 'imported' && importSummaryText ? (
-          <Alert className="shrink-0">
-            <Download className="h-4 w-4" />
-            <AlertDescription>
-              <div>{importSummaryText}</div>
-              {importSummary?.failedItems.length ? (
-                <div className="mt-2 space-y-1">
-                  <div className="font-medium">{t('marketplace.import.result.failedDetails')}</div>
-                  {importSummary.failedItems.map(item => (
-                    <div key={`${item.packageId}-${item.errorCode}`} className="text-xs">
-                      {item.displayName} ({item.packageId}): {t(item.errorCode)}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </AlertDescription>
+            <AlertDescription>{translateMarketplaceMessage(t, scanErrorKey)}</AlertDescription>
           </Alert>
         ) : null}
         <DialogFooter>
@@ -1103,6 +1088,7 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
   if (!action) return null;
 
   const { item } = action;
+  const commandName = getMarketplaceInstallCommandName(item.provider, t);
   const titleKey = {
     install: 'marketplace.install.title',
     export: 'marketplace.export.title',
@@ -1116,32 +1102,38 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
 
   const runAction = async () => {
     setStatus('running');
-    if (action.type === 'install') {
-      saveMarketplaceInstallWorkspaceId(MARKETPLACE_STORAGE_USER_SCOPE, workspaceId);
-      const result = await installPackage({
-        provider: item.provider,
-        packageId: item.packageId,
-        revision: item.revision,
-        workspaceId,
-      });
-      setStatus(result.status);
-      setErrorCode(result.errorCode ?? null);
-      setInstallResult(result);
-      return;
+    setErrorCode(null);
+    try {
+      if (action.type === 'install') {
+        saveMarketplaceInstallWorkspaceId(MARKETPLACE_STORAGE_USER_SCOPE, workspaceId);
+        const result = await installPackage({
+          provider: item.provider,
+          packageId: item.packageId,
+          revision: item.revision,
+          workspaceId,
+        });
+        setStatus(result.status);
+        setErrorCode(result.errorCode ?? null);
+        setInstallResult(result);
+        return;
+      }
+      if (action.type === 'export') {
+        await exportPackage({ provider: item.provider, packageId: item.packageId, revision: item.revision });
+        setStatus('success');
+        return;
+      }
+      const result = await deletePackage({ provider: item.provider, packageId: item.packageId, revision: item.revision });
+      if (result.deleted) {
+        setStatus('success');
+        onDeleted();
+        return;
+      }
+      setStatus('failed');
+      setErrorCode(result.errorCode ?? 'marketplace.package.delete_failed');
+    } catch (err) {
+      setStatus('failed');
+      setErrorCode(getMarketplaceErrorCode(err, `marketplace.${action.type}.failed`));
     }
-    if (action.type === 'export') {
-      await exportPackage({ provider: item.provider, packageId: item.packageId, revision: item.revision });
-      setStatus('success');
-      return;
-    }
-    const result = await deletePackage({ provider: item.provider, packageId: item.packageId, revision: item.revision });
-    if (result.deleted) {
-      setStatus('success');
-      onDeleted();
-      return;
-    }
-    setStatus('failed');
-    setErrorCode(result.errorCode ?? 'marketplace.package.delete_failed');
   };
 
   const isDeleteBlocked = action.type === 'delete' && confirmText !== item.packageId;
@@ -1151,7 +1143,7 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle>{t(titleKey)}</AlertDialogTitle>
-          <AlertDialogDescription>{t(descriptionKey)}</AlertDialogDescription>
+          <AlertDialogDescription>{t(descriptionKey, { commandName })}</AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-4">
           <div className="grid gap-3 rounded-md border border-border p-3 text-sm">
@@ -1204,10 +1196,10 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
             <Terminal className="h-4 w-4" />
             <AlertDescription>
               {isLoadingPreflight
-                ? t('marketplace.install.preflight.loading')
+                ? t('marketplace.install.preflight.loading', { commandName })
                 : preflight?.available
-                  ? t('marketplace.install.preflight.ready', { version: preflight.version ?? t('marketplace.install.preflight.unknownVersion') })
-                  : t('marketplace.install.preflight.unavailable', { code: preflight?.errorCode ?? 'unknown' })}
+                  ? t('marketplace.install.preflight.ready', { commandName, version: preflight.version ?? t('marketplace.install.preflight.unknownVersion') })
+                  : t('marketplace.install.preflight.unavailable', { commandName, code: preflight?.errorCode ?? 'unknown' })}
             </AlertDescription>
           </Alert>
             </>
@@ -1246,14 +1238,25 @@ const MarketplacePackageActionDialog: React.FC<MarketplacePackageActionDialogPro
             <Alert variant="destructive">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                {t(`marketplace.install.result.${installResult.status}`, { code: errorCode ?? 'unknown' })}
+                {t(`marketplace.install.result.${installResult.status}`, { commandName, code: errorCode ?? 'unknown' })}
               </AlertDescription>
             </Alert>
           ) : null}
           {status === 'failed' && !installResult ? (
             <Alert variant="destructive">
               <Info className="h-4 w-4" />
-              <AlertDescription>{t('marketplace.delete.result.failed', { code: errorCode ?? 'unknown' })}</AlertDescription>
+              <AlertDescription>
+                {errorCode && !errorCode.startsWith('marketplace.')
+                  ? errorCode
+                  : t(
+                    action.type === 'install'
+                      ? 'marketplace.install.result.failed'
+                      : action.type === 'export'
+                        ? 'marketplace.export.result.failed'
+                        : 'marketplace.delete.result.failed',
+                    { code: errorCode ?? 'unknown' },
+                  )}
+              </AlertDescription>
             </Alert>
           ) : null}
           {installResult?.stdout || installResult?.stderr ? (

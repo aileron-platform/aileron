@@ -190,6 +190,9 @@ const marketplace = {
     viewer: {
       searchPlaceholder: '搜尋檔案...',
       refresh: '重新整理',
+      collapseSidebar: '收折檔案列表',
+      expandSidebar: '展開檔案列表',
+      resizeSidebar: '調整檔案列表寬度',
       fileNameFallback: '未命名檔案',
       descriptionFallback: '無描述',
       copy: '複製',
@@ -332,7 +335,6 @@ const marketplace = {
       provider: 'Provider',
       sourceKind: '來源類型',
       source: 'Repository URL',
-      branch: 'Branch',
       localFile: '上傳套件封存檔',
       newPackageId: '新套件 ID',
       newPackageIdPlaceholder: 'package-id-copy',
@@ -344,15 +346,11 @@ const marketplace = {
     localFile: {
       empty: '尚未選擇封存檔',
     },
-    branch: {
-      placeholder: '選擇 branch',
-    },
     actions: {
       scan: '掃描來源',
       import: '匯入選取項目',
       settings: 'SSH 設定',
       chooseFile: '選擇封存檔',
-      loadBranches: '載入分支',
       selectAll: '全選',
       clearSelection: '取消全選',
     },
@@ -378,19 +376,23 @@ const marketplace = {
       httpsTokenUnsupported: '此版本的 Marketplace 匯入不支援 HTTPS token 驗證。',
       sshKeyRequired: '從 SSH repository 匯入前，請先產生 Marketplace SSH key。',
       cloneFailed: 'Marketplace 匯入來源 checkout 失敗。',
-      branchListFailed: 'Marketplace 匯入來源 branch 查詢失敗。',
       invalidUploadArchive: '請上傳有效的 ZIP 封存檔。',
-      nestedRemoteSourceUnsupported: '此版本的 Marketplace 不支援巢狀遠端套件來源。',
-      nested_remote_source_unsupported: '此版本的 Marketplace 不支援巢狀遠端套件來源。',
     },
     result: {
       summary: '已匯入 {{imported}}，略過 {{skipped}}，失敗 {{failed}}，重複 {{duplicates}}，警告 {{warnings}}。',
       failedDetails: '失敗項目',
+      failedDetailsDescription: '失敗項目：{{details}}',
+      failedDetailItem: '{{displayName}}（{{packageId}}）：{{message}}',
     },
   },
   install: {
     title: '安裝套件',
-    description: '透過目標 workspace runtime 執行 provider CLI 來安裝套件。',
+    description: '透過目標 workspace runtime 執行 {{commandName}} command 來安裝套件。',
+    commandNames: {
+      'claude-code': 'Claude',
+      codex: 'Codex',
+      gemini: 'Gemini',
+    },
     fields: {
       provider: 'Provider',
       package: '套件',
@@ -402,9 +404,9 @@ const marketplace = {
       currentWorkspace: '目前 workspace',
     },
     preflight: {
-      loading: '正在檢查 provider CLI 可用性...',
-      ready: 'Provider CLI 可用（{{version}}）。',
-      unavailable: 'Provider CLI 不可用：{{code}}。',
+      loading: '正在檢查 {{commandName}} command 可用性...',
+      ready: '{{commandName}} command 可用（{{version}}）。',
+      unavailable: '{{commandName}} command 不可用：{{code}}。',
       unknownVersion: '版本未知',
     },
     commandPreview: 'Command preview',
@@ -420,11 +422,11 @@ const marketplace = {
     result: {
       success: '套件已安裝。',
       failed: '安裝失敗，錯誤代碼：{{code}}',
-      timeout: 'Provider CLI 未在時間內完成安裝。錯誤代碼：{{code}}',
+      timeout: '{{commandName}} command 未在時間內完成安裝。錯誤代碼：{{code}}',
       validation: 'Provider 驗證阻擋安裝。錯誤代碼：{{code}}',
-      cliUnavailable: '目標 workspace 無法使用 provider CLI。錯誤代碼：{{code}}',
-      cliVersionUnsupported: 'Provider CLI 版本不支援。錯誤代碼：{{code}}',
-      cliCapabilityMissing: 'Provider CLI 缺少必要安裝能力。錯誤代碼：{{code}}',
+      cliUnavailable: '目標 workspace 無法使用 {{commandName}} command。錯誤代碼：{{code}}',
+      cliVersionUnsupported: '{{commandName}} command 版本不支援。錯誤代碼：{{code}}',
+      cliCapabilityMissing: '{{commandName}} command 缺少必要安裝能力。錯誤代碼：{{code}}',
       runtimeUnavailable: 'Workspace runtime 不可用。錯誤代碼：{{code}}',
     },
   },
@@ -441,6 +443,7 @@ const marketplace = {
     },
     result: {
       ready: '匯出 archive 已就緒。',
+      failed: '匯出失敗，錯誤代碼：{{code}}',
     },
   },
   delete: {
@@ -1180,6 +1183,7 @@ const marketplace = {
       errors: {
         conflict: 'Pull 已停止，因為 registry 檔案發生衝突。請在 Marketplace 外解決衝突後重新整理。',
         unsupportedBranch: '此 repository 需要目前不支援的 branch 操作。Marketplace 第一版只支援目前 branch 的 fetch、pull、push、status、diff、commit 與 history。',
+        permissionDenied: '你可以檢視 Marketplace registry 變更，但沒有 stage、commit 或更新 registry 的權限。',
       },
       setupRequired: {
         title: '需要設定 Git repository',

@@ -56,6 +56,7 @@ def test_marketplace_registry_init_and_settings_save(test_app):
     codex = json.loads((root / "codex" / ".agents" / "plugins" / "marketplace.json").read_text())
     assert claude["owner"] == {"name": "Team Maintainer", "email": "team@example.local"}
     assert claude["plugins"] == []
+    assert codex["name"] == "Team-Marketplace"
     assert "owner" not in codex
     assert codex["plugins"] == []
 
@@ -638,14 +639,48 @@ def test_marketplace_install_endpoint_validates_revision_and_runtime(test_app, c
     client, session_factory = test_app
     client.headers.update({"X-Internal-Token": "test-internal-token"})
     user = create_user(id="local-user", username="local-user", email="local-user@example.local")
-    monkeypatch.setattr("app.services.marketplace_service.shutil.which", lambda name: f"/usr/bin/{name}")
+    runtime_payloads = []
 
-    def fake_run(command, **kwargs):
-        if command[-1] == "--version":
-            return SimpleNamespace(returncode=0, stdout="codex 1.0.0", stderr="")
-        return SimpleNamespace(returncode=0, stdout="codex help", stderr="")
+    class RuntimeResponse:
+        def __init__(self, payload):
+            self.payload = payload
 
-    monkeypatch.setattr("app.services.marketplace_service.subprocess.run", fake_run)
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            argv = self.payload["argv"]
+            if argv == ["sh", "-lc", "command -v codex"]:
+                return {"status": "success", "stdout": "/home/developer/.npm-global/bin/codex\n", "stderr": ""}
+            if argv == ["/home/developer/.npm-global/bin/codex", "--version"]:
+                return {"status": "success", "stdout": "codex 1.0.0\n", "stderr": ""}
+            if argv == ["/home/developer/.npm-global/bin/codex", "plugin", "marketplace", "--help"]:
+                return {"status": "success", "stdout": "Usage: codex plugin marketplace add [--user]\n", "stderr": ""}
+            return {
+                "status": "success",
+                "exitCode": 0,
+                "startedAt": "2026-05-07T00:00:00Z",
+                "completedAt": "2026-05-07T00:00:01Z",
+                "stdout": "installed",
+                "stderr": "",
+                "truncated": False,
+            }
+
+    class RuntimeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers):
+            runtime_payloads.append({"url": url, "payload": json, "headers": headers})
+            return RuntimeResponse(json)
+
+    monkeypatch.setattr("app.services.marketplace_service.httpx.Client", RuntimeClient)
     create_response = client.post("/api/v1/marketplace/packages", json={
         "provider": "codex",
         "packageId": "figma-context",
@@ -677,7 +712,7 @@ def test_marketplace_install_endpoint_validates_revision_and_runtime(test_app, c
         ))
         session.commit()
 
-    cli_missing_response = client.post("/api/v1/marketplace/install", json={
+    install_response = client.post("/api/v1/marketplace/install", json={
         "provider": "codex",
         "packageId": "figma-context",
         "revision": created["revision"],
@@ -691,13 +726,29 @@ def test_marketplace_install_endpoint_validates_revision_and_runtime(test_app, c
     assert missing_workspace_response.status_code == 200
     assert missing_workspace_response.json()["status"] == "runtimeUnavailable"
     assert missing_workspace_response.json()["errorCode"] == "marketplace.install.workspace_not_found"
-    assert cli_missing_response.status_code == 200
-    assert cli_missing_response.json()["status"] == "cliCapabilityMissing"
-    assert cli_missing_response.json()["errorCode"] == "marketplace.install.cli_capability_missing"
+    assert install_response.status_code == 200
+    assert install_response.json()["status"] == "success"
+    assert install_response.json()["errorCode"] is None
     assert len(intents) == 1
     assert json.loads(intents[0])["revision"] == created["revision"]
+    assert len(runtime_payloads) == 4
+    install_payload = runtime_payloads[-1]["payload"]
+    assert runtime_payloads[-1]["url"] == "http://workspace-runtime:3002/api/v1/internal/marketplace/install/execute"
+    assert runtime_payloads[-1]["headers"] == {"Authorization": "Bearer dev-internal-token"}
+    assert install_payload["provider"] == "codex"
+    assert install_payload["argv"] == [
+        "/home/developer/.npm-global/bin/codex",
+        "plugin",
+        "marketplace",
+        "add",
+        "/marketplace-install/codex",
+        "--user",
+    ]
+    assert install_payload["cwd"] == "/marketplace-install/codex"
+    assert install_payload["env"] == {"WORKSPACE_ID": "workspace-1"}
     assert activity_response.status_code == 200
     assert activity_response.json()["items"][0]["action"] == "install"
+    assert activity_response.json()["items"][0]["status"] == "success"
 
 
 def test_marketplace_install_preflight_endpoint_reports_cli_state(test_app, monkeypatch):
@@ -744,7 +795,7 @@ def test_marketplace_install_preflight_endpoint_rejects_invalid_provider(test_ap
     client, _ = test_app
     client.headers.update({"X-Internal-Token": "test-internal-token"})
 
-    response = client.get("/api/v1/marketplace/install/preflight", params={"provider": "template-center"})
+    response = client.get("/api/v1/marketplace/install/preflight", params={"provider": "invalid-provider"})
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid Marketplace provider"
@@ -822,6 +873,8 @@ def test_marketplace_rbac_allows_viewer_read_and_blocks_edit(
     settings_response = client.get("/api/v1/marketplace/settings")
     init_response = client.post("/api/v1/marketplace/registry/init")
     repository_response = client.get("/api/v1/marketplace/registry/repository")
+    registry_status_response = client.get("/api/v1/marketplace/registry/status")
+    registry_commits_response = client.get("/api/v1/marketplace/registry/commits")
     ssh_key_response = client.get("/api/v1/marketplace/registry/ssh-key")
     settings_save_response = client.put("/api/v1/marketplace/settings", json={
         "name": "Viewer Registry",
@@ -849,6 +902,8 @@ def test_marketplace_rbac_allows_viewer_read_and_blocks_edit(
     assert settings_response.status_code == 200
     assert init_response.status_code == 201
     assert repository_response.status_code == 200
+    assert registry_status_response.status_code == 200
+    assert registry_commits_response.status_code == 200
     assert ssh_key_response.status_code == 200
     assert settings_save_response.status_code == 403
     assert activity_response.status_code == 403
@@ -1002,6 +1057,99 @@ def test_marketplace_rbac_accepts_direct_marketplace_view_permission_claim(
     assert create_denied_response.status_code == 403
 
 
+def test_marketplace_rbac_accepts_keycloak_authorization_permissions(
+    test_app,
+    create_user,
+    monkeypatch,
+):
+    client, _ = test_app
+    user_id = "marketplace-authz-permission-user"
+    user = create_user(id=user_id, username=user_id, email=f"{user_id}@example.local")
+
+    async def mock_validate_token(self, token: str) -> dict[str, object]:
+        return {
+            "sub": f"keycloak-{user_id}",
+            "preferred_username": user.username,
+            "email": user.email,
+            "roles": ["viewer"],
+            "authorization": {
+                "permissions": [
+                    {"rsname": "marketplace", "scopes": ["view", "edit"]},
+                ],
+            },
+        }
+
+    async def mock_ensure_local_user(payload: dict) -> str:
+        return user.id
+
+    monkeypatch.setattr(
+        "app.modules.auth.middleware.JWTAuthenticationMiddleware._validate_token",
+        mock_validate_token,
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.middleware._ensure_local_user",
+        mock_ensure_local_user,
+    )
+    client.headers.pop("X-Internal-Token", None)
+    client.headers.update({"Authorization": f"Bearer token-{user_id}"})
+
+    create_response = client.post("/api/v1/marketplace/packages", json={
+        "provider": "codex",
+        "packageId": "authz-package",
+        "displayName": "Authz Package",
+        "description": "Created through authorization permissions",
+    })
+    delete_response = client.delete(
+        "/api/v1/marketplace/packages/codex/authz-package",
+        params={"revision": create_response.json()["revision"]},
+    )
+
+    assert create_response.status_code == 201
+    assert delete_response.status_code == 403
+
+
+def test_marketplace_rbac_accepts_keycloak_group_mapping(
+    test_app,
+    create_user,
+    monkeypatch,
+):
+    client, _ = test_app
+    user_id = "marketplace-group-user"
+    user = create_user(id=user_id, username=user_id, email=f"{user_id}@example.local")
+
+    async def mock_validate_token(self, token: str) -> dict[str, object]:
+        return {
+            "sub": f"keycloak-{user_id}",
+            "preferred_username": user.username,
+            "email": user.email,
+            "roles": [],
+            "groups": ["/developers"],
+        }
+
+    async def mock_ensure_local_user(payload: dict) -> str:
+        return user.id
+
+    monkeypatch.setattr(
+        "app.modules.auth.middleware.JWTAuthenticationMiddleware._validate_token",
+        mock_validate_token,
+    )
+    monkeypatch.setattr(
+        "app.modules.auth.middleware._ensure_local_user",
+        mock_ensure_local_user,
+    )
+    client.headers.pop("X-Internal-Token", None)
+    client.headers.update({"Authorization": f"Bearer token-{user_id}"})
+
+    create_response = client.post("/api/v1/marketplace/packages", json={
+        "provider": "codex",
+        "packageId": "group-package",
+        "displayName": "Group Package",
+        "description": "Created through group mapping",
+    })
+
+    assert create_response.status_code == 201
+
+
 def test_marketplace_rbac_falls_back_to_default_permissions_for_unmapped_keycloak_roles(
     test_app,
     create_user,
@@ -1086,39 +1234,20 @@ def test_marketplace_import_scan_validates_source_inputs(
         "sourceKind": "git",
         "source": "https://token@example.com/org/repo.git",
     })
-    invalid_ref_response = client.post("/api/v1/marketplace/import/scan", json={
-        "provider": "codex",
-        "sourceKind": "git",
-        "source": "https://example.com/org/repo.git",
-        "ref": "../main",
-    })
-
     def fake_run(command, **kwargs):
-        if command[:3] == ["git", "ls-remote", "--heads"]:
-            return SimpleNamespace(returncode=0, stdout="abc123\trefs/heads/main\n")
         Path(command[-1]).mkdir(parents=True)
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr("app.services.marketplace_service.subprocess.run", fake_run)
 
-    branches_response = client.post("/api/v1/marketplace/import/branches", json={
-        "provider": "codex",
-        "sourceKind": "git",
-        "source": "https://example.com/org/repo.git",
-    })
     valid_response = client.post("/api/v1/marketplace/import/scan", json={
         "provider": "codex",
         "sourceKind": "git",
         "source": "https://example.com/org/repo.git",
-        "ref": "main",
     })
 
     assert token_response.status_code == 400
     assert token_response.json()["detail"]["code"] == "marketplace.import.validation.https_token_unsupported"
-    assert invalid_ref_response.status_code == 400
-    assert invalid_ref_response.json()["detail"]["code"] == "marketplace.import.validation.invalid_ref"
-    assert branches_response.status_code == 200
-    assert branches_response.json()["branches"] == ["main"]
     assert valid_response.status_code == 200
     assert valid_response.json() == []
 

@@ -51,4 +51,19 @@ describe('ApiClient', () => {
       'X-Language': 'zh-TW',
     });
   });
+
+  it('將物件型錯誤 detail 正規化為字串訊息', async () => {
+    const client = new ApiClient();
+    const response = new Response(JSON.stringify({
+      detail: {
+        message: { key: 'invalid' },
+        code: 'marketplace.import.validation.cloneFailed',
+      },
+    }), { status: 400 });
+
+    await expect((client as any).handleResponse(response)).rejects.toMatchObject({
+      message: 'marketplace.import.validation.cloneFailed',
+      errorCode: 'marketplace.import.validation.cloneFailed',
+    });
+  });
 });

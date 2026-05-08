@@ -674,7 +674,6 @@ class WorkspaceService:
             owner=owner,
             name=workspace.name,
             description=workspace.description,
-            template_id=None,
             git_url=workspace.git_url,
             branch=workspace.branch,
             runtime=workspace.runtime,

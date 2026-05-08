@@ -386,7 +386,6 @@ class MarketplaceImportSource(BaseModel):
     provider: MarketplaceProvider
     source_kind: MarketplaceImportSourceKind = Field(alias="sourceKind")
     source: str
-    ref: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -396,14 +395,6 @@ class MarketplaceImportUploadResult(BaseModel):
 
     source: MarketplaceImportSource
     file_name: str = Field(alias="fileName")
-
-    model_config = {"populate_by_name": True}
-
-
-class MarketplaceImportBranchesResult(BaseModel):
-    """Remote branches available for a Git Marketplace import source."""
-
-    branches: list[str] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 
@@ -422,6 +413,7 @@ class MarketplaceImportCandidate(BaseModel):
     local_revision: str | None = Field(default=None, alias="localRevision")
     validation_severity: MarketplaceValidationSeverity = Field(default="none", alias="validationSeverity")
     validation_results: list[MarketplaceValidationResult] = Field(default_factory=list, alias="validationResults")
+    source_metadata: dict[str, Any] = Field(default_factory=dict, alias="sourceMetadata")
 
     model_config = {"populate_by_name": True}
 

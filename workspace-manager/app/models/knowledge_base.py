@@ -165,6 +165,23 @@ class KnowledgeBaseSourceUploadResponse(CamelModel):
     source: KnowledgeBaseSourceImportResponse
 
 
+class UploadedFileInfo(CamelModel):
+    filename: str
+    path: str
+    size: int
+    success: bool
+    error: Optional[str] = None
+
+
+class FileUploadResponse(CamelModel):
+    success: bool
+    uploaded: list[UploadedFileInfo]
+    total: int
+    succeeded: int
+    failed: int
+    message: Optional[str] = None
+
+
 class KnowledgeBaseIngestJobRequest(CamelModel):
     source_paths: Optional[list[str]] = Field(None, alias="sourcePaths")
     force: bool = False

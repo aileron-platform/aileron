@@ -831,6 +831,10 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
     },
     [loadedDetail, mode, provider],
   );
+  const skillsFileManagerKey = React.useMemo(
+    () => `${provider ?? 'none'}-skills-${featureItems?.skills.map(item => item.path).join('|') ?? 'empty'}`,
+    [featureItems?.skills, provider],
+  );
   const packageFileTree = React.useMemo(
     () => provider ? createMarketplacePackageFileTree(provider, packageRoot, resolvedDisplayName, packageFiles) : [],
     [packageFiles, packageRoot, provider, resolvedDisplayName],
@@ -1032,7 +1036,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
           </TabsContent>
 
           <TabsContent value="skills" className="flex-1 overflow-auto !m-0 !p-0">
-            <MarketplaceSkillsFileManager key={`${provider}-skills`} items={featureItems.skills} onDirty={markDirty} />
+            <MarketplaceSkillsFileManager key={skillsFileManagerKey} items={featureItems.skills} onDirty={markDirty} />
           </TabsContent>
 
           <TabsContent value="agents" className="flex-1 overflow-auto !m-0 !p-0">
@@ -2208,6 +2212,10 @@ interface MarketplaceSkillsFileManagerProps {
   onDirty: () => void;
 }
 
+export const shouldUpdateMarketplaceEditorFileContent = (nextContent: string, currentContent: string): boolean => (
+  nextContent !== currentContent
+);
+
 const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> = ({ items, onDirty }) => {
   const { t } = useI18n();
   const initialNodes = React.useMemo(() => marketplaceFeatureItemsToFileTree(items, 'skills'), [items]);
@@ -2323,9 +2331,11 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
 
   const handleSaveFile = React.useCallback(async (content: string) => {
     if (!activeNode) return;
+    const currentContent = contents[activeNode.path] ?? '';
+    if (!shouldUpdateMarketplaceEditorFileContent(content, currentContent)) return;
     setContents(prev => ({ ...prev, [activeNode.path]: content }));
     onDirty();
-  }, [activeNode, onDirty]);
+  }, [activeNode, contents, onDirty]);
 
   const contextMenuItems = useFileTreeContextMenu({
     node: treeState.contextMenu?.node ?? null,
@@ -2495,6 +2505,7 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
             fileContent={contents[activeNode.path] ?? ''}
             onSave={handleSaveFile}
             onContentChange={(content) => {
+              if (!shouldUpdateMarketplaceEditorFileContent(content, contents[activeNode.path] ?? '')) return;
               setContents(prev => ({ ...prev, [activeNode.path]: content }));
               onDirty();
             }}

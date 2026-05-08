@@ -8,7 +8,7 @@ title: 簡介
 
 **企業級 AI 代理的強韌編排平台（The Hardened Orchestration Layer for Enterprise AI Agents）**
 
-Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台。它以容器化技術、Model Context Protocol (MCP)、可治理的模板中心，以及逐步擴充的 Agent 執行架構為核心，解決現有 AI 開發工具在**資安監控、環境隔離與大規模部署**上的痛點，讓團隊可以放心地把 AI Agent 引入日常工作流。
+Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台。它以容器化技術、Model Context Protocol (MCP)、可治理的 Marketplace，以及逐步擴充的 Agent 執行架構為核心，解決現有 AI 開發工具在**資安監控、環境隔離與大規模部署**上的痛點，讓團隊可以放心地把 AI Agent 引入日常工作流。
 
 目前 Aileron 以 **Claude Code** 提供最完整的端到端體驗，包含對話執行、串流輸出、設定管理、自動化與 OpenSpec workflow 整合。同時，平台已朝多 Agent 架構演進，正逐步補齊 **OpenCode**、**Gemini**、**Codex** 等 agent 的整合能力。
 
@@ -18,9 +18,9 @@ Aileron 是一個專為企業環境設計的多 Agent workspace 與編排平台�
 
 所有 AI 執行的指令（例如 Bash、Read、Write、Git）都在獨立的 Docker 容器或 Kubernetes Pod 中運作，搭配 **Cilium 網路政策**與 workspace / browser 分組的 domain allowlist，有效防止 Agent 誤刪檔案、逃逸宿主機或存取未授權資源。每個 workspace 都有獨立的 runtime、檔案系統與網路界線。
 
-### 統一規範模板（Standardized Templates）
+### 統一 Marketplace 套件治理
 
-透過**模板中心**預先定義不同情境的 Slash Commands、MCP Servers、安裝流程與環境變數，讓團隊可以一鍵建立符合公司規範的工作區。模板確保開發風格一致、權限可控，並把安全策略內建到每一個 Agent 的起手式中。
+透過 **Marketplace** 管理 Slash Commands、MCP Servers、安裝流程與環境變數，讓團隊可以集中審核與安裝符合公司規範的 agent 套件。
 
 ### 降低非技術使用門檻
 
@@ -45,7 +45,7 @@ OpenSpec 已整合為 Aileron 的 workspace 內建能力，而不只是附屬命
 | Workspace 生命週期管理 | 建立、啟動、停止、刪除工作區，同時支援 Docker Compose 與 Kubernetes（workspace-operator + CRD） |
 | 多 Agent 執行架構 | 以 Claude Code 為目前最完整整合，並持續擴充 OpenCode、Gemini、Codex 等 agent 支援 |
 | OpenSpec 工作流 | 在 workspace 中原生瀏覽 OpenSpec 文件、掌握 change 狀態，並從 chat composer 發動 workflow actions |
-| 模板化工作區 | Slash Commands、MCP Server、環境變數、安裝流程一次設定，團隊共用 |
+| Marketplace 套件 | Slash Commands、MCP Server、環境變數、安裝流程集中管理，團隊共用 |
 | 多型態 Runtime | Terminal (Go-based PTY)、Chrome/Browser、Next.js，皆可作為 Agent 可操作的執行載體 |
 | 檔案總管與 Git | 即時檔案監控、版本控制操作、分支管理 |
 | Scheduler / Automation | Cron 定時任務可結合 agent workflow 執行，目前以 Claude Code 體驗最完整 |
@@ -114,7 +114,7 @@ Aileron 目前以 **100% Vibe Coding** 的方式快速開發與演進。這讓�
                           │ REST / WebSocket
 ┌─────────────────────────▼────────────────────────┐
 │              Workspace Manager (FastAPI)         │
-│   Workspace CRUD │ Templates │ Automation        │
+│   Workspace CRUD │ Marketplace │ Automation      │
 │   Auth (Keycloak) │ Teams │ Docker/K8s Provisioner │
 └──────────┬──────────────────────┬────────────────┘
            │ HTTP                 │ Docker / K8s API

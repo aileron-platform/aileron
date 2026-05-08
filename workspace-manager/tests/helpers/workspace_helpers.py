@@ -45,7 +45,6 @@ class WorkspaceTestHelper:
         name: str,
         description: str = "",
         team_id: uuid.UUID | None = None,
-        template_id: uuid.UUID | None = None,
         config: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """Create workspace creation payload"""
@@ -53,7 +52,6 @@ class WorkspaceTestHelper:
             "name": name,
             "description": description,
             "team_id": str(team_id) if team_id else None,
-            "template_id": str(template_id) if template_id else None,
             "config": config or WorkspaceTestHelper.create_workspace_config(),
         }
 
@@ -157,7 +155,6 @@ class MockWorkspace:
         description: str = "A test workspace",
         owner_id: uuid.UUID | None = None,
         team_id: uuid.UUID | None = None,
-        template_id: uuid.UUID | None = None,
         status: str = "stopped",
     ):
         self.id = id or uuid.uuid4()
@@ -165,7 +162,6 @@ class MockWorkspace:
         self.description = description
         self.owner_id = owner_id or uuid.uuid4()
         self.team_id = team_id
-        self.template_id = template_id
         self.status = status
         self.config = WorkspaceTestHelper.create_workspace_config()
         self.created_at = datetime.now(timezone.utc)
@@ -181,7 +177,6 @@ class MockWorkspace:
             "description": self.description,
             "owner_id": str(self.owner_id),
             "team_id": str(self.team_id) if self.team_id else None,
-            "template_id": str(self.template_id) if self.template_id else None,
             "status": self.status,
             "config": self.config,
             "container_id": self.container_id,

@@ -65,7 +65,6 @@ class DatabaseTestHelper:
         session.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE;"))
         session.execute(text("TRUNCATE TABLE teams RESTART IDENTITY CASCADE;"))
         session.execute(text("TRUNCATE TABLE workspaces RESTART IDENTITY CASCADE;"))
-        session.execute(text("TRUNCATE TABLE templates RESTART IDENTITY CASCADE;"))
         session.commit()
 
 

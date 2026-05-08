@@ -123,10 +123,18 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: SlashCommandScope = Path(..., description="Command scope"),
         file_name: str = Path(..., description="File name"),
+        namespace: str | None = Query(None, description="Command namespace"),
+        extension_name: str | None = Query(None, alias="extensionName", description="Gemini extension name"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDocumentResponse:
         try:
-            return service.get_document(workspace_id, scope, file_name)
+            return service.get_document(
+                workspace_id,
+                scope,
+                file_name,
+                namespace=namespace,
+                extension_name=extension_name,
+            )
         except CliSlashCommandAmbiguousError as error:
             raise _ambiguous(error) from error
         except CliSlashCommandNotFoundError:
@@ -190,10 +198,11 @@ def create_slash_commands_router(tool: SlashCommandTool) -> APIRouter:
         workspace_id: str = Path(..., description="Workspace ID"),
         scope: SlashCommandScope = Path(..., description="Command scope"),
         file_name: str = Path(..., description="File name"),
+        namespace: str | None = Query(None, description="Command namespace"),
         service: CliSlashCommandService = Depends(get_service),
     ) -> CliSlashCommandDeleteResponse:
         try:
-            return service.delete_document(workspace_id, scope, file_name)
+            return service.delete_document(workspace_id, scope, file_name, namespace=namespace)
         except CliSlashCommandReadOnlyScopeError as error:
             raise _read_only(error) from error
         except CliSlashCommandAmbiguousError as error:

@@ -40,6 +40,7 @@ from app.services.marketplace_service import (
 @pytest.fixture()
 def marketplace_service(tmp_path, monkeypatch):
     monkeypatch.setenv("MARKETPLACE_STORAGE_PATH", str(tmp_path / "marketplace"))
+    monkeypatch.setenv("MANAGER_MARKETPLACE_INSTALL_DIR", str(tmp_path / "marketplace-install"))
     get_settings.cache_clear()
     try:
         yield MarketplaceService()
@@ -74,6 +75,7 @@ def test_initialize_registry_bootstraps_provider_roots_without_gemini_manifest(m
     codex = json.loads((root / "codex" / ".agents" / "plugins" / "marketplace.json").read_text())
     assert claude["plugins"] == []
     assert codex["plugins"] == []
+    assert codex["name"] == "Team-Marketplace"
     assert claude["owner"] == {"name": "Team Maintainer", "email": "team@example.local"}
     assert "owner" not in codex
 
@@ -100,9 +102,39 @@ def test_save_settings_dual_writes_metadata_and_preserves_package_entries(market
     assert updated_claude["name"] == "Updated Marketplace"
     assert updated_claude["owner"]["name"] == "Team Maintainer"
     assert updated_claude["plugins"] == claude["plugins"]
-    assert updated_codex["name"] == "Updated Marketplace"
+    assert updated_codex["name"] == "Updated-Marketplace"
     assert "owner" not in updated_codex
     assert updated_codex["plugins"] == codex["plugins"]
+
+
+def test_staged_codex_manifest_name_is_cli_safe(marketplace_service, monkeypatch, tmp_path):
+    root = marketplace_service.get_registry_root("user-1")
+    marketplace_service.initialize_registry("user-1", _metadata("本機市集"))
+    package_path = root / "codex" / "plugins" / "figma-context"
+    (package_path / ".codex-plugin").mkdir(parents=True, exist_ok=True)
+    (package_path / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "figma-context", "version": "0.1.0"}),
+        encoding="utf-8",
+    )
+    manifest_path = root / "codex" / ".agents" / "plugins" / "marketplace.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["plugins"] = [{
+        "name": "figma-context",
+        "source": {"source": "local", "path": "./plugins/figma-context"},
+    }]
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(
+        "app.services.marketplace_service.get_settings",
+        lambda: SimpleNamespace(MANAGER_MARKETPLACE_INSTALL_DIR=str(tmp_path / "marketplace-install")),
+    )
+
+    runtime_package_path = marketplace_service._stage_install_provider_root("workspace-1", "codex", package_path)
+
+    staged_manifest = json.loads((
+        tmp_path / "marketplace-install" / "workspace_1" / "codex" / ".agents" / "plugins" / "marketplace.json"
+    ).read_text(encoding="utf-8"))
+    assert staged_manifest["name"] == "local-marketplace"
+    assert runtime_package_path == Path("/marketplace-install/codex/plugins/figma-context")
 
 
 def test_save_settings_reports_partial_success_when_second_adapter_fails(marketplace_service, monkeypatch):
@@ -127,17 +159,25 @@ def test_save_settings_reports_partial_success_when_second_adapter_fails(marketp
     claude = json.loads((root / "claude-code" / ".claude-plugin" / "marketplace.json").read_text())
     codex = json.loads(codex_path.read_text())
     assert claude["name"] == "Partially Saved Marketplace"
-    assert codex["name"] == "Original Marketplace"
+    assert codex["name"] == "Original-Marketplace"
 
 
 def test_resolve_package_path_rejects_invalid_package_ids(marketplace_service):
     marketplace_service.initialize_registry("user-1", _metadata())
+
+    assert marketplace_service.resolve_package_path("user-1", "claude-code", "42crunch-api-security-testing").name == (
+        "42crunch-api-security-testing"
+    )
+    assert marketplace_service.resolve_package_path("user-1", "claude-code", "wordpress.com").name == "wordpress.com"
 
     with pytest.raises(MarketplacePathError):
         marketplace_service.resolve_package_path("user-1", "codex", "../escape")
 
     with pytest.raises(MarketplacePathError):
         marketplace_service.resolve_package_path("user-1", "gemini", "bad/id")
+
+    with pytest.raises(MarketplacePathError):
+        marketplace_service.resolve_package_path("user-1", "claude-code", "bad..id")
 
 
 def test_registry_scope_is_shared(marketplace_service):
@@ -188,11 +228,11 @@ def test_registry_scoped_records_are_shared_across_users(marketplace_service, mo
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(
                 supports_user_scope=True,
@@ -363,7 +403,7 @@ def test_registry_clone_preserves_existing_manifest_and_uses_it_to_bootstrap_mis
     assert cloned_claude["name"] == "Remote Registry"
     assert cloned_claude["owner"]["name"] == "Remote Maintainer"
     assert cloned_claude["plugins"] == [{"name": "remote-plugin", "source": "./plugins/remote-plugin"}]
-    assert bootstrapped_codex["name"] == "Remote Registry"
+    assert bootstrapped_codex["name"] == "Remote-Registry"
     assert bootstrapped_codex["description"] == "Remote description"
     assert bootstrapped_codex["plugins"] == []
     assert "owner" not in bootstrapped_codex
@@ -408,6 +448,26 @@ def test_registry_git_status_reports_provider_prefixed_staged_unstaged_and_untra
     assert status.staged_count == 1
     assert status.unstaged_count == 1
     assert status.untracked_count == 1
+
+
+def test_registry_git_status_initializes_existing_registry_content(marketplace_service):
+    marketplace_service.initialize_registry("user-1", _metadata())
+    root = marketplace_service.get_registry_root("user-1")
+    package_readme = root / "claude-code" / "plugins" / "settings" / "README.md"
+    package_readme.parent.mkdir(parents=True)
+    package_readme.write_text("# Settings\n", encoding="utf-8")
+
+    status = marketplace_service.get_registry_git_status("user-1")
+
+    assert status.is_git_repo is True
+    assert (root / ".git").is_dir()
+    assert status.staged == []
+    assert status.unstaged == []
+    assert {item.path for item in status.untracked} >= {
+        "claude-code/.claude-plugin/marketplace.json",
+        "codex/.agents/plugins/marketplace.json",
+        "claude-code/plugins/settings/README.md",
+    }
 
 
 def test_registry_file_diff_supports_worktree_index_commit_and_untracked_files(marketplace_service):
@@ -1353,15 +1413,6 @@ def test_install_package_returns_cli_unavailable_from_preflight(marketplace_serv
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
-            provider=provider,
-            available=False,
-            error_code="marketplace.install.cli_unavailable",
-        ),
-    )
-    monkeypatch.setattr(
-        marketplace_service,
         "_detect_cli_on_runtime",
         lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
@@ -1407,11 +1458,11 @@ def test_install_package_returns_cli_version_unsupported_from_preflight(marketpl
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(supports_marketplace_add=True),
             error_code="marketplace.install.cli_version_unsupported",
@@ -1453,11 +1504,11 @@ def test_install_package_does_not_build_command_when_preflight_fails(marketplace
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             error_code="marketplace.install.cli_capability_missing",
         ),
@@ -1543,11 +1594,11 @@ def test_install_package_returns_runtime_delegation_unavailable_after_command_pl
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(
                 supports_user_scope=True,
@@ -1605,17 +1656,22 @@ def test_install_package_delegates_command_plan_to_workspace_runtime(marketplace
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(
                 supports_user_scope=True,
                 supports_marketplace_add=True,
             ),
         ),
+    )
+    monkeypatch.setattr(
+        marketplace_service,
+        "detect_cli",
+        lambda provider: (_ for _ in ()).throw(AssertionError("install should use runtime CLI detection")),
     )
     captured: dict[str, object] = {}
 
@@ -1669,7 +1725,8 @@ def test_install_package_delegates_command_plan_to_workspace_runtime(marketplace
     assert captured["headers"] == {"Authorization": "Bearer dev-internal-token"}
     payload = captured["payload"]
     assert payload["provider"] == "codex"
-    assert payload["argv"][:4] == ["/usr/bin/codex", "plugin", "marketplace", "add"]
+    assert payload["argv"][:4] == ["/home/developer/.npm-global/bin/codex", "plugin", "marketplace", "add"]
+    assert payload["argv"][4] == "/marketplace-install/codex"
     assert payload["env"] == {"WORKSPACE_ID": "workspace-1"}
     activity = marketplace_service.list_activity("user-1")
     assert activity.items[0].action == "install"
@@ -1696,11 +1753,11 @@ def test_install_package_maps_runtime_timeout_result(marketplace_service, monkey
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(supports_marketplace_add=True),
         ),
@@ -1753,6 +1810,80 @@ def test_install_package_maps_runtime_timeout_result(marketplace_service, monkey
     assert result.truncated is True
 
 
+def test_install_package_treats_gemini_already_installed_as_success(marketplace_service, monkeypatch):
+    created = marketplace_service.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            provider="gemini",
+            package_id="workspace-tools",
+            display_name="Workspace Tools",
+            description="Gemini workspace tools",
+        ),
+    )
+    monkeypatch.setattr(
+        marketplace_service,
+        "_resolve_install_runtime",
+        lambda workspace_id: {
+            "runtimeUrl": "http://workspace-runtime:3002",
+            "errorCode": None,
+        },
+    )
+    monkeypatch.setattr(
+        marketplace_service,
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
+            provider=provider,
+            available=True,
+            executable_path="/home/developer/.npm-global/bin/gemini",
+            version="1.0.0",
+            capabilities=MarketplaceCliCapabilities(supports_extension_install=True),
+        ),
+    )
+
+    class RuntimeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "status": "failed",
+                "exitCode": 1,
+                "stdout": "",
+                "stderr": 'Extension "workspace-tools" is already installed. Please uninstall it first.\n',
+                "truncated": False,
+                "errorCode": "marketplace.install.command_failed",
+            }
+
+    class RuntimeClient:
+        def __init__(self, timeout):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, *, json, headers):
+            return RuntimeResponse()
+
+    monkeypatch.setattr("app.services.marketplace_service.httpx.Client", RuntimeClient)
+
+    result = marketplace_service.install_package(
+        "user-1",
+        MarketplaceInstallRequest(
+            provider="gemini",
+            package_id="workspace-tools",
+            revision=created.revision,
+            workspace_id="workspace-1",
+        ),
+    )
+
+    assert result.status == "success"
+    assert result.error_code is None
+    assert "already installed" in result.stderr
+
+
 def test_install_package_maps_adapter_command_build_failures(marketplace_service, monkeypatch):
     created = marketplace_service.create_package(
         "user-1",
@@ -1774,11 +1905,11 @@ def test_install_package_maps_adapter_command_build_failures(marketplace_service
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(supports_marketplace_add=True),
         ),
@@ -1843,11 +1974,11 @@ def test_install_package_rejects_shell_like_command_plan(marketplace_service, mo
     )
     monkeypatch.setattr(
         marketplace_service,
-        "detect_cli",
-        lambda provider: MarketplaceCliPreflightResult(
+        "_detect_cli_on_runtime",
+        lambda provider, runtime_url: MarketplaceCliPreflightResult(
             provider=provider,
             available=True,
-            executable_path="/usr/bin/codex",
+            executable_path="/home/developer/.npm-global/bin/codex",
             version="1.0.0",
             capabilities=MarketplaceCliCapabilities(supports_marketplace_add=True),
         ),
@@ -2046,16 +2177,6 @@ def test_validate_import_source_rejects_unsafe_git_inputs(marketplace_service):
                 source="https://token@example.com/org/repo.git",
             ),
         )
-    with pytest.raises(MarketplaceImportSourceError) as ref_exc:
-        marketplace_service.validate_import_source(
-            "user-1",
-            MarketplaceImportSource(
-                provider="codex",
-                sourceKind="git",
-                source="https://example.com/org/repo.git",
-                ref="../main",
-            ),
-        )
     with pytest.raises(MarketplaceImportSourceError) as key_exc:
         marketplace_service.validate_import_source(
             "user-1",
@@ -2067,7 +2188,6 @@ def test_validate_import_source_rejects_unsafe_git_inputs(marketplace_service):
         )
 
     assert token_exc.value.code == "marketplace.import.validation.https_token_unsupported"
-    assert ref_exc.value.code == "marketplace.import.validation.invalid_ref"
     assert key_exc.value.code == "marketplace.import.validation.raw_private_key_unsupported"
 
 
@@ -2087,7 +2207,6 @@ def test_validate_import_source_uses_registry_ssh_key_for_ssh_imports(marketplac
             provider="claude-code",
             sourceKind="git",
             source="git@github.com:org/repo.git",
-            ref="main",
         ),
     )
 
@@ -2111,36 +2230,6 @@ def test_validate_import_source_uses_registry_ssh_key_for_ssh_imports(marketplac
     assert missing_key_exc.value.code == "marketplace.import.validation.ssh_key_required"
 
 
-def test_list_import_branches_returns_remote_git_heads(marketplace_service, monkeypatch):
-    commands = []
-
-    def fake_run(command, **kwargs):
-        commands.append((command, kwargs))
-        return SimpleNamespace(
-            returncode=0,
-            stdout=(
-                "abc123\trefs/heads/main\n"
-                "def456\trefs/heads/feature/import-flow\n"
-                "789abc\trefs/tags/v1\n"
-            ),
-        )
-
-    monkeypatch.setattr("app.services.marketplace_service.subprocess.run", fake_run)
-
-    result = marketplace_service.list_import_branches(
-        "user-1",
-        MarketplaceImportSource(
-            provider="codex",
-            sourceKind="git",
-            source="https://example.com/org/repo.git",
-        ),
-    )
-
-    assert result.branches == ["feature/import-flow", "main"]
-    assert commands[0][0] == ["git", "ls-remote", "--heads", "https://example.com/org/repo.git"]
-    assert commands[0][1]["timeout"] == 60
-
-
 def test_scan_import_source_clones_git_source_to_temporary_worktree_and_cleans_up(
     marketplace_service,
     monkeypatch,
@@ -2160,7 +2249,6 @@ def test_scan_import_source_clones_git_source_to_temporary_worktree_and_cleans_u
             provider="codex",
             sourceKind="git",
             source="https://example.com/org/repo.git",
-            ref="main",
         ),
     )
     work_root = marketplace_service.get_registry_root("user-1").parent / "import-worktrees"
@@ -2171,8 +2259,6 @@ def test_scan_import_source_clones_git_source_to_temporary_worktree_and_cleans_u
         "clone",
         "--depth",
         "1",
-        "--branch",
-        "main",
         "https://example.com/org/repo.git",
         commands[0][0][-1],
     ]
@@ -2397,6 +2483,8 @@ def test_import_candidates_copies_codex_package_and_updates_manifest(marketplace
     )
     package_path = source_root / "plugins" / "figma-context"
     (package_path / ".codex-plugin").mkdir(parents=True)
+    (package_path / ".git" / "objects").mkdir(parents=True)
+    (package_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
     (package_path / "README.md").write_text("# Imported\n", encoding="utf-8")
     (package_path / ".codex-plugin" / "plugin.json").write_text(
         json.dumps({
@@ -2425,6 +2513,7 @@ def test_import_candidates_copies_codex_package_and_updates_manifest(marketplace
     assert result.skipped == []
     assert result.failed == []
     assert (root / "codex" / "plugins" / "figma-context" / "README.md").read_text() == "# Imported\n"
+    assert not (root / "codex" / "plugins" / "figma-context" / ".git").exists()
     assert local_manifest["plugins"][0]["name"] == "figma-context"
     assert local_manifest["plugins"][0]["source"] == {
         "source": "local",
@@ -2438,12 +2527,91 @@ def test_import_candidates_copies_codex_package_and_updates_manifest(marketplace
         "provider": "codex",
         "sourceKind": "local",
         "source": str(source_root),
-        "ref": None,
         "packageId": "figma-context",
         "targetPackageId": "figma-context",
         "sourcePath": "plugins/figma-context",
+        "sourceMetadata": {},
         "importedAt": detail.manifest_metadata["importSource"]["importedAt"],
     }
+
+
+def test_import_candidates_clones_nested_remote_claude_source(marketplace_service, monkeypatch):
+    user_root = marketplace_service.get_registry_root("user-1").parent
+    source_root = user_root / "import-sources" / "claude-remote"
+    manifest_path = source_root / ".claude-plugin" / "marketplace.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({
+            "plugins": [{
+                "name": "remote-plugin",
+                "source": {
+                    "source": "git-subdir",
+                    "url": "https://example.com/org/remote-plugin.git",
+                    "path": "plugins/remote-plugin",
+                    "ref": "main",
+                    "sha": "abc123",
+                },
+                "category": "productivity",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    clone_calls = []
+
+    def fake_clone_nested(url, checkout_root, *, ref=None, sha=None, ssh_key_path=None):
+        clone_calls.append({
+            "url": url,
+            "ref": ref,
+            "sha": sha,
+            "sshKeyPath": ssh_key_path,
+        })
+        package_path = checkout_root / "plugins" / "remote-plugin"
+        (package_path / ".claude-plugin").mkdir(parents=True)
+        (package_path / "README.md").write_text("# Remote\n", encoding="utf-8")
+        (package_path / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "remote-plugin"}),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(marketplace_service, "_clone_nested_import_source", fake_clone_nested)
+    source = MarketplaceImportSource(
+        provider="claude-code",
+        sourceKind="local",
+        source=str(source_root),
+    )
+    candidates = marketplace_service.scan_import_source("user-1", source)
+
+    assert candidates[0].source_path == "https://example.com/org/remote-plugin.git:plugins/remote-plugin"
+    assert candidates[0].source_metadata == {
+        "kind": "git",
+        "sourceType": "git-subdir",
+        "url": "https://example.com/org/remote-plugin.git",
+        "path": "plugins/remote-plugin",
+        "ref": "main",
+        "sha": "abc123",
+    }
+
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=candidates),
+    )
+    root = marketplace_service.get_registry_root("user-1")
+    local_manifest = json.loads((root / "claude-code" / ".claude-plugin" / "marketplace.json").read_text())
+    detail = marketplace_service.get_package_detail("user-1", "claude-code", "remote-plugin")
+
+    assert [item.package_id for item in result.imported] == ["remote-plugin"]
+    assert result.failed == []
+    assert clone_calls == [{
+        "url": "https://example.com/org/remote-plugin.git",
+        "ref": "main",
+        "sha": "abc123",
+        "sshKeyPath": None,
+    }]
+    assert (root / "claude-code" / "plugins" / "remote-plugin" / "README.md").read_text() == "# Remote\n"
+    assert local_manifest["plugins"][0]["name"] == "remote-plugin"
+    assert local_manifest["plugins"][0]["source"] == "./plugins/remote-plugin"
+    assert local_manifest["plugins"][0]["category"] == "productivity"
+    assert detail.manifest_metadata["importSource"]["sourceMetadata"] == candidates[0].source_metadata
 
 
 def test_import_candidates_skips_duplicate_by_default(marketplace_service):
@@ -2670,6 +2838,90 @@ def test_scan_import_source_reports_clone_failure_and_cleans_up(marketplace_serv
     assert checkout_paths
     assert not checkout_paths[0].exists()
     assert list(work_root.iterdir()) == []
+
+
+def test_clone_import_source_trims_repository_url(marketplace_service, monkeypatch, tmp_path):
+    captured_command = []
+
+    def fake_run(command, **kwargs):
+        captured_command.extend(command)
+        Path(command[-1]).mkdir(parents=True)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("app.services.marketplace_service.subprocess.run", fake_run)
+
+    marketplace_service._clone_import_source(
+        MarketplaceImportSource(
+            provider="claude-code",
+            sourceKind="git",
+            source=" https://github.com/obra/superpowers \n",
+        ),
+        tmp_path / "checkout",
+    )
+
+    assert captured_command[-2] == "https://github.com/obra/superpowers"
+
+
+def test_import_allows_internal_symlink_by_copying_target_file(marketplace_service, tmp_path):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "source"
+    plugin_root = source_root / "plugins" / "linked-plugin"
+    manifest_root = source_root / ".agents" / "plugins"
+    manifest_root.mkdir(parents=True)
+    plugin_root.mkdir(parents=True)
+    (manifest_root / "marketplace.json").write_text(
+        json.dumps({
+            "plugins": [{
+                "name": "linked-plugin",
+                "source": {"source": "local", "path": "./plugins/linked-plugin"},
+            }],
+        }),
+        encoding="utf-8",
+    )
+    (plugin_root / ".codex-plugin").mkdir()
+    (plugin_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "linked-plugin", "version": "0.1.0", "description": "Linked"}),
+        encoding="utf-8",
+    )
+    (plugin_root / "TARGET.md").write_text("linked content", encoding="utf-8")
+    (plugin_root / "AGENTS.md").symlink_to("TARGET.md")
+
+    source = MarketplaceImportSource(provider="codex", sourceKind="local", source=str(source_root))
+    candidates = marketplace_service.scan_import_source("user-1", source)
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=candidates),
+    )
+    imported_root = marketplace_service.resolve_package_path("user-1", "codex", "linked-plugin")
+
+    assert [item.package_id for item in result.imported] == ["linked-plugin"]
+    assert result.failed == []
+    assert (imported_root / "AGENTS.md").read_text(encoding="utf-8") == "linked content"
+    assert not (imported_root / "AGENTS.md").is_symlink()
+
+
+def test_import_codex_root_plugin_without_marketplace_manifest_appears_in_list(marketplace_service):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "codex-root"
+    (source_root / ".codex-plugin").mkdir(parents=True)
+    (source_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({
+            "name": "superpowers",
+            "version": "1.0.0",
+            "description": "Core skills library",
+        }),
+        encoding="utf-8",
+    )
+
+    source = MarketplaceImportSource(provider="codex", sourceKind="local", source=str(source_root))
+    candidates = marketplace_service.scan_import_source("user-1", source)
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=candidates),
+    )
+    listed = marketplace_service.list_packages("user-1", provider="codex")
+
+    assert [candidate.package_id for candidate in candidates] == ["superpowers"]
+    assert [item.package_id for item in result.imported] == ["superpowers"]
+    assert [item.package_id for item in listed.items] == ["superpowers"]
 
 
 def test_export_package_returns_provider_native_zip_and_rejects_symlink(marketplace_service):

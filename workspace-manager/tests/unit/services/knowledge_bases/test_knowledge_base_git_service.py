@@ -8,11 +8,11 @@ import pytest
 from git import Repo
 
 from app.db import models as db_models
-from app.models.template_git import (
-    TemplateCheckoutRequest,
-    TemplateDiscardRequest,
-    TemplateStageRequest,
-    TemplateUnstageRequest,
+from app.models.version_control import (
+    CheckoutRequest,
+    DiscardRequest,
+    StageRequest,
+    UnstageRequest,
 )
 from app.services.knowledge_base_git_service import (
     KB_VERSION_CONTROL_DISABLED,
@@ -132,7 +132,7 @@ def test_changes_stage_unstage_discard_and_commit(git_service, kb):
     staged = git_service.stage(
         user_id="owner-1",
         kb_id="kb-1",
-        payload=TemplateStageRequest(paths=["wiki/index.md", "wiki/new.md"]),
+        payload=StageRequest(paths=["wiki/index.md", "wiki/new.md"]),
     )
     assert staged.staged == ["wiki/index.md", "wiki/new.md"]
 
@@ -143,7 +143,7 @@ def test_changes_stage_unstage_discard_and_commit(git_service, kb):
     unstaged = git_service.unstage(
         user_id="owner-1",
         kb_id="kb-1",
-        payload=TemplateUnstageRequest(paths=["wiki/new.md"]),
+        payload=UnstageRequest(paths=["wiki/new.md"]),
     )
     assert unstaged.unstaged == ["wiki/new.md"]
     assert unstaged.remainingStaged == 1
@@ -151,7 +151,7 @@ def test_changes_stage_unstage_discard_and_commit(git_service, kb):
     discarded = git_service.discard(
         user_id="owner-1",
         kb_id="kb-1",
-        payload=TemplateDiscardRequest(paths=["wiki/new.md"]),
+        payload=DiscardRequest(paths=["wiki/new.md"]),
     )
     assert discarded.discarded == ["wiki/new.md"]
     assert not new_page.exists()
@@ -194,7 +194,7 @@ def test_diff_blob_branch_and_rollback(git_service, kb):
     git_service.stage(
         user_id="owner-1",
         kb_id="kb-1",
-        payload=TemplateStageRequest(paths=["wiki/index.md"]),
+        payload=StageRequest(paths=["wiki/index.md"]),
     )
     updated = git_service.commit(user_id="owner-1", kb_id="kb-1", message="Update index")
 
@@ -211,7 +211,7 @@ def test_diff_blob_branch_and_rollback(git_service, kb):
         user_id="owner-1",
         kb_id="kb-1",
         branch_name="draft",
-        payload=TemplateCheckoutRequest(create=True),
+        payload=CheckoutRequest(create=True),
     )
     assert checkout.branch == "draft"
     branches = git_service.list_branches(user_id="owner-1", kb_id="kb-1")
@@ -232,5 +232,5 @@ def test_rejects_paths_outside_repository(git_service, kb):
         git_service.stage(
             user_id="owner-1",
             kb_id="kb-1",
-            payload=TemplateStageRequest(paths=["../escape.md"]),
+            payload=StageRequest(paths=["../escape.md"]),
         )

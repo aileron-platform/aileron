@@ -1,6 +1,6 @@
 export type WizardStepKey = 'basicInfo' | 'runtimeConfig' | 'workspaceCreation' | 'settingsSync';
 
-import type { CliType } from '@/shared/types/templates';
+export type CliType = 'claude-code' | 'codex' | 'gemini';
 
 export interface BasicInfoForm {
   name: string;

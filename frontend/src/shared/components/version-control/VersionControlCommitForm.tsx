@@ -5,6 +5,7 @@ import { cn } from '@/shared/utils/cn';
 interface VersionControlCommitFormProps {
   onCommit?: (data: { message: string }) => void;
   isLoading?: boolean;
+  disabled?: boolean;
   stagedCount?: number;
   placeholderKey?: string;
   submitKey?: string;
@@ -17,6 +18,7 @@ interface VersionControlCommitFormProps {
 export const VersionControlCommitForm: React.FC<VersionControlCommitFormProps> = ({
   onCommit,
   isLoading = false,
+  disabled = false,
   stagedCount = 0,
   placeholderKey = 'shared.versionControl.commitForm.placeholder',
   submitKey = 'shared.versionControl.commitForm.submit',
@@ -27,11 +29,12 @@ export const VersionControlCommitForm: React.FC<VersionControlCommitFormProps> =
 }) => {
   const [commitMessage, setCommitMessage] = useState('');
   const { t } = useI18n();
+  const formDisabled = disabled || isLoading;
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     const message = commitMessage.trim();
-    if (!message || stagedCount === 0) {
+    if (!message || stagedCount === 0 || formDisabled) {
       return;
     }
     onCommit?.({ message });
@@ -50,11 +53,11 @@ export const VersionControlCommitForm: React.FC<VersionControlCommitFormProps> =
             'min-w-0 flex-1 h-8 px-2.5 border border-border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-background',
             inputClassName,
           )}
-          disabled={isLoading}
+          disabled={formDisabled}
         />
         <button
           type="submit"
-          disabled={!commitMessage.trim() || stagedCount === 0 || isLoading}
+          disabled={!commitMessage.trim() || stagedCount === 0 || formDisabled}
           className={cn(
             'shrink-0 h-8 px-3 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors',
             buttonClassName,

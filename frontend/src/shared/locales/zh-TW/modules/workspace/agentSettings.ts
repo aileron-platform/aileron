@@ -674,7 +674,7 @@ const agentSettings = {
               markdown: '直接編輯完整 Markdown 文件，包含 frontmatter metadata。',
               toml: '直接編輯完整 TOML 文件。必要欄位是 name、description 與 developer_instructions。',
             },
-            templates: {
+            defaults: {
               markdown: '---\nname: reviewer\ndescription: 檢查程式正確性與測試缺口。\n---\n\nReview code like an owner.',
               toml: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""',
             },
@@ -794,8 +794,7 @@ const agentSettings = {
         runtimeMissing: '尚未取得 Workspace Runtime 連線，請稍後重試。',
         runtimeUnavailable: 'Workspace Runtime 無法使用：{{message}}',
         loading: '載入 {{fileName}}...',
-        fallbackNotice: '當前顯示預設模板內容，儲存後將建立新的 {{fileName}}。',
-        staleTemplate: '偵測到外部模板安裝已更新這份文件。你目前的未儲存內容尚未被覆蓋，重新整理即可載入最新版本。',
+        fallbackNotice: '目前顯示預設內容，儲存後將建立新的 {{fileName}}。',
       },
       notifications: {
         saveSuccess: {
@@ -813,9 +812,6 @@ const agentSettings = {
         runtimeUnavailable: {
           title: 'Workspace Runtime 尚未就緒',
           description: '請確認執行環境狀態後再試一次。',
-        },
-        templateUpdated: {
-          description: '偵測到模板安裝更新。已保留你未儲存的內容，請儲存或手動重新整理後再載入最新版本。',
         },
       },
       confirmDiscard: '目前有尚未儲存的變更，確定要放棄嗎？',
@@ -1206,7 +1202,7 @@ const agentSettings = {
               markdown: '直接編輯完整 Markdown 文件，包含 frontmatter metadata。',
               toml: '直接編輯完整 TOML 文件。',
             },
-            templates: {
+            defaults: {
               markdown: '---\nname: reviewer\ndescription: 檢查程式正確性與測試缺口。\n---\n\nReview code like an owner.',
               toml: 'name = "reviewer"\ndescription = "Reviews code"\ndeveloper_instructions = """Review code like an owner."""',
             },

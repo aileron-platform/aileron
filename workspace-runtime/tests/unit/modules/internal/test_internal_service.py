@@ -287,6 +287,25 @@ class TestMarketplaceInstallExecution:
         assert timeout.stdout == "partial stdout"
         assert timeout.stderr == "partial stderr"
 
+    @pytest.mark.asyncio
+    async def test_execute_marketplace_install_maps_missing_binary_to_cli_unavailable(self, internal_service, tmp_path):
+        """Test missing provider CLI result mapping."""
+        with patch(
+            "app.modules.internal.service.subprocess.run",
+            side_effect=FileNotFoundError("[Errno 2] No such file or directory: '/usr/local/bin/codex'"),
+        ):
+            result = await internal_service.execute_marketplace_install(
+                MarketplaceInstallExecutionRequest(
+                    provider="codex",
+                    argv=["/usr/local/bin/codex"],
+                    cwd=str(tmp_path),
+                )
+            )
+
+        assert result.status == "failed"
+        assert result.error_code == "marketplace.install.cli_unavailable"
+        assert "/usr/local/bin/codex" in result.stderr
+
 
 class TestSetupClaudeCode:
     """Test setting up Claude Code"""

@@ -6,7 +6,6 @@ import type {
   MarketplaceDeleteRequest,
   MarketplaceDeleteResult,
   MarketplaceExportRequest,
-  MarketplaceImportBranchesResult,
   MarketplaceImportCandidate,
   MarketplaceImportResult,
   MarketplaceImportSource,
@@ -128,10 +127,6 @@ export async function getInstallPreflight(provider: MarketplaceProvider, workspa
 export async function scanImportSource(source: MarketplaceImportSource): Promise<MarketplaceImportCandidate[]> {
   lastImportSource = source;
   return apiClient.post<MarketplaceImportCandidate[]>(`${MARKETPLACE_BASE}/import/scan`, source);
-}
-
-export async function listImportBranches(source: MarketplaceImportSource): Promise<MarketplaceImportBranchesResult> {
-  return apiClient.post<MarketplaceImportBranchesResult>(`${MARKETPLACE_BASE}/import/branches`, source);
 }
 
 export async function uploadImportSource(provider: MarketplaceProvider, file: File): Promise<MarketplaceImportUploadResult> {

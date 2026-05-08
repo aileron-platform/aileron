@@ -23,10 +23,6 @@ vi.mock('@/features/workspace/providers/WorkspaceProvider', () => ({
   }),
 }));
 
-vi.mock('@/features/workspace/events/templateInstallCoordinator', () => ({
-  useWorkspaceTemplateInstallRefresh: vi.fn(),
-}));
-
 vi.mock('../services/agentSettingsApi', () => ({
   createAgentSettingsApi: () => ({
     getAgentsMd: getAgentsMdMock,

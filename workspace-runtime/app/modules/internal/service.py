@@ -222,7 +222,7 @@ class InternalService:
                 startedAt=started_at,
                 completedAt=completed_at,
                 stderr=str(exc),
-                errorCode="marketplace.install.command_failed",
+                errorCode="marketplace.install.cli_unavailable",
             )
 
     def _sanitize_marketplace_install_output(

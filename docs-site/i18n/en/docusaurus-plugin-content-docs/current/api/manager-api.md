@@ -59,16 +59,6 @@ Response:
 | `GET` | `/api/v1/workspaces/{id}/setup/*` | Get settings |
 | `PUT` | `/api/v1/workspaces/{id}/setup/*` | Update settings |
 
-### Template Management
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/v1/templates` | List templates |
-| `POST` | `/api/v1/templates` | Create a template |
-| `GET` | `/api/v1/templates/{id}` | Get a template |
-| `PUT` | `/api/v1/templates/{id}` | Update a template |
-| `DELETE` | `/api/v1/templates/{id}` | Delete a template |
-
 ### Automation Tasks
 
 | Method | Path | Description |

@@ -1,29 +1,19 @@
-"""Template Git version control related data models"""
+"""Shared Git version control data models."""
 
 from typing import List, Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class GitStatus(BaseModel):
-    """Git repository status"""
-
-    current_branch: str = Field(..., description="Current branch name")
-    has_changes: bool = Field(..., description="Whether there are uncommitted changes")
-    ahead_count: int = Field(default=0, description="Number of commits ahead of remote")
-    behind_count: int = Field(default=0, description="Number of commits behind remote")
-    remote_url: Optional[str] = Field(None, description="Remote repository URL")
-    is_git_repo: bool = Field(..., description="Whether it is a Git repository")
-
-
 class GitCommitRequest(BaseModel):
-    """Git commit request"""
+    """Git commit request."""
 
     message: str = Field(..., min_length=1, description="Commit message")
     paths: Optional[List[str]] = Field(default=None, description="Limited file paths to commit")
 
 
 class GitOperationResponse(BaseModel):
-    """Git operation response"""
+    """Git operation response."""
 
     success: bool = Field(..., description="Whether operation succeeded")
     message: str = Field(..., description="Response message")
@@ -34,66 +24,22 @@ class GitOperationResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-class GitUserConfig(BaseModel):
-    """Git user information"""
-
-    user_name: Optional[str] = Field(None, alias="userName", description="Git user name")
-    user_email: Optional[str] = Field(None, alias="userEmail", description="Git user email")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class GitUserConfigResponse(BaseModel):
-    """Git user information response"""
-
-    success: bool = Field(..., description="Whether operation succeeded")
-    data: Optional[GitUserConfig] = Field(None, description="Git user information")
-    error: Optional[str] = Field(None, description="Error message")
-
-
 class GitRemoteUrlRequest(BaseModel):
-    """Set Git remote repository URL request"""
+    """Set Git remote repository URL request."""
 
     url: str = Field(..., min_length=1, alias="remoteUrl", description="Remote repository URL")
 
     model_config = ConfigDict(populate_by_name=True)
 
 
-class SSHKeysUpdateRequest(BaseModel):
-    """Update SSH keys request"""
-
-    private_key: str = Field(..., alias="privateKey", description="SSH private key")
-    public_key: str = Field(..., alias="publicKey", description="SSH public key")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class GitCloneRequest(BaseModel):
-    """Clone Git repository request"""
-
-    url: str = Field(..., min_length=1, description="Remote repository URL")
-    branch: Optional[str] = Field(None, description="Branch to clone (optional)")
-    force: bool = Field(False, description="Whether to allow overwriting existing local content")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class GitRepositoryInitRequest(BaseModel):
-    """Initialize template center Git repository request"""
-
-    remote_url: Optional[str] = Field(None, alias="remoteUrl", description="Origin URL to set after initialization")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
 class GitRepositoryStatus(BaseModel):
-    """Template center Git repository lifecycle status"""
+    """Git repository lifecycle status."""
 
     is_git_repo: bool = Field(..., alias="isGitRepo", description="Whether initialized as Git repository")
     current_branch: Optional[str] = Field(None, alias="currentBranch", description="Current branch")
     remote_url: Optional[str] = Field(None, alias="remoteUrl", description="origin URL")
     has_origin: bool = Field(False, alias="hasOrigin", description="Whether origin is set")
-    has_local_content: bool = Field(False, alias="hasLocalContent", description="Whether there is local template center content")
+    has_local_content: bool = Field(False, alias="hasLocalContent", description="Whether there is local content")
     can_clone_safely: bool = Field(False, alias="canCloneSafely", description="Whether clone can be done safely")
     can_init_safely: bool = Field(False, alias="canInitSafely", description="Whether init can be done safely")
     clone_blocked_reason: Optional[str] = Field(None, alias="cloneBlockedReason", description="Reason why clone is blocked")
@@ -101,8 +47,8 @@ class GitRepositoryStatus(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
-class TemplateVersionControlStatus(BaseModel):
-    """Template Center file-level Git status."""
+class VersionControlStatus(BaseModel):
+    """File-level Git status."""
 
     branch: str = Field(description="Current branch")
     ahead: int = Field(default=0, description="Commits ahead of remote")
@@ -115,7 +61,7 @@ class TemplateVersionControlStatus(BaseModel):
     lastFetchedAt: Optional[str] = Field(default=None, description="Last fetch time")
 
 
-class TemplateBranchCommitInfo(BaseModel):
+class BranchCommitInfo(BaseModel):
     """Branch last commit summary."""
 
     id: str = Field(description="Commit ID")
@@ -125,8 +71,8 @@ class TemplateBranchCommitInfo(BaseModel):
     timestamp: str = Field(description="ISO8601 commit time")
 
 
-class TemplateVersionControlBranch(BaseModel):
-    """Template Center Git branch."""
+class VersionControlBranch(BaseModel):
+    """Git branch."""
 
     name: str = Field(description="Branch name")
     displayName: str = Field(description="Display name")
@@ -134,15 +80,15 @@ class TemplateVersionControlBranch(BaseModel):
     isRemote: bool = Field(default=False, description="Whether this is a remote branch")
     ahead: int = Field(default=0, description="Number of commits ahead")
     behind: int = Field(default=0, description="Number of commits behind")
-    lastCommit: Optional[TemplateBranchCommitInfo] = Field(default=None, description="Last commit information")
+    lastCommit: Optional[BranchCommitInfo] = Field(default=None, description="Last commit information")
 
 
-class TemplateVersionControlBranchListResponse(BaseModel):
-    branches: List[TemplateVersionControlBranch] = Field(default_factory=list)
+class VersionControlBranchListResponse(BaseModel):
+    branches: List[VersionControlBranch] = Field(default_factory=list)
 
 
-class TemplateFileChange(BaseModel):
-    """File-level Git change for Template Center."""
+class FileChange(BaseModel):
+    """File-level Git change."""
 
     name: str = Field(description="File name")
     path: str = Field(description="Relative path")
@@ -164,50 +110,45 @@ class TemplateFileChange(BaseModel):
     patch: Optional[str] = Field(default=None, description="Difference content")
 
 
-class TemplateChangesResponse(BaseModel):
-    staged: List[TemplateFileChange] = Field(default_factory=list)
-    unstaged: List[TemplateFileChange] = Field(default_factory=list)
-    untracked: List[TemplateFileChange] = Field(default_factory=list)
+class ChangesResponse(BaseModel):
+    staged: List[FileChange] = Field(default_factory=list)
+    unstaged: List[FileChange] = Field(default_factory=list)
+    untracked: List[FileChange] = Field(default_factory=list)
     untrackedTotal: int = Field(default=0)
     untrackedPage: int = Field(default=1)
     untrackedPageSize: int = Field(default=100)
     untrackedHasMore: bool = Field(default=False)
 
 
-class TemplateStageRequest(BaseModel):
+class StageRequest(BaseModel):
     paths: List[str] = Field(description="Paths to stage")
     includeUntracked: bool = Field(default=True, description="Whether to include untracked files")
 
 
-class TemplateStageResponse(BaseModel):
+class StageResponse(BaseModel):
     staged: List[str] = Field(default_factory=list)
     unstaged: List[str] = Field(default_factory=list)
 
 
-class TemplateUnstageRequest(BaseModel):
+class UnstageRequest(BaseModel):
     paths: List[str] = Field(description="Paths to unstage")
 
 
-class TemplateUnstageResponse(BaseModel):
+class UnstageResponse(BaseModel):
     unstaged: List[str] = Field(default_factory=list)
     remainingStaged: int = Field(default=0)
 
 
-class TemplateDiscardRequest(BaseModel):
+class DiscardRequest(BaseModel):
     paths: List[str] = Field(description="Paths to restore")
 
 
-class TemplateDiscardResponse(BaseModel):
+class DiscardResponse(BaseModel):
     discarded: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
 
 
-class TemplateCommitAuthor(BaseModel):
-    name: str = Field(description="Author name")
-    email: str = Field(description="Author email")
-
-
-class TemplateCommitSummary(BaseModel):
+class CommitSummary(BaseModel):
     id: str = Field(description="Commit ID")
     message: str = Field(description="Commit message")
     author: str = Field(description="Author")
@@ -219,35 +160,35 @@ class TemplateCommitSummary(BaseModel):
     files: int = Field(default=0)
 
 
-class TemplateCommitResponse(BaseModel):
-    commit: TemplateCommitSummary
+class CommitResponse(BaseModel):
+    commit: CommitSummary
 
 
-class TemplateCommitListResponse(BaseModel):
+class CommitListResponse(BaseModel):
     page: int = Field(description="Page number")
     pageSize: int = Field(description="Items per page")
     total: int = Field(description="Total items")
-    items: List[TemplateCommitSummary] = Field(default_factory=list)
+    items: List[CommitSummary] = Field(default_factory=list)
 
 
-class TemplateCommitFilesResponse(BaseModel):
+class CommitFilesResponse(BaseModel):
     commitId: str = Field(description="Commit ID")
-    files: List[TemplateFileChange] = Field(default_factory=list)
+    files: List[FileChange] = Field(default_factory=list)
 
 
-class TemplateCheckoutRequest(BaseModel):
+class CheckoutRequest(BaseModel):
     create: bool = Field(default=False, description="Whether to create new branch")
     startPoint: Optional[str] = Field(default=None, description="New branch start point")
     stashChanges: bool = Field(default=False, description="Whether to stash before switching")
 
 
-class TemplateCheckoutResponse(BaseModel):
+class CheckoutResponse(BaseModel):
     branch: str = Field(description="Branch after switching")
     created: bool = Field(description="Whether new branch was created")
     stashedChanges: Optional[str] = Field(default=None, description="Stash name")
 
 
-class TemplateRemoteRequest(BaseModel):
+class RemoteRequest(BaseModel):
     remote: str = Field(default="origin", description="Remote name")
     branch: Optional[str] = Field(default=None, description="Branch name")
     rebase: bool = Field(default=True, description="Whether to rebase during pull")
@@ -255,20 +196,20 @@ class TemplateRemoteRequest(BaseModel):
     force: bool = Field(default=False, description="Whether to force during push")
 
 
-class TemplateRemoteResponse(BaseModel):
+class RemoteResponse(BaseModel):
     remote: str = Field(default="origin")
     branch: Optional[str] = None
     message: str = Field(default="")
 
 
-class TemplateDiffResponse(BaseModel):
+class DiffResponse(BaseModel):
     path: str = Field(description="File path")
     patch: str = Field(default="", description="diff patch")
     diff: str = Field(default="", description="diff patch")
     binary: bool = Field(default=False, description="Whether binary")
 
 
-class TemplateBlobResponse(BaseModel):
+class BlobResponse(BaseModel):
     path: str = Field(description="File path")
     revision: Optional[str] = Field(default=None, description="revision")
     content: str = Field(description="File content")

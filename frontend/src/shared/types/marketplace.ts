@@ -199,16 +199,11 @@ export interface MarketplaceImportSource {
   provider: MarketplaceProvider;
   sourceKind: 'git' | 'local';
   source: string;
-  ref?: string;
 }
 
 export interface MarketplaceImportUploadResult {
   source: MarketplaceImportSource;
   fileName: string;
-}
-
-export interface MarketplaceImportBranchesResult {
-  branches: string[];
 }
 
 export interface MarketplaceImportCandidate {
@@ -217,6 +212,7 @@ export interface MarketplaceImportCandidate {
   packageId: string;
   displayName: string;
   sourcePath: string;
+  sourceMetadata?: Record<string, unknown>;
   duplicate: boolean;
   duplicateAction: 'skip' | 'overwrite' | 'import-as-new';
   newPackageId?: string;

@@ -62,14 +62,18 @@ class TestRoleMappingHelpers:
 
     def test_permission_and_role_helpers(self):
         assert has_permission("workspace:read", ["workspace:read", "workspace:update"]) is True
+        assert has_permission("workspace:delete", ["workspace:all"]) is True
+        assert has_permission("marketplace:manage_registry", ["*:all"]) is True
         assert has_permission("workspace:delete", ["workspace:read"]) is False
         assert has_role("admin", ["admin", "user"]) is True
         assert has_role("admin", ["user"]) is False
         assert has_any_role(["admin", "editor"], ["viewer", "editor"]) is True
         assert has_any_role(["admin"], ["viewer", "editor"]) is False
         assert has_all_permissions(["a", "b"], ["a", "b", "c"]) is True
+        assert has_all_permissions(["workspace:read", "workspace:delete"], ["workspace:all"]) is True
         assert has_all_permissions(["a", "b"], ["a"]) is False
         assert has_any_permission(["a", "b"], ["c", "b"]) is True
+        assert has_any_permission(["marketplace:delete", "marketplace:install"], ["marketplace:all"]) is True
         assert has_any_permission(["a", "b"], ["c"]) is False
 
 

@@ -162,7 +162,6 @@ class WorkspaceDetail(CamelModel):
     owner: WorkspaceOwner
     name: str
     description: Optional[str] = None
-    template_id: Optional[str] = Field(None, alias="templateId")
     git_url: Optional[str] = Field(None, alias="gitUrl")
     branch: str
     runtime: str
@@ -294,7 +293,6 @@ class WorkspaceCreateRequest(CamelModel):
         None,
         alias="runtimeResources",
     )
-    template_id: Optional[str] = Field(None, alias="templateId")
     preferred_cli: Optional[str] = Field(None, alias="preferredCli")
     fallback_enabled: Optional[bool] = Field(None, alias="fallbackEnabled")
     workspace_path: Optional[str] = Field(None, alias="workspacePath")

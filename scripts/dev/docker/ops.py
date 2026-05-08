@@ -43,9 +43,8 @@ DATA_DIRS = (
     "data/workspace-data",
     "data/workspace-scripts",
     "data/claude-data",
+    "data/marketplace-install",
     "data/knowledge-bases",
-    "data/template-center",
-    "data/ssh-keys",
 )
 PRESERVED_FILENAMES = {".gitkeep", "README.md"}
 
@@ -292,12 +291,11 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "WORKSPACE_RUNTIME_JAVA_HOME": "/usr/lib/jvm/openjdk-21",
             "HOST_PROJECT_ROOT": str(repo_root),
             "HOST_WORKSPACE_RUNTIME_DIR": str(env.get("HOST_WORKSPACE_RUNTIME_DIR", repo_root / "workspace-runtime")),
-            "HOST_WORKSPACE_MANAGER_DIR": str(env.get("HOST_WORKSPACE_MANAGER_DIR", repo_root / "workspace-manager")),
             "HOST_WORKSPACES_DIR": str(env.get("HOST_WORKSPACES_DIR", data_root / "workspace-data")),
             "HOST_WORKSPACE_SCRIPTS_DIR": str(env.get("HOST_WORKSPACE_SCRIPTS_DIR", data_root / "workspace-scripts")),
             "HOST_CLAUDE_DATA_DIR": str(env.get("HOST_CLAUDE_DATA_DIR", data_root / "claude-data")),
+            "HOST_MARKETPLACE_INSTALL_DIR": str(env.get("HOST_MARKETPLACE_INSTALL_DIR", data_root / "marketplace-install")),
             "HOST_KNOWLEDGE_BASES_DIR": str(env.get("HOST_KNOWLEDGE_BASES_DIR", data_root / "knowledge-bases")),
-            "HOST_SSH_KEYS_DIR": str(env.get("HOST_SSH_KEYS_DIR", data_root / "ssh-keys")),
         }
     )
     return env

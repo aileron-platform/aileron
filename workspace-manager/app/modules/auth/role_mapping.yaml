@@ -8,21 +8,7 @@ role_mappings:
   # Administrator role.
   admin:
     permissions:
-      - "workspace:all"
-      - "workspace:create"
-      - "workspace:read"
-      - "workspace:update"
-      - "workspace:delete"
-      - "workspace:share"
-      - "user:manage"
-      - "settings:manage"
-      - "template:manage"
-      - "marketplace:view"
-      - "marketplace:edit"
-      - "marketplace:delete"
-      - "marketplace:import"
-      - "marketplace:install"
-      - "marketplace:manage_registry"
+      - "*:all"
     description: "System administrator with all permissions"
 
   # Developer role.
@@ -32,12 +18,11 @@ role_mappings:
       - "workspace:read"
       - "workspace:update"
       - "workspace:share"
-      - "template:read"
       - "marketplace:view"
       - "marketplace:edit"
       - "marketplace:import"
       - "marketplace:install"
-    description: "Developer who can manage workspaces and templates"
+    description: "Developer who can manage workspaces and marketplace packages"
 
   # General user role.
   user:
@@ -129,21 +114,6 @@ resource_access:
       - "read"    # Can only read workspaces they can access.
     viewer:
       - "read"    # Can only read workspaces they can access.
-
-  # Template resources.
-  templates:
-    admin:
-      - "create"
-      - "read"
-      - "update"
-      - "delete"
-    developer:
-      - "read"
-      - "create"
-    user:
-      - "read"
-    viewer:
-      - "read"
 
   # User management resources.
   users:

@@ -44,20 +44,10 @@ Workspace scripts are file collections. Common files include:
 | Extension | Usage |
 |-----------|-------|
 | `.sh` | Linux/macOS shell scripts, best for runtime execution |
-| `.ps1` | PowerShell scripts for Windows host workflows or template content |
+| `.ps1` | PowerShell scripts for Windows host workflows or cross-platform instructions |
 | `.md` | Runbooks and instructions |
 | `.json` / `.yaml` | Configuration or sample payloads |
 
-Runtime containers are Linux-based, so scripts intended to run inside runtime should prefer `.sh`. PowerShell scripts are useful for Windows host-side operations or template delivery.
-
-## Template Scripts
-
-Template `scripts` scope is installed into a workspace at:
-
-```text
-/scripts/<templateName>/
-```
-
-Manager template APIs manage the template `scripts` scope. Runtime script APIs manage installed or user-created workspace scripts.
+Runtime containers are Linux-based, so scripts intended to run inside runtime should prefer `.sh`. PowerShell scripts are useful for Windows host-side operations or cross-platform instructions.
 
 See [Runtime API](/api/runtime-api#scripts) for endpoint details.

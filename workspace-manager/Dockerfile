@@ -42,7 +42,7 @@ RUN uv sync --dev
 RUN mkdir -p /workspace-manager/app
 
 # Create data directories with proper permissions
-RUN mkdir -p /data/templates-center /data/init-scripts \
+RUN mkdir -p /data/init-scripts \
     && chmod -R 755 /data
 
 # Copy scripts and supervisor configs
@@ -87,7 +87,7 @@ COPY .env* ./
 RUN chmod +x ./scripts/*.sh
 
 # Create data directories with proper permissions
-RUN mkdir -p /data/templates /data/templates/temp /data/templates/exports /data/init-scripts \
+RUN mkdir -p /data/init-scripts \
     && chmod -R 755 /data
 
 # For Docker socket access, run as root in production

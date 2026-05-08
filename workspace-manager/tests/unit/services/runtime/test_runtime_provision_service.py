@@ -49,11 +49,13 @@ def mock_settings():
     settings.HOST_WORKSPACES_DIR = "/tmp/workspaces"
     settings.HOST_WORKSPACE_SCRIPTS_DIR = "/tmp/workspace-scripts-host"
     settings.HOST_CLAUDE_DATA_DIR = "/tmp/claude-data"
+    settings.HOST_MARKETPLACE_INSTALL_DIR = "/tmp/marketplace-install"
     settings.HOST_KNOWLEDGE_BASES_DIR = "/tmp/knowledge-bases"
     settings.BROWSER_WEBRTC_RESERVED_UDP_RANGES = ["50000-52321"]
     settings.MANAGER_WORKSPACES_DIR = "/mnt/workspaces"
     settings.MANAGER_WORKSPACE_SCRIPTS_DIR = "/mnt/workspace-scripts"
     settings.MANAGER_CLAUDE_DATA_DIR = "/mnt/claude-data"
+    settings.MANAGER_MARKETPLACE_INSTALL_DIR = "/mnt/marketplace-install"
     settings.MANAGER_KNOWLEDGE_BASES_DIR = "/mnt/knowledge-bases"
     settings.DOCKER_NETWORK = "workspace-network"
     settings.ENV = "testing"
@@ -220,12 +222,16 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_WORKSPACES_DIR = str(tmp_path / "workspaces")
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = str(tmp_path / "workspace-scripts")
         mock_settings.HOST_CLAUDE_DATA_DIR = str(tmp_path / "claude-data")
+        mock_settings.HOST_MARKETPLACE_INSTALL_DIR = str(tmp_path / "marketplace-install")
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = str(tmp_path / "knowledge-bases")
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
             tmp_path / "mounted-workspace-scripts"
         )
         mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_MARKETPLACE_INSTALL_DIR = str(
+            tmp_path / "mounted-marketplace-install"
+        )
         mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
             tmp_path / "mounted-knowledge-bases"
         )
@@ -240,9 +246,13 @@ class TestRuntimeProvisionService:
         assert sources["/home/developer/.claude"] == str(
             tmp_path / "claude-data" / "workspace_123"
         )
+        assert sources["/marketplace-install"] == str(
+            tmp_path / "marketplace-install" / "workspace_123"
+        )
         assert (
             tmp_path / "mounted-workspace-scripts" / "workspace_123" / "custom-setup.sh"
         ).is_file()
+        assert (tmp_path / "mounted-marketplace-install" / "workspace_123").is_dir()
 
     def test_build_volumes_resolves_relative_host_mount_paths(
         self,
@@ -255,12 +265,16 @@ class TestRuntimeProvisionService:
         mock_settings.HOST_WORKSPACES_DIR = "data/workspace-data"
         mock_settings.HOST_WORKSPACE_SCRIPTS_DIR = "data/workspace-scripts"
         mock_settings.HOST_CLAUDE_DATA_DIR = "data/claude-data"
+        mock_settings.HOST_MARKETPLACE_INSTALL_DIR = "data/marketplace-install"
         mock_settings.HOST_KNOWLEDGE_BASES_DIR = "data/knowledge-bases"
         mock_settings.MANAGER_WORKSPACES_DIR = str(tmp_path / "mounted-workspaces")
         mock_settings.MANAGER_WORKSPACE_SCRIPTS_DIR = str(
             tmp_path / "mounted-workspace-scripts"
         )
         mock_settings.MANAGER_CLAUDE_DATA_DIR = str(tmp_path / "mounted-claude-data")
+        mock_settings.MANAGER_MARKETPLACE_INSTALL_DIR = str(
+            tmp_path / "mounted-marketplace-install"
+        )
         mock_settings.MANAGER_KNOWLEDGE_BASES_DIR = str(
             tmp_path / "mounted-knowledge-bases"
         )
@@ -277,6 +291,9 @@ class TestRuntimeProvisionService:
         )
         assert sources["/home/developer/.claude"] == str(
             tmp_path / "project-root" / "data" / "claude-data" / "workspace_123"
+        )
+        assert sources["/marketplace-install"] == str(
+            tmp_path / "project-root" / "data" / "marketplace-install" / "workspace_123"
         )
 
     def test_build_volumes_rejects_relative_host_paths_without_absolute_project_root(

@@ -68,6 +68,19 @@ const formatValidationPath = (loc: unknown): string => {
   return path || 'request';
 };
 
+const normalizeErrorMessage = (value: unknown, fallback: string): string => {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['message', 'error', 'detail', 'code', 'errorCode', 'error_code']) {
+      const nested = record[key];
+      if (typeof nested === 'string' && nested.trim()) return nested;
+    }
+  }
+  return fallback;
+};
+
 const extractErrorMessage = (errorData: any, status: number): { message: string; code?: string; reason?: string } => {
   if (Array.isArray(errorData?.detail)) {
     const firstIssue = errorData.detail[0];
@@ -84,15 +97,16 @@ const extractErrorMessage = (errorData: any, status: number): { message: string;
   }
 
   if (typeof errorData?.detail === 'object' && errorData.detail !== null) {
+    const code = errorData.detail.errorCode ?? errorData.detail.error_code ?? errorData.detail.code;
     return {
-      message: errorData.detail.message || errorData.detail.error || `HTTP ${status}`,
-      code: errorData.detail.errorCode ?? errorData.detail.error_code ?? errorData.detail.code,
+      message: normalizeErrorMessage(errorData.detail.message ?? errorData.detail.error ?? code, code ?? `HTTP ${status}`),
+      code,
       reason: errorData.detail.reason,
     };
   }
 
   return {
-    message: errorData?.detail || errorData?.message || `HTTP ${status}`,
+    message: normalizeErrorMessage(errorData?.detail ?? errorData?.message, `HTTP ${status}`),
     code: errorData?.error_code ?? errorData?.errorCode,
   };
 };

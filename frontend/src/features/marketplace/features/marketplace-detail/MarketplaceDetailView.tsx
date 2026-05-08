@@ -109,6 +109,11 @@ const LEFT_WIDTH = 280;
 const isProvider = (value: string | undefined): value is MarketplaceProvider =>
   value === 'claude-code' || value === 'codex' || value === 'gemini';
 
+const getMarketplaceInstallCommandName = (
+  provider: MarketplaceProvider,
+  t: (key: string) => string,
+) => t(`marketplace.install.commandNames.${provider}`);
+
 const toFileName = (item: MarketplaceFeatureContentItem, extension = 'md') =>
   item.path?.split('/').pop() ?? `${item.id}.${extension}`;
 
@@ -540,6 +545,7 @@ const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogProps> = 
   const [installResult, setInstallResult] = React.useState<MarketplaceInstallResult | null>(null);
   const [preflight, setPreflight] = React.useState<MarketplaceCliPreflight | null>(null);
   const [isLoadingPreflight, setIsLoadingPreflight] = React.useState(false);
+  const commandName = getMarketplaceInstallCommandName(detail.provider, t);
 
   React.useEffect(() => {
     if (open) {
@@ -629,7 +635,7 @@ const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogProps> = 
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>{t('marketplace.install.title')}</DialogTitle>
-          <DialogDescription>{t('marketplace.install.description')}</DialogDescription>
+          <DialogDescription>{t('marketplace.install.description', { commandName })}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -670,10 +676,10 @@ const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogProps> = 
             <Terminal className="h-4 w-4" />
             <AlertDescription>
               {isLoadingPreflight
-                ? t('marketplace.install.preflight.loading')
+                ? t('marketplace.install.preflight.loading', { commandName })
                 : preflight?.available
-                  ? t('marketplace.install.preflight.ready', { version: preflight.version ?? t('marketplace.install.preflight.unknownVersion') })
-                  : t('marketplace.install.preflight.unavailable', { code: preflight?.errorCode ?? 'unknown' })}
+                  ? t('marketplace.install.preflight.ready', { commandName, version: preflight.version ?? t('marketplace.install.preflight.unknownVersion') })
+                  : t('marketplace.install.preflight.unavailable', { commandName, code: preflight?.errorCode ?? 'unknown' })}
             </AlertDescription>
           </Alert>
           <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -687,7 +693,7 @@ const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogProps> = 
           {installResult && status !== 'success' ? (
             <Alert variant="destructive">
               <Info className="h-4 w-4" />
-              <AlertDescription>{t(`marketplace.install.result.${installResult.status}`, { code: errorCode ?? 'unknown' })}</AlertDescription>
+              <AlertDescription>{t(`marketplace.install.result.${installResult.status}`, { commandName, code: errorCode ?? 'unknown' })}</AlertDescription>
             </Alert>
           ) : null}
           {status === 'success' ? (
@@ -907,14 +913,17 @@ interface MarketplaceHookAction {
 }
 
 interface MarketplaceHookMatcher {
+  event?: string;
   matcher?: string;
   sequential?: boolean;
   hooks?: MarketplaceHookAction[];
 }
 
 interface MarketplaceHookData {
+  description?: string;
   event?: string;
   matchers?: MarketplaceHookMatcher[];
+  hooks?: Record<string, MarketplaceHookMatcher[]>;
 }
 
 interface MarketplaceHooksWorkflowProps {
@@ -965,9 +974,14 @@ interface MarketplaceHookCardProps {
 const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hook }) => {
   const { t } = useI18n();
   const data = toFeatureData<MarketplaceHookData>(hook);
-  const matchers = data.matchers ?? [];
+  const matchers = data.matchers ?? Object.entries(data.hooks ?? {}).flatMap(([event, eventMatchers]) => (
+    Array.isArray(eventMatchers)
+      ? eventMatchers.map(matcher => ({ ...matcher, event: matcher.event ?? event }))
+      : []
+  ));
   const totalMatchers = matchers.length;
   const totalCommands = matchers.reduce((acc, matcher) => acc + (matcher.hooks?.length ?? 0), 0);
+  const description = hook.description ?? data.description;
 
   return (
     <div className="relative rounded-lg border border-border bg-background p-6">
@@ -980,8 +994,8 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
             </div>
           </div>
 
-          {hook.description ? (
-            <p className="mb-4 text-sm text-muted-foreground">{hook.description}</p>
+          {description ? (
+            <p className="mb-4 text-sm text-muted-foreground">{description}</p>
           ) : null}
 
           <div className="mb-4">
@@ -998,6 +1012,11 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
                   <div key={`${hook.id}-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        {matcher.event ? (
+                          <Badge variant="outline" className="px-1 py-0 text-xs">
+                            {matcher.event}
+                          </Badge>
+                        ) : null}
                         <span className="text-xs text-muted-foreground">
                           {t('marketplace.detail.hooks.card.matcherLabel')}
                         </span>
@@ -1285,6 +1304,11 @@ interface MarketplaceFeatureViewerProps {
   icon: React.ComponentType<{ className?: string }>;
 }
 
+const MARKETPLACE_DETAIL_SIDEBAR_DEFAULT_WIDTH = 320;
+const MARKETPLACE_DETAIL_SIDEBAR_MIN_WIDTH = 240;
+const MARKETPLACE_DETAIL_SIDEBAR_MAX_WIDTH = 520;
+const MARKETPLACE_DETAIL_SIDEBAR_COLLAPSED_WIDTH = 44;
+
 interface MarketplaceSkillsFileViewerProps {
   items: MarketplaceFeatureContentItem[];
 }
@@ -1292,6 +1316,10 @@ interface MarketplaceSkillsFileViewerProps {
 const MarketplaceSkillsFileViewer: React.FC<MarketplaceSkillsFileViewerProps> = ({ items }) => {
   const { t } = useI18n();
   const { toast } = useToast();
+  const [sidebarWidth, setSidebarWidth] = React.useState(MARKETPLACE_DETAIL_SIDEBAR_DEFAULT_WIDTH);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [isSidebarResizing, setIsSidebarResizing] = React.useState(false);
+  const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
   const initialNodes = React.useMemo(() => marketplaceDetailFeatureItemsToFileTree(items, 'skills'), [items]);
   const firstFilePath = React.useMemo(() => marketplaceDetailFindFirstFilePath(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
@@ -1345,40 +1373,120 @@ const MarketplaceSkillsFileViewer: React.FC<MarketplaceSkillsFileViewerProps> = 
     downloadBlob(blob, activeNode.name);
   };
 
+  const handleSidebarResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsSidebarCollapsed(false);
+    setIsSidebarResizing(true);
+    sidebarResizeRef.current = {
+      startX: event.clientX,
+      startWidth: isSidebarCollapsed ? MARKETPLACE_DETAIL_SIDEBAR_MIN_WIDTH : sidebarWidth,
+    };
+    document.body.classList.add('select-none', 'cursor-col-resize');
+  };
+
+  React.useEffect(() => {
+    if (!isSidebarResizing) return undefined;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const dragState = sidebarResizeRef.current;
+      if (!dragState) return;
+      const nextWidth = Math.min(
+        Math.max(dragState.startWidth + event.clientX - dragState.startX, MARKETPLACE_DETAIL_SIDEBAR_MIN_WIDTH),
+        MARKETPLACE_DETAIL_SIDEBAR_MAX_WIDTH,
+      );
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      sidebarResizeRef.current = null;
+      setIsSidebarResizing(false);
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+  }, [isSidebarResizing]);
+
   return (
     <div className="flex h-full overflow-hidden border-x border-b bg-background">
-      <div className="w-80">
-        <MarketplaceSectionSidebarShell
-          title={t('marketplace.editor.fileManager.skills.title')}
-          icon={<Sparkles className="h-4 w-4" />}
-          actions={(
+      <div
+        className="relative flex-shrink-0"
+        style={{ width: isSidebarCollapsed ? MARKETPLACE_DETAIL_SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
+      >
+        {isSidebarCollapsed ? (
+          <div className="flex h-full flex-col items-center gap-2 border-r border-border bg-background px-1 py-2">
             <Button
-              size="sm"
               variant="ghost"
-              className="h-7 w-7 p-0"
-              title={t('marketplace.detail.viewer.refresh')}
-              aria-label={t('marketplace.detail.viewer.refresh')}
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label={t('marketplace.detail.viewer.expandSidebar')}
+              title={t('marketplace.detail.viewer.expandSidebar')}
+              onClick={() => setIsSidebarCollapsed(false)}
             >
-              <RefreshCw className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
+            <Sparkles className="h-4 w-4 text-primary" />
+          </div>
+        ) : (
+          <MarketplaceSectionSidebarShell
+            title={t('marketplace.editor.fileManager.skills.title')}
+            icon={<Sparkles className="h-4 w-4" />}
+            actions={(
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  title={t('marketplace.detail.viewer.refresh')}
+                  aria-label={t('marketplace.detail.viewer.refresh')}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0"
+                  title={t('marketplace.detail.viewer.collapseSidebar')}
+                  aria-label={t('marketplace.detail.viewer.collapseSidebar')}
+                  onClick={() => setIsSidebarCollapsed(true)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            searchValue={treeState.searchQuery}
+            onSearchChange={treeState.setSearchQuery}
+            onSearchClear={treeState.clearSearch}
+            searchPlaceholder={t('marketplace.editor.fileManager.search.placeholder')}
+            body={(
+              <FileTreePanel
+                state={treeState}
+                onNodeClick={handleNodeClick}
+                onNodeDoubleClick={handleNodeDoubleClick}
+                enableSearch={false}
+                enableToolbar={false}
+                enableMultiSelectBar={false}
+                enableBottomStatusBar={false}
+                enableDragDrop={false}
+                className="flex-1"
+              />
+            )}
+          />
+        )}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('marketplace.detail.viewer.resizeSidebar')}
+          className={cn(
+            'absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize transition-colors',
+            isSidebarResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20',
           )}
-          searchValue={treeState.searchQuery}
-          onSearchChange={treeState.setSearchQuery}
-          onSearchClear={treeState.clearSearch}
-          searchPlaceholder={t('marketplace.editor.fileManager.search.placeholder')}
-          body={(
-            <FileTreePanel
-              state={treeState}
-              onNodeClick={handleNodeClick}
-              onNodeDoubleClick={handleNodeDoubleClick}
-              enableSearch={false}
-              enableToolbar={false}
-              enableMultiSelectBar={false}
-              enableBottomStatusBar={false}
-              enableDragDrop={false}
-              className="flex-1"
-            />
-          )}
+          onMouseDown={handleSidebarResizeStart}
         />
       </div>
 
@@ -1501,6 +1609,10 @@ const MarketplaceDocumentShell: React.FC<MarketplaceDocumentShellProps> = ({
 }) => {
   const { t } = useI18n();
   const { toast } = useToast();
+  const [sidebarWidth, setSidebarWidth] = React.useState(MARKETPLACE_DETAIL_SIDEBAR_DEFAULT_WIDTH);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
+  const [isSidebarResizing, setIsSidebarResizing] = React.useState(false);
+  const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
   const selectedIndex = selectedItem ? items.findIndex(item => item.id === selectedItem.id) : -1;
   const canNavigatePrevious = selectedIndex > 0;
   const canNavigateNext = selectedIndex >= 0 && selectedIndex < items.length - 1;
@@ -1544,10 +1656,61 @@ const MarketplaceDocumentShell: React.FC<MarketplaceDocumentShellProps> = ({
     downloadBlob(blob, selectedItem.fileName);
   };
 
+  const handleSidebarResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsSidebarCollapsed(false);
+    setIsSidebarResizing(true);
+    sidebarResizeRef.current = {
+      startX: event.clientX,
+      startWidth: isSidebarCollapsed ? MARKETPLACE_DETAIL_SIDEBAR_MIN_WIDTH : sidebarWidth,
+    };
+    document.body.classList.add('select-none', 'cursor-col-resize');
+  };
+
+  React.useEffect(() => {
+    if (!isSidebarResizing) return undefined;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const dragState = sidebarResizeRef.current;
+      if (!dragState) return;
+      const nextWidth = Math.min(
+        Math.max(dragState.startWidth + event.clientX - dragState.startX, MARKETPLACE_DETAIL_SIDEBAR_MIN_WIDTH),
+        MARKETPLACE_DETAIL_SIDEBAR_MAX_WIDTH,
+      );
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      sidebarResizeRef.current = null;
+      setIsSidebarResizing(false);
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.classList.remove('select-none', 'cursor-col-resize');
+    };
+  }, [isSidebarResizing]);
+
   const sidebarActions = (
-    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={t('marketplace.detail.viewer.refresh')}>
-      <RefreshCw className="h-4 w-4" />
-    </Button>
+    <>
+      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" aria-label={t('marketplace.detail.viewer.refresh')}>
+        <RefreshCw className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 w-7 p-0"
+        aria-label={t('marketplace.detail.viewer.collapseSidebar')}
+        title={t('marketplace.detail.viewer.collapseSidebar')}
+        onClick={() => setIsSidebarCollapsed(true)}
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </Button>
+    </>
   );
 
   const sidebarBody = (
@@ -1593,33 +1756,62 @@ const MarketplaceDocumentShell: React.FC<MarketplaceDocumentShellProps> = ({
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-80 flex-shrink-0">
-        <MarketplaceSectionSidebarShell
-          title={title}
-          icon={<Icon className="h-4 w-4" />}
-          actions={sidebarActions}
-          searchValue={hideSearch ? undefined : searchTerm}
-          onSearchChange={hideSearch ? undefined : onSearchTermChange}
-          onSearchClear={hideSearch ? undefined : () => onSearchTermChange('')}
-          searchPlaceholder={searchPlaceholder}
-          body={sidebarBody}
+      <div
+        className="relative flex-shrink-0"
+        style={{ width: isSidebarCollapsed ? MARKETPLACE_DETAIL_SIDEBAR_COLLAPSED_WIDTH : sidebarWidth }}
+      >
+        {isSidebarCollapsed ? (
+          <div className="flex h-full flex-col items-center gap-2 border-r border-border bg-background px-1 py-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              aria-label={t('marketplace.detail.viewer.expandSidebar')}
+              title={t('marketplace.detail.viewer.expandSidebar')}
+              onClick={() => setIsSidebarCollapsed(false)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Icon className="h-4 w-4 text-primary" />
+          </div>
+        ) : (
+          <MarketplaceSectionSidebarShell
+            title={title}
+            icon={<Icon className="h-4 w-4" />}
+            actions={sidebarActions}
+            searchValue={hideSearch ? undefined : searchTerm}
+            onSearchChange={hideSearch ? undefined : onSearchTermChange}
+            onSearchClear={hideSearch ? undefined : () => onSearchTermChange('')}
+            searchPlaceholder={searchPlaceholder}
+            body={sidebarBody}
+          />
+        )}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t('marketplace.detail.viewer.resizeSidebar')}
+          className={cn(
+            'absolute right-0 top-0 z-20 h-full w-1 cursor-col-resize transition-colors',
+            isSidebarResizing ? 'bg-primary/40' : 'bg-transparent hover:bg-primary/20',
+          )}
+          onMouseDown={handleSidebarResizeStart}
         />
       </div>
 
-      <main className="flex-1 bg-background">
+      <main className="min-w-0 flex-1 bg-background">
         {selectedItem ? (
           <div className="flex h-full flex-col">
             <div className="sticky top-0 z-10 border-b border-border bg-background">
               <div className="border-b border-border bg-background p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="flex min-w-0 shrink-0 items-center gap-2">
                       <Icon className="h-5 w-5 shrink-0 text-primary" />
-                      <h3 className="truncate font-semibold text-foreground">
+                      <h3 className="max-w-64 truncate font-semibold text-foreground">
                         {selectedItem.fileName || selectedItem.name || itemNameFallback}
                       </h3>
                     </div>
-                    <p className="truncate text-sm text-muted-foreground">
+                    <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                       {selectedItem.description || selectedItem.path || descriptionFallback}
                     </p>
                   </div>

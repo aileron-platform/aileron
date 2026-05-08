@@ -100,23 +100,21 @@ def test_build_compose_env_includes_cross_platform_host_paths(monkeypatch: pytes
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("HOST_PROJECT_ROOT", raising=False)
     monkeypatch.delenv("HOST_WORKSPACE_RUNTIME_DIR", raising=False)
-    monkeypatch.delenv("HOST_WORKSPACE_MANAGER_DIR", raising=False)
     monkeypatch.delenv("HOST_WORKSPACES_DIR", raising=False)
     monkeypatch.delenv("HOST_WORKSPACE_SCRIPTS_DIR", raising=False)
     monkeypatch.delenv("HOST_CLAUDE_DATA_DIR", raising=False)
+    monkeypatch.delenv("HOST_MARKETPLACE_INSTALL_DIR", raising=False)
     monkeypatch.delenv("HOST_KNOWLEDGE_BASES_DIR", raising=False)
-    monkeypatch.delenv("HOST_SSH_KEYS_DIR", raising=False)
 
     env = ops.build_compose_env(profile)
 
     assert env["HOST_PROJECT_ROOT"] == str(tmp_path.resolve())
     assert env["HOST_WORKSPACE_RUNTIME_DIR"] == str(tmp_path / "workspace-runtime")
-    assert env["HOST_WORKSPACE_MANAGER_DIR"] == str(tmp_path / "workspace-manager")
     assert env["HOST_WORKSPACES_DIR"] == str(tmp_path / "data" / "workspace-data")
     assert env["HOST_WORKSPACE_SCRIPTS_DIR"] == str(tmp_path / "data" / "workspace-scripts")
     assert env["HOST_CLAUDE_DATA_DIR"] == str(tmp_path / "data" / "claude-data")
+    assert env["HOST_MARKETPLACE_INSTALL_DIR"] == str(tmp_path / "data" / "marketplace-install")
     assert env["HOST_KNOWLEDGE_BASES_DIR"] == str(tmp_path / "data" / "knowledge-bases")
-    assert env["HOST_SSH_KEYS_DIR"] == str(tmp_path / "data" / "ssh-keys")
 
 
 @pytest.mark.unit

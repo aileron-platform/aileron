@@ -42,7 +42,7 @@ class MarketplaceProviderAdapter(Protocol):
     def create_package(self, package_path: Path, request: MarketplacePackageCreateRequest) -> None:
         """Create provider-native package scaffold."""
 
-    def validate_package(self, package_path: Path) -> list[dict[str, Any]]:
+    def validate_package(self, package_path: Path, package_id: str | None = None) -> list[dict[str, Any]]:
         """Validate provider-native package files."""
 
     def validate_catalog_metadata(
@@ -97,7 +97,7 @@ class BaseMarketplaceProviderAdapter:
     provider: MarketplaceProvider
     package_type = "plugin"
     manifest_required_fields: tuple[str, ...] = ("name",)
-    package_id_pattern = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
+    package_id_pattern = re.compile(r"^[a-z0-9]+(?:[.-][a-z0-9]+)*$")
 
     def read_json(self, path: Path) -> dict[str, Any]:
         data, _ = self.read_json_with_error(path)
@@ -179,12 +179,36 @@ class BaseMarketplaceProviderAdapter:
             or normalized.endswith(".git")
         )
 
-    def unsupported_nested_source_result(self, package_id: str, source_value: str) -> dict[str, Any]:
-        return self.validation_result(
-            code="marketplace.import.validation.nested_remote_source_unsupported",
-            file_path=source_value,
-            details={"packageId": package_id},
-        )
+    def remote_source_metadata(
+        self,
+        *,
+        source_type: str,
+        url: str,
+        path: str | None = None,
+        ref: str | None = None,
+        sha: str | None = None,
+    ) -> dict[str, Any]:
+        metadata: dict[str, Any] = {
+            "kind": "git",
+            "sourceType": source_type,
+            "url": url,
+        }
+        if path:
+            metadata["path"] = path
+        if ref:
+            metadata["ref"] = ref
+        if sha:
+            metadata["sha"] = sha
+        return metadata
+
+    def remote_source_path(self, url: str, path: str | None = None) -> str:
+        return f"{url}:{path}" if path else url
+
+    def github_repo_url(self, repo: str) -> str:
+        value = repo.strip()
+        if self.is_remote_source_value(value):
+            return value
+        return f"https://github.com/{value.removesuffix('.git')}.git"
 
     def revision_for_paths(self, paths: list[Path]) -> str:
         digest = sha256()
@@ -345,7 +369,7 @@ class BaseMarketplaceProviderAdapter:
             ))
         return results
 
-    def validate_package(self, package_path: Path) -> list[dict[str, Any]]:
+    def validate_package(self, package_path: Path, package_id: str | None = None) -> list[dict[str, Any]]:
         manifest_path = self.manifest_path(package_path)
         try:
             manifest_path.resolve().relative_to(package_path.resolve())
@@ -366,7 +390,7 @@ class BaseMarketplaceProviderAdapter:
                 file_path=str(manifest_path.relative_to(package_path)),
             )]
         return self.validate_manifest_data(
-            package_id=package_path.name,
+            package_id=package_id or package_path.name,
             manifest=manifest,
             file_path=str(manifest_path.relative_to(package_path)),
         )
@@ -663,7 +687,7 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
             package_id = str(entry.get("name") or "").strip()
             if not package_id:
                 continue
-            package_path, source_path, source_results = self.resolve_external_package_source(
+            package_path, source_path, source_results, source_metadata = self.resolve_external_package_source(
                 source_root,
                 entry,
                 package_id,
@@ -671,7 +695,7 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
             manifest = self.read_manifest(package_path) if package_path is not None else {}
             validation_results = [
                 *source_results,
-                *([] if package_path is None else self.validate_package(package_path)),
+                *([] if package_path is None else self.validate_package(package_path, package_id=package_id)),
                 *self.validate_catalog_metadata(
                     entry,
                     manifest,
@@ -696,6 +720,7 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
                 "duplicateAction": "skip",
                 "validationSeverity": self.highest_severity(validation_results),
                 "validationResults": validation_results,
+                "sourceMetadata": source_metadata,
             })
         return candidates
 
@@ -704,7 +729,7 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
         source_root: Path,
         entry: dict[str, Any],
         package_id: str,
-    ) -> tuple[Path | None, str, list[dict[str, Any]]]:
+    ) -> tuple[Path | None, str, list[dict[str, Any]], dict[str, Any]]:
         raw_source = entry.get("source")
         if isinstance(raw_source, str) and raw_source.strip():
             source_value = raw_source.strip()
@@ -716,26 +741,32 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
             if source_type == "local" and isinstance(path_value, str) and path_value.strip():
                 source_value = path_value.strip()
             else:
-                source_value = (
+                url = (
                     str(url_value).strip()
                     if isinstance(url_value, str) and url_value.strip()
-                    else str(repo_value).strip()
+                    else self.github_repo_url(str(repo_value).strip())
                     if isinstance(repo_value, str) and repo_value.strip()
                     else source_type
                     if source_type
                     else f"./plugins/{package_id}"
                 )
-                if isinstance(path_value, str) and path_value.strip():
-                    source_value = f"{source_value}:{path_value.strip()}"
-                return None, source_value, [
-                    self.unsupported_nested_source_result(package_id, source_value),
-                ]
+                path = path_value.strip() if isinstance(path_value, str) and path_value.strip() else None
+                ref = raw_source.get("ref")
+                sha = raw_source.get("sha")
+                return None, self.remote_source_path(url, path), [], self.remote_source_metadata(
+                    source_type=source_type or "url",
+                    url=url,
+                    path=path,
+                    ref=ref.strip() if isinstance(ref, str) and ref.strip() else None,
+                    sha=sha.strip() if isinstance(sha, str) and sha.strip() else None,
+                )
         else:
             source_value = f"./plugins/{package_id}"
         if self.is_remote_source_value(source_value):
-            return None, source_value, [
-                self.unsupported_nested_source_result(package_id, source_value),
-            ]
+            return None, source_value, [], self.remote_source_metadata(
+                source_type="url",
+                url=source_value,
+            )
         source_path = Path(source_value)
         candidate = (source_root / source_path).resolve()
         try:
@@ -745,12 +776,12 @@ class ClaudeCodeMarketplaceAdapter(MarketplaceManifestAdapter):
                 code="marketplace.validation.path_escape",
                 file_path=source_value,
                 details={"packageId": package_id},
-            )]
+            )], {}
         try:
             relative_source = candidate.relative_to(source_root.resolve()).as_posix()
         except ValueError:
             relative_source = source_value
-        return candidate, relative_source, []
+        return candidate, relative_source, [], {}
 
     def create_package(self, package_path: Path, request: MarketplacePackageCreateRequest) -> None:
         (package_path / ".claude-plugin").mkdir(parents=True, exist_ok=True)
@@ -814,6 +845,29 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
         manifest_path = source_root / self.marketplace_manifest
         data = self.read_json(manifest_path)
         entries = data.get("plugins") if isinstance(data.get("plugins"), list) else []
+        if not entries and self.manifest_path(source_root).exists():
+            manifest = self.read_manifest(source_root)
+            package_id = str(manifest.get("name") or source_root.name).strip()
+            if not package_id:
+                return []
+            validation_results = self.validate_package(source_root, package_id=package_id)
+            return [{
+                "id": f"{self.provider}:{package_id}",
+                "provider": self.provider,
+                "packageId": package_id,
+                "displayName": str(
+                    manifest.get("displayName")
+                    or manifest.get("display_name")
+                    or manifest.get("name")
+                    or package_id
+                ),
+                "sourcePath": ".",
+                "duplicate": False,
+                "duplicateAction": "skip",
+                "validationSeverity": self.highest_severity(validation_results),
+                "validationResults": validation_results,
+                "sourceMetadata": {},
+            }]
         candidates: list[dict[str, Any]] = []
         for entry in entries:
             if not isinstance(entry, dict):
@@ -821,7 +875,7 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
             package_id = str(entry.get("name") or "").strip()
             if not package_id:
                 continue
-            package_path, source_path, source_results = self.resolve_external_package_source(
+            package_path, source_path, source_results, source_metadata = self.resolve_external_package_source(
                 source_root,
                 entry,
                 package_id,
@@ -829,7 +883,7 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
             manifest = self.read_manifest(package_path) if package_path is not None else {}
             validation_results = [
                 *source_results,
-                *([] if package_path is None else self.validate_package(package_path)),
+                *([] if package_path is None else self.validate_package(package_path, package_id=package_id)),
                 *self.validate_catalog_metadata(
                     entry,
                     manifest,
@@ -854,6 +908,7 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
                 "duplicateAction": "skip",
                 "validationSeverity": self.highest_severity(validation_results),
                 "validationResults": validation_results,
+                "sourceMetadata": source_metadata,
             })
         return candidates
 
@@ -862,7 +917,7 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
         source_root: Path,
         entry: dict[str, Any],
         package_id: str,
-    ) -> tuple[Path | None, str, list[dict[str, Any]]]:
+    ) -> tuple[Path | None, str, list[dict[str, Any]], dict[str, Any]]:
         raw_source = entry.get("source")
         source_value = f"./plugins/{package_id}"
         if isinstance(raw_source, str) and raw_source.strip():
@@ -870,17 +925,35 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
         elif isinstance(raw_source, dict):
             raw_source_type = raw_source.get("source")
             if isinstance(raw_source_type, str) and raw_source_type.strip() and raw_source_type.strip() != "local":
-                source_value = raw_source_type.strip()
-                return None, source_value, [
-                    self.unsupported_nested_source_result(package_id, source_value),
-                ]
+                source_type = raw_source_type.strip()
+                raw_url = raw_source.get("url")
+                raw_repo = raw_source.get("repo")
+                url = (
+                    raw_url.strip()
+                    if isinstance(raw_url, str) and raw_url.strip()
+                    else self.github_repo_url(raw_repo)
+                    if isinstance(raw_repo, str) and raw_repo.strip()
+                    else source_type
+                )
+                raw_path = raw_source.get("path")
+                path = raw_path.strip() if isinstance(raw_path, str) and raw_path.strip() else None
+                raw_ref = raw_source.get("ref")
+                raw_sha = raw_source.get("sha")
+                return None, self.remote_source_path(url, path), [], self.remote_source_metadata(
+                    source_type=source_type,
+                    url=url,
+                    path=path,
+                    ref=raw_ref.strip() if isinstance(raw_ref, str) and raw_ref.strip() else None,
+                    sha=raw_sha.strip() if isinstance(raw_sha, str) and raw_sha.strip() else None,
+                )
             raw_path = raw_source.get("path")
             if isinstance(raw_path, str) and raw_path.strip():
                 source_value = raw_path.strip()
         if self.is_remote_source_value(source_value):
-            return None, source_value, [
-                self.unsupported_nested_source_result(package_id, source_value),
-            ]
+            return None, source_value, [], self.remote_source_metadata(
+                source_type="url",
+                url=source_value,
+            )
         source_path = Path(source_value)
         candidate = (source_root / source_path).resolve()
         try:
@@ -890,12 +963,35 @@ class CodexMarketplaceAdapter(MarketplaceManifestAdapter):
                 code="marketplace.validation.path_escape",
                 file_path=source_value,
                 details={"packageId": package_id},
-            )]
+            )], {}
         try:
             relative_source = candidate.relative_to(source_root.resolve()).as_posix()
         except ValueError:
             relative_source = source_value
-        return candidate, relative_source, []
+        return candidate, relative_source, [], {}
+
+    def import_listing_entry(
+        self,
+        source_root: Path,
+        source_package_id: str,
+        target_package_id: str,
+    ) -> dict[str, Any] | None:
+        listing = super().import_listing_entry(source_root, source_package_id, target_package_id)
+        if listing is not None:
+            return listing
+        manifest_path = self.manifest_path(source_root)
+        if not manifest_path.exists():
+            return None
+        manifest = self.read_json(manifest_path)
+        return {
+            "name": target_package_id,
+            "description": self.string_or_none(manifest.get("description")),
+            "version": self.string_or_none(manifest.get("version")),
+            "source": {
+                "source": "local",
+                "path": f"./plugins/{target_package_id}",
+            },
+        }
 
     def create_package(self, package_path: Path, request: MarketplacePackageCreateRequest) -> None:
         (package_path / ".codex-plugin").mkdir(parents=True, exist_ok=True)
@@ -951,7 +1047,7 @@ class GeminiExtensionAdapter(BaseMarketplaceProviderAdapter):
 
     provider: MarketplaceProvider = "gemini"
     package_type = "extension"
-    manifest_required_fields = ("name", "version", "description")
+    manifest_required_fields = ("name", "version")
 
     def ensure_roots(self, registry_root: Path) -> None:
         (registry_root / self.provider / "extensions").mkdir(parents=True, exist_ok=True)
@@ -1072,6 +1168,7 @@ class GeminiExtensionAdapter(BaseMarketplaceProviderAdapter):
             "extensions",
             "install",
             str(package_path),
+            "--consent",
         ]
         if preflight.capabilities.supports_user_scope:
             argv.append("--user")
@@ -1079,7 +1176,10 @@ class GeminiExtensionAdapter(BaseMarketplaceProviderAdapter):
             provider=self.provider,
             argv=argv,
             cwd=package_path.parent,
-            env={"WORKSPACE_ID": workspace_id},
+            env={
+                "WORKSPACE_ID": workspace_id,
+                "GEMINI_CLI_TRUST_WORKSPACE": "true",
+            },
         )
 
 
