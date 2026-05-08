@@ -27,6 +27,13 @@ const mockPackage: MarketplacePackageSummary = {
   registryPath: 'codex/plugins/figma-context',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
+  variants: [{
+    provider: 'codex',
+    packageId: 'figma-context',
+    displayName: 'Figma Context',
+    registryPath: 'codex/plugins/figma-context',
+    revision: 'rev-1',
+  }],
 };
 
 const mockListResult: MarketplaceListResult = {
@@ -137,6 +144,8 @@ describe('MarketplaceCenterView', () => {
         sourcePath: 'plugins/review-assistant',
         duplicate: false,
         duplicateAction: 'skip',
+        variantStatus: 'new-family',
+        variants: [],
         validationSeverity: 'warning',
         validationResults: [{
           severity: 'warning',
@@ -153,6 +162,12 @@ describe('MarketplaceCenterView', () => {
         duplicate: true,
         duplicateAction: 'skip',
         newPackageId: 'existing-package-copy',
+        variantStatus: 'duplicate-variant',
+        variants: [{
+          provider: 'claude-code',
+          packageId: 'existing-package',
+          displayName: 'Existing Package',
+        }],
         validationSeverity: 'warning',
         validationResults: [{
           severity: 'warning',
@@ -404,6 +419,8 @@ describe('MarketplaceCenterView', () => {
 
     expect(await screen.findByText('Review Assistant')).toBeInTheDocument();
     expect(screen.getByText('Existing Package')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.import.variantStatuses.new-family')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.import.variantStatuses.duplicate-variant')).toBeInTheDocument();
     expect(screen.getByText('marketplace.import.candidates.duplicate')).toBeInTheDocument();
     expect(screen.queryByText('marketplace.validation.metadata_conflict')).not.toBeInTheDocument();
     expect(screen.getByText('marketplace.import.validation.duplicate')).toBeInTheDocument();
@@ -421,7 +438,7 @@ describe('MarketplaceCenterView', () => {
 
     await waitFor(() => {
       expect(mockScanImportSource).toHaveBeenCalledWith(expect.objectContaining({
-        provider: 'claude-code',
+        provider: 'all',
         sourceKind: 'git',
       }));
       expect(mockScanImportSource).toHaveBeenCalledWith(expect.not.objectContaining({
@@ -543,6 +560,8 @@ describe('MarketplaceCenterView', () => {
         sourcePath: 'plugins/review-assistant',
         duplicate: false,
         duplicateAction: 'skip',
+        variantStatus: 'new-family',
+        variants: [],
         validationSeverity: 'none',
         validationResults: [],
         errorCode: 'marketplace.validation.required_manifest_missing',

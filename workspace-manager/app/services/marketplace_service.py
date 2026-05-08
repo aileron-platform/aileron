@@ -59,11 +59,15 @@ from app.models.marketplace import (
     MarketplacePackageDeleteRequest,
     MarketplacePackageDeleteResult,
     MarketplacePackageDetail,
+    MarketplacePackageFamiliesDocument,
+    MarketplacePackageFamily,
+    MarketplacePackageFamilySource,
     MarketplacePackageFile,
     MarketplacePackageListResult,
     MarketplacePackageSaveRequest,
     MarketplacePackageSaveResult,
     MarketplacePackageSummary,
+    MarketplaceProviderVariant,
     MarketplaceRegistryInitResult,
     MarketplaceRegistryCloneRequest,
     MarketplaceRegistryGitOperationResult,
@@ -533,34 +537,159 @@ class MarketplaceService:
     ) -> list[MarketplaceImportCandidate]:
         """Validate an external import source before provider-native scanning."""
         metadata = self.validate_import_source(user_id, source)
-        adapter = self._get_adapter(source.provider)
         with self._prepared_import_source_root(source, metadata) as source_root:
-            try:
-                candidates = adapter.scan_external_source(source_root)
-            except NotImplementedError:
-                return []
-        return [
-            self._with_duplicate_import_state(user_id, MarketplaceImportCandidate.model_validate(candidate))
+            candidates = self._scan_import_candidates(source, source_root)
+        enriched = [
+            self._with_duplicate_import_state(
+                user_id,
+                MarketplaceImportCandidate.model_validate(candidate),
+                source,
+                metadata,
+            )
             for candidate in candidates
         ]
+        return self._with_batch_variant_metadata(source, metadata, enriched)
+
+    def _scan_import_candidates(
+        self,
+        source: MarketplaceImportSource,
+        source_root: Path,
+    ) -> list[dict[str, Any]]:
+        providers = list(self.adapters) if source.provider == "all" else [source.provider]
+        candidates: list[dict[str, Any]] = []
+        for provider in providers:
+            adapter = self._get_adapter(provider)
+            try:
+                candidates.extend(adapter.scan_external_source(source_root))
+            except NotImplementedError:
+                continue
+        return candidates
 
     def _with_duplicate_import_state(
         self,
         user_id: str,
         candidate: MarketplaceImportCandidate,
+        source: MarketplaceImportSource | None = None,
+        import_metadata: dict[str, Any] | None = None,
     ) -> MarketplaceImportCandidate:
+        root = self.get_registry_root(user_id)
+        source_identity = candidate.source_identity
+        family: MarketplacePackageFamily | None = None
+        if source is not None:
+            source_identity = self._source_identity_for_import(source, import_metadata or {})
+            family = self._find_family_by_source_identity(root, source_identity)
+        if family is None and source_identity:
+            family = self._find_family_by_source_identity(root, source_identity)
+
         try:
             package_path = self.resolve_package_path(user_id, candidate.provider, candidate.package_id)
         except MarketplacePathError:
             return candidate
-        if not package_path.exists():
-            return candidate
+        existing_same_variant = package_path.exists()
+        unrelated_duplicate = False
+        if existing_same_variant and family is not None:
+            unrelated_duplicate = not any(
+                variant.provider == candidate.provider and variant.package_id == candidate.package_id
+                for variant in family.variants
+            )
+        variant_status = self._candidate_variant_status(
+            candidate,
+            family,
+            existing_same_variant=existing_same_variant,
+            unrelated_duplicate=unrelated_duplicate,
+        )
+        family_updates: dict[str, Any] = {
+            "source_identity": source_identity,
+            "variant_status": variant_status,
+        }
+        if family is not None:
+            family_updates.update({
+                "family_id": family.family_id,
+                "family_display_name": family.display_name,
+                "variants": family.variants,
+            })
+        if not existing_same_variant:
+            return candidate.model_copy(update=family_updates)
         detail = self.get_package_detail(user_id, candidate.provider, candidate.package_id)
         return candidate.model_copy(update={
+            **family_updates,
             "duplicate": True,
             "duplicate_action": "skip",
             "local_revision": detail.revision if detail else None,
         })
+
+    def _with_batch_variant_metadata(
+        self,
+        source: MarketplaceImportSource,
+        import_metadata: dict[str, Any],
+        candidates: list[MarketplaceImportCandidate],
+    ) -> list[MarketplaceImportCandidate]:
+        source_identity = self._source_identity_for_import(source, import_metadata)
+        if not source_identity:
+            return candidates
+
+        peer_variants: list[MarketplaceProviderVariant] = []
+        seen: set[tuple[str, str]] = set()
+        for candidate in candidates:
+            key = (candidate.provider, candidate.package_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            peer_variants.append(MarketplaceProviderVariant(
+                provider=candidate.provider,
+                package_id=candidate.package_id,
+                display_name=candidate.display_name,
+            ))
+        if len(peer_variants) <= 1:
+            return candidates
+
+        family_display_name = next(
+            (candidate.family_display_name for candidate in candidates if candidate.family_display_name),
+            candidates[0].display_name if candidates else source_identity,
+        )
+        merged: list[MarketplaceImportCandidate] = []
+        for candidate in candidates:
+            variants = self._merge_provider_variants(candidate.variants, peer_variants)
+            merged.append(candidate.model_copy(update={
+                "family_id": candidate.family_id or source_identity,
+                "family_display_name": candidate.family_display_name or family_display_name,
+                "source_identity": candidate.source_identity or source_identity,
+                "variants": variants,
+            }))
+        return merged
+
+    def _merge_provider_variants(
+        self,
+        existing: list[MarketplaceProviderVariant],
+        incoming: list[MarketplaceProviderVariant],
+    ) -> list[MarketplaceProviderVariant]:
+        merged: list[MarketplaceProviderVariant] = []
+        seen: set[tuple[str, str]] = set()
+        for variant in [*existing, *incoming]:
+            key = (variant.provider, variant.package_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(variant)
+        return merged
+
+    def _candidate_variant_status(
+        self,
+        candidate: MarketplaceImportCandidate,
+        family: MarketplacePackageFamily | None,
+        *,
+        existing_same_variant: bool,
+        unrelated_duplicate: bool,
+    ) -> str:
+        if candidate.validation_severity == "error":
+            return "invalid"
+        if unrelated_duplicate:
+            return "unrelated-duplicate"
+        if existing_same_variant:
+            return "duplicate-variant"
+        if family is not None:
+            return "add-variant"
+        return "new-family"
 
     def import_candidates(
         self,
@@ -576,14 +705,16 @@ class MarketplaceService:
         metadata = self.validate_import_source(user_id, request.source)
         with self._registry_lock:
             with self._prepared_import_source_root(request.source, metadata) as source_root:
-                adapter = self._get_adapter(request.source.provider)
                 scanned = [
                     self._with_duplicate_import_state(
                         user_id,
                         MarketplaceImportCandidate.model_validate(candidate),
+                        request.source,
+                        metadata,
                     )
-                    for candidate in adapter.scan_external_source(source_root)
+                    for candidate in self._scan_import_candidates(request.source, source_root)
                 ]
+                scanned = self._with_batch_variant_metadata(request.source, metadata, scanned)
                 scanned_by_key = {
                     self._import_candidate_key(candidate): candidate
                     for candidate in scanned
@@ -624,6 +755,7 @@ class MarketplaceService:
                         ))
         if imported:
             self.invalidate_package_index(user_id)
+            imported = self._with_family_metadata(self.get_registry_root(user_id), imported)
         if imported and not failed:
             self.record_activity(user_id, action="import", status="success")
         elif failed:
@@ -697,6 +829,7 @@ class MarketplaceService:
         staging_path = staging_root / target_package_id
         backup_path = target_parent / f".backup-{uuid4().hex}"
         manifest_backup = self._provider_manifest_backup(registry_root, adapter)
+        family_backup = self._package_families_backup(registry_root)
         promoted = False
         backup_created = False
         try:
@@ -722,6 +855,13 @@ class MarketplaceService:
             )
             if listing is not None:
                 adapter.upsert_listing_entry(registry_root, target_package_id, listing)
+            self._upsert_import_family_variant(
+                registry_root,
+                source,
+                candidate,
+                target_package_id,
+                str(target_package_path.relative_to(registry_root)),
+            )
             if backup_created:
                 shutil.rmtree(backup_path)
             if staging_root.exists():
@@ -732,6 +872,7 @@ class MarketplaceService:
                 staging_path,
                 backup_path,
                 manifest_backup,
+                family_backup,
                 promoted,
                 backup_created,
             )
@@ -742,6 +883,7 @@ class MarketplaceService:
                 staging_path,
                 backup_path,
                 manifest_backup,
+                family_backup,
                 promoted,
                 backup_created,
             )
@@ -754,6 +896,43 @@ class MarketplaceService:
         if detail is None:
             raise MarketplaceImportSourceError("marketplace.package.not_found")
         return MarketplacePackageSummary.model_validate(detail.model_dump(by_alias=True))
+
+    def _upsert_import_family_variant(
+        self,
+        registry_root: Path,
+        source: MarketplaceImportSource,
+        candidate: MarketplaceImportCandidate,
+        target_package_id: str,
+        registry_path: str,
+    ) -> None:
+        source_identity = candidate.source_identity or self._source_identity_for_import(source, {})
+        document = self._read_package_families(registry_root)
+        family = next((item for item in document.families if item.family_id == source_identity), None)
+        if family is None:
+            family = MarketplacePackageFamily(
+                familyId=source_identity,
+                displayName=candidate.family_display_name or candidate.display_name,
+                source=MarketplacePackageFamilySource(
+                    kind=source.source_kind,
+                    source=source.source.strip(),
+                    normalizedUrl=source_identity,
+                ),
+                variants=[],
+            )
+            document.families.append(family)
+        next_variants = [
+            variant
+            for variant in family.variants
+            if not (variant.provider == candidate.provider and variant.package_id == target_package_id)
+        ]
+        next_variants.append(MarketplaceProviderVariant(
+            provider=candidate.provider,
+            packageId=target_package_id,
+            registryPath=registry_path,
+            displayName=candidate.display_name,
+        ))
+        family.variants = sorted(next_variants, key=lambda item: (item.provider, item.package_id))
+        self._write_package_families(registry_root, document)
 
     def _target_import_package_id(self, candidate: MarketplaceImportCandidate) -> str:
         if candidate.duplicate_action != "import-as-new":
@@ -948,13 +1127,15 @@ class MarketplaceService:
         manifest = self._read_json(manifest_path)
         manifest["sourceType"] = "imported"
         manifest["importSource"] = {
-            "provider": source.provider,
+            "provider": candidate.provider,
+            "scanProvider": source.provider,
             "sourceKind": source.source_kind,
             "source": source.source,
             "packageId": candidate.package_id,
             "targetPackageId": target_package_id,
             "sourcePath": candidate.source_path,
             "sourceMetadata": candidate.source_metadata,
+            "sourceIdentity": candidate.source_identity or self._source_identity_for_import(source, {}),
             "importedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
         self._atomic_write_json(manifest_path, manifest)
@@ -970,12 +1151,19 @@ class MarketplaceService:
             return None
         return (manifest_path, self._read_json(manifest_path))
 
+    def _package_families_backup(self, registry_root: Path) -> tuple[Path, dict[str, Any] | None]:
+        path = self._package_families_path(registry_root)
+        if not path.exists():
+            return (path, None)
+        return (path, self._read_json(path))
+
     def _rollback_import_candidate(
         self,
         target_path: Path,
         staging_path: Path,
         backup_path: Path,
         manifest_backup: tuple[Path, dict[str, Any]] | None,
+        family_backup: tuple[Path, dict[str, Any] | None] | None,
         promoted: bool,
         backup_created: bool,
     ) -> None:
@@ -990,6 +1178,12 @@ class MarketplaceService:
             backup_path.rename(target_path)
         if manifest_backup is not None:
             self._atomic_write_json(manifest_backup[0], manifest_backup[1])
+        if family_backup is not None:
+            path, data = family_backup
+            if data is None:
+                path.unlink(missing_ok=True)
+            else:
+                self._atomic_write_json(path, data)
 
     def validate_import_source(self, user_id: str, source: MarketplaceImportSource) -> dict[str, Any]:
         """Validate import source safety boundaries and return resolved source metadata."""
@@ -1946,13 +2140,178 @@ class MarketplaceService:
         packages: list[MarketplacePackageSummary] = []
         for adapter in self.adapters.values():
             packages.extend(adapter.scan_registry(root))
+        packages = self._with_family_metadata(root, packages)
         return sorted(packages, key=lambda item: (item.provider, item.package_id))
+
+    def _with_family_metadata(
+        self,
+        root: Path,
+        packages: list[MarketplacePackageSummary],
+    ) -> list[MarketplacePackageSummary]:
+        document = self._read_package_families(root)
+        inferred = self._infer_imported_families(root, packages, document)
+        families = {family.family_id: family for family in [*document.families, *inferred]}
+        by_variant: dict[tuple[str, str], MarketplacePackageFamily] = {}
+        for family in families.values():
+            for variant in family.variants:
+                by_variant[(variant.provider, variant.package_id)] = family
+        enriched: list[MarketplacePackageSummary] = []
+        for item in packages:
+            family = by_variant.get((item.provider, item.package_id))
+            if family is None:
+                enriched.append(item)
+                continue
+            enriched.append(item.model_copy(update={
+                "family_id": family.family_id,
+                "family_display_name": family.display_name,
+                "source_identity": family.source.normalized_url or family.source.source,
+                "variants": family.variants,
+            }))
+        return enriched
+
+    def _infer_imported_families(
+        self,
+        root: Path,
+        packages: list[MarketplacePackageSummary],
+        existing: MarketplacePackageFamiliesDocument,
+    ) -> list[MarketplacePackageFamily]:
+        existing_ids = {family.family_id for family in existing.families}
+        grouped: dict[str, MarketplacePackageFamily] = {}
+        for item in packages:
+            if item.source_type != "imported":
+                continue
+            adapter = self._get_adapter(item.provider)
+            package_path = adapter.package_path(root, item.package_id)
+            manifest = adapter.read_manifest(package_path)  # type: ignore[attr-defined]
+            import_source = manifest.get("importSource")
+            if not isinstance(import_source, dict):
+                continue
+            source_kind = str(import_source.get("sourceKind") or "git")
+            source_value = str(import_source.get("source") or "").strip()
+            if source_kind not in {"git", "local"} or not source_value:
+                continue
+            source = MarketplaceImportSource(
+                provider=item.provider,
+                sourceKind=source_kind,
+                source=source_value,
+            )
+            source_identity = self._source_identity_for_import(source, {})
+            if not source_identity or source_identity in existing_ids:
+                continue
+            family = grouped.get(source_identity)
+            if family is None:
+                family = MarketplacePackageFamily(
+                    familyId=source_identity,
+                    displayName=item.display_name,
+                    source=MarketplacePackageFamilySource(
+                        kind=source.source_kind,
+                        source=source.source,
+                        normalizedUrl=source_identity,
+                    ),
+                    variants=[],
+                )
+                grouped[source_identity] = family
+            family.variants.append(self._variant_for_summary(item))
+        return list(grouped.values())
+
+    def _variant_for_summary(self, item: MarketplacePackageSummary) -> MarketplaceProviderVariant:
+        return MarketplaceProviderVariant(
+            provider=item.provider,
+            packageId=item.package_id,
+            registryPath=item.registry_path,
+            displayName=item.display_name,
+        )
 
     def _activity_log_path(self, root: Path) -> Path:
         return root / ".marketplace" / "activity.jsonl"
 
     def _install_intents_path(self, root: Path) -> Path:
         return root / ".marketplace" / "install-intents.jsonl"
+
+    def _package_families_path(self, root: Path) -> Path:
+        return root / ".marketplace" / "package-families.json"
+
+    def _read_package_families(self, root: Path) -> MarketplacePackageFamiliesDocument:
+        path = self._package_families_path(root)
+        if not path.exists():
+            return MarketplacePackageFamiliesDocument()
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return MarketplacePackageFamiliesDocument()
+        try:
+            document = MarketplacePackageFamiliesDocument.model_validate(data)
+        except ValueError:
+            return MarketplacePackageFamiliesDocument()
+        return self._validated_package_families(root, document)
+
+    def _write_package_families(self, root: Path, document: MarketplacePackageFamiliesDocument) -> None:
+        document = self._validated_package_families(root, document)
+        path = self._package_families_path(root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._atomic_write_json(path, document.model_dump(by_alias=True))
+
+    def _validated_package_families(
+        self,
+        root: Path,
+        document: MarketplacePackageFamiliesDocument,
+    ) -> MarketplacePackageFamiliesDocument:
+        families: list[MarketplacePackageFamily] = []
+        seen_family_ids: set[str] = set()
+        for family in document.families:
+            if not family.family_id or family.family_id in seen_family_ids:
+                continue
+            seen_family_ids.add(family.family_id)
+            variants: list[MarketplaceProviderVariant] = []
+            seen_variants: set[tuple[str, str]] = set()
+            for variant in family.variants:
+                key = (variant.provider, variant.package_id)
+                if key in seen_variants:
+                    continue
+                seen_variants.add(key)
+                try:
+                    package_path = self._get_adapter(variant.provider).package_path(root, variant.package_id)
+                    self._assert_relative_to(package_path, root)
+                except (MarketplacePathError, ValueError):
+                    continue
+                registry_path = variant.registry_path or str(package_path.relative_to(root))
+                variants.append(variant.model_copy(update={"registry_path": registry_path}))
+            families.append(family.model_copy(update={"variants": variants}))
+        return MarketplacePackageFamiliesDocument(families=families)
+
+    def _find_family_by_source_identity(self, root: Path, source_identity: str | None) -> MarketplacePackageFamily | None:
+        if not source_identity:
+            return None
+        for family in self._read_package_families(root).families:
+            if family.family_id == source_identity or family.source.normalized_url == source_identity:
+                return family
+        return None
+
+    def _source_identity_for_import(
+        self,
+        source: MarketplaceImportSource,
+        import_metadata: dict[str, Any] | None = None,
+    ) -> str:
+        if source.source_kind == "git":
+            return self._normalize_git_source_identity(source.source)
+        root = import_metadata.get("sourceRoot") if import_metadata else None
+        return f"local:{root or source.source.strip()}"
+
+    def _normalize_git_source_identity(self, source: str) -> str:
+        value = source.strip()
+        scp_like = self._git_scp_like_pattern.match(value)
+        if scp_like:
+            host = scp_like.group("host").lower()
+            repo_path = scp_like.group("path")
+        else:
+            parsed = urlparse(value)
+            host = (parsed.hostname or parsed.netloc).lower()
+            repo_path = parsed.path
+        repo_path = repo_path.strip().lstrip("/")
+        if repo_path.endswith(".git"):
+            repo_path = repo_path[:-4]
+        repo_path = repo_path.rstrip("/")
+        return f"{host}/{repo_path}" if host and repo_path else value
 
     def _registry_ssh_key_path(self, root: Path) -> Path:
         return root / ".marketplace" / "registry-ssh-key.json"
@@ -2656,13 +3015,15 @@ class MarketplaceService:
             raise MarketplaceImportSourceError("marketplace.import.validation.raw_private_key_unsupported")
 
     def _parse_git_import_source(self, source: str) -> dict[str, str]:
-        if not source.strip():
+        source = source.strip()
+        if not source:
             raise MarketplaceImportSourceError("marketplace.import.validation.source_required")
         scp_like = self._git_scp_like_pattern.match(source)
         if scp_like:
             return {
                 "scheme": "ssh",
                 "host": scp_like.group("host").lower(),
+                "path": scp_like.group("path").strip().rstrip("/"),
             }
         parsed = urlparse(source)
         scheme = parsed.scheme.lower()
@@ -2675,6 +3036,7 @@ class MarketplaceService:
         return {
             "scheme": scheme,
             "host": (parsed.hostname or "").lower(),
+            "path": parsed.path.strip().rstrip("/"),
         }
 
     def _reject_https_token_source(self, source: str) -> None:

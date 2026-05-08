@@ -64,6 +64,10 @@ interface PluginSkillResponse {
   skillPath: string;
 }
 
+interface PluginSkillsResponse {
+  plugins: PluginSkillResponse[];
+}
+
 interface CodexFileSummaryResponse {
   name: string;
   path: string;
@@ -308,10 +312,10 @@ export const slashCommandApi = {
             continue;
           }
 
-          const pluginSkills = await client.get<PluginSkillResponse[]>(
+          const pluginSkills = await client.get<PluginSkillsResponse>(
             `/api/v1/workspaces/${workspaceId}/${apiPrefix}/skills/plugins`,
           );
-          skillItems.push(...pluginSkills.map((skill) => mapPluginSkillToItem(scope, skill)));
+          skillItems.push(...pluginSkills.plugins.map((skill) => mapPluginSkillToItem(scope, skill)));
           continue;
         }
 

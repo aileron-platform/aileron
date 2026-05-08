@@ -1,10 +1,19 @@
 export type MarketplaceProvider = 'claude-code' | 'codex' | 'gemini';
 
+export type MarketplaceImportProvider = MarketplaceProvider | 'all';
+
 export type MarketplacePackageType = 'plugin' | 'extension';
 
 export type MarketplaceValidationSeverity = 'error' | 'warning' | 'info' | 'none';
 
 export type MarketplaceSourceType = 'created' | 'imported' | 'cloned';
+
+export type MarketplaceImportVariantStatus =
+  | 'new-family'
+  | 'add-variant'
+  | 'duplicate-variant'
+  | 'unrelated-duplicate'
+  | 'invalid';
 
 export type MarketplaceFeatureKey = 'mcp' | 'commands' | 'hooks' | 'agentsMd' | 'agents' | 'outputStyle' | 'skills';
 
@@ -26,6 +35,16 @@ export interface MarketplaceValidationResult {
   code: string;
   messageKey: string;
   filePath?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface MarketplaceProviderVariant {
+  provider: MarketplaceProvider;
+  packageId: string;
+  displayName: string;
+  registryPath?: string;
+  revision?: string;
+  importedAt?: string;
 }
 
 export interface MarketplacePackageSummary {
@@ -43,6 +62,10 @@ export interface MarketplacePackageSummary {
   registryPath: string;
   revision: string;
   updatedAt: string;
+  familyId?: string;
+  familyDisplayName?: string;
+  sourceIdentity?: string;
+  variants: MarketplaceProviderVariant[];
 }
 
 export interface MarketplaceFeatureContentItem {
@@ -196,7 +219,7 @@ export interface MarketplaceInstallResult {
 }
 
 export interface MarketplaceImportSource {
-  provider: MarketplaceProvider;
+  provider: MarketplaceImportProvider;
   sourceKind: 'git' | 'local';
   source: string;
 }
@@ -211,12 +234,17 @@ export interface MarketplaceImportCandidate {
   provider: MarketplaceProvider;
   packageId: string;
   displayName: string;
+  familyId?: string;
+  familyDisplayName?: string;
+  sourceIdentity?: string;
   sourcePath: string;
   sourceMetadata?: Record<string, unknown>;
   duplicate: boolean;
   duplicateAction: 'skip' | 'overwrite' | 'import-as-new';
   newPackageId?: string;
   localRevision?: string;
+  variantStatus: MarketplaceImportVariantStatus;
+  variants: MarketplaceProviderVariant[];
   validationSeverity: MarketplaceValidationSeverity;
   validationResults: MarketplaceValidationResult[];
 }

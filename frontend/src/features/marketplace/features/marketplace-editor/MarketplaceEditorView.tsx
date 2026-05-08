@@ -73,7 +73,6 @@ import {
   FileRenameDialog,
   FileTreeContextMenu,
   FileTreePanel,
-  getAllDirectoryNodes,
   useFileTreeContextMenu,
   useFileTreeState,
   type FileTreeNode,
@@ -2222,7 +2221,7 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
   const firstFilePath = React.useMemo(() => marketplaceFindFirstFilePath(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
     initialNodes,
-    initialExpandedIds: marketplaceDirectoryPaths(initialNodes),
+    initialExpandedIds: [],
     initialSelectedId: firstFilePath,
     enableMultiSelect: true,
   });
@@ -3132,10 +3131,9 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
   const { t } = useI18n();
   const packageRootPath = `/${packageRoot}`;
   const initialSelectedPath = React.useMemo(() => marketplaceFindFirstFilePath(initialNodes), [initialNodes]);
-  const initialExpandedIds = React.useMemo(() => marketplaceDirectoryPaths(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
     initialNodes,
-    initialExpandedIds,
+    initialExpandedIds: [],
     initialSelectedId: initialSelectedPath,
     enableMultiSelect: true,
   });
@@ -4683,10 +4681,6 @@ const marketplacePackageFilesFromTree = (
 
   walk(nodes);
   return files;
-};
-
-const marketplaceDirectoryPaths = (nodes: FileTreeNode[]): string[] => {
-  return getAllDirectoryNodes(nodes).map(node => node.path);
 };
 
 const marketplaceFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {

@@ -26,6 +26,19 @@ const packageItem: MarketplacePackageSummary = {
   registryPath: 'gemini/extensions/workspace-tools',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
+  variants: [{
+    provider: 'gemini',
+    packageId: 'workspace-tools',
+    displayName: 'Workspace Tools',
+    registryPath: 'gemini/extensions/workspace-tools',
+    revision: 'rev-1',
+  }, {
+    provider: 'codex',
+    packageId: 'workspace-tools',
+    displayName: 'Workspace Tools',
+    registryPath: 'codex/plugins/workspace-tools',
+    revision: 'rev-2',
+  }],
 };
 
 describe('MarketplacePackageCard', () => {
@@ -49,6 +62,8 @@ describe('MarketplacePackageCard', () => {
     );
 
     expect(screen.getByText('marketplace.features.geminiMd')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.providers.gemini')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.providers.codex')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.hooks')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.mcp')).toBeInTheDocument();
     expect(screen.getByText('marketplace.features.subagents')).toBeInTheDocument();

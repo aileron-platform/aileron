@@ -11,7 +11,7 @@ import pytest
 from app.modules.claude_code.file_collections.service import FileCollectionService
 from app.modules.claude_code.file_collections.models import FileCollectionType, FileType
 from app.modules.claude_code.common import DocumentScope
-from app.modules.file_system import InvalidScopeException
+from app.modules.file_system import FileTreeResponse, InvalidScopeException
 
 
 @pytest.fixture
@@ -246,7 +246,7 @@ class TestGetPluginSkills:
         """Test getting empty plugin skills."""
         # Arrange
         mock_loader = MagicMock()
-        mock_loader.get_all_skills.return_value = []
+        mock_loader.load_plugin_skills.return_value = []
         file_collection_service.plugin_loader = mock_loader
 
         # Act
@@ -259,7 +259,7 @@ class TestGetPluginSkills:
         """Test getting plugin skills with data."""
         # Arrange
         mock_loader = MagicMock()
-        mock_loader.get_all_skills.return_value = []
+        mock_loader.load_plugin_skills.return_value = []
         file_collection_service.plugin_loader = mock_loader
 
         # Act
@@ -269,38 +269,71 @@ class TestGetPluginSkills:
         # Empty list is also a valid result
         assert result == []
 
-    @patch("app.modules.claude_code.file_collections.service.resolve_scope_root")
-    def test_get_plugin_skills_reads_markdown_and_skips_invalid_files(self, mock_resolve, file_collection_service, tmp_path):
-        plugin_root = tmp_path / "plugins"
-        skill_dir = plugin_root / "plugin-a" / "skills"
+    def test_get_plugin_skills_reads_loader_skill_directories(self, file_collection_service, tmp_path):
+        skill_dir = tmp_path / "plugin-a" / "skills" / "good"
         skill_dir.mkdir(parents=True)
-        (skill_dir / "good.md").write_text("---\ndescription: Good skill\n---\nBody", encoding="utf-8")
-        (skill_dir / "broken.md").write_bytes(b"\xff\xfe")
-        mock_resolve.return_value = plugin_root
-        file_collection_service.plugin_loader.get_installed_plugins.return_value = [
-            SimpleNamespace(name="plugin-a", version="1.0.0")
+        (skill_dir / "SKILL.md").write_text("---\ndescription: Good skill\n---\nBody", encoding="utf-8")
+        file_collection_service.plugin_loader.load_plugin_skills.return_value = [
+            SimpleNamespace(
+                directory_path=str(skill_dir),
+                plugin_name="plugin-a",
+                marketplace_name="market-a",
+                skill_name="good",
+            )
         ]
 
-        class FakePluginSkillInfo:
-            def __init__(self, **kwargs):
-                self.plugin_name = kwargs["pluginName"]
-                self.skill_name = kwargs["skillName"]
-                self.skill_path = kwargs["skillPath"]
-                self.description = kwargs["description"]
-                self.metadata = kwargs["metadata"]
-
-        with patch("app.modules.claude_code.file_collections.service.PluginSkillInfo", FakePluginSkillInfo):
-            result = file_collection_service.get_plugin_skills()
+        result = file_collection_service.get_plugin_skills()
 
         assert len(result) == 1
         assert result[0].plugin_name == "plugin-a"
+        assert result[0].marketplace_name == "market-a"
         assert result[0].skill_name == "good"
-        assert result[0].description == "Good skill"
+        assert result[0].plugin_id == "plugin-a@market-a"
 
     def test_get_plugin_skills_returns_empty_on_loader_error(self, file_collection_service):
-        file_collection_service.plugin_loader.get_installed_plugins.side_effect = RuntimeError("boom")
+        file_collection_service.plugin_loader.load_plugin_skills.side_effect = RuntimeError("boom")
 
         assert file_collection_service.get_plugin_skills() == []
+
+    def test_plugin_scope_tree_uses_enabled_plugin_skills(self, file_collection_service, tmp_path):
+        skill_dir = tmp_path / "plugin-a" / "skills" / "good"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("---\nname: Good Skill\n---\nBody", encoding="utf-8")
+        file_collection_service.plugin_loader.load_plugin_skills.return_value = [
+            SimpleNamespace(
+                directory_path=str(skill_dir),
+                plugin_name="plugin-a",
+                marketplace_name="market-a",
+                skill_name="good",
+            )
+        ]
+
+        result = file_collection_service.get_tree(scope=DocumentScope.PLUGIN)
+
+        FileTreeResponse.model_validate(result)
+        assert result["nodes"][0]["name"] == "plugin-a@market-a"
+        assert result["nodes"][0]["updatedAt"]
+        skill_node = result["nodes"][0]["children"][0]
+        assert skill_node["name"] == "good"
+        assert skill_node["updatedAt"]
+        assert skill_node["children"][0]["path"] == "/plugin-a@market-a/good/SKILL.md"
+
+    def test_plugin_scope_read_file_resolves_loader_skill_directory(self, file_collection_service, tmp_path):
+        skill_dir = tmp_path / "plugin-a" / "skills" / "good"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("Body", encoding="utf-8")
+        file_collection_service.plugin_loader.load_plugin_skills.return_value = [
+            SimpleNamespace(
+                directory_path=str(skill_dir),
+                plugin_name="plugin-a",
+                marketplace_name="market-a",
+                skill_name="good",
+            )
+        ]
+
+        result = file_collection_service.read_file("/plugin-a@market-a/good/SKILL.md", DocumentScope.PLUGIN)
+
+        assert result["content"] == "Body"
 
 
 class TestGetTreeWithMetadata:

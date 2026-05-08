@@ -56,6 +56,9 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
 }) => {
   const { t } = useI18n();
   const featureBadges = getPackageFeatures(item);
+  const siblingVariants = item.variants.filter(variant => (
+    variant.provider !== item.provider || variant.packageId !== item.packageId
+  ));
 
   return (
     <Card className="p-5 h-full flex flex-col border-border/80 hover:border-primary/60 transition-colors">
@@ -103,6 +106,13 @@ export const MarketplacePackageCard: React.FC<MarketplacePackageCardProps> = ({
       </div>
 
       <div className="mt-4 mb-5 flex flex-wrap gap-2">
+        {siblingVariants.length > 0 ? (
+          item.variants.map(variant => (
+            <Badge key={`${variant.provider}:${variant.packageId}`} variant="outline" className="text-xs">
+              {t(`marketplace.providers.${variant.provider}`)}
+            </Badge>
+          ))
+        ) : null}
         {featureBadges.map(feature => (
           <Badge key={feature} variant="secondary" className="text-xs">
             {t(getMarketplaceFeatureLabelKey(item.provider, feature))}

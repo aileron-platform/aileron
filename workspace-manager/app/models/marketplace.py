@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 
 MarketplaceProvider = Literal["claude-code", "codex", "gemini"]
+MarketplaceImportProvider = Literal["all", "claude-code", "codex", "gemini"]
 MarketplaceRegistryStatus = Literal["uninitialized", "ready", "busy", "error"]
 MarketplacePackageType = Literal["plugin", "extension"]
 MarketplaceSourceType = Literal["created", "imported", "cloned"]
@@ -16,6 +17,13 @@ MarketplaceActivityAction = Literal["import", "install", "delete"]
 MarketplaceActivityStatus = Literal["success", "failed"]
 MarketplaceImportSourceKind = Literal["git", "local"]
 MarketplaceDuplicateAction = Literal["skip", "overwrite", "import-as-new"]
+MarketplaceImportVariantStatus = Literal[
+    "new-family",
+    "add-variant",
+    "duplicate-variant",
+    "unrelated-duplicate",
+    "invalid",
+]
 MarketplaceInstallStatus = Literal[
     "success",
     "failed",
@@ -259,6 +267,46 @@ class MarketplaceValidationResult(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class MarketplacePackageFamilySource(BaseModel):
+    """External source identity for a Marketplace package family."""
+
+    kind: MarketplaceImportSourceKind
+    source: str
+    normalized_url: str | None = Field(default=None, alias="normalizedUrl")
+
+    model_config = {"populate_by_name": True}
+
+
+class MarketplaceProviderVariant(BaseModel):
+    """Provider-native package variant that belongs to a package family."""
+
+    provider: MarketplaceProvider
+    package_id: str = Field(alias="packageId")
+    registry_path: str = Field(default="", alias="registryPath")
+    display_name: str | None = Field(default=None, alias="displayName")
+
+    model_config = {"populate_by_name": True}
+
+
+class MarketplacePackageFamily(BaseModel):
+    """Marketplace package family grouping provider-native variants."""
+
+    family_id: str = Field(alias="familyId")
+    display_name: str = Field(alias="displayName")
+    source: MarketplacePackageFamilySource
+    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
+class MarketplacePackageFamiliesDocument(BaseModel):
+    """Persisted package family metadata document."""
+
+    families: list[MarketplacePackageFamily] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}
+
+
 class MarketplacePackageSummary(BaseModel):
     """Marketplace package summary for list cards and rows."""
 
@@ -276,6 +324,10 @@ class MarketplacePackageSummary(BaseModel):
     registry_path: str = Field(alias="registryPath")
     revision: str
     updated_at: str = Field(alias="updatedAt")
+    family_id: str | None = Field(default=None, alias="familyId")
+    family_display_name: str | None = Field(default=None, alias="familyDisplayName")
+    source_identity: str | None = Field(default=None, alias="sourceIdentity")
+    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 
@@ -383,7 +435,7 @@ class MarketplaceActivityListResult(BaseModel):
 class MarketplaceImportSource(BaseModel):
     """External source selected for Marketplace import scanning."""
 
-    provider: MarketplaceProvider
+    provider: MarketplaceImportProvider
     source_kind: MarketplaceImportSourceKind = Field(alias="sourceKind")
     source: str
 
@@ -414,6 +466,11 @@ class MarketplaceImportCandidate(BaseModel):
     validation_severity: MarketplaceValidationSeverity = Field(default="none", alias="validationSeverity")
     validation_results: list[MarketplaceValidationResult] = Field(default_factory=list, alias="validationResults")
     source_metadata: dict[str, Any] = Field(default_factory=dict, alias="sourceMetadata")
+    family_id: str | None = Field(default=None, alias="familyId")
+    family_display_name: str | None = Field(default=None, alias="familyDisplayName")
+    source_identity: str | None = Field(default=None, alias="sourceIdentity")
+    variant_status: MarketplaceImportVariantStatus = Field(default="new-family", alias="variantStatus")
+    variants: list[MarketplaceProviderVariant] = Field(default_factory=list)
 
     model_config = {"populate_by_name": True}
 

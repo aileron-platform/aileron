@@ -198,7 +198,7 @@ export const DocumentWorkflowShell = <TDocument extends DocumentWorkflowDocument
   );
 
   const renderEmptyState = () => (
-    <div className="flex h-full flex-col items-center justify-center gap-3 border border-dashed border-border p-8 text-center">
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
       <div className="rounded-full bg-muted p-3">
         <Icon className="h-6 w-6 text-muted-foreground" />
       </div>

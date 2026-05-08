@@ -2523,8 +2523,12 @@ def test_import_candidates_copies_codex_package_and_updates_manifest(marketplace
     detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
     assert detail.source_type == "imported"
     assert detail.manifest_metadata["sourceType"] == "imported"
-    assert detail.manifest_metadata["importSource"] == {
+    assert detail.manifest_metadata["importSource"] | {
+        "importedAt": detail.manifest_metadata["importSource"]["importedAt"],
+        "sourceIdentity": detail.manifest_metadata["importSource"]["sourceIdentity"],
+    } == {
         "provider": "codex",
+        "scanProvider": "codex",
         "sourceKind": "local",
         "source": str(source_root),
         "packageId": "figma-context",
@@ -2532,6 +2536,7 @@ def test_import_candidates_copies_codex_package_and_updates_manifest(marketplace
         "sourcePath": "plugins/figma-context",
         "sourceMetadata": {},
         "importedAt": detail.manifest_metadata["importSource"]["importedAt"],
+        "sourceIdentity": f"local:{source_root.resolve()}",
     }
 
 
@@ -2862,6 +2867,18 @@ def test_clone_import_source_trims_repository_url(marketplace_service, monkeypat
     assert captured_command[-2] == "https://github.com/obra/superpowers"
 
 
+def test_git_source_identity_normalizes_url_variants(marketplace_service):
+    assert marketplace_service._normalize_git_source_identity("https://github.com/obra/superpowers") == (
+        "github.com/obra/superpowers"
+    )
+    assert marketplace_service._normalize_git_source_identity("https://github.com/obra/superpowers.git") == (
+        "github.com/obra/superpowers"
+    )
+    assert marketplace_service._normalize_git_source_identity("git@github.com:obra/superpowers.git") == (
+        "github.com/obra/superpowers"
+    )
+
+
 def test_import_allows_internal_symlink_by_copying_target_file(marketplace_service, tmp_path):
     source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "source"
     plugin_root = source_root / "plugins" / "linked-plugin"
@@ -2897,6 +2914,157 @@ def test_import_allows_internal_symlink_by_copying_target_file(marketplace_servi
     assert result.failed == []
     assert (imported_root / "AGENTS.md").read_text(encoding="utf-8") == "linked content"
     assert not (imported_root / "AGENTS.md").is_symlink()
+
+
+def test_import_all_provider_source_tracks_family_variants(marketplace_service):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "multi-provider"
+    claude_marketplace = source_root / ".claude-plugin" / "marketplace.json"
+    codex_marketplace = source_root / ".agents" / "plugins" / "marketplace.json"
+    claude_marketplace.parent.mkdir(parents=True)
+    codex_marketplace.parent.mkdir(parents=True)
+    claude_marketplace.write_text(
+        json.dumps({
+            "plugins": [{
+                "name": "superpowers",
+                "source": "./",
+                "description": "Core skills library",
+                "version": "1.0.0",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    codex_marketplace.write_text(
+        json.dumps({
+            "plugins": [{
+                "name": "superpowers",
+                "source": {"source": "local", "path": "./"},
+                "description": "Core skills library",
+                "version": "1.0.0",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    (source_root / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "superpowers", "description": "Core skills library", "version": "1.0.0"}),
+        encoding="utf-8",
+    )
+    (source_root / ".codex-plugin").mkdir()
+    (source_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "superpowers", "description": "Core skills library", "version": "1.0.0"}),
+        encoding="utf-8",
+    )
+    source = MarketplaceImportSource(provider="all", sourceKind="local", source=str(source_root))
+
+    candidates = marketplace_service.scan_import_source("user-1", source)
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=candidates),
+    )
+    listed = marketplace_service.list_packages("user-1")
+    detail = marketplace_service.get_package_detail("user-1", "codex", "superpowers")
+
+    assert [(candidate.provider, candidate.package_id) for candidate in candidates] == [
+        ("claude-code", "superpowers"),
+        ("codex", "superpowers"),
+    ]
+    assert {candidate.variant_status for candidate in candidates} == {"new-family"}
+    assert {candidate.family_id for candidate in candidates} == {f"local:{source_root.resolve()}"}
+    assert all(len(candidate.variants) == 2 for candidate in candidates)
+    assert [(item.provider, item.package_id) for item in result.imported] == [
+        ("claude-code", "superpowers"),
+        ("codex", "superpowers"),
+    ]
+    assert all(len(item.variants) == 2 for item in result.imported)
+    assert {item.family_id for item in listed.items} == {f"local:{source_root.resolve()}"}
+    assert all(len(item.variants) == 2 for item in listed.items)
+    assert detail is not None
+    assert len(detail.variants) == 2
+
+
+def test_import_marks_missing_provider_as_additive_variant(marketplace_service):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "add-variant"
+    (source_root / ".claude-plugin").mkdir(parents=True)
+    (source_root / ".claude-plugin" / "marketplace.json").write_text(
+        json.dumps({"plugins": [{"name": "superpowers", "source": "./"}]}),
+        encoding="utf-8",
+    )
+    (source_root / ".claude-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "superpowers", "description": "Core skills library"}),
+        encoding="utf-8",
+    )
+    (source_root / ".agents" / "plugins").mkdir(parents=True)
+    (source_root / ".agents" / "plugins" / "marketplace.json").write_text(
+        json.dumps({"plugins": [{"name": "superpowers", "source": {"source": "local", "path": "./"}}]}),
+        encoding="utf-8",
+    )
+    (source_root / ".codex-plugin").mkdir()
+    (source_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "superpowers", "version": "1.0.0", "description": "Core skills library"}),
+        encoding="utf-8",
+    )
+
+    claude_source = MarketplaceImportSource(provider="claude-code", sourceKind="local", source=str(source_root))
+    claude_candidate = marketplace_service.scan_import_source("user-1", claude_source)[0]
+    marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=claude_source, candidates=[claude_candidate]),
+    )
+
+    codex_source = MarketplaceImportSource(provider="codex", sourceKind="local", source=str(source_root))
+    codex_candidate = marketplace_service.scan_import_source("user-1", codex_source)[0]
+
+    assert codex_candidate.duplicate is False
+    assert codex_candidate.variant_status == "add-variant"
+    assert codex_candidate.family_id == f"local:{source_root.resolve()}"
+
+
+def test_import_marks_existing_provider_as_duplicate_variant(marketplace_service):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "duplicate-variant"
+    (source_root / ".codex-plugin").mkdir(parents=True)
+    (source_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "superpowers", "version": "1.0.0", "description": "Core skills library"}),
+        encoding="utf-8",
+    )
+    source = MarketplaceImportSource(provider="codex", sourceKind="local", source=str(source_root))
+    candidate = marketplace_service.scan_import_source("user-1", source)[0]
+    marketplace_service.import_candidates("user-1", MarketplaceImportRequest(source=source, candidates=[candidate]))
+
+    rescanned = marketplace_service.scan_import_source("user-1", source)[0]
+
+    assert rescanned.duplicate is True
+    assert rescanned.variant_status == "duplicate-variant"
+    assert rescanned.local_revision
+
+
+def test_import_rolls_back_package_listing_and_family_metadata_failure(marketplace_service, monkeypatch):
+    source_root = marketplace_service.get_registry_root("user-1").parent / "import-sources" / "rollback-family"
+    (source_root / ".codex-plugin").mkdir(parents=True)
+    (source_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "rollback-plugin", "version": "1.0.0", "description": "Rollback test"}),
+        encoding="utf-8",
+    )
+    source = MarketplaceImportSource(provider="codex", sourceKind="local", source=str(source_root))
+    candidate = marketplace_service.scan_import_source("user-1", source)[0]
+
+    def fail_family_write(*_args, **_kwargs):
+        raise OSError("family metadata write failed")
+
+    monkeypatch.setattr(marketplace_service, "_write_package_families", fail_family_write)
+
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=[candidate]),
+    )
+    package_path = marketplace_service.resolve_package_path("user-1", "codex", "rollback-plugin")
+    listed = marketplace_service.list_packages("user-1")
+
+    assert result.imported == []
+    assert [(item.package_id, item.error_code) for item in result.failed] == [
+        ("rollback-plugin", "marketplace.import.validation.copy_failed"),
+    ]
+    assert not package_path.exists()
+    assert listed.items == []
+    assert marketplace_service._read_package_families(marketplace_service.get_registry_root("user-1")).families == []
 
 
 def test_import_codex_root_plugin_without_marketplace_manifest_appears_in_list(marketplace_service):

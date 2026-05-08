@@ -703,15 +703,55 @@ class PluginComponentsLoader:
         from ..common import DocumentScope, resolve_scope_root
 
         user_root = resolve_scope_root(workspace_id, DocumentScope.USER)
-        marketplace_json = (
+        candidates = [(
             user_root / "plugins" / "marketplaces" / marketplace_name /
             ".claude-plugin" / "marketplace.json"
-        )
+        )]
 
-        if not marketplace_json.exists():
-            raise FileNotFoundError(f"Marketplace config not found: {marketplace_json}")
+        for registry_file in [
+            user_root / "plugins" / "known_marketplaces.json",
+            user_root / "settings.json",
+        ]:
+            candidates.extend(self._marketplace_paths_from_registry_file(registry_file, marketplace_name))
 
-        return marketplace_json
+        for marketplace_json in candidates:
+            if marketplace_json.exists():
+                return marketplace_json
+
+        raise FileNotFoundError(f"Marketplace config not found: {candidates[0]}")
+
+    def _marketplace_paths_from_registry_file(
+        self,
+        registry_file: Path,
+        marketplace_name: str,
+    ) -> list[Path]:
+        try:
+            data = self._read_json_file(registry_file)
+        except (FileNotFoundError, ValueError):
+            return []
+
+        if registry_file.name == "settings.json":
+            entries = data.get("extraKnownMarketplaces")
+        else:
+            entries = data
+        if not isinstance(entries, dict):
+            return []
+
+        entry = entries.get(marketplace_name)
+        if not isinstance(entry, dict):
+            return []
+
+        paths: list[Path] = []
+        install_location = entry.get("installLocation")
+        if isinstance(install_location, str) and install_location.strip():
+            paths.append(Path(install_location.strip()) / ".claude-plugin" / "marketplace.json")
+
+        source = entry.get("source")
+        if isinstance(source, dict):
+            source_path = source.get("path")
+            if isinstance(source_path, str) and source_path.strip():
+                paths.append(Path(source_path.strip()) / ".claude-plugin" / "marketplace.json")
+        return paths
 
     def _find_plugin_in_marketplace(
         self,

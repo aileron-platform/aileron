@@ -90,6 +90,9 @@ class FileCollectionService(BaseFileService):
         if not self.validate_scope(scope):
             raise InvalidScopeException(f"Invalid scope: {scope}")
         
+        if scope == DocumentScope.PLUGIN and self.collection_type == FileCollectionType.SKILLS:
+            return self._resolve_plugin_skill_path(relative_path)
+
         # Resolve scope root directory
         scope_root = resolve_scope_root(self.workspace_id, scope)
         
@@ -137,10 +140,84 @@ class FileCollectionService(BaseFileService):
         max_depth: Optional[int] = None,
     ) -> Dict:
         """Get file tree and embed front matter metadata for SKILL.md nodes"""
+        if scope == DocumentScope.PLUGIN and self.collection_type == FileCollectionType.SKILLS:
+            return self._get_plugin_skill_tree(path)
+
         result = super().get_tree(path, scope, include_hidden, max_depth)
         if self.collection_type == FileCollectionType.SKILLS:
             self._enrich_skill_nodes(result["nodes"], scope)
         return result
+
+    def _get_plugin_skill_tree(self, path: str = "/") -> Dict:
+        """Build a read-only tree from enabled plugin skill directories."""
+        if path not in {"/", ""}:
+            # Plugin skill children are returned eagerly from the root tree.
+            return {"path": path, "scope": DocumentScope.PLUGIN, "nodes": [], "total": 0}
+
+        plugin_dirs: Dict[str, Dict] = {}
+        for skill in self.plugin_loader.load_plugin_skills(self.workspace_id):
+            plugin_id = f"{skill.plugin_name}@{skill.marketplace_name}"
+            skill_root = Path(skill.directory_path)
+            skill_file = skill_root / "SKILL.md"
+            if not skill_file.is_file():
+                continue
+            stat = skill_file.stat()
+            updated_at = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            plugin_dir = plugin_dirs.setdefault(plugin_id, {
+                "id": f"/{plugin_id}",
+                "name": plugin_id,
+                "path": f"/{plugin_id}",
+                "type": "directory",
+                "scope": DocumentScope.PLUGIN,
+                "size": 0,
+                "updatedAt": updated_at,
+                "depth": 0,
+                "children": [],
+                "hasChildren": True,
+            })
+            if updated_at > plugin_dir["updatedAt"]:
+                plugin_dir["updatedAt"] = updated_at
+            skill_path = f"/{plugin_id}/{skill.skill_name}"
+            plugin_dir["children"].append({
+                "id": skill_path,
+                "name": skill.skill_name,
+                "path": skill_path,
+                "type": "directory",
+                "scope": DocumentScope.PLUGIN,
+                "size": 0,
+                "updatedAt": updated_at,
+                "depth": 1,
+                "children": [{
+                    "id": f"{skill_path}/SKILL.md",
+                    "name": "SKILL.md",
+                    "path": f"{skill_path}/SKILL.md",
+                    "type": "file",
+                    "scope": DocumentScope.PLUGIN,
+                    "size": stat.st_size,
+                    "updatedAt": updated_at,
+                    "depth": 2,
+                }],
+                "hasChildren": True,
+            })
+
+        nodes = sorted(plugin_dirs.values(), key=lambda item: item["name"].lower())
+        for node in nodes:
+            node["children"] = sorted(node["children"], key=lambda item: item["name"].lower())
+        self._enrich_skill_nodes(nodes, DocumentScope.PLUGIN)
+        return {"path": path, "scope": DocumentScope.PLUGIN, "nodes": nodes, "total": len(nodes)}
+
+    def _resolve_plugin_skill_path(self, relative_path: str) -> Path:
+        validated_path = self._validate_path(relative_path)
+        parts = Path(validated_path).parts
+        if len(parts) < 3:
+            return Path("/__missing_plugin_skill__") / validated_path
+
+        plugin_id, skill_name = parts[0], parts[1]
+        tail = Path(*parts[2:])
+        for skill in self.plugin_loader.load_plugin_skills(self.workspace_id):
+            if f"{skill.plugin_name}@{skill.marketplace_name}" == plugin_id and skill.skill_name == skill_name:
+                return Path(skill.directory_path) / tail
+        return Path("/__missing_plugin_skill__") / validated_path
 
     def _enrich_skill_nodes(self, nodes: List[Dict], scope: Optional[str]) -> None:
         """Recursively traverse nodes and embed skillName/skillDescription for SKILL.md file nodes"""
@@ -253,34 +330,20 @@ class FileCollectionService(BaseFileService):
         plugin_skills = []
         
         try:
-            # Get all installed plugins
-            plugins = self.plugin_loader.get_installed_plugins()
-            
-            for plugin in plugins:
-                # Get plugin skills directory
-                plugin_root = resolve_scope_root(self.workspace_id, DocumentScope.PLUGIN)
-                skills_dir = plugin_root / plugin.name / "skills"
-                
-                if not skills_dir.exists():
+            for skill in self.plugin_loader.load_plugin_skills(self.workspace_id):
+                skill_file = Path(skill.directory_path) / "SKILL.md"
+                try:
+                    content = skill_file.read_text(encoding="utf-8")
+                    front_matter, _ = self._parse_front_matter(content)
+                    plugin_skills.append(PluginSkillInfo(
+                        pluginId=f"{skill.plugin_name}@{skill.marketplace_name}",
+                        pluginName=skill.plugin_name,
+                        marketplaceName=skill.marketplace_name,
+                        skillName=skill.skill_name,
+                        skillPath=f"{skill.plugin_name}@{skill.marketplace_name}/{skill.skill_name}/SKILL.md",
+                    ))
+                except Exception:
                     continue
-                
-                # Scan skills directory
-                for skill_file in skills_dir.glob("*.md"):
-                    try:
-                        content = skill_file.read_text(encoding="utf-8")
-                        front_matter, _ = self._parse_front_matter(content)
-                        
-                        plugin_skills.append(PluginSkillInfo(
-                            pluginName=plugin.name,
-                            pluginVersion=plugin.version,
-                            skillName=skill_file.stem,
-                            skillPath=str(skill_file.relative_to(plugin_root)),
-                            description=front_matter.get("description", "") if front_matter else "",
-                            metadata=front_matter
-                        ))
-                    except Exception:
-                        # Skip unreadable files
-                        continue
         
         except Exception:
             # If getting plugins fails, return empty list
@@ -290,4 +353,3 @@ class FileCollectionService(BaseFileService):
 
 
 __all__ = ["FileCollectionService"]
-

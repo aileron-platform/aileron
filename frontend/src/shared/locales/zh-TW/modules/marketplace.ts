@@ -155,6 +155,7 @@ const marketplace = {
       manifest: 'Manifest',
       resources: 'Resources',
       targetPreview: 'Target preview',
+      files: '檔案',
     },
     featureEmpty: '此區塊沒有內容。',
     sidebar: {
@@ -176,6 +177,8 @@ const marketplace = {
       packageType: 'Package type',
       version: 'Version',
       validation: 'Validation',
+      family: '來源家族',
+      variants: 'Provider 變體',
       sections: {
         general: {
           title: '一般',
@@ -343,6 +346,9 @@ const marketplace = {
       git: 'Git repository',
       local: '本機上傳',
     },
+    providers: {
+      all: '所有供應商',
+    },
     localFile: {
       empty: '尚未選擇封存檔',
     },
@@ -358,6 +364,14 @@ const marketplace = {
       title: '候選套件',
       empty: '掃描來源後會列出可匯入的候選套件。',
       duplicate: '重複',
+      family: '家族：{{family}}',
+    },
+    variantStatuses: {
+      'new-family': '新家族',
+      'add-variant': '新增 provider 變體',
+      'duplicate-variant': '既有 provider 變體',
+      'unrelated-duplicate': '非關聯重複',
+      invalid: '無效',
     },
     duplicateActions: {
       skip: '略過',
@@ -971,6 +985,23 @@ const marketplace = {
         executions: {
           title: 'Commands',
           add: '新增 command',
+          types: {
+            command: {
+              label: '命令',
+            },
+            http: {
+              label: 'HTTP',
+            },
+            mcp_tool: {
+              label: 'MCP tool',
+            },
+            prompt: {
+              label: 'Prompt',
+            },
+            agent: {
+              label: 'Agent',
+            },
+          },
           timeoutLabel: {
             'claude-code': 'Timeout 秒數',
             codex: 'Timeout 秒數',

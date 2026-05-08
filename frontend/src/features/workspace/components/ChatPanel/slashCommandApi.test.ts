@@ -110,14 +110,16 @@ describe('slashCommandApi.listPickerItems', () => {
         total: 0,
         nodes: [],
       })
-      .mockResolvedValueOnce([
-        {
-          pluginName: 'openspec',
-          marketplaceName: 'core',
-          skillName: 'explore',
-          skillPath: '/plugins/openspec/skills/explore',
-        },
-      ]);
+      .mockResolvedValueOnce({
+        plugins: [
+          {
+            pluginName: 'openspec',
+            marketplaceName: 'core',
+            skillName: 'explore',
+            skillPath: '/plugins/openspec/skills/explore',
+          },
+        ],
+      });
 
     const items = await slashCommandApi.listPickerItems('http://runtime.test', 'ws-1', 'claude-code', ['project', 'plugin']);
 

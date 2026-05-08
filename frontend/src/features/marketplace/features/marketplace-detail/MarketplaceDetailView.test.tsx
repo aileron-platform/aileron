@@ -41,6 +41,19 @@ const mockDetail: MarketplacePackageDetail = {
   registryPath: 'codex/plugins/review-tools',
   revision: 'rev-1',
   updatedAt: '2026-05-07T00:00:00.000Z',
+  variants: [{
+    provider: 'codex',
+    packageId: 'review-tools',
+    displayName: 'Review Tools',
+    registryPath: 'codex/plugins/review-tools',
+    revision: 'rev-1',
+  }, {
+    provider: 'claude-code',
+    packageId: 'review-tools',
+    displayName: 'Review Tools',
+    registryPath: 'claude-code/plugins/review-tools',
+    revision: 'rev-2',
+  }],
   catalogMetadata: {},
   manifestMetadata: {},
   readmeMarkdown: '# Review Tools',
@@ -60,7 +73,29 @@ const mockDetail: MarketplacePackageDetail = {
       },
     ],
   },
-  packageFiles: [],
+  packageFiles: [
+    {
+      path: '.codex-plugin/plugin.json',
+      content: '{\n  "id": "review-tools"\n}',
+      binary: false,
+      mimeType: 'application/json',
+      size: 28,
+    },
+    {
+      path: 'README.md',
+      content: '# Package README',
+      binary: false,
+      mimeType: 'text/markdown',
+      size: 16,
+    },
+    {
+      path: 'scripts/check.sh',
+      content: '#!/usr/bin/env bash\nset -euo pipefail\n',
+      binary: false,
+      mimeType: 'text/x-shellscript',
+      size: 37,
+    },
+  ],
   validationResults: [],
   activity: [],
 };
@@ -146,6 +181,38 @@ describe('MarketplaceDetailView', () => {
     fireEvent.mouseMove(window, { clientX: 420 });
     fireEvent.mouseUp(window);
     expect(resizeHandle.parentElement).toHaveStyle({ width: '420px' });
+  });
+
+  it('renders package files in the read-only file viewer', async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await screen.findByText('Review Tools');
+    await user.click(screen.getByRole('button', { name: /marketplace\.detail\.tabs\.files/ }));
+
+    expect(screen.getByText('marketplace.editor.fileManager.packageFiles.rootLabel')).toBeInTheDocument();
+    expect(screen.getByText('codex/plugins/review-tools')).toBeInTheDocument();
+    expect(screen.getAllByText('plugin.json').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('check.sh')).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('README.md'));
+    expect(screen.getByText('# Package README')).toBeInTheDocument();
+
+    await user.dblClick(screen.getByText('scripts'));
+    await user.click(screen.getByText('check.sh'));
+    expect(screen.getByLabelText('check.sh')).toHaveValue('#!/usr/bin/env bash\nset -euo pipefail\n');
+  });
+
+  it('renders sibling provider variants and navigates to the selected variant', async () => {
+    const user = userEvent.setup();
+    renderDetail();
+
+    await screen.findByText('Review Tools');
+    await user.click(screen.getByRole('button', { name: 'marketplace.providers.claude-code' }));
+
+    await waitFor(() => {
+      expect(mockGetPackage).toHaveBeenCalledWith('claude-code', 'review-tools');
+    });
   });
 
   it('blocks destructive delete until the package id confirmation matches', async () => {

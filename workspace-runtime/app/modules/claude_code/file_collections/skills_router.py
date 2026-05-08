@@ -25,7 +25,7 @@ from app.modules.file_system import (
     FileManagementException,
 )
 from ..common import DocumentScope
-from .models import FileCollectionType, PluginSkillInfo
+from .models import FileCollectionType, PluginSkillsResponse
 from .service import FileCollectionService
 from .dependencies import get_workspace_id
 
@@ -288,7 +288,7 @@ async def batch_delete_skills(
 
 @router.get(
     "/plugins",
-    response_model=List[PluginSkillInfo],
+    response_model=PluginSkillsResponse,
     summary="Get plugin Skills",
     responses=build_responses(401, 500),
 )
@@ -297,10 +297,10 @@ async def get_plugin_skills(
 ):
     """Get all plugin Skills"""
     try:
-        return service.get_plugin_skills()
+        return PluginSkillsResponse(workspaceId=service.workspace_id, plugins=service.get_plugin_skills())
     except Exception:
         # Gracefully handle plugin loading errors, return empty list
-        return []
+        return PluginSkillsResponse(workspaceId=service.workspace_id, plugins=[])
 
 
 __all__ = ["router"]

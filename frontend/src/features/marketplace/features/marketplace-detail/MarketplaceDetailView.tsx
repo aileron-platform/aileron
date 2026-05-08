@@ -12,6 +12,7 @@ import {
   Download,
   Eye,
   EyeOff,
+  FileArchive,
   FileText,
   Info,
   MoreHorizontal,
@@ -63,12 +64,11 @@ import {
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ROUTES } from '@/shared/constants/routes';
 import { fetchWorkspaceList } from '@/features/workspace/services/workspaceRuntimeApi';
-import type { MarketplaceCliPreflight, MarketplaceFeatureContentItem, MarketplaceInstallResult, MarketplacePackageDetail, MarketplaceProvider } from '@/shared/types/marketplace';
+import type { MarketplaceCliPreflight, MarketplaceFeatureContentItem, MarketplaceInstallResult, MarketplacePackageDetail, MarketplacePackageFile, MarketplaceProvider } from '@/shared/types/marketplace';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useToast } from '@/shared/components/ui/use-toast';
 import {
   FileTreePanel,
-  getAllDirectoryNodes,
   isMarkdownFile,
   useFileTreeState,
   type FileTreeNode,
@@ -102,7 +102,8 @@ type MarketplaceDetailTab =
   | 'agent'
   | 'commands'
   | 'output-style'
-  | 'skills';
+  | 'skills'
+  | 'files';
 
 const LEFT_WIDTH = 280;
 
@@ -149,6 +150,7 @@ const getMarketplaceDetailFeatureItems = (
     { id: 'commands', name: t('marketplace.features.slashCommands'), icon: Command, count: detail.featureContent.commands.length },
     { id: 'output-style', name: t('marketplace.features.outputStyle'), icon: Wand2, count: detail.featureContent.outputStyles.length },
     { id: 'skills', name: t('marketplace.features.skills'), icon: Sparkles, count: detail.featureContent.skills.length },
+    { id: 'files', name: t('marketplace.detail.tabs.files'), icon: FileArchive, count: detail.packageFiles.length },
   ];
 
   return items.filter(item => {
@@ -205,6 +207,7 @@ export const MarketplaceDetailView: React.FC = () => {
       detail?.featureContent.mcpServers.length,
       detail?.featureContent.outputStyles.length,
       detail?.featureContent.skills.length,
+      detail?.packageFiles.length,
       detail?.provider,
       t,
     ],
@@ -231,7 +234,12 @@ export const MarketplaceDetailView: React.FC = () => {
     switch (activeTab) {
       case 'basic-info':
         return (
-          <MarketplaceBasicInfoPanel detail={detail} />
+          <MarketplaceBasicInfoPanel
+            detail={detail}
+            onOpenVariant={(variantProvider, variantPackageId) => {
+              navigate(ROUTES.MARKETPLACE_PACKAGE_DETAIL(variantProvider, variantPackageId));
+            }}
+          />
         );
       case 'agents-md':
         return (
@@ -249,6 +257,8 @@ export const MarketplaceDetailView: React.FC = () => {
         return <MarketplaceFeatureViewer title={t('marketplace.features.outputStyle')} items={detail.featureContent.outputStyles} icon={Wand2} />;
       case 'skills':
         return <MarketplaceSkillsFileViewer items={detail.featureContent.skills} />;
+      case 'files':
+        return <MarketplacePackageFilesViewer detail={detail} />;
       default:
         return null;
     }
@@ -385,12 +395,16 @@ export const MarketplaceDetailView: React.FC = () => {
 
 interface MarketplaceBasicInfoPanelProps {
   detail: MarketplacePackageDetail;
+  onOpenVariant: (provider: MarketplaceProvider, packageId: string) => void;
 }
 
-const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps> = ({ detail }) => {
+const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps> = ({ detail, onOpenVariant }) => {
   const { t } = useI18n();
 
   const featureCounts = getMarketplaceDetailFeatureItems(detail, t);
+  const siblingVariants = detail.variants.filter(variant => (
+    variant.provider !== detail.provider || variant.packageId !== detail.packageId
+  ));
 
   return (
     <div className="h-full overflow-y-auto">
@@ -418,6 +432,42 @@ const MarketplaceBasicInfoPanel: React.FC<MarketplaceBasicInfoPanelProps> = ({ d
             <InfoGridRow label={t('marketplace.detail.basicInfo.registryPath')} value={detail.registryPath} monospace />
             <InfoGridRow label={t('marketplace.detail.basicInfo.provider')} value={<Badge variant="outline">{t(`marketplace.providers.${detail.provider}`)}</Badge>} />
             <InfoGridRow label={t('marketplace.detail.basicInfo.version')} value={<Badge variant="secondary">{detail.version ?? t('marketplace.common.noVersion')}</Badge>} />
+            {detail.familyDisplayName || detail.sourceIdentity ? (
+              <InfoGridRow
+                label={t('marketplace.detail.basicInfo.family')}
+                value={(
+                  <div className="space-y-1">
+                    {detail.familyDisplayName ? <div>{detail.familyDisplayName}</div> : null}
+                    {detail.sourceIdentity ? <div className="font-mono text-xs text-muted-foreground">{detail.sourceIdentity}</div> : null}
+                  </div>
+                )}
+              />
+            ) : null}
+            {siblingVariants.length > 0 ? (
+              <InfoGridRow
+                label={t('marketplace.detail.basicInfo.variants')}
+                value={(
+                  <div className="flex flex-wrap gap-2">
+                    {detail.variants.map(variant => {
+                      const isCurrent = variant.provider === detail.provider && variant.packageId === detail.packageId;
+                      return (
+                        <Button
+                          key={`${variant.provider}:${variant.packageId}`}
+                          type="button"
+                          variant={isCurrent ? 'secondary' : 'outline'}
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          disabled={isCurrent}
+                          onClick={() => onOpenVariant(variant.provider, variant.packageId)}
+                        >
+                          {t(`marketplace.providers.${variant.provider}`)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              />
+            ) : null}
             <div className="grid grid-cols-3 gap-4">
               <div className="text-sm font-medium text-muted-foreground">
                 {t('marketplace.detail.basicInfo.sections.features.title')}
@@ -1313,18 +1363,66 @@ interface MarketplaceSkillsFileViewerProps {
   items: MarketplaceFeatureContentItem[];
 }
 
+interface MarketplacePackageFilesViewerProps {
+  detail: MarketplacePackageDetail;
+}
+
+const MarketplacePackageFilesViewer: React.FC<MarketplacePackageFilesViewerProps> = ({ detail }) => {
+  const packageRoot = detail.registryPath || getMarketplaceDetailPackageRoot(detail.provider, detail.packageId);
+  const initialNodes = React.useMemo(
+    () => marketplaceDetailPackageFilesToFileTree(
+      detail.packageFiles,
+      `/${packageRoot}`,
+      detail.provider === 'gemini' ? 'extension' : 'plugin',
+    ),
+    [detail.packageFiles, detail.provider, packageRoot],
+  );
+
+  return (
+    <MarketplaceReadOnlyFileTreeViewer
+      titleKey="marketplace.editor.fileManager.packageFiles.title"
+      icon={FileArchive}
+      initialNodes={initialNodes}
+      rootLabel={packageRoot}
+    />
+  );
+};
+
 const MarketplaceSkillsFileViewer: React.FC<MarketplaceSkillsFileViewerProps> = ({ items }) => {
+  const initialNodes = React.useMemo(() => marketplaceDetailFeatureItemsToFileTree(items, 'skills'), [items]);
+
+  return (
+    <MarketplaceReadOnlyFileTreeViewer
+      titleKey="marketplace.editor.fileManager.skills.title"
+      icon={Sparkles}
+      initialNodes={initialNodes}
+    />
+  );
+};
+
+interface MarketplaceReadOnlyFileTreeViewerProps {
+  titleKey: string;
+  icon: React.ComponentType<{ className?: string }>;
+  initialNodes: FileTreeNode[];
+  rootLabel?: string;
+}
+
+const MarketplaceReadOnlyFileTreeViewer: React.FC<MarketplaceReadOnlyFileTreeViewerProps> = ({
+  titleKey,
+  icon: Icon,
+  initialNodes,
+  rootLabel,
+}) => {
   const { t } = useI18n();
   const { toast } = useToast();
   const [sidebarWidth, setSidebarWidth] = React.useState(MARKETPLACE_DETAIL_SIDEBAR_DEFAULT_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const [isSidebarResizing, setIsSidebarResizing] = React.useState(false);
   const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
-  const initialNodes = React.useMemo(() => marketplaceDetailFeatureItemsToFileTree(items, 'skills'), [items]);
   const firstFilePath = React.useMemo(() => marketplaceDetailFindFirstFilePath(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
     initialNodes,
-    initialExpandedIds: marketplaceDetailDirectoryPaths(initialNodes),
+    initialExpandedIds: [],
     initialSelectedId: firstFilePath,
     enableMultiSelect: false,
   });
@@ -1430,12 +1528,12 @@ const MarketplaceSkillsFileViewer: React.FC<MarketplaceSkillsFileViewerProps> = 
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
-            <Sparkles className="h-4 w-4 text-primary" />
+            <Icon className="h-4 w-4 text-primary" />
           </div>
         ) : (
           <MarketplaceSectionSidebarShell
-            title={t('marketplace.editor.fileManager.skills.title')}
-            icon={<Sparkles className="h-4 w-4" />}
+            title={t(titleKey)}
+            icon={<Icon className="h-4 w-4" />}
             actions={(
               <>
                 <Button
@@ -1464,17 +1562,29 @@ const MarketplaceSkillsFileViewer: React.FC<MarketplaceSkillsFileViewerProps> = 
             onSearchClear={treeState.clearSearch}
             searchPlaceholder={t('marketplace.editor.fileManager.search.placeholder')}
             body={(
-              <FileTreePanel
-                state={treeState}
-                onNodeClick={handleNodeClick}
-                onNodeDoubleClick={handleNodeDoubleClick}
-                enableSearch={false}
-                enableToolbar={false}
-                enableMultiSelectBar={false}
-                enableBottomStatusBar={false}
-                enableDragDrop={false}
-                className="flex-1"
-              />
+              <div className="flex h-full min-h-0 flex-col">
+                {rootLabel ? (
+                  <div className="border-b border-border bg-muted/20 px-3 py-2">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {t('marketplace.editor.fileManager.packageFiles.rootLabel')}
+                    </div>
+                    <div className="mt-1 truncate font-mono text-xs text-foreground" title={rootLabel}>
+                      {rootLabel}
+                    </div>
+                  </div>
+                ) : null}
+                <FileTreePanel
+                  state={treeState}
+                  onNodeClick={handleNodeClick}
+                  onNodeDoubleClick={handleNodeDoubleClick}
+                  enableSearch={false}
+                  enableToolbar={false}
+                  enableMultiSelectBar={false}
+                  enableBottomStatusBar={false}
+                  enableDragDrop={false}
+                  className="flex-1"
+                />
+              </div>
             )}
           />
         )}
@@ -1895,6 +2005,12 @@ const marketplaceDetailJoinPath = (parentPath: string | null | undefined, name: 
   parentPath ? `${parentPath.replace(/\/$/, '')}/${name}` : name
 );
 
+const getMarketplaceDetailPackageRoot = (provider: MarketplaceProvider, packageId: string): string => (
+  provider === 'gemini'
+    ? `gemini/extensions/${packageId}`
+    : `${provider}/plugins/${packageId}`
+);
+
 const marketplaceDetailIsMarkdownFile = (fileName: string): boolean => {
   const extension = fileName.split('.').pop()?.toLowerCase();
   return isMarkdownFile(fileName) || extension === 'mdx';
@@ -1968,8 +2084,71 @@ const marketplaceDetailFeatureItemsToFileTree = (
   return roots;
 };
 
-const marketplaceDetailDirectoryPaths = (nodes: FileTreeNode[]): string[] => {
-  return getAllDirectoryNodes(nodes).map(node => node.path);
+const marketplaceDetailPackageFilesToFileTree = (
+  files: MarketplacePackageFile[],
+  rootPath: string,
+  scope: 'plugin' | 'extension',
+): FileTreeNode[] => {
+  const packageName = rootPath.split('/').at(-1) ?? rootPath;
+  const root: FileTreeNode = {
+    id: rootPath,
+    name: packageName,
+    path: rootPath,
+    type: 'directory',
+    scope,
+    children: [],
+  };
+  const directories = new Map<string, FileTreeNode>([[rootPath, root]]);
+
+  const ensureDirectory = (path: string, name: string, parentChildren: FileTreeNode[]) => {
+    const existing = directories.get(path);
+    if (existing) return existing;
+    const node: FileTreeNode = {
+      id: path,
+      name,
+      path,
+      type: 'directory',
+      scope,
+      children: [],
+    };
+    directories.set(path, node);
+    parentChildren.push(node);
+    return node;
+  };
+
+  files.forEach(file => {
+    const parts = file.path.split('/').filter(Boolean);
+    if (parts.length === 0) return;
+
+    let currentPath = rootPath;
+    let parentChildren = root.children ?? [];
+
+    parts.slice(0, -1).forEach(part => {
+      currentPath = marketplaceDetailJoinPath(currentPath, part);
+      const directory = ensureDirectory(currentPath, part, parentChildren);
+      parentChildren = directory.children ?? [];
+    });
+
+    const fileName = parts.at(-1);
+    if (!fileName) return;
+    const path = marketplaceDetailJoinPath(currentPath, fileName);
+    parentChildren.push({
+      id: path,
+      name: fileName,
+      path,
+      type: 'file',
+      extension: fileName.split('.').pop(),
+      scope,
+      size: file.size,
+      metadata: {
+        content: file.content,
+        binary: file.binary,
+        mimeType: file.mimeType,
+      },
+    });
+  });
+
+  return root.children ?? [];
 };
 
 const marketplaceDetailFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {

@@ -233,6 +233,13 @@ const createMockDetail = (provider: MarketplaceProvider, packageId: string): Mar
   registryPath: provider === 'gemini' ? `gemini/extensions/${packageId}` : `${provider}/plugins/${packageId}`,
   revision: `rev-${packageId}`,
   updatedAt: '2026-05-07T00:00:00.000Z',
+  variants: [{
+    provider,
+    packageId,
+    displayName: packageId,
+    registryPath: provider === 'gemini' ? `gemini/extensions/${packageId}` : `${provider}/plugins/${packageId}`,
+    revision: `rev-${packageId}`,
+  }],
   catalogMetadata: {},
   manifestMetadata: provider === 'gemini'
     ? { name: packageId, version: '0.1.0' }
@@ -313,6 +320,13 @@ describe('MarketplaceEditorView', () => {
         registryPath: provider === 'gemini' ? `gemini/extensions/${packageId}` : `${provider}/plugins/${packageId}`,
         revision: `rev-${packageId}`,
         updatedAt: '2026-05-07T00:00:00.000Z',
+        variants: [{
+          provider,
+          packageId,
+          displayName: packageId,
+          registryPath: provider === 'gemini' ? `gemini/extensions/${packageId}` : `${provider}/plugins/${packageId}`,
+          revision: `rev-${packageId}`,
+        }],
       })
     ));
     marketplaceApiMock.savePackage.mockImplementation(({ provider, packageId }: { provider: MarketplaceProvider; packageId: string }) => (

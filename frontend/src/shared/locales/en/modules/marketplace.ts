@@ -155,6 +155,7 @@ const marketplace = {
       manifest: 'Manifest',
       resources: 'Resources',
       targetPreview: 'Target preview',
+      files: 'Files',
     },
     featureEmpty: 'No content in this section.',
     sidebar: {
@@ -176,6 +177,8 @@ const marketplace = {
       packageType: 'Package type',
       version: 'Version',
       validation: 'Validation',
+      family: 'Source family',
+      variants: 'Provider variants',
       sections: {
         general: {
           title: 'General',
@@ -343,6 +346,9 @@ const marketplace = {
       git: 'Git repository',
       local: 'Local upload',
     },
+    providers: {
+      all: 'All providers',
+    },
     localFile: {
       empty: 'No archive selected',
     },
@@ -358,6 +364,14 @@ const marketplace = {
       title: 'Candidates',
       empty: 'Scan a source to list import candidates.',
       duplicate: 'Duplicate',
+      family: 'Family: {{family}}',
+    },
+    variantStatuses: {
+      'new-family': 'New family',
+      'add-variant': 'Add provider variant',
+      'duplicate-variant': 'Existing provider variant',
+      'unrelated-duplicate': 'Unrelated duplicate',
+      invalid: 'Invalid',
     },
     duplicateActions: {
       skip: 'Skip',
@@ -971,6 +985,23 @@ const marketplace = {
         executions: {
           title: 'Commands',
           add: 'Add command',
+          types: {
+            command: {
+              label: 'Command',
+            },
+            http: {
+              label: 'HTTP',
+            },
+            mcp_tool: {
+              label: 'MCP tool',
+            },
+            prompt: {
+              label: 'Prompt',
+            },
+            agent: {
+              label: 'Agent',
+            },
+          },
           timeoutLabel: {
             'claude-code': 'Timeout seconds',
             codex: 'Timeout seconds',

@@ -35,7 +35,9 @@ def client(app):
 
 @pytest.fixture
 def mock_service():
-    return MagicMock()
+    service = MagicMock()
+    service.workspace_id = "test-workspace"
+    return service
 
 
 @pytest.fixture
@@ -159,7 +161,7 @@ class TestSkillsRouter:
         response = client.get("/skills/plugins")
 
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json() == {"workspaceId": "test-workspace", "plugins": []}
 
     def test_get_skills_children_success(self, client, override_service):
         override_service.get_tree.return_value = FileTreeResponse(path="/team", nodes=[], total=0)

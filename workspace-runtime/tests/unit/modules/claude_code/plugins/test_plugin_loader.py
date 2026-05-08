@@ -476,6 +476,32 @@ class TestGetMarketplaceBasePath:
         # Parent of marketplace.json is .claude-plugin, parent of that is test
         assert result == Path("/home/user/.claude/plugins/marketplaces/test")
 
+    @patch("app.modules.claude_code.common.resolve_scope_root")
+    def test_get_marketplace_path_uses_known_marketplace_install_location(
+        self,
+        mock_resolve_scope_root,
+        plugin_loader,
+        tmp_path,
+    ):
+        user_root = tmp_path / ".claude"
+        marketplace_root = tmp_path / "marketplace-install" / "claude-code"
+        marketplace_json = marketplace_root / ".claude-plugin" / "marketplace.json"
+        marketplace_json.parent.mkdir(parents=True)
+        marketplace_json.write_text('{"plugins":[]}', encoding="utf-8")
+        known_path = user_root / "plugins" / "known_marketplaces.json"
+        known_path.parent.mkdir(parents=True)
+        known_path.write_text(json.dumps({
+            "local-marketplace": {
+                "installLocation": str(marketplace_root),
+                "source": {"source": "directory", "path": str(marketplace_root)},
+            }
+        }), encoding="utf-8")
+        mock_resolve_scope_root.return_value = user_root
+
+        result = plugin_loader._get_marketplace_path("workspace-1", "local-marketplace")
+
+        assert result == marketplace_json
+
 
 class TestScanCommandsStrictMode:
     """Test commands scanning in strict mode."""

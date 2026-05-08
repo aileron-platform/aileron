@@ -38,6 +38,7 @@ import type {
   MarketplaceFeatureKey,
   MarketplaceCliPreflight,
   MarketplaceImportCandidate,
+  MarketplaceImportProvider,
   MarketplaceImportResult,
   MarketplaceInstallResult,
   MarketplaceListQuery,
@@ -76,6 +77,7 @@ import {
 const PAGE_SIZE_OPTIONS = [6, 12, 24];
 const MARKETPLACE_FEATURES: MarketplaceFeatureKey[] = ['mcp', 'commands', 'hooks', 'agentsMd', 'agents', 'outputStyle', 'skills'];
 const IMPORT_SCAN_HIDDEN_VALIDATION_CODES = new Set(['marketplace.validation.metadata_conflict']);
+const IMPORT_PROVIDERS: MarketplaceImportProvider[] = ['all', 'claude-code', 'codex', 'gemini'];
 
 const getMarketplaceInstallCommandName = (
   provider: MarketplaceProvider,
@@ -621,7 +623,7 @@ interface MarketplaceImportDialogProps {
 const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open, onOpenChange, onImported }) => {
   const { t } = useI18n();
   const { toast } = useToast();
-  const [provider, setProvider] = React.useState<MarketplaceProvider>('claude-code');
+  const [provider, setProvider] = React.useState<MarketplaceImportProvider>('all');
   const [sourceKind, setSourceKind] = React.useState<'git' | 'local'>('git');
   const [source, setSource] = React.useState('');
   const [localFile, setLocalFile] = React.useState<File | null>(null);
@@ -660,7 +662,7 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
     try {
       const importSource = sourceKind === 'local'
         ? (localFile
-          ? (await uploadImportSource(provider, localFile)).source
+          ? (await uploadImportSource(provider === 'all' ? 'claude-code' : provider, localFile)).source
           : { provider, sourceKind, source: uploadedLocalSource })
         : {
             provider,
@@ -728,13 +730,17 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
             <div className="space-y-2">
               <Label>{t('marketplace.import.fields.provider')}</Label>
               <Select value={provider} onValueChange={value => {
-                setProvider(value as MarketplaceProvider);
+                setProvider(value as MarketplaceImportProvider);
                 resetScanState();
               }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(['claude-code', 'codex', 'gemini'] as const).map(value => (
-                    <SelectItem key={value} value={value}>{t(`marketplace.providers.${value}`)}</SelectItem>
+                  {IMPORT_PROVIDERS.map(value => (
+                    <SelectItem key={value} value={value}>
+                      {value === 'all'
+                        ? t('marketplace.import.providers.all')
+                        : t(`marketplace.providers.${value}`)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -867,12 +873,31 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{candidate.displayName}</span>
                         <span className="font-mono text-xs text-muted-foreground">{candidate.packageId}</span>
+                        <Badge variant="outline">{t(`marketplace.providers.${candidate.provider}`)}</Badge>
+                        <Badge variant={candidate.variantStatus === 'invalid' || candidate.variantStatus === 'unrelated-duplicate' ? 'destructive' : candidate.variantStatus === 'duplicate-variant' ? 'secondary' : 'outline'}>
+                          {t(`marketplace.import.variantStatuses.${candidate.variantStatus}`)}
+                        </Badge>
                         {candidate.duplicate ? (
                           <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                             {t('marketplace.import.candidates.duplicate')}
                           </span>
                         ) : null}
                       </div>
+                      {candidate.familyDisplayName || candidate.sourceIdentity || candidate.variants.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {candidate.familyDisplayName ? (
+                            <span>{t('marketplace.import.candidates.family', { family: candidate.familyDisplayName })}</span>
+                          ) : null}
+                          {candidate.sourceIdentity ? (
+                            <span className="font-mono">{candidate.sourceIdentity}</span>
+                          ) : null}
+                          {candidate.variants.map(variant => (
+                            <Badge key={`${variant.provider}:${variant.packageId}`} variant="secondary" className="text-[11px]">
+                              {t(`marketplace.providers.${variant.provider}`)}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="mt-1 font-mono text-xs text-muted-foreground">{candidate.sourcePath}</div>
                       {visibleValidationResults.length > 0 ? (
                         <div className="mt-2 space-y-1">
@@ -960,6 +985,13 @@ const MarketplacePackageListRow: React.FC<MarketplacePackageListRowProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-foreground hover:text-primary">{item.displayName}</h3>
           <Badge variant="outline">{t(`marketplace.providers.${item.provider}`)}</Badge>
+          {item.variants.length > 1 ? (
+            item.variants.map(variant => (
+              <Badge key={`${variant.provider}:${variant.packageId}`} variant="secondary">
+                {t(`marketplace.providers.${variant.provider}`)}
+              </Badge>
+            ))
+          ) : null}
           {item.category ? <Badge variant="secondary">{item.category}</Badge> : null}
         </div>
         <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{item.packageId}</p>
