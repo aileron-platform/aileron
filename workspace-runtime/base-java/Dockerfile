@@ -13,6 +13,7 @@ USER root
 
 ENV DEBIAN_FRONTEND=noninteractive
 ARG MAVEN_VERSION=3.9.10
+ARG MAVEN_SHA512=4ef617e421695192a3e9a53b3530d803baf31f4269b26f9ab6863452d833da5530a4d04ed08c36490ad0f141b55304bceed58dbf44821153d94ae9abf34d0e1b
 
 # Install Eclipse Temurin JDK 21 from the Adoptium APT repository.
 RUN install -d -m 0755 /etc/apt/keyrings \
@@ -31,12 +32,11 @@ RUN install -d -m 0755 /etc/apt/keyrings \
 RUN MAVEN_ARCHIVE="apache-maven-${MAVEN_VERSION}-bin.tar.gz" \
     && MAVEN_BASE_URL="https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries" \
     && curl -fsSLO "${MAVEN_BASE_URL}/${MAVEN_ARCHIVE}" \
-    && curl -fsSLO "${MAVEN_BASE_URL}/${MAVEN_ARCHIVE}.sha512" \
-    && sha512sum -c "${MAVEN_ARCHIVE}.sha512" \
+    && echo "${MAVEN_SHA512}  ${MAVEN_ARCHIVE}" | sha512sum -c - \
     && tar -xzf "${MAVEN_ARCHIVE}" -C /opt \
     && ln -sfn "/opt/apache-maven-${MAVEN_VERSION}" /opt/maven \
     && ln -sfn /opt/maven/bin/mvn /usr/local/bin/mvn \
-    && rm "${MAVEN_ARCHIVE}" "${MAVEN_ARCHIVE}.sha512"
+    && rm "${MAVEN_ARCHIVE}"
 
 # Provide a stable JAVA_HOME symlink that does not depend on the host architecture.
 RUN ARCH="$(dpkg --print-architecture)" \
