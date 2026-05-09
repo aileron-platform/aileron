@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -783,6 +784,35 @@ def test_get_package_detail_returns_manifest_and_readme(marketplace_service):
         "README.md",
     ]
     assert detail.package_files[1].content == "# Figma Context\n"
+
+
+def test_get_package_detail_returns_binary_package_files_as_base64(marketplace_service):
+    root = marketplace_service.get_registry_root("user-1")
+    marketplace_service.initialize_registry("user-1", _metadata())
+    codex_manifest_path = root / "codex" / ".agents" / "plugins" / "marketplace.json"
+    codex_manifest = json.loads(codex_manifest_path.read_text())
+    codex_manifest["plugins"] = [{
+        "name": "figma-context",
+        "source": {"source": "local", "path": "./plugins/figma-context"},
+    }]
+    codex_manifest_path.write_text(json.dumps(codex_manifest), encoding="utf-8")
+    package_root = root / "codex" / "plugins" / "figma-context"
+    (package_root / ".codex-plugin").mkdir(parents=True)
+    (package_root / "assets").mkdir()
+    (package_root / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"name": "figma-context"}),
+        encoding="utf-8",
+    )
+    raw_image = b"\x89PNG\r\n\x1a\n\x00"
+    (package_root / "assets" / "logo.png").write_bytes(raw_image)
+
+    detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
+
+    assert detail is not None
+    image_file = next(item for item in detail.package_files if item.path == "assets/logo.png")
+    assert image_file.binary is True
+    assert image_file.mime_type == "image/png"
+    assert image_file.content == base64.b64encode(raw_image).decode("ascii")
 
 
 def test_get_package_detail_returns_feature_content(marketplace_service):

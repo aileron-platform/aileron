@@ -74,6 +74,16 @@ const readFileText = (file: File): Promise<string> => new Promise((resolve, reje
   reader.readAsText(file);
 });
 
+const blobFromPackageFile = (file: MarketplacePackageFile): Blob => {
+  if (!file.binary) {
+    return new Blob([file.content], { type: file.mimeType || 'text/plain' });
+  }
+
+  const byteCharacters = atob(file.content);
+  const byteNumbers = Array.from(byteCharacters, character => character.charCodeAt(0));
+  return new Blob([new Uint8Array(byteNumbers)], { type: file.mimeType || 'application/octet-stream' });
+};
+
 export const createMarketplaceFileWorkbenchAdapter = (
   context: MarketplaceFileWorkbenchAdapterContext,
 ): MarketplaceFileWorkbenchAdapter => {
@@ -231,6 +241,15 @@ export const createMarketplaceFileWorkbenchAdapter = (
 
     async readFile(path) {
       return adapter.getContent(path);
+    },
+
+    async readBlob(path) {
+      const relativePath = getRelativePath(path);
+      const file = getFiles().find(item => item.path === relativePath);
+      if (!file) {
+        throw new Error('marketplace.fileTree.error.read');
+      }
+      return blobFromPackageFile(file);
     },
 
     async write(path, content) {

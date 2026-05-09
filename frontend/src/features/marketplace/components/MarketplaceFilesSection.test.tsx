@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { MarketplacePackageDetail } from '@/shared/types/marketplace';
@@ -16,12 +16,69 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
-  FileViewerWorkbench: ({ tabs, activeTabId }: {
+  FileViewerWorkbench: ({ tabs, activeTabId, adapter, capabilities, readOnly, onActiveTabChange, onTabsChange }: {
     tabs: Array<{ id: string; name: string; content: string }>;
     activeTabId: string | null;
+    adapter?: { readBlob?: (path: string) => Promise<Blob> };
+    capabilities?: { canEdit?: boolean; canSave?: boolean; canReadBlob?: boolean; canCloseTabs?: boolean };
+    readOnly?: boolean;
+    onActiveTabChange: (tabId: string | null) => void;
+    onTabsChange: (tabs: Array<{ id: string; name: string; content: string }>) => void;
   }) => {
     const tab = tabs.find(item => item.id === activeTabId) ?? tabs[0];
-    return tab ? <textarea aria-label={tab.name} readOnly value={tab.content} /> : null;
+    const [blobSummary, setBlobSummary] = React.useState('');
+
+    React.useEffect(() => {
+      if (!tab?.name.endsWith('.png')) return;
+      if (!capabilities?.canReadBlob || !adapter?.readBlob) {
+        setBlobSummary('missing-readBlob');
+        return;
+      }
+      void adapter.readBlob(tab.id).then(blob => setBlobSummary(`${blob.type}:${blob.size}`));
+    }, [adapter, capabilities?.canReadBlob, tab]);
+
+    return (
+      <div data-testid="file-viewer-workbench" data-readonly={readOnly ? 'true' : 'false'}>
+        <div role="tablist">
+          {tabs.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={item.id === activeTabId}
+              onClick={() => onActiveTabChange(item.id)}
+            >
+              {`${item.name} tab`}
+            </button>
+          ))}
+        </div>
+        {capabilities?.canCloseTabs !== false && tabs.map(item => (
+          <button
+            key={`close-${item.id}`}
+            type="button"
+            aria-label={`close ${item.name}`}
+            onClick={() => onTabsChange(tabs.filter(candidate => candidate.id !== item.id))}
+          >
+            close
+          </button>
+        ))}
+        {capabilities?.canSave !== false ? (
+          <button type="button" aria-label="shared.fileViewer.toolbar.save">save</button>
+        ) : null}
+        {tab?.name.endsWith('.png') ? (
+          <div aria-label={tab.name}>{blobSummary}</div>
+        ) : tab ? (
+          <textarea
+            aria-label={tab.name}
+            readOnly={readOnly || capabilities?.canEdit === false}
+            value={tab.content}
+            onChange={event => onTabsChange(tabs.map(item => (
+              item.id === tab.id ? { ...item, content: event.target.value } : item
+            )))}
+          />
+        ) : null}
+      </div>
+    );
   },
   useFileViewerTabs: () => {
     const [tabs, setTabs] = React.useState<Array<{ id: string; path: string; name: string; content: string }>>([]);
@@ -80,6 +137,13 @@ const detail = {
       mimeType: 'application/json',
       size: 24,
     },
+    {
+      path: 'assets/logo.png',
+      content: 'aGVsbG8=',
+      binary: true,
+      mimeType: 'image/png',
+      size: 5,
+    },
   ],
   validationResults: [],
   activity: [],
@@ -94,11 +158,57 @@ describe('MarketplaceFilesSection', () => {
     expect(screen.getByText('marketplace.editor.fileManager.packageFiles.title')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.fileManager.packageFiles.rootLabel')).toBeInTheDocument();
     expect(screen.getByText('codex/plugins/review-tools')).toBeInTheDocument();
+    await user.dblClick(screen.getByText('.codex-plugin'));
     expect(screen.getAllByText('plugin.json').length).toBeGreaterThan(0);
 
     await user.click(screen.getByText('README.md'));
 
     expect(screen.getByText('# Package README')).toBeInTheDocument();
+  });
+
+  it('opens multiple package files as read-only tabs', async () => {
+    const user = userEvent.setup();
+
+    render(<MarketplaceFilesSection mode="package" detail={detail} />);
+
+    await user.click(screen.getByText('README.md'));
+    await user.dblClick(screen.getByText('.codex-plugin'));
+    await user.click(screen.getAllByText('plugin.json')[0]);
+
+    expect(screen.getByRole('tab', { name: 'README.md tab' })).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('tab', { name: 'plugin.json tab' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('plugin.json')).toHaveAttribute('readonly');
+    expect(screen.queryByRole('button', { name: 'shared.fileViewer.toolbar.save' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'README.md tab' }));
+    expect(screen.getByRole('tab', { name: 'README.md tab' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('README.md')).toHaveValue('# Package README');
+  });
+
+  it('closes read-only package file tabs back to the empty state', async () => {
+    const user = userEvent.setup();
+
+    render(<MarketplaceFilesSection mode="package" detail={detail} />);
+
+    await user.click(screen.getByText('README.md'));
+    expect(screen.getByRole('tab', { name: 'README.md tab' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'close README.md' }));
+    expect(screen.queryByRole('tab', { name: 'README.md tab' })).not.toBeInTheDocument();
+    expect(screen.getByText('marketplace.editor.fileManager.viewer.noFile')).toBeInTheDocument();
+  });
+
+  it('loads package image files through the shared blob image viewer', async () => {
+    const user = userEvent.setup();
+
+    render(<MarketplaceFilesSection mode="package" detail={detail} />);
+
+    await user.dblClick(screen.getByText('assets'));
+    await user.click(screen.getByText('logo.png'));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('logo.png')).toHaveTextContent('image/png:5');
+    });
   });
 
   it('renders skills as read-only files', async () => {

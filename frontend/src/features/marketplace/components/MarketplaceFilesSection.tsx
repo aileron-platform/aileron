@@ -2,8 +2,6 @@ import React from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  Copy,
-  Download,
   FileArchive,
   FolderPlus,
   MoreHorizontal,
@@ -20,7 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu';
-import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import {
   BatchDeleteDialog,
@@ -38,7 +35,6 @@ import {
 import { FileViewerWorkbench, useFileViewerTabs } from '@/shared/components/file-workbench/viewer-entry';
 import type {
   FileViewerWorkbenchAdapter,
-  FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench/viewer-entry';
 import type {
   MarketplaceFeatureContentItem,
@@ -59,7 +55,6 @@ import {
   marketplaceRenameNode,
 } from '../adapters/marketplaceFileTreeAdapter';
 import { createMarketplaceFileWorkbenchAdapter } from '../adapters/marketplaceFileWorkbenchAdapter';
-import { downloadBlob } from '../utils/downloadBlob';
 import { MarketplaceSectionSidebarShell } from './MarketplaceSectionSidebarShell';
 
 const MARKETPLACE_FILES_SIDEBAR_DEFAULT_WIDTH = 320;
@@ -100,12 +95,6 @@ interface MarketplaceReadOnlyFileTreeViewerProps {
   initialNodes: FileTreeNode[];
   rootLabel?: string;
   viewerAdapter?: FileViewerWorkbenchAdapter;
-}
-
-interface MarketplaceReadOnlyContentWorkbenchProps {
-  tabs: FileViewerWorkbenchTab[];
-  activeTabId: string | null;
-  adapter?: FileViewerWorkbenchAdapter;
 }
 
 const defaultFileName = (item: MarketplaceFeatureContentItem, extension = 'md') =>
@@ -259,6 +248,20 @@ const isMarketplaceBinaryFile = (node: FileTreeNode | null): boolean => {
 const getStringField = (value: unknown, fallback = ''): string => (
   typeof value === 'string' && value.trim() ? value : fallback
 );
+
+const marketplaceBlobFromContent = (
+  content: string,
+  mimeType: string,
+  binary: boolean,
+): Blob => {
+  if (!binary) {
+    return new Blob([content], { type: mimeType });
+  }
+
+  const byteCharacters = atob(content);
+  const byteNumbers = Array.from(byteCharacters, character => character.charCodeAt(0));
+  return new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+};
 
 interface MarketplaceEditorResourceItem {
   id: string;
@@ -817,7 +820,7 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
         return response.blob();
       }
       const mimeType = getStringField(node?.metadata?.mimeType, 'application/octet-stream');
-      return new Blob([contentsRef.current[path] ?? ''], { type: mimeType });
+      return marketplaceBlobFromContent(contentsRef.current[path] ?? '', mimeType, node?.metadata?.binary === true);
     },
     saveFile: handleSaveFile,
     copyPath: async (path) => {
@@ -1219,81 +1222,49 @@ const MarketplaceReadOnlyFileTreeViewer: React.FC<MarketplaceReadOnlyFileTreeVie
   viewerAdapter,
 }) => {
   const { t } = useI18n();
-  const { toast } = useToast();
   const [sidebarWidth, setSidebarWidth] = React.useState(MARKETPLACE_FILES_SIDEBAR_DEFAULT_WIDTH);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const [isSidebarResizing, setIsSidebarResizing] = React.useState(false);
   const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
-  const firstFilePath = React.useMemo(() => marketplaceFindFirstFilePath(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
     initialNodes,
     initialExpandedIds: [],
-    initialSelectedId: firstFilePath,
+    initialSelectedId: null,
     enableMultiSelect: false,
   });
-  const [activePath, setActivePath] = React.useState(firstFilePath ?? '');
+  const fileTabs = useFileViewerTabs();
   const contents = React.useMemo(() => marketplaceFileContentsFromTree(initialNodes), [initialNodes]);
   const fallbackViewerAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
     readFile: async (path) => contents[path] ?? '',
+    readBlob: async (path) => {
+      const node = treeState.flatNodes.find(item => item.path === path);
+      const mimeType = getStringField(node?.metadata?.mimeType, 'application/octet-stream');
+      return marketplaceBlobFromContent(contents[path] ?? '', mimeType, node?.metadata?.binary === true);
+    },
     copyPath: async (path) => {
       await navigator.clipboard.writeText(path);
     },
-  }), [contents]);
+  }), [contents, treeState.flatNodes]);
 
-  const activeNode = React.useMemo(
-    () => treeState.flatNodes.find(node => node.path === activePath && node.type === 'file') ?? null,
-    [activePath, treeState.flatNodes],
-  );
-
-  const activeViewerTabs = React.useMemo<FileViewerWorkbenchTab[]>(() => {
-    if (!activeNode) return [];
-    const content = contents[activeNode.path] ?? '';
-    return [{
-      id: activeNode.path,
-      path: activeNode.path,
-      name: activeNode.name,
-      content,
-      originalContent: content,
-      isModified: false,
-    }];
-  }, [activeNode, contents]);
-
-  React.useEffect(() => {
-    if (activeNode) return;
-    const nextFile = treeState.flatNodes.find(node => node.type === 'file');
-    setActivePath(nextFile?.path ?? '');
-  }, [activeNode, treeState.flatNodes]);
+  const openFileInTab = React.useCallback((node: FileTreeNode) => {
+    if (node.type !== 'file') return;
+    fileTabs.openFile(node, contents[node.path] ?? '');
+  }, [contents, fileTabs]);
 
   const handleNodeClick = React.useCallback((node: FileTreeNode, modifier: SelectionModifier) => {
     treeState.selectNodeWithModifier(node.path, modifier);
     if (node.type === 'file') {
-      setActivePath(node.path);
+      openFileInTab(node);
     }
-  }, [treeState]);
+  }, [openFileInTab, treeState]);
 
   const handleNodeDoubleClick = React.useCallback((node: FileTreeNode) => {
     if (node.type === 'file') {
-      setActivePath(node.path);
+      openFileInTab(node);
     } else {
       treeState.toggleNode(node.path);
     }
-  }, [treeState]);
-
-  const handleCopy = async () => {
-    if (!activeNode) return;
-    try {
-      await navigator.clipboard.writeText(contents[activeNode.path] ?? '');
-      toast({ title: t('marketplace.detail.viewer.copySuccess') });
-    } catch {
-      toast({ title: t('marketplace.detail.viewer.copyFailed'), variant: 'destructive' });
-    }
-  };
-
-  const handleDownload = () => {
-    if (!activeNode) return;
-    const blob = new Blob([contents[activeNode.path] ?? ''], { type: 'text/markdown' });
-    downloadBlob(blob, activeNode.name);
-  };
+  }, [openFileInTab, treeState]);
 
   const handleSidebarResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -1425,70 +1396,29 @@ const MarketplaceReadOnlyFileTreeViewer: React.FC<MarketplaceReadOnlyFileTreeVie
       </div>
 
       <div className="min-w-0 flex-1 overflow-hidden">
-        {!activeNode ? (
+        {fileTabs.tabs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {t('marketplace.editor.fileManager.viewer.noFile')}
           </div>
         ) : (
-          <div className="flex h-full flex-col bg-background">
-            <div className="flex h-12 items-center justify-between border-b border-border px-4">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-foreground">{activeNode.name}</div>
-                <div className="truncate font-mono text-xs text-muted-foreground">{activeNode.path}</div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCopy}>
-                  <Copy className="mr-1.5 h-3.5 w-3.5" />
-                  {t('marketplace.detail.viewer.copy')}
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleDownload}>
-                  <Download className="mr-1.5 h-3.5 w-3.5" />
-                  {t('marketplace.detail.viewer.download')}
-                </Button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="mx-auto max-w-4xl">
-                <MarketplaceReadOnlyContentWorkbench
-                  tabs={activeViewerTabs}
-                  activeTabId={activeNode.path}
-                  adapter={viewerAdapter ?? fallbackViewerAdapter}
-                />
-              </div>
-            </div>
-          </div>
+          <FileViewerWorkbench
+            tabs={fileTabs.tabs}
+            activeTabId={fileTabs.activeTabId}
+            adapter={viewerAdapter ?? fallbackViewerAdapter}
+            readOnly
+            capabilities={{
+              canEdit: false,
+              canSave: false,
+              canReadBlob: true,
+              canCopyPath: true,
+              canCloseTabs: true,
+            }}
+            onTabsChange={fileTabs.applyTabsChange}
+            onActiveTabChange={fileTabs.setActiveTabId}
+            className="h-full"
+          />
         )}
       </div>
-    </div>
-  );
-};
-
-const MarketplaceReadOnlyContentWorkbench: React.FC<MarketplaceReadOnlyContentWorkbenchProps> = ({
-  tabs,
-  activeTabId,
-  adapter,
-}) => {
-  const fallbackAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
-    readFile: async (path) => tabs.find(tab => tab.path === path)?.content ?? '',
-  }), [tabs]);
-
-  return (
-    <div className="h-[32rem] min-h-64 overflow-hidden rounded-md border border-border">
-      <FileViewerWorkbench
-        tabs={tabs}
-        activeTabId={activeTabId}
-        adapter={adapter ?? fallbackAdapter}
-        readOnly
-        hideChrome
-        capabilities={{
-          canEdit: false,
-          canSave: false,
-          canCloseTabs: false,
-        }}
-        onTabsChange={() => undefined}
-        onActiveTabChange={() => undefined}
-        className="h-full"
-      />
     </div>
   );
 };

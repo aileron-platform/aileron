@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import difflib
 import mimetypes
 import os
@@ -426,7 +427,7 @@ class MarketplaceService:
                 content = raw.decode("utf-8")
                 binary = False
             except UnicodeDecodeError:
-                content = ""
+                content = base64.b64encode(raw).decode("ascii")
                 binary = True
 
             files.append(MarketplacePackageFile(
