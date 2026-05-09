@@ -42,6 +42,7 @@ export interface FileViewerWorkbenchFocusToolbarParams {
   subtitle?: ReactNode;
   metadata?: ReactNode;
   actions?: ReactNode;
+  onExit?: () => void;
 }
 
 export interface FileViewerWorkbenchProps {
@@ -52,6 +53,7 @@ export interface FileViewerWorkbenchProps {
   statusMetadata?: FileViewerWorkbenchStatusMetadata;
   className?: string;
   headerActions?: ReactNode;
+  hideChrome?: boolean;
   readOnly?: boolean;
   isExpanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;

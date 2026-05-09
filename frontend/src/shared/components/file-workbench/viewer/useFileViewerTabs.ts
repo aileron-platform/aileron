@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
-import type { FileTreeNode } from '@/shared/components/file-workbench';
-import type { FileViewerWorkbenchTab } from '@/shared/components/file-workbench/viewer-entry';
+import type { FileTreeNode } from '../types';
+import type { FileViewerWorkbenchTab } from './types';
 
-export interface MarketplaceFileTabsApi {
+export interface UseFileViewerTabsReturn {
   tabs: FileViewerWorkbenchTab[];
   activeTabId: string | null;
   activeTab: FileViewerWorkbenchTab | null;
@@ -17,7 +17,7 @@ const isPathUnder = (id: string, base: string): boolean => (
   id === base || id.startsWith(`${base}/`)
 );
 
-export const useMarketplaceFileTabs = (): MarketplaceFileTabsApi => {
+export const useFileViewerTabs = (): UseFileViewerTabsReturn => {
   const [tabs, setTabs] = useState<FileViewerWorkbenchTab[]>([]);
   const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
 

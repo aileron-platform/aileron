@@ -44,6 +44,11 @@ const marketplace = {
     outputStyle: 'Output styles',
     skills: 'Skills',
   },
+  viewer: {
+    readOnly: '唯讀',
+    emptyState: '未選擇檔案',
+    copyPath: '複製路徑',
+  },
   packageTypes: {
     plugin: 'Plugin',
     extension: 'Extension',
@@ -700,6 +705,7 @@ const marketplace = {
       title: 'AGENTS.md',
       description: '隨 package 安裝到 workspace 的操作指引。',
       placeholder: '撰寫 AGENTS.md 指引...',
+      defaultContent: '# {{fileName}}\n\n使用此 package 指引目標 workspace 的 CLI 行為。\n\n## Review policy\n\n- 先回報 findings，再提供摘要。\n- 包含具體檔案參照。\n- 優先使用現有驗證指令。\n',
       status: {
         loading: '正在載入 AGENTS.md...',
       },
@@ -780,6 +786,7 @@ const marketplace = {
         delete: '刪除',
         copy: '複製',
         download: '下載',
+        more: '更多操作',
       },
       editor: {
         placeholder: '撰寫 Markdown 內容...',

@@ -126,6 +126,14 @@ describe('FileViewerWorkbench', () => {
     expect(onActiveTabChange).toHaveBeenCalledWith('/docs/b.ts');
   });
 
+  it('can hide tab and status chrome for embedded single-file previews', () => {
+    renderWorkbench({ hideChrome: true });
+
+    expect(screen.queryByText('a.md')).not.toBeInTheDocument();
+    expect(screen.queryByText('shared.fileViewer.status.lineCount:1')).not.toBeInTheDocument();
+    expect(screen.getByText('markdown:# A')).toBeInTheDocument();
+  });
+
   it('dispatches Markdown, Mermaid, image, Draw.io fallback, and code viewers', () => {
     renderWorkbench();
     expect(screen.getByText('markdown:# A')).toBeInTheDocument();

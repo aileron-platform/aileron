@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { FileTreeNode } from '@/shared/components/file-workbench';
-import { useMarketplaceFileTabs } from './useMarketplaceFileTabs';
+import type { FileTreeNode } from '../types';
+import { useFileViewerTabs } from './useFileViewerTabs';
 
 const buildNode = (path: string, name?: string): FileTreeNode => ({
   id: path,
@@ -10,9 +10,9 @@ const buildNode = (path: string, name?: string): FileTreeNode => ({
   type: 'file',
 });
 
-describe('useMarketplaceFileTabs', () => {
+describe('useFileViewerTabs', () => {
   it('opens a file as a new tab and activates it', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/a.md'), 'A');
@@ -31,7 +31,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('reactivates an existing tab without duplicating', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/a.md'), 'A');
@@ -44,7 +44,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('falls back to the last tab when active tab is removed via tabs change', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/a.md'), 'A');
@@ -61,7 +61,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('clears active tab id when last tab is closed', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/a.md'), 'A');
@@ -76,7 +76,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('renames matching tab id, path and name and preserves active tab id when active tab renamed', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/folder/b.md'), 'B');
@@ -97,7 +97,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('renames descendant tab paths when a directory is renamed', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/folder/a.md'), 'A');
@@ -116,7 +116,7 @@ describe('useMarketplaceFileTabs', () => {
   });
 
   it('removes tabs and clears active id when paths are deleted', () => {
-    const { result } = renderHook(() => useMarketplaceFileTabs());
+    const { result } = renderHook(() => useFileViewerTabs());
 
     act(() => {
       result.current.openFile(buildNode('/pkg/a.md'), 'A');

@@ -9,6 +9,7 @@ import type {
   FileUploadOptions,
   FileUploadResult,
 } from '@/shared/components/file-workbench';
+import type { FileViewerWorkbenchAdapter as SharedFileViewerWorkbenchAdapter } from '@/shared/components/file-workbench/viewer-entry';
 import type { MarketplacePackageFile, MarketplaceProvider } from '@/shared/types/marketplace';
 import {
   createMarketplacePackageFileTree,
@@ -25,7 +26,7 @@ export interface MarketplaceFileWorkbenchAdapterContext {
   readOnly?: boolean;
 }
 
-export interface MarketplaceFileWorkbenchAdapter extends FileTreeDataAdapter {
+export interface MarketplaceFileWorkbenchAdapter extends FileTreeDataAdapter, SharedFileViewerWorkbenchAdapter {
   read: (path: string) => Promise<string>;
   write: (path: string, content: string) => Promise<void>;
   rename: (oldPath: string, newPath: string) => Promise<FileOperationResponse>;
@@ -228,6 +229,10 @@ export const createMarketplaceFileWorkbenchAdapter = (
       return adapter.getContent(path);
     },
 
+    async readFile(path) {
+      return adapter.getContent(path);
+    },
+
     async write(path, content) {
       if (context.readOnly) {
         throw new Error('marketplace.fileTree.error.readOnly');
@@ -249,6 +254,14 @@ export const createMarketplaceFileWorkbenchAdapter = (
         throw new Error('marketplace.fileTree.error.write');
       }
       setFiles(nextFiles);
+    },
+
+    async saveFile(path, content) {
+      await adapter.write(path, content);
+    },
+
+    async copyPath(path) {
+      await navigator.clipboard.writeText(path);
     },
 
     async rename(oldPath, newPath) {

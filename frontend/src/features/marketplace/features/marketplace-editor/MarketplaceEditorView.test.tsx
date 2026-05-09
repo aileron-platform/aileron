@@ -11,7 +11,11 @@ import type { MarketplacePackageDetail, MarketplaceProvider } from '@/shared/typ
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: (key: string, values?: Record<string, string>) => (
+      key === 'marketplace.editor.agentsMd.defaultContent'
+        ? `# ${values?.fileName ?? 'AGENTS.md'}\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n`
+        : key
+    ),
   }),
 }));
 
@@ -102,6 +106,76 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => {
           ) : null}
         </div>
       );
+    },
+    FileFocusToolbar: ({ title, subtitle, onExit }: {
+      title: React.ReactNode;
+      subtitle?: React.ReactNode;
+      onExit: () => void;
+    }) => (
+      <div data-testid="file-focus-toolbar">
+        <span>{title}</span>
+        <span>{subtitle}</span>
+        <button type="button" onClick={onExit}>exit</button>
+      </div>
+    ),
+    useFileViewerTabs: () => {
+      const [tabs, setTabs] = React.useState<MockTab[]>([]);
+      const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+      const openFile = React.useCallback((node: { path: string; name: string }, content: string) => {
+        setTabs(prev => {
+          if (prev.some(tab => tab.id === node.path)) return prev;
+          return [
+            ...prev,
+            {
+              id: node.path,
+              path: node.path,
+              name: node.name,
+              content,
+              originalContent: content,
+              isModified: false,
+            },
+          ];
+        });
+        setActiveTabId(node.path);
+      }, []);
+      const applyTabsChange = React.useCallback((nextTabs: MockTab[]) => {
+        setTabs(nextTabs);
+        setActiveTabId(prev => {
+          if (prev && nextTabs.some(tab => tab.id === prev)) return prev;
+          return nextTabs[nextTabs.length - 1]?.id ?? null;
+        });
+      }, []);
+      const renamePath = React.useCallback((oldPath: string, newPath: string, newName: string) => {
+        setTabs(prev => prev.map(tab => (
+          tab.path === oldPath
+            ? { ...tab, id: newPath, path: newPath, name: newName }
+            : tab.path.startsWith(`${oldPath}/`)
+              ? { ...tab, id: tab.path.replace(oldPath, newPath), path: tab.path.replace(oldPath, newPath) }
+              : tab
+        )));
+        setActiveTabId(prev => {
+          if (!prev) return prev;
+          if (prev === oldPath) return newPath;
+          return prev.startsWith(`${oldPath}/`) ? prev.replace(oldPath, newPath) : prev;
+        });
+      }, []);
+      const removePaths = React.useCallback((paths: string[]) => {
+        const isAffected = (id: string) => paths.some(path => id === path || id.startsWith(`${path}/`));
+        setTabs(prev => prev.filter(tab => !isAffected(tab.id)));
+        setActiveTabId(prev => (prev && isAffected(prev) ? null : prev));
+      }, []);
+      const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
+
+      return {
+        tabs,
+        activeTabId,
+        activeTab,
+        openFile,
+        setActiveTabId,
+        applyTabsChange,
+        renamePath,
+        removePaths,
+      };
     },
   };
 });

@@ -61,6 +61,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   statusMetadata,
   className,
   headerActions,
+  hideChrome: hideChromeProp = false,
   readOnly = false,
   isExpanded,
   onExpandedChange,
@@ -87,7 +88,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const effectiveExpanded = isExpanded ?? uncontrolledExpanded;
-  const hideChrome = effectiveExpanded && hideChromeWhenExpanded;
+  const hideChrome = hideChromeProp || (effectiveExpanded && hideChromeWhenExpanded);
   const isTabWritable = useCallback((tab: FileViewerWorkbenchTab | null) => (
     tab ? (isPathWritable?.(tab.path) ?? true) : true
   ), [isPathWritable]);
@@ -312,7 +313,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   }, [effectiveExpanded, setExpanded, tabs.length]);
 
   const renderSharedFocusToolbar = (params: FileViewerWorkbenchFocusToolbarParams) => (
-    renderFocusToolbar?.(params)
+    renderFocusToolbar?.({ ...params, onExit: () => setExpanded(false) })
   );
 
   const renderActiveViewer = () => {
@@ -426,6 +427,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
                 ) : null}
               </>
             ),
+            onExit: () => setExpanded(false),
           })}
           <div className="min-h-0 flex-1">{editor}</div>
         </div>

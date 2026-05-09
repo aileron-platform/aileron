@@ -44,6 +44,11 @@ const marketplace = {
     outputStyle: 'Output styles',
     skills: 'Skills',
   },
+  viewer: {
+    readOnly: 'Read-only',
+    emptyState: 'No file selected',
+    copyPath: 'Copy path',
+  },
   packageTypes: {
     plugin: 'Plugin',
     extension: 'Extension',
@@ -700,6 +705,7 @@ const marketplace = {
       title: 'AGENTS.md',
       description: 'Workspace guidance installed with the package.',
       placeholder: 'Write AGENTS.md guidance...',
+      defaultContent: '# {{fileName}}\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n',
       status: {
         loading: 'Loading AGENTS.md...',
       },
@@ -780,6 +786,7 @@ const marketplace = {
         delete: 'Delete',
         copy: 'Copy',
         download: 'Download',
+        more: 'More actions',
       },
       editor: {
         placeholder: 'Write Markdown content...',

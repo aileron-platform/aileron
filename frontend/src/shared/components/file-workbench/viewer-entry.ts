@@ -3,6 +3,7 @@ export {
   FileFocusToolbar,
   FileEditor,
   CodeTextEditor,
+  useFileViewerTabs,
   SharedImageViewer,
   SharedDrawioViewer,
   SharedMarkdownViewer,
@@ -15,6 +16,7 @@ export {
 
 export type {
   FileEditorProps,
+  UseFileViewerTabsReturn,
   FileViewerWorkbenchAdapter,
   FileViewerWorkbenchCapabilities,
   FileViewerWorkbenchProps,

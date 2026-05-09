@@ -17,9 +17,23 @@ vi.mock('@/shared/components/markdown/MarkdownContent', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
-  CodeTextEditor: ({ content, fileName }: { content: string; fileName: string }) => (
-    <textarea aria-label={fileName} readOnly value={content} />
-  ),
+  FileViewerWorkbench: ({ tabs, activeTabId, readOnly }: {
+    tabs: Array<{ id: string; path: string; name: string; content: string }>;
+    activeTabId: string | null;
+    readOnly?: boolean;
+  }) => {
+    const activeTab = tabs.find(tab => tab.id === activeTabId) ?? tabs[0] ?? null;
+    return activeTab ? (
+      <div data-testid="file-viewer-workbench">
+        <textarea
+          aria-label={activeTab.name}
+          data-readonly={readOnly ? 'true' : 'false'}
+          readOnly={readOnly}
+          value={activeTab.content}
+        />
+      </div>
+    ) : null;
+  },
 }));
 
 vi.mock('@/shared/components/ui/use-toast', () => ({
@@ -226,7 +240,9 @@ describe('MarketplaceDetailView', () => {
 
     await user.dblClick(screen.getByText('scripts'));
     await user.click(screen.getByText('check.sh'));
-    expect(screen.getByLabelText('check.sh')).toHaveValue('#!/usr/bin/env bash\nset -euo pipefail\n');
+    const shellPreview = screen.getByLabelText('check.sh');
+    expect(shellPreview).toHaveValue('#!/usr/bin/env bash\nset -euo pipefail\n');
+    expect(shellPreview).toHaveAttribute('readonly');
   });
 
   it('renders sibling provider variants and navigates to the selected variant', async () => {
