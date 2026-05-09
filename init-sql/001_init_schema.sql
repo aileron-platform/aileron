@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS knowledge_bases (
     slug varchar(255) NOT NULL,
     name varchar(255) NOT NULL,
     description text,
+    template_id varchar(64) DEFAULT 'general' NOT NULL,
     owner_id varchar(128) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     current_size_bytes integer NOT NULL DEFAULT 0,
     quota_bytes integer,
@@ -299,6 +300,7 @@ COMMENT ON COLUMN knowledge_bases.id IS 'Knowledge base unique ID';
 COMMENT ON COLUMN knowledge_bases.slug IS 'Knowledge base slug';
 COMMENT ON COLUMN knowledge_bases.name IS 'Knowledge base name';
 COMMENT ON COLUMN knowledge_bases.description IS 'Knowledge base description';
+COMMENT ON COLUMN knowledge_bases.template_id IS 'Knowledge base template ID';
 COMMENT ON COLUMN knowledge_bases.owner_id IS 'Knowledge base owner user ID';
 COMMENT ON COLUMN knowledge_bases.current_size_bytes IS 'Current storage usage in bytes';
 COMMENT ON COLUMN knowledge_bases.quota_bytes IS 'Optional storage quota in bytes';
