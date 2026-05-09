@@ -1,4 +1,21 @@
 const agentSettings = {
+  settings: {
+    list: {
+      search: {
+        placeholder: 'Search settings...',
+      },
+      empty: {
+        title: 'No settings found',
+        description: 'Adjust the filters or create a new item.',
+      },
+      scope: {
+        all: 'All scopes',
+      },
+      actions: {
+        create: 'Create',
+      },
+    },
+  },
   claude: {
     agentsMd: 'CLAUDE.md',
     hooks: {

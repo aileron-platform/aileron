@@ -23,7 +23,12 @@ import {
 import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
 import { createLogger } from '@/shared/services/logger';
-import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
+import {
+  SettingsListWorkbench,
+  SettingsWorkflowCountBadge,
+  SettingsWorkflowShell,
+  useSettingsListController,
+} from '@/shared/components/settings-workflow';
 
 const logger = createLogger('HooksSettingsPage');
 
@@ -84,6 +89,15 @@ const removeHookFromMap = (hooks: AgentHookRuleMap, target: AgentHook): AgentHoo
 
 const DEFAULT_HOOK_SCOPES: AgentScope[] = ['project', 'user', 'local', 'plugin'];
 
+const SCOPE_FILTER_ICONS: Record<string, React.ReactNode> = {
+  all: <Layers className="h-3 w-3" />,
+  project: <FolderGit className="h-3 w-3" />,
+  user: <User className="h-3 w-3" />,
+  local: <HardDrive className="h-3 w-3" />,
+  plugin: <Puzzle className="h-3 w-3" />,
+  extension: <Puzzle className="h-3 w-3" />,
+};
+
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
   availableScopes?: AgentScope[];
@@ -100,11 +114,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   supportsActionMetadata = false,
 }) => {
   const [scopeDocuments, setScopeDocuments] = useState<HookScopeState>(() => createEmptyScopeDocuments());
-  const [search, setSearch] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<'all' | AgentHook['scope']>('all');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
-  const [activeHook, setActiveHook] = useState<AgentHook | null>(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +145,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
     [t, hookEvents, i18nNamespace],
   );
 
-  const describeEvent = (eventName: string) => eventLabels[eventName] ?? eventName;
+  const describeEvent = useCallback((eventName: string) => eventLabels[eventName] ?? eventName, [eventLabels]);
 
   const dialogEventOptions = useMemo<EventOption[] | undefined>(() => {
     if (!hookEvents) return undefined;
@@ -156,11 +165,38 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
 
   const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
 
+  const getHookSearchText = useCallback((hook: AgentHook) => [
+    hook.scope,
+    hook.eventName,
+    describeEvent(hook.eventName),
+    ...hook.matchers.flatMap((matcher) => [
+      matcher.matcher,
+      ...matcher.hooks.map((exec) => exec.command),
+    ]),
+  ], [describeEvent]);
+
+  const {
+    filteredItems: filteredHooks,
+    selectedItem: activeHook,
+    scope: scopeFilter,
+    setScope: setScopeFilter,
+    query: search,
+    setQuery: setSearch,
+    editorMode: dialogMode,
+    editorOpen: dialogOpen,
+    openCreate,
+    openEdit,
+    closeEditor,
+  } = useSettingsListController<AgentHook>(hooks, {
+    getScope: (hook) => hook.scope,
+    getSearchText: getHookSearchText,
+  });
+
   useEffect(() => {
-    if (scopeFilter !== 'all' && !effectiveScopes.includes(scopeFilter)) {
+    if (scopeFilter !== 'all' && !effectiveScopes.includes(scopeFilter as AgentHook['scope'])) {
       setScopeFilter('all');
     }
-  }, [effectiveScopes, scopeFilter]);
+  }, [effectiveScopes, scopeFilter, setScopeFilter]);
 
   const scopeFilterOptions = useMemo(() => {
     const options: Record<string, string> = {
@@ -171,25 +207,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
     }
     return options;
   }, [t, effectiveScopes, i18nNamespace]);
-
-  const filteredHooks = useMemo(() => {
-    return hooks.filter((hook) => {
-      if (scopeFilter !== 'all' && hook.scope !== scopeFilter) {
-        return false;
-      }
-      if (!search) {
-        return true;
-      }
-      const keyword = search.toLowerCase();
-      if (hook.scope.includes(keyword)) return true;
-      if (hook.eventName.toLowerCase().includes(keyword)) return true;
-      if (describeEvent(hook.eventName).toLowerCase().includes(keyword)) return true;
-      return hook.matchers.some((matcher) => {
-        if (matcher.matcher.toLowerCase().includes(keyword)) return true;
-        return matcher.hooks.some((exec) => exec.command?.toLowerCase().includes(keyword));
-      });
-    });
-  }, [hooks, search, scopeFilter, describeEvent]);
 
   const refreshHooks = useCallback(async () => {
     if (runtimeLoading) {
@@ -310,8 +327,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
       };
 
       setScopeDocuments(nextDocuments);
-      setDialogOpen(false);
-      setActiveHook(null);
+      closeEditor();
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : t(`${i18nNamespace}.hooks.messages.updateFailed`);
@@ -376,266 +392,251 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   };
 
   const handleOpenCreate = () => {
-    setDialogMode('create');
-    setActiveHook(null);
-    setDialogOpen(true);
+    openCreate();
   };
 
   const handleOpenEdit = (hook: AgentHook) => {
     if (!canEdit(hook)) {
       return;
     }
-    setDialogMode('edit');
-    setActiveHook(hook);
-    setDialogOpen(true);
+    openEdit(hook);
   };
 
-
-
   return (
-    <>
-      <SettingsWorkflowShell
-        title={t(`${i18nNamespace}.hooks.header.title`)}
-        icon={Zap}
-        headerActions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
-              <span className="text-xs text-muted-foreground">
-                {t(`${i18nNamespace}.hooks.filters.scope.label`)}
-              </span>
-              <Select value={scopeFilter} onValueChange={(value) => setScopeFilter(value as typeof scopeFilter)}>
-                <SelectTrigger className="h-7 w-32 text-xs">
-                  <SelectValue placeholder={t(`${i18nNamespace}.hooks.filters.scope.placeholder`)} />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(scopeFilterOptions).map(([value, label]) => {
-                    const icons: Record<string, React.ReactNode> = {
-                      all: <Layers className="h-3 w-3" />,
-                      project: <FolderGit className="h-3 w-3" />,
-                      user: <User className="h-3 w-3" />,
-                      local: <HardDrive className="h-3 w-3" />,
-                      plugin: <Puzzle className="h-3 w-3" />,
-                      extension: <Puzzle className="h-3 w-3" />,
-                    };
-                    return (
-                      <SelectItem key={value} value={value}>
-                        <div className="flex items-center gap-2">
-                          {icons[value]}
-                          {label}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={() => refreshHooks()}
-              disabled={isBusy}
+    <SettingsWorkflowShell
+      title={t(`${i18nNamespace}.hooks.header.title`)}
+      icon={Zap}
+      headerActions={
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
+            <span className="text-xs text-muted-foreground">
+              {t(`${i18nNamespace}.hooks.filters.scope.label`)}
+            </span>
+            <Select
+              value={scopeFilter}
+              onValueChange={(value) => setScopeFilter(value as typeof scopeFilter)}
             >
-              <RefreshCw className={`mr-1 h-3 w-3 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-              {t(`${i18nNamespace}.hooks.actions.refresh`)}
-            </Button>
-            <Button
-              size="sm"
-              className="h-7 px-2 text-xs"
-              onClick={handleOpenCreate}
-              disabled={!isRuntimeReady || processing}
-            >
-              <Plus className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.hooks.actions.create`)}
-            </Button>
+              <SelectTrigger className="h-7 w-32 text-xs">
+                <SelectValue placeholder={t(`${i18nNamespace}.hooks.filters.scope.placeholder`)} />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(scopeFilterOptions).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    <div className="flex items-center gap-2">
+                      {SCOPE_FILTER_ICONS[value]}
+                      {label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        }
-        error={error}
-        hasItems
-        summary={
-          <SettingsWorkflowCountBadge
-            label={t(`${i18nNamespace}.hooks.stats.hooks`, { count: filteredHooks.length })}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => refreshHooks()}
+            disabled={isBusy}
+          >
+            <RefreshCw className={`mr-1 h-3 w-3 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {t(`${i18nNamespace}.hooks.actions.refresh`)}
+          </Button>
+          <Button
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={handleOpenCreate}
+            disabled={!isRuntimeReady || processing}
+          >
+            <Plus className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.hooks.actions.create`)}
+          </Button>
+        </div>
+      }
+      error={error}
+      hasItems
+      summary={
+        <SettingsWorkflowCountBadge
+          label={t(`${i18nNamespace}.hooks.stats.hooks`, { count: filteredHooks.length })}
+        />
+      }
+      controls={
+        <div className="relative w-full max-w-md">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t(`${i18nNamespace}.hooks.search.placeholder`)}
+            className="h-7 pl-9 text-xs"
           />
-        }
-        controls={
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t(`${i18nNamespace}.hooks.search.placeholder`)}
-              className="h-7 pl-9 text-xs"
-            />
-          </div>
-        }
-        emptyTitle={t(`${i18nNamespace}.hooks.header.title`)}
-        emptyDescription={t(`${i18nNamespace}.hooks.list.empty`)}
-        contentClassName="h-full overflow-y-auto"
-      >
-        <div className="space-y-4 p-6">
-            {filteredHooks.map((hook) => {
-              const totalMatchers = hook.matchers.length;
-              const totalCommands = hook.matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
+        </div>
+      }
+      emptyTitle={t(`${i18nNamespace}.hooks.header.title`)}
+      emptyDescription={t(`${i18nNamespace}.hooks.list.empty`)}
+      contentClassName="h-full overflow-y-auto"
+    >
+      <div className="space-y-4 p-6">
+        <SettingsListWorkbench
+          items={filteredHooks}
+          getItemKey={(hook) => hook.id}
+          i18nKeys={{
+            emptyTitle: `${i18nNamespace}.hooks.header.title`,
+            emptyDescription: `${i18nNamespace}.hooks.list.empty`,
+          }}
+          card={(hook) => {
+            const totalMatchers = hook.matchers.length;
+            const totalCommands = hook.matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
 
-              return (
-                <div key={hook.id} className="relative rounded-lg border border-border bg-background p-6">
-                  <div className="flex items-start">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-3 flex items-center gap-3">
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {describeEvent(hook.eventName)}
-                        </h3>
-                        <Badge
-                          variant="outline"
-                          className={`text-xs ${getAgentSettingsSourceBadgeClassName(hook.scope)}`}
-                        >
-                          {t(`${i18nNamespace}.hooks.scope.badge.${hook.scope}`)}
+            return (
+              <div key={hook.id} className="relative rounded-lg border border-border bg-background p-6">
+                <div className="flex items-start">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-foreground">
+                        {describeEvent(hook.eventName)}
+                      </h3>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${getAgentSettingsSourceBadgeClassName(hook.scope)}`}
+                      >
+                        {t(`${i18nNamespace}.hooks.scope.badge.${hook.scope}`)}
+                      </Badge>
+                      {hook.scope === 'plugin' && hook.pluginName && (
+                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                          <Puzzle className="h-3 w-3" />
+                          {hook.pluginName}@{hook.marketplaceName}
                         </Badge>
-                        {hook.scope === 'plugin' && hook.pluginName && (
-                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                            <Puzzle className="h-3 w-3" />
-                            {hook.pluginName}@{hook.marketplaceName}
-                          </Badge>
-                        )}
-                        {hook.scope === 'extension' && hook.extensionName && (
-                          <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                            <Puzzle className="h-3 w-3" />
-                            {[hook.extensionName, hook.extensionVersion].filter(Boolean).join('@')}
-                          </Badge>
-                        )}
-                      </div>
+                      )}
+                      {hook.scope === 'extension' && hook.extensionName && (
+                        <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                          <Puzzle className="h-3 w-3" />
+                          {[hook.extensionName, hook.extensionVersion].filter(Boolean).join('@')}
+                        </Badge>
+                      )}
+                    </div>
 
-                      <div className="mb-4">
-                        <div className="mb-3 flex items-center gap-2">
-                          <Terminal className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {t(`${i18nNamespace}.hooks.matchers.title`)}
-                          </span>
-                        </div>
-                        <div className="space-y-2">
-                          {hook.matchers.map((matcher: AgentHookMatcher, matcherIndex) => (
-                            <div key={`${hook.id}-matcher-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
-                              <div className="mb-2 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-muted-foreground">
-                                    {t(`${i18nNamespace}.hooks.matchers.matcherLabel`)}
-                                  </span>
-                                  <code className="rounded bg-muted px-1 text-xs">{matcher.matcher}</code>
-                                </div>
+                    <div className="mb-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Terminal className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium text-muted-foreground">
+                          {t(`${i18nNamespace}.hooks.matchers.title`)}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {hook.matchers.map((matcher: AgentHookMatcher, matcherIndex) => (
+                          <div key={`${hook.id}-matcher-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <div className="flex items-center gap-2">
                                 <span className="text-xs text-muted-foreground">
-                                  {t(`${i18nNamespace}.hooks.matchers.actionsCount`, {
-                                    count: matcher.hooks.length,
-                                  })}
+                                  {t(`${i18nNamespace}.hooks.matchers.matcherLabel`)}
                                 </span>
+                                <code className="rounded bg-muted px-1 text-xs">{matcher.matcher}</code>
                               </div>
-                              {matcher.hooks.slice(0, 2).map((exec, execIndex) => (
-                                <div key={`${hook.id}-exec-${matcherIndex}-${execIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
-                                  <div className="mb-1 flex items-center gap-2">
-                                    <Badge variant="outline" className="px-1 py-0 text-xs">
-                                      {exec.name?.trim()
-                                        ? exec.name
-                                        : t(`${i18nNamespace}.hooks.matchers.commandLabel`)}
-                                    </Badge>
-                                    {exec.timeout && (
-                                      <span className="text-muted-foreground">
-                                        {t(`${i18nNamespace}.hooks.matchers.timeoutValue`, {
-                                          value: exec.timeout,
-                                        })}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="truncate font-mono text-muted-foreground">
-                                    {exec.command?.trim()
-                                      ? exec.command
-                                      : t(`${i18nNamespace}.hooks.matchers.noCommand`)}
-                                  </p>
-                                  {exec.description?.trim() ? (
-                                    <p className="truncate text-muted-foreground">{exec.description}</p>
-                                  ) : null}
-                                </div>
-                              ))}
-                              {matcher.hooks.length > 2 && (
-                                <div className="text-xs italic text-muted-foreground">
-                                  {t(`${i18nNamespace}.hooks.matchers.moreActions`, {
-                                    count: matcher.hooks.length - 2,
-                                  })}
-                                </div>
-                              )}
+                              <span className="text-xs text-muted-foreground">
+                                {t(`${i18nNamespace}.hooks.matchers.actionsCount`, {
+                                  count: matcher.hooks.length,
+                                })}
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                        <span>
-                          {t(`${i18nNamespace}.hooks.matchers.summary.matchers`, {
-                            count: totalMatchers,
-                          })}
-                        </span>
-                        <span>
-                          {t(`${i18nNamespace}.hooks.matchers.summary.commands`, {
-                            count: totalCommands,
-                          })}
-                        </span>
+                            {matcher.hooks.slice(0, 2).map((exec, execIndex) => (
+                              <div key={`${hook.id}-exec-${matcherIndex}-${execIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
+                                <div className="mb-1 flex items-center gap-2">
+                                  <Badge variant="outline" className="px-1 py-0 text-xs">
+                                    {exec.name?.trim()
+                                      ? exec.name
+                                      : t(`${i18nNamespace}.hooks.matchers.commandLabel`)}
+                                  </Badge>
+                                  {exec.timeout && (
+                                    <span className="text-muted-foreground">
+                                      {t(`${i18nNamespace}.hooks.matchers.timeoutValue`, {
+                                        value: exec.timeout,
+                                      })}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="truncate font-mono text-muted-foreground">
+                                  {exec.command?.trim()
+                                    ? exec.command
+                                    : t(`${i18nNamespace}.hooks.matchers.noCommand`)}
+                                </p>
+                                {exec.description?.trim() ? (
+                                  <p className="truncate text-muted-foreground">{exec.description}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                            {matcher.hooks.length > 2 && (
+                              <div className="text-xs italic text-muted-foreground">
+                                {t(`${i18nNamespace}.hooks.matchers.moreActions`, {
+                                  count: matcher.hooks.length - 2,
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="absolute top-4 right-4 flex items-center gap-2">
-                    {canEdit(hook) && (
-                      <button
-                        type="button"
-                        className="rounded-md p-2 transition-colors hover:bg-muted disabled:opacity-50"
-                        onClick={() => handleOpenEdit(hook)}
-                        disabled={!isRuntimeReady || processing}
-                        aria-label={t(`${i18nNamespace}.hooks.actions.edit`)}
-                      >
-                        <Edit className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="sr-only">{t(`${i18nNamespace}.hooks.actions.edit`)}</span>
-                      </button>
-                    )}
-                    {canDelete(hook) && (
-                      <button
-                        type="button"
-                        className="rounded-md p-2 transition-colors hover:bg-muted disabled:opacity-50"
-                        onClick={() => handleDelete(hook)}
-                        disabled={!isRuntimeReady || processing}
-                        aria-label={t(`${i18nNamespace}.hooks.actions.delete`)}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                        <span className="sr-only">{t(`${i18nNamespace}.hooks.actions.delete`)}</span>
-                      </button>
-                    )}
+                    <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                      <span>
+                        {t(`${i18nNamespace}.hooks.matchers.summary.matchers`, {
+                          count: totalMatchers,
+                        })}
+                      </span>
+                      <span>
+                        {t(`${i18nNamespace}.hooks.matchers.summary.commands`, {
+                          count: totalCommands,
+                        })}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
 
-            {filteredHooks.length === 0 && (
-              <div className="grid h-48 place-content-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-                {t(`${i18nNamespace}.hooks.list.empty`)}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                  {canEdit(hook) && (
+                    <button
+                      type="button"
+                      className="rounded-md p-2 transition-colors hover:bg-muted disabled:opacity-50"
+                      onClick={() => handleOpenEdit(hook)}
+                      disabled={!isRuntimeReady || processing}
+                      aria-label={t(`${i18nNamespace}.hooks.actions.edit`)}
+                    >
+                      <Edit className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      <span className="sr-only">{t(`${i18nNamespace}.hooks.actions.edit`)}</span>
+                    </button>
+                  )}
+                  {canDelete(hook) && (
+                    <button
+                      type="button"
+                      className="rounded-md p-2 transition-colors hover:bg-muted disabled:opacity-50"
+                      onClick={() => handleDelete(hook)}
+                      disabled={!isRuntimeReady || processing}
+                      aria-label={t(`${i18nNamespace}.hooks.actions.delete`)}
+                    >
+                      <Trash2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                      <span className="sr-only">{t(`${i18nNamespace}.hooks.actions.delete`)}</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            )}
-        </div>
-      </SettingsWorkflowShell>
-
-      <WorkspaceHookDialog
-        open={dialogOpen}
-        mode={dialogMode}
-        hook={activeHook}
-        existingHooks={hooks}
-        availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
-        eventOptions={dialogEventOptions}
-        i18nNamespace={i18nNamespace}
-        supportsActionMetadata={supportsActionMetadata}
-        onClose={() => {
-          setDialogOpen(false);
-          setActiveHook(null);
-        }}
-        onSubmit={(hook) => {
-          void handleSubmit(hook);
-        }}
-      />
-    </>
+            );
+          }}
+          dialog={(
+            <WorkspaceHookDialog
+              open={dialogOpen}
+              mode={dialogMode}
+              hook={activeHook}
+              existingHooks={hooks}
+              availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
+              eventOptions={dialogEventOptions}
+              i18nNamespace={i18nNamespace}
+              supportsActionMetadata={supportsActionMetadata}
+              onClose={closeEditor}
+              onSubmit={(hook) => {
+                void handleSubmit(hook);
+              }}
+            />
+          )}
+        />
+      </div>
+    </SettingsWorkflowShell>
   );
 };
 

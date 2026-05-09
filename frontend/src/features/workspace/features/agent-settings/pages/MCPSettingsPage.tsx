@@ -19,7 +19,12 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { useWorkspace } from '@/features/workspace/providers/WorkspaceProvider';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
-import { SettingsWorkflowCountBadge, SettingsWorkflowShell } from '@/shared/components/settings-workflow';
+import {
+  SettingsListWorkbench,
+  SettingsWorkflowCountBadge,
+  SettingsWorkflowShell,
+  useSettingsListController,
+} from '@/shared/components/settings-workflow';
 import { AgentSettingsSourceBadge, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 
 const ALL_SCOPES: AgentScope[] = ['project', 'user', 'local', 'extension', 'plugin'];
@@ -51,44 +56,43 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
   const [servers, setServers] = useState<AgentMcpServer[]>([]);
-  const [search, setSearch] = useState('');
-  const [selectedScope, setSelectedScope] = useState<AgentScope | 'all'>('all');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
   const [importOpen, setImportOpen] = useState(false);
-  const [activeServer, setActiveServer] = useState<AgentMcpServer | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visibleEnvs, setVisibleEnvs] = useState<Record<string, boolean>>({});
 
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId && !runtimeError);
 
-  const filteredServers = useMemo(() => {
-    let filtered = servers;
+  const getServerSearchText = useCallback((server: AgentMcpServer) => [
+    server.name,
+    server.command,
+    ...(server.args ?? []),
+  ], []);
 
-    if (selectedScope !== 'all') {
-      filtered = filtered.filter((server) => server.scope === selectedScope);
-    }
-
-    if (search) {
-      const keyword = search.toLowerCase();
-      filtered = filtered.filter((server) => {
-        if (server.name.toLowerCase().includes(keyword)) return true;
-        if (server.command?.toLowerCase().includes(keyword)) return true;
-        return server.args?.some((arg) => arg.toLowerCase().includes(keyword));
-      });
-    }
-
-    return filtered;
-  }, [servers, search, selectedScope]);
+  const {
+    filteredItems: filteredServers,
+    selectedItem: activeServer,
+    scope: selectedScope,
+    setScope: setSelectedScope,
+    query: search,
+    setQuery: setSearch,
+    editorMode: dialogMode,
+    editorOpen: dialogOpen,
+    openCreate,
+    openEdit,
+    closeEditor,
+  } = useSettingsListController<AgentMcpServer>(servers, {
+    getScope: (server) => server.scope,
+    getSearchText: getServerSearchText,
+  });
 
   const effectiveScopes = useMemo(() => sortAgentSettingsScopeValues(availableScopes), [availableScopes]);
 
   useEffect(() => {
-    if (selectedScope !== 'all' && !effectiveScopes.includes(selectedScope)) {
+    if (selectedScope !== 'all' && !effectiveScopes.includes(selectedScope as AgentScope)) {
       setSelectedScope('all');
     }
-  }, [effectiveScopes, selectedScope]);
+  }, [effectiveScopes, selectedScope, setSelectedScope]);
 
   const fetchServers = useCallback(async () => {
     if (!runtimeBaseUrl || !workspaceId || runtimeError) {
@@ -131,9 +135,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
   };
 
   const handleOpenCreate = () => {
-    setDialogMode('create');
-    setActiveServer(null);
-    setDialogOpen(true);
+    openCreate();
   };
 
   const handleOpenEdit = (server: AgentMcpServer) => {
@@ -145,9 +147,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
       });
       return;
     }
-    setDialogMode('edit');
-    setActiveServer(server);
-    setDialogOpen(true);
+    openEdit(server);
   };
 
   const handleSubmit = useCallback(
@@ -180,8 +180,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
           });
         }
         await fetchServers();
-        setDialogOpen(false);
-        setActiveServer(null);
+        closeEditor();
       } catch (err) {
         const message = err instanceof Error
           ? err.message
@@ -194,7 +193,7 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
         throw err instanceof Error ? err : new Error(message);
       }
     },
-    [runtimeBaseUrl, workspaceId, runtimeError, dialogMode, fetchServers, toast, api, t, i18nNamespace],
+    [runtimeBaseUrl, workspaceId, runtimeError, dialogMode, fetchServers, closeEditor, toast, api, t, i18nNamespace],
   );
 
   const handleDelete = useCallback(
@@ -327,195 +326,195 @@ const MCPSettingsPage: React.FC<MCPSettingsPageProps> = ({ apiPrefix = 'claude-c
     [runtimeBaseUrl, workspaceId, runtimeError, fetchServers, toast, api, t, i18nNamespace],
   );
 
-
   return (
     <TooltipProvider>
       <SettingsWorkflowShell
-          title={t(`${i18nNamespace}.mcp.header.title`)}
-          icon={Wrench}
-          headerActions={
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
-                <span className="text-xs text-muted-foreground">
-                  {t(`${i18nNamespace}.mcp.server.scope.label`)}
-                </span>
-                <Select value={selectedScope} onValueChange={(value) => setSelectedScope(value as AgentScope | 'all')}>
-                  <SelectTrigger className="h-7 w-32 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">
-                      <div className="flex items-center gap-2">
-                        <Layers className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.all`)}
-                      </div>
-                    </SelectItem>
-                    {effectiveScopes.map((scopeOption) => {
-                      const Icon = scopeFilterIcons[scopeOption];
-                      return (
-                        <SelectItem key={scopeOption} value={scopeOption}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.${scopeOption}`)}
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => void fetchServers()}
-                disabled={!isRuntimeReady || loading || runtimeLoading}
+        title={t(`${i18nNamespace}.mcp.header.title`)}
+        icon={Wrench}
+        headerActions={
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-1">
+              <span className="text-xs text-muted-foreground">
+                {t(`${i18nNamespace}.mcp.server.scope.label`)}
+              </span>
+              <Select
+                value={selectedScope}
+                onValueChange={(value) => setSelectedScope(value as AgentScope | 'all')}
               >
-                <RefreshCw className={`mr-1 h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-                {t(`${i18nNamespace}.mcp.header.actions.refresh`)}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
-                onClick={() => setImportOpen(true)}
-                disabled={!isRuntimeReady}
-              >
-                <Upload className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.mcp.header.actions.import`)}
-              </Button>
-              <Button size="sm" className="h-7 px-2 text-xs" onClick={handleOpenCreate} disabled={!isRuntimeReady}>
-                <Plus className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.mcp.header.actions.create`)}
-              </Button>
+                <SelectTrigger className="h-7 w-32 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <div className="flex items-center gap-2">
+                      <Layers className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.all`)}
+                    </div>
+                  </SelectItem>
+                  {effectiveScopes.map((scopeOption) => {
+                    const Icon = scopeFilterIcons[scopeOption];
+                    return (
+                      <SelectItem key={scopeOption} value={scopeOption}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3 w-3" /> {t(`${i18nNamespace}.mcp.server.scope.${scopeOption}`)}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
             </div>
-          }
-          hasItems
-          summary={
-            <SettingsWorkflowCountBadge
-              label={t(`${i18nNamespace}.mcp.stats.total`, { count: filteredServers.length })}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => void fetchServers()}
+              disabled={!isRuntimeReady || loading || runtimeLoading}
+            >
+              <RefreshCw className={`mr-1 h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
+              {t(`${i18nNamespace}.mcp.header.actions.refresh`)}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setImportOpen(true)}
+              disabled={!isRuntimeReady}
+            >
+              <Upload className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.mcp.header.actions.import`)}
+            </Button>
+            <Button size="sm" className="h-7 px-2 text-xs" onClick={handleOpenCreate} disabled={!isRuntimeReady}>
+              <Plus className="mr-1 h-3 w-3" /> {t(`${i18nNamespace}.mcp.header.actions.create`)}
+            </Button>
+          </div>
+        }
+        hasItems
+        summary={
+          <SettingsWorkflowCountBadge
+            label={t(`${i18nNamespace}.mcp.stats.total`, { count: filteredServers.length })}
+          />
+        }
+        controls={
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={t(`${i18nNamespace}.mcp.search.placeholder`)}
+              className="h-7 pl-9 text-xs"
             />
-          }
-          controls={
-            <div className="relative w-full max-w-md">
-              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 transform text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={t(`${i18nNamespace}.mcp.search.placeholder`)}
-                className="h-7 pl-9 text-xs"
-              />
-            </div>
-          }
-          emptyTitle={t(`${i18nNamespace}.mcp.header.title`)}
-          emptyDescription={t(`${i18nNamespace}.mcp.list.empty`)}
-          contentClassName="h-full overflow-y-auto"
-        >
-          <div className="space-y-4 p-6">
-              {!isRuntimeReady && !runtimeLoading && (
-                <Alert>
-                  <AlertDescription>
-                    {t(`${i18nNamespace}.mcp.status.runtimeUnavailable`, {
-                      message: t(`${i18nNamespace}.mcp.messages.runtimeNotReady`),
-                    })}
-                  </AlertDescription>
-                </Alert>
-              )}
+          </div>
+        }
+        emptyTitle={t(`${i18nNamespace}.mcp.header.title`)}
+        emptyDescription={t(`${i18nNamespace}.mcp.list.empty`)}
+        contentClassName="h-full overflow-y-auto"
+      >
+        <div className="space-y-4 p-6">
+          {!isRuntimeReady && !runtimeLoading && (
+            <Alert>
+              <AlertDescription>
+                {t(`${i18nNamespace}.mcp.status.runtimeUnavailable`, {
+                  message: t(`${i18nNamespace}.mcp.messages.runtimeNotReady`),
+                })}
+              </AlertDescription>
+            </Alert>
+          )}
 
-              {runtimeError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{runtimeError}</AlertDescription>
-                </Alert>
-              )}
+          {runtimeError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{runtimeError}</AlertDescription>
+            </Alert>
+          )}
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-              {(runtimeLoading || loading) && (
-                <div className="flex h-40 flex-col items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mb-2 h-5 w-5 animate-spin text-primary" />
-                  <span>
-                    {t(`${i18nNamespace}.mcp.list.loading`)}
-                  </span>
-                </div>
-              )}
-
-              {!runtimeLoading && !loading &&
-                filteredServers.map((server) => (
-                  <MCPServerCard
-                    key={server.id}
-                    server={server}
-                    scopeBadge={(
-                      <AgentSettingsSourceBadge
-                        source={{
-                          type: server.scope,
-                          label: t(`${i18nNamespace}.mcp.server.scope.${server.scope}`),
-                          pluginName: server.pluginName,
-                          marketplaceName: server.marketplaceName,
-                          extensionName: server.extensionName,
-                          extensionVersion: server.extensionVersion,
-                        }}
-                      />
-                    )}
-                    labels={{
-                      enabled: t(`${i18nNamespace}.mcp.server.status.enabled`),
-                      disabled: t(`${i18nNamespace}.mcp.server.status.disabled`),
-                      transportType: t(`${i18nNamespace}.mcp.serverDetails.transportType`),
-                      serverUrl: t(`${i18nNamespace}.mcp.serverDetails.serverUrl`),
-                      headers: t(`${i18nNamespace}.mcp.serverDetails.headers`),
-                      command: t(`${i18nNamespace}.mcp.serverDetails.command`),
-                      commandArgs: t(`${i18nNamespace}.mcp.serverDetails.commandArgs`),
-                      env: t(`${i18nNamespace}.mcp.serverDetails.env`),
-                      showEnvValues: t(`${i18nNamespace}.mcp.actions.showEnvValues`),
-                      hideEnvValues: t(`${i18nNamespace}.mcp.actions.hideEnvValues`),
-                      edit: t(`${i18nNamespace}.mcp.actions.edit`),
-                      delete: t(`${i18nNamespace}.mcp.actions.delete`),
-                      readOnlyTooltip: t(`${i18nNamespace}.mcp.plugin.readonly`),
-                    }}
-                    supportsToggle={supportsToggle && server.scope !== 'plugin' && server.scope !== 'extension'}
-                    canEdit={canEdit(server)}
-                    canDelete={canDelete(server)}
-                    disabled={!isRuntimeReady}
-                    envVisible={visibleEnvs[server.id]}
-                    onEdit={handleOpenEdit}
-                    onDelete={handleDelete}
-                    onToggleStatus={handleToggleStatus}
-                    onToggleEnvVisibility={(target) => {
-                      setVisibleEnvs((prev) => ({ ...prev, [target.id]: !prev[target.id] }));
+          <SettingsListWorkbench
+            items={filteredServers}
+            getItemKey={(server) => server.id}
+            isLoading={runtimeLoading || loading}
+            loading={(
+              <div className="flex h-40 flex-col items-center justify-center text-sm text-muted-foreground">
+                <Loader2 className="mb-2 h-5 w-5 animate-spin text-primary" />
+                <span>{t(`${i18nNamespace}.mcp.list.loading`)}</span>
+              </div>
+            )}
+            i18nKeys={{
+              emptyTitle: `${i18nNamespace}.mcp.header.title`,
+              emptyDescription: `${i18nNamespace}.mcp.list.empty`,
+            }}
+            card={(server) => (
+              <MCPServerCard
+                key={server.id}
+                server={server}
+                scopeBadge={(
+                  <AgentSettingsSourceBadge
+                    source={{
+                      type: server.scope,
+                      label: t(`${i18nNamespace}.mcp.server.scope.${server.scope}`),
+                      pluginName: server.pluginName,
+                      marketplaceName: server.marketplaceName,
+                      extensionName: server.extensionName,
+                      extensionVersion: server.extensionVersion,
                     }}
                   />
-                ))}
+                )}
+                labels={{
+                  enabled: t(`${i18nNamespace}.mcp.server.status.enabled`),
+                  disabled: t(`${i18nNamespace}.mcp.server.status.disabled`),
+                  transportType: t(`${i18nNamespace}.mcp.serverDetails.transportType`),
+                  serverUrl: t(`${i18nNamespace}.mcp.serverDetails.serverUrl`),
+                  headers: t(`${i18nNamespace}.mcp.serverDetails.headers`),
+                  command: t(`${i18nNamespace}.mcp.serverDetails.command`),
+                  commandArgs: t(`${i18nNamespace}.mcp.serverDetails.commandArgs`),
+                  env: t(`${i18nNamespace}.mcp.serverDetails.env`),
+                  showEnvValues: t(`${i18nNamespace}.mcp.actions.showEnvValues`),
+                  hideEnvValues: t(`${i18nNamespace}.mcp.actions.hideEnvValues`),
+                  edit: t(`${i18nNamespace}.mcp.actions.edit`),
+                  delete: t(`${i18nNamespace}.mcp.actions.delete`),
+                  readOnlyTooltip: t(`${i18nNamespace}.mcp.plugin.readonly`),
+                }}
+                supportsToggle={supportsToggle && server.scope !== 'plugin' && server.scope !== 'extension'}
+                canEdit={canEdit(server)}
+                canDelete={canDelete(server)}
+                disabled={!isRuntimeReady}
+                envVisible={visibleEnvs[server.id]}
+                onEdit={handleOpenEdit}
+                onDelete={handleDelete}
+                onToggleStatus={handleToggleStatus}
+                onToggleEnvVisibility={(target) => {
+                  setVisibleEnvs((prev) => ({ ...prev, [target.id]: !prev[target.id] }));
+                }}
+              />
+            )}
+            dialog={(
+              <>
+                <WorkspaceMCPServerDialog
+                  open={dialogOpen}
+                  mode={dialogMode}
+                  server={activeServer}
+                  availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
+                  i18nNamespace={i18nNamespace}
+                  onClose={closeEditor}
+                  onSubmit={handleSubmit}
+                />
 
-              {!runtimeLoading && !loading && filteredServers.length === 0 && isRuntimeReady && !error && (
-                <div className="grid h-48 place-content-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
-                  {t(`${i18nNamespace}.mcp.list.empty`)}
-                </div>
-              )}
-          </div>
-        </SettingsWorkflowShell>
-
-        <WorkspaceMCPServerDialog
-          open={dialogOpen}
-          mode={dialogMode}
-          server={activeServer}
-          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
-          i18nNamespace={i18nNamespace}
-          onClose={() => {
-            setDialogOpen(false);
-            setActiveServer(null);
-          }}
-          onSubmit={handleSubmit}
-        />
-
-        <MCPImportDialog
-          open={importOpen}
-          onClose={() => setImportOpen(false)}
-          onImport={handleImport}
-          availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
-          i18nNamespace={i18nNamespace}
-        />
-      
+                <MCPImportDialog
+                  open={importOpen}
+                  onClose={() => setImportOpen(false)}
+                  onImport={handleImport}
+                  availableScopes={effectiveScopes.filter((scope) => scope !== 'plugin' && scope !== 'extension')}
+                  i18nNamespace={i18nNamespace}
+                />
+              </>
+            )}
+          />
+        </div>
+      </SettingsWorkflowShell>
     </TooltipProvider>
   );
 };

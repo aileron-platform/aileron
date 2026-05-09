@@ -1,4 +1,21 @@
 const agentSettings = {
+  settings: {
+    list: {
+      search: {
+        placeholder: '搜尋設定...',
+      },
+      empty: {
+        title: '沒有設定項目',
+        description: '調整篩選條件或建立新項目。',
+      },
+      scope: {
+        all: '全部範圍',
+      },
+      actions: {
+        create: '建立',
+      },
+    },
+  },
   claude: {
     agentsMd: 'CLAUDE.md',
     hooks: {
