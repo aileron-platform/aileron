@@ -55,6 +55,10 @@ const containerManagement = {
         label: '標準容器映像',
         description: 'Aileron 標準執行環境，包含 Python、Node.js、Git、SSH、Claude Code 等完整工具鏈',
       },
+      java: {
+        label: 'Java 21 + Maven',
+        description: '預載 Eclipse Temurin JDK 21 與 Apache Maven 3.9，適合 Spring Boot、Maven 專案',
+      },
       'ubuntu-22': {
         label: 'Ubuntu 22.04',
         description: '通用 Linux 開發環境',

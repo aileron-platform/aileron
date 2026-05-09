@@ -117,6 +117,10 @@ const wizard = {
           label: 'Python runtime',
           description: 'Optimised Python environment with pip and poetry.',
         },
+        java: {
+          label: 'Java 21 + Maven',
+          description: 'Eclipse Temurin JDK 21 with Apache Maven 3.9, ready for Spring Boot and Maven projects.',
+        },
       },
     },
     workspaceCreation: {

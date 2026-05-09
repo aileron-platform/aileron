@@ -36,6 +36,26 @@ images:
     active: true
     sort_order: 1
 
+  - id: "java"
+    name: "Java 21 + Maven"
+    description: "Eclipse Temurin JDK 21 (LTS) with Apache Maven 3.9, ready for Spring Boot and Maven projects"
+    icon: "☕"
+    image: "ailerondocker/workspace-runtime:dev-java-arm64"
+    tags:
+      - "java"
+      - "maven"
+      - "jvm"
+      - "temurin"
+    features:
+      - "Java 21 (Temurin LTS)"
+      - "Apache Maven 3.9"
+      - "Inherits standard developer toolchain (Node.js, Python, Git, uv)"
+      - "SSH remote access"
+      - "Docker-in-Docker"
+    recommended: false
+    active: true
+    sort_order: 2
+
   # Future extensible image options, currently commented out.
   # - id: "python-data-science"
   #   name: "Python Data Science"

@@ -56,6 +56,10 @@ const containerManagement = {
         label: 'Standard Container Image',
         description: 'Aileron standard runtime with Python, Node.js, Git, SSH, Claude Code, and a complete developer toolchain.',
       },
+      java: {
+        label: 'Java 21 + Maven',
+        description: 'Eclipse Temurin JDK 21 with Apache Maven 3.9, ready for Spring Boot and Maven projects.',
+      },
       'ubuntu-22': {
         label: 'Ubuntu 22.04',
         description: 'General-purpose Linux development environment',

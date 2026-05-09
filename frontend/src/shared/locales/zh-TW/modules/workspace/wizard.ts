@@ -117,6 +117,10 @@ const wizard = {
           label: 'Python 環境',
           description: '針對 Python 專案最佳化，內建 pip 與 poetry。',
         },
+        java: {
+          label: 'Java 21 + Maven',
+          description: '預載 Eclipse Temurin JDK 21 與 Apache Maven 3.9，適合 Spring Boot、Maven 專案。',
+        },
       },
     },
     workspaceCreation: {
