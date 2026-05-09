@@ -4,11 +4,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { FileViewerWorkbench } from './FileViewerWorkbench';
 import type { FileViewerWorkbenchAdapter, FileViewerWorkbenchTab } from './types';
 
+const tMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) => (
+  values?.count !== undefined ? `${key}:${values.count}` : key
+));
+
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, unknown>) => (
-      values?.count !== undefined ? `${key}:${values.count}` : key
-    ),
+    t: tMock,
   }),
 }));
 
@@ -341,34 +343,22 @@ describe('FileViewerWorkbench', () => {
     });
   });
 
-  it('uses controlled focus expansion with the injected workspace focus toolbar', () => {
+  it('preserves tabs, toolbar, and status while expanded', () => {
     const onExpandedChange = vi.fn();
 
     renderWorkbench({
       activeTabId: '/docs/b.ts',
       isExpanded: true,
       onExpandedChange,
-      hideChromeWhenExpanded: true,
-      renderFocusToolbar: ({ title, subtitle, metadata }) => (
-        <header>
-          <button type="button" onClick={() => onExpandedChange(false)}>
-            exit-focus
-          </button>
-          <h1>{title}</h1>
-          <span>{subtitle}</span>
-          <div>{metadata}</div>
-        </header>
-      ),
     });
 
-    expect(screen.getByRole('heading', { name: 'b.ts' })).toBeInTheDocument();
-    expect(screen.getByText('/docs/b.ts')).toBeInTheDocument();
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
+    expect(screen.getByText('a.md')).toBeInTheDocument();
+    expect(screen.getByText('b.ts')).toBeInTheDocument();
+    expect(screen.getByLabelText('shared.fileViewer.toolbar.more')).toBeInTheDocument();
+    expect(screen.getByLabelText('shared.fileViewer.toolbar.collapse')).toBeInTheDocument();
     expect(screen.getByText('shared.fileViewer.status.modified')).toBeInTheDocument();
-    expect(screen.queryByLabelText('shared.fileViewer.toolbar.more')).not.toBeInTheDocument();
-    expect(screen.queryByText('a.md')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('exit-focus'));
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.collapse'));
 
     expect(onExpandedChange).toHaveBeenCalledWith(false);
   });

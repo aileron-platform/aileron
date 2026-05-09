@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Download, Edit3, Image as ImageIcon, Loader2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, Download, Edit3, Loader2, X } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { createLogger } from '@/shared/services/logger';
 import { CodeTextEditor } from './CodeTextEditor';
+import { useFileViewerWorkbench } from './FileViewerWorkbenchContext';
 import type { FileViewerWorkbenchAdapter } from './types';
 
 const logger = createLogger('SharedDrawioViewer');
@@ -19,12 +20,6 @@ interface SharedDrawioViewerProps {
   canPreview?: boolean;
   className?: string;
   i18nBase?: string;
-  isFocusMode?: boolean;
-  renderFocusToolbar?: (params: {
-    actions: ReactNode;
-    title: string;
-    subtitle: string;
-  }) => ReactNode;
   onContentChange: (content: string) => void;
   onModifiedChange: (isModified: boolean) => void;
 }
@@ -61,12 +56,11 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
   canPreview = true,
   className,
   i18nBase = 'shared.fileViewer.drawio',
-  isFocusMode = false,
-  renderFocusToolbar,
   onContentChange,
   onModifiedChange,
 }) => {
   const { t } = useI18n();
+  const { registerFormatActions } = useFileViewerWorkbench();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestContentRef = useRef(content);
   const [isLoading, setIsLoading] = useState(false);
@@ -249,7 +243,7 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
     return () => window.removeEventListener('message', handleMessage);
   }, [handleMessage]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!content) return;
     const blob = new Blob([content], { type: 'application/xml' });
     const url = URL.createObjectURL(blob);
@@ -260,10 +254,10 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [content, fileName]);
 
   const canEditInDrawio = hasRuntimePreview && !readOnly && fallbackReason === undefined;
-  const toolbarActions = (
+  const toolbarActions = useMemo(() => (
     <>
       {canEditInDrawio && (
         <Button
@@ -288,7 +282,12 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
         <Download className="h-4 w-4" />
       </Button>
     </>
-  );
+  ), [canEditInDrawio, content, handleDownload, i18nBase, isLoading, isSaving, switchViewerMode, t, viewerMode]);
+
+  useEffect(() => {
+    registerFormatActions(toolbarActions);
+    return () => registerFormatActions(null);
+  }, [registerFormatActions, toolbarActions]);
 
   const fallbackDescriptionKey = fallbackReason === 'DISABLED'
     ? `${i18nBase}.serviceUnavailable.disabled`
@@ -300,22 +299,6 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
 
   return (
     <div id="drawio-viewer-container" className={cn('flex h-full flex-col bg-background', className)}>
-      {isFocusMode && renderFocusToolbar ? (
-        renderFocusToolbar({
-          actions: toolbarActions,
-          title: fileName,
-          subtitle: filePath,
-        })
-      ) : (
-        <div className="flex items-center justify-between border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{fileName}</span>
-          </div>
-          <div className="flex items-center gap-1">{toolbarActions}</div>
-        </div>
-      )}
-
       <div className="relative flex-1 overflow-hidden">
         {shouldShowCodeFallback ? (
           <div className="flex h-full flex-col overflow-hidden bg-background">

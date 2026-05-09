@@ -8,7 +8,7 @@
  * - 類型安全的翻譯函數
  */
 
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useReducer, ReactNode, useEffect } from 'react';
 import zhTWTranslations from '../../shared/locales/zh-TW/index';
 import enTranslations from '../../shared/locales/en/index';
 import { createLogger } from '@/shared/services/logger';
@@ -127,6 +127,56 @@ interface I18nContextType {
 // Context 建立
 const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
+const getPluralSuffix = (language: SupportedLanguage, count: number): 'one' | 'other' => {
+  if (language === 'en') {
+    return count === 1 ? 'one' : 'other';
+  }
+  return 'other';
+};
+
+const getNestedValue = (obj: TranslationResources, path: string): string | TranslationResources => {
+  return path.split('.').reduce((current, key) => {
+    return current && typeof current === 'object' ? current[key] : undefined;
+  }, obj) as string | TranslationResources;
+};
+
+const resolveTranslationValue = (
+  translations: TranslationResources,
+  key: string,
+  language: SupportedLanguage,
+  params?: Record<string, string | number>,
+  defaultValue?: string,
+): string | TranslationResources | undefined => {
+  const directValue = getNestedValue(translations, key);
+
+  if (typeof directValue === 'string') {
+    return directValue;
+  }
+
+  if (params?.count !== undefined) {
+    const count = Number(params.count);
+    const pluralKey = `${key}_${getPluralSuffix(language, count)}`;
+    const pluralValue = getNestedValue(translations, pluralKey);
+
+    if (typeof pluralValue === 'string') {
+      return pluralValue;
+    }
+
+    if (!pluralKey.endsWith('_other')) {
+      const fallbackPluralValue = getNestedValue(translations, `${key}_other`);
+      if (typeof fallbackPluralValue === 'string') {
+        return fallbackPluralValue;
+      }
+    }
+  }
+
+  if (typeof defaultValue === 'string') {
+    return defaultValue;
+  }
+
+  return directValue;
+};
+
 // Provider 組件
 interface I18nProviderProps {
   children: ReactNode;
@@ -144,12 +194,13 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
   }, [state.currentLanguage]);
 
   // 翻譯函數
-  const t = (key: string, params?: TranslationParams): string => {
+  const t = useCallback((key: string, params?: TranslationParams): string => {
     const translations = state.translations[state.currentLanguage];
     const { defaultValue, ...interpolationParams } = params ?? {};
     const value = resolveTranslationValue(
       translations,
       key,
+      state.currentLanguage,
       interpolationParams,
       defaultValue,
     );
@@ -186,60 +237,10 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
 
     logger.warn(`Translation not found for key`, { key });
     return key;
-  };
-
-  const resolveTranslationValue = (
-    translations: TranslationResources,
-    key: string,
-    params?: Record<string, string | number>,
-    defaultValue?: string
-  ): string | TranslationResources | undefined => {
-    const directValue = getNestedValue(translations, key);
-
-    if (typeof directValue === 'string') {
-      return directValue;
-    }
-
-    if (params?.count !== undefined) {
-      const count = Number(params.count);
-      const pluralKey = `${key}_${getPluralSuffix(state.currentLanguage, count)}`;
-      const pluralValue = getNestedValue(translations, pluralKey);
-
-      if (typeof pluralValue === 'string') {
-        return pluralValue;
-      }
-
-      if (!pluralKey.endsWith('_other')) {
-        const fallbackPluralValue = getNestedValue(translations, `${key}_other`);
-        if (typeof fallbackPluralValue === 'string') {
-          return fallbackPluralValue;
-        }
-      }
-    }
-
-    if (typeof defaultValue === 'string') {
-      return defaultValue;
-    }
-
-    return directValue;
-  };
-
-  const getPluralSuffix = (language: SupportedLanguage, count: number): 'one' | 'other' => {
-    if (language === 'en') {
-      return count === 1 ? 'one' : 'other';
-    }
-    return 'other';
-  };
-
-  // 獲取嵌套物件的值
-  const getNestedValue = (obj: TranslationResources, path: string): string | TranslationResources => {
-    return path.split('.').reduce((current, key) => {
-      return current && typeof current === 'object' ? current[key] : undefined;
-    }, obj) as string | TranslationResources;
-  };
+  }, [state.currentLanguage, state.translations]);
 
   // 載入語言資源（現在使用預載入的翻譯）
-  const loadLanguage = async (language: SupportedLanguage): Promise<void> => {
+  const loadLanguage = useCallback(async (language: SupportedLanguage): Promise<void> => {
     if (state.loadedLanguages.includes(language)) {
       return;
     }
@@ -267,10 +268,10 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, [state.loadedLanguages]);
 
   // 切換語言
-  const changeLanguage = async (language: SupportedLanguage): Promise<void> => {
+  const changeLanguage = useCallback(async (language: SupportedLanguage): Promise<void> => {
     // 先載入語言資源
     await loadLanguage(language);
     
@@ -282,7 +283,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     
     // 更新 HTML lang 屬性
     document.documentElement.lang = language;
-  };
+  }, [loadLanguage]);
 
   // 初始化載入預設語言
   useEffect(() => {
@@ -297,7 +298,7 @@ export const I18nProvider: React.FC<I18nProviderProps> = ({ children }) => {
     };
 
     initializeLanguage();
-  }, []);
+  }, [loadLanguage]);
 
   const contextValue: I18nContextType = {
     state,

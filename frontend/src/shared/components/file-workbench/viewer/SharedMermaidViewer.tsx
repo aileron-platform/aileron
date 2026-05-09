@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Check, Copy, Download, RefreshCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { createLogger } from '@/shared/services/logger';
+import { useFileViewerWorkbench } from './FileViewerWorkbenchContext';
 
 const logger = createLogger('SharedMermaidViewer');
 type MermaidApi = typeof import('mermaid').default;
@@ -22,12 +23,6 @@ interface SharedMermaidViewerProps {
   fileName: string;
   className?: string;
   i18nBase?: string;
-  isFocusMode?: boolean;
-  renderFocusToolbar?: (params: {
-    actions: ReactNode;
-    title: string;
-    subtitle: string;
-  }) => ReactNode;
 }
 
 export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
@@ -35,10 +30,9 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   fileName,
   className,
   i18nBase = 'shared.fileViewer.mermaid',
-  isFocusMode = false,
-  renderFocusToolbar,
 }) => {
   const { t } = useI18n();
+  const { registerFormatActions } = useFileViewerWorkbench();
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState('');
   const [error, setError] = useState('');
@@ -106,8 +100,8 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     };
   }, [content]);
 
-  const handleZoomIn = () => setZoom((current) => Math.min(current + 0.1, 3));
-  const handleZoomOut = () => {
+  const handleZoomIn = useCallback(() => setZoom((current) => Math.min(current + 0.1, 3)), []);
+  const handleZoomOut = useCallback(() => {
     setZoom((current) => {
       const nextZoom = Math.max(current - 0.1, 0.3);
       if (nextZoom <= 1) {
@@ -115,11 +109,11 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
       }
       return nextZoom;
     });
-  };
-  const handleResetZoom = () => {
+  }, []);
+  const handleResetZoom = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-  };
+  }, []);
 
   const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.pointerType === 'mouse' && event.button !== 0) || !svg) return;
@@ -155,7 +149,7 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!svg) return;
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
@@ -166,9 +160,9 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [fileName, svg]);
 
-  const handleCopySvg = async () => {
+  const handleCopySvg = useCallback(async () => {
     if (!svg) return;
     try {
       await navigator.clipboard.writeText(svg);
@@ -177,9 +171,9 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     } catch (copyError) {
       logger.error('Failed to copy SVG', { error: copyError });
     }
-  };
+  }, [svg]);
 
-  const toolbarActions = (
+  const toolbarActions = useMemo(() => (
     <>
       <Button
         variant="ghost"
@@ -232,26 +226,26 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
         <Download className="h-4 w-4" />
       </Button>
     </>
-  );
+  ), [
+    copied,
+    handleCopySvg,
+    handleDownload,
+    handleResetZoom,
+    handleZoomIn,
+    handleZoomOut,
+    i18nBase,
+    svg,
+    t,
+    zoom,
+  ]);
+
+  useEffect(() => {
+    registerFormatActions(toolbarActions);
+    return () => registerFormatActions(null);
+  }, [registerFormatActions, toolbarActions]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-background', className)}>
-      {isFocusMode && renderFocusToolbar ? (
-        renderFocusToolbar({
-          actions: toolbarActions,
-          title: fileName,
-          subtitle: t(`${i18nBase}.title`),
-        })
-      ) : (
-        <div className="flex items-center justify-between border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">{t(`${i18nBase}.title`)}</span>
-            {isRendering && <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />}
-          </div>
-          <div className="flex items-center gap-1">{toolbarActions}</div>
-        </div>
-      )}
-
       <div className="flex-1 overflow-auto bg-background">
         {error ? (
           <div className="flex h-full items-center justify-center p-8">

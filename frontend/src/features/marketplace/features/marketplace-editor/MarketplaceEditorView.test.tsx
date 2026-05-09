@@ -107,17 +107,6 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => {
         </div>
       );
     },
-    FileFocusToolbar: ({ title, subtitle, onExit }: {
-      title: React.ReactNode;
-      subtitle?: React.ReactNode;
-      onExit: () => void;
-    }) => (
-      <div data-testid="file-focus-toolbar">
-        <span>{title}</span>
-        <span>{subtitle}</span>
-        <button type="button" onClick={onExit}>exit</button>
-      </div>
-    ),
     useFileViewerTabs: () => {
       const [tabs, setTabs] = React.useState<MockTab[]>([]);
       const [activeTabId, setActiveTabId] = React.useState<string | null>(null);

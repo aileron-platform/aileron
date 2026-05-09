@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import {
   ChevronLeft,
@@ -30,8 +30,9 @@ import { SharedDrawioViewer } from './SharedDrawioViewer';
 import { SharedImageViewer } from './SharedImageViewer';
 import { SharedMarkdownViewer } from './SharedMarkdownViewer';
 import { SharedMermaidViewer } from './SharedMermaidViewer';
+import { FileViewerWorkbenchProvider } from './FileViewerWorkbenchContext';
+import { FileViewerWorkbenchToolbar } from './FileViewerWorkbenchToolbar';
 import type {
-  FileViewerWorkbenchFocusToolbarParams,
   FileViewerWorkbenchProps,
   FileViewerWorkbenchTab,
 } from './types';
@@ -66,8 +67,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   isExpanded,
   onExpandedChange,
   useViewportExpansion = true,
-  hideChromeWhenExpanded = false,
-  renderFocusToolbar,
   isPathWritable,
   renderReadOnlyBadge,
   onOpenPath,
@@ -86,9 +85,10 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const [contextMenuTabId, setContextMenuTabId] = useState<string | null>(null);
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false);
+  const [formatActions, setFormatActions] = useState<ReactNode | null>(null);
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const effectiveExpanded = isExpanded ?? uncontrolledExpanded;
-  const hideChrome = hideChromeProp || (effectiveExpanded && hideChromeWhenExpanded);
+  const hideChrome = hideChromeProp;
   const isTabWritable = useCallback((tab: FileViewerWorkbenchTab | null) => (
     tab ? (isPathWritable?.(tab.path) ?? true) : true
   ), [isPathWritable]);
@@ -111,6 +111,18 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
 
   const closeToolbarMenus = useCallback(() => {
     setMoreMenuPosition(null);
+  }, []);
+
+  const setExpanded = useCallback((next: boolean) => {
+    if (onExpandedChange) {
+      onExpandedChange(next);
+    } else {
+      setUncontrolledExpanded(next);
+    }
+  }, [onExpandedChange]);
+
+  const registerFormatActions = useCallback((node: ReactNode | null) => {
+    setFormatActions(node);
   }, []);
 
   const checkScroll = useCallback(() => {
@@ -169,7 +181,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsExpanded(false);
+        setExpanded(false);
         closeToolbarMenus();
         closeTabContextMenu();
       }
@@ -180,7 +192,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     }
 
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [closeTabContextMenu, closeToolbarMenus, effectiveExpanded]);
+  }, [closeTabContextMenu, closeToolbarMenus, effectiveExpanded, setExpanded]);
 
   const updateTab = (tabId: string, updates: Partial<FileViewerWorkbenchTab>) => {
     onTabsChange(tabs.map((tab) => (tab.id === tabId ? { ...tab, ...updates } : tab)));
@@ -292,14 +304,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     ));
   };
 
-  const setExpanded = useCallback((next: boolean) => {
-    if (onExpandedChange) {
-      onExpandedChange(next);
-    } else {
-      setUncontrolledExpanded(next);
-    }
-  }, [onExpandedChange]);
-
   const toggleExpanded = () => {
     setExpanded(!effectiveExpanded);
     closeToolbarMenus();
@@ -311,10 +315,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
       setExpanded(false);
     }
   }, [effectiveExpanded, setExpanded, tabs.length]);
-
-  const renderSharedFocusToolbar = (params: FileViewerWorkbenchFocusToolbarParams) => (
-    renderFocusToolbar?.({ ...params, onExit: () => setExpanded(false) })
-  );
 
   const renderActiveViewer = () => {
     if (!activeTab) {
@@ -347,8 +347,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           filePath={activeTab.path}
           fileName={activeTab.name}
           adapter={adapter}
-          isFocusMode={effectiveExpanded}
-          renderFocusToolbar={renderSharedFocusToolbar}
         />
       );
     }
@@ -358,8 +356,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
         <SharedMermaidViewer
           content={activeTab.content}
           fileName={activeTab.name}
-          isFocusMode={effectiveExpanded}
-          renderFocusToolbar={renderSharedFocusToolbar}
         />
       );
     }
@@ -371,8 +367,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           fileName={activeTab.name}
           filePath={activeTab.path}
           readOnly={!canMutate}
-          isFocusMode={effectiveExpanded}
-          renderFocusToolbar={renderSharedFocusToolbar}
           onReload={() => adapter.readFile(activeTab.path)}
           onContentChange={setActiveContent}
           onOpenPath={onOpenPath}
@@ -390,8 +384,6 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           readOnly={!canMutate}
           adapter={adapter}
           canPreview={capabilities.canPreviewDrawio !== false}
-          isFocusMode={effectiveExpanded}
-          renderFocusToolbar={renderSharedFocusToolbar}
           onContentChange={setActiveContent}
           onModifiedChange={(isModified) => updateTab(activeTab.id, { isModified })}
         />
@@ -410,70 +402,8 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
       />
     );
 
-    if (effectiveExpanded && renderFocusToolbar) {
-      return (
-        <div className="flex h-full min-h-0 flex-col">
-          {renderFocusToolbar({
-            icon: getFileIcon(activeTab.name),
-            title: activeTab.name,
-            subtitle: activeTab.path,
-            metadata: (
-              <>
-                <span>{getFileLanguage(activeTab.name)}</span>
-                <span>{formatFileSize(stats.characters)}</span>
-                <span>{t('shared.fileViewer.status.lineCount', { count: stats.lines })}</span>
-                {activeTab.isModified ? (
-                  <span className="text-primary">{t('shared.fileViewer.status.modified')}</span>
-                ) : null}
-              </>
-            ),
-            onExit: () => setExpanded(false),
-          })}
-          <div className="min-h-0 flex-1">{editor}</div>
-        </div>
-      );
-    }
-
     return editor;
   };
-
-  const renderWorkbenchToolbar = () => (
-    <div className="flex h-full items-center border-l border-border">
-      {headerActions}
-      {canSave && activeTab ? (
-        <button
-          type="button"
-          className="flex h-full items-center justify-center px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => void saveTab(activeTab)}
-          title={t('shared.fileViewer.toolbar.save')}
-          aria-label={t('shared.fileViewer.toolbar.save')}
-          disabled={!activeTab.isModified}
-        >
-          <Save className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
-      <button
-        type="button"
-        className="flex h-full items-center justify-center px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        onClick={toggleExpanded}
-        title={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
-        aria-label={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
-        disabled={!activeTab}
-      >
-        {effectiveExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-      </button>
-      <button
-        ref={moreButtonRef}
-        type="button"
-        className="flex h-full items-center justify-center px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        onClick={openMoreMenu}
-        title={t('shared.fileViewer.toolbar.more')}
-        aria-label={t('shared.fileViewer.toolbar.more')}
-      >
-        <MoreHorizontal className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
 
   return (
     <div
@@ -557,11 +487,28 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
               </button>
             )}
           </div>
-          {renderWorkbenchToolbar()}
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-hidden">{renderActiveViewer()}</div>
+      {tabs.length > 0 && !hideChrome && (
+        <FileViewerWorkbenchToolbar
+          headerActions={headerActions}
+          formatActions={formatActions}
+          canSave={canSave}
+          activeTab={activeTab}
+          isExpanded={effectiveExpanded}
+          onSave={() => {
+            if (activeTab) void saveTab(activeTab);
+          }}
+          onToggleExpanded={toggleExpanded}
+          onOpenMoreMenu={openMoreMenu}
+          moreButtonRef={moreButtonRef}
+        />
+      )}
+
+      <FileViewerWorkbenchProvider registerFormatActions={registerFormatActions}>
+        <div key={activeTab?.id ?? 'empty'} className="min-h-0 flex-1 overflow-hidden">{renderActiveViewer()}</div>
+      </FileViewerWorkbenchProvider>
 
       {activeTab && !hideChrome && (
         <div className="flex h-7 shrink-0 items-center gap-3 border-t px-3 text-xs text-muted-foreground">

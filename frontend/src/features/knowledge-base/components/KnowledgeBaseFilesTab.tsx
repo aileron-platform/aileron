@@ -20,7 +20,6 @@ import {
   knowledgeBaseFileEndpoints,
 } from './file-workbench/knowledgeBaseFileTreeDataAdapter';
 import {
-  FileFocusToolbar,
   FileViewerWorkbench,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
@@ -763,7 +762,6 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
             readOnly={readOnly}
             isExpanded={isWorkbenchExpanded}
             onExpandedChange={setIsWorkbenchExpanded}
-            hideChromeWhenExpanded
             isPathWritable={isPathWritable}
             renderReadOnlyBadge={() => (
               <TooltipProvider>
@@ -776,17 +774,6 @@ export const KnowledgeBaseFilesTab: React.FC<KnowledgeBaseFilesTabProps> = ({
                   <TooltipContent>{t('knowledgeBase.files.readOnlyPathBadgeTooltip')}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            )}
-            renderFocusToolbar={({ actions, icon, metadata, subtitle, title }) => (
-              <FileFocusToolbar
-                icon={icon}
-                title={title}
-                subtitle={subtitle}
-                metadata={metadata}
-                actions={actions}
-                exitLabel={t('shared.fileViewer.toolbar.collapse')}
-                onExit={() => setIsWorkbenchExpanded(false)}
-              />
             )}
             onTabsChange={handleWorkbenchTabsChange}
             onActiveTabChange={handleWorkbenchActiveTabChange}

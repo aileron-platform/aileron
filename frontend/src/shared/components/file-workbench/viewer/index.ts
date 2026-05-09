@@ -1,5 +1,10 @@
 export { FileViewerWorkbench } from './FileViewerWorkbench';
-export { FileFocusToolbar } from './FileFocusToolbar';
+export { FileViewerWorkbenchToolbar } from './FileViewerWorkbenchToolbar';
+export {
+  FileViewerWorkbenchContext,
+  FileViewerWorkbenchProvider,
+  useFileViewerWorkbench,
+} from './FileViewerWorkbenchContext';
 export { FileEditor } from './FileEditor';
 export { CodeTextEditor } from './CodeTextEditor';
 export { useFileViewerTabs } from './useFileViewerTabs';
@@ -19,4 +24,5 @@ export type {
   FileViewerWorkbenchProps,
   FileViewerWorkbenchStatusMetadata,
   FileViewerWorkbenchTab,
+  FileViewerWorkbenchContextValue,
 } from './types';

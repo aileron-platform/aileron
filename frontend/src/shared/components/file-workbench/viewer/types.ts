@@ -36,13 +36,8 @@ export interface FileViewerWorkbenchStatusMetadata {
   lineEnding?: string;
 }
 
-export interface FileViewerWorkbenchFocusToolbarParams {
-  icon?: ReactNode;
-  title: ReactNode;
-  subtitle?: ReactNode;
-  metadata?: ReactNode;
-  actions?: ReactNode;
-  onExit?: () => void;
+export interface FileViewerWorkbenchContextValue {
+  registerFormatActions: (node: ReactNode | null) => void;
 }
 
 export interface FileViewerWorkbenchProps {
@@ -58,8 +53,6 @@ export interface FileViewerWorkbenchProps {
   isExpanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   useViewportExpansion?: boolean;
-  hideChromeWhenExpanded?: boolean;
-  renderFocusToolbar?: (params: FileViewerWorkbenchFocusToolbarParams) => ReactNode;
   isPathWritable?: (path: string) => boolean;
   renderReadOnlyBadge?: (tab: FileViewerWorkbenchTab) => ReactNode;
   onOpenPath?: (path: string) => void;

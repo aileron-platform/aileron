@@ -1,6 +1,9 @@
 export {
   FileViewerWorkbench,
-  FileFocusToolbar,
+  FileViewerWorkbenchToolbar,
+  FileViewerWorkbenchContext,
+  FileViewerWorkbenchProvider,
+  useFileViewerWorkbench,
   FileEditor,
   CodeTextEditor,
   useFileViewerTabs,
@@ -22,6 +25,7 @@ export type {
   FileViewerWorkbenchProps,
   FileViewerWorkbenchStatusMetadata,
   FileViewerWorkbenchTab,
+  FileViewerWorkbenchContextValue,
 } from './viewer';
 
 export type {

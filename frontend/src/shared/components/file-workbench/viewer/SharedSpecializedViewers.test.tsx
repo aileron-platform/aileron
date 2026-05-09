@@ -1,7 +1,8 @@
-import type React from 'react';
+import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SharedDrawioViewer } from './SharedDrawioViewer';
+import { FileViewerWorkbenchProvider } from './FileViewerWorkbenchContext';
 import { SharedImageViewer } from './SharedImageViewer';
 import { SharedMarkdownViewer } from './SharedMarkdownViewer';
 import { SharedMermaidViewer } from './SharedMermaidViewer';
@@ -9,12 +10,13 @@ import type { FileViewerWorkbenchAdapter } from './types';
 
 const mermaidInitializeMock = vi.hoisted(() => vi.fn());
 const mermaidRenderMock = vi.hoisted(() => vi.fn());
+const tMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) => (
+  values?.count !== undefined ? `${key}:${values.count}` : key
+));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, unknown>) => (
-      values?.count !== undefined ? `${key}:${values.count}` : key
-    ),
+    t: tMock,
   }),
 }));
 
@@ -71,6 +73,28 @@ const firePointerEvent = (
   fireEvent(element, event);
 };
 
+const renderWithFormatActions = (
+  ui: React.ReactElement,
+  registerSpy?: (node: React.ReactNode | null) => void,
+) => {
+  const Harness: React.FC = () => {
+    const [actions, setActions] = React.useState<React.ReactNode | null>(null);
+    const registerFormatActions = React.useCallback((node: React.ReactNode | null) => {
+      registerSpy?.(node);
+      setActions(node);
+    }, []);
+
+    return (
+      <FileViewerWorkbenchProvider registerFormatActions={registerFormatActions}>
+        <div data-testid="registered-format-actions">{actions}</div>
+        {ui}
+      </FileViewerWorkbenchProvider>
+    );
+  };
+
+  return render(<Harness />);
+};
+
 describe('shared specialized file viewers', () => {
   beforeEach(() => {
     mermaidInitializeMock.mockReset();
@@ -90,7 +114,7 @@ describe('shared specialized file viewers', () => {
   it('renders Markdown content and edits only when a change handler is provided', async () => {
     const onContentChange = vi.fn();
 
-    render(
+    renderWithFormatActions(
       <SharedMarkdownViewer
         content="# Shared"
         fileName="readme.md"
@@ -110,32 +134,29 @@ describe('shared specialized file viewers', () => {
   });
 
   it('keeps Markdown toolbar actions available through the shared focus toolbar', () => {
-    render(
+    const registerFormatActions = vi.fn();
+
+    const view = renderWithFormatActions(
       <SharedMarkdownViewer
         content="# Shared"
         fileName="readme.md"
-        isFocusMode
-        renderFocusToolbar={({ actions, title, subtitle }) => (
-          <header>
-            <h1>{title}</h1>
-            <span>{subtitle}</span>
-            <div>{actions}</div>
-          </header>
-        )}
       />,
+      registerFormatActions,
     );
 
-    expect(screen.getByRole('heading', { name: 'readme.md' })).toBeInTheDocument();
-    expect(screen.getByText('shared.fileViewer.markdown.title')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.markdown.zoomIn')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.markdown.copy')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.markdown.download')).toBeInTheDocument();
+    expect(registerFormatActions).toHaveBeenCalledWith(expect.any(Object));
+
+    view.unmount();
+    expect(registerFormatActions).toHaveBeenCalledWith(null);
   });
 
   it('opens internal Markdown links through the workspace tab callback', () => {
     const onOpenPath = vi.fn();
 
-    render(
+    renderWithFormatActions(
       <SharedMarkdownViewer
         content="[Config](../../schemas/spec-driven-api/standards/configuration-standards.md)"
         fileName="design.md"
@@ -150,7 +171,7 @@ describe('shared specialized file viewers', () => {
   });
 
   it('renders Mermaid through the shared renderer and exposes shared toolbar actions', async () => {
-    render(
+    renderWithFormatActions(
       <SharedMermaidViewer
         content="graph TD; A-->B;"
         fileName="diagram.mmd"
@@ -167,7 +188,7 @@ describe('shared specialized file viewers', () => {
   });
 
   it('allows panning the Mermaid diagram after zooming', async () => {
-    render(
+    renderWithFormatActions(
       <SharedMermaidViewer
         content="graph TD; A-->B;"
         fileName="diagram.mmd"
@@ -205,7 +226,7 @@ describe('shared specialized file viewers', () => {
   });
 
   it('defers Mermaid loading until diagram content is rendered', () => {
-    render(
+    renderWithFormatActions(
       <SharedMermaidViewer
         content="   "
         fileName="empty.mmd"
@@ -220,7 +241,7 @@ describe('shared specialized file viewers', () => {
   it('shows a localized Mermaid error fallback when rendering fails', async () => {
     mermaidRenderMock.mockRejectedValueOnce(new Error('Invalid diagram'));
 
-    render(
+    renderWithFormatActions(
       <SharedMermaidViewer
         content="graph TD;"
         fileName="broken.mmd"
@@ -238,7 +259,7 @@ describe('shared specialized file viewers', () => {
       readBlob: vi.fn().mockResolvedValue(new Blob(['image'], { type: 'image/png' })),
     };
 
-    render(
+    renderWithFormatActions(
       <SharedImageViewer
         filePath="/assets/logo.png"
         fileName="logo.png"
@@ -264,7 +285,7 @@ describe('shared specialized file viewers', () => {
       saveDrawio: vi.fn(),
     };
 
-    render(
+    renderWithFormatActions(
       <SharedDrawioViewer
         content="<mxfile />"
         originalContent="<mxfile />"
@@ -279,6 +300,10 @@ describe('shared specialized file viewers', () => {
 
     await waitFor(() => {
       expect(adapter.getDrawioViewerUrl).toHaveBeenCalledWith('/docs/diagram.drawio', 'view');
+    });
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('shared.fileViewer.drawio.edit')).not.toBeDisabled();
     });
 
     fireEvent.click(screen.getByLabelText('shared.fileViewer.drawio.edit'));
@@ -297,7 +322,7 @@ describe('shared specialized file viewers', () => {
       getDrawioViewerUrl: vi.fn().mockRejectedValue(new DrawioUnavailableError('DISABLED')),
     };
 
-    render(
+    renderWithFormatActions(
       <SharedDrawioViewer
         content="<mxfile><diagram /></mxfile>"
         originalContent="<mxfile><diagram /></mxfile>"

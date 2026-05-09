@@ -1,22 +1,17 @@
-import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Copy, Download, Edit3, Eye, FileText, RefreshCw, Save, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { classifyMarkdownHref, resolveWorkspaceMarkdownPath } from '@/shared/components/markdown/markdownLinkUtils';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
+import { useFileViewerWorkbench } from './FileViewerWorkbenchContext';
 
 interface SharedMarkdownViewerProps {
   content: string;
   fileName: string;
   filePath?: string;
   readOnly?: boolean;
-  isFocusMode?: boolean;
-  renderFocusToolbar?: (params: {
-    actions: ReactNode;
-    title: string;
-    subtitle: string;
-  }) => ReactNode;
   onReload?: () => Promise<string>;
   onContentChange?: (content: string) => void;
   onOpenPath?: (path: string) => void;
@@ -27,13 +22,12 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   fileName,
   filePath,
   readOnly = false,
-  isFocusMode = false,
-  renderFocusToolbar,
   onReload,
   onContentChange,
   onOpenPath,
 }) => {
   const { t } = useI18n();
+  const { registerFormatActions } = useFileViewerWorkbench();
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -47,11 +41,11 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
 
   const previewContent = useMemo(() => content, [content]);
 
-  const handleZoomOut = () => setZoom((current) => Math.max(0.5, current - 0.1));
-  const handleZoomIn = () => setZoom((current) => Math.min(2, current + 0.1));
-  const handleResetZoom = () => setZoom(1);
+  const handleZoomOut = useCallback(() => setZoom((current) => Math.max(0.5, current - 0.1)), []);
+  const handleZoomIn = useCallback(() => setZoom((current) => Math.min(2, current + 0.1)), []);
+  const handleResetZoom = useCallback(() => setZoom(1), []);
 
-  const handleReload = async () => {
+  const handleReload = useCallback(async () => {
     if (!onReload) return;
     setIsRefreshing(true);
     try {
@@ -60,15 +54,15 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [onContentChange, onReload]);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     await navigator.clipboard?.writeText(content);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1200);
-  };
+  }, [content]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -76,17 +70,17 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     link.download = fileName;
     link.click();
     URL.revokeObjectURL(url);
-  };
+  }, [content, fileName]);
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     onContentChange?.(editContent);
     setIsEditMode(false);
-  };
+  }, [editContent, onContentChange]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setEditContent(content);
     setIsEditMode(false);
-  };
+  }, [content]);
 
   const handleMarkdownLinkClick = (href: string, event: React.MouseEvent<HTMLAnchorElement>) => {
     if (!filePath || !onOpenPath || classifyMarkdownHref(href) !== 'internal') {
@@ -102,7 +96,7 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     onOpenPath(targetPath);
   };
 
-  const toolbarActions = (
+  const toolbarActions = useMemo(() => (
     <>
       {isEditMode ? (
         <>
@@ -214,25 +208,32 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
         </>
       )}
     </>
-  );
+  ), [
+    canEdit,
+    content,
+    copied,
+    handleCancel,
+    handleCopy,
+    handleDownload,
+    handleReload,
+    handleResetZoom,
+    handleSave,
+    handleZoomIn,
+    handleZoomOut,
+    isEditMode,
+    isRefreshing,
+    onReload,
+    t,
+    zoom,
+  ]);
+
+  useEffect(() => {
+    registerFormatActions(toolbarActions);
+    return () => registerFormatActions(null);
+  }, [registerFormatActions, toolbarActions]);
 
   return (
     <div id="markdown-preview-container" className="flex h-full flex-col bg-background">
-      {isFocusMode && renderFocusToolbar ? renderFocusToolbar({
-        actions: toolbarActions,
-        title: fileName,
-        subtitle: t('shared.fileViewer.markdown.title'),
-      }) : (
-      <div className="h-10 flex-shrink-0 border-b border-border bg-card px-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <FileText className="h-4 w-4" />
-          <span>{t('shared.fileViewer.markdown.title')}</span>
-        </div>
-
-        <div className="flex items-center gap-1">{toolbarActions}</div>
-      </div>
-      )}
-
       <div className="min-h-0 flex-1 overflow-auto bg-background">
         {isEditMode ? (
           <textarea

@@ -35,7 +35,7 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
-import { FileFocusToolbar, FileViewerWorkbench, useFileViewerTabs } from '@/shared/components/file-workbench/viewer-entry';
+import { FileViewerWorkbench, useFileViewerTabs } from '@/shared/components/file-workbench/viewer-entry';
 import type {
   FileViewerWorkbenchAdapter,
   FileViewerWorkbenchTab,
@@ -582,13 +582,6 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
               canCopyPath: true,
               canCloseTabs: true,
             }}
-            renderFocusToolbar={(params) => (
-              <FileFocusToolbar
-                {...params}
-                exitLabel={t('shared.fileViewer.toolbar.collapse')}
-                onExit={params.onExit ?? (() => undefined)}
-              />
-            )}
             onTabsChange={fileTabs.applyTabsChange}
             onActiveTabChange={fileTabs.setActiveTabId}
             className="h-full"
@@ -1065,13 +1058,6 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
               canCloseTabs: true,
             }}
             isPathWritable={isFileWritable}
-            renderFocusToolbar={(params) => (
-              <FileFocusToolbar
-                {...params}
-                exitLabel={t('shared.fileViewer.toolbar.collapse')}
-                onExit={params.onExit ?? (() => undefined)}
-              />
-            )}
             onTabsChange={fileTabs.applyTabsChange}
             onActiveTabChange={fileTabs.setActiveTabId}
             className="h-full"

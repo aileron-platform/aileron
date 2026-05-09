@@ -84,7 +84,7 @@ describe('shared component boundaries', () => {
     const publicBarrelImportsPattern =
       /import\s+[\s\S]*?\s+from\s+['"]@\/shared\/components\/file-workbench['"]/g;
     const viewerSymbolsPattern =
-      /\b(FileViewerWorkbench|FileFocusToolbar|FileEditor|CodeTextEditor|Shared(?:Image|Drawio|Markdown|Mermaid)Viewer)\b/;
+      /\b(FileViewerWorkbench|FileEditor|CodeTextEditor|Shared(?:Image|Drawio|Markdown|Mermaid)Viewer)\b/;
 
     const offenders = readFiles(featureRoots.flatMap(collectSourceFiles))
       .filter(({ relativePath }) => !testPattern.test(relativePath))

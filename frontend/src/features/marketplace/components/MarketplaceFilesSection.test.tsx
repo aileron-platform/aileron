@@ -16,7 +16,6 @@ vi.mock('@/shared/components/ui/use-toast', () => ({
 }));
 
 vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
-  FileFocusToolbar: () => null,
   FileViewerWorkbench: ({ tabs, activeTabId }: {
     tabs: Array<{ id: string; name: string; content: string }>;
     activeTabId: string | null;

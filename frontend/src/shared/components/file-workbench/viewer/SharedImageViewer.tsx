@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Download, Image as ImageIcon, RefreshCw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 import { createLogger } from '@/shared/services/logger';
+import { useFileViewerWorkbench } from './FileViewerWorkbenchContext';
 import type { FileViewerWorkbenchAdapter } from './types';
 
 const logger = createLogger('SharedImageViewer');
@@ -14,13 +15,6 @@ interface SharedImageViewerProps {
   adapter: FileViewerWorkbenchAdapter;
   className?: string;
   i18nBase?: string;
-  isFocusMode?: boolean;
-  renderFocusToolbar?: (params: {
-    actions: ReactNode;
-    title: string;
-    subtitle: string;
-    metadata: ReactNode;
-  }) => ReactNode;
 }
 
 export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
@@ -29,10 +23,9 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
   adapter,
   className,
   i18nBase = 'shared.fileViewer.image',
-  isFocusMode = false,
-  renderFocusToolbar,
 }) => {
   const { t } = useI18n();
+  const { registerFormatActions } = useFileViewerWorkbench();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const currentBlobUrlRef = useRef<string | null>(null);
@@ -41,7 +34,6 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -95,11 +87,6 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
   }, []);
 
   const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
-    const image = event.currentTarget;
-    setImageDimensions({
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-    });
     setIsLoading(false);
     setError('');
   };
@@ -110,15 +97,15 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
     setIsLoading(false);
   };
 
-  const handleZoomIn = () => setZoom((current) => Math.min(current + 0.25, 5));
-  const handleZoomOut = () => setZoom((current) => Math.max(current - 0.25, 0.25));
-  const handleResetZoom = () => {
+  const handleZoomIn = useCallback(() => setZoom((current) => Math.min(current + 0.25, 5)), []);
+  const handleZoomOut = useCallback(() => setZoom((current) => Math.max(current - 0.25, 0.25)), []);
+  const handleResetZoom = useCallback(() => {
     setZoom(1);
     setRotation(0);
-  };
-  const handleRotate = () => setRotation((current) => (current + 90) % 360);
+  }, []);
+  const handleRotate = useCallback(() => setRotation((current) => (current + 90) % 360), []);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     if (!imageUrl) return;
     const link = document.createElement('a');
     link.href = imageUrl;
@@ -126,9 +113,9 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
+  }, [fileName, imageUrl]);
 
-  const toolbarActions = (
+  const toolbarActions = useMemo(() => (
     <>
       <Button
         variant="ghost"
@@ -184,32 +171,15 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
         <Download className="h-4 w-4" />
       </Button>
     </>
-  );
+  ), [handleDownload, handleResetZoom, handleRotate, handleZoomIn, handleZoomOut, i18nBase, imageUrl, t, zoom]);
 
-  const metadata = imageDimensions ? <span>{imageDimensions.width} × {imageDimensions.height}</span> : null;
+  useEffect(() => {
+    registerFormatActions(toolbarActions);
+    return () => registerFormatActions(null);
+  }, [registerFormatActions, toolbarActions]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-muted/10', className)}>
-      {isFocusMode && renderFocusToolbar ? (
-        renderFocusToolbar({
-          actions: toolbarActions,
-          title: fileName,
-          subtitle: filePath,
-          metadata,
-        })
-      ) : (
-        <div className="flex items-center justify-between border-b border-border bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2">
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">{fileName}</span>
-            {imageDimensions && (
-              <span className="text-xs text-muted-foreground">{imageDimensions.width} × {imageDimensions.height}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">{toolbarActions}</div>
-        </div>
-      )}
-
       <div className="flex-1 overflow-auto bg-[radial-gradient(circle_at_1px_1px,_rgb(var(--muted-foreground)_/_0.15)_1px,_transparent_0)] [background-size:20px_20px]">
         {error ? (
           <div className="flex h-full items-center justify-center">
