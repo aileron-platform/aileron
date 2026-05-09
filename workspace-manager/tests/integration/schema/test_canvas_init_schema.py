@@ -29,6 +29,7 @@ CANVAS_COLUMNS = (
 
 KNOWLEDGE_BASE_BASELINE_COLUMNS = (
     "runtime_mounted_kb_signature",
+    "template_id",
     "version_control_enabled",
     "git_lfs_enabled",
     "git_default_branch",

@@ -137,6 +137,10 @@ describe('KnowledgeBaseGraphTab', () => {
     renderGraphTab();
     await screen.findByText('Guide');
 
+    await waitFor(() => {
+      expect(screen.getByTestId('location')).toHaveTextContent('path=wiki%2Foverview.md');
+    });
+
     act(() => {
       sigmaEvents.current.clickNode?.({ node: 'wiki/guide' });
     });
