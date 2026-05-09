@@ -42,6 +42,15 @@ const getStats = (content: string) => ({
   characters: content.length,
 });
 
+interface RegisteredFormatActions {
+  key: string;
+  ownerKey: string;
+  node: ReactNode | null;
+}
+
+const EMPTY_FORMAT_ACTIONS_KEY = '__empty__';
+const DEFAULT_FORMAT_ACTIONS_KEY = '__default__';
+const DEFAULT_FORMAT_ACTIONS_OWNER_KEY = '__default_owner__';
 const MORE_MENU_WIDTH = 192;
 const TAB_CONTEXT_MENU_WIDTH = 192;
 const MENU_VIEWPORT_PADDING = 8;
@@ -52,6 +61,15 @@ const clampMenuLeft = (left: number, width: number) => {
     MENU_VIEWPORT_PADDING,
     Math.min(left, window.innerWidth - width - MENU_VIEWPORT_PADDING),
   );
+};
+
+const getViewerOwnerKey = (tab: FileViewerWorkbenchTab | null): string | null => {
+  if (!tab) return null;
+  if (isImageFile(tab.name)) return `image:${tab.path}`;
+  if (isDrawioFile(tab.name)) return `drawio:${tab.path}`;
+  if (isMarkdownFile(tab.name)) return `markdown:${tab.path}`;
+  if (isMermaidFile(tab.name)) return `mermaid:${tab.path}`;
+  return null;
 };
 
 export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
@@ -85,7 +103,16 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const [contextMenuTabId, setContextMenuTabId] = useState<string | null>(null);
   const [moreMenuPosition, setMoreMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [uncontrolledExpanded, setUncontrolledExpanded] = useState(false);
-  const [formatActions, setFormatActions] = useState<ReactNode | null>(null);
+  const [formatActions, setFormatActions] = useState<RegisteredFormatActions>({
+    key: EMPTY_FORMAT_ACTIONS_KEY,
+    ownerKey: '',
+    node: null,
+  });
+  const formatActionsRef = useRef<RegisteredFormatActions>({
+    key: EMPTY_FORMAT_ACTIONS_KEY,
+    ownerKey: '',
+    node: null,
+  });
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? null;
   const effectiveExpanded = isExpanded ?? uncontrolledExpanded;
   const hideChrome = hideChromeProp;
@@ -98,6 +125,11 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const canCloseTabs = capabilities.canCloseTabs !== false;
 
   const stats = useMemo(() => getStats(activeTab?.content ?? ''), [activeTab?.content]);
+  const tabLayoutKey = useMemo(
+    () => tabs.map((tab) => tab.id).join('|'),
+    [tabs],
+  );
+  const activeViewerOwnerKey = useMemo(() => getViewerOwnerKey(activeTab), [activeTab]);
 
   const contextMenuTab = useMemo(
     () => tabs.find((tab) => tab.id === contextMenuTabId) ?? null,
@@ -121,16 +153,39 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     }
   }, [onExpandedChange]);
 
-  const registerFormatActions = useCallback((node: ReactNode | null) => {
-    setFormatActions(node);
+  const registerFormatActions = useCallback((
+    node: ReactNode | null,
+    registrationKey = DEFAULT_FORMAT_ACTIONS_KEY,
+    ownerKey = DEFAULT_FORMAT_ACTIONS_OWNER_KEY,
+  ) => {
+    const current = formatActionsRef.current;
+
+    if (node === null) {
+      return;
+    }
+
+    if (current.key === registrationKey && current.ownerKey === ownerKey) {
+      return;
+    }
+
+    const next = { key: registrationKey, ownerKey, node };
+    formatActionsRef.current = next;
+    setFormatActions(next);
   }, []);
 
   const checkScroll = useCallback(() => {
     const element = tabScrollRef.current;
     if (!element) return;
     const { scrollLeft, scrollWidth, clientWidth } = element;
-    setShowLeftScroll(scrollLeft > 0);
-    setShowRightScroll(scrollLeft < scrollWidth - clientWidth - 1);
+    const nextShowLeftScroll = scrollLeft > 0;
+    const nextShowRightScroll = scrollLeft < scrollWidth - clientWidth - 1;
+
+    setShowLeftScroll((current) => (
+      current === nextShowLeftScroll ? current : nextShowLeftScroll
+    ));
+    setShowRightScroll((current) => (
+      current === nextShowRightScroll ? current : nextShowRightScroll
+    ));
   }, []);
 
   const scrollTabs = useCallback((direction: 'left' | 'right') => {
@@ -145,7 +200,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     checkScroll();
     window.addEventListener('resize', checkScroll);
     return () => window.removeEventListener('resize', checkScroll);
-  }, [checkScroll, tabs]);
+  }, [checkScroll, tabLayoutKey]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -347,6 +402,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           filePath={activeTab.path}
           fileName={activeTab.name}
           adapter={adapter}
+          toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
         />
       );
     }
@@ -356,6 +412,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
         <SharedMermaidViewer
           content={activeTab.content}
           fileName={activeTab.name}
+          toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
         />
       );
     }
@@ -370,6 +427,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           onReload={() => adapter.readFile(activeTab.path)}
           onContentChange={setActiveContent}
           onOpenPath={onOpenPath}
+          toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
         />
       );
     }
@@ -386,6 +444,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
           canPreview={capabilities.canPreviewDrawio !== false}
           onContentChange={setActiveContent}
           onModifiedChange={(isModified) => updateTab(activeTab.id, { isModified })}
+          toolbarOwnerKey={activeViewerOwnerKey ?? undefined}
         />
       );
     }
@@ -493,7 +552,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
       {tabs.length > 0 && !hideChrome && (
         <FileViewerWorkbenchToolbar
           headerActions={headerActions}
-          formatActions={formatActions}
+          formatActions={formatActions.ownerKey === activeViewerOwnerKey ? formatActions.node : null}
           canSave={canSave}
           activeTab={activeTab}
           isExpanded={effectiveExpanded}

@@ -22,6 +22,7 @@ interface SharedDrawioViewerProps {
   i18nBase?: string;
   onContentChange: (content: string) => void;
   onModifiedChange: (isModified: boolean) => void;
+  toolbarOwnerKey?: string;
 }
 
 interface DrawioMessage {
@@ -58,8 +59,9 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
   i18nBase = 'shared.fileViewer.drawio',
   onContentChange,
   onModifiedChange,
+  toolbarOwnerKey,
 }) => {
-  const { t } = useI18n();
+  const { t, state: i18nState } = useI18n();
   const { registerFormatActions } = useFileViewerWorkbench();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const latestContentRef = useRef(content);
@@ -284,10 +286,28 @@ export const SharedDrawioViewer: React.FC<SharedDrawioViewerProps> = ({
     </>
   ), [canEditInDrawio, content, handleDownload, i18nBase, isLoading, isSaving, switchViewerMode, t, viewerMode]);
 
+  const toolbarRegistrationKey = useMemo(
+    () => [
+      'drawio',
+      filePath,
+      fileName,
+      content,
+      viewerMode,
+      isLoading,
+      isSaving,
+      canEditInDrawio,
+      fallbackReason ?? 'none',
+      i18nBase,
+      i18nState.currentLanguage,
+    ].join('|'),
+    [canEditInDrawio, content, fallbackReason, fileName, filePath, i18nBase, i18nState.currentLanguage, isLoading, isSaving, viewerMode],
+  );
+  const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `drawio:${filePath}`;
+
   useEffect(() => {
-    registerFormatActions(toolbarActions);
-    return () => registerFormatActions(null);
-  }, [registerFormatActions, toolbarActions]);
+    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
 
   const fallbackDescriptionKey = fallbackReason === 'DISABLED'
     ? `${i18nBase}.serviceUnavailable.disabled`

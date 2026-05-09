@@ -17,6 +17,9 @@ const tMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) =
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
     t: tMock,
+    state: {
+      currentLanguage: 'en',
+    },
   }),
 }));
 
@@ -75,12 +78,12 @@ const firePointerEvent = (
 
 const renderWithFormatActions = (
   ui: React.ReactElement,
-  registerSpy?: (node: React.ReactNode | null) => void,
+  registerSpy?: (node: React.ReactNode | null, registrationKey?: string, ownerKey?: string) => void,
 ) => {
   const Harness: React.FC = () => {
     const [actions, setActions] = React.useState<React.ReactNode | null>(null);
-    const registerFormatActions = React.useCallback((node: React.ReactNode | null) => {
-      registerSpy?.(node);
+    const registerFormatActions = React.useCallback((node: React.ReactNode | null, registrationKey?: string, ownerKey?: string) => {
+      registerSpy?.(node, registrationKey, ownerKey);
       setActions(node);
     }, []);
 
@@ -147,10 +150,10 @@ describe('shared specialized file viewers', () => {
     expect(screen.getByLabelText('shared.fileViewer.markdown.zoomIn')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.markdown.copy')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.markdown.download')).toBeInTheDocument();
-    expect(registerFormatActions).toHaveBeenCalledWith(expect.any(Object));
+    expect(registerFormatActions).toHaveBeenCalledWith(expect.any(Object), expect.any(String), expect.any(String));
 
     view.unmount();
-    expect(registerFormatActions).toHaveBeenCalledWith(null);
+    expect(registerFormatActions).toHaveBeenCalledWith(null, expect.any(String), expect.any(String));
   });
 
   it('opens internal Markdown links through the workspace tab callback', () => {

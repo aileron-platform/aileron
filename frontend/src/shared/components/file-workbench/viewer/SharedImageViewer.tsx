@@ -15,6 +15,7 @@ interface SharedImageViewerProps {
   adapter: FileViewerWorkbenchAdapter;
   className?: string;
   i18nBase?: string;
+  toolbarOwnerKey?: string;
 }
 
 export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
@@ -23,8 +24,9 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
   adapter,
   className,
   i18nBase = 'shared.fileViewer.image',
+  toolbarOwnerKey,
 }) => {
-  const { t } = useI18n();
+  const { t, state: i18nState } = useI18n();
   const { registerFormatActions } = useFileViewerWorkbench();
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -173,10 +175,25 @@ export const SharedImageViewer: React.FC<SharedImageViewerProps> = ({
     </>
   ), [handleDownload, handleResetZoom, handleRotate, handleZoomIn, handleZoomOut, i18nBase, imageUrl, t, zoom]);
 
+  const toolbarRegistrationKey = useMemo(
+    () => [
+      'image',
+      filePath,
+      fileName,
+      i18nBase,
+      i18nState.currentLanguage,
+      imageUrl,
+      zoom,
+      rotation,
+    ].join('|'),
+    [fileName, filePath, i18nBase, i18nState.currentLanguage, imageUrl, rotation, zoom],
+  );
+  const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `image:${filePath}`;
+
   useEffect(() => {
-    registerFormatActions(toolbarActions);
-    return () => registerFormatActions(null);
-  }, [registerFormatActions, toolbarActions]);
+    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-muted/10', className)}>

@@ -235,6 +235,20 @@ describe('WorkspaceShell', () => {
     expect(mocks.chatMountCount).toBe(1);
   });
 
+  it('positions the chat panel as a viewport overlay when expanded', () => {
+    mocks.workspaceState.chatExpanded = true;
+
+    render(
+      <WorkspaceShell secondColumn={<div data-testid="custom-second-column">second-column</div>}>
+        <div data-testid="custom-main-content">main-content</div>
+      </WorkspaceShell>,
+    );
+
+    const chatColumn = screen.getByTestId('workspace-chat-column');
+    expect(chatColumn).toHaveClass('fixed', 'inset-0', 'z-[99995]');
+    expect(chatColumn).not.toHaveClass('relative');
+  });
+
   it('lets file management editor occupy the workspace when expanded', () => {
     mocks.workspaceState.currentFeature = 'file-management';
     mocks.workspaceState.fileManagementEditorExpanded = true;

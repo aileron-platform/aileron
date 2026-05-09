@@ -37,7 +37,7 @@ export interface FileViewerWorkbenchStatusMetadata {
 }
 
 export interface FileViewerWorkbenchContextValue {
-  registerFormatActions: (node: ReactNode | null) => void;
+  registerFormatActions: (node: ReactNode | null, registrationKey?: string, ownerKey?: string) => void;
 }
 
 export interface FileViewerWorkbenchProps {

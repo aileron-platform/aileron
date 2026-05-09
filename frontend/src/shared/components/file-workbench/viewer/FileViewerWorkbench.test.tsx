@@ -11,6 +11,9 @@ const tMock = vi.hoisted(() => (key: string, values?: Record<string, unknown>) =
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
     t: tMock,
+    state: {
+      currentLanguage: 'en',
+    },
   }),
 }));
 
@@ -300,6 +303,49 @@ describe('FileViewerWorkbench', () => {
       } else {
         delete (HTMLElement.prototype as Partial<HTMLElement>).scrollBy;
       }
+    }
+  });
+
+  it('does not rerun tab scroll measurement when parent recreates the same tabs', () => {
+    const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    const removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+
+    const Harness: React.FC = () => {
+      const [renderCount, setRenderCount] = React.useState(0);
+      const adapter: FileViewerWorkbenchAdapter = React.useMemo(() => ({
+        readFile: vi.fn(),
+        saveFile: vi.fn(),
+      }), []);
+      const unstableTabs = tabs.map((tab) => ({ ...tab }));
+
+      return (
+        <div>
+          <button type="button" onClick={() => setRenderCount((current) => current + 1)}>
+            rerender:{renderCount}
+          </button>
+          <FileViewerWorkbench
+            tabs={unstableTabs}
+            activeTabId="/docs/a.md"
+            adapter={adapter}
+            onTabsChange={vi.fn()}
+            onActiveTabChange={vi.fn()}
+          />
+        </div>
+      );
+    };
+
+    try {
+      render(<Harness />);
+
+      expect(addEventListenerSpy.mock.calls.filter(([eventName]) => eventName === 'resize')).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: 'rerender:0' }));
+
+      expect(addEventListenerSpy.mock.calls.filter(([eventName]) => eventName === 'resize')).toHaveLength(1);
+      expect(removeEventListenerSpy.mock.calls.filter(([eventName]) => eventName === 'resize')).toHaveLength(0);
+    } finally {
+      addEventListenerSpy.mockRestore();
+      removeEventListenerSpy.mockRestore();
     }
   });
 

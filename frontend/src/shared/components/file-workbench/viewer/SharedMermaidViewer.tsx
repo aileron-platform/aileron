@@ -23,6 +23,7 @@ interface SharedMermaidViewerProps {
   fileName: string;
   className?: string;
   i18nBase?: string;
+  toolbarOwnerKey?: string;
 }
 
 export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
@@ -30,8 +31,9 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   fileName,
   className,
   i18nBase = 'shared.fileViewer.mermaid',
+  toolbarOwnerKey,
 }) => {
-  const { t } = useI18n();
+  const { t, state: i18nState } = useI18n();
   const { registerFormatActions } = useFileViewerWorkbench();
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState('');
@@ -239,10 +241,24 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
     zoom,
   ]);
 
+  const toolbarRegistrationKey = useMemo(
+    () => [
+      'mermaid',
+      fileName,
+      i18nBase,
+      i18nState.currentLanguage,
+      svg,
+      zoom,
+      copied,
+    ].join('|'),
+    [copied, fileName, i18nBase, i18nState.currentLanguage, svg, zoom],
+  );
+  const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `mermaid:${fileName}`;
+
   useEffect(() => {
-    registerFormatActions(toolbarActions);
-    return () => registerFormatActions(null);
-  }, [registerFormatActions, toolbarActions]);
+    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
 
   return (
     <div ref={containerRef} className={cn('flex h-full flex-col bg-background', className)}>

@@ -15,6 +15,7 @@ interface SharedMarkdownViewerProps {
   onReload?: () => Promise<string>;
   onContentChange?: (content: string) => void;
   onOpenPath?: (path: string) => void;
+  toolbarOwnerKey?: string;
 }
 
 export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
@@ -25,8 +26,9 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   onReload,
   onContentChange,
   onOpenPath,
+  toolbarOwnerKey,
 }) => {
-  const { t } = useI18n();
+  const { t, state: i18nState } = useI18n();
   const { registerFormatActions } = useFileViewerWorkbench();
   const [zoom, setZoom] = useState(1);
   const [copied, setCopied] = useState(false);
@@ -227,10 +229,29 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
     zoom,
   ]);
 
+  const toolbarRegistrationKey = useMemo(
+    () => [
+      'markdown',
+      filePath ?? fileName,
+      i18nState.currentLanguage,
+      content,
+      editContent,
+      isEditMode,
+      zoom,
+      copied,
+      isRefreshing,
+      canEdit,
+      Boolean(onReload),
+      readOnly,
+    ].join('|'),
+    [canEdit, content, copied, editContent, fileName, filePath, i18nState.currentLanguage, isEditMode, isRefreshing, onReload, readOnly, zoom],
+  );
+  const resolvedToolbarOwnerKey = toolbarOwnerKey ?? `markdown:${filePath ?? fileName}`;
+
   useEffect(() => {
-    registerFormatActions(toolbarActions);
-    return () => registerFormatActions(null);
-  }, [registerFormatActions, toolbarActions]);
+    registerFormatActions(toolbarActions, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+    return () => registerFormatActions(null, toolbarRegistrationKey, resolvedToolbarOwnerKey);
+  }, [registerFormatActions, resolvedToolbarOwnerKey, toolbarActions, toolbarRegistrationKey]);
 
   return (
     <div id="markdown-preview-container" className="flex h-full flex-col bg-background">

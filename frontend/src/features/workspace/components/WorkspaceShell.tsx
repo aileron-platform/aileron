@@ -23,6 +23,7 @@ import { workspaceLifecycleApi } from '../services/workspaceLifecycleApi';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspaceDeleteFallback } from '../hooks/useWorkspaceDeleteFallback';
+import { cn } from '@/shared/utils/cn';
 
 const logger = createLogger('WorkspaceShell');
 
@@ -690,12 +691,14 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children, second
           {wrappedMainColumns}
         </div>
         <div
-          className={`bg-background transition-all duration-300 relative ${isFileManagementEditorExpanded
-            ? 'hidden'
-            : state.chatExpanded
-            ? 'fixed inset-0 z-40'
-            : `flex-shrink-0 ${state.rightChatCollapsed ? 'w-12' : ''}`
-            }`}
+          data-testid="workspace-chat-column"
+          className={cn(
+            'bg-background transition-all duration-300',
+            isFileManagementEditorExpanded && 'hidden',
+            !isFileManagementEditorExpanded && state.chatExpanded && 'fixed inset-0 z-[99995]',
+            !isFileManagementEditorExpanded && !state.chatExpanded && 'relative flex-shrink-0',
+            !isFileManagementEditorExpanded && !state.chatExpanded && state.rightChatCollapsed && 'w-12',
+          )}
           style={state.chatExpanded
             ? undefined
             : { width: state.rightChatCollapsed ? '48px' : `${state.rightChatWidth}px` }}
