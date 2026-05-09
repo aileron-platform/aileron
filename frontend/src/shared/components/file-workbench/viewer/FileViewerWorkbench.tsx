@@ -130,6 +130,9 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     [tabs],
   );
   const activeViewerOwnerKey = useMemo(() => getViewerOwnerKey(activeTab), [activeTab]);
+  const toolbarFormatActions = formatActions.ownerKey === activeViewerOwnerKey ? formatActions.node : null;
+  const showToolbarSave = canSave && Boolean(activeTab) && (activeTab?.isModified === true || !toolbarFormatActions);
+  const showEditorToolbar = Boolean(headerActions || toolbarFormatActions || showToolbarSave);
 
   const contextMenuTab = useMemo(
     () => tabs.find((tab) => tab.id === contextMenuTabId) ?? null,
@@ -546,22 +549,40 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
               </button>
             )}
           </div>
+          <div className="flex shrink-0 items-center gap-1 border-l border-border bg-card px-1.5" data-testid="file-viewer-tabbar-actions">
+            <button
+              type="button"
+              className="flex h-8 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={toggleExpanded}
+              title={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
+              aria-label={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
+              disabled={!activeTab}
+            >
+              {effectiveExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              ref={moreButtonRef}
+              type="button"
+              className="flex h-8 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={openMoreMenu}
+              title={t('shared.fileViewer.toolbar.more')}
+              aria-label={t('shared.fileViewer.toolbar.more')}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
-      {tabs.length > 0 && !hideChrome && (
+      {tabs.length > 0 && !hideChrome && showEditorToolbar && (
         <FileViewerWorkbenchToolbar
           headerActions={headerActions}
-          formatActions={formatActions.ownerKey === activeViewerOwnerKey ? formatActions.node : null}
+          formatActions={toolbarFormatActions}
           canSave={canSave}
           activeTab={activeTab}
-          isExpanded={effectiveExpanded}
           onSave={() => {
             if (activeTab) void saveTab(activeTab);
           }}
-          onToggleExpanded={toggleExpanded}
-          onOpenMoreMenu={openMoreMenu}
-          moreButtonRef={moreButtonRef}
         />
       )}
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FileViewerWorkbench } from './FileViewerWorkbench';
 import type { FileViewerWorkbenchAdapter, FileViewerWorkbenchTab } from './types';
@@ -191,7 +191,7 @@ describe('FileViewerWorkbench', () => {
     ]);
   });
 
-  it('shows save and expand icon actions before the action menu', async () => {
+  it('shows save in the editor toolbar and expand/actions at the right of the tab bar', async () => {
     const onExpandedChange = vi.fn();
     const { adapter, onTabsChange } = renderWorkbench({
       activeTabId: '/docs/b.ts',
@@ -210,7 +210,12 @@ describe('FileViewerWorkbench', () => {
       tabs[2],
     ]);
 
-    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.expand'));
+    const tabBarActions = screen.getByTestId('file-viewer-tabbar-actions');
+
+    expect(within(tabBarActions).getByLabelText('shared.fileViewer.toolbar.expand')).toBeInTheDocument();
+    expect(within(tabBarActions).getByLabelText('shared.fileViewer.toolbar.more')).toBeInTheDocument();
+
+    fireEvent.click(within(tabBarActions).getByLabelText('shared.fileViewer.toolbar.expand'));
 
     expect(onExpandedChange).toHaveBeenCalledWith(true);
   });

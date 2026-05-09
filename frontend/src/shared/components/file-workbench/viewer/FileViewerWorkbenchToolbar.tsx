@@ -1,6 +1,6 @@
 import type React from 'react';
-import type { ReactNode, RefObject } from 'react';
-import { Maximize2, Minimize2, MoreHorizontal, Save } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Save } from 'lucide-react';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { FileViewerWorkbenchTab } from './types';
 
@@ -9,11 +9,7 @@ interface FileViewerWorkbenchToolbarProps {
   formatActions: ReactNode | null;
   canSave: boolean;
   activeTab: FileViewerWorkbenchTab | null;
-  isExpanded: boolean;
   onSave: () => void;
-  onToggleExpanded: () => void;
-  onOpenMoreMenu: () => void;
-  moreButtonRef: RefObject<HTMLButtonElement>;
 }
 
 export const FileViewerWorkbenchToolbar: React.FC<FileViewerWorkbenchToolbarProps> = ({
@@ -21,16 +17,9 @@ export const FileViewerWorkbenchToolbar: React.FC<FileViewerWorkbenchToolbarProp
   formatActions,
   canSave,
   activeTab,
-  isExpanded,
   onSave,
-  onToggleExpanded,
-  onOpenMoreMenu,
-  moreButtonRef,
 }) => {
   const { t } = useI18n();
-  const expandedLabel = isExpanded
-    ? t('shared.fileViewer.toolbar.collapse')
-    : t('shared.fileViewer.toolbar.expand');
   const showSave = canSave && Boolean(activeTab) && (activeTab?.isModified === true || !formatActions);
 
   return (
@@ -52,26 +41,6 @@ export const FileViewerWorkbenchToolbar: React.FC<FileViewerWorkbenchToolbarProp
             <Save className="h-3.5 w-3.5" />
           </button>
         ) : null}
-        <button
-          type="button"
-          className="flex h-8 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={onToggleExpanded}
-          title={expandedLabel}
-          aria-label={expandedLabel}
-          disabled={!activeTab}
-        >
-          {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-        </button>
-        <button
-          ref={moreButtonRef}
-          type="button"
-          className="flex h-8 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          onClick={onOpenMoreMenu}
-          title={t('shared.fileViewer.toolbar.more')}
-          aria-label={t('shared.fileViewer.toolbar.more')}
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
       </div>
     </div>
   );
