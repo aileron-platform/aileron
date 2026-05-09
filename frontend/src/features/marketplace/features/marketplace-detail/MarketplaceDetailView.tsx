@@ -65,7 +65,7 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import { ROUTES } from '@/shared/constants/routes';
 import { ApiError } from '@/shared/api/apiClient';
 import { fetchWorkspaceList } from '@/features/workspace/services/workspaceRuntimeApi';
-import type { MarketplaceCliPreflight, MarketplaceFeatureContentItem, MarketplaceInstallResult, MarketplacePackageDetail, MarketplacePackageFile, MarketplaceProvider } from '@/shared/types/marketplace';
+import type { MarketplaceCliPreflight, MarketplaceFeatureContentItem, MarketplaceInstallResult, MarketplacePackageDetail, MarketplaceProvider } from '@/shared/types/marketplace';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useToast } from '@/shared/components/ui/use-toast';
 import {
@@ -90,6 +90,11 @@ import { MarketplaceInstallOutput } from '../../components/MarketplaceInstallOut
 import { MarketplaceSectionSidebarShell } from '../../components/MarketplaceSectionSidebarShell';
 import { downloadBlob } from '../../utils/downloadBlob';
 import { getMarketplaceFeatureLabelKey } from '../../utils/featureLabels';
+import {
+  marketplaceFileContentsFromTree,
+  marketplaceFindFirstFilePath,
+  marketplacePackageFilesToFileTreeNodes,
+} from '../../adapters/marketplaceFileTreeAdapter';
 import {
   resolveMarketplaceInstallWorkspaceId,
   saveMarketplaceInstallWorkspaceId,
@@ -1399,11 +1404,10 @@ interface MarketplacePackageFilesViewerProps {
 const MarketplacePackageFilesViewer: React.FC<MarketplacePackageFilesViewerProps> = ({ detail }) => {
   const packageRoot = detail.registryPath || getMarketplaceDetailPackageRoot(detail.provider, detail.packageId);
   const initialNodes = React.useMemo(
-    () => marketplaceDetailPackageFilesToFileTree(
-      detail.packageFiles,
-      `/${packageRoot}`,
-      detail.provider === 'gemini' ? 'extension' : 'plugin',
-    ),
+    () => marketplacePackageFilesToFileTreeNodes(detail.packageFiles, {
+      rootPath: `/${packageRoot}`,
+      scope: detail.provider === 'gemini' ? 'extension' : 'plugin',
+    }),
     [detail.packageFiles, detail.provider, packageRoot],
   );
 
@@ -1448,7 +1452,7 @@ const MarketplaceReadOnlyFileTreeViewer: React.FC<MarketplaceReadOnlyFileTreeVie
   const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
   const [isSidebarResizing, setIsSidebarResizing] = React.useState(false);
   const sidebarResizeRef = React.useRef<{ startX: number; startWidth: number } | null>(null);
-  const firstFilePath = React.useMemo(() => marketplaceDetailFindFirstFilePath(initialNodes), [initialNodes]);
+  const firstFilePath = React.useMemo(() => marketplaceFindFirstFilePath(initialNodes), [initialNodes]);
   const treeState = useFileTreeState({
     initialNodes,
     initialExpandedIds: [],
@@ -1456,7 +1460,7 @@ const MarketplaceReadOnlyFileTreeViewer: React.FC<MarketplaceReadOnlyFileTreeVie
     enableMultiSelect: false,
   });
   const [activePath, setActivePath] = React.useState(firstFilePath ?? '');
-  const contents = React.useMemo(() => marketplaceDetailFileContentsFromTree(initialNodes), [initialNodes]);
+  const contents = React.useMemo(() => marketplaceFileContentsFromTree(initialNodes), [initialNodes]);
 
   const activeNode = React.useMemo(
     () => treeState.flatNodes.find(node => node.path === activePath && node.type === 'file') ?? null,
@@ -2045,22 +2049,6 @@ const marketplaceDetailIsMarkdownFile = (fileName: string): boolean => {
   return isMarkdownFile(fileName) || extension === 'mdx';
 };
 
-const marketplaceDetailFileContentsFromTree = (nodes: FileTreeNode[]): Record<string, string> => {
-  const contents: Record<string, string> = {};
-  const walk = (items: FileTreeNode[]) => {
-    items.forEach(node => {
-      if (node.type === 'file') {
-        contents[node.path] = typeof node.metadata?.content === 'string' ? node.metadata.content : '';
-      }
-      if (node.children) {
-        walk(node.children);
-      }
-    });
-  };
-  walk(nodes);
-  return contents;
-};
-
 const marketplaceDetailFeatureItemsToFileTree = (
   items: MarketplaceFeatureContentItem[],
   basePath: string,
@@ -2111,82 +2099,6 @@ const marketplaceDetailFeatureItemsToFileTree = (
   });
 
   return sortTreeNodes(roots);
-};
-
-const marketplaceDetailPackageFilesToFileTree = (
-  files: MarketplacePackageFile[],
-  rootPath: string,
-  scope: 'plugin' | 'extension',
-): FileTreeNode[] => {
-  const packageName = rootPath.split('/').at(-1) ?? rootPath;
-  const root: FileTreeNode = {
-    id: rootPath,
-    name: packageName,
-    path: rootPath,
-    type: 'directory',
-    scope,
-    children: [],
-  };
-  const directories = new Map<string, FileTreeNode>([[rootPath, root]]);
-
-  const ensureDirectory = (path: string, name: string, parentChildren: FileTreeNode[]) => {
-    const existing = directories.get(path);
-    if (existing) return existing;
-    const node: FileTreeNode = {
-      id: path,
-      name,
-      path,
-      type: 'directory',
-      scope,
-      children: [],
-    };
-    directories.set(path, node);
-    parentChildren.push(node);
-    return node;
-  };
-
-  files.forEach(file => {
-    const parts = file.path.split('/').filter(Boolean);
-    if (parts.length === 0) return;
-
-    let currentPath = rootPath;
-    let parentChildren = root.children ?? [];
-
-    parts.slice(0, -1).forEach(part => {
-      currentPath = marketplaceDetailJoinPath(currentPath, part);
-      const directory = ensureDirectory(currentPath, part, parentChildren);
-      parentChildren = directory.children ?? [];
-    });
-
-    const fileName = parts.at(-1);
-    if (!fileName) return;
-    const path = marketplaceDetailJoinPath(currentPath, fileName);
-    parentChildren.push({
-      id: path,
-      name: fileName,
-      path,
-      type: 'file',
-      extension: fileName.split('.').pop(),
-      scope,
-      size: file.size,
-      metadata: {
-        content: file.content,
-        binary: file.binary,
-        mimeType: file.mimeType,
-      },
-    });
-  });
-
-  return sortTreeNodes(root.children ?? []);
-};
-
-const marketplaceDetailFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {
-  for (const node of nodes) {
-    if (node.type === 'file') return node.path;
-    const childPath = node.children ? marketplaceDetailFindFirstFilePath(node.children) : undefined;
-    if (childPath) return childPath;
-  }
-  return undefined;
 };
 
 export default MarketplaceDetailView;

@@ -2,14 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import {
   FileViewerWorkbench,
-  FileFocusToolbar,
   toFileWorkbenchTab,
   type FileViewerWorkbenchTab,
 } from '@/shared/components/file-workbench/viewer-entry';
 import { createWorkspaceFileWorkbenchAdapter } from '../adapters/workspaceFileWorkbenchAdapter';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { getFileIcon } from '@/shared/utils/fileIconUtils';
 import { isImageFile } from '@/shared/utils/fileTypeUtils';
 import { createLogger } from '@/shared/services/logger';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
@@ -35,7 +33,6 @@ export const FileEditor: React.FC = () => {
 
   const activeTab = workspace.openTabs.find(tab => tab.id === workspace.activeTabId) ?? null;
   const isFocusMode = layout.fileManagementFocusMode ?? layout.fileManagementEditorExpanded;
-  const useViewportExpansion = workspace.tabScope === 'openspec';
 
   const workbenchTabs = useMemo(
     () => workspace.openTabs.map((tab): FileViewerWorkbenchTab => toFileWorkbenchTab({
@@ -210,6 +207,12 @@ export const FileEditor: React.FC = () => {
     actions.selectFile(tabId);
   }, [actions, switchToTab]);
 
+  useEffect(() => {
+    if (workspace.openTabs.length === 0 && isFocusMode) {
+      toggleFileManagementEditorExpanded();
+    }
+  }, [isFocusMode, toggleFileManagementEditorExpanded, workspace.openTabs.length]);
+
   if (workspace.openTabs.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -237,19 +240,6 @@ export const FileEditor: React.FC = () => {
       }}
       isExpanded={isFocusMode}
       onExpandedChange={toggleFileManagementEditorExpanded}
-      useViewportExpansion={useViewportExpansion}
-      hideChromeWhenExpanded
-      renderFocusToolbar={({ actions: focusActions, icon, metadata, subtitle, title }) => (
-        <FileFocusToolbar
-          icon={icon ?? getFileIcon(activeTab?.name ?? '')}
-          title={title}
-          subtitle={subtitle}
-          metadata={metadata}
-          actions={focusActions}
-          exitLabel={t('workspace.fileManagement.focus.exit')}
-          onExit={toggleFileManagementEditorExpanded}
-        />
-      )}
       onTabsChange={handleTabsChange}
       onActiveTabChange={handleActiveTabChange}
       onOpenPath={openFileInTab}

@@ -291,16 +291,25 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
     ));
   };
 
-  const toggleExpanded = () => {
-    const nextExpanded = !effectiveExpanded;
+  const setExpanded = useCallback((next: boolean) => {
     if (onExpandedChange) {
-      onExpandedChange(nextExpanded);
+      onExpandedChange(next);
     } else {
-      setUncontrolledExpanded(nextExpanded);
+      setUncontrolledExpanded(next);
     }
+  }, [onExpandedChange]);
+
+  const toggleExpanded = () => {
+    setExpanded(!effectiveExpanded);
     closeToolbarMenus();
     closeTabContextMenu();
   };
+
+  useEffect(() => {
+    if (effectiveExpanded && tabs.length === 0) {
+      setExpanded(false);
+    }
+  }, [effectiveExpanded, setExpanded, tabs.length]);
 
   const renderSharedFocusToolbar = (params: FileViewerWorkbenchFocusToolbarParams) => (
     renderFocusToolbar?.(params)

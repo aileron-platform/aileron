@@ -135,6 +135,19 @@ const marketplace = {
       },
     },
   },
+  fileTree: {
+    error: {
+      read: '無法讀取此 Marketplace 檔案。',
+      binaryRead: '二進位 Marketplace 檔案不能以文字開啟。',
+      create: '無法建立此 Marketplace 檔案。',
+      write: '無法儲存此 Marketplace 檔案。',
+      delete: '無法刪除此 Marketplace 檔案。',
+      rename: '無法重新命名此 Marketplace 檔案。',
+      upload: '無法上傳此 Marketplace 檔案。',
+      download: '尚未支援下載 Marketplace 檔案。',
+      readOnly: '此 Marketplace 檔案為唯讀。',
+    },
+  },
   detail: {
     header: {
       version: '版本 {{version}}',
@@ -754,14 +767,6 @@ const marketplace = {
       },
       viewer: {
         noFile: '未選擇檔案',
-        placeholder: '撰寫 package skill 內容...',
-        binaryTitle: '二進位資產',
-        binaryDescription: '此檔案會以 {{mimeType}} 處理，不會用文字編輯器開啟。',
-        binaryDownloadContent: '{{name}} 的二進位資產 placeholder。',
-        previewAlt: '{{name}} 預覽',
-        previewUnavailable: '此二進位檔案類型無法預覽。',
-        download: '下載',
-        delete: '刪除',
       },
     },
     documentViewer: {

@@ -78,7 +78,8 @@ import {
   type FileTreeNode,
   type SelectionModifier,
 } from '@/shared/components/file-workbench';
-import { CodeTextEditor, FileEditor } from '@/shared/components/file-workbench/viewer-entry';
+import { CodeTextEditor, FileViewerWorkbench } from '@/shared/components/file-workbench/viewer-entry';
+import type { FileViewerWorkbenchAdapter } from '@/shared/components/file-workbench/viewer-entry';
 import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import WarningIcon from '@/shared/components/ui/WarningIcon';
@@ -106,6 +107,19 @@ import {
 import { cn } from '@/shared/utils/cn';
 import { MarketplaceSectionSidebarShell } from '../../components/MarketplaceSectionSidebarShell';
 import { createPackage, getPackage, savePackage as saveMarketplacePackage } from '../../api/marketplaceApi';
+import {
+  createMarketplacePackageFileTree,
+  marketplaceDeleteContentPaths,
+  marketplaceFeaturePackageFilesFromTree,
+  marketplaceFileContentsFromTree,
+  marketplaceFindFirstFilePath,
+  marketplaceJoinPath,
+  marketplacePackageFilesFromTree,
+  marketplaceRenameContentPaths,
+  marketplaceRenameNode,
+} from '../../adapters/marketplaceFileTreeAdapter';
+import { createMarketplaceFileWorkbenchAdapter } from '../../adapters/marketplaceFileWorkbenchAdapter';
+import { useMarketplaceFileTabs } from '../../hooks/useMarketplaceFileTabs';
 import { downloadBlob } from '../../utils/downloadBlob';
 
 export interface MarketplaceEditorViewProps {
@@ -164,151 +178,6 @@ const getMarketplacePackageRoot = (provider: MarketplaceProvider, packageId: str
     ? `gemini/extensions/${packageId}`
     : `${provider}/plugins/${packageId}`
 );
-
-const createMarketplacePackageFileTree = (
-  provider: MarketplaceProvider,
-  packageRoot: string,
-  displayName: string,
-  packageFiles: MarketplacePackageFile[],
-): FileTreeNode[] => {
-  const rootPath = `/${packageRoot}`;
-  if (packageFiles.length > 0) {
-    return marketplacePackageFilesToFileTree(packageFiles, rootPath, provider === 'gemini' ? 'extension' : 'plugin');
-  }
-
-  const packageName = packageRoot.split('/').at(-1) ?? packageRoot;
-  const scope = provider === 'gemini' ? 'extension' : 'plugin';
-  const manifestPath = provider === 'gemini'
-    ? `${rootPath}/gemini-extension.json`
-    : `${rootPath}/${provider === 'codex' ? '.codex-plugin' : '.claude-plugin'}/plugin.json`;
-  const manifestDirectory = provider === 'gemini' ? null : {
-    id: manifestPath.split('/').slice(0, -1).join('/'),
-    name: provider === 'codex' ? '.codex-plugin' : '.claude-plugin',
-    path: manifestPath.split('/').slice(0, -1).join('/'),
-    type: 'directory' as const,
-    scope: 'plugin' as const,
-    children: [
-      {
-        id: manifestPath,
-        name: 'plugin.json',
-        path: manifestPath,
-        type: 'file' as const,
-        extension: 'json',
-        scope: 'plugin' as const,
-        size: 128,
-        metadata: {
-          content: `{\n  "id": "${packageName}",\n  "name": "${displayName}",\n  "version": "0.1.0"\n}`,
-        },
-      },
-    ],
-  };
-
-  return [
-    {
-      id: rootPath,
-      name: packageName,
-      path: rootPath,
-      type: 'directory',
-      scope,
-      children: [
-        ...(manifestDirectory ? [manifestDirectory] : [
-          {
-            id: manifestPath,
-            name: 'gemini-extension.json',
-            path: manifestPath,
-            type: 'file' as const,
-            extension: 'json',
-            scope: 'extension' as const,
-            size: 128,
-            metadata: {
-              content: `{\n  "name": "${packageName}",\n  "version": "0.1.0",\n  "contextFileName": "GEMINI.md"\n}`,
-            },
-          },
-        ]),
-        {
-          id: `${rootPath}/README.md`,
-          name: 'README.md',
-          path: `${rootPath}/README.md`,
-          type: 'file',
-          extension: 'md',
-          scope: provider === 'gemini' ? 'extension' : 'plugin',
-          size: 96,
-          metadata: {
-            content: `# ${displayName}\n\nPackage README for ${packageRoot}.`,
-          },
-        },
-        {
-          id: `${rootPath}/assets`,
-          name: 'assets',
-          path: `${rootPath}/assets`,
-          type: 'directory',
-          scope: provider === 'gemini' ? 'extension' : 'plugin',
-          children: [
-            {
-              id: `${rootPath}/assets/icon.svg`,
-              name: 'icon.svg',
-              path: `${rootPath}/assets/icon.svg`,
-              type: 'file',
-              extension: 'svg',
-              scope: provider === 'gemini' ? 'extension' : 'plugin',
-              size: 96,
-              metadata: {
-                content: '<svg viewBox="0 0 24 24" role="img"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /></svg>',
-              },
-            },
-            {
-              id: `${rootPath}/assets/logo.png`,
-              name: 'logo.png',
-              path: `${rootPath}/assets/logo.png`,
-              type: 'file',
-              extension: 'png',
-              scope: provider === 'gemini' ? 'extension' : 'plugin',
-              size: 68,
-              metadata: {
-                binary: true,
-                mimeType: 'image/png',
-                previewDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
-              },
-            },
-          ],
-        },
-        {
-          id: `${rootPath}/scripts`,
-          name: 'scripts',
-          path: `${rootPath}/scripts`,
-          type: 'directory',
-          scope: provider === 'gemini' ? 'extension' : 'plugin',
-          children: [
-            {
-              id: `${rootPath}/scripts/install-check.sh`,
-              name: 'install-check.sh',
-              path: `${rootPath}/scripts/install-check.sh`,
-              type: 'file',
-              extension: 'sh',
-              scope: provider === 'gemini' ? 'extension' : 'plugin',
-              size: 64,
-              metadata: {
-                content: '#!/usr/bin/env bash\nset -euo pipefail\n\necho "Checking package prerequisites"\n',
-              },
-            },
-          ],
-        },
-        {
-          id: `${rootPath}/LICENSE`,
-          name: 'LICENSE',
-          path: `${rootPath}/LICENSE`,
-          type: 'file',
-          extension: 'txt',
-          scope: provider === 'gemini' ? 'extension' : 'plugin',
-          size: 32,
-          metadata: {
-            content: 'MIT License\n\nCopyright (c) 2026',
-          },
-        },
-      ],
-    },
-  ];
-};
 
 interface MarketplaceEditorResourceItem {
   id: string;
@@ -903,7 +772,18 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
     [featureItems?.skills, provider],
   );
   const packageFileTree = React.useMemo(
-    () => provider ? createMarketplacePackageFileTree(provider, packageRoot, resolvedDisplayName, packageFiles) : [],
+    () => {
+      if (!provider) return [];
+      const tree = createMarketplacePackageFileTree({
+        provider,
+        packageRoot,
+        displayName: resolvedDisplayName,
+        packageFiles,
+      });
+      return packageFiles.length > 0 && tree[0]?.path === `/${packageRoot}`
+        ? tree[0].children ?? []
+        : tree;
+    },
     [packageFiles, packageRoot, provider, resolvedDisplayName],
   );
 
@@ -1213,7 +1093,11 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
           <TabsContent value="files" className="flex-1 overflow-auto !m-0 !p-0">
             <MarketplacePackageFileManager
               key={packageRoot}
+              provider={provider}
+              packageId={packageId}
               packageRoot={packageRoot}
+              displayName={resolvedDisplayName}
+              packageFiles={packageFiles}
               initialNodes={packageFileTree}
               onDirty={markDirty}
               onPackageFilesChange={setPackageFiles}
@@ -1436,19 +1320,12 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> => (
 );
 
 const marketplaceBinaryExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico', 'pdf', 'zip', 'tar', 'gz', 'woff', 'woff2']);
-const marketplacePreviewableImageExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
 
 const isMarketplaceBinaryFile = (node: FileTreeNode | null): boolean => {
   if (!node || node.type !== 'file') return false;
   if (node.metadata?.binary === true) return true;
   const extension = node.extension?.toLowerCase() ?? node.name.split('.').pop()?.toLowerCase() ?? '';
   return marketplaceBinaryExtensions.has(extension);
-};
-
-const isMarketplacePreviewableBinaryFile = (node: FileTreeNode | null): boolean => {
-  if (!node || !isMarketplaceBinaryFile(node)) return false;
-  const extension = node.extension?.toLowerCase() ?? node.name.split('.').pop()?.toLowerCase() ?? '';
-  return marketplacePreviewableImageExtensions.has(extension) && typeof node.metadata?.previewDataUrl === 'string';
 };
 
 const getStringField = (value: unknown, fallback = ''): string => (
@@ -2343,43 +2220,45 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
     enableMultiSelect: true,
   });
   const [dialogState, setDialogState] = React.useState<MarketplaceFileDialogState>(null);
-  const [activePath, setActivePath] = React.useState(firstFilePath ?? '');
   const [draggingPath, setDraggingPath] = React.useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = React.useState<string | null>(null);
   const [clipboardItem, setClipboardItem] = React.useState<FileTreeNode | null>(null);
   const [contents, setContents] = React.useState<Record<string, string>>(
     () => marketplaceFileContentsFromTree(initialNodes),
   );
+  const fileTabs = useMarketplaceFileTabs();
+  const contentsRef = React.useRef(contents);
+  React.useEffect(() => {
+    contentsRef.current = contents;
+  }, [contents]);
+  const flatNodesRef = React.useRef(treeState.flatNodes);
+  React.useEffect(() => {
+    flatNodesRef.current = treeState.flatNodes;
+  }, [treeState.flatNodes]);
 
   React.useEffect(() => {
     onPackageFilesChange(marketplaceFeaturePackageFilesFromTree(treeState.nodes, 'skills', contents));
   }, [contents, onPackageFilesChange, treeState.nodes]);
 
-  const activeNode = React.useMemo(
-    () => treeState.flatNodes.find(node => node.path === activePath && node.type === 'file') ?? null,
-    [activePath, treeState.flatNodes],
-  );
-
-  React.useEffect(() => {
-    if (activeNode) return;
-    const nextFile = treeState.flatNodes.find(node => node.type === 'file');
-    setActivePath(nextFile?.path ?? '');
-  }, [activeNode, treeState.flatNodes]);
+  const openFileInTab = React.useCallback((node: FileTreeNode) => {
+    if (node.type !== 'file') return;
+    fileTabs.openFile(node, contentsRef.current[node.path] ?? '');
+  }, [fileTabs]);
 
   const handleNodeClick = React.useCallback((node: FileTreeNode, modifier: SelectionModifier) => {
     treeState.selectNodeWithModifier(node.path, modifier);
     if (node.type === 'file' && modifier === 'none') {
-      setActivePath(node.path);
+      openFileInTab(node);
     }
-  }, [treeState]);
+  }, [openFileInTab, treeState]);
 
   const handleNodeDoubleClick = React.useCallback((node: FileTreeNode) => {
     if (node.type === 'file') {
-      setActivePath(node.path);
+      openFileInTab(node);
     } else {
       treeState.toggleNode(node.path);
     }
-  }, [treeState]);
+  }, [openFileInTab, treeState]);
 
   const handleContextMenu = React.useCallback((node: FileTreeNode, event: React.MouseEvent) => {
     treeState.openContextMenu(event.clientX, event.clientY, node);
@@ -2402,14 +2281,14 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
     treeState.addNode(parentPath, node);
     if (node.type === 'file') {
       setContents(prev => ({ ...prev, [path]: '' }));
-      setActivePath(path);
       treeState.selectNode(path);
+      fileTabs.openFile(node, '');
     } else {
       treeState.expandNode(path);
     }
     setDialogState(null);
     onDirty();
-  }, [dialogState, onDirty, treeState]);
+  }, [dialogState, fileTabs, onDirty, treeState]);
 
   const handleRename = React.useCallback((name: string) => {
     if (!dialogState || dialogState.type !== 'rename') return;
@@ -2418,44 +2297,44 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
     const nextPath = marketplaceJoinPath(parentPath, name);
     treeState.setNodes(marketplaceRenameNode(treeState.nodes, node.path, nextPath, name));
     setContents(prev => marketplaceRenameContentPaths(prev, node.path, nextPath));
-    if (activePath === node.path || activePath.startsWith(`${node.path}/`)) {
-      setActivePath(activePath.replace(node.path, nextPath));
-    }
+    fileTabs.renamePath(node.path, nextPath, name);
     setDialogState(null);
     onDirty();
-  }, [activePath, dialogState, onDirty, treeState]);
+  }, [dialogState, fileTabs, onDirty, treeState]);
 
   const handleDelete = React.useCallback(() => {
     if (!dialogState || dialogState.type !== 'delete') return;
     const { node } = dialogState;
     treeState.removeNode(node.path);
     setContents(prev => marketplaceDeleteContentPaths(prev, [node.path]));
-    if (activePath === node.path || activePath.startsWith(`${node.path}/`)) {
-      setActivePath('');
-    }
+    fileTabs.removePaths([node.path]);
     setDialogState(null);
     onDirty();
-  }, [activePath, dialogState, onDirty, treeState]);
+  }, [dialogState, fileTabs, onDirty, treeState]);
 
   const handleBatchDelete = React.useCallback(() => {
     const paths = Array.from(treeState.selectedIds);
     paths.forEach(path => treeState.removeNode(path));
     setContents(prev => marketplaceDeleteContentPaths(prev, paths));
-    if (paths.some(path => activePath === path || activePath.startsWith(`${path}/`))) {
-      setActivePath('');
-    }
+    fileTabs.removePaths(paths);
     treeState.clearSelection();
     setDialogState(null);
     onDirty();
-  }, [activePath, onDirty, treeState]);
+  }, [fileTabs, onDirty, treeState]);
 
-  const handleSaveFile = React.useCallback(async (content: string) => {
-    if (!activeNode) return;
-    const currentContent = contents[activeNode.path] ?? '';
-    if (!shouldUpdateMarketplaceEditorFileContent(content, currentContent)) return;
-    setContents(prev => ({ ...prev, [activeNode.path]: content }));
+  const handleSaveFile = React.useCallback(async (path: string, content: string) => {
+    if (!shouldUpdateMarketplaceEditorFileContent(content, contentsRef.current[path] ?? '')) return;
+    setContents(prev => ({ ...prev, [path]: content }));
     onDirty();
-  }, [activeNode, contents, onDirty]);
+  }, [onDirty]);
+
+  const viewerAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: async (path) => contentsRef.current[path] ?? '',
+    saveFile: handleSaveFile,
+    copyPath: async (path) => {
+      await navigator.clipboard.writeText(path);
+    },
+  }), [handleSaveFile]);
 
   const contextMenuItems = useFileTreeContextMenu({
     node: treeState.contextMenu?.node ?? null,
@@ -2614,23 +2493,24 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
         </div>
 
       <div className="min-w-0 flex-1 overflow-hidden">
-        {!activeNode ? (
+        {fileTabs.tabs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {t('marketplace.editor.fileManager.viewer.noFile')}
           </div>
         ) : (
-          <FileEditor
-            fileName={activeNode.name}
-            filePath={activeNode.path}
-            fileContent={contents[activeNode.path] ?? ''}
-            onSave={handleSaveFile}
-            onContentChange={(content) => {
-              if (!shouldUpdateMarketplaceEditorFileContent(content, contents[activeNode.path] ?? '')) return;
-              setContents(prev => ({ ...prev, [activeNode.path]: content }));
-              onDirty();
+          <FileViewerWorkbench
+            tabs={fileTabs.tabs}
+            activeTabId={fileTabs.activeTabId}
+            adapter={viewerAdapter}
+            capabilities={{
+              canEdit: true,
+              canSave: true,
+              canCopyPath: true,
+              canCloseTabs: true,
             }}
-            isLoading={false}
-            isSaving={false}
+            onTabsChange={fileTabs.applyTabsChange}
+            onActiveTabChange={fileTabs.setActiveTabId}
+            className="h-full"
           />
         )}
       </div>
@@ -3257,7 +3137,11 @@ const MarketplaceRenameDialog: React.FC<MarketplaceRenameDialogProps> = ({
 };
 
 interface MarketplacePackageFileManagerProps {
+  provider: MarketplaceProvider;
+  packageId: string;
   packageRoot: string;
+  displayName: string;
+  packageFiles: MarketplacePackageFile[];
   initialNodes: FileTreeNode[];
   onDirty: () => void;
   onPackageFilesChange: (files: MarketplacePackageFile[]) => void;
@@ -3269,7 +3153,11 @@ type MarketplaceFileDialogState =
   | null;
 
 const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps> = ({
+  provider,
+  packageId,
   packageRoot,
+  displayName,
+  packageFiles,
   initialNodes,
   onDirty,
   onPackageFilesChange,
@@ -3289,43 +3177,53 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
   );
   const packageRootParentPath = hasPackageRootNode ? packageRootPath : null;
   const [dialogState, setDialogState] = React.useState<MarketplaceFileDialogState>(null);
-  const [activePath, setActivePath] = React.useState(initialSelectedPath ?? '');
   const [draggingPath, setDraggingPath] = React.useState<string | null>(null);
   const [dragOverPath, setDragOverPath] = React.useState<string | null>(null);
   const [clipboardItem, setClipboardItem] = React.useState<FileTreeNode | null>(null);
   const [contents, setContents] = React.useState<Record<string, string>>(
     () => marketplaceFileContentsFromTree(initialNodes),
   );
+  const fileTabs = useMarketplaceFileTabs();
+  const contentsRef = React.useRef(contents);
+  React.useEffect(() => {
+    contentsRef.current = contents;
+  }, [contents]);
+  const flatNodesRef = React.useRef(treeState.flatNodes);
+  React.useEffect(() => {
+    flatNodesRef.current = treeState.flatNodes;
+  }, [treeState.flatNodes]);
+  const workbenchAdapter = React.useMemo(() => createMarketplaceFileWorkbenchAdapter({
+    provider,
+    packageId,
+    packageRoot,
+    displayName,
+    getPackageFiles: () => packageFiles,
+    onPackageFilesChange,
+  }), [displayName, onPackageFilesChange, packageFiles, packageId, packageRoot, provider]);
 
   React.useEffect(() => {
     onPackageFilesChange(marketplacePackageFilesFromTree(treeState.nodes, packageRootPath, contents));
   }, [contents, onPackageFilesChange, packageRootPath, treeState.nodes]);
 
-  const activeNode = React.useMemo(
-    () => treeState.flatNodes.find(node => node.path === activePath && node.type === 'file') ?? null,
-    [activePath, treeState.flatNodes],
-  );
-
-  React.useEffect(() => {
-    if (activeNode) return;
-    const nextFile = treeState.flatNodes.find(node => node.type === 'file');
-    setActivePath(nextFile?.path ?? '');
-  }, [activeNode, treeState.flatNodes]);
+  const openFileInTab = React.useCallback((node: FileTreeNode) => {
+    if (node.type !== 'file') return;
+    fileTabs.openFile(node, contentsRef.current[node.path] ?? '');
+  }, [fileTabs]);
 
   const handleNodeClick = React.useCallback((node: FileTreeNode, modifier: SelectionModifier) => {
     treeState.selectNodeWithModifier(node.path, modifier);
     if (node.type === 'file' && modifier === 'none') {
-      setActivePath(node.path);
+      openFileInTab(node);
     }
-  }, [treeState]);
+  }, [openFileInTab, treeState]);
 
   const handleNodeDoubleClick = React.useCallback((node: FileTreeNode) => {
     if (node.type === 'file') {
-      setActivePath(node.path);
+      openFileInTab(node);
     } else {
       treeState.toggleNode(node.path);
     }
-  }, [treeState]);
+  }, [openFileInTab, treeState]);
 
   const handleContextMenu = React.useCallback((node: FileTreeNode, event: React.MouseEvent) => {
     treeState.openContextMenu(event.clientX, event.clientY, node);
@@ -3346,17 +3244,23 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
       size: dialogState.type === 'create-file' ? 0 : undefined,
     };
 
+    void workbenchAdapter.create({
+      type: 'create',
+      path,
+      content: '',
+      isDirectory: node.type === 'directory',
+    });
     treeState.addNode(parentPath, node);
     if (node.type === 'file') {
       setContents(prev => ({ ...prev, [path]: '' }));
-      setActivePath(path);
       treeState.selectNode(path);
+      fileTabs.openFile(node, '');
     } else {
       treeState.expandNode(path);
     }
     setDialogState(null);
     onDirty();
-  }, [dialogState, onDirty, packageRootParentPath, packageRootPath, treeState]);
+  }, [dialogState, fileTabs, onDirty, packageRootParentPath, packageRootPath, treeState, workbenchAdapter]);
 
   const handleRename = React.useCallback((name: string) => {
     if (!dialogState || dialogState.type !== 'rename') return;
@@ -3367,15 +3271,14 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
     }
     const parentPath = marketplaceParentPath(node.path);
     const nextPath = marketplaceJoinPath(parentPath, name);
+    void workbenchAdapter.rename(node.path, nextPath);
     const renamedNodes = marketplaceRenameNode(treeState.nodes, node.path, nextPath, name);
     treeState.setNodes(renamedNodes);
     setContents(prev => marketplaceRenameContentPaths(prev, node.path, nextPath));
-    if (activePath === node.path || activePath.startsWith(`${node.path}/`)) {
-      setActivePath(activePath.replace(node.path, nextPath));
-    }
+    fileTabs.renamePath(node.path, nextPath, name);
     setDialogState(null);
     onDirty();
-  }, [activePath, dialogState, onDirty, packageRootPath, treeState]);
+  }, [dialogState, fileTabs, onDirty, packageRootPath, treeState, workbenchAdapter]);
 
   const handleDelete = React.useCallback(() => {
     if (!dialogState || dialogState.type !== 'delete') return;
@@ -3384,14 +3287,13 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
       setDialogState(null);
       return;
     }
+    void workbenchAdapter.delete(node.path, true);
     treeState.removeNode(node.path);
     setContents(prev => marketplaceDeleteContentPaths(prev, [node.path]));
-    if (activePath === node.path || activePath.startsWith(`${node.path}/`)) {
-      setActivePath('');
-    }
+    fileTabs.removePaths([node.path]);
     setDialogState(null);
     onDirty();
-  }, [activePath, dialogState, onDirty, packageRootPath, treeState]);
+  }, [dialogState, fileTabs, onDirty, packageRootPath, treeState, workbenchAdapter]);
 
   const handleBatchDelete = React.useCallback(() => {
     const paths = Array.from(treeState.selectedIds).filter(path => path !== packageRootPath);
@@ -3399,22 +3301,45 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
       setDialogState(null);
       return;
     }
+    void workbenchAdapter.batchDelete({ paths, recursive: true });
     paths.forEach(path => treeState.removeNode(path));
     setContents(prev => marketplaceDeleteContentPaths(prev, paths));
-    if (paths.some(path => activePath === path || activePath.startsWith(`${path}/`))) {
-      setActivePath('');
-    }
+    fileTabs.removePaths(paths);
     treeState.clearSelection();
     setDialogState(null);
     onDirty();
-  }, [activePath, onDirty, packageRootPath, treeState]);
+  }, [fileTabs, onDirty, packageRootPath, treeState, workbenchAdapter]);
 
-  const handleSaveFile = React.useCallback(async (content: string) => {
-    if (!activeNode) return;
-    if (isMarketplaceBinaryFile(activeNode)) return;
-    setContents(prev => ({ ...prev, [activeNode.path]: content }));
+  const handleSaveFile = React.useCallback(async (path: string, content: string) => {
+    const node = flatNodesRef.current.find(item => item.path === path && item.type === 'file');
+    if (!node || isMarketplaceBinaryFile(node)) return;
+    void workbenchAdapter.write(path, content);
+    setContents(prev => ({ ...prev, [path]: content }));
     onDirty();
-  }, [activeNode, onDirty]);
+  }, [onDirty, workbenchAdapter]);
+
+  const viewerAdapter = React.useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: async (path) => contentsRef.current[path] ?? '',
+    readBlob: async (path) => {
+      const node = flatNodesRef.current.find(item => item.path === path);
+      const previewDataUrl = typeof node?.metadata?.previewDataUrl === 'string' ? node.metadata.previewDataUrl : '';
+      if (previewDataUrl) {
+        const response = await fetch(previewDataUrl);
+        return response.blob();
+      }
+      const mimeType = getStringField(node?.metadata?.mimeType, 'application/octet-stream');
+      return new Blob([contentsRef.current[path] ?? ''], { type: mimeType });
+    },
+    saveFile: handleSaveFile,
+    copyPath: async (path) => {
+      await navigator.clipboard.writeText(path);
+    },
+  }), [handleSaveFile]);
+
+  const isFileWritable = React.useCallback((path: string) => {
+    const node = flatNodesRef.current.find(item => item.path === path);
+    return !isMarketplaceBinaryFile(node ?? null);
+  }, []);
 
   const handleUploadBinaryAsset = React.useCallback(() => {
     const assetsPath = `${packageRootPath}/assets`;
@@ -3449,17 +3374,9 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
     }
     treeState.expandNode(assetsPath);
     treeState.selectNode(uploadPath);
-    setActivePath(uploadPath);
+    fileTabs.openFile(uploadNode, '');
     onDirty();
-  }, [onDirty, packageRoot, packageRootParentPath, packageRootPath, treeState]);
-
-  const handleDownloadActiveFile = React.useCallback(() => {
-    if (!activeNode) return;
-    const binaryLabel = t('marketplace.editor.fileManager.viewer.binaryDownloadContent', { name: activeNode.name });
-    const content = isMarketplaceBinaryFile(activeNode) ? binaryLabel : (contents[activeNode.path] ?? '');
-    const blob = new Blob([content], { type: getStringField(activeNode.metadata?.mimeType, 'application/octet-stream') });
-    downloadBlob(blob, activeNode.name);
-  }, [activeNode, contents, t]);
+  }, [fileTabs, onDirty, packageRoot, packageRootParentPath, packageRootPath, treeState]);
 
   const contextMenuItems = useFileTreeContextMenu({
     node: treeState.contextMenu?.node ?? null,
@@ -3636,26 +3553,25 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
       </div>
 
       <div className="min-w-0 flex-1 overflow-hidden">
-        {!activeNode ? (
+        {fileTabs.tabs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {t('marketplace.editor.fileManager.viewer.noFile')}
           </div>
-        ) : isMarketplaceBinaryFile(activeNode) ? (
-          <MarketplaceBinaryFilePreview
-            node={activeNode}
-            canPreview={isMarketplacePreviewableBinaryFile(activeNode)}
-            onDownload={handleDownloadActiveFile}
-            onDelete={() => setDialogState({ type: 'delete', node: activeNode })}
-          />
         ) : (
-          <FileEditor
-            fileName={activeNode.name}
-            filePath={activeNode.path}
-            fileContent={contents[activeNode.path] ?? ''}
-            onSave={handleSaveFile}
-            onContentChange={(content) => setContents(prev => ({ ...prev, [activeNode.path]: content }))}
-            isLoading={false}
-            isSaving={false}
+          <FileViewerWorkbench
+            tabs={fileTabs.tabs}
+            activeTabId={fileTabs.activeTabId}
+            adapter={viewerAdapter}
+            capabilities={{
+              canEdit: true,
+              canSave: true,
+              canCopyPath: true,
+              canCloseTabs: true,
+            }}
+            isPathWritable={isFileWritable}
+            onTabsChange={fileTabs.applyTabsChange}
+            onActiveTabChange={fileTabs.setActiveTabId}
+            className="h-full"
           />
         )}
       </div>
@@ -3691,70 +3607,6 @@ const MarketplacePackageFileManager: React.FC<MarketplacePackageFileManagerProps
         onClose={() => setDialogState(null)}
         onConfirm={handleBatchDelete}
       />
-    </div>
-  );
-};
-
-interface MarketplaceBinaryFilePreviewProps {
-  node: FileTreeNode;
-  canPreview: boolean;
-  onDownload: () => void;
-  onDelete: () => void;
-}
-
-const MarketplaceBinaryFilePreview: React.FC<MarketplaceBinaryFilePreviewProps> = ({
-  node,
-  canPreview,
-  onDownload,
-  onDelete,
-}) => {
-  const { t } = useI18n();
-  const previewDataUrl = typeof node.metadata?.previewDataUrl === 'string' ? node.metadata.previewDataUrl : '';
-  const mimeType = getStringField(node.metadata?.mimeType, t('marketplace.common.unknown'));
-
-  return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">{node.name}</div>
-          <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground">{node.path}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={onDownload}>
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            {t('marketplace.editor.fileManager.viewer.download')}
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 px-2 text-xs text-destructive" onClick={onDelete}>
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            {t('marketplace.editor.fileManager.viewer.delete')}
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-xl space-y-4 rounded-md border border-border bg-muted/20 p-5 text-center">
-          {canPreview ? (
-            <div className="mx-auto flex aspect-video max-h-80 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
-              <img
-                src={previewDataUrl}
-                alt={t('marketplace.editor.fileManager.viewer.previewAlt', { name: node.name })}
-                className="max-h-full max-w-full object-contain"
-              />
-            </div>
-          ) : (
-            <div className="mx-auto flex h-40 items-center justify-center rounded-md border border-dashed border-border bg-background px-4 text-sm text-muted-foreground">
-              {t('marketplace.editor.fileManager.viewer.previewUnavailable')}
-            </div>
-          )}
-          <div className="space-y-1">
-            <div className="text-sm font-semibold text-foreground">
-              {t('marketplace.editor.fileManager.viewer.binaryTitle')}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {t('marketplace.editor.fileManager.viewer.binaryDescription', { mimeType })}
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
@@ -4696,31 +4548,11 @@ const getMarketplaceItemFileName = (item: MarketplaceEditorResourceItem): string
   item.path.split('/').pop() || item.id
 );
 
-const marketplaceJoinPath = (parentPath: string | null, name: string): string => (
-  parentPath ? `${parentPath.replace(/\/$/, '')}/${name}` : `/${name}`
-);
-
 const marketplaceParentPath = (path: string): string | null => {
   const normalized = path.replace(/\/$/, '');
   const index = normalized.lastIndexOf('/');
   if (index <= 0) return null;
   return normalized.slice(0, index);
-};
-
-const marketplaceFileContentsFromTree = (nodes: FileTreeNode[]): Record<string, string> => {
-  const contents: Record<string, string> = {};
-  const walk = (items: FileTreeNode[]) => {
-    items.forEach(node => {
-      if (node.type === 'file') {
-        contents[node.path] = typeof node.metadata?.content === 'string' ? node.metadata.content : '';
-      }
-      if (node.children) {
-        walk(node.children);
-      }
-    });
-  };
-  walk(nodes);
-  return contents;
 };
 
 const marketplaceFeatureItemsToFileTree = (
@@ -4772,170 +4604,6 @@ const marketplaceFeatureItemsToFileTree = (
 
   return roots;
 };
-
-const marketplacePackageFilesToFileTree = (
-  files: MarketplacePackageFile[],
-  rootPath: string,
-  scope: 'plugin' | 'extension',
-): FileTreeNode[] => {
-  const packageName = rootPath.split('/').at(-1) ?? rootPath;
-  const root: FileTreeNode = {
-    id: rootPath,
-    name: packageName,
-    path: rootPath,
-    type: 'directory',
-    scope,
-    children: [],
-  };
-  const directories = new Map<string, FileTreeNode>([[rootPath, root]]);
-
-  const ensureDirectory = (path: string, name: string, parentChildren: FileTreeNode[]) => {
-    const existing = directories.get(path);
-    if (existing) return existing;
-    const node: FileTreeNode = {
-      id: path,
-      name,
-      path,
-      type: 'directory',
-      scope,
-      children: [],
-    };
-    directories.set(path, node);
-    parentChildren.push(node);
-    return node;
-  };
-
-  files.forEach(file => {
-    const parts = file.path.split('/').filter(Boolean);
-    if (parts.length === 0) return;
-
-    let currentPath = rootPath;
-    let parentChildren = root.children ?? [];
-
-    parts.slice(0, -1).forEach(part => {
-      currentPath = marketplaceJoinPath(currentPath, part);
-      const directory = ensureDirectory(currentPath, part, parentChildren);
-      parentChildren = directory.children ?? [];
-    });
-
-    const fileName = parts.at(-1);
-    if (!fileName) return;
-    const path = marketplaceJoinPath(currentPath, fileName);
-    parentChildren.push({
-      id: path,
-      name: fileName,
-      path,
-      type: 'file',
-      extension: fileName.split('.').pop(),
-      scope,
-      size: file.size,
-      metadata: {
-        content: file.content,
-        binary: file.binary,
-        mimeType: file.mimeType,
-      },
-    });
-  });
-
-  return root.children ?? [];
-};
-
-const marketplacePackageFilesFromTree = (
-  nodes: FileTreeNode[],
-  packageRootPath: string,
-  contents: Record<string, string>,
-): MarketplacePackageFile[] => {
-  const files: MarketplacePackageFile[] = [];
-  const rootPrefix = `${packageRootPath.replace(/\/$/, '')}/`;
-
-  const walk = (items: FileTreeNode[]) => {
-    items.forEach(node => {
-      if (node.type === 'file') {
-        const relativePath = node.path.startsWith(rootPrefix)
-          ? node.path.slice(rootPrefix.length)
-          : node.path.replace(/^\//, '');
-        files.push({
-          path: relativePath,
-          content: contents[node.path] ?? getStringField(node.metadata?.content, ''),
-          binary: Boolean(node.metadata?.binary),
-          mimeType: getStringField(node.metadata?.mimeType) || undefined,
-          size: typeof node.size === 'number' ? node.size : (contents[node.path] ?? '').length,
-        });
-      }
-      if (node.children) {
-        walk(node.children);
-      }
-    });
-  };
-
-  walk(nodes);
-  return files;
-};
-
-const marketplaceFeaturePackageFilesFromTree = (
-  nodes: FileTreeNode[],
-  basePath: string,
-  contents: Record<string, string>,
-): MarketplacePackageFile[] => (
-  marketplacePackageFilesFromTree(nodes, `/${basePath}`, contents)
-    .map(file => ({
-      ...file,
-      path: file.path.startsWith(`${basePath}/`) ? file.path : `${basePath}/${file.path}`,
-    }))
-);
-
-const marketplaceFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {
-  for (const node of nodes) {
-    if (node.type === 'file') return node.path;
-    const childPath = node.children ? marketplaceFindFirstFilePath(node.children) : undefined;
-    if (childPath) return childPath;
-  }
-  return undefined;
-};
-
-const marketplaceRenameNode = (
-  nodes: FileTreeNode[],
-  oldPath: string,
-  nextPath: string,
-  nextName: string,
-): FileTreeNode[] => (
-  nodes.map(node => {
-    if (node.path === oldPath || node.path.startsWith(`${oldPath}/`)) {
-      const renamedPath = node.path.replace(oldPath, nextPath);
-      return {
-        ...node,
-        id: renamedPath,
-        path: renamedPath,
-        name: node.path === oldPath ? nextName : node.name,
-        children: node.children ? marketplaceRenameNode(node.children, oldPath, nextPath, nextName) : undefined,
-      };
-    }
-    return {
-      ...node,
-      children: node.children ? marketplaceRenameNode(node.children, oldPath, nextPath, nextName) : undefined,
-    };
-  })
-);
-
-const marketplaceRenameContentPaths = (
-  contents: Record<string, string>,
-  oldPath: string,
-  nextPath: string,
-): Record<string, string> => (
-  Object.fromEntries(Object.entries(contents).map(([path, content]) => [
-    path === oldPath || path.startsWith(`${oldPath}/`) ? path.replace(oldPath, nextPath) : path,
-    content,
-  ]))
-);
-
-const marketplaceDeleteContentPaths = (
-  contents: Record<string, string>,
-  paths: string[],
-): Record<string, string> => (
-  Object.fromEntries(Object.entries(contents).filter(([path]) => (
-    !paths.some(deletedPath => path === deletedPath || path.startsWith(`${deletedPath}/`))
-  )))
-);
 
 const marketplaceCloneNodeForParent = (
   node: FileTreeNode,

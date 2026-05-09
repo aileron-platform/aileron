@@ -29,30 +29,82 @@ vi.mock('@/shared/components/markdown/MarkdownEditor', () => ({
   ),
 }));
 
-vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
-  CodeTextEditor: ({ content, onContentChange, fileName }: {
+vi.mock('@/shared/components/file-workbench/viewer-entry', () => {
+  const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'tiff'];
+  const isImageFileName = (fileName: string): boolean => {
+    const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+    return imageExtensions.includes(extension);
+  };
+
+  type MockTab = {
+    id: string;
+    path: string;
+    name: string;
     content: string;
-    onContentChange: (content: string) => void;
-    fileName: string;
-  }) => (
-    <textarea
-      aria-label={fileName}
-      value={content}
-      onChange={event => onContentChange(event.target.value)}
-    />
-  ),
-  FileEditor: ({ filePath, fileContent, onContentChange }: {
-    filePath: string;
-    fileContent: string;
-    onContentChange: (content: string) => void;
-  }) => (
-    <textarea
-      aria-label={filePath}
-      value={fileContent}
-      onChange={event => onContentChange(event.target.value)}
-    />
-  ),
-}));
+    originalContent: string;
+    isModified: boolean;
+  };
+
+  return {
+    CodeTextEditor: ({ content, onContentChange, fileName }: {
+      content: string;
+      onContentChange: (content: string) => void;
+      fileName: string;
+    }) => (
+      <textarea
+        aria-label={fileName}
+        value={content}
+        onChange={event => onContentChange(event.target.value)}
+      />
+    ),
+    FileViewerWorkbench: ({ tabs, activeTabId, onActiveTabChange, onTabsChange }: {
+      tabs: MockTab[];
+      activeTabId: string | null;
+      onActiveTabChange: (id: string | null) => void;
+      onTabsChange: (next: MockTab[]) => void;
+    }) => {
+      const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
+      return (
+        <div data-testid="file-viewer-workbench">
+          <div role="tablist">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={tab.id === activeTabId}
+                onClick={() => onActiveTabChange(tab.id)}
+              >
+                {`${tab.name} (tab)`}
+              </button>
+            ))}
+          </div>
+          {activeTab ? (
+            isImageFileName(activeTab.name) ? (
+              <div data-testid="image-viewer">
+                <button type="button" aria-label="shared.fileViewer.image.zoomIn">zoom-in</button>
+                <button type="button" aria-label="shared.fileViewer.image.download">download</button>
+              </div>
+            ) : (
+              <textarea
+                aria-label={activeTab.path}
+                value={activeTab.content}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onTabsChange(tabs.map(tab => (
+                    tab.id === activeTab.id
+                      ? { ...tab, content: value, isModified: value !== tab.originalContent }
+                      : tab
+                  )));
+                }}
+              />
+            )
+          ) : null}
+        </div>
+      );
+    },
+  };
+});
 
 const marketplaceApiMock = vi.hoisted(() => ({
   getPackage: vi.fn(),
@@ -449,7 +501,6 @@ describe('MarketplaceEditorView', () => {
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.skills/ }));
 
     expect(screen.getByText('review-checklist')).toBeInTheDocument();
-    expect(screen.queryByText('marketplace.editor.fileManager.viewer.binaryTitle')).not.toBeInTheDocument();
     expect(screen.queryByText('marketplace.errors.module.title')).not.toBeInTheDocument();
   });
 
@@ -588,23 +639,18 @@ describe('MarketplaceEditorView', () => {
     expect(shouldUpdateMarketplaceEditorFileContent(`${content}\n`, content)).toBe(true);
   });
 
-  it('keeps uploaded binary assets out of the text editor and shows safe preview actions', async () => {
+  it('keeps uploaded binary assets out of the text editor and shows the shared image viewer', async () => {
     const user = userEvent.setup();
     renderCodexEditor();
 
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.files/ }));
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.fileManager.sidebar.upload' }));
 
-    expect(screen.getByText('marketplace.editor.fileManager.viewer.binaryTitle')).toBeInTheDocument();
-    expect(screen.getByAltText('marketplace.editor.fileManager.viewer.previewAlt')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'marketplace.editor.fileManager.viewer.download' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'marketplace.editor.fileManager.viewer.delete' })).toBeInTheDocument();
+    const tabHeader = await screen.findByRole('tab', { name: /uploaded-image\.png/ });
+    expect(tabHeader).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'shared.fileViewer.image.zoomIn' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'shared.fileViewer.image.download' })).toBeInTheDocument();
     expect(screen.queryByLabelText('/codex/plugins/demo-plugin/assets/uploaded-image.png')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'marketplace.editor.fileManager.viewer.delete' }));
-    expect(screen.getByText('common.fileOperations.delete.title')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'common.fileOperations.buttons.delete' }));
-    expect(screen.queryByText('marketplace.editor.fileManager.viewer.binaryTitle')).not.toBeInTheDocument();
   });
 
   it('requires provider selection before showing create metadata controls', async () => {

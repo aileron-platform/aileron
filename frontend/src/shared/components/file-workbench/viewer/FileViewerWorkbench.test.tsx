@@ -293,6 +293,46 @@ describe('FileViewerWorkbench', () => {
     }
   });
 
+  it('collapses automatically when the last tab is closed while expanded', async () => {
+    const Harness: React.FC = () => {
+      const [tabState, setTabState] = React.useState<FileViewerWorkbenchTab[]>([tabs[0]]);
+      const [activeTabId, setActiveTabId] = React.useState<string | null>('/docs/a.md');
+      const [expanded, setExpanded] = React.useState(true);
+      const adapter: FileViewerWorkbenchAdapter = React.useMemo(() => ({
+        readFile: vi.fn(),
+        saveFile: vi.fn(),
+      }), []);
+      return (
+        <div>
+          <span data-testid="expanded-state">{expanded ? 'expanded' : 'collapsed'}</span>
+          <FileViewerWorkbench
+            tabs={tabState}
+            activeTabId={activeTabId}
+            adapter={adapter}
+            isExpanded={expanded}
+            onExpandedChange={setExpanded}
+            capabilities={{ canCloseTabs: true }}
+            onTabsChange={(next) => {
+              setTabState(next);
+              if (next.length === 0) setActiveTabId(null);
+            }}
+            onActiveTabChange={setActiveTabId}
+          />
+        </div>
+      );
+    };
+
+    render(<Harness />);
+
+    expect(screen.getByTestId('expanded-state')).toHaveTextContent('expanded');
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.tabs.close'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('expanded-state')).toHaveTextContent('collapsed');
+    });
+  });
+
   it('uses controlled focus expansion with the injected workspace focus toolbar', () => {
     const onExpandedChange = vi.fn();
 

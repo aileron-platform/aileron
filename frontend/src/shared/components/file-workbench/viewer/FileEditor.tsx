@@ -1,12 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Download } from 'lucide-react';
-import { Button } from '@/shared/components/ui/button';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { createLogger } from '@/shared/services/logger';
-import { getFileIcon } from '@/shared/utils/fileIconUtils';
 import { cn } from '@/shared/utils/cn';
-import { FileFocusToolbar } from './FileFocusToolbar';
 import { FileViewerWorkbench } from './FileViewerWorkbench';
 import type { FileViewerWorkbenchAdapter, FileViewerWorkbenchTab } from './types';
 
@@ -53,7 +49,6 @@ export const FileEditor: React.FC<FileEditorProps> = ({
   fileName,
   filePath,
   fileContent,
-  fileIcon,
   readOnly = false,
   onSave,
   onContentChange,
@@ -83,39 +78,6 @@ export const FileEditor: React.FC<FileEditorProps> = ({
       setOriginalContent(fileContent);
     }
   }, [content, fileContent, filePath, originalContent]);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      toast({
-        title: t('common.fileEditor.copy.success'),
-        description: t('common.fileEditor.copy.successDesc'),
-      });
-    } catch (error) {
-      logger.error('Failed to copy file content', { error });
-      toast({
-        title: t('common.fileEditor.copy.error'),
-        variant: 'destructive',
-      });
-    }
-  }, [content, t, toast]);
-
-  const handleDownload = useCallback(() => {
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
-
-    toast({
-      title: t('common.fileEditor.download.success'),
-      description: t('common.fileEditor.download.successDesc', { name: fileName }),
-    });
-  }, [content, fileName, t, toast]);
 
   const adapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
     readFile: async () => content,
@@ -161,35 +123,6 @@ export const FileEditor: React.FC<FileEditorProps> = ({
     onContentChange?.(nextTab.content);
   }, [onContentChange]);
 
-  const headerActions = (
-    <>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-full w-8 rounded-none text-muted-foreground hover:text-foreground"
-        onClick={() => void handleCopy()}
-        title={t('common.fileEditor.actions.copy')}
-        aria-label={t('common.fileEditor.actions.copy')}
-        disabled={isLoading}
-      >
-        <Copy className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-full w-8 rounded-none text-muted-foreground hover:text-foreground"
-        onClick={handleDownload}
-        title={t('common.fileEditor.actions.download')}
-        aria-label={t('common.fileEditor.actions.download')}
-        disabled={isLoading}
-      >
-        <Download className="h-3.5 w-3.5" />
-      </Button>
-    </>
-  );
-
   return (
     <FileViewerWorkbench
       tabs={[tab]}
@@ -203,22 +136,9 @@ export const FileEditor: React.FC<FileEditorProps> = ({
         canCloseTabs: false,
       }}
       className={cn('h-full', className)}
-      headerActions={headerActions}
       readOnly={readOnly}
       isExpanded={isExpanded}
       onExpandedChange={setIsExpanded}
-      hideChromeWhenExpanded
-      renderFocusToolbar={({ actions, icon, metadata, subtitle, title }) => (
-        <FileFocusToolbar
-          icon={icon ?? fileIcon ?? getFileIcon(fileName)}
-          title={title}
-          subtitle={subtitle}
-          metadata={metadata}
-          actions={actions}
-          exitLabel={t('shared.fileViewer.toolbar.collapse')}
-          onExit={() => setIsExpanded(false)}
-        />
-      )}
       onTabsChange={handleTabsChange}
       onActiveTabChange={() => undefined}
     />

@@ -126,7 +126,7 @@ describe('FileEditor editor-pane expansion', () => {
     expect(screen.getByText('shared.fileViewer.toolbar.expand')).toBeInTheDocument();
   });
 
-  it('toggles file focus mode and reflects the focused code toolbar', () => {
+  it('toggles editor expansion through the toolbar more menu', () => {
     const view = render(<FileEditor />);
 
     fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
@@ -137,40 +137,52 @@ describe('FileEditor editor-pane expansion', () => {
     useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
     view.rerender(<FileEditor />);
 
-    expect(screen.getByLabelText('workspace.fileManagement.focus.exit')).toBeInTheDocument();
-    expect(screen.queryByText('shared.fileViewer.toolbar.expand')).not.toBeInTheDocument();
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.more'));
+    expect(screen.getByText('shared.fileViewer.toolbar.collapse')).toBeInTheDocument();
   });
 
-  it('keeps active content and modified state visible while focused', () => {
+  it('keeps active content and modified state visible while expanded', () => {
     useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
 
-    const { container } = render(<FileEditor />);
+    render(<FileEditor />);
 
-    expect(container.firstElementChild).not.toHaveClass('fixed');
     expect(screen.getAllByText('App.tsx').length).toBeGreaterThan(0);
     expect(screen.getByText('shared.fileViewer.status.modified')).toBeInTheDocument();
     expect(screen.getByLabelText('code-editor')).toHaveValue('const value = 1;');
   });
 
-  it('expands to the viewport for OpenSpec markdown previews', () => {
-    fileTypeState.markdown = true;
-    useWorkspaceMock.mockReturnValue(createWorkspaceValue(true, 'openspec'));
+  it('expands to the viewport when the editor is expanded', () => {
+    useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
 
     const { container } = render(<FileEditor />);
 
     expect(container.firstElementChild).toHaveClass('fixed', 'inset-0', 'h-screen', 'w-screen');
-    expect(screen.getByText('shared.fileViewer.markdown.title')).toBeInTheDocument();
   });
 
-  it('passes focus mode to specialized viewers and hides file tabs', () => {
-    fileTypeState.markdown = true;
+  it('keeps the tab list visible when expanded', () => {
     useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
 
     render(<FileEditor />);
 
-    expect(screen.getByText('shared.fileViewer.markdown.title')).toBeInTheDocument();
-    expect(screen.queryByLabelText('shared.fileViewer.toolbar.more')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('shared.fileViewer.toolbar.more')).toBeInTheDocument();
+    expect(screen.getAllByText('App.tsx').length).toBeGreaterThan(0);
+  });
+
+  it('collapses automatically when the last tab is closed while expanded', () => {
+    useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
+    const view = render(<FileEditor />);
+
+    expect(toggleFileManagementEditorExpandedMock).not.toHaveBeenCalled();
+
+    const expandedEmptyValue = createWorkspaceValue(true);
+    expandedEmptyValue.workspace.openTabs = [];
+    expandedEmptyValue.workspace.activeTabId = null;
+    expandedEmptyValue.fileEditor.modifiedTabs = [];
+    expandedEmptyValue.fileEditor.originalContents = {};
+    useWorkspaceMock.mockReturnValue(expandedEmptyValue);
+    view.rerender(<FileEditor />);
+
+    expect(toggleFileManagementEditorExpandedMock).toHaveBeenCalledTimes(1);
   });
 
   it('saves the active tab through the workspace adapter and clears modified state', async () => {

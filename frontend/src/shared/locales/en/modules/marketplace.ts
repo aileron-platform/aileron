@@ -135,6 +135,19 @@ const marketplace = {
       },
     },
   },
+  fileTree: {
+    error: {
+      read: 'Unable to read this Marketplace file.',
+      binaryRead: 'Binary Marketplace files cannot be opened as text.',
+      create: 'Unable to create this Marketplace file.',
+      write: 'Unable to save this Marketplace file.',
+      delete: 'Unable to delete this Marketplace file.',
+      rename: 'Unable to rename this Marketplace file.',
+      upload: 'Unable to upload this Marketplace file.',
+      download: 'Marketplace file downloads are not supported yet.',
+      readOnly: 'This Marketplace file is read-only.',
+    },
+  },
   detail: {
     header: {
       version: 'Version {{version}}',
@@ -754,14 +767,6 @@ const marketplace = {
       },
       viewer: {
         noFile: 'No file selected',
-        placeholder: 'Write package skill content...',
-        binaryTitle: 'Binary asset',
-        binaryDescription: 'This file is handled as {{mimeType}} and is not opened in the text editor.',
-        binaryDownloadContent: 'Binary asset placeholder for {{name}}.',
-        previewAlt: 'Preview of {{name}}',
-        previewUnavailable: 'Preview is unavailable for this binary file type.',
-        download: 'Download',
-        delete: 'Delete',
       },
     },
     documentViewer: {
