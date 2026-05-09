@@ -178,17 +178,34 @@ export const normalizePath = (path: string): string => {
  */
 export const sortFileNodes = (nodes: FileNode[]): FileNode[] => {
   return [...nodes].sort((a, b) => {
-    // 目錄優先
     if (a.type !== b.type) {
       return a.type === 'directory' ? -1 : 1;
     }
+
+    if (a.type === 'file' && b.type === 'file') {
+      const extensionCompare = getFileExtension(a.name).localeCompare(
+        getFileExtension(b.name),
+        undefined,
+        { numeric: true, sensitivity: 'base' },
+      );
+      if (extensionCompare !== 0) {
+        return extensionCompare;
+      }
+    }
     
-    // 同類型按名稱排序
-    return a.name.localeCompare(b.name, 'zh-TW', { 
+    return a.name.localeCompare(b.name, undefined, { 
       numeric: true, 
       sensitivity: 'base' 
     });
   });
+};
+
+const getFileExtension = (fileName: string): string => {
+  const parts = fileName.split('.');
+  if (parts.length <= 1) {
+    return '';
+  }
+  return parts[parts.length - 1].toLowerCase();
 };
 
 /**

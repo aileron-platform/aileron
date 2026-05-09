@@ -44,6 +44,7 @@ export {
   getAllDirectoryNodes,
   getDescendantPaths,
   sortNodes,
+  sortTreeNodes,
   validateFileName,
 } from './utils/fileTreeUtils';
 

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@/__tests__/utils/render';
 import userEvent from '@testing-library/user-event';
-import SettingsPage from './SettingsPage';
+import SettingsPage, { getPartialSyncWorkspaceCount } from './SettingsPage';
 import { ApiError, apiClient } from '@/shared/api/apiClient';
 
 vi.mock('@/app/components/navigation/GlobalNavigation', () => ({
@@ -120,6 +120,52 @@ const notConnectedSettingsResponse = {
     },
   },
 };
+
+describe('SettingsPage sync result classification', () => {
+  it('does not report partial failure for successful workspace no-op details', () => {
+    expect(
+      getPartialSyncWorkspaceCount([
+        {
+          workspace_id: 'workspace-1',
+          workspace_name: 'Workspace 1',
+          success: true,
+          details: {
+            ssh: { success: false, message: 'No SSH keys need to sync' },
+            claude_code: { success: true, message: 'Synced' },
+            codex: { success: true, message: 'Synced' },
+            gemini: { success: true, message: 'Synced' },
+            git: { success: false, message: 'No Git settings need to sync' },
+          },
+        },
+      ])
+    ).toBe(0);
+  });
+
+  it('reports partial failure only when a failed workspace has successful details', () => {
+    expect(
+      getPartialSyncWorkspaceCount([
+        {
+          workspace_id: 'workspace-1',
+          workspace_name: 'Workspace 1',
+          success: false,
+          details: {
+            ssh: { success: false, message: 'SSH sync failed' },
+            claude_code: { success: true, message: 'Synced' },
+            codex: { success: true, message: 'Synced' },
+            gemini: { success: false, message: 'Gemini sync failed' },
+            git: { success: false, message: 'Git sync failed' },
+          },
+        },
+        {
+          workspace_id: 'workspace-2',
+          workspace_name: 'Workspace 2',
+          success: false,
+          error: 'Workspace runtime is unavailable',
+        },
+      ])
+    ).toBe(1);
+  });
+});
 
 describe('SettingsPage Codex tab', () => {
   const openedWindow = {

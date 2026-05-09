@@ -63,6 +63,7 @@ import {
 } from '@/shared/components/ui/dropdown-menu';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { ROUTES } from '@/shared/constants/routes';
+import { ApiError } from '@/shared/api/apiClient';
 import { fetchWorkspaceList } from '@/features/workspace/services/workspaceRuntimeApi';
 import type { MarketplaceCliPreflight, MarketplaceFeatureContentItem, MarketplaceInstallResult, MarketplacePackageDetail, MarketplacePackageFile, MarketplaceProvider } from '@/shared/types/marketplace';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
@@ -70,6 +71,7 @@ import { useToast } from '@/shared/components/ui/use-toast';
 import {
   FileTreePanel,
   isMarkdownFile,
+  sortTreeNodes,
   useFileTreeState,
   type FileTreeNode,
   type SelectionModifier,
@@ -128,6 +130,16 @@ const resolveI18nText = (t: (key: string, params?: Record<string, unknown>) => s
   const value = t(key);
   return value === key ? t(fallbackKey) : value;
 };
+
+const getMarketplaceErrorCode = (err: unknown, fallback: string) => (
+  err instanceof ApiError
+    ? (err.errorCode ?? err.message ?? fallback)
+    : err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : fallback
+);
 
 type MarketplaceDetailFeatureTab = Exclude<MarketplaceDetailTab, 'basic-info'>;
 
@@ -770,16 +782,27 @@ const MarketplaceInstallDialog: React.FC<MarketplacePackageActionDialogProps> = 
 
 const MarketplaceExportDialog: React.FC<MarketplacePackageActionDialogProps> = ({ open, detail, onOpenChange }) => {
   const { t } = useI18n();
-  const [status, setStatus] = React.useState<'idle' | 'running' | 'success'>('idle');
+  const [status, setStatus] = React.useState<'idle' | 'running' | 'success' | 'failed'>('idle');
+  const [errorCode, setErrorCode] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (open) setStatus('idle');
+    if (open) {
+      setStatus('idle');
+      setErrorCode(null);
+    }
   }, [open]);
 
   const runExport = async () => {
     setStatus('running');
-    await exportPackage({ provider: detail.provider, packageId: detail.packageId, revision: detail.revision });
-    setStatus('success');
+    setErrorCode(null);
+    try {
+      const archive = await exportPackage({ provider: detail.provider, packageId: detail.packageId, revision: detail.revision });
+      downloadBlob(archive, `${detail.provider}-${detail.packageId}.zip`);
+      setStatus('success');
+    } catch (err) {
+      setErrorCode(getMarketplaceErrorCode(err, 'marketplace.export.result.failed'));
+      setStatus('failed');
+    }
   };
 
   return (
@@ -800,6 +823,12 @@ const MarketplaceExportDialog: React.FC<MarketplacePackageActionDialogProps> = (
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
               <AlertDescription>{t('marketplace.export.result.ready')}</AlertDescription>
+            </Alert>
+          ) : null}
+          {status === 'failed' ? (
+            <Alert variant="destructive">
+              <Info className="h-4 w-4" />
+              <AlertDescription>{t('marketplace.export.result.failed', { code: errorCode ?? 'unknown' })}</AlertDescription>
             </Alert>
           ) : null}
         </div>
@@ -2081,7 +2110,7 @@ const marketplaceDetailFeatureItemsToFileTree = (
     });
   });
 
-  return roots;
+  return sortTreeNodes(roots);
 };
 
 const marketplaceDetailPackageFilesToFileTree = (
@@ -2148,7 +2177,7 @@ const marketplaceDetailPackageFilesToFileTree = (
     });
   });
 
-  return root.children ?? [];
+  return sortTreeNodes(root.children ?? []);
 };
 
 const marketplaceDetailFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {

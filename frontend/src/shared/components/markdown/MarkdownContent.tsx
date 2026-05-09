@@ -7,6 +7,7 @@ import { cn } from '@/shared/utils/cn';
 import { sharedComponents } from './markdownComponents';
 import { parseFrontmatterSegments, preprocessMarkdown, type FrontmatterValue } from './markdownPreprocess';
 import { remarkLineBreakTag } from './remarkLineBreakTag';
+import { classifyMarkdownHref } from './markdownLinkUtils';
 
 export type MarkdownVariant = 'default' | 'compact' | 'chat' | 'detailed' | 'editor';
 
@@ -14,6 +15,7 @@ export interface MarkdownContentProps {
   content: string;
   variant?: MarkdownVariant;
   className?: string;
+  onLinkClick?: (href: string, event: React.MouseEvent<HTMLAnchorElement>) => void;
 }
 
 const isObjectValue = (value: FrontmatterValue): value is Record<string, FrontmatterValue> => (
@@ -80,8 +82,31 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
   content,
   variant = 'default',
   className,
+  onLinkClick,
 }) => {
   const segments = React.useMemo(() => parseFrontmatterSegments(content ?? ''), [content]);
+  const components = React.useMemo(() => ({
+    ...sharedComponents,
+    a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+      const kind = classifyMarkdownHref(href);
+      return (
+        <a
+          href={href}
+          target={kind === 'external' ? '_blank' : undefined}
+          rel={kind === 'external' ? 'noopener noreferrer' : undefined}
+          className="text-primary underline decoration-primary/40 hover:decoration-primary"
+          onClick={(event) => {
+            if (href) {
+              onLinkClick?.(href, event);
+            }
+          }}
+          {...props}
+        >
+          {children}
+        </a>
+      );
+    },
+  }), [onLinkClick]);
 
   React.useEffect(() => {
     if (content) {
@@ -108,7 +133,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
             key={`markdown-${index}`}
             remarkPlugins={[remarkGfm, remarkMath, remarkLineBreakTag]}
             rehypePlugins={[rehypeKatex]}
-            components={sharedComponents}
+            components={components}
           >
             {processed}
           </ReactMarkdown>

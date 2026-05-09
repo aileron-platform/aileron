@@ -30,6 +30,7 @@ from app.models.marketplace import (
     MarketplaceRegistryRootMetadataSavePayload,
 )
 from app.services.marketplace_service import (
+    MarketplaceConflictError,
     MarketplaceImportSourceError,
     MarketplacePathError,
     MarketplaceService,
@@ -1241,11 +1242,13 @@ def test_export_package_blocks_error_validation_but_allows_warning_validation(ma
         encoding="utf-8",
     )
 
-    warning_archive = marketplace_service.export_package("user-1", "codex", "figma-context")
+    detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
+    warning_archive = marketplace_service.export_package("user-1", "codex", "figma-context", detail.revision)
     plugin_manifest_path.unlink()
+    broken_detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
 
     with pytest.raises(MarketplaceValidationError) as exc_info:
-        marketplace_service.export_package("user-1", "codex", "figma-context")
+        marketplace_service.export_package("user-1", "codex", "figma-context", broken_detail.revision)
 
     assert warning_archive
     assert exc_info.value.results[0]["code"] == "marketplace.validation.required_manifest_missing"
@@ -3102,7 +3105,7 @@ def test_export_package_returns_provider_native_zip_and_rejects_symlink(marketpl
             description="Workspace package",
         ),
     )
-    archive = marketplace_service.export_package("user-1", created.provider, created.package_id)
+    archive = marketplace_service.export_package("user-1", created.provider, created.package_id, created.revision)
 
     with zipfile.ZipFile(BytesIO(archive)) as zip_file:
         assert "gemini-extension.json" in zip_file.namelist()
@@ -3110,5 +3113,145 @@ def test_export_package_returns_provider_native_zip_and_rejects_symlink(marketpl
 
     package_root = marketplace_service.resolve_package_path("user-1", "gemini", "workspace-tools")
     (package_root / "unsafe-link").symlink_to(package_root / "GEMINI.md")
+    unsafe_detail = marketplace_service.get_package_detail("user-1", "gemini", "workspace-tools")
     with pytest.raises(Exception, match="marketplace.package.symlink_rejected"):
-        marketplace_service.export_package("user-1", "gemini", "workspace-tools")
+        marketplace_service.export_package("user-1", "gemini", "workspace-tools", unsafe_detail.revision)
+
+
+def test_export_package_requires_current_revision(marketplace_service):
+    created = marketplace_service.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            provider="codex",
+            package_id="figma-context",
+            display_name="Figma Context",
+            description="Figma MCP package",
+        ),
+    )
+
+    with pytest.raises(MarketplaceConflictError, match="marketplace.package.revision_conflict"):
+        marketplace_service.export_package("user-1", "codex", created.package_id, "stale")
+
+
+@pytest.mark.parametrize(
+    ("provider", "package_id", "expected_entries"),
+    [
+        (
+            "claude-code",
+            "review-assistant",
+            {
+                ".claude-plugin/marketplace.json",
+                "plugins/review-assistant/.claude-plugin/plugin.json",
+            },
+        ),
+        (
+            "codex",
+            "figma-context",
+            {
+                ".agents/plugins/marketplace.json",
+                "plugins/figma-context/.codex-plugin/plugin.json",
+            },
+        ),
+        (
+            "gemini",
+            "workspace-tools",
+            {
+                "gemini-extension.json",
+                "GEMINI.md",
+            },
+        ),
+    ],
+)
+def test_export_package_archives_scan_and_import_round_trip(
+    marketplace_service,
+    provider,
+    package_id,
+    expected_entries,
+):
+    created = marketplace_service.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            provider=provider,
+            package_id=package_id,
+            display_name="Exported Package",
+            description="Exported package",
+        ),
+    )
+    archive_bytes = marketplace_service.export_package("user-1", provider, package_id, created.revision)
+
+    with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
+        names = set(archive.namelist())
+    assert expected_entries.issubset(names)
+
+    marketplace_service.delete_package(
+        "user-1",
+        MarketplacePackageDeleteRequest(
+            provider=provider,
+            package_id=package_id,
+            revision=created.revision,
+        ),
+    )
+    upload = marketplace_service.save_uploaded_import_source(
+        "user-1",
+        provider,
+        f"{provider}-{package_id}.zip",
+        archive_bytes,
+    )
+    candidates = marketplace_service.scan_import_source("user-1", upload.source)
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=upload.source, candidates=candidates),
+    )
+
+    assert [candidate.package_id for candidate in candidates] == [package_id]
+    assert [item.package_id for item in result.imported] == [package_id]
+    assert result.failed == []
+    assert marketplace_service.get_package_detail("user-1", provider, package_id) is not None
+
+
+def test_exported_archive_duplicate_actions_use_import_flow(marketplace_service):
+    created = marketplace_service.create_package(
+        "user-1",
+        MarketplacePackageCreateRequest(
+            provider="codex",
+            package_id="figma-context",
+            display_name="Figma Context",
+            description="Figma MCP package",
+        ),
+    )
+    archive_bytes = marketplace_service.export_package("user-1", "codex", "figma-context", created.revision)
+    upload = marketplace_service.save_uploaded_import_source(
+        "user-1",
+        "codex",
+        "codex-figma-context.zip",
+        archive_bytes,
+    )
+
+    skipped_candidate = marketplace_service.scan_import_source("user-1", upload.source)[0]
+    skipped = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=upload.source, candidates=[skipped_candidate]),
+    )
+    assert skipped.imported == []
+    assert [candidate.package_id for candidate in skipped.skipped] == ["figma-context"]
+
+    overwrite_candidate = marketplace_service.scan_import_source("user-1", upload.source)[0].model_copy(update={
+        "duplicate_action": "overwrite",
+    })
+    overwritten = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=upload.source, candidates=[overwrite_candidate]),
+    )
+    assert [item.package_id for item in overwritten.imported] == ["figma-context"]
+
+    copy_candidate = marketplace_service.scan_import_source("user-1", upload.source)[0].model_copy(update={
+        "duplicate_action": "import-as-new",
+        "new_package_id": "figma-context-copy",
+    })
+    copied = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=upload.source, candidates=[copy_candidate]),
+    )
+
+    assert [item.package_id for item in copied.imported] == ["figma-context-copy"]
+    assert marketplace_service.get_package_detail("user-1", "codex", "figma-context-copy") is not None

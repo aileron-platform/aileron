@@ -5,8 +5,79 @@ const logger = createLogger('useFileTreeManager');
 import { useFileTreeState, type UseFileTreeStateOptions } from './useFileTreeState';
 import { useFileOperations, type UseFileOperationsOptions } from './useFileOperations';
 import { useFileEditor, type UseFileEditorOptions } from './useFileEditor';
-import { computeLoadedChildrenPaths, findNodeByPath } from '../utils/fileTreeUtils';
+import { computeLoadedChildrenPaths, findNodeByPath, sortTreeNodes } from '../utils/fileTreeUtils';
 import type { FileTreeDataAdapter, FileTreeNode } from '../types';
+
+const EXPANDED_PATHS_STORAGE_PREFIX = 'fileTree.expandedPaths.v1';
+
+const getExpandedPathsStorageKey = (adapterKey: string) => (
+  `${EXPANDED_PATHS_STORAGE_PREFIX}:${encodeURIComponent(adapterKey)}`
+);
+
+const readPersistedExpandedPaths = (adapterKey: string): string[] => {
+  if (typeof window === 'undefined') return [];
+
+  const storageKey = getExpandedPathsStorageKey(adapterKey);
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      window.localStorage.removeItem(storageKey);
+      return [];
+    }
+
+    return parsed.filter((path): path is string => typeof path === 'string' && path.length > 0);
+  } catch (error) {
+    logger.warn('Failed to read persisted expanded file tree paths', { adapterKey, error });
+    window.localStorage.removeItem(storageKey);
+    return [];
+  }
+};
+
+const writePersistedExpandedPaths = (adapterKey: string, expandedPaths: Set<string>) => {
+  if (typeof window === 'undefined') return;
+
+  const storageKey = getExpandedPathsStorageKey(adapterKey);
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(Array.from(expandedPaths).sort()));
+  } catch (error) {
+    logger.warn('Failed to persist expanded file tree paths', { adapterKey, error });
+  }
+};
+
+const restoreExpandedNodes = async (
+  nodes: FileTreeNode[],
+  expandedPaths: Set<string>,
+  adapter: FileTreeDataAdapter,
+): Promise<FileTreeNode[]> => {
+  const restoredNodes: FileTreeNode[] = [];
+
+  for (const node of nodes) {
+    if (node.type !== 'directory') {
+      restoredNodes.push(node);
+      continue;
+    }
+
+    let children = node.children;
+
+    if (expandedPaths.has(node.path) && children === undefined && node.hasChildren !== false) {
+      try {
+        children = await adapter.getChildren(node.path);
+      } catch (error) {
+        logger.warn('Failed to restore expanded file tree directory', { path: node.path, error });
+      }
+    }
+
+    restoredNodes.push({
+      ...node,
+      children: children ? await restoreExpandedNodes(children, expandedPaths, adapter) : children,
+    });
+  }
+
+  return sortTreeNodes(restoredNodes);
+};
 
 export interface UseFileTreeManagerOptions {
   adapter: FileTreeDataAdapter;
@@ -54,6 +125,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   const stableAdapter = stableAdapterRef.current;
   const latestLoadIdRef = useRef(0);
   const activeAdapterKeyRef = useRef(adapterKey);
+  const hasLoadedTreeRef = useRef(false);
 
 
   const loadedChildrenPathsRef = useRef<Set<string>>(new Set());
@@ -62,7 +134,13 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
   useEffect(() => {
     activeAdapterKeyRef.current = adapterKey;
     latestLoadIdRef.current += 1;
+    hasLoadedTreeRef.current = false;
   }, [adapterKey]);
+
+  useEffect(() => {
+    if (!hasLoadedTreeRef.current) return;
+    writePersistedExpandedPaths(adapterKey, state.expandedIds);
+  }, [adapterKey, state.expandedIds]);
 
 
   const loadTree = useCallback(async () => {
@@ -76,7 +154,13 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
     try {
       logger.debug('loadTree: calling adapter.getTree()');
-      const nodes = await stableAdapter.getTree();
+      const persistedExpandedPaths = readPersistedExpandedPaths(requestAdapterKey);
+      const persistedExpandedPathSet = new Set(persistedExpandedPaths);
+      const nodes = await restoreExpandedNodes(
+        await stableAdapter.getTree(),
+        persistedExpandedPathSet,
+        stableAdapter,
+      );
 
       if (
         latestLoadIdRef.current !== requestId ||
@@ -97,7 +181,8 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
 
       const newLoadedPaths = computeLoadedChildrenPaths(nodes);
       loadedChildrenPathsRef.current = newLoadedPaths;
-      state.syncExpandedWithLoaded(newLoadedPaths);
+      state.replaceExpandedIds(persistedExpandedPaths.filter((path) => newLoadedPaths.has(path)));
+      hasLoadedTreeRef.current = true;
 
       logger.debug('loadTree: called state.setNodes()');
 
@@ -149,6 +234,7 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
     state.setError,
     state.setLoading,
     state.setNodes,
+    state.replaceExpandedIds,
   ]);
 
 
@@ -269,10 +355,9 @@ export function useFileTreeManager(options: UseFileTreeManagerOptions) {
         onFileDoubleClick(node);
       }
     } else {
-
-      state.toggleNode(node.path);
+      await toggleDirectory(node);
     }
-  }, [handleFileSelect, state, onFileDoubleClick]);
+  }, [handleFileSelect, onFileDoubleClick, toggleDirectory]);
 
 
   const createFileAndOpen = useCallback(async (path: string, content = '') => {

@@ -1,5 +1,6 @@
+import type React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MarkdownContent } from './MarkdownContent';
 
 // rehype-katex 在 jsdom 可能產生警告，mock 掉避免干擾測試輸出
@@ -100,6 +101,29 @@ describe('MarkdownContent', () => {
     const a = container.querySelector('a');
     expect(a?.getAttribute('target')).toBe('_blank');
     expect(a?.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  it('內部連結不套用新視窗屬性並回呼點擊事件', () => {
+    const onLinkClick = vi.fn((_: string, event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+    });
+    const { container } = render(
+      <MarkdownContent
+        content="[Config](../../schemas/spec-driven-api/standards/configuration-standards.md)"
+        onLinkClick={onLinkClick}
+      />,
+    );
+
+    const a = container.querySelector('a');
+    expect(a?.getAttribute('target')).toBeNull();
+    expect(a?.getAttribute('rel')).toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Config' }));
+
+    expect(onLinkClick).toHaveBeenCalledWith(
+      '../../schemas/spec-driven-api/standards/configuration-standards.md',
+      expect.anything(),
+    );
   });
 
   it('className prop 附加到根容器', () => {

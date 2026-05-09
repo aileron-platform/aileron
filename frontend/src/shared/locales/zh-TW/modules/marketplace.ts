@@ -155,7 +155,7 @@ const marketplace = {
       manifest: 'Manifest',
       resources: 'Resources',
       targetPreview: 'Target preview',
-      files: '檔案',
+      files: '檢視檔案',
     },
     featureEmpty: '此區塊沒有內容。',
     sidebar: {
@@ -446,12 +446,12 @@ const marketplace = {
   },
   export: {
     title: '匯出套件',
-    description: '建立以 provider-native 套件目錄為根的 .zip archive。',
+    description: '建立可由 Marketplace 匯入的 provider-native .zip archive。',
     fields: {
       archive: 'Archive',
       root: 'Archive root',
     },
-    compatibilityNotice: '第一版 Marketplace 不保證匯出的 archive 可直接匯入。',
+    compatibilityNotice: 'Archive 會包含 Marketplace 匯入掃描所需的 provider metadata。',
     actions: {
       export: '匯出 .zip',
     },

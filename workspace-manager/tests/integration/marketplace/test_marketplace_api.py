@@ -557,9 +557,21 @@ def test_marketplace_package_create_save_delete_and_export(test_app):
     assert any(file["path"] == ".mcp.json" for file in saved["package"]["packageFiles"])
     assert saved["validationResults"][0]["messageKey"] == "marketplace.validation.root_metadata_stripped"
 
-    export_response = client.get("/api/v1/marketplace/packages/codex/figma-context/export")
+    stale_export_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context/export",
+        params={"revision": "stale"},
+    )
+    assert stale_export_response.status_code == 409
+
+    export_response = client.get(
+        "/api/v1/marketplace/packages/codex/figma-context/export",
+        params={"revision": saved["revision"]},
+    )
     assert export_response.status_code == 200
     assert export_response.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(BytesIO(export_response.content)) as archive:
+        assert ".agents/plugins/marketplace.json" in archive.namelist()
+        assert "plugins/figma-context/.codex-plugin/plugin.json" in archive.namelist()
 
     delete_response = client.delete(
         "/api/v1/marketplace/packages/codex/figma-context",
@@ -626,7 +638,13 @@ def test_marketplace_package_export_returns_validation_blocking_detail(test_app)
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     (root / "codex" / "plugins" / "broken-plugin").mkdir(parents=True)
 
-    export_response = client.get("/api/v1/marketplace/packages/codex/broken-plugin/export")
+    detail_response = client.get("/api/v1/marketplace/packages/codex/broken-plugin")
+    assert detail_response.status_code == 200
+
+    export_response = client.get(
+        "/api/v1/marketplace/packages/codex/broken-plugin/export",
+        params={"revision": detail_response.json()["revision"]},
+    )
 
     assert export_response.status_code == 400
     body = export_response.json()["detail"]

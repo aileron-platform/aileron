@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Check, Copy, Download, Edit3, Eye, FileText, RefreshCw, Save, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
+import { classifyMarkdownHref, resolveWorkspaceMarkdownPath } from '@/shared/components/markdown/markdownLinkUtils';
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 
 interface SharedMarkdownViewerProps {
   content: string;
   fileName: string;
+  filePath?: string;
   readOnly?: boolean;
   isFocusMode?: boolean;
   renderFocusToolbar?: (params: {
@@ -17,16 +19,19 @@ interface SharedMarkdownViewerProps {
   }) => ReactNode;
   onReload?: () => Promise<string>;
   onContentChange?: (content: string) => void;
+  onOpenPath?: (path: string) => void;
 }
 
 export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   content,
   fileName,
+  filePath,
   readOnly = false,
   isFocusMode = false,
   renderFocusToolbar,
   onReload,
   onContentChange,
+  onOpenPath,
 }) => {
   const { t } = useI18n();
   const [zoom, setZoom] = useState(1);
@@ -81,6 +86,20 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
   const handleCancel = () => {
     setEditContent(content);
     setIsEditMode(false);
+  };
+
+  const handleMarkdownLinkClick = (href: string, event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!filePath || !onOpenPath || classifyMarkdownHref(href) !== 'internal') {
+      return;
+    }
+
+    const targetPath = resolveWorkspaceMarkdownPath(filePath, href);
+    if (!targetPath) {
+      return;
+    }
+
+    event.preventDefault();
+    onOpenPath(targetPath);
   };
 
   const toolbarActions = (
@@ -231,7 +250,7 @@ export const SharedMarkdownViewer: React.FC<SharedMarkdownViewerProps> = ({
               transition: 'transform 0.2s ease-out',
             }}
           >
-            <MarkdownContent content={previewContent} />
+            <MarkdownContent content={previewContent} onLinkClick={handleMarkdownLinkClick} />
           </div>
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">

@@ -92,4 +92,43 @@ describe('SlashCommandPickerDialog', () => {
       kind: 'skill',
     }));
   });
+
+  it('keeps long metadata labels constrained so they do not drive card layout', () => {
+    render(
+      <SlashCommandPickerDialog
+        open
+        onOpenChange={vi.fn()}
+        commands={[
+          {
+            ...items[1],
+            id: 'project:skill:long-metadata',
+            displayName: 'claude-superpowers/dispatching-parallel-agents',
+            category: 'Claude-Superpowers-with-an-extremely-long-category-name',
+            tags: ['very-long-plugin-tag-that-should-truncate'],
+          },
+        ]}
+        onSelect={vi.fn()}
+        availableScopes={['project']}
+      />,
+    );
+
+    expect(screen.getByText('/claude-superpowers/dispatching-parallel-agents')).toBeInTheDocument();
+    expect(screen.getByTitle('Claude-Superpowers-with-an-extremely-long-category-name')).toHaveClass('max-w-44');
+    expect(screen.getByTitle('very-long-plugin-tag-that-should-truncate')).toHaveClass('max-w-40');
+  });
+
+  it('lets item descriptions use the full card width instead of the left metadata column', () => {
+    render(
+      <SlashCommandPickerDialog
+        open
+        onOpenChange={vi.fn()}
+        commands={items}
+        onSelect={vi.fn()}
+        availableScopes={['project']}
+      />,
+    );
+
+    expect(screen.getByText('Deploy service')).toHaveClass('col-span-2');
+    expect(screen.getByText('Explore a change')).toHaveClass('col-span-2');
+  });
 });

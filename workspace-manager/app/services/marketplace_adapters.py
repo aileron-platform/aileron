@@ -64,6 +64,14 @@ class MarketplaceProviderAdapter(Protocol):
     ) -> dict[str, Any] | None:
         """Build a target listing entry for an imported package."""
 
+    def export_listing_entry(
+        self,
+        registry_root: Path,
+        package_path: Path,
+        package_id: str,
+    ) -> dict[str, Any] | None:
+        """Build a listing entry for an exported package archive."""
+
     def upsert_listing_entry(self, registry_root: Path, package_id: str, entry: dict[str, Any]) -> None:
         """Upsert package listing entry when provider uses a root marketplace manifest."""
 
@@ -414,6 +422,14 @@ class BaseMarketplaceProviderAdapter:
     ) -> dict[str, Any] | None:
         return None
 
+    def export_listing_entry(
+        self,
+        registry_root: Path,
+        package_path: Path,
+        package_id: str,
+    ) -> dict[str, Any] | None:
+        return None
+
     def upsert_listing_entry(self, registry_root: Path, package_id: str, entry: dict[str, Any]) -> None:
         return None
 
@@ -631,6 +647,35 @@ class MarketplaceManifestAdapter(BaseMarketplaceProviderAdapter):
                     next_entry["source"] = f"./plugins/{target_package_id}"
                 return next_entry
         return None
+
+    def export_listing_entry(
+        self,
+        registry_root: Path,
+        package_path: Path,
+        package_id: str,
+    ) -> dict[str, Any] | None:
+        entry = self.read_listing_entry(registry_root, package_id)
+        if entry is not None:
+            next_entry = dict(entry)
+            next_entry["name"] = package_id
+            return next_entry
+
+        manifest = self.read_manifest(package_path)
+        next_entry: dict[str, Any] = {
+            "name": package_id,
+        }
+        for key in ("displayName", "description", "version", "category", "tags", "keywords"):
+            value = manifest.get(key)
+            if value is not None:
+                next_entry[key] = value
+        if self.provider == "codex":
+            next_entry["source"] = {
+                "source": "local",
+                "path": f"./plugins/{package_id}",
+            }
+        else:
+            next_entry["source"] = f"./plugins/{package_id}"
+        return next_entry
 
     def upsert_listing_entry(self, registry_root: Path, package_id: str, entry: dict[str, Any]) -> None:
         manifest_path = self.marketplace_manifest_path(registry_root)

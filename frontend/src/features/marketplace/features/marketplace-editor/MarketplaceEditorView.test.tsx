@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -471,6 +471,18 @@ describe('MarketplaceEditorView', () => {
     await user.click(saveButton);
     expect(saveButton).toBeDisabled();
 
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'AGENTS.md',
+            content: expect.stringContaining('Additional Codex guidance.'),
+          }),
+        ]),
+      }));
+    });
+
     await user.type(guidanceEditor, '\nTemporary local change.');
     expect(saveButton).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'marketplace.common.actions.refresh' }));
@@ -555,6 +567,18 @@ describe('MarketplaceEditorView', () => {
 
     expect(screen.getByText('extra.md')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'skills/extra.md',
+          }),
+        ]),
+      }));
+    });
   });
 
   it('does not mark the package dirty when opening a skill file without content changes', async () => {
@@ -962,6 +986,19 @@ describe('MarketplaceEditorView', () => {
 
     expect(screen.getByText('test-before-save')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'hooks/test-before-finish.json',
+            content: expect.stringContaining('npm run test:unit'),
+          }),
+        ]),
+      }));
+    });
   });
 
   it('opens Gemini hook creation with sequential matchers and execution metadata fields', async () => {
@@ -1000,5 +1037,76 @@ describe('MarketplaceEditorView', () => {
     expect(screen.getAllByText('new-reviewer.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('marketplace.editor.documentViewer.unsavedFile')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'agents/new-reviewer.md',
+            content: '# New Reviewer',
+          }),
+        ]),
+      }));
+    });
+  });
+
+  it('persists slash commands and output styles from document viewer tabs', async () => {
+    const user = userEvent.setup();
+    const codexEditor = renderCodexEditor();
+
+    await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.slashCommand/ }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.documentViewer.actions.add' }));
+    await user.clear(screen.getByLabelText('marketplace.editor.documentViewer.create.fields.path.label'));
+    await user.type(screen.getByLabelText('marketplace.editor.documentViewer.create.fields.path.label'), 'commands/sync-check');
+    let contentEditors = screen.getAllByLabelText('marketplace.editor.documentViewer.editor.placeholder');
+    await user.type(contentEditors[contentEditors.length - 1], '# /sync-check');
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.documentViewer.create.actions.create' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'commands/sync-check.md',
+            content: '# /sync-check',
+          }),
+        ]),
+      }));
+    });
+
+    vi.clearAllMocks();
+    codexEditor.unmount();
+    render(
+      <MemoryRouter initialEntries={['/marketplace/packages/claude-code/review-assistant/edit']}>
+        <Routes>
+          <Route
+            path="/marketplace/packages/:provider/:packageId/edit"
+            element={<MarketplaceEditorView mode="edit" />}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.outputStyle/ }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.documentViewer.actions.add' }));
+    await user.clear(screen.getByLabelText('marketplace.editor.documentViewer.create.fields.path.label'));
+    await user.type(screen.getByLabelText('marketplace.editor.documentViewer.create.fields.path.label'), 'output-styles/brief-review');
+    contentEditors = screen.getAllByLabelText('marketplace.editor.documentViewer.editor.placeholder');
+    await user.type(contentEditors[contentEditors.length - 1], '# Brief Review');
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.documentViewer.create.actions.create' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
+
+    await waitFor(() => {
+      expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
+        packageFiles: expect.arrayContaining([
+          expect.objectContaining({
+            path: 'output-styles/brief-review.md',
+            content: '# Brief Review',
+          }),
+        ]),
+      }));
+    });
   });
 });

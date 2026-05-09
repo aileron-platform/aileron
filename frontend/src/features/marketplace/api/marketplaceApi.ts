@@ -111,7 +111,8 @@ export async function deletePackage(request: MarketplaceDeleteRequest): Promise<
 }
 
 export async function exportPackage(request: MarketplaceExportRequest): Promise<Blob> {
-  return apiClient.getBlob(`${marketplacePackagePath(request.provider, request.packageId)}/export`);
+  const params = new URLSearchParams({ revision: request.revision });
+  return apiClient.getBlob(`${marketplacePackagePath(request.provider, request.packageId)}/export?${params.toString()}`);
 }
 
 export async function installPackage(request: MarketplaceInstallRequest): Promise<MarketplaceInstallResult> {

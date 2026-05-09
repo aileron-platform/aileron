@@ -324,6 +324,8 @@ interface MarketplaceEditorResourceItem {
 }
 
 type MarketplaceEditorFeatureItems = Record<Exclude<MarketplaceEditorTab, 'basic' | 'agentsMd'>, MarketplaceEditorResourceItem[]>;
+type MarketplaceResourceFormat = 'markdown' | 'toml';
+type MarketplaceMarkdownEditorTab = 'agents' | 'commands' | 'outputStyle' | 'policies';
 
 const emptyMarketplaceFeatureItems = (): MarketplaceEditorFeatureItems => ({
   skills: [],
@@ -504,6 +506,72 @@ const marketplaceApplyMcpItemsToPackageFiles = (
 
   return Array.from(fileMap.values()).sort((first, second) => first.path.localeCompare(second.path));
 };
+
+const marketplacePackageFileFromResourceItem = (item: MarketplaceEditorResourceItem): MarketplacePackageFile => {
+  const extension = item.path.split('.').pop()?.toLowerCase() ?? '';
+  const mimeType = extension === 'json'
+    ? 'application/json'
+    : extension === 'toml'
+      ? 'application/toml'
+      : 'text/markdown';
+
+  return {
+    path: item.path,
+    content: item.content,
+    binary: false,
+    mimeType,
+    size: item.content.length,
+  };
+};
+
+const marketplaceApplyResourceItemsToPackageFiles = (
+  files: MarketplacePackageFile[],
+  items: MarketplaceEditorResourceItem[],
+  managedPrefixes: string[],
+): MarketplacePackageFile[] => {
+  const itemPaths = new Set(items.map(item => item.path));
+  const nextFiles = files.filter(file => (
+    !itemPaths.has(file.path) &&
+    !managedPrefixes.some(prefix => file.path === prefix.slice(0, -1) || file.path.startsWith(prefix))
+  ));
+
+  return [
+    ...nextFiles,
+    ...items.map(marketplacePackageFileFromResourceItem),
+  ].sort((first, second) => first.path.localeCompare(second.path));
+};
+
+const marketplaceMarkdownManagedPrefixes: Record<MarketplaceMarkdownEditorTab, string[]> = {
+  agents: ['agents/'],
+  commands: ['commands/'],
+  outputStyle: ['output-styles/'],
+  policies: ['policies/'],
+};
+
+const marketplaceApplyPackageFiles = (
+  files: MarketplacePackageFile[],
+  packageFiles: MarketplacePackageFile[],
+  managedPrefixes: string[],
+): MarketplacePackageFile[] => {
+  const packageFilePaths = new Set(packageFiles.map(file => file.path));
+  const nextFiles = files.filter(file => (
+    !packageFilePaths.has(file.path) &&
+    !managedPrefixes.some(prefix => file.path === prefix.slice(0, -1) || file.path.startsWith(prefix))
+  ));
+
+  return [
+    ...nextFiles,
+    ...packageFiles,
+  ].sort((first, second) => first.path.localeCompare(second.path));
+};
+
+const marketplaceTextPackageFile = (path: string, content: string, mimeType = 'text/markdown'): MarketplacePackageFile => ({
+  path,
+  content,
+  binary: false,
+  mimeType,
+  size: content.length,
+});
 
 const marketplaceFeatureItemsFromDetail = (detail: MarketplacePackageDetail | null): MarketplaceEditorFeatureItems | null => {
   if (!detail) return null;
@@ -846,6 +914,21 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
   const handleMcpItemsChange = React.useCallback((items: MarketplaceEditorResourceItem[]) => {
     setPackageFiles(prev => marketplaceApplyMcpItemsToPackageFiles(prev, items));
   }, []);
+  const handleMarkdownItemsChange = React.useCallback((tab: MarketplaceMarkdownEditorTab, items: MarketplaceEditorResourceItem[]) => {
+    setPackageFiles(prev => marketplaceApplyResourceItemsToPackageFiles(prev, items, marketplaceMarkdownManagedPrefixes[tab]));
+  }, []);
+  const handlePackageFilesChange = React.useCallback((files: MarketplacePackageFile[], managedPrefixes: string[]) => {
+    setPackageFiles(prev => marketplaceApplyPackageFiles(prev, files, managedPrefixes));
+  }, []);
+  const handleRootTextFileChange = React.useCallback((path: string, content: string) => {
+    handlePackageFilesChange([marketplaceTextPackageFile(path, content)], [path]);
+  }, [handlePackageFilesChange]);
+  const handleSkillsPackageFilesChange = React.useCallback((files: MarketplacePackageFile[]) => {
+    handlePackageFilesChange(files, ['skills/']);
+  }, [handlePackageFilesChange]);
+  const handleHooksItemsChange = React.useCallback((items: MarketplaceEditorResourceItem[]) => {
+    handlePackageFilesChange(items.map(marketplacePackageFileFromResourceItem), ['hooks/']);
+  }, [handlePackageFilesChange]);
   const savePackage = async (): Promise<boolean> => {
     if (!provider) {
       setSaveStatus('error');
@@ -1026,16 +1109,27 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
               onDisplayNameChange={(value) => { setDisplayName(value); markDirty(); }}
               onDescriptionChange={(value) => { setDescription(value); markDirty(); }}
               onRequiredDraftChange={setRequiredDraft}
+              onReadmeChange={content => handleRootTextFileChange('README.md', content)}
+              onProviderGuidanceChange={content => handleRootTextFileChange('GEMINI.md', content)}
               onDirty={markDirty}
             />
           </TabsContent>
 
           <TabsContent value="agentsMd" className="flex-1 overflow-auto !m-0 !p-0">
-            <MarketplaceAgentsMdEditor onDirty={markDirty} />
+            <MarketplaceAgentsMdEditor
+              provider={provider}
+              onDirty={markDirty}
+              onContentChange={(path, content) => handleRootTextFileChange(path, content)}
+            />
           </TabsContent>
 
           <TabsContent value="skills" className="flex-1 overflow-auto !m-0 !p-0">
-            <MarketplaceSkillsFileManager key={skillsFileManagerKey} items={featureItems.skills} onDirty={markDirty} />
+            <MarketplaceSkillsFileManager
+              key={skillsFileManagerKey}
+              items={featureItems.skills}
+              onDirty={markDirty}
+              onPackageFilesChange={handleSkillsPackageFilesChange}
+            />
           </TabsContent>
 
           <TabsContent value="agents" className="flex-1 overflow-auto !m-0 !p-0">
@@ -1047,6 +1141,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
               commitVersion={resourceCommitVersion}
               discardVersion={resourceDiscardVersion}
               onDirty={markDirty}
+              onItemsChange={items => handleMarkdownItemsChange('agents', items)}
             />
           </TabsContent>
 
@@ -1060,6 +1155,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
               commitVersion={resourceCommitVersion}
               discardVersion={resourceDiscardVersion}
               onDirty={markDirty}
+              onItemsChange={items => handleMarkdownItemsChange('commands', items)}
             />
           </TabsContent>
 
@@ -1076,7 +1172,15 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
           </TabsContent>
 
           <TabsContent value="hooks" className="flex-1 overflow-auto !m-0 !p-0">
-            <MarketplaceEditorFeatureSection key={`${provider}-hooks`} provider={provider} tab="hooks" icon={Zap} items={featureItems.hooks} onDirty={markDirty} />
+            <MarketplaceEditorFeatureSection
+              key={`${provider}-hooks`}
+              provider={provider}
+              tab="hooks"
+              icon={Zap}
+              items={featureItems.hooks}
+              onDirty={markDirty}
+              onItemsChange={handleHooksItemsChange}
+            />
           </TabsContent>
 
           <TabsContent value="outputStyle" className="flex-1 overflow-auto !m-0 !p-0">
@@ -1088,6 +1192,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
               commitVersion={resourceCommitVersion}
               discardVersion={resourceDiscardVersion}
               onDirty={markDirty}
+              onItemsChange={items => handleMarkdownItemsChange('outputStyle', items)}
             />
           </TabsContent>
 
@@ -1101,6 +1206,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
               commitVersion={resourceCommitVersion}
               discardVersion={resourceDiscardVersion}
               onDirty={markDirty}
+              onItemsChange={items => handleMarkdownItemsChange('policies', items)}
             />
           </TabsContent>
 
@@ -1286,6 +1392,8 @@ interface MarketplaceEditorBasicSectionProps {
   onDisplayNameChange: (value: string) => void;
   onDescriptionChange: (value: string) => void;
   onRequiredDraftChange: (draft: MarketplaceRequiredDraft) => void;
+  onReadmeChange: (content: string) => void;
+  onProviderGuidanceChange: (content: string) => void;
   onDirty: () => void;
 }
 
@@ -1522,6 +1630,8 @@ const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSectionProps
   onDisplayNameChange,
   onDescriptionChange,
   onRequiredDraftChange,
+  onReadmeChange,
+  onProviderGuidanceChange,
   onDirty,
 }) => {
   const { t } = useI18n();
@@ -1822,6 +1932,7 @@ const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSectionProps
               value={providerGuidanceDraft || `# ${resolvedDisplayName}\n\n${t('marketplace.editor.packageSections.providerGuidance.defaultBody')}`}
               onChange={(value) => {
                 setProviderGuidanceDraft(value);
+                onProviderGuidanceChange(value);
                 onDirty();
               }}
               placeholder={t('marketplace.editor.packageSections.providerGuidance.placeholder')}
@@ -1840,6 +1951,7 @@ const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSectionProps
             value={readmeDraft || `# ${resolvedDisplayName}\n\n${draft.manifestDescription}`}
             onChange={(value) => {
               setReadmeDraft(value);
+              onReadmeChange(value);
               onDirty();
             }}
             placeholder={t('marketplace.editor.packageSections.readme.placeholder')}
@@ -2136,13 +2248,16 @@ const MarketplaceEditorTextAreaField: React.FC<MarketplaceEditorTextAreaFieldPro
 );
 
 interface MarketplaceAgentsMdEditorProps {
+  provider: MarketplaceProvider;
   onDirty: () => void;
+  onContentChange: (path: string, content: string) => void;
 }
 
-const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ onDirty }) => {
+const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ provider, onDirty, onContentChange }) => {
   const { t } = useI18n();
+  const fileName = provider === 'gemini' ? 'GEMINI.md' : 'AGENTS.md';
   const [content, setContent] = React.useState(
-    '# AGENTS.md\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n',
+    `# ${fileName}\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n`,
   );
   const [savedContent, setSavedContent] = React.useState(content);
   const hasUnsavedChanges = content !== savedContent;
@@ -2153,7 +2268,7 @@ const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ o
 
   const handleDownload = () => {
     const blob = new Blob([content], { type: 'text/markdown' });
-    downloadBlob(blob, 'AGENTS.md');
+    downloadBlob(blob, fileName);
   };
 
   return (
@@ -2169,6 +2284,7 @@ const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ o
       value={content}
       onChange={(value) => {
         setContent(value);
+        onContentChange(fileName, value);
         onDirty();
       }}
       onRefresh={() => setContent(savedContent)}
@@ -2176,7 +2292,7 @@ const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ o
       saveDisabled={!hasUnsavedChanges}
       statusMessage={(
         <span className="font-mono text-xs text-muted-foreground">
-          AGENTS.md
+          {fileName}
         </span>
       )}
       placeholder={t('marketplace.editor.agentsMd.placeholder')}
@@ -2209,13 +2325,14 @@ const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ o
 interface MarketplaceSkillsFileManagerProps {
   items: MarketplaceEditorResourceItem[];
   onDirty: () => void;
+  onPackageFilesChange: (files: MarketplacePackageFile[]) => void;
 }
 
 export const shouldUpdateMarketplaceEditorFileContent = (nextContent: string, currentContent: string): boolean => (
   nextContent !== currentContent
 );
 
-const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> = ({ items, onDirty }) => {
+const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> = ({ items, onDirty, onPackageFilesChange }) => {
   const { t } = useI18n();
   const initialNodes = React.useMemo(() => marketplaceFeatureItemsToFileTree(items, 'skills'), [items]);
   const firstFilePath = React.useMemo(() => marketplaceFindFirstFilePath(initialNodes), [initialNodes]);
@@ -2233,6 +2350,10 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
   const [contents, setContents] = React.useState<Record<string, string>>(
     () => marketplaceFileContentsFromTree(initialNodes),
   );
+
+  React.useEffect(() => {
+    onPackageFilesChange(marketplaceFeaturePackageFilesFromTree(treeState.nodes, 'skills', contents));
+  }, [contents, onPackageFilesChange, treeState.nodes]);
 
   const activeNode = React.useMemo(
     () => treeState.flatNodes.find(node => node.path === activePath && node.type === 'file') ?? null,
@@ -2549,9 +2670,6 @@ const MarketplaceSkillsFileManager: React.FC<MarketplaceSkillsFileManagerProps> 
   );
 };
 
-type MarketplaceResourceFormat = 'markdown' | 'toml';
-type MarketplaceMarkdownEditorTab = 'agents' | 'commands' | 'outputStyle' | 'policies';
-
 interface MarketplaceMarkdownEditorViewerProps {
   tab: MarketplaceMarkdownEditorTab;
   icon: React.ComponentType<{ className?: string }>;
@@ -2560,6 +2678,7 @@ interface MarketplaceMarkdownEditorViewerProps {
   commitVersion: number;
   discardVersion: number;
   onDirty: () => void;
+  onItemsChange?: (items: MarketplaceEditorResourceItem[]) => void;
 }
 
 const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerProps> = ({
@@ -2570,6 +2689,7 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
   commitVersion,
   discardVersion,
   onDirty,
+  onItemsChange,
 }) => {
   const { t } = useI18n();
   const [baseItems, setBaseItems] = React.useState(items);
@@ -2582,6 +2702,23 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
     () => Object.fromEntries(items.map(item => [item.id, item.content])),
   );
   const didMountRef = React.useRef(false);
+
+  const materializeItems = React.useCallback((
+    nextItems: MarketplaceEditorResourceItem[],
+    nextDrafts: Record<string, string>,
+  ): MarketplaceEditorResourceItem[] => (
+    nextItems.map(item => ({
+      ...item,
+      content: nextDrafts[item.id] ?? item.content,
+    }))
+  ), []);
+
+  const emitItemsChange = React.useCallback((
+    nextItems: MarketplaceEditorResourceItem[],
+    nextDrafts: Record<string, string>,
+  ) => {
+    onItemsChange?.(materializeItems(nextItems, nextDrafts));
+  }, [materializeItems, onItemsChange]);
 
   React.useEffect(() => {
     setBaseItems(items);
@@ -2671,10 +2808,13 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
       content: value.content,
       badge: format === 'toml' ? 'toml' : 'md',
     };
-    setLocalItems(prev => [...prev, nextItem]);
-    setDrafts(prev => ({ ...prev, [id]: value.content }));
+    const nextItems = [...localItems, nextItem];
+    const nextDrafts = { ...drafts, [id]: value.content };
+    setLocalItems(nextItems);
+    setDrafts(nextDrafts);
     setSelectedId(id);
     setCreateDialogOpen(false);
+    emitItemsChange(nextItems, nextDrafts);
     onDirty();
   };
 
@@ -2841,7 +2981,9 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
                     content={selectedContent}
                     originalContent={selectedItem.content}
                     onContentChange={(value) => {
-                      setDrafts(prev => ({ ...prev, [selectedItem.id]: value }));
+                      const nextDrafts = { ...drafts, [selectedItem.id]: value };
+                      setDrafts(nextDrafts);
+                      emitItemsChange(localItems, nextDrafts);
                       onDirty();
                     }}
                     onModifiedChange={() => undefined}
@@ -2854,7 +2996,9 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
                 <MarkdownEditor
                   value={selectedContent}
                   onChange={(value) => {
-                    setDrafts(prev => ({ ...prev, [selectedItem.id]: value }));
+                    const nextDrafts = { ...drafts, [selectedItem.id]: value };
+                    setDrafts(nextDrafts);
+                    emitItemsChange(localItems, nextDrafts);
                     onDirty();
                   }}
                   placeholder={t('marketplace.editor.documentViewer.editor.placeholder')}
@@ -2884,10 +3028,12 @@ const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditorViewerP
         }}
         onSubmit={(nextPath) => {
           if (!renameItem) return;
-          setLocalItems(prev => prev.map(item => (
+          const nextItems = localItems.map(item => (
             item.id === renameItem.id ? { ...item, path: nextPath } : item
-          )));
+          ));
+          setLocalItems(nextItems);
           setRenameItem(null);
+          emitItemsChange(nextItems, drafts);
           onDirty();
         }}
       />
@@ -3691,8 +3837,8 @@ const MarketplaceEditorFeatureSection: React.FC<MarketplaceEditorFeatureSectionP
     const id = `local-${Math.random().toString(36).slice(2, 10)}`;
     const firstMatcher = value.matchers[0];
     const firstAction = firstMatcher?.hooks[0];
-    setItems(prev => [
-      ...prev,
+    const nextItems = [
+      ...items,
       {
         id,
         titleKey: 'marketplace.editor.hooks.dialog.create.defaultTitle',
@@ -3710,7 +3856,9 @@ const MarketplaceEditorFeatureSection: React.FC<MarketplaceEditorFeatureSectionP
           ...(firstMatcher?.sequential ? [{ labelKey: 'marketplace.editor.featureMeta.labels.sequential', value: t('marketplace.common.labels.enabled') }] : []),
         ],
       },
-    ]);
+    ];
+    setItems(nextItems);
+    onItemsChange?.(nextItems);
     setHookDialogOpen(false);
     onDirty?.();
   };
@@ -3756,7 +3904,19 @@ const MarketplaceEditorFeatureSection: React.FC<MarketplaceEditorFeatureSectionP
             );
           }
           if (tab === 'hooks') {
-            return <MarketplaceHookCard key={item.id} provider={provider} item={item} onDirty={onDirty} />;
+            return (
+              <MarketplaceHookCard
+                key={item.id}
+                provider={provider}
+                item={item}
+                onDirty={onDirty}
+                onChange={(nextItem) => {
+                  const nextItems = items.map(current => (current.id === nextItem.id ? nextItem : current));
+                  setItems(nextItems);
+                  onItemsChange?.(nextItems);
+                }}
+              />
+            );
           }
           return <MarketplaceEditorResourceItemCard key={item.id} item={item} icon={Icon} />;
         })}
@@ -3883,9 +4043,10 @@ interface MarketplaceHookCardProps {
   provider: MarketplaceProvider;
   item: MarketplaceEditorResourceItem;
   onDirty?: () => void;
+  onChange: (item: MarketplaceEditorResourceItem) => void;
 }
 
-const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, item, onDirty }) => {
+const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, item, onDirty, onChange }) => {
   const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const parsedTimeout = Number(item.meta?.find(meta => meta.labelKey === 'marketplace.editor.featureMeta.labels.timeout')?.value.replace(/[^0-9]/g, '') ?? (provider === 'gemini' ? 60000 : 120));
@@ -3984,6 +4145,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
         onOpenChange={setDialogOpen}
         onSave={(value) => {
           setHook(value);
+          onChange(marketplaceHookResourceItemFromValue(item, provider, value, t));
           setDialogOpen(false);
           onDirty?.();
         }}
@@ -4454,6 +4616,33 @@ const formatMarketplaceHookTimeout = (provider: MarketplaceProvider, timeout?: n
   provider === 'gemini' ? `${timeout ?? 60000}ms` : `${timeout ?? 120}s`
 );
 
+const marketplaceHookResourceItemFromValue = (
+  item: MarketplaceEditorResourceItem,
+  provider: MarketplaceProvider,
+  value: MarketplaceHookDialogValue,
+  t: (key: string) => string,
+): MarketplaceEditorResourceItem => {
+  const firstMatcher = value.matchers[0];
+  const firstAction = firstMatcher?.hooks[0];
+  const name = value.name.trim() || value.event;
+
+  return {
+    ...item,
+    title: name,
+    description: value.event,
+    path: item.path,
+    content: JSON.stringify(value, null, 2),
+    badge: value.event,
+    code: firstAction?.command ?? '',
+    meta: [
+      { labelKey: 'marketplace.editor.featureMeta.labels.type', value: firstAction?.type ?? 'command' },
+      { labelKey: 'marketplace.editor.featureMeta.labels.matcher', value: firstMatcher?.matcher ?? '*' },
+      { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(provider, firstAction?.timeout) },
+      ...(firstMatcher?.sequential ? [{ labelKey: 'marketplace.editor.featureMeta.labels.sequential', value: t('marketplace.common.labels.enabled') }] : []),
+    ],
+  };
+};
+
 interface MarketplaceEditorResourceItemCardProps {
   item: MarketplaceEditorResourceItem;
   icon: React.ComponentType<{ className?: string }>;
@@ -4682,6 +4871,18 @@ const marketplacePackageFilesFromTree = (
   walk(nodes);
   return files;
 };
+
+const marketplaceFeaturePackageFilesFromTree = (
+  nodes: FileTreeNode[],
+  basePath: string,
+  contents: Record<string, string>,
+): MarketplacePackageFile[] => (
+  marketplacePackageFilesFromTree(nodes, `/${basePath}`, contents)
+    .map(file => ({
+      ...file,
+      path: file.path.startsWith(`${basePath}/`) ? file.path : `${basePath}/${file.path}`,
+    }))
+);
 
 const marketplaceFindFirstFilePath = (nodes: FileTreeNode[]): string | undefined => {
   for (const node of nodes) {

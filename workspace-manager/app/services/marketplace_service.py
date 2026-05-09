@@ -1498,24 +1498,68 @@ class MarketplaceService:
                 revision=f"deleted-{detail.revision}",
             )
 
-    def export_package(self, user_id: str, provider: MarketplaceProvider, package_id: str) -> bytes:
-        """Export a package directory as a provider-native zip archive."""
+    def export_package(self, user_id: str, provider: MarketplaceProvider, package_id: str, revision: str) -> bytes:
+        """Export a package as a provider-native import-source zip archive."""
+        detail = self.get_package_detail(user_id, provider, package_id)
+        if detail is None:
+            raise FileNotFoundError("marketplace.package.not_found")
+        if detail.revision != revision:
+            raise MarketplaceConflictError("marketplace.package.revision_conflict")
         package_path = self.resolve_package_path(user_id, provider, package_id)
         if not package_path.exists():
             raise FileNotFoundError("marketplace.package.not_found")
+        registry_root = self.get_registry_root(user_id)
         adapter = self._get_adapter(provider)
         self._raise_if_validation_blocks(adapter.validate_package(package_path), "export")
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(item for item in package_path.rglob("*") if item.is_file()):
-                if path.is_symlink():
-                    raise MarketplacePathError("marketplace.package.symlink_rejected")
-                self._assert_relative_to(path, package_path)
-                rel_path = path.relative_to(package_path)
-                if ".git" in rel_path.parts or "__pycache__" in rel_path.parts:
-                    continue
-                archive.write(path, rel_path.as_posix())
+            listing = adapter.export_listing_entry(registry_root, package_path, package_id)
+            marketplace_manifest = getattr(adapter, "marketplace_manifest", None)
+            if listing is not None and isinstance(marketplace_manifest, str):
+                archive.writestr(
+                    marketplace_manifest,
+                    json.dumps(self._export_marketplace_manifest(registry_root, adapter, listing), indent=2) + "\n",
+                )
+                self._write_package_tree_to_archive(
+                    archive,
+                    package_path,
+                    Path("plugins") / package_id,
+                )
+            else:
+                self._write_package_tree_to_archive(archive, package_path, Path(""))
         return buffer.getvalue()
+
+    def _export_marketplace_manifest(
+        self,
+        registry_root: Path,
+        adapter: MarketplaceProviderAdapter,
+        listing: dict[str, Any],
+    ) -> dict[str, Any]:
+        manifest: dict[str, Any] = {}
+        try:
+            manifest_path = adapter.marketplace_manifest_path(registry_root)  # type: ignore[attr-defined]
+        except AttributeError:
+            manifest_path = None
+        if manifest_path is not None and manifest_path.exists():
+            manifest = self._read_json(manifest_path)
+        manifest["plugins"] = [listing]
+        return manifest
+
+    def _write_package_tree_to_archive(
+        self,
+        archive: zipfile.ZipFile,
+        package_path: Path,
+        archive_root: Path,
+    ) -> None:
+        for path in sorted(item for item in package_path.rglob("*") if item.is_file()):
+            if path.is_symlink():
+                raise MarketplacePathError("marketplace.package.symlink_rejected")
+            self._assert_relative_to(path, package_path)
+            rel_path = path.relative_to(package_path)
+            if ".git" in rel_path.parts or "__pycache__" in rel_path.parts:
+                continue
+            archive_path = archive_root / rel_path
+            archive.write(path, archive_path.as_posix())
 
     def install_package(
         self,

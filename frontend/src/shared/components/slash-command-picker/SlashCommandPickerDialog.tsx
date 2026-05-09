@@ -160,7 +160,13 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
                   {resolvedLabels.empty}
                 </div>
               ) : (
-                filteredCommands.map((command) => (
+                filteredCommands.map((command) => {
+                  const kindLabel = command.kind === 'skill'
+                    ? resolvedLabels.kind.skill
+                    : resolvedLabels.kind['slash-command'];
+                  const KindIcon = command.kind === 'skill' ? Sparkles : Command;
+
+                  return (
                   <button
                     key={command.id}
                     type="button"
@@ -173,46 +179,57 @@ export const SlashCommandPickerDialog: React.FC<SlashCommandPickerDialogProps> =
                       'hover:border-primary/60 hover:bg-primary/5'
                     )}
                   >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm text-primary">/{command.displayName}</span>
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
-                            {command.kind === 'skill' ? (
-                              <span className="inline-flex items-center gap-1">
-                                <Sparkles className="h-3 w-3" />
-                                {resolvedLabels.kind.skill}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1">
-                                <Command className="h-3 w-3" />
-                                {resolvedLabels.kind['slash-command']}
-                              </span>
-                            )}
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                      <div className="min-w-0">
+                        <span className="block break-words font-mono text-sm leading-6 text-primary">
+                          /{command.displayName}
+                        </span>
+                      </div>
+                      <div className="flex min-w-0 items-start justify-end gap-2">
+                        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                          <Badge
+                            variant="outline"
+                            className="max-w-28 text-[10px] uppercase tracking-wide"
+                            title={kindLabel}
+                          >
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <KindIcon className="h-3 w-3 shrink-0" />
+                              <span className="min-w-0 truncate">{kindLabel}</span>
+                            </span>
                           </Badge>
-                          <Badge variant="secondary" className="text-xs capitalize">
-                            {command.category}
+                          <Badge
+                            variant="secondary"
+                            className="max-w-44 text-xs capitalize"
+                            title={command.category}
+                          >
+                            <span className="min-w-0 truncate">{command.category}</span>
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {command.description}
-                        </p>
-                        {command.tags && command.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {command.tags.slice(0, 4).map((tag) => (
-                              <Badge key={tag} variant="outline" className="text-[10px] capitalize">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
+                        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
+                          <Download className="h-4 w-4" />
+                        </span>
                       </div>
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground">
-                        <Download className="h-4 w-4" />
-                      </span>
+                      <p className="col-span-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                        {command.description}
+                      </p>
+                      {command.tags && command.tags.length > 0 && (
+                        <div className="col-span-2 flex flex-wrap gap-1.5">
+                          {command.tags.slice(0, 4).map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="outline"
+                              className="max-w-40 text-[10px] capitalize"
+                              title={tag}
+                            >
+                              <span className="min-w-0 truncate">{tag}</span>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </button>
-                ))
+                  );
+                })
               )}
             </div>
           </ScrollArea>

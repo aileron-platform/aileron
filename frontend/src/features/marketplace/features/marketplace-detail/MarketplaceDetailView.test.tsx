@@ -89,6 +89,20 @@ const mockDetail: MarketplacePackageDetail = {
       size: 16,
     },
     {
+      path: 'zeta.ts',
+      content: 'export const zeta = true;',
+      binary: false,
+      mimeType: 'text/typescript',
+      size: 25,
+    },
+    {
+      path: 'alpha.md',
+      content: '# Alpha',
+      binary: false,
+      mimeType: 'text/markdown',
+      size: 7,
+    },
+    {
       path: 'scripts/check.sh',
       content: '#!/usr/bin/env bash\nset -euo pipefail\n',
       binary: false,
@@ -105,6 +119,7 @@ const mockDeletePackage = vi.fn();
 const mockInstallPackage = vi.fn();
 const mockExportPackage = vi.fn();
 const mockGetInstallPreflight = vi.fn();
+const mockDownloadBlob = vi.fn();
 
 vi.mock('../../api/marketplaceApi', () => ({
   getPackage: (...args: unknown[]) => mockGetPackage(...args),
@@ -118,6 +133,10 @@ vi.mock('@/features/workspace/services/workspaceRuntimeApi', () => ({
   fetchWorkspaceList: vi.fn(async () => ({
     items: [{ id: 'ws-1', name: 'Workspace One' }],
   })),
+}));
+
+vi.mock('../../utils/downloadBlob', () => ({
+  downloadBlob: (...args: unknown[]) => mockDownloadBlob(...args),
 }));
 
 const renderDetail = () => render(
@@ -136,6 +155,7 @@ describe('MarketplaceDetailView', () => {
     mockInstallPackage.mockReset();
     mockExportPackage.mockReset();
     mockGetInstallPreflight.mockReset();
+    mockDownloadBlob.mockReset();
     mockGetPackage.mockResolvedValue(mockDetail);
     mockGetInstallPreflight.mockResolvedValue({
       provider: 'codex',
@@ -155,7 +175,7 @@ describe('MarketplaceDetailView', () => {
       workspaceId: 'ws-1',
       stdout: 'installed review-tools',
     });
-    mockExportPackage.mockResolvedValue({ archiveName: 'review-tools.zip' });
+    mockExportPackage.mockResolvedValue(new Blob(['zip'], { type: 'application/zip' }));
   });
 
   it('renders TOML skill content through the shared code editor preview', async () => {
@@ -194,6 +214,12 @@ describe('MarketplaceDetailView', () => {
     expect(screen.getByText('codex/plugins/review-tools')).toBeInTheDocument();
     expect(screen.getAllByText('plugin.json').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('check.sh')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('scripts').compareDocumentPosition(screen.getByText('alpha.md')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByText('alpha.md').compareDocumentPosition(screen.getByText('zeta.ts')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
 
     await user.click(screen.getByText('README.md'));
     expect(screen.getByText('# Package README')).toBeInTheDocument();
@@ -278,8 +304,23 @@ describe('MarketplaceDetailView', () => {
         packageId: 'review-tools',
         revision: 'rev-1',
       });
+      expect(mockDownloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'codex-review-tools.zip');
     });
     expect(screen.getByText('marketplace.export.result.ready')).toBeInTheDocument();
+  });
+
+  it('shows a localized export error and stops running state', async () => {
+    const user = userEvent.setup();
+    mockExportPackage.mockRejectedValue(new Error('marketplace.package.revision_conflict'));
+    renderDetail();
+
+    await screen.findByText('Review Tools');
+    await user.click(screen.getByRole('button', { name: 'marketplace.detail.actions.export' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.export.actions.export' }));
+
+    expect(await screen.findByText('marketplace.export.result.failed')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'marketplace.export.actions.export' })).not.toBeDisabled();
+    expect(mockDownloadBlob).not.toHaveBeenCalled();
   });
 
   it('shows the localized not-found state and returns to the center route', async () => {

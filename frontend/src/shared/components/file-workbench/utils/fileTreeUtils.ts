@@ -270,8 +270,33 @@ export function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
       return 1;
     }
 
-    return a.name.localeCompare(b.name);
+    if (a.type === 'file' && b.type === 'file') {
+      const extensionCompare = getSortableFileExtension(a).localeCompare(
+        getSortableFileExtension(b),
+        undefined,
+        { numeric: true, sensitivity: 'base' },
+      );
+      if (extensionCompare !== 0) {
+        return extensionCompare;
+      }
+    }
+
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
   });
+}
+
+export function sortTreeNodes(nodes: FileTreeNode[]): FileTreeNode[] {
+  return sortNodes(nodes).map((node) => ({
+    ...node,
+    children: node.children ? sortTreeNodes(node.children) : node.children,
+  }));
+}
+
+function getSortableFileExtension(node: FileTreeNode): string {
+  if (typeof node.extension === 'string') {
+    return node.extension.toLowerCase();
+  }
+  return getFileExtension(node.name);
 }
 
 /**
@@ -295,4 +320,3 @@ export function validateFileName(fileName: string): { valid: boolean; error?: st
 
   return { valid: true };
 }
-

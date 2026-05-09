@@ -63,8 +63,9 @@ vi.mock('@/shared/utils/fileTypeUtils', () => ({
   isImageFile: () => fileTypeState.image,
 }));
 
-const createWorkspaceValue = (expanded = false) => ({
+const createWorkspaceValue = (expanded = false, tabScope: 'file-management' | 'openspec' = 'file-management') => ({
   workspace: {
+    tabScope,
     openTabs: [
       {
         id: '/src/App.tsx',
@@ -144,11 +145,22 @@ describe('FileEditor editor-pane expansion', () => {
   it('keeps active content and modified state visible while focused', () => {
     useWorkspaceMock.mockReturnValue(createWorkspaceValue(true));
 
-    render(<FileEditor />);
+    const { container } = render(<FileEditor />);
 
+    expect(container.firstElementChild).not.toHaveClass('fixed');
     expect(screen.getAllByText('App.tsx').length).toBeGreaterThan(0);
     expect(screen.getByText('shared.fileViewer.status.modified')).toBeInTheDocument();
     expect(screen.getByLabelText('code-editor')).toHaveValue('const value = 1;');
+  });
+
+  it('expands to the viewport for OpenSpec markdown previews', () => {
+    fileTypeState.markdown = true;
+    useWorkspaceMock.mockReturnValue(createWorkspaceValue(true, 'openspec'));
+
+    const { container } = render(<FileEditor />);
+
+    expect(container.firstElementChild).toHaveClass('fixed', 'inset-0', 'h-screen', 'w-screen');
+    expect(screen.getByText('shared.fileViewer.markdown.title')).toBeInTheDocument();
   });
 
   it('passes focus mode to specialized viewers and hides file tabs', () => {

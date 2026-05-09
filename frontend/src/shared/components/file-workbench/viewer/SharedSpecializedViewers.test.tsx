@@ -1,3 +1,4 @@
+import type React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SharedDrawioViewer } from './SharedDrawioViewer';
@@ -25,7 +26,23 @@ vi.mock('mermaid', () => ({
 }));
 
 vi.mock('@/shared/components/markdown/MarkdownContent', () => ({
-  MarkdownContent: ({ content }: { content: string }) => <article>{content}</article>,
+  MarkdownContent: ({
+    content,
+    onLinkClick,
+  }: {
+    content: string;
+    onLinkClick?: (href: string, event: React.MouseEvent<HTMLAnchorElement>) => void;
+  }) => (
+    <article>
+      {content}
+      <a
+        href="../../schemas/spec-driven-api/standards/configuration-standards.md"
+        onClick={(event) => onLinkClick?.('../../schemas/spec-driven-api/standards/configuration-standards.md', event)}
+      >
+        config
+      </a>
+    </article>
+  ),
 }));
 
 vi.mock('./CodeTextEditor', () => ({
@@ -42,6 +59,17 @@ class DrawioUnavailableError extends Error {
     this.reason = reason;
   }
 }
+
+const firePointerEvent = (
+  element: Element,
+  type: string,
+  init: MouseEventInit & { pointerId: number; pointerType: string },
+) => {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+  Object.defineProperty(event, 'pointerId', { value: init.pointerId });
+  Object.defineProperty(event, 'pointerType', { value: init.pointerType });
+  fireEvent(element, event);
+};
 
 describe('shared specialized file viewers', () => {
   beforeEach(() => {
@@ -104,6 +132,23 @@ describe('shared specialized file viewers', () => {
     expect(screen.getByLabelText('shared.fileViewer.markdown.download')).toBeInTheDocument();
   });
 
+  it('opens internal Markdown links through the workspace tab callback', () => {
+    const onOpenPath = vi.fn();
+
+    render(
+      <SharedMarkdownViewer
+        content="[Config](../../schemas/spec-driven-api/standards/configuration-standards.md)"
+        fileName="design.md"
+        filePath="/openspec/changes/parse-policy-excel-file/design.md"
+        onOpenPath={onOpenPath}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'config' }));
+
+    expect(onOpenPath).toHaveBeenCalledWith('/openspec/schemas/spec-driven-api/standards/configuration-standards.md');
+  });
+
   it('renders Mermaid through the shared renderer and exposes shared toolbar actions', async () => {
     render(
       <SharedMermaidViewer
@@ -119,6 +164,44 @@ describe('shared specialized file viewers', () => {
     expect(document.querySelector('.mermaid-diagram svg')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.mermaid.zoomIn')).toBeInTheDocument();
     expect(screen.getByLabelText('shared.fileViewer.mermaid.copySvg')).toBeInTheDocument();
+  });
+
+  it('allows panning the Mermaid diagram after zooming', async () => {
+    render(
+      <SharedMermaidViewer
+        content="graph TD; A-->B;"
+        fileName="diagram.mmd"
+      />,
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector('.mermaid-diagram svg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.mermaid.zoomIn'));
+
+    const panSurface = screen.getByTestId('mermaid-pan-surface');
+    firePointerEvent(panSurface, 'pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+    firePointerEvent(panSurface, 'pointermove', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 160,
+      clientY: 130,
+    });
+    firePointerEvent(panSurface, 'pointerup', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 160,
+      clientY: 130,
+    });
+
+    expect(panSurface).toHaveStyle({ transform: 'translate(60px, 30px) scale(1.1)' });
   });
 
   it('defers Mermaid loading until diagram content is rendered', () => {
@@ -203,7 +286,9 @@ describe('shared specialized file viewers', () => {
     await waitFor(() => {
       expect(adapter.getDrawioViewerUrl).toHaveBeenCalledWith('/docs/diagram.drawio', 'edit');
     });
-    expect(document.querySelector('iframe')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.querySelector('iframe')).toBeInTheDocument();
+    });
   });
 
   it('renders Draw.io service-unavailable XML fallback without the code editor provider path', async () => {

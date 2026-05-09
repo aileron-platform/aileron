@@ -155,7 +155,7 @@ const marketplace = {
       manifest: 'Manifest',
       resources: 'Resources',
       targetPreview: 'Target preview',
-      files: 'Files',
+      files: 'View files',
     },
     featureEmpty: 'No content in this section.',
     sidebar: {
@@ -446,12 +446,12 @@ const marketplace = {
   },
   export: {
     title: 'Export package',
-    description: 'Create a provider-native .zip archive rooted at the package directory.',
+    description: 'Create a provider-native .zip archive that can be imported by Marketplace.',
     fields: {
       archive: 'Archive',
       root: 'Archive root',
     },
-    compatibilityNotice: 'First-version Marketplace does not guarantee that exported archives can be imported directly.',
+    compatibilityNotice: 'The archive includes the provider metadata required for Marketplace import scanning.',
     actions: {
       export: 'Export .zip',
     },

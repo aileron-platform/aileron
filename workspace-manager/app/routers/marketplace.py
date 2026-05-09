@@ -414,6 +414,7 @@ def export_marketplace_package(
     provider: str,
     package_id: str,
     request: Request,
+    revision: str = Query(...),
     current_user_id: str = Depends(get_marketplace_user_id),
     service: MarketplaceService = Depends(get_marketplace_service),
 ) -> Response:
@@ -421,7 +422,7 @@ def export_marketplace_package(
     _require_marketplace_permission(request, MARKETPLACE_VIEW_PERMISSION)
     _validate_provider(provider, request)
     try:
-        archive = service.export_package(current_user_id, provider, package_id)  # type: ignore[arg-type]
+        archive = service.export_package(current_user_id, provider, package_id, revision)  # type: ignore[arg-type]
     except MarketplacePathError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -430,6 +431,11 @@ def export_marketplace_package(
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=_translate_error(request, str(exc)),
+        ) from exc
+    except MarketplaceConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
             detail=_translate_error(request, str(exc)),
         ) from exc
     except MarketplaceValidationError as exc:

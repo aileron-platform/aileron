@@ -69,6 +69,7 @@ const createAdapter = (
 describe('useFileTreeManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
   });
 
   it('ignores a stale tree response after the active workspace changes', async () => {
@@ -216,6 +217,79 @@ describe('useFileTreeManager', () => {
 
     await waitFor(() => {
       expect(getTreeMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('persists expanded directory paths per adapter key', async () => {
+    const adapterKey = 'workspace:ws-a:hide-hidden';
+    const srcNode: FileTreeNode = {
+      id: 'src',
+      name: 'src',
+      path: '/src',
+      type: 'directory',
+      hasChildren: false,
+    };
+
+    const { result } = renderHook(() =>
+      useFileTreeManager({
+        adapter: createAdapter(vi.fn().mockResolvedValue([srcNode])),
+        adapterKey,
+        autoLoad: false,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadTree();
+    });
+
+    await act(async () => {
+      await result.current.toggleDirectory(srcNode);
+    });
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(`fileTree.expandedPaths.v1:${encodeURIComponent(adapterKey)}`))
+        .toBe(JSON.stringify(['/src']));
+    });
+  });
+
+  it('restores persisted expanded directories and lazy-loads their children', async () => {
+    const adapterKey = 'workspace:ws-a:hide-hidden';
+    window.localStorage.setItem(
+      `fileTree.expandedPaths.v1:${encodeURIComponent(adapterKey)}`,
+      JSON.stringify(['/src']),
+    );
+
+    const getChildrenMock = vi.fn().mockResolvedValue([
+      { id: 'src/index.ts', name: 'index.ts', path: '/src/index.ts', type: 'file' },
+    ]);
+
+    const { result } = renderHook(() =>
+      useFileTreeManager({
+        adapter: createAdapter(
+          vi.fn().mockResolvedValue([
+            {
+              id: 'src',
+              name: 'src',
+              path: '/src',
+              type: 'directory',
+              hasChildren: true,
+            },
+          ]),
+          { getChildren: getChildrenMock },
+        ),
+        adapterKey,
+        autoLoad: false,
+      })
+    );
+
+    await act(async () => {
+      await result.current.loadTree();
+    });
+
+    await waitFor(() => {
+      expect(getChildrenMock).toHaveBeenCalledWith('/src');
+      expect(result.current.state.expandedIds.has('/src')).toBe(true);
+      expect(result.current.state.nodes[0]?.children?.map((node) => node.path)).toEqual(['/src/index.ts']);
     });
   });
 });

@@ -36,6 +36,7 @@ import { OAuthService } from '@/shared/services/oauthService';
 import { OAuthApiService } from '@/shared/services/oauthApiService';
 import { GeminiOAuthService } from '@/shared/services/geminiOauthService';
 import { GeminiOAuthApiService } from '@/shared/services/geminiOauthApiService';
+import type { SyncWorkspaceResult } from '@/shared/services/syncApiService';
 import type {
   UserSettings,
   UserSettingsGeneral,
@@ -67,6 +68,12 @@ const normalizeCodexSettings = (
   lastSyncedAt: codex?.lastSyncedAt ?? current?.lastSyncedAt,
   lastSyncError: codex?.lastSyncError ?? current?.lastSyncError,
 });
+
+const hasSuccessfulSyncDetail = (workspace: SyncWorkspaceResult): boolean =>
+  Object.values(workspace.details ?? {}).some((detail) => detail?.success);
+
+export const getPartialSyncWorkspaceCount = (workspaces: SyncWorkspaceResult[]): number =>
+  workspaces.filter((workspace) => !workspace.success && hasSuccessfulSyncDetail(workspace)).length;
 
 export const SettingsPage: React.FC = () => {
   const { toast } = useToast();
@@ -262,20 +269,7 @@ export const SettingsPage: React.FC = () => {
     try {
       const SyncApiService = (await import('@/shared/services/syncApiService')).default;
       const result = await SyncApiService.syncSettingsToWorkspaces(userId);
-      const partialWorkspaceCount = result.workspaces.filter((workspace) => {
-        if (!workspace.details) {
-          return false;
-        }
-
-        const statusList = [
-          workspace.details.ssh.success,
-          workspace.details.claude_code.success,
-          workspace.details.codex?.success ?? true,
-          workspace.details.git.success,
-        ];
-
-        return statusList.some(Boolean) && statusList.some((status) => !status);
-      }).length;
+      const partialWorkspaceCount = getPartialSyncWorkspaceCount(result.workspaces);
       const failedWorkspaceCount = result.workspaces.filter((workspace) => !workspace.success).length;
 
       if (result.success) {

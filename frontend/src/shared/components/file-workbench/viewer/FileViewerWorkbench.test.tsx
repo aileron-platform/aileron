@@ -39,7 +39,18 @@ vi.mock('@monaco-editor/react', () => ({
 }));
 
 vi.mock('./SharedMarkdownViewer', () => ({
-  SharedMarkdownViewer: ({ content }: { content: string }) => <div>markdown:{content}</div>,
+  SharedMarkdownViewer: ({
+    content,
+    onOpenPath,
+  }: {
+    content: string;
+    onOpenPath?: (path: string) => void;
+  }) => (
+    <div>
+      markdown:{content}
+      <button type="button" onClick={() => onOpenPath?.('/docs/linked.md')}>open-linked-markdown</button>
+    </div>
+  ),
 }));
 
 vi.mock('./SharedMermaidViewer', () => ({
@@ -142,6 +153,15 @@ describe('FileViewerWorkbench', () => {
     expect(screen.getByLabelText('mock-code-editor')).toHaveValue('const b = 2;');
   });
 
+  it('passes workspace Markdown link opens to the file workbench owner', () => {
+    const onOpenPath = vi.fn();
+    renderWorkbench({ onOpenPath });
+
+    fireEvent.click(screen.getByRole('button', { name: 'open-linked-markdown' }));
+
+    expect(onOpenPath).toHaveBeenCalledWith('/docs/linked.md');
+  });
+
   it('saves all modified tabs through the adapter', async () => {
     const { adapter, onTabsChange } = renderWorkbench({ activeTabId: '/docs/b.ts' });
 
@@ -156,6 +176,30 @@ describe('FileViewerWorkbench', () => {
       { ...tabs[1], originalContent: 'const b = 2;', isModified: false },
       tabs[2],
     ]);
+  });
+
+  it('shows save and expand icon actions before the action menu', async () => {
+    const onExpandedChange = vi.fn();
+    const { adapter, onTabsChange } = renderWorkbench({
+      activeTabId: '/docs/b.ts',
+      isExpanded: false,
+      onExpandedChange,
+    });
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.save'));
+
+    await waitFor(() => {
+      expect(adapter.saveFile).toHaveBeenCalledWith('/docs/b.ts', 'const b = 2;');
+    });
+    expect(onTabsChange).toHaveBeenCalledWith([
+      tabs[0],
+      { ...tabs[1], originalContent: 'const b = 2;', isModified: false },
+      tabs[2],
+    ]);
+
+    fireEvent.click(screen.getByLabelText('shared.fileViewer.toolbar.expand'));
+
+    expect(onExpandedChange).toHaveBeenCalledWith(true);
   });
 
   it('omits mutation toolbar actions in read-only mode', () => {

@@ -110,6 +110,7 @@ export interface UseFileTreeStateReturn {
   collapseAll: () => void;
   isNodeExpanded: (path: string) => boolean;
   syncExpandedWithLoaded: (loadedPaths: Set<string>) => void;
+  replaceExpandedIds: (paths: Iterable<string>) => void;
 
 
   setSearchQuery: (query: string) => void;
@@ -378,6 +379,10 @@ export function useFileTreeState(
     });
   }, []);
 
+  const replaceExpandedIds = useCallback((paths: Iterable<string>) => {
+    setExpandedIds(new Set(paths));
+  }, []);
+
 
   const clearSearch = useCallback(() => {
     setSearchQuery('');
@@ -435,6 +440,7 @@ export function useFileTreeState(
     collapseAll,
     isNodeExpanded,
     syncExpandedWithLoaded,
+    replaceExpandedIds,
 
 
     setSearchQuery,

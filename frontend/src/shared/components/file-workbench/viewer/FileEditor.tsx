@@ -1,17 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createLogger } from '@/shared/services/logger';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, Download } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
-import { Badge } from '@/shared/components/ui/badge';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { Edit, Save, X, Copy, Download, Loader2 } from 'lucide-react';
-import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
-import MarkdownEditor from '@/shared/components/markdown/MarkdownEditor';
-import type { OnChange, OnMount } from '@monaco-editor/react';
-import { useApp } from '@/app/providers/AppProvider';
-import { getLanguageFromFileName } from '@/shared/utils/languageUtils';
-import { disableMonacoDiagnostics } from '@/shared/components/monaco/disableMonacoDiagnostics';
-import { LocalizedMonacoEditor as Editor } from '@/shared/components/monaco/LocalizedMonacoEditor';
+import { createLogger } from '@/shared/services/logger';
+import { getFileIcon } from '@/shared/utils/fileIconUtils';
+import { cn } from '@/shared/utils/cn';
+import { FileFocusToolbar } from './FileFocusToolbar';
+import { FileViewerWorkbench } from './FileViewerWorkbench';
+import type { FileViewerWorkbenchAdapter, FileViewerWorkbenchTab } from './types';
 
 const logger = createLogger('FileEditor');
 
@@ -28,7 +25,29 @@ export interface FileEditorProps {
   className?: string;
 }
 
-const isMarkdownFile = (filename: string) => filename.toLowerCase().endsWith('.md');
+const buildSingleFileTab = ({
+  fileName,
+  filePath,
+  content,
+  originalContent,
+  isModified,
+  isLoading,
+}: {
+  fileName: string;
+  filePath: string;
+  content: string;
+  originalContent: string;
+  isModified: boolean;
+  isLoading: boolean;
+}): FileViewerWorkbenchTab => ({
+  id: filePath,
+  path: filePath,
+  name: fileName,
+  content,
+  originalContent,
+  isModified,
+  isLoading,
+});
 
 export const FileEditor: React.FC<FileEditorProps> = ({
   fileName,
@@ -40,72 +59,32 @@ export const FileEditor: React.FC<FileEditorProps> = ({
   onContentChange,
   isLoading = false,
   isSaving = false,
-  className = '',
+  className,
 }) => {
   const { toast } = useToast();
   const { t } = useI18n();
-  const { state } = useApp();
-
-  const [isEditing, setIsEditing] = useState(false);
   const [content, setContent] = useState(fileContent);
   const [originalContent, setOriginalContent] = useState(fileContent);
-  const prevFilePathRef = useRef(filePath);
-  const prevFileContentRef = useRef(fileContent);
-  const editorRef = useRef<any>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const previousFilePathRef = useRef(filePath);
 
   useEffect(() => {
-    const filePathChanged = prevFilePathRef.current !== filePath;
-    const fileContentChanged = prevFileContentRef.current !== fileContent;
-
+    const filePathChanged = previousFilePathRef.current !== filePath;
     if (filePathChanged) {
+      previousFilePathRef.current = filePath;
       setContent(fileContent);
       setOriginalContent(fileContent);
-      setIsEditing(false);
-      prevFilePathRef.current = filePath;
-      prevFileContentRef.current = fileContent;
-    } else if (fileContentChanged && !isEditing) {
+      setIsExpanded(false);
+      return;
+    }
+
+    if (content === originalContent && fileContent !== originalContent) {
       setContent(fileContent);
       setOriginalContent(fileContent);
-      prevFileContentRef.current = fileContent;
     }
-  }, [filePath, fileContent, isEditing]);
+  }, [content, fileContent, filePath, originalContent]);
 
-  const currentTheme = useMemo(() => {
-    return state.ui.currentTheme === 'dark' ? 'vs-dark' : 'vs';
-  }, [state.ui.currentTheme]);
-
-  const handleEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleCancel = () => {
-    setContent(originalContent);
-    setIsEditing(false);
-    onContentChange?.(originalContent);
-  };
-
-  const handleSave = async () => {
-    if (!onSave) return;
-
-    try {
-      await onSave(content);
-      setOriginalContent(content);
-      setIsEditing(false);
-      toast({
-        title: t('common.fileEditor.save.success'),
-        description: t('common.fileEditor.save.successDesc', { name: fileName }),
-      });
-    } catch (error) {
-      logger.error('Failed to save file', { error });
-      toast({
-        title: t('common.fileEditor.save.error'),
-        description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(content);
       toast({
@@ -119,151 +98,133 @@ export const FileEditor: React.FC<FileEditorProps> = ({
         variant: 'destructive',
       });
     }
-  };
+  }, [content, t, toast]);
 
-  const handleDownload = () => {
+  const handleDownload = useCallback(() => {
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
 
     toast({
       title: t('common.fileEditor.download.success'),
       description: t('common.fileEditor.download.successDesc', { name: fileName }),
     });
-  };
+  }, [content, fileName, t, toast]);
 
-  const handleEditorChange: OnChange = (value) => {
-    try {
-      const newContent = value || '';
-      setContent(newContent);
-      onContentChange?.(newContent);
-    } catch (error) {
-      logger.error('Failed to handle editor content change', { error });
+  const adapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: async () => content,
+    saveFile: onSave
+      ? async (_path, nextContent) => {
+        try {
+          await onSave(nextContent);
+          setOriginalContent(nextContent);
+          toast({
+            title: t('common.fileEditor.save.success'),
+            description: t('common.fileEditor.save.successDesc', { name: fileName }),
+          });
+        } catch (error) {
+          logger.error('Failed to save file', { error });
+          toast({
+            title: t('common.fileEditor.save.error'),
+            description: error instanceof Error ? error.message : t('common.fileEditor.unknownError'),
+            variant: 'destructive',
+          });
+          throw error;
+        }
+      }
+      : undefined,
+  }), [content, fileName, onSave, t, toast]);
+
+  const tab = useMemo(() => buildSingleFileTab({
+    fileName,
+    filePath,
+    content,
+    originalContent,
+    isModified: content !== originalContent,
+    isLoading,
+  }), [content, fileName, filePath, isLoading, originalContent]);
+
+  const handleTabsChange = useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
+    const nextTab = nextTabs[0];
+    if (!nextTab) {
+      return;
     }
-  };
 
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
-    try {
-      editorRef.current = editor;
-      disableMonacoDiagnostics(monaco);
-    } catch (error) {
-      logger.error('Failed to initialize Monaco editor', { error });
-    }
-  };
+    setContent(nextTab.content);
+    setOriginalContent(nextTab.originalContent);
+    onContentChange?.(nextTab.content);
+  }, [onContentChange]);
 
-  const fileExtension = fileName.split('.').pop() || '';
+  const headerActions = (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-full w-8 rounded-none text-muted-foreground hover:text-foreground"
+        onClick={() => void handleCopy()}
+        title={t('common.fileEditor.actions.copy')}
+        aria-label={t('common.fileEditor.actions.copy')}
+        disabled={isLoading}
+      >
+        <Copy className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-full w-8 rounded-none text-muted-foreground hover:text-foreground"
+        onClick={handleDownload}
+        title={t('common.fileEditor.actions.download')}
+        aria-label={t('common.fileEditor.actions.download')}
+        disabled={isLoading}
+      >
+        <Download className="h-3.5 w-3.5" />
+      </Button>
+    </>
+  );
 
   return (
-    <div className={`flex h-full flex-col ${className}`}>
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
-          {fileIcon}
-          <span className="truncate font-medium text-sm">{fileName}</span>
-          <Badge variant="secondary" className="text-[11px]">
-            {fileExtension}
-          </Badge>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {isEditing ? (
-            <>
-              <Button
-                size="sm"
-                onClick={handleSave}
-                disabled={isSaving || content === originalContent}
-              >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-1" />
-                )}
-                {t('common.fileEditor.actions.save')}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCancel}
-                disabled={isSaving}
-              >
-                <X className="h-4 w-4 mr-1" />
-                {t('common.fileEditor.actions.cancel')}
-              </Button>
-            </>
-          ) : (
-            <>
-              {!readOnly && (
-                <Button size="sm" variant="outline" onClick={handleEdit}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  {t('common.fileEditor.actions.edit')}
-                </Button>
-              )}
-              <Button size="sm" variant="outline" onClick={handleCopy}>
-                <Copy className="h-4 w-4 mr-1" />
-                {t('common.fileEditor.actions.copy')}
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleDownload}>
-                <Download className="h-4 w-4 mr-1" />
-                {t('common.fileEditor.actions.download')}
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : isMarkdownFile(fileName) ? (
-          isEditing ? (
-            <MarkdownEditor
-              value={content}
-              onChange={(newContent) => {
-                setContent(newContent);
-                onContentChange?.(newContent);
-              }}
-              placeholder={t('common.fileEditor.markdown.placeholder')}
-              className="h-full border-0 rounded-none"
-            />
-          ) : (
-            <MarkdownContent content={content} variant="detailed" className="p-4" />
-          )
-        ) : (
-          <div className="h-full relative">
-            <Editor
-              height="100%"
-              language={getLanguageFromFileName(fileName)}
-              value={content}
-              theme={currentTheme}
-              onMount={handleEditorDidMount}
-              onChange={handleEditorChange}
-              options={{
-                readOnly: !isEditing,
-                minimap: { enabled: false },
-                fontSize: 14,
-                wordWrap: 'on',
-                automaticLayout: true,
-                scrollBeyondLastLine: false,
-                fontFamily: 'var(--font-mono)',
-              }}
-            />
-            {(!content || content.length === 0) && !isEditing && (
-              <div className="absolute inset-0 flex items-start justify-center pt-6 pointer-events-none">
-                <div className="p-6 text-sm text-muted-foreground bg-background/80 rounded-md">
-                  {t('common.fileEditor.emptyFile')}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+    <FileViewerWorkbench
+      tabs={[tab]}
+      activeTabId={filePath}
+      adapter={adapter}
+      capabilities={{
+        canEdit: !isSaving,
+        canSave: Boolean(onSave) && !isSaving,
+        canCopyPath: false,
+        canRevealInTree: false,
+        canCloseTabs: false,
+      }}
+      className={cn('h-full', className)}
+      headerActions={headerActions}
+      readOnly={readOnly}
+      isExpanded={isExpanded}
+      onExpandedChange={setIsExpanded}
+      hideChromeWhenExpanded
+      renderFocusToolbar={({ actions, icon, metadata, subtitle, title }) => (
+        <FileFocusToolbar
+          icon={icon ?? fileIcon ?? getFileIcon(fileName)}
+          title={title}
+          subtitle={subtitle}
+          metadata={metadata}
+          actions={actions}
+          exitLabel={t('shared.fileViewer.toolbar.collapse')}
+          onExit={() => setIsExpanded(false)}
+        />
+      )}
+      onTabsChange={handleTabsChange}
+      onActiveTabChange={() => undefined}
+    />
   );
 };
+
+FileEditor.displayName = 'FileEditor';
+
+export default FileEditor;

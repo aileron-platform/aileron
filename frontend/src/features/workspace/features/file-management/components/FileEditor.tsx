@@ -24,6 +24,7 @@ export const FileEditor: React.FC = () => {
     closeTab,
     switchToTab,
     closeAllTabs,
+    openFileInTab,
     fileTreeActions: actions,
     fileEditor,
     toggleFileManagementEditorExpanded,
@@ -34,6 +35,7 @@ export const FileEditor: React.FC = () => {
 
   const activeTab = workspace.openTabs.find(tab => tab.id === workspace.activeTabId) ?? null;
   const isFocusMode = layout.fileManagementFocusMode ?? layout.fileManagementEditorExpanded;
+  const useViewportExpansion = workspace.tabScope === 'openspec';
 
   const workbenchTabs = useMemo(
     () => workspace.openTabs.map((tab): FileViewerWorkbenchTab => toFileWorkbenchTab({
@@ -235,7 +237,7 @@ export const FileEditor: React.FC = () => {
       }}
       isExpanded={isFocusMode}
       onExpandedChange={toggleFileManagementEditorExpanded}
-      useViewportExpansion={false}
+      useViewportExpansion={useViewportExpansion}
       hideChromeWhenExpanded
       renderFocusToolbar={({ actions: focusActions, icon, metadata, subtitle, title }) => (
         <FileFocusToolbar
@@ -250,6 +252,7 @@ export const FileEditor: React.FC = () => {
       )}
       onTabsChange={handleTabsChange}
       onActiveTabChange={handleActiveTabChange}
+      onOpenPath={openFileInTab}
     />
   );
 };

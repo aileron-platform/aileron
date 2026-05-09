@@ -137,7 +137,7 @@ class TestSyncService:
                 mock_workspace, mock_settings
             )
 
-            assert result["ssh"]["success"] is False
+            assert result["ssh"]["success"] is True
             assert "No SSH keys need to sync" in result["ssh"]["message"]
             assert result["claude_code"]["success"] is True
             assert result["codex"]["success"] is True
@@ -166,7 +166,7 @@ class TestSyncService:
             assert result["ssh"]["success"] is True
             assert result["claude_code"]["success"] is True
             assert result["codex"]["success"] is True
-            assert result["git"]["success"] is False
+            assert result["git"]["success"] is True
             assert "No Git settings need to sync" in result["git"]["message"]
 
     @pytest.mark.asyncio
@@ -328,6 +328,39 @@ class TestSyncService:
             assert len(result["workspaces"]) == 1
             assert result["workspaces"][0]["workspace_id"] == "workspace_123"
             assert result["workspaces"][0]["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_sync_to_all_workspaces_treats_missing_optional_settings_as_success(
+        self, mock_workspace, mock_settings, httpx_response_factory
+    ):
+        """Test sync succeeds when optional SSH and Git settings are not configured"""
+        mock_settings.ssh_private_key = None
+        mock_settings.ssh_public_key = None
+        mock_settings.git_user_name = None
+        mock_settings.git_user_email = None
+        mock_db = Mock()
+        mock_db.execute = Mock(
+            return_value=Mock(
+                scalars=Mock(return_value=Mock(all=Mock(return_value=[mock_workspace])))
+            )
+        )
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_response = httpx_response_factory()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client_class.return_value = mock_client
+
+            result = await SyncService.sync_to_all_workspaces(
+                "user_123", mock_settings, mock_db
+            )
+
+            assert result["success"] is True
+            assert result["workspaces"][0]["success"] is True
+            assert result["workspaces"][0]["details"]["ssh"]["success"] is True
+            assert result["workspaces"][0]["details"]["git"]["success"] is True
 
     @pytest.mark.asyncio
     async def test_sync_to_all_workspaces_partial_failure(

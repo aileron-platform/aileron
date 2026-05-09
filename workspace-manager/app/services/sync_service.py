@@ -82,6 +82,7 @@ class SyncService:
                         "sync.ssh.failed", language=language
                     )
             else:
+                results["ssh"]["success"] = True
                 results["ssh"]["message"] = "No SSH keys need to sync"
 
             # 2. Sync Claude Code settings
@@ -320,6 +321,7 @@ class SyncService:
                         "sync.git.failed", language=language
                     )
             else:
+                results["git"]["success"] = True
                 results["git"]["message"] = "No Git settings need to sync"
 
         return results
@@ -367,13 +369,7 @@ class SyncService:
                     {
                         "workspace_id": workspace.id,
                         "workspace_name": workspace.name,
-                        "success": not any(
-                            not r["success"]
-                            and "no" not in r["message"]
-                            and "not have" not in r["message"]
-                            and "missing" not in r["message"]
-                            for r in sync_result.values()
-                        ),
+                        "success": all(r["success"] for r in sync_result.values()),
                         "details": sync_result,
                     }
                 )

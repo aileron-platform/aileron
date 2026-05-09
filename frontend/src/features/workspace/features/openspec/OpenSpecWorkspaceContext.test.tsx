@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { renderHook, waitFor } from '@/__tests__/utils/render';
+import { renderHook, waitFor, act } from '@/__tests__/utils/render';
 import { OpenSpecWorkspaceProvider, useOpenSpecWorkspace } from './OpenSpecWorkspaceContext';
 
 const mocks = vi.hoisted(() => {
@@ -152,5 +152,25 @@ describe('OpenSpecWorkspaceContext', () => {
     await waitFor(() => {
       expect(mocks.getWorkspaceStateMock).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('keeps the loaded OpenSpec navigation state when switching documents', async () => {
+    mocks.workspaceState.currentFeature = 'openspec';
+    mocks.workspaceState.openspec.selectedPath = '/openspec/changes/demo/proposal.md';
+
+    const { rerender } = renderHook(() => useOpenSpecWorkspace(), { wrapper });
+
+    await waitFor(() => {
+      expect(mocks.getWorkspaceStateMock).toHaveBeenCalledTimes(1);
+    });
+
+    mocks.workspaceState.openspec.selectedPath = '/openspec/changes/demo/design.md';
+    rerender();
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mocks.getWorkspaceStateMock).toHaveBeenCalledTimes(1);
   });
 });

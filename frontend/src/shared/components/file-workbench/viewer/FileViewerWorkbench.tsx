@@ -69,6 +69,7 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   renderFocusToolbar,
   isPathWritable,
   renderReadOnlyBadge,
+  onOpenPath,
   onTabsChange,
   onActiveTabChange,
 }) => {
@@ -358,11 +359,13 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
         <SharedMarkdownViewer
           content={activeTab.content}
           fileName={activeTab.name}
+          filePath={activeTab.path}
           readOnly={!canMutate}
           isFocusMode={effectiveExpanded}
           renderFocusToolbar={renderSharedFocusToolbar}
           onReload={() => adapter.readFile(activeTab.path)}
           onContentChange={setActiveContent}
+          onOpenPath={onOpenPath}
         />
       );
     }
@@ -426,6 +429,28 @@ export const FileViewerWorkbench: React.FC<FileViewerWorkbenchProps> = ({
   const renderWorkbenchToolbar = () => (
     <div className="flex h-full items-center border-l border-border">
       {headerActions}
+      {canSave && activeTab ? (
+        <button
+          type="button"
+          className="flex h-full items-center justify-center px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => void saveTab(activeTab)}
+          title={t('shared.fileViewer.toolbar.save')}
+          aria-label={t('shared.fileViewer.toolbar.save')}
+          disabled={!activeTab.isModified}
+        >
+          <Save className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="flex h-full items-center justify-center px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        onClick={toggleExpanded}
+        title={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
+        aria-label={effectiveExpanded ? t('shared.fileViewer.toolbar.collapse') : t('shared.fileViewer.toolbar.expand')}
+        disabled={!activeTab}
+      >
+        {effectiveExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+      </button>
       <button
         ref={moreButtonRef}
         type="button"

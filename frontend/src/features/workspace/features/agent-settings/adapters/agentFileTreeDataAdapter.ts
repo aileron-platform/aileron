@@ -1,4 +1,5 @@
 import { ApiClient, apiClient } from '@/shared/api/apiClient';
+import { sortTreeNodes } from '@/shared/components/file-workbench';
 import type {
   BatchDeleteRequest,
   BatchDeleteResponse,
@@ -364,15 +365,7 @@ const buildTreeFromCodexSummaries = (summaries: CodexFileSummary[]): FileTreeNod
     }
   }
 
-  const sortNodes = (nodes: FileTreeNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    nodes.forEach((node) => node.children && sortNodes(node.children));
-  };
-  sortNodes(roots);
-  return roots;
+  return sortTreeNodes(roots);
 };
 
 export const createAgentFileTreeDataAdapter = (

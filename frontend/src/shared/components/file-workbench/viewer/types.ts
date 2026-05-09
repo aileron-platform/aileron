@@ -60,6 +60,7 @@ export interface FileViewerWorkbenchProps {
   renderFocusToolbar?: (params: FileViewerWorkbenchFocusToolbarParams) => ReactNode;
   isPathWritable?: (path: string) => boolean;
   renderReadOnlyBadge?: (tab: FileViewerWorkbenchTab) => ReactNode;
+  onOpenPath?: (path: string) => void;
   onTabsChange: (tabs: FileViewerWorkbenchTab[]) => void;
   onActiveTabChange: (tabId: string | null) => void;
 }

@@ -15,6 +15,8 @@ const loadMermaid = async (): Promise<MermaidApi> => {
   return mermaidPromise;
 };
 
+const getPointerCoordinate = (value: number): number => (Number.isFinite(value) ? value : 0);
+
 interface SharedMermaidViewerProps {
   content: string;
   fileName: string;
@@ -42,7 +44,16 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   const [error, setError] = useState('');
   const [isRendering, setIsRendering] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
   const [copied, setCopied] = useState(false);
+  const panStartRef = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!content.trim()) {
@@ -72,6 +83,8 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
         const { svg: renderedSvg } = await mermaid.render(id, content);
         if (isMounted) {
           setSvg(renderedSvg);
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
         }
       } catch (renderError) {
         logger.error('Mermaid rendering error', { error: renderError });
@@ -94,8 +107,53 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
   }, [content]);
 
   const handleZoomIn = () => setZoom((current) => Math.min(current + 0.1, 3));
-  const handleZoomOut = () => setZoom((current) => Math.max(current - 0.1, 0.3));
-  const handleResetZoom = () => setZoom(1);
+  const handleZoomOut = () => {
+    setZoom((current) => {
+      const nextZoom = Math.max(current - 0.1, 0.3);
+      if (nextZoom <= 1) {
+        setPan({ x: 0, y: 0 });
+      }
+      return nextZoom;
+    });
+  };
+  const handleResetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.pointerType === 'mouse' && event.button !== 0) || !svg) return;
+    panStartRef.current = {
+      pointerId: event.pointerId,
+      clientX: getPointerCoordinate(event.clientX),
+      clientY: getPointerCoordinate(event.clientY),
+      panX: pan.x,
+      panY: pan.y,
+    };
+    setIsPanning(true);
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePanMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const panStart = panStartRef.current;
+    if (!panStart || panStart.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    setPan({
+      x: panStart.panX + getPointerCoordinate(event.clientX) - panStart.clientX,
+      y: panStart.panY + getPointerCoordinate(event.clientY) - panStart.clientY,
+    });
+  };
+
+  const handlePanEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const panStart = panStartRef.current;
+    if (!panStart || panStart.pointerId !== event.pointerId) return;
+    panStartRef.current = null;
+    setIsPanning(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   const handleDownload = () => {
     if (!svg) return;
@@ -206,11 +264,16 @@ export const SharedMermaidViewer: React.FC<SharedMermaidViewerProps> = ({
           </div>
         ) : svg ? (
           <div
-            className="flex min-h-full items-center justify-center p-8"
+            data-testid="mermaid-pan-surface"
+            className="flex min-h-full cursor-grab touch-none select-none items-center justify-center p-8 active:cursor-grabbing"
+            onPointerDown={handlePanStart}
+            onPointerMove={handlePanMove}
+            onPointerUp={handlePanEnd}
+            onPointerCancel={handlePanEnd}
             style={{
-              transform: `scale(${zoom})`,
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: 'center',
-              transition: 'transform 0.2s ease-out',
+              transition: isPanning ? 'none' : 'transform 0.2s ease-out',
             }}
           >
             <div dangerouslySetInnerHTML={{ __html: svg }} className="mermaid-diagram" />

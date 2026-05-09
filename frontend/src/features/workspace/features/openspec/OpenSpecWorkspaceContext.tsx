@@ -222,10 +222,15 @@ export const OpenSpecWorkspaceProvider: React.FC<{ children: React.ReactNode }> 
   }, [isAuthReady, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
   const ensureLoaded = useCallback(async (options?: { reloadActiveDocument?: boolean }) => {
-    if (fullStateLoadedRef.current || inFlightRefreshRef.current) {
-      await refresh(options);
+    if (fullStateLoadedRef.current) {
       return;
     }
+
+    if (inFlightRefreshRef.current) {
+      await inFlightRefreshRef.current;
+      return;
+    }
+
     await refresh(options);
   }, [refresh]);
 

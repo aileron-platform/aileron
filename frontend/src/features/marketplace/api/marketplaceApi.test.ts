@@ -115,7 +115,7 @@ describe('marketplaceApi backend boundary', () => {
       readmeMarkdown: undefined,
     });
     expect(apiClientMock.delete).toHaveBeenCalledWith('/marketplace/packages/codex/new-plugin?revision=rev-1');
-    expect(apiClientMock.getBlob).toHaveBeenCalledWith('/marketplace/packages/gemini/workspace-tools/export');
+    expect(apiClientMock.getBlob).toHaveBeenCalledWith('/marketplace/packages/gemini/workspace-tools/export?revision=rev-2');
   });
 
   it('uses backend install, preflight, activity, and settings endpoints', async () => {
