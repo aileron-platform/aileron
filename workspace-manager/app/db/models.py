@@ -343,6 +343,7 @@ class KnowledgeBase(Base):
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
+    template_id: Mapped[str] = mapped_column(String(64), nullable=False, default="general")
     owner_id: Mapped[str] = mapped_column(
         String(128), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
@@ -628,4 +629,3 @@ class JobExecution(Base):
             name="job_executions_status_check",
         ),
     )
-

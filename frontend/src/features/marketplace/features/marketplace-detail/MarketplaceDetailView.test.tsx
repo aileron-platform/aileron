@@ -31,8 +31,26 @@ vi.mock('@/shared/components/file-workbench/viewer-entry', () => ({
           readOnly={readOnly}
           value={activeTab.content}
         />
+        <div>{activeTab.content}</div>
       </div>
     ) : null;
+  },
+  useFileViewerTabs: () => {
+    const [tabs, setTabs] = React.useState<Array<{ id: string; path: string; name: string; content: string }>>([]);
+    const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
+    return {
+      tabs,
+      activeTabId,
+      openFile: (node: { path: string; name: string }, content: string) => {
+        const tab = { id: node.path, path: node.path, name: node.name, content };
+        setTabs(prev => (prev.some(item => item.id === tab.id) ? prev : [...prev, tab]));
+        setActiveTabId(tab.id);
+      },
+      renamePath: vi.fn(),
+      removePaths: vi.fn(),
+      applyTabsChange: setTabs,
+      setActiveTabId,
+    };
   },
 }));
 
@@ -198,6 +216,8 @@ describe('MarketplaceDetailView', () => {
 
     await screen.findByText('Review Tools');
     await user.click(screen.getByRole('button', { name: /marketplace\.features\.skills/ }));
+    await user.dblClick(screen.getByText('review'));
+    await user.click(screen.getByText('config.toml'));
 
     expect(screen.getByLabelText('config.toml')).toHaveValue('description = "Review config"');
     const refreshButton = screen.getByRole('button', { name: 'marketplace.detail.viewer.refresh' });
@@ -226,6 +246,7 @@ describe('MarketplaceDetailView', () => {
 
     expect(screen.getByText('marketplace.editor.fileManager.packageFiles.rootLabel')).toBeInTheDocument();
     expect(screen.getByText('codex/plugins/review-tools')).toBeInTheDocument();
+    await user.dblClick(screen.getByText('.codex-plugin'));
     expect(screen.getAllByText('plugin.json').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('check.sh')).not.toBeInTheDocument();
     expect(
@@ -236,7 +257,7 @@ describe('MarketplaceDetailView', () => {
     ).toBeTruthy();
 
     await user.click(screen.getByText('README.md'));
-    expect(screen.getByText('# Package README')).toBeInTheDocument();
+    expect(screen.getByLabelText('README.md')).toHaveValue('# Package README');
 
     await user.dblClick(screen.getByText('scripts'));
     await user.click(screen.getByText('check.sh'));
