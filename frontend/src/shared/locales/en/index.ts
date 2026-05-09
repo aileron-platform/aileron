@@ -11,6 +11,7 @@ import automation from './modules/automation';
 import marketplace from './modules/marketplace';
 import dialogs from './dialogs';
 import shared from './shared';
+import resource from './resource';
 
 export default {
   common,
@@ -22,4 +23,5 @@ export default {
   marketplace,
   dialogs,
   shared,
+  resource,
 };

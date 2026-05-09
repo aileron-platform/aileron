@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ChevronLeft, RefreshCw } from 'lucide-react';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
+import { ResourceSidebarShell } from '@/shared/components/resource-workflow';
 import { Button } from '@/shared/components/ui/button';
 import {
   FileCreateDialog,
@@ -8,8 +9,8 @@ import {
   FileRenameDialog,
   FileTreeContextMenu,
   FileTreePanel,
+  FileTreeSearchBar,
   FileTreeToolbar,
-  StandardFileTreeLayout,
   useFileTreeContextMenu,
   useFileTreeManager,
   type FileTreeDataAdapter,
@@ -313,74 +314,103 @@ export const SettingsFileTreeWorkflow = <TScope extends string = string>({
     </Button>
   );
 
+  const header = (
+    <div className={`h-10 px-3 border-b border-sidebar-border bg-card flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+      {!isCollapsed ? (
+        <div className="flex items-center gap-2">
+          <div className="flex-shrink-0">
+            <HeaderIcon className="h-5 w-5 text-sidebar-primary" />
+          </div>
+          <h2 className="text-sm font-medium text-sidebar-foreground">{labels.title}</h2>
+        </div>
+      ) : null}
+      <div className="flex flex-shrink-0 items-center gap-1">
+        {!isCollapsed ? headerActions : null}
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="p-0.5 hover:bg-sidebar-accent rounded text-sidebar-foreground transition"
+          aria-label={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
+          title={isCollapsed ? t('common.fileTree.sidebar.expand') : t('common.fileTree.sidebar.collapse')}
+        >
+          <ChevronLeft className={`w-3.5 h-3.5 transition-transform ${isCollapsed ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+    </div>
+  );
+
+  const search = !isCollapsed ? (
+    <FileTreeSearchBar
+      value={manager.state.searchQuery}
+      onChange={manager.state.setSearchQuery}
+      onClear={manager.state.clearSearch}
+      placeholder={labels.searchPlaceholder}
+      containerClassName="border-b border-sidebar-border bg-sidebar-accent/20"
+    />
+  ) : undefined;
+
+  const body = isCollapsed ? (
+    <CollapsedSidebarPlaceholder icon={HeaderIcon} className="text-primary" iconClassName="text-primary" />
+  ) : (
+    <>
+      <FileTreePanel
+        state={manager.state}
+        onNodeClick={handleSelectNode}
+        onNodeDoubleClick={(node) => {
+          if (node.type === 'file') {
+            selectFile(node);
+          }
+        }}
+        onContextMenu={(node, event) => manager.state.openContextMenu(event.clientX, event.clientY, node)}
+        onDragStart={handleDragStart}
+        onDragEnd={() => {
+          setDraggingPath(null);
+          setDragOverPath(null);
+        }}
+        onDragOver={(node, event) => {
+          if (isReadOnly || node.type !== 'directory') return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          setDragOverPath(node.path);
+        }}
+        onDragLeave={() => setDragOverPath(null)}
+        onDrop={handleDrop}
+        onCreateFile={handleCreateFile}
+        onCreateFolder={handleCreateFolder}
+        onUpload={handleUpload}
+        onPaste={(files) => {
+          void manager.operations.uploadFiles({ targetPath: '', files }).then(loadTree);
+        }}
+        onRefresh={handleRefresh}
+        onBatchDelete={(paths) => {
+          void manager.batchDeleteAndCloseTabs(paths, true).then(loadTree);
+        }}
+        enableSearch={false}
+        enableToolbar={false}
+        enableMultiSelectBar={!isReadOnly}
+        enableDragDrop={!isReadOnly}
+        draggingPath={draggingPath}
+        dragOverPath={dragOverPath}
+        className="flex-1"
+      />
+      <FileTreeContextMenu
+        contextMenu={manager.state.contextMenu}
+        items={contextMenuItems}
+        onClose={manager.state.closeContextMenu}
+      />
+    </>
+  );
+
   return (
-    <div className="flex h-full flex-col border-r border-sidebar-border">
-      <StandardFileTreeLayout
-        title={labels.title}
-        icon={<HeaderIcon className="h-5 w-5 text-sidebar-primary" />}
-        isCollapsed={isCollapsed}
-        onToggleCollapse={onToggleCollapse}
-        searchValue={manager.state.searchQuery}
-        onSearchChange={manager.state.setSearchQuery}
-        onSearchClear={manager.state.clearSearch}
-        searchPlaceholder={labels.searchPlaceholder}
-        showSearch={!isCollapsed}
-        headerActions={headerActions}
-        toolbarContent={toolbarContent}
-        showToolbar={!isCollapsed}
-      >
-        {isCollapsed ? (
-          <CollapsedSidebarPlaceholder icon={HeaderIcon} className="text-primary" iconClassName="text-primary" />
-        ) : (
-          <>
-            <FileTreePanel
-              state={manager.state}
-              onNodeClick={handleSelectNode}
-              onNodeDoubleClick={(node) => {
-                if (node.type === 'file') {
-                  selectFile(node);
-                }
-              }}
-              onContextMenu={(node, event) => manager.state.openContextMenu(event.clientX, event.clientY, node)}
-              onDragStart={handleDragStart}
-              onDragEnd={() => {
-                setDraggingPath(null);
-                setDragOverPath(null);
-              }}
-              onDragOver={(node, event) => {
-                if (isReadOnly || node.type !== 'directory') return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'move';
-                setDragOverPath(node.path);
-              }}
-              onDragLeave={() => setDragOverPath(null)}
-              onDrop={handleDrop}
-              onCreateFile={handleCreateFile}
-              onCreateFolder={handleCreateFolder}
-              onUpload={handleUpload}
-              onPaste={(files) => {
-                void manager.operations.uploadFiles({ targetPath: '', files }).then(loadTree);
-              }}
-              onRefresh={handleRefresh}
-              onBatchDelete={(paths) => {
-                void manager.batchDeleteAndCloseTabs(paths, true).then(loadTree);
-              }}
-              enableSearch={false}
-              enableToolbar={false}
-              enableMultiSelectBar={!isReadOnly}
-              enableDragDrop={!isReadOnly}
-              draggingPath={draggingPath}
-              dragOverPath={dragOverPath}
-              className="flex-1"
-            />
-            <FileTreeContextMenu
-              contextMenu={manager.state.contextMenu}
-              items={contextMenuItems}
-              onClose={manager.state.closeContextMenu}
-            />
-          </>
-        )}
-      </StandardFileTreeLayout>
+    <>
+      <ResourceSidebarShell
+        className="border-r border-sidebar-border bg-background"
+        header={header}
+        search={search}
+        scopeFilter={!isCollapsed ? toolbarContent : undefined}
+        body={body}
+        bodyClassName="flex flex-1 min-h-0 flex-col overflow-hidden bg-background"
+      />
 
       <FileCreateDialog
         open={dialogState?.type === 'create-file'}
@@ -407,7 +437,7 @@ export const SettingsFileTreeWorkflow = <TScope extends string = string>({
         fileName={dialogState?.type === 'delete' ? dialogState.node.name : ''}
         fileType={dialogState?.type === 'delete' ? dialogState.node.type : 'file'}
       />
-    </div>
+    </>
   );
 };
 

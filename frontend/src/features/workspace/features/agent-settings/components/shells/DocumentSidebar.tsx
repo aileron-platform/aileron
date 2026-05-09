@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ChevronLeft, FileText, Layers, RefreshCw, Search } from 'lucide-react';
 import { CollapsedSidebarPlaceholder } from '@/shared/components/layout/CollapsedSidebarPlaceholder';
+import { ResourceSidebarShell, useResourceSidebarController } from '@/shared/components/resource-workflow';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
@@ -75,11 +76,11 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
   labels,
 }: DocumentSidebarProps<TFilterValue>) => {
   const { layout, toggleSecondColumn } = useWorkspace();
-  const [search, setSearch] = useState('');
+  const sidebar = useResourceSidebarController();
   const isCollapsed = layout.secondColumnCollapsed;
 
   const filteredItems = useMemo(() => {
-    const normalizedQuery = search.trim().toLowerCase();
+    const normalizedQuery = sidebar.query.trim().toLowerCase();
     return items.filter((item) => {
       const matchesFilter = filterOptions.some((option) => option.value === filterValue)
         ? filterValue === filterOptions[0]?.value || item.source === filterValue
@@ -95,7 +96,7 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
         || item.badges?.some((badge) => badge.label.toLowerCase().includes(normalizedQuery))
         || false;
     });
-  }, [filterOptions, filterValue, items, search]);
+  }, [filterOptions, filterValue, items, sidebar.query]);
 
   useEffect(() => {
     const selectedExists = selectedId
@@ -106,8 +107,7 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
     }
   }, [filteredItems, onSelect, selectedId]);
 
-  return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+  const header = (
       <div className={`flex h-10 items-center border-b border-border bg-card px-3 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
         {!isCollapsed ? (
           <div className="flex min-w-0 items-center gap-1.5">
@@ -141,17 +141,15 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
           </button>
         </div>
       </div>
+  );
 
-      {isCollapsed ? (
-        <CollapsedSidebarPlaceholder icon={Icon} className="text-primary" iconClassName="text-primary" />
-      ) : (
-        <>
-          <div className="space-y-2 border-b border-border bg-muted/30 p-2">
+  const filterControls = !isCollapsed ? (
+    <div className="space-y-2 border-b border-border bg-muted/30 p-2">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                value={sidebar.query}
+                onChange={(event) => sidebar.setQuery(event.target.value)}
                 placeholder={labels.searchPlaceholder}
                 className="h-7 pl-8 text-xs"
               />
@@ -162,9 +160,13 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
               options={filterOptions}
               label={filterLabel}
             />
-          </div>
+    </div>
+  ) : undefined;
 
-          <div className="flex-1 space-y-1.5 overflow-y-auto p-2">
+  const body = isCollapsed ? (
+    <CollapsedSidebarPlaceholder icon={Icon} className="text-primary" iconClassName="text-primary" />
+  ) : (
+    <>
             {isLoading && items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
                 {labels.loading}
@@ -235,10 +237,17 @@ export const DocumentSidebar = <TFilterValue extends string = string>({
                 );
               })
             )}
-          </div>
-        </>
-      )}
-    </div>
+    </>
+  );
+
+  return (
+    <ResourceSidebarShell
+      className="bg-background text-foreground"
+      header={header}
+      scopeFilter={filterControls}
+      body={body}
+      bodyClassName={isCollapsed ? 'flex-1' : 'flex-1 space-y-1.5 overflow-y-auto p-2'}
+    />
   );
 };
 

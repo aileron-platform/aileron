@@ -1,8 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { FeatureHeader } from '@/shared/components/layout/FeatureHeader';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { ScrollText, Wand2 } from 'lucide-react';
-import { FileEditor } from '@/shared/components/file-workbench/viewer-entry';
+import {
+  FileViewerWorkbench,
+  type FileViewerWorkbenchAdapter,
+  type FileViewerWorkbenchTab,
+} from '@/shared/components/file-workbench/viewer-entry';
 import { useWorkspace } from '../../../providers/WorkspaceProvider';
 import { createAgentSettingsApi } from '../services/agentSettingsApi';
 import type { AgentFileCollection, AgentSelectedFile } from '../types';
@@ -15,121 +17,227 @@ export interface SkillsPageProps {
   apiPrefix?: string;
   i18nNamespace?: string;
   collectionType?: AgentFileCollection;
+  onSelect?: (file: AgentSelectedFile | null) => void;
 }
+
+const buildTabKey = (file: AgentSelectedFile): string => (
+  `${file.scope}|${file.pluginId ?? ''}|${file.path}`
+);
+
+const fileBasename = (path: string): string => path.split('/').pop() || path;
 
 const SkillsPage: React.FC<SkillsPageProps> = ({
   selectedFile,
   apiPrefix = 'claude-code',
   i18nNamespace = 'workspace.agentSettings.common',
   collectionType = 'skills',
+  onSelect,
 }) => {
   const { t } = useI18n();
   const { workspaceRuntime } = useWorkspace();
 
   const api = useMemo(() => createAgentSettingsApi(apiPrefix), [apiPrefix]);
 
-  const [fileContent, setFileContent] = useState('');
-  const [isLoadingFile, setIsLoadingFile] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [openFiles, setOpenFiles] = useState<AgentSelectedFile[]>([]);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [contents, setContents] = useState<Record<string, string>>({});
+  const [originalContents, setOriginalContents] = useState<Record<string, string>>({});
+  const [loadingKeys, setLoadingKeys] = useState<string[]>([]);
+  const [savingKeys, setSavingKeys] = useState<string[]>([]);
 
-  React.useEffect(() => {
-    if (!selectedFile) {
-      setFileContent('');
-      return;
-    }
-    setIsLoadingFile(true);
-    const loadFile = apiPrefix === 'codex'
-      ? api.getCodexFile(
-        workspaceRuntime.runtimeBaseUrl,
-        workspaceRuntime.workspaceId,
-        collectionType,
-        selectedFile.scope === 'plugin' ? 'plugin' : selectedFile.scope === 'user' ? 'user' : 'project',
-        selectedFile.path,
-        selectedFile.pluginId,
-      )
-      : api[collectionType === 'scripts' ? 'getScript' : 'getSkill'](
-        workspaceRuntime.runtimeBaseUrl,
-        workspaceRuntime.workspaceId,
-        selectedFile.path,
-        selectedFile.scope,
-      );
-    loadFile
-      .then((response) => {
-        setFileContent(response.content || '');
-      })
-      .catch((error) => {
-        logger.error('Failed to load file', { error });
-        setFileContent('');
-      })
-      .finally(() => {
-        setIsLoadingFile(false);
-      });
-  }, [api, apiPrefix, collectionType, selectedFile, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+  const openFilesRef = useRef(openFiles);
+  useEffect(() => {
+    openFilesRef.current = openFiles;
+  }, [openFiles]);
 
-  const handleSaveFile = async (content: string) => {
-    if (!selectedFile) return;
-    if (selectedFile.scope === 'plugin' || selectedFile.scope === 'extension') return;
+  const findFileByKey = useCallback((key: string): AgentSelectedFile | undefined => (
+    openFilesRef.current.find(file => buildTabKey(file) === key)
+  ), []);
 
-    setIsSaving(true);
+  const loadFileContent = useCallback(async (file: AgentSelectedFile) => {
+    const key = buildTabKey(file);
+    setLoadingKeys(prev => (prev.includes(key) ? prev : [...prev, key]));
     try {
-      if (apiPrefix === 'codex') {
-        await api.updateCodexFile(
+      const response = apiPrefix === 'codex'
+        ? await api.getCodexFile(
           workspaceRuntime.runtimeBaseUrl,
           workspaceRuntime.workspaceId,
           collectionType,
-          selectedFile.scope === 'user' ? 'user' : 'project',
-          selectedFile.path,
-          content,
-        );
-      } else {
-        await api[collectionType === 'scripts' ? 'updateScript' : 'updateSkill'](
+          file.scope === 'plugin' ? 'plugin' : file.scope === 'user' ? 'user' : 'project',
+          file.path,
+          file.pluginId,
+        )
+        : await api[collectionType === 'scripts' ? 'getScript' : 'getSkill'](
           workspaceRuntime.runtimeBaseUrl,
           workspaceRuntime.workspaceId,
-          selectedFile.path,
-          { content },
-          selectedFile.scope as 'project' | 'user'
+          file.path,
+          file.scope,
         );
-      }
+      const content = response.content || '';
+      setContents(prev => ({ ...prev, [key]: content }));
+      setOriginalContents(prev => ({ ...prev, [key]: content }));
     } catch (error) {
-      logger.error('Failed to save file', { error });
-      throw error;
+      logger.error('Failed to load file', { error });
+      setContents(prev => ({ ...prev, [key]: '' }));
+      setOriginalContents(prev => ({ ...prev, [key]: '' }));
     } finally {
-      setIsSaving(false);
+      setLoadingKeys(prev => prev.filter(item => item !== key));
     }
-  };
+  }, [api, apiPrefix, collectionType, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
 
-  const isPluginFile = selectedFile?.scope === 'plugin' || selectedFile?.scope === 'extension';
-  const fileName = selectedFile?.path.split('/').pop() || '';
-  const FileIcon = collectionType === 'scripts' ? ScrollText : Wand2;
+  const lastProcessedSelectionKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedFile) {
+      lastProcessedSelectionKey.current = null;
+      return;
+    }
+    const key = buildTabKey(selectedFile);
+    if (lastProcessedSelectionKey.current === key) return;
+    lastProcessedSelectionKey.current = key;
+    setOpenFiles(prev => {
+      if (prev.some(file => buildTabKey(file) === key)) {
+        return prev;
+      }
+      return [...prev, selectedFile];
+    });
+    setActiveKey(key);
+    if (originalContents[key] === undefined) {
+      void loadFileContent(selectedFile);
+    }
+  }, [loadFileContent, originalContents, selectedFile]);
+
+  const saveFile = useCallback(async (file: AgentSelectedFile, content: string) => {
+    if (apiPrefix === 'codex') {
+      await api.updateCodexFile(
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        collectionType,
+        file.scope === 'user' ? 'user' : 'project',
+        file.path,
+        content,
+      );
+    } else {
+      await api[collectionType === 'scripts' ? 'updateScript' : 'updateSkill'](
+        workspaceRuntime.runtimeBaseUrl,
+        workspaceRuntime.workspaceId,
+        file.path,
+        { content },
+        file.scope as 'project' | 'user',
+      );
+    }
+  }, [api, apiPrefix, collectionType, workspaceRuntime.runtimeBaseUrl, workspaceRuntime.workspaceId]);
+
+  const adapter = useMemo<FileViewerWorkbenchAdapter>(() => ({
+    readFile: async (key) => contents[key] ?? '',
+    saveFile: async (key, content) => {
+      const file = findFileByKey(key);
+      if (!file) return;
+      if (file.scope === 'plugin' || file.scope === 'extension') return;
+      setSavingKeys(prev => (prev.includes(key) ? prev : [...prev, key]));
+      try {
+        await saveFile(file, content);
+        setContents(prev => ({ ...prev, [key]: content }));
+        setOriginalContents(prev => ({ ...prev, [key]: content }));
+      } catch (error) {
+        logger.error('Failed to save file', { error });
+        throw error;
+      } finally {
+        setSavingKeys(prev => prev.filter(item => item !== key));
+      }
+    },
+  }), [contents, findFileByKey, saveFile]);
+
+  const tabs = useMemo<FileViewerWorkbenchTab[]>(() => openFiles.map(file => {
+    const key = buildTabKey(file);
+    const content = contents[key] ?? '';
+    const original = originalContents[key] ?? '';
+    return {
+      id: key,
+      path: key,
+      name: fileBasename(file.path),
+      content,
+      originalContent: original,
+      isModified: content !== original,
+      isLoading: loadingKeys.includes(key),
+    };
+  }), [contents, loadingKeys, openFiles, originalContents]);
+
+  const isPathWritable = useCallback((key: string): boolean => {
+    const file = findFileByKey(key);
+    if (!file) return false;
+    return !(file.scope === 'plugin' || file.scope === 'extension');
+  }, [findFileByKey]);
+
+  const handleTabsChange = useCallback((nextTabs: FileViewerWorkbenchTab[]) => {
+    const nextKeys = new Set(nextTabs.map(tab => tab.id));
+    setOpenFiles(prev => prev.filter(file => nextKeys.has(buildTabKey(file))));
+    setContents(prev => {
+      const next: Record<string, string> = {};
+      nextTabs.forEach(tab => {
+        next[tab.id] = tab.content;
+      });
+      Object.entries(prev).forEach(([key, value]) => {
+        if (next[key] === undefined && nextKeys.has(key)) {
+          next[key] = value;
+        }
+      });
+      return next;
+    });
+    setOriginalContents(prev => {
+      const next: Record<string, string> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        if (nextKeys.has(key)) {
+          next[key] = value;
+        }
+      });
+      nextTabs.forEach(tab => {
+        if (next[tab.id] === undefined) {
+          next[tab.id] = tab.originalContent;
+        }
+      });
+      return next;
+    });
+  }, []);
+
+  const handleActiveTabChange = useCallback((nextKey: string | null) => {
+    setActiveKey(nextKey);
+    if (!onSelect) return;
+    if (!nextKey) {
+      onSelect(null);
+      return;
+    }
+    const file = findFileByKey(nextKey);
+    if (file) onSelect(file);
+  }, [findFileByKey, onSelect]);
+
+  const activeFile = activeKey ? findFileByKey(activeKey) : undefined;
+  const isSavingActive = activeKey ? savingKeys.includes(activeKey) : false;
+  const canSaveActive = activeFile ? !(activeFile.scope === 'plugin' || activeFile.scope === 'extension') : false;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <FeatureHeader
-        title={t(`${i18nNamespace}.${collectionType}.header.title`)}
-        icon={FileIcon}
-      />
-
-      <div className="flex-1 overflow-hidden border-t border-border bg-background">
-        {!selectedFile ? (
+      <div className="flex-1 overflow-hidden bg-background">
+        {tabs.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             {t(`${i18nNamespace}.${collectionType}.noSelection`)}
           </div>
         ) : (
-          <div className="flex h-full flex-col">
-            <div className="min-h-0 flex-1">
-              <FileEditor
-                key={selectedFile.path}
-                fileName={fileName}
-                filePath={selectedFile.path}
-                fileContent={fileContent}
-                fileIcon={<FileIcon className="h-4 w-4 text-purple-600 dark:text-purple-400" />}
-                readOnly={isPluginFile}
-                onSave={handleSaveFile}
-                isLoading={isLoadingFile}
-                isSaving={isSaving}
-              />
-            </div>
-          </div>
+          <FileViewerWorkbench
+            tabs={tabs}
+            activeTabId={activeKey}
+            adapter={adapter}
+            capabilities={{
+              canEdit: !isSavingActive,
+              canSave: canSaveActive && !isSavingActive,
+              canCopyPath: false,
+              canRevealInTree: false,
+              canCloseTabs: true,
+            }}
+            isPathWritable={isPathWritable}
+            onTabsChange={handleTabsChange}
+            onActiveTabChange={handleActiveTabChange}
+          />
         )}
       </div>
     </div>

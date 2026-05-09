@@ -1,5 +1,6 @@
 import React from 'react';
 import { FileTreeSearchBar } from '@/shared/components/file-workbench';
+import { ResourceSidebarShell } from '@/shared/components/resource-workflow';
 import { cn } from '@/shared/utils/cn';
 
 interface MarketplaceSectionSidebarShellProps {
@@ -29,30 +30,34 @@ export const MarketplaceSectionSidebarShell: React.FC<MarketplaceSectionSidebarS
 }) => {
   const showSearch = typeof onSearchChange === 'function';
 
-  return (
-    <div className={cn('flex h-full min-h-0 flex-col border-r border-border bg-background text-foreground', className)}>
-      <div className="flex h-10 items-center justify-between border-b border-border bg-muted/30 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {icon ? <div className="flex shrink-0 items-center text-primary">{icon}</div> : null}
-          <span className="truncate text-sm font-medium">{title}</span>
-        </div>
-        {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+  const header = (
+    <div className="flex h-10 items-center justify-between border-b border-border bg-muted/30 px-3">
+      <div className="flex min-w-0 items-center gap-2">
+        {icon ? <div className="flex shrink-0 items-center text-primary">{icon}</div> : null}
+        <span className="truncate text-sm font-medium">{title}</span>
       </div>
-
-      {showSearch ? (
-        <FileTreeSearchBar
-          value={searchValue ?? ''}
-          onChange={onSearchChange!}
-          onClear={onSearchClear}
-          placeholder={searchPlaceholder}
-          showClearButton
-          containerClassName="border-b border-border bg-muted/20"
-        />
-      ) : null}
-
-      <div className={cn('min-h-0 flex-1 overflow-hidden', bodyClassName)}>
-        {body}
-      </div>
+      {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
     </div>
+  );
+
+  const search = showSearch ? (
+    <FileTreeSearchBar
+      value={searchValue ?? ''}
+      onChange={onSearchChange!}
+      onClear={onSearchClear}
+      placeholder={searchPlaceholder}
+      showClearButton
+      containerClassName="border-b border-border bg-muted/20"
+    />
+  ) : undefined;
+
+  return (
+    <ResourceSidebarShell
+      className={cn('border-r border-border bg-background text-foreground', className)}
+      header={header}
+      search={search}
+      body={body}
+      bodyClassName={cn('min-h-0 flex-1 overflow-hidden', bodyClassName)}
+    />
   );
 };
