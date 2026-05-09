@@ -31,6 +31,8 @@ from app.modules.version_control.models import (
     PushRequest,
     PushResponse,
     PushUpdate,
+    RemoteSettingsRequest,
+    RemoteSettingsResponse,
     StageRequest,
     StageResponse,
     UnstageRequest,
@@ -48,12 +50,14 @@ from app.modules.version_control.router import (
     get_commit,
     get_commit_files,
     get_diff,
+    get_remote_settings,
     get_status,
     list_contexts,
     list_branches,
     list_commits,
     pull_changes,
     push_changes,
+    set_remote_settings,
     stage_changes,
     unstage_changes,
 )
@@ -168,6 +172,29 @@ class DummyGitService:
         self._maybe_raise()
         return FetchResponse(remote=payload.remote, fetchedRefs=["refs/heads/main"])
 
+    def get_remote_settings(self, workspace_id: str, context_id: str | None = None) -> RemoteSettingsResponse:
+        self._maybe_raise()
+        return RemoteSettingsResponse(
+            isInitialized=True,
+            currentBranch="main",
+            remoteUrl="git@example.com:team/project.git",
+            hasOrigin=True,
+        )
+
+    def set_remote_settings(
+        self,
+        workspace_id: str,
+        payload: RemoteSettingsRequest,
+        context_id: str | None = None,
+    ) -> RemoteSettingsResponse:
+        self._maybe_raise()
+        return RemoteSettingsResponse(
+            isInitialized=True,
+            currentBranch="main",
+            remoteUrl=payload.remote_url,
+            hasOrigin=True,
+        )
+
     def diff(self, workspace_id: str, path: str, base: str | None = None, head: str | None = None, context: int = 3, include_metadata: bool = False, context_id: str | None = None) -> DiffResponse:
         self._maybe_raise()
         return DiffResponse(path=path, base=base or "HEAD", head=head or "WORKTREE", context=context, patch="@@ -1 +1 @@", metadata={"ok": True} if include_metadata else None)
@@ -205,6 +232,8 @@ async def test_router_success_paths() -> None:
     assert (await push_changes(PushRequest(), "ws", None, service)).remote == "origin"
     assert (await pull_changes(PullRequest(), "ws", None, service)).fastForward is True
     assert (await fetch_changes(FetchRequest(), "ws", None, service)).fetchedRefs == ["refs/heads/main"]
+    assert (await get_remote_settings("ws", None, service)).remote_url == "git@example.com:team/project.git"
+    assert (await set_remote_settings(RemoteSettingsRequest(remoteUrl="git@example.com:team/updated.git"), "ws", None, service)).remote_url == "git@example.com:team/updated.git"
     assert (await get_diff("ws", "a.py", None, None, 3, True, None, service)).metadata == {"ok": True}
     assert (await get_blob("ws", "a.py", None, None, service)).revision == "HEAD"
 

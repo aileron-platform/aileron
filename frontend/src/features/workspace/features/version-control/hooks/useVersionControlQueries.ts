@@ -21,6 +21,7 @@ import type {
   VersionControlFetchResponse,
   VersionControlPullResponse,
   VersionControlPushResponse,
+  VersionControlRemoteSettings,
 } from '../types';
 
 interface UseVersionControlOptions {
@@ -131,6 +132,20 @@ export function useStatusQuery({ workspaceId, runtimeBaseUrl, contextId }: UseVe
     queryKey: versionControlKeys.status(workspaceId, contextId),
     queryFn: () => fetchVersionControl<VersionControlStatus>('status'),
     enabled: !!workspaceId && !!runtimeBaseUrl,
+    retry: shouldRetryVersionControlQuery,
+  });
+}
+
+export function useRemoteSettingsQuery(
+  { workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions,
+  enabled: boolean = true,
+) {
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useQuery({
+    queryKey: versionControlKeys.remoteSettings(workspaceId, contextId),
+    queryFn: () => fetchVersionControl<VersionControlRemoteSettings>('remote'),
+    enabled: enabled && !!workspaceId && !!runtimeBaseUrl,
     retry: shouldRetryVersionControlQuery,
   });
 }
@@ -349,6 +364,28 @@ export function usePushMutation({ workspaceId, runtimeBaseUrl, contextId }: UseV
       return refreshVersionControlQueries(queryClient, workspaceId, {
         includeBranches: true,
         includeCommits: true,
+        includeContexts: true,
+        contextId,
+      });
+    },
+  });
+}
+
+export function useSetRemoteUrlMutation({ workspaceId, runtimeBaseUrl, contextId }: UseVersionControlOptions) {
+  const queryClient = useQueryClient();
+  const fetchVersionControl = createFetchFn(runtimeBaseUrl, workspaceId, contextId);
+
+  return useMutation({
+    mutationFn: async (remoteUrl: string) => {
+      return fetchVersionControl<VersionControlRemoteSettings>('remote', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remoteUrl }),
+      });
+    },
+    onSuccess: () => {
+      return refreshVersionControlQueries(queryClient, workspaceId, {
+        includeBranches: true,
         includeContexts: true,
         contextId,
       });

@@ -199,6 +199,13 @@ const versionControl = {
       title: 'Push failed',
       description: 'Unable to push local changes.',
     },
+    remoteUrlSuccess: {
+      title: 'Remote URL saved',
+    },
+    remoteUrlFailed: {
+      title: 'Failed to save remote URL',
+      description: 'Check the remote URL and try again.',
+    },
     checkoutSuccess: {
       title: 'Branch checked out',
       description: 'Checked out {{branch}}.',

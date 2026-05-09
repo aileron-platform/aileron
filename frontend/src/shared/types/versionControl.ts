@@ -10,6 +10,13 @@ export interface VersionControlStatus {
   lastFetchedAt?: string | null;
 }
 
+export interface VersionControlRemoteSettings {
+  isInitialized: boolean;
+  currentBranch?: string | null;
+  remoteUrl?: string | null;
+  hasOrigin?: boolean;
+}
+
 export interface VersionControlBranch {
   name: string;
   displayName?: string;

@@ -14,12 +14,15 @@ const {
   fetchMutationMock,
   pullMutationMock,
   pushMutationMock,
+  remoteSettingsQueryMock,
+  setRemoteUrlMutationMock,
   checkoutMutationMock,
   stageMutationMock,
   unstageMutationMock,
   discardMutationMock,
   toastMock,
   worktreeSettingsDialogMock,
+  remoteSettingsDialogMock,
 } = vi.hoisted(() => ({
   onFileSelectMock: vi.fn(),
   changesQueryMock: {
@@ -45,12 +48,22 @@ const {
   fetchMutationMock: { mutateAsync: vi.fn(), isPending: false },
   pullMutationMock: { mutateAsync: vi.fn(), isPending: false },
   pushMutationMock: { mutateAsync: vi.fn(), isPending: false },
+  remoteSettingsQueryMock: {
+    data: {
+      isInitialized: true,
+      currentBranch: 'main',
+      remoteUrl: 'git@example.com:team/project.git',
+      hasOrigin: true,
+    },
+  },
+  setRemoteUrlMutationMock: { mutateAsync: vi.fn(), isPending: false },
   checkoutMutationMock: { mutateAsync: vi.fn(), isPending: false },
   stageMutationMock: { mutateAsync: vi.fn(), isPending: false },
   unstageMutationMock: { mutateAsync: vi.fn(), isPending: false },
   discardMutationMock: { mutateAsync: vi.fn(), isPending: false },
   toastMock: vi.fn(),
   worktreeSettingsDialogMock: vi.fn(),
+  remoteSettingsDialogMock: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -66,6 +79,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'shared.versionControl.actions.fetch.label': 'Fetch',
         'shared.versionControl.actions.pull.label': 'Pull',
         'shared.versionControl.actions.push.label': 'Push',
+        'shared.versionControl.actions.remoteSettings.label': 'Remote settings',
         'workspace.versionControl.worktree.menu.settings': 'Worktree settings...',
         'shared.versionControl.fileChanges.stagedTitle': 'Staged changes',
         'shared.versionControl.fileChanges.unstagedTitle': 'Unstaged changes',
@@ -93,6 +107,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'workspace.versionControl.toasts.fetchSuccess.title': 'Fetch completed',
         'workspace.versionControl.toasts.pullSuccess.title': 'Pull completed',
         'workspace.versionControl.toasts.pushSuccess.title': 'Push completed',
+        'workspace.versionControl.toasts.remoteUrlSuccess.title': 'Remote URL saved',
         'workspace.versionControl.toasts.createBranchSuccess.title': 'Branch created',
         'workspace.versionControl.toasts.createBranchSuccess.description': `Created ${params?.branch}.`,
       }[key] ?? key),
@@ -110,6 +125,29 @@ vi.mock('./WorktreeSettingsDialog', () => ({
   },
 }));
 
+vi.mock('@/shared/components/version-control', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/components/version-control')>();
+  return {
+    ...actual,
+    VersionControlRemoteSettingsDialog: (props: {
+      open: boolean;
+      repository: { isRepositoryInitialized: boolean; remoteUrl?: string | null };
+      onSaveRemoteUrl: (remoteUrl: string) => void;
+    }) => {
+      remoteSettingsDialogMock(props);
+      return props.open ? (
+        <div role="dialog">
+          <div>Remote settings dialog</div>
+          <div>{props.repository.remoteUrl}</div>
+          <button type="button" onClick={() => props.onSaveRemoteUrl('git@example.com:team/updated.git')}>
+            save remote
+          </button>
+        </div>
+      ) : null;
+    },
+  };
+});
+
 vi.mock('../../../providers/WorkspaceProvider', () => ({
   useWorkspace: () => ({
     state: {
@@ -121,6 +159,7 @@ vi.mock('../../../providers/WorkspaceProvider', () => ({
     workspaceRuntime: {
       runtimeBaseUrl: 'http://runtime',
       workspaceId: 'ws-refresh',
+      reload: vi.fn(),
     },
   }),
 }));
@@ -143,6 +182,8 @@ vi.mock('../hooks/useVersionControlQueries', () => ({
   useFetchMutation: () => fetchMutationMock,
   usePullMutation: () => pullMutationMock,
   usePushMutation: () => pushMutationMock,
+  useRemoteSettingsQuery: () => remoteSettingsQueryMock,
+  useSetRemoteUrlMutation: () => setRemoteUrlMutationMock,
   useCheckoutMutation: () => checkoutMutationMock,
 }));
 
@@ -156,6 +197,7 @@ describe('FileChangesPanel', () => {
     fetchMutationMock.mutateAsync.mockResolvedValue({});
     pullMutationMock.mutateAsync.mockResolvedValue({});
     pushMutationMock.mutateAsync.mockResolvedValue({});
+    setRemoteUrlMutationMock.mutateAsync.mockResolvedValue({});
     checkoutMutationMock.mutateAsync.mockResolvedValue({ branch: 'feature/new', created: true });
     stageMutationMock.mutateAsync.mockClear();
     unstageMutationMock.mutateAsync.mockClear();
@@ -164,6 +206,7 @@ describe('FileChangesPanel', () => {
     unstageMutationMock.mutateAsync.mockResolvedValue({});
     discardMutationMock.mutateAsync.mockResolvedValue({});
     toastMock.mockClear();
+    remoteSettingsDialogMock.mockClear();
   });
 
   it('renders branch and action controls in the changes header', () => {
@@ -288,6 +331,37 @@ describe('FileChangesPanel', () => {
     expect(worktreeSettingsDialogMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ open: true }),
     );
+  });
+
+  it('opens remote settings from the action menu and saves the remote URL', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByText('Remote settings'));
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Remote settings dialog');
+    expect(screen.getByRole('dialog')).toHaveTextContent('git@example.com:team/project.git');
+    expect(remoteSettingsDialogMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        open: true,
+        repository: expect.objectContaining({
+          isRepositoryInitialized: true,
+          remoteUrl: 'git@example.com:team/project.git',
+        }),
+      }),
+    );
+
+    await user.click(screen.getByText('save remote'));
+
+    expect(setRemoteUrlMutationMock.mutateAsync).toHaveBeenCalledWith('git@example.com:team/updated.git');
+    expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Remote URL saved' }));
   });
 
   it('creates a branch with start point and stash option', async () => {

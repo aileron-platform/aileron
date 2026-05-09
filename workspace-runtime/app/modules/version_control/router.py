@@ -26,6 +26,8 @@ from .models import (
     PullResponse,
     PushRequest,
     PushResponse,
+    RemoteSettingsRequest,
+    RemoteSettingsResponse,
     StageRequest,
     StageResponse,
     UnstageRequest,
@@ -358,6 +360,41 @@ async def fetch_changes(
 ) -> FetchResponse:
     try:
         return service.fetch(workspace_id, payload, context_id)
+    except VersionControlError as exc:
+        raise _handle_error(exc)
+
+
+@router.get(
+    "/remote",
+    response_model=RemoteSettingsResponse,
+    summary="Get remote settings",
+    responses=build_responses(401, 404, 500),
+)
+async def get_remote_settings(
+    workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
+    service: GitService = Depends(get_git_service),
+) -> RemoteSettingsResponse:
+    try:
+        return service.get_remote_settings(workspace_id, context_id)
+    except VersionControlError as exc:
+        raise _handle_error(exc)
+
+
+@router.put(
+    "/remote",
+    response_model=RemoteSettingsResponse,
+    summary="Set remote settings",
+    responses=build_responses(400, 401, 404, 422, 500),
+)
+async def set_remote_settings(
+    payload: RemoteSettingsRequest,
+    workspace_id: str = Path(..., description="Workspace ID"),
+    context_id: str | None = Query(None, alias="contextId", description="Git context ID"),
+    service: GitService = Depends(get_git_service),
+) -> RemoteSettingsResponse:
+    try:
+        return service.set_remote_settings(workspace_id, payload, context_id)
     except VersionControlError as exc:
         raise _handle_error(exc)
 

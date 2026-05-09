@@ -190,6 +190,13 @@ const versionControl = {
       title: '推送失敗',
       description: '無法推送本地變更。',
     },
+    remoteUrlSuccess: {
+      title: '遠端 URL 已儲存',
+    },
+    remoteUrlFailed: {
+      title: '遠端 URL 儲存失敗',
+      description: '請確認遠端 URL 後再試一次。',
+    },
     checkoutSuccess: {
       title: '已切換分支',
       description: '已切換到 {{branch}}。',

@@ -27,6 +27,7 @@ import { WorktreeSettingsDialog } from './WorktreeSettingsDialog';
 import {
   VersionControlChangesSidebar,
   VersionControlCreateBranchDialog,
+  VersionControlRemoteSettingsDialog,
   useVersionControlFileSelection,
   type VersionControlActionMenuItem,
   type VersionControlCreateBranchPayload,
@@ -47,6 +48,8 @@ import {
   useFetchMutation,
   usePullMutation,
   usePushMutation,
+  useRemoteSettingsQuery,
+  useSetRemoteUrlMutation,
 } from '../hooks/useVersionControlQueries';
 import { refreshVersionControlQueries, versionControlKeys } from '../lib/queryClient';
 import { useQueryClient } from '@tanstack/react-query';
@@ -111,6 +114,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
   const [worktreeSettingsOpen, setWorktreeSettingsOpen] = useState(false);
+  const [remoteSettingsOpen, setRemoteSettingsOpen] = useState(false);
 
   // ==================== Refs ====================
 
@@ -136,6 +140,10 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     false,
   );
   const statusQuery = useStatusQuery({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const remoteSettingsQuery = useRemoteSettingsQuery(
+    { workspaceId, runtimeBaseUrl, contextId: selectedGitContextId },
+    remoteSettingsOpen,
+  );
 
   // React Query - 變更操作
   const stageMutation = useStageMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
@@ -146,6 +154,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const fetchMutation = useFetchMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
   const pullMutation = usePullMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
   const pushMutation = usePushMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
+  const setRemoteUrlMutation = useSetRemoteUrlMutation({ workspaceId, runtimeBaseUrl, contextId: selectedGitContextId });
 
   // ==================== Computed Data ====================
 
@@ -208,7 +217,8 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
     || checkoutMutation.isPending
     || fetchMutation.isPending
     || pullMutation.isPending
-    || pushMutation.isPending;
+    || pushMutation.isPending
+    || setRemoteUrlMutation.isPending;
 
   // ==================== Effects ====================
 
@@ -327,6 +337,24 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
       });
     }
   }, [currentBranch, fetchMutation, pullMutation, pushMutation, resetPagination, t, toast]);
+
+  const handleSetRemoteUrl = useCallback(async (remoteUrl: string) => {
+    try {
+      await setRemoteUrlMutation.mutateAsync(remoteUrl.trim());
+      setRemoteSettingsOpen(false);
+      toast({
+        title: t('workspace.versionControl.toasts.remoteUrlSuccess.title'),
+        variant: 'success',
+      });
+    } catch (err) {
+      logger.error('Set remote URL error', { error: err });
+      toast({
+        title: t('workspace.versionControl.toasts.remoteUrlFailed.title'),
+        description: getErrorDescription(err) ?? t('workspace.versionControl.toasts.remoteUrlFailed.description'),
+        variant: 'destructive',
+      });
+    }
+  }, [setRemoteUrlMutation, t, toast]);
 
   const handleCreateBranch = useCallback(async ({
     branch,
@@ -521,6 +549,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   const actionItems: VersionControlActionMenuItem[] = [
     { id: 'refresh', onClick: () => void handleRefresh() },
+    { id: 'remoteSettings', onClick: () => setRemoteSettingsOpen(true) },
     {
       id: 'worktreeSettings',
       labelKey: 'workspace.versionControl.worktree.menu.settings',
@@ -580,6 +609,23 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         workspaceId={workspaceId}
         onOpenChange={setWorktreeSettingsOpen}
         onSaved={workspaceRuntime.reload}
+      />
+      <VersionControlRemoteSettingsDialog
+        open={remoteSettingsOpen}
+        onOpenChange={setRemoteSettingsOpen}
+        repository={{
+          isRepositoryInitialized: remoteSettingsQuery.data?.isInitialized ?? true,
+          currentBranch: remoteSettingsQuery.data?.currentBranch ?? currentBranch,
+          remoteUrl: remoteSettingsQuery.data?.remoteUrl ?? null,
+          hasOrigin: remoteSettingsQuery.data?.hasOrigin ?? Boolean(remoteSettingsQuery.data?.remoteUrl),
+        }}
+        capabilities={{
+          canConfigureRemote: true,
+          supportsRemoteInit: false,
+          supportsRemoteClone: false,
+        }}
+        onSaveRemoteUrl={handleSetRemoteUrl}
+        isSavingRemoteUrl={setRemoteUrlMutation.isPending}
       />
     </>
   );

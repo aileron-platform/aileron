@@ -40,6 +40,8 @@ from .models import (
     PullResponse,
     PushRequest,
     PushResponse,
+    RemoteSettingsRequest,
+    RemoteSettingsResponse,
     StageRequest,
     StageResponse,
     UnstageRequest,
@@ -353,6 +355,19 @@ class GitService:
             Fetch response
         """
         return self._remote_ops.fetch(workspace_id, payload, context_id)
+
+    def get_remote_settings(self, workspace_id: str, context_id: Optional[str] = None) -> RemoteSettingsResponse:
+        """Get repository remote settings."""
+        return self._remote_ops.get_settings(workspace_id, context_id)
+
+    def set_remote_settings(
+        self,
+        workspace_id: str,
+        payload: RemoteSettingsRequest,
+        context_id: Optional[str] = None,
+    ) -> RemoteSettingsResponse:
+        """Set repository remote settings."""
+        return self._remote_ops.set_settings(workspace_id, payload, context_id)
 
     # ------------------------------------------------------------------
     # Diff and content operations

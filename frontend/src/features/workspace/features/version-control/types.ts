@@ -10,6 +10,7 @@ export type {
   VersionControlFetchResponse,
   VersionControlPullResponse,
   VersionControlPushResponse,
+  VersionControlRemoteSettings,
   VersionControlStatus,
 } from '@/shared/types/versionControl';
 

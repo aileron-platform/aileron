@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 from git import GitCommandError
 
-from app.modules.version_control.models import FetchRequest, PullRequest, PushRequest
+from app.modules.version_control.models import FetchRequest, PullRequest, PushRequest, RemoteSettingsRequest
 from app.modules.version_control.remote_ops import RemoteOperations
 from app.modules.version_control.utils import VersionControlError
 
@@ -113,3 +113,50 @@ def test_pull_handles_missing_head_and_fetch_returns_refs() -> None:
     remote.fetch.side_effect = _git_error("fetch failed")
     with pytest.raises(VersionControlError, match="fetch failed"):
         ops.fetch("ws-1", FetchRequest())
+
+
+def test_remote_settings_reads_and_updates_origin_url() -> None:
+    origin = SimpleNamespace(name="origin", urls=["git@example.com:team/project.git"])
+    repo = Mock()
+    repo.remotes = [origin]
+    repo.remote.return_value = origin
+
+    utils = Mock()
+    utils.get_repo.return_value = repo
+    utils.current_branch.return_value = ("main", False)
+
+    cache = Mock()
+    ops = RemoteOperations(utils, cache)
+
+    settings = ops.get_settings("ws-1")
+
+    assert settings.remote_url == "git@example.com:team/project.git"
+    assert settings.current_branch == "main"
+    assert settings.has_origin is True
+
+    updated = ops.set_settings("ws-1", RemoteSettingsRequest(remoteUrl=" git@example.com:team/updated.git "))
+
+    repo.git.remote.assert_called_once_with("set-url", "origin", "git@example.com:team/updated.git")
+    assert updated.current_branch == "main"
+    assert cache.invalidate.call_count == 3
+
+
+def test_remote_settings_adds_origin_and_rejects_empty_url() -> None:
+    origin = SimpleNamespace(name="origin", urls=["git@example.com:team/project.git"])
+    repo = Mock()
+    repo.remotes = []
+    repo.create_remote.side_effect = lambda name, url: repo.remotes.append(origin)
+    repo.remote.return_value = origin
+
+    utils = Mock()
+    utils.get_repo.return_value = repo
+    utils.current_branch.return_value = ("main", False)
+
+    ops = RemoteOperations(utils)
+    settings = ops.set_settings("ws-1", RemoteSettingsRequest(remoteUrl="git@example.com:team/project.git"))
+
+    repo.create_remote.assert_called_once_with("origin", "git@example.com:team/project.git")
+    assert settings.remote_url == "git@example.com:team/project.git"
+
+    with pytest.raises(VersionControlError, match="Remote URL is required"):
+        ops.set_settings("ws-1", RemoteSettingsRequest(remoteUrl=" "))

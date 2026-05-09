@@ -334,6 +334,21 @@ class FetchResponse(BaseModel):
     fetchedRefs: list[str] = Field(description="Synced reference list")
 
 
+class RemoteSettingsRequest(BaseModel):
+    """Repository remote settings update request"""
+
+    remote_url: str = Field(alias="remoteUrl", description="origin remote URL")
+
+
+class RemoteSettingsResponse(BaseModel):
+    """Repository remote settings response"""
+
+    is_initialized: bool = Field(alias="isInitialized", description="Whether Git is initialized")
+    current_branch: Optional[str] = Field(default=None, alias="currentBranch", description="Current branch name")
+    remote_url: Optional[str] = Field(default=None, alias="remoteUrl", description="origin remote URL")
+    has_origin: bool = Field(default=False, alias="hasOrigin", description="Whether origin remote exists")
+
+
 class DiffResponse(BaseModel):
     """Diff result response"""
 
@@ -387,6 +402,8 @@ __all__ = [
     "PushRequest",
     "PushResponse",
     "PushUpdate",
+    "RemoteSettingsRequest",
+    "RemoteSettingsResponse",
     "StageRequest",
     "StageResponse",
     "UnstageRequest",

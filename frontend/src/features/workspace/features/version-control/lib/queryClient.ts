@@ -30,6 +30,9 @@ export const versionControlKeys = {
 
   contexts: (workspaceId: string) => [...versionControlKeys.all, "contexts", workspaceId] as const,
 
+  remoteSettings: (workspaceId: string, contextId?: string | null) =>
+    [...versionControlKeys.all, "remoteSettings", workspaceId, contextId ?? "primary"] as const,
+
   // Commits
   commits: (workspaceId: string, contextId?: string | null) =>
     [...versionControlKeys.all, "commits", workspaceId, contextId ?? "primary"] as const,
@@ -62,7 +65,7 @@ interface RefreshVersionControlOptions {
   contextId?: string | null;
 }
 
-type VersionControlQueryCategory = "changes" | "status" | "branches" | "commits";
+type VersionControlQueryCategory = "changes" | "status" | "branches" | "commits" | "remoteSettings";
 
 const getWorkspaceQueryPrefixes = (
   workspaceId: string,
@@ -72,6 +75,7 @@ const getWorkspaceQueryPrefixes = (
   const prefixes: Array<readonly unknown[]> = [
     versionControlKeys.changes(workspaceId, contextId),
     versionControlKeys.status(workspaceId, contextId),
+    versionControlKeys.remoteSettings(workspaceId, contextId),
   ];
 
   if (options.includeBranches) {
@@ -110,6 +114,7 @@ const categorizeQueryKey = (
     case "status":
     case "branches":
     case "commits":
+    case "remoteSettings":
       return queryKey[1];
     default:
       return null;
