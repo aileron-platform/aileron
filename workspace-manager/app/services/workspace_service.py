@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 from typing import Optional
 from uuid import uuid4
 
+import httpx
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased, selectinload
 
@@ -39,6 +41,8 @@ from app.models import (
 from app.services.knowledge_base_service import compute_attachment_signature
 from app.services.workspace_custom_resource_service import WorkspaceCustomResourceService
 from app.utils.string_utils import snake_case
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_OWNER_NOT_FOUND_MESSAGE = "Workspace owner does not exist"
 WORKSPACE_NOT_FOUND_MESSAGE = "Workspace does not exist"
@@ -264,6 +268,7 @@ class WorkspaceService:
             preferred_cli=payload.preferred_cli or "claude-code",
             fallback_enabled=payload.fallback_enabled if payload.fallback_enabled is not None else True,
             workspace_path=payload.workspace_path or "/workspace",
+            worktree_subdir=payload.worktree_subdir or ".worktrees",
             acp_cli_args=payload.acp_cli_args or [],
             runtime_status="starting",
             runtime_internal_port=default_internal_port,
@@ -299,6 +304,7 @@ class WorkspaceService:
             minimum_role="manager",
         )
 
+        previous_worktree_subdir = workspace.worktree_subdir
         data = payload.model_dump(exclude_unset=True, by_alias=True)
 
         if "envVars" in data:
@@ -364,6 +370,16 @@ class WorkspaceService:
         workspace.updated_at = datetime.utcnow()
         self.db.commit()
         self.db.refresh(workspace)
+        if (
+            "worktreeSubdir" in data
+            and workspace.worktree_subdir != previous_worktree_subdir
+            and workspace.runtime_status == "running"
+        ):
+            self._push_worktree_gitignore_sync(
+                workspace,
+                subdir=workspace.worktree_subdir,
+                previous=previous_worktree_subdir,
+            )
         return self._to_detail(
             workspace,
             access_role=access_context.access_role,
@@ -553,6 +569,7 @@ class WorkspaceService:
             runtime_last_seen=workspace.runtime_last_seen,
             access_role=access_role,
             access_source=access_source,
+            worktree_subdir=getattr(workspace, "worktree_subdir", ".worktrees") or ".worktrees",
             created_at=workspace.created_at,
             updated_at=workspace.updated_at,
         )
@@ -694,6 +711,7 @@ class WorkspaceService:
             preferred_cli=workspace.preferred_cli,
             fallback_enabled=workspace.fallback_enabled,
             workspace_path=workspace.workspace_path,
+            worktree_subdir=getattr(workspace, "worktree_subdir", ".worktrees") or ".worktrees",
             acp_cli_args=workspace.acp_cli_args or [],
             access_role=access_role,
             access_source=access_source,
@@ -704,6 +722,36 @@ class WorkspaceService:
             updated_at=workspace.updated_at,
             runtime_job=runtime_job,
         )
+
+    def _push_worktree_gitignore_sync(
+        self,
+        workspace: db_models.Workspace,
+        *,
+        subdir: str,
+        previous: str,
+    ) -> None:
+        if not workspace.runtime_internal_url:
+            logger.warning(
+                "Skipping worktree gitignore sync for workspace %s because runtime_internal_url is missing",
+                workspace.id,
+            )
+            return
+
+        url = f"{workspace.runtime_internal_url.rstrip('/')}/api/v1/internal/worktree/sync-gitignore"
+        headers = {"Authorization": f"Bearer {self.settings.INTERNAL_API_TOKEN}"}
+        try:
+            with httpx.Client(timeout=3.0) as client:
+                client.post(
+                    url,
+                    json={"subdir": subdir, "previous": previous},
+                    headers=headers,
+                ).raise_for_status()
+        except Exception as exc:
+            logger.warning(
+                "Failed to push worktree gitignore sync for workspace %s: %s",
+                workspace.id,
+                exc,
+            )
 
     def _to_workspace_kb_attachments(
         self,

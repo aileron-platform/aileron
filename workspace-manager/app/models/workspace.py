@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import Field
+from pydantic import Field, field_validator
+from pydantic_core import PydanticCustomError
 
 from app.utils.pydantic import CamelModel
 from app.models.knowledge_base import KnowledgeBaseAttachmentMode, KnowledgeBaseRole
@@ -19,6 +20,32 @@ FirewallDomainAccessMode = Literal['all', 'specific']
 WorkspaceShareRole = Literal['viewer', 'editor', 'manager']
 WorkspaceAccessRole = Literal['owner', 'manager', 'editor', 'viewer']
 WorkspaceAccessSource = Literal['owned', 'shared']
+DEFAULT_WORKTREE_SUBDIR = ".worktrees"
+WORKTREE_SUBDIR_MAX_LENGTH = 64
+
+
+def validate_worktree_subdir(value: Optional[str]) -> Optional[str]:
+    """Normalize and validate a managed worktree relative path."""
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    segments = normalized.split("/")
+    if (
+        not normalized
+        or normalized == "."
+        or normalized.startswith("/")
+        or normalized.endswith("/")
+        or "\\" in normalized
+        or any(not segment for segment in segments)
+        or any(segment in {".", ".."} for segment in segments)
+        or len(normalized) > WORKTREE_SUBDIR_MAX_LENGTH
+    ):
+        raise PydanticCustomError(
+            "WORKSPACE_WORKTREE_SUBDIR_INVALID",
+            "workspace.worktree_subdir.invalid",
+        )
+    return normalized
 
 
 class Pagination(CamelModel):
@@ -153,6 +180,7 @@ class WorkspaceSummary(CamelModel):
     runtime_last_seen: Optional[datetime] = Field(None, alias="runtimeLastSeen")
     access_role: WorkspaceAccessRole = Field("owner", alias="accessRole")
     access_source: WorkspaceAccessSource = Field("owned", alias="accessSource")
+    worktree_subdir: str = Field(DEFAULT_WORKTREE_SUBDIR, alias="worktreeSubdir")
     created_at: datetime = Field(..., alias="createdAt")
     updated_at: datetime = Field(..., alias="updatedAt")
 
@@ -185,6 +213,7 @@ class WorkspaceDetail(CamelModel):
     preferred_cli: str = Field("claude-code", alias="preferredCli")
     fallback_enabled: bool = Field(True, alias="fallbackEnabled")
     workspace_path: str = Field("/workspace", alias="workspacePath")
+    worktree_subdir: str = Field(DEFAULT_WORKTREE_SUBDIR, alias="worktreeSubdir")
     acp_cli_args: list[str] = Field(default_factory=list, alias="acpCliArgs")
     access_role: WorkspaceAccessRole = Field("owner", alias="accessRole")
     access_source: WorkspaceAccessSource = Field("owned", alias="accessSource")
@@ -296,8 +325,14 @@ class WorkspaceCreateRequest(CamelModel):
     preferred_cli: Optional[str] = Field(None, alias="preferredCli")
     fallback_enabled: Optional[bool] = Field(None, alias="fallbackEnabled")
     workspace_path: Optional[str] = Field(None, alias="workspacePath")
+    worktree_subdir: Optional[str] = Field(None, alias="worktreeSubdir")
     acp_cli_args: Optional[list[str]] = Field(None, alias="acpCliArgs")
     firewall: Optional[FirewallConfig] = None
+
+    @field_validator("worktree_subdir")
+    @classmethod
+    def validate_worktree_subdir_field(cls, value: Optional[str]) -> Optional[str]:
+        return validate_worktree_subdir(value)
 
 
 class WorkspaceUpdateRequest(CamelModel):
@@ -319,7 +354,13 @@ class WorkspaceUpdateRequest(CamelModel):
     preferred_cli: Optional[str] = Field(None, alias="preferredCli")
     fallback_enabled: Optional[bool] = Field(None, alias="fallbackEnabled")
     workspace_path: Optional[str] = Field(None, alias="workspacePath")
+    worktree_subdir: Optional[str] = Field(None, alias="worktreeSubdir")
     acp_cli_args: Optional[list[str]] = Field(None, alias="acpCliArgs")
+
+    @field_validator("worktree_subdir")
+    @classmethod
+    def validate_worktree_subdir_field(cls, value: Optional[str]) -> Optional[str]:
+        return validate_worktree_subdir(value)
 
 
 class WorkspaceSetupTaskStatus(CamelModel):

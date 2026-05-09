@@ -72,6 +72,7 @@ def _apply_workspace_defaults(obj, owner=None):
         "browser_firewall_network_access_enabled": True,
         "browser_firewall_domain_access_mode": "all",
         "browser_firewall_allowed_domains": [],
+        "worktree_subdir": ".worktrees",
         "acp_cli_args": [],
         "runtime_logs": [],
         "runtime_jobs": [],
@@ -165,6 +166,7 @@ def sample_workspace_db(user_factory):
     workspace.preferred_cli = "claude-code"
     workspace.fallback_enabled = True
     workspace.workspace_path = "/workspace"
+    workspace.worktree_subdir = ".worktrees"
     workspace.acp_cli_args = []
     workspace.canvas_internal_port = 3003
     workspace.canvas_external_port = None
@@ -338,6 +340,34 @@ class TestWorkspaceCreate:
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
         assert result is not None
+        assert result.worktree_subdir == ".worktrees"
+
+    def test_create_workspace_persists_worktree_subdir(
+        self, workspace_service, mock_db_session, user_factory
+    ):
+        """Test: Create Workspace With Custom Worktree Subdirectory"""
+        # Arrange
+        owner = user_factory()
+        mock_db_session.get.return_value = owner
+
+        def mock_refresh(obj):
+            _apply_workspace_defaults(obj, owner=owner)
+
+        mock_db_session.refresh.side_effect = mock_refresh
+        create_request = WorkspaceCreateRequest(
+            owner_id=owner.id,
+            name="New Workspace",
+            runtime="docker",
+            worktree_subdir=" worktree ",
+        )
+
+        # Act
+        result = workspace_service.create(create_request)
+
+        # Assert
+        created_workspace = mock_db_session.add.call_args.args[0]
+        assert created_workspace.worktree_subdir == "worktree"
+        assert result.worktree_subdir == "worktree"
 
     def test_create_workspace_with_nonexistent_owner(
         self, workspace_service, mock_db_session
@@ -629,6 +659,71 @@ class TestWorkspaceUpdate:
         # Assert
         assert result is not None
         mock_db_session.commit.assert_called_once()
+
+    def test_update_workspace_persists_worktree_subdir_and_notifies_runtime(
+        self, workspace_service, mock_db_session, sample_workspace_db
+    ):
+        """Test: Update Worktree Subdirectory And Notify Runtime"""
+        # Arrange
+        mock_db_session.get.return_value = sample_workspace_db
+        response = MagicMock()
+        response.raise_for_status = MagicMock()
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.post.return_value = response
+
+        # Act
+        with patch("app.services.workspace_service.httpx.Client", return_value=client):
+            result = workspace_service.update(
+                "workspace-123",
+                WorkspaceUpdateRequest(worktree_subdir="worktree"),
+            )
+
+        # Assert
+        assert result is not None
+        assert sample_workspace_db.worktree_subdir == "worktree"
+        client.post.assert_called_once_with(
+            "http://localhost:3002/api/v1/internal/worktree/sync-gitignore",
+            json={"subdir": "worktree", "previous": ".worktrees"},
+            headers={"Authorization": "Bearer dev-internal-token"},
+        )
+
+    def test_update_workspace_worktree_sync_failure_does_not_rollback(
+        self, workspace_service, mock_db_session, sample_workspace_db
+    ):
+        """Test: Runtime Sync Failure Does Not Roll Back Database Update"""
+        # Arrange
+        mock_db_session.get.return_value = sample_workspace_db
+        client = MagicMock()
+        client.__enter__.return_value = client
+        client.post.side_effect = RuntimeError("offline")
+
+        # Act
+        with patch("app.services.workspace_service.httpx.Client", return_value=client):
+            result = workspace_service.update(
+                "workspace-123",
+                WorkspaceUpdateRequest(worktree_subdir="worktree"),
+            )
+
+        # Assert
+        assert result is not None
+        assert sample_workspace_db.worktree_subdir == "worktree"
+        mock_db_session.commit.assert_called_once()
+
+    @pytest.mark.parametrize("value", ["", "   ", "/", "a/", "/a", "a//b", "\\", ".", "..", "a/../b", "a\\b", "x" * 65])
+    def test_worktree_subdir_validator_rejects_invalid_values(self, value):
+        """Test: Invalid Worktree Subdirectory Values Are Rejected"""
+        with pytest.raises(Exception) as exc:
+            WorkspaceUpdateRequest(worktree_subdir=value)
+
+        assert "WORKSPACE_WORKTREE_SUBDIR_INVALID" in str(exc.value)
+
+    @pytest.mark.parametrize("value", ["worktree", "branches/team-a", "a..b"])
+    def test_worktree_subdir_validator_accepts_relative_paths(self, value):
+        """Test: Valid Worktree Relative Paths Are Accepted"""
+        request = WorkspaceUpdateRequest(worktree_subdir=value)
+
+        assert request.worktree_subdir == value
 
     def test_update_workspace_not_found(
         self, workspace_service, mock_db_session

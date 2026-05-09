@@ -198,6 +198,7 @@ class Workspace(Base):
     cli_type: Mapped[str] = mapped_column(String(32), default="claude-code")
     fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     workspace_path: Mapped[str] = mapped_column(Text, default="/workspace")
+    worktree_subdir: Mapped[str] = mapped_column(Text, default=".worktrees", nullable=False)
     acp_cli_args: Mapped[list[str]] = mapped_column(JSON, default=list)
     runtime_mounted_kb_signature: Mapped[Optional[str]] = mapped_column(Text)
 

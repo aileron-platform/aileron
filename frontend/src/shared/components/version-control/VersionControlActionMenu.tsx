@@ -3,12 +3,13 @@ import { ArrowDown, ArrowUp, MoreHorizontal, RefreshCw, Settings } from 'lucide-
 import { useI18n } from '@/shared/hooks/useI18n';
 import { cn } from '@/shared/utils/cn';
 
-type VersionControlActionId = 'refresh' | 'fetch' | 'pull' | 'push' | 'remoteSettings';
+type VersionControlActionId = 'refresh' | 'fetch' | 'pull' | 'push' | 'remoteSettings' | 'worktreeSettings';
 
 export interface VersionControlActionMenuItem {
   id: VersionControlActionId;
   onClick: () => void;
   disabled?: boolean;
+  labelKey?: string;
 }
 
 interface VersionControlActionMenuProps {
@@ -23,6 +24,7 @@ const actionIcons: Record<VersionControlActionId, React.ReactNode> = {
   pull: <ArrowDown className="h-3 w-3" />,
   push: <ArrowUp className="h-3 w-3" />,
   remoteSettings: <Settings className="h-3 w-3" />,
+  worktreeSettings: <Settings className="h-3 w-3" />,
 };
 
 export const VersionControlActionMenu: React.FC<VersionControlActionMenuProps> = ({
@@ -77,7 +79,7 @@ export const VersionControlActionMenu: React.FC<VersionControlActionMenuProps> =
                 disabled={action.disabled}
               >
                 {actionIcons[action.id]}
-                {t(`shared.versionControl.actions.${action.id}.label`)}
+                {t(action.labelKey ?? `shared.versionControl.actions.${action.id}.label`)}
               </button>
             ))}
           </div>

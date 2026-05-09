@@ -56,6 +56,44 @@ const versionControl = {
       worktree: 'Worktree · {{name}}',
     },
   },
+  worktree: {
+    menu: {
+      moreActions: 'More actions',
+      group: 'Worktrees',
+      settings: 'Worktree settings...',
+      create: 'Create worktree...',
+      comingSoon: 'Coming soon',
+    },
+    dialog: {
+      title: 'Worktree settings',
+      description: 'Choose the workspace subdirectory used for managed Git worktrees.',
+      fieldLabel: 'Directory path',
+      helper: 'Use a relative subdirectory path under /workspace, such as branches/team-a.',
+      cancel: 'Cancel',
+      save: 'Save',
+      saving: 'Saving...',
+    },
+    validation: {
+      empty: 'Enter a directory path.',
+      separator: 'Use a relative directory path without leading, trailing, or empty path segments.',
+      parentTraversal: 'Directory paths cannot contain parent path segments.',
+      tooLong: 'Directory paths must be 64 characters or fewer.',
+    },
+    toast: {
+      loadFailed: {
+        title: 'Unable to load worktree settings',
+        description: 'Try opening the dialog again.',
+      },
+      saveSuccess: {
+        title: 'Worktree settings saved',
+        description: 'The runtime will sync the .gitignore managed block.',
+      },
+      saveFailed: {
+        title: 'Unable to save worktree settings',
+        description: 'Review the value and try again.',
+      },
+    },
+  },
   fileChanges: {
     loading: 'Loading...',
     stagedTitle: 'Staged changes',

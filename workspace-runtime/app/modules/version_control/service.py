@@ -67,7 +67,12 @@ class GitService:
     - Fast total count calculation
     """
 
-    def __init__(self, base_path: Optional[Path | str] = None, cache: Optional[GitCache] = None) -> None:
+    def __init__(
+        self,
+        base_path: Optional[Path | str] = None,
+        cache: Optional[GitCache] = None,
+        worktree_subdir: str = ".worktrees",
+    ) -> None:
         """Initialize Git service
 
         Args:
@@ -80,7 +85,7 @@ class GitService:
         self.cache = cache
 
         # Initialize utility class
-        self._utils = GitUtils(self._root_path, cache)
+        self._utils = GitUtils(self._root_path, cache, worktree_subdir=worktree_subdir)
         self._snapshot_provider = WorkingTreeSnapshotProvider(self._utils, cache)
 
         # Initialize operation classes
@@ -131,6 +136,14 @@ class GitService:
     def list_contexts(self, workspace_id: str) -> GitContextListResponse:
         """List available Git contexts for a workspace."""
         return self._utils.list_contexts(workspace_id)
+
+    def set_worktree_subdir(self, worktree_subdir: str) -> None:
+        """Update the managed worktree subdirectory."""
+        self._utils.set_worktree_subdir(worktree_subdir)
+
+    def invalidate_context_path_cache(self, workspace_id: Optional[str] = None) -> None:
+        """Invalidate cached Git context path resolutions."""
+        self._utils.invalidate_context_path_cache(workspace_id)
 
     def get_status(self, workspace_id: str, context_id: Optional[str] = None) -> VersionControlStatus:
         """Get Git status

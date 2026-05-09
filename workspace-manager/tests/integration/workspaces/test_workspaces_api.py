@@ -118,6 +118,33 @@ def test_update_docker_workspace_does_not_trigger_apply_custom_resource(
 
 
 @pytest.mark.integration
+def test_workspace_worktree_subdir_round_trip(
+    authenticated_client,
+    test_app,
+):
+    client, user = authenticated_client
+    _, session_factory = test_app
+    workspace_id = _create_workspace(
+        session_factory,
+        owner_id=user.id,
+        provisioner="docker",
+    )
+
+    update_response = client.put(
+        f"/api/v1/workspaces/{workspace_id}",
+        json={"worktreeSubdir": " branches/team-a "},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["worktreeSubdir"] == "branches/team-a"
+
+    get_response = client.get(f"/api/v1/workspaces/{workspace_id}")
+
+    assert get_response.status_code == 200
+    assert get_response.json()["worktreeSubdir"] == "branches/team-a"
+
+
+@pytest.mark.integration
 def test_update_docker_workspace_firewall_triggers_runtime_sync_only(
     authenticated_client,
     test_app,

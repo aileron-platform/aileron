@@ -56,6 +56,44 @@ const versionControl = {
       worktree: '工作樹 · {{name}}',
     },
   },
+  worktree: {
+    menu: {
+      moreActions: '更多動作',
+      group: '工作樹',
+      settings: '工作樹設定...',
+      create: '建立工作樹...',
+      comingSoon: '即將推出',
+    },
+    dialog: {
+      title: '工作樹設定',
+      description: '選擇用來放置 Git 工作樹的工作區子目錄。',
+      fieldLabel: '目錄路徑',
+      helper: '請使用 /workspace 底下的相對子目錄路徑，例如 branches/team-a。',
+      cancel: '取消',
+      save: '儲存',
+      saving: '儲存中...',
+    },
+    validation: {
+      empty: '請輸入目錄路徑。',
+      separator: '請使用相對目錄路徑，不可用開頭或結尾斜線，也不可包含空路徑片段。',
+      parentTraversal: '目錄名稱不可包含上層路徑片段。',
+      tooLong: '目錄路徑不得超過 64 個字元。',
+    },
+    toast: {
+      loadFailed: {
+        title: '無法載入工作樹設定',
+        description: '請重新開啟對話框再試一次。',
+      },
+      saveSuccess: {
+        title: '工作樹設定已儲存',
+        description: 'Runtime 會同步 .gitignore 管理區塊。',
+      },
+      saveFailed: {
+        title: '無法儲存工作樹設定',
+        description: '請檢查輸入內容後再試一次。',
+      },
+    },
+  },
   fileChanges: {
     loading: '載入中...',
     stagedTitle: '已暫存的變更',

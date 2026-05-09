@@ -6,6 +6,12 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.config.settings import get_settings
+from app.modules.version_control.dependencies import get_git_service
+from app.modules.version_control.worktree_config import set_worktree_subdir
+from app.modules.version_control.worktree_gitignore import WorktreeGitignoreManager
 
 from .dependencies import (
     get_internal_service,
@@ -27,11 +33,35 @@ from .service import InternalService
 
 logger = logging.getLogger(__name__)
 
+
+class WorktreeGitignoreSyncRequest(BaseModel):
+    """Request body for worktree gitignore synchronization."""
+
+    subdir: str = Field(...)
+    previous: str | None = None
+
 router = APIRouter(
     prefix="/internal",
     tags=["Internal API"],
     dependencies=[Depends(verify_internal_token)],
 )
+
+
+@router.post("/worktree/sync-gitignore")
+async def sync_worktree_gitignore(request: WorktreeGitignoreSyncRequest) -> dict[str, bool]:
+    """Synchronize the managed worktree .gitignore block."""
+    try:
+        subdir = set_worktree_subdir(request.subdir)
+        get_git_service().set_worktree_subdir(subdir)
+        manager = WorktreeGitignoreManager(get_settings().WORKSPACE_PATH)
+        changed = manager.ensure(subdir)
+        get_git_service().invalidate_context_path_cache()
+        return {"changed": changed}
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "WORKTREE_SUBDIR_INVALID"},
+        ) from exc
 
 
 @router.post(

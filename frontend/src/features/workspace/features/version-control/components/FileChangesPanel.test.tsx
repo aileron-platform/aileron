@@ -19,6 +19,7 @@ const {
   unstageMutationMock,
   discardMutationMock,
   toastMock,
+  worktreeSettingsDialogMock,
 } = vi.hoisted(() => ({
   onFileSelectMock: vi.fn(),
   changesQueryMock: {
@@ -49,6 +50,7 @@ const {
   unstageMutationMock: { mutateAsync: vi.fn(), isPending: false },
   discardMutationMock: { mutateAsync: vi.fn(), isPending: false },
   toastMock: vi.fn(),
+  worktreeSettingsDialogMock: vi.fn(),
 }));
 
 vi.mock('@/shared/hooks/useI18n', () => ({
@@ -64,6 +66,7 @@ vi.mock('@/shared/hooks/useI18n', () => ({
         'shared.versionControl.actions.fetch.label': 'Fetch',
         'shared.versionControl.actions.pull.label': 'Pull',
         'shared.versionControl.actions.push.label': 'Push',
+        'workspace.versionControl.worktree.menu.settings': 'Worktree settings...',
         'shared.versionControl.fileChanges.stagedTitle': 'Staged changes',
         'shared.versionControl.fileChanges.unstagedTitle': 'Unstaged changes',
         'shared.versionControl.fileChanges.empty': 'No file changes',
@@ -98,6 +101,13 @@ vi.mock('@/shared/hooks/useI18n', () => ({
 
 vi.mock('@/shared/components/ui/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
+}));
+
+vi.mock('./WorktreeSettingsDialog', () => ({
+  WorktreeSettingsDialog: (props: { open: boolean }) => {
+    worktreeSettingsDialogMock(props);
+    return props.open ? <div role="dialog">Worktree settings dialog</div> : null;
+  },
 }));
 
 vi.mock('../../../providers/WorkspaceProvider', () => ({
@@ -259,6 +269,25 @@ describe('FileChangesPanel', () => {
       branch: 'main',
       force: false,
     });
+  });
+
+  it('opens worktree settings from the action menu', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient();
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <FileChangesPanel onFileSelect={onFileSelectMock} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More actions' }));
+    await user.click(screen.getByText('Worktree settings...'));
+
+    expect(screen.getByRole('dialog')).toHaveTextContent('Worktree settings dialog');
+    expect(worktreeSettingsDialogMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true }),
+    );
   });
 
   it('creates a branch with start point and stash option', async () => {

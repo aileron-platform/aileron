@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import get_settings
 from app.modules.version_control.utils import GitUtils
+from app.modules.version_control.worktree_config import get_worktree_subdir
 from app.utils.datetime_utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ class AgentSessionService:
         self.task_repo = task_repo or TaskRepository(db)
         self.emitter = emitter or get_event_emitter()
         workspace_root = Path(get_settings().WORKSPACE_PATH).resolve()
-        self.git_utils = git_utils or GitUtils(workspace_root)
+        self.git_utils = git_utils or GitUtils(workspace_root, worktree_subdir=get_worktree_subdir())
 
     async def create_session(
         self,

@@ -337,6 +337,7 @@ export interface WorkspaceDetailResponse {
   preferredCli?: string;
   fallbackEnabled?: boolean;
   workspacePath?: string;
+  worktreeSubdir?: string;
   createdAt?: string;
   updatedAt?: string;
   runtimeJob?: any;

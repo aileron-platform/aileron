@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .cache import create_git_cache
 from .service import GitService
+from .worktree_config import get_worktree_subdir
 
 
 MOCK_GIT_ROOT = Path(__file__).resolve().parents[3] / "tests" / "git_workspaces"
@@ -32,7 +33,7 @@ def get_git_service() -> GitService:
 
     cache = create_git_cache(redis_url=redis_url, enabled=True)
 
-    return GitService(base_path=base_path, cache=cache)
+    return GitService(base_path=base_path, cache=cache, worktree_subdir=get_worktree_subdir())
 
 
 __all__ = ["get_git_service", "MOCK_GIT_ROOT"]

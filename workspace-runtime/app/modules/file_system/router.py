@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, Response
 from app.config.settings import get_settings
 from app.core.openapi import build_responses
 from app.modules.version_control.utils import GitUtils, VersionControlError
+from app.modules.version_control.worktree_config import get_worktree_subdir
 from .exceptions import (
     DirectoryNotEmptyException,
     FileAlreadyExistsException,
@@ -129,7 +130,7 @@ def _resolve_file_service_root(context_id: str | None) -> Path:
     if not context_id or context_id == "primary":
         return workspace_root
 
-    utils = GitUtils(workspace_root.parent)
+    utils = GitUtils(workspace_root.parent, worktree_subdir=get_worktree_subdir())
     workspace_id = workspace_root.name
 
     try:

@@ -97,10 +97,10 @@ def test_diff_index_and_ensure_remote(tmp_path: Path) -> None:
 def test_list_contexts_and_resolve_context_path(tmp_path: Path) -> None:
     workspace_root = tmp_path / "ws-1"
     workspace_root.mkdir()
-    worktree_root = workspace_root / ".worktrees" / "feature-auth"
+    worktree_root = workspace_root / "worktree" / "feature-auth"
     worktree_root.mkdir(parents=True)
 
-    utils = GitUtils(tmp_path)
+    utils = GitUtils(tmp_path, worktree_subdir="worktree")
     repo = MagicMock()
     repo.git.worktree.return_value = "\n".join([
         f"worktree {workspace_root}",
@@ -150,3 +150,30 @@ def test_resolve_context_path_invalidates_missing_cached_path(tmp_path: Path) ->
     with pytest.raises(VersionControlError):
         utils.resolve_context_path("ws-1", "worktree:feature-auth")
     assert utils.list_contexts.call_count == 2
+
+
+def test_list_contexts_skips_worktrees_outside_configured_subdir(tmp_path: Path) -> None:
+    workspace_root = tmp_path / "ws-1"
+    workspace_root.mkdir()
+    legacy_worktree_root = workspace_root / ".worktrees" / "legacy"
+    legacy_worktree_root.mkdir(parents=True)
+
+    utils = GitUtils(tmp_path, worktree_subdir="worktree")
+    repo = MagicMock()
+    repo.git.worktree.return_value = "\n".join([
+        f"worktree {workspace_root}",
+        "HEAD abcdef1234567890",
+        "branch refs/heads/main",
+        "",
+        f"worktree {legacy_worktree_root}",
+        "HEAD 1234567890abcdef",
+        "branch refs/heads/legacy",
+        "",
+    ])
+    repo.head.commit.hexsha = "abcdef1234567890"
+    repo.active_branch.name = "main"
+
+    utils.get_repo = MagicMock(return_value=repo)  # type: ignore[method-assign]
+    contexts = utils.list_contexts("ws-1")
+
+    assert [context.id for context in contexts.contexts] == ["primary"]

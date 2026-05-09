@@ -54,7 +54,12 @@ class GitUtils:
     Provides basic utility methods for Git operations.
     """
 
-    def __init__(self, root_path: Path, cache: Optional["GitCache"] = None) -> None:
+    def __init__(
+        self,
+        root_path: Path,
+        cache: Optional["GitCache"] = None,
+        worktree_subdir: str = ".worktrees",
+    ) -> None:
         """Initialize utility class
 
         Args:
@@ -62,8 +67,14 @@ class GitUtils:
             cache: Cache layer (optional)
         """
         self._root_path = root_path
+        self._worktree_subdir = worktree_subdir
         self.cache = cache
         self._context_path_cache: dict[tuple[str, str], Path] = {}
+
+    def set_worktree_subdir(self, worktree_subdir: str) -> None:
+        """Update the managed worktree subdirectory and clear cached contexts."""
+        self._worktree_subdir = worktree_subdir
+        self.invalidate_context_path_cache()
 
     def workspace_path(self, workspace_id: str) -> Path:
         """Get workspace path
@@ -148,7 +159,7 @@ class GitUtils:
                 )
                 continue
 
-            managed_root = workspace_root / ".worktrees"
+            managed_root = workspace_root / self._worktree_subdir
             if managed_root not in repo_path.parents:
                 continue
 

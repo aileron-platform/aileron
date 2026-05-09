@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { GitContextSelector } from './GitContextSelector';
+import { WorktreeSettingsDialog } from './WorktreeSettingsDialog';
 import {
   VersionControlChangesSidebar,
   VersionControlCreateBranchDialog,
@@ -109,6 +110,7 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
   const [untrackedPage, setUntrackedPage] = useState(1);
   const [accumulatedUntrackedFiles, setAccumulatedUntrackedFiles] = useState<VersionControlFileChange[]>([]);
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
+  const [worktreeSettingsOpen, setWorktreeSettingsOpen] = useState(false);
 
   // ==================== Refs ====================
 
@@ -519,6 +521,11 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
 
   const actionItems: VersionControlActionMenuItem[] = [
     { id: 'refresh', onClick: () => void handleRefresh() },
+    {
+      id: 'worktreeSettings',
+      labelKey: 'workspace.versionControl.worktree.menu.settings',
+      onClick: () => setWorktreeSettingsOpen(true),
+    },
     { id: 'fetch', onClick: () => void handleGitAction('fetch') },
     { id: 'pull', onClick: () => void handleGitAction('pull') },
     { id: 'push', onClick: () => void handleGitAction('push') },
@@ -567,6 +574,12 @@ export const FileChangesPanel: React.FC<FileChangesPanelProps> = ({ onFileSelect
         isCreating={checkoutMutation.isPending}
         supportsStartPoint
         supportsStashBeforeCheckout
+      />
+      <WorktreeSettingsDialog
+        open={worktreeSettingsOpen}
+        workspaceId={workspaceId}
+        onOpenChange={setWorktreeSettingsOpen}
+        onSaved={workspaceRuntime.reload}
       />
     </>
   );

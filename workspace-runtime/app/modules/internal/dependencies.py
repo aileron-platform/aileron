@@ -15,10 +15,10 @@ settings = get_settings()
 
 
 async def verify_internal_token(
-    authorization: Annotated[str, Header(description="Internal API authentication Token")]
+    authorization: Annotated[str | None, Header(description="Internal API authentication Token")] = None,
 ) -> None:
     """Verify internal API call permission"""
-    if not authorization.startswith("Bearer "):
+    if not authorization or not authorization.startswith("Bearer "):
         logger.warning("Internal API call missing Bearer token")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

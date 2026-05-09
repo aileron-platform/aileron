@@ -30,8 +30,15 @@ from app.modules.agent_session.routers import (
 )
 from app.modules.agent_session.websocket import websocket_router as agent_websocket_router
 from app.modules.file_system import router as file_system_router
+from app.modules.file_system.workspace_service import WorkspaceDataService
 from app.modules.canvas import router as canvas_router
 from app.modules.version_control import router as version_control_router
+from app.modules.version_control.dependencies import get_git_service
+from app.modules.version_control.worktree_config import (
+    DEFAULT_WORKTREE_SUBDIR,
+    set_worktree_subdir,
+)
+from app.modules.version_control.worktree_gitignore import WorktreeGitignoreManager
 from app.modules.cli_settings import router as cli_settings_router
 from app.modules.client_browser_relay import router as client_browser_relay_router
 # Services to be implemented later
@@ -50,11 +57,32 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifecycle management"""
     logger.info("🚀 Aileron - Workspace Runtime starting...")
+    workspace_data_service = WorkspaceDataService()
 
     try:
         # Basic initialization
         logger.info("✅ Basic service initialization complete")
         OpenSpecService().log_cli_probe()
+        subdir = DEFAULT_WORKTREE_SUBDIR
+        workspace_info = await workspace_data_service.get_workspace(settings.WORKSPACE_ID)
+        if workspace_info is None:
+            logger.warning(
+                "Unable to fetch workspace information during startup; using default worktree subdir"
+            )
+        else:
+            subdir = workspace_info.worktree_subdir or DEFAULT_WORKTREE_SUBDIR
+
+        try:
+            subdir = set_worktree_subdir(subdir)
+            get_git_service().set_worktree_subdir(subdir)
+            WorktreeGitignoreManager(settings.WORKSPACE_PATH).ensure(subdir)
+        except Exception as exc:
+            logger.warning(
+                "Failed to reconcile worktree gitignore during startup; falling back to default subdir: %s",
+                exc,
+            )
+            subdir = set_worktree_subdir(DEFAULT_WORKTREE_SUBDIR)
+            get_git_service().set_worktree_subdir(subdir)
 
         # TODO: Will add workspace manager and system monitor later
 
@@ -66,6 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Do not use sys.exit, let FastAPI handle the error
         raise
     finally:
+        await workspace_data_service.close()
         logger.info("🛑 Workspace Runtime shutting down...")
         logger.info("✅ Resource cleanup complete")
 

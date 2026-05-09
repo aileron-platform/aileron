@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 
     fallback_enabled boolean DEFAULT true,
     workspace_path text DEFAULT '/workspace',
+    worktree_subdir text NOT NULL DEFAULT '.worktrees',
     runtime_mounted_kb_signature text,
 
     -- Browser container fields
@@ -185,6 +186,7 @@ ALTER TABLE workspaces
     ADD COLUMN IF NOT EXISTS runtime_created_at timestamp with time zone,
     ADD COLUMN IF NOT EXISTS runtime_resources jsonb,
     ADD COLUMN IF NOT EXISTS runtime_mounted_kb_signature text,
+    ADD COLUMN IF NOT EXISTS worktree_subdir text NOT NULL DEFAULT '.worktrees',
     ADD COLUMN IF NOT EXISTS language varchar(10) DEFAULT 'zh-TW',
     ADD COLUMN IF NOT EXISTS timezone varchar(64) DEFAULT 'Asia/Taipei',
     ADD COLUMN IF NOT EXISTS default_shell varchar(32) DEFAULT 'bash',

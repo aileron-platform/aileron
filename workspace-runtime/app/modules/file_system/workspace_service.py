@@ -19,6 +19,7 @@ class WorkspaceInfo(BaseModel):
     id: str
     name: str
     workspace_path: str = "/workspace"
+    worktree_subdir: str = ".worktrees"
     runtime_status: str = "stopped"
     env_vars: list["WorkspaceEnvVar"] = Field(default_factory=list)
     acp_cli_args: list[str] = Field(default_factory=list)
@@ -53,6 +54,7 @@ class WorkspaceDataService:
                 id=data["id"],
                 name=data["name"],
                 workspace_path=data.get("workspacePath", "/workspace"),
+                worktree_subdir=data.get("worktreeSubdir") or ".worktrees",
                 runtime_status=data.get("runtimeStatus", {}).get("status", "stopped"),
                 env_vars=[WorkspaceEnvVar(**item) for item in env_vars if isinstance(item, dict)],
                 acp_cli_args=data.get("acpCliArgs") or [],
