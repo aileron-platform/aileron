@@ -271,8 +271,9 @@ def test_resolve_file_service_root_uses_git_context(monkeypatch, tmp_path: Path)
     resolved_context_path.mkdir(parents=True)
 
     class StubGitUtils:
-        def __init__(self, base_path: Path) -> None:
+        def __init__(self, base_path: Path, worktree_subdir: str = ".worktrees") -> None:
             assert base_path == workspace_root.parent
+            assert worktree_subdir == ".worktrees"
 
         def resolve_context_path(self, workspace_id: str, context_id: str) -> Path:
             assert workspace_id == workspace_root.name
@@ -305,8 +306,9 @@ def test_resolve_file_service_root_maps_invalid_context_to_http_error(monkeypatc
     workspace_root.mkdir()
 
     class StubGitUtils:
-        def __init__(self, base_path: Path) -> None:
+        def __init__(self, base_path: Path, worktree_subdir: str = ".worktrees") -> None:
             assert base_path == workspace_root.parent
+            assert worktree_subdir == ".worktrees"
 
         def resolve_context_path(self, workspace_id: str, context_id: str) -> Path:
             raise VersionControlError(
