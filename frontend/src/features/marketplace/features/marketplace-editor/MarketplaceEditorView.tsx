@@ -10,8 +10,6 @@ import {
   FolderPlus,
   Info,
   Network,
-  Sparkles,
-  Terminal,
   Wand2,
   Workflow,
   Zap,
@@ -35,7 +33,6 @@ import { MarketplaceEditorHookSection } from './MarketplaceEditorHookSection';
 import { MarketplaceEditorMcpSection, marketplaceApplyMcpItemsToPackageFiles } from './MarketplaceEditorMcpSection';
 import {
   emptyMarketplaceFeatureItems,
-  getMarketplaceScaffoldFeatureItems,
   marketplaceApplyPackageFiles,
   marketplaceApplyResourceItemsToPackageFiles,
   marketplaceMarkdownManagedPrefixes,
@@ -137,14 +134,12 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
   const resolvedPackageId = packageId || t('marketplace.editor.fields.packageIdPreviewFallback');
   const resolvedDisplayName = displayName || packageId || t('marketplace.editor.fields.displayNamePlaceholder');
   const packageRoot = provider ? getMarketplacePackageRoot(provider, resolvedPackageId) : '';
-  const featureItems = React.useMemo(
+  const featureItems = React.useMemo<MarketplaceEditorFeatureItems | null>(
     () => {
       if (!provider) return null;
-      const detailItems = marketplaceFeatureItemsFromDetail(loadedDetail);
-      if (detailItems) return detailItems;
-      return mode === 'create' ? getMarketplaceScaffoldFeatureItems(provider) : emptyMarketplaceFeatureItems();
+      return marketplaceFeatureItemsFromDetail(loadedDetail) ?? emptyMarketplaceFeatureItems();
     },
-    [loadedDetail, mode, provider],
+    [loadedDetail, provider],
   );
   const skillsFileManagerKey = React.useMemo(
     () => `${provider ?? 'none'}-skills-${featureItems?.skills.map(item => item.path).join('|') ?? 'empty'}`,
@@ -478,19 +473,19 @@ interface MarketplaceProviderSelectionStepProps {
 
 const marketplaceProviderOptions: Array<{
   provider: MarketplaceProvider;
-  icon: React.ComponentType<{ className?: string }>;
+  iconSrc: string;
 }> = [
   {
     provider: 'claude-code',
-    icon: Bot,
+    iconSrc: '/marketplace/providers/claude-code.png',
   },
   {
     provider: 'codex',
-    icon: Terminal,
+    iconSrc: '/marketplace/providers/codex.png',
   },
   {
     provider: 'gemini',
-    icon: Sparkles,
+    iconSrc: '/marketplace/providers/gemini.svg',
   },
 ];
 
@@ -530,7 +525,7 @@ const MarketplaceProviderSelectionStep: React.FC<MarketplaceProviderSelectionSte
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {marketplaceProviderOptions.map(({ provider: optionProvider, icon: Icon }) => {
+            {marketplaceProviderOptions.map(({ provider: optionProvider, iconSrc }) => {
               const editorTabs = providerEditorTabs[optionProvider].filter(tab => tab !== 'basic' && tab !== 'files');
 
               return (
@@ -542,8 +537,8 @@ const MarketplaceProviderSelectionStep: React.FC<MarketplaceProviderSelectionSte
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background text-muted-foreground group-hover:text-primary">
-                      <Icon className="h-4 w-4" />
+                    <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
+                      <img src={iconSrc} alt="" className="h-7 w-7 object-contain" />
                     </span>
                     <div>
                       <div className="text-sm font-semibold text-foreground">

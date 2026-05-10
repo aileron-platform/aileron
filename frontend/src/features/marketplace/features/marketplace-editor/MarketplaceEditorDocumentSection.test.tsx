@@ -9,11 +9,7 @@ import type { MarketplaceEditorResourceItem } from './marketplaceEditorResourceI
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, string>) => (
-      key === 'marketplace.editor.agentsMd.defaultContent'
-        ? `# ${values?.fileName ?? 'AGENTS.md'}`
-        : key
-    ),
+    t: (key: string) => key,
   }),
 }));
 

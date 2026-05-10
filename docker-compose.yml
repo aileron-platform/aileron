@@ -139,6 +139,7 @@ services:
       - DOCKER_NETWORK=aileron-network-dev
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/aileron
       - HOST_PROJECT_ROOT=${HOST_PROJECT_ROOT:-.}
+      - WORKSPACE_IMAGE_ARCH=${WORKSPACE_IMAGE_ARCH:-arm64}
       - HOST_WORKSPACE_RUNTIME_DIR=${HOST_WORKSPACE_RUNTIME_DIR:-./workspace-runtime}
       - HOST_WORKSPACES_DIR=${HOST_WORKSPACES_DIR:-./data/workspace-data}
       - HOST_WORKSPACE_SCRIPTS_DIR=${HOST_WORKSPACE_SCRIPTS_DIR:-./data/workspace-scripts}

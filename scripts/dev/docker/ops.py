@@ -36,6 +36,8 @@ PROJECT_IMAGE_REPOS = (
     "ailerondocker/workspace-ui",
     "ailerondocker/workspace-runtime-base-lite",
 )
+WORKSPACE_IMAGES_CONFIG = Path("workspace-manager/app/config/container_images.yaml")
+ARCH_PLACEHOLDER = "{arch}"
 DATA_DIRS = (
     "data/postgres",
     "data/redis",
@@ -288,6 +290,7 @@ def build_compose_env(profile: StartupProfile) -> dict[str, str]:
             "WORKSPACE_CANVAS_IMAGE": f"ailerondocker/workspace-canvas:{profile.service_tag}",
             "WORKSPACE_UI_IMAGE": f"ailerondocker/workspace-ui:{profile.service_tag}",
             "WORKSPACE_RUNTIME_BASE_IMAGE": profile.runtime_base_image,
+            "WORKSPACE_IMAGE_ARCH": profile.image_arch,
             "WORKSPACE_RUNTIME_JAVA_HOME": "/usr/lib/jvm/openjdk-21",
             "HOST_PROJECT_ROOT": str(repo_root),
             "HOST_WORKSPACE_RUNTIME_DIR": str(env.get("HOST_WORKSPACE_RUNTIME_DIR", repo_root / "workspace-runtime")),
@@ -384,6 +387,78 @@ def compose_pull(repo_root: Path, *, env: dict[str, str]) -> None:
         action="docker compose pull",
     )
     print_success("docker compose pull 已完成")
+
+
+def load_workspace_images(repo_root: Path, profile: StartupProfile) -> list[str]:
+    """Load and render the workspace-creation image list from container_images.yaml."""
+    try:
+        import yaml  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise OpsError(
+            "需要 PyYAML 才能讀取 workspace image 設定，請執行 `pip install pyyaml` 後重試。"
+        ) from exc
+
+    config_path = repo_root / WORKSPACE_IMAGES_CONFIG
+    if not config_path.is_file():
+        raise OpsError(f"找不到 workspace image 設定檔: {config_path}")
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+
+    arch = profile.image_arch
+
+    def render(template: str) -> str:
+        return template.replace(ARCH_PLACEHOLDER, arch)
+
+    rendered: list[str] = []
+    seen: set[str] = set()
+
+    for key in ("browser_image", "canvas_image"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            ref = render(value)
+            if ref not in seen:
+                seen.add(ref)
+                rendered.append(ref)
+
+    for entry in data.get("images", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("active", True):
+            continue
+        image_template = entry.get("image")
+        if not isinstance(image_template, str) or not image_template:
+            continue
+        ref = render(image_template)
+        if ref not in seen:
+            seen.add(ref)
+            rendered.append(ref)
+
+    return rendered
+
+
+def pull_workspace_images(repo_root: Path, images: list[str]) -> None:
+    """Pull each workspace-creation image; abort on first failure."""
+    if not images:
+        print_info("workspace image 設定為空，跳過 prefetch")
+        return
+
+    print_info("預取新建 workspace 用 image：")
+    for ref in images:
+        print(f"  - {ref}")
+
+    for ref in images:
+        print_info(f"docker pull {ref}")
+        result = stream_command(
+            ["docker", "pull", ref],
+            cwd=repo_root,
+            check=False,
+            action=f"docker pull {ref}",
+        )
+        if result.returncode != 0:
+            raise OpsError(f"拉取 image 失敗: {ref} (exit code {result.returncode})")
+
+    print_success(f"已 prefetch {len(images)} 個 workspace image")
 
 
 def compose_up(
@@ -903,6 +978,8 @@ def main() -> int:
             print_startup_profile(profile, action=action)
             if args.pull:
                 compose_pull(repo_root, env=env)
+                workspace_images = load_workspace_images(repo_root, profile)
+                pull_workspace_images(repo_root, workspace_images)
             compose_up(
                 repo_root,
                 build=args.build,

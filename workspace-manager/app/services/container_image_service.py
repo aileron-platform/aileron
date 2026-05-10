@@ -5,12 +5,29 @@ Provides read and management features for container image configuration
 """
 
 import os
+import platform
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
 
 import yaml
 from pydantic import BaseModel, Field
+
+_ARCH_PLACEHOLDER = "{arch}"
+_AARCH64_MACHINES = {"aarch64", "arm64", "arm64e"}
+_X86_64_MACHINES = {"x86_64", "amd64"}
+
+
+def _detect_host_arch() -> str:
+    machine = platform.machine().lower()
+    if machine in _AARCH64_MACHINES:
+        return "arm64"
+    if machine in _X86_64_MACHINES:
+        return "amd64"
+    raise ValueError(
+        f"Unsupported host architecture for image rendering: {machine!r}. "
+        "Set WORKSPACE_IMAGE_ARCH to 'arm64' or 'amd64' explicitly."
+    )
 
 
 class ContainerImageFeature(BaseModel):
@@ -133,6 +150,13 @@ class ContainerImageService:
             raise ValueError(f"Default image does not exist: {self.config.default_image}")
         return default_image
 
+    def _render_image(self, template: str) -> str:
+        """Resolve {arch} placeholder using WORKSPACE_IMAGE_ARCH env or host detection."""
+        if _ARCH_PLACEHOLDER not in template:
+            return template
+        arch = os.environ.get("WORKSPACE_IMAGE_ARCH", "").strip() or _detect_host_arch()
+        return template.replace(_ARCH_PLACEHOLDER, arch)
+
     def get_docker_image_name(self, image_id: str) -> str:
         """
         Get Docker image name
@@ -150,15 +174,15 @@ class ContainerImageService:
         if image is None:
             # If image doesn't exist, use default image
             image = self.get_default_image()
-        return image.image
+        return self._render_image(image.image)
 
     def get_browser_image_name(self) -> str:
         """Get browser container image name"""
-        return self.config.browser_image
+        return self._render_image(self.config.browser_image)
 
     def get_canvas_image_name(self) -> str:
         """Get canvas container image name"""
-        return self.config.canvas_image
+        return self._render_image(self.config.canvas_image)
 
     def validate_image_id(self, image_id: str) -> bool:
         """

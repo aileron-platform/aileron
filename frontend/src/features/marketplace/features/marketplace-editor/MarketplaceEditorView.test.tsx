@@ -11,11 +11,7 @@ import type { MarketplacePackageDetail, MarketplaceProvider } from '@/shared/typ
 
 vi.mock('@/shared/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string, values?: Record<string, string>) => (
-      key === 'marketplace.editor.agentsMd.defaultContent'
-        ? `# ${values?.fileName ?? 'AGENTS.md'}\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n`
-        : key
-    ),
+    t: (key: string) => key,
   }),
 }));
 
@@ -843,6 +839,10 @@ describe('MarketplaceEditorView', () => {
     renderCodexEditor();
 
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.agentsMd/ }));
+    await user.type(
+      screen.getByLabelText('marketplace.editor.agentsMd.placeholder'),
+      '# AGENTS.md\n\nGuidance body.',
+    );
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.agentsMd.actions.copy' }));
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.agentsMd.actions.download' }));
 

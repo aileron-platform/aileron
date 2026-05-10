@@ -17,6 +17,12 @@ from app.services.container_image_service import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _clear_workspace_image_arch(monkeypatch):
+    """Ensure WORKSPACE_IMAGE_ARCH does not leak between tests."""
+    monkeypatch.delenv("WORKSPACE_IMAGE_ARCH", raising=False)
+
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -307,3 +313,114 @@ class TestSingleton:
 
         # Assert
         assert service1 is service2
+
+
+# ============================================================================
+# Architecture Placeholder Rendering Tests
+# ============================================================================
+
+@pytest.fixture
+def placeholder_config_data():
+    """Configuration with {arch} placeholders in image fields."""
+    return {
+        "version": "1.0",
+        "default_image": "universal",
+        "browser_image": "ailerondocker/workspace-chrome:dev-{arch}",
+        "canvas_image": "ailerondocker/workspace-canvas:dev-{arch}",
+        "images": [
+            {
+                "id": "universal",
+                "name": "Universal",
+                "description": "Universal runtime",
+                "icon": "🌐",
+                "image": "ailerondocker/workspace-runtime:dev-lite-{arch}",
+                "tags": ["universal"],
+                "features": [],
+                "recommended": True,
+                "active": True,
+                "sort_order": 1,
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def placeholder_service(placeholder_config_data, tmp_path):
+    config_file = tmp_path / "container_images.yaml"
+    with open(config_file, "w", encoding="utf-8") as f:
+        yaml.dump(placeholder_config_data, f)
+    return ContainerImageService(config_path=str(config_file))
+
+
+@pytest.mark.unit
+class TestArchPlaceholderRendering:
+    """Architecture placeholder rendering tests"""
+
+    def test_render_with_env_arm64(self, placeholder_service, monkeypatch):
+        """Test: WORKSPACE_IMAGE_ARCH=arm64 renders arm64 tag"""
+        # Arrange
+        monkeypatch.setenv("WORKSPACE_IMAGE_ARCH", "arm64")
+
+        # Act & Assert
+        assert placeholder_service.get_docker_image_name("universal") == \
+            "ailerondocker/workspace-runtime:dev-lite-arm64"
+        assert placeholder_service.get_browser_image_name() == \
+            "ailerondocker/workspace-chrome:dev-arm64"
+        assert placeholder_service.get_canvas_image_name() == \
+            "ailerondocker/workspace-canvas:dev-arm64"
+
+    def test_render_with_env_amd64(self, placeholder_service, monkeypatch):
+        """Test: WORKSPACE_IMAGE_ARCH=amd64 renders amd64 tag"""
+        # Arrange
+        monkeypatch.setenv("WORKSPACE_IMAGE_ARCH", "amd64")
+
+        # Act & Assert
+        assert placeholder_service.get_docker_image_name("universal") == \
+            "ailerondocker/workspace-runtime:dev-lite-amd64"
+        assert placeholder_service.get_browser_image_name() == \
+            "ailerondocker/workspace-chrome:dev-amd64"
+
+    def test_render_falls_back_to_host_arch_arm64(self, placeholder_service, monkeypatch):
+        """Test: env unset falls back to host detection (aarch64-class → arm64)"""
+        # Arrange
+        monkeypatch.delenv("WORKSPACE_IMAGE_ARCH", raising=False)
+        monkeypatch.setattr("platform.machine", lambda: "aarch64")
+
+        # Act & Assert
+        assert placeholder_service.get_browser_image_name() == \
+            "ailerondocker/workspace-chrome:dev-arm64"
+
+    def test_render_falls_back_to_host_arch_amd64(self, placeholder_service, monkeypatch):
+        """Test: env unset falls back to host detection (x86_64 → amd64)"""
+        # Arrange
+        monkeypatch.delenv("WORKSPACE_IMAGE_ARCH", raising=False)
+        monkeypatch.setattr("platform.machine", lambda: "x86_64")
+
+        # Act & Assert
+        assert placeholder_service.get_canvas_image_name() == \
+            "ailerondocker/workspace-canvas:dev-amd64"
+
+    def test_render_unsupported_host_machine_raises(self, placeholder_service, monkeypatch):
+        """Test: unrecognised host machine raises ValueError"""
+        # Arrange
+        monkeypatch.delenv("WORKSPACE_IMAGE_ARCH", raising=False)
+        monkeypatch.setattr("platform.machine", lambda: "riscv64")
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="Unsupported host architecture"):
+            placeholder_service.get_browser_image_name()
+
+    def test_render_empty_env_falls_back(self, placeholder_service, monkeypatch):
+        """Test: empty WORKSPACE_IMAGE_ARCH treated as unset, falls back to host detection"""
+        # Arrange
+        monkeypatch.setenv("WORKSPACE_IMAGE_ARCH", "  ")
+        monkeypatch.setattr("platform.machine", lambda: "x86_64")
+
+        # Act & Assert
+        assert placeholder_service.get_browser_image_name() == \
+            "ailerondocker/workspace-chrome:dev-amd64"
+
+    def test_render_passthrough_when_no_placeholder(self, container_image_service):
+        """Test: image strings without {arch} return verbatim"""
+        # Act & Assert (sample_config_data uses literal "python:3.11")
+        assert container_image_service.get_docker_image_name("python") == "python:3.11"

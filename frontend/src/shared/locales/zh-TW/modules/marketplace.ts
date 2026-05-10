@@ -627,7 +627,6 @@ const marketplace = {
       providerGuidance: {
         title: 'Provider guidance',
         description: '隨 extension 安裝的 Gemini 指引。',
-        defaultBody: '新增此 extension 的 Gemini 專用指引。',
         placeholder: '撰寫 GEMINI.md 指引...',
       },
       readme: {
@@ -705,7 +704,6 @@ const marketplace = {
       title: 'AGENTS.md',
       description: '隨 package 安裝到 workspace 的操作指引。',
       placeholder: '撰寫 AGENTS.md 指引...',
-      defaultContent: '# {{fileName}}\n\n使用此 package 指引目標 workspace 的 CLI 行為。\n\n## Review policy\n\n- 先回報 findings，再提供摘要。\n- 包含具體檔案參照。\n- 優先使用現有驗證指令。\n',
       status: {
         loading: '正在載入 AGENTS.md...',
       },

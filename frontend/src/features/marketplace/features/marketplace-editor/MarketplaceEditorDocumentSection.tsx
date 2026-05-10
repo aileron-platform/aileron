@@ -33,10 +33,8 @@ export interface MarketplaceAgentsMdEditorProps {
 export const MarketplaceAgentsMdEditor: React.FC<MarketplaceAgentsMdEditorProps> = ({ provider, onDirty, onContentChange }) => {
   const { t } = useI18n();
   const fileName = provider === 'gemini' ? 'GEMINI.md' : 'AGENTS.md';
-  const [content, setContent] = React.useState(
-    t('marketplace.editor.agentsMd.defaultContent', { fileName }),
-  );
-  const [savedContent, setSavedContent] = React.useState(content);
+  const [content, setContent] = React.useState('');
+  const [savedContent, setSavedContent] = React.useState('');
   const hasUnsavedChanges = content !== savedContent;
 
   const handleCopy = async () => {

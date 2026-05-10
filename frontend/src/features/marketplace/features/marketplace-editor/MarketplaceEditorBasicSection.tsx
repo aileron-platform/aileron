@@ -84,7 +84,6 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
   }, [draft, onRequiredDraftChange]);
 
   const resolvedPackageId = draft.packageName || packageId || t('marketplace.editor.fields.packageIdPreviewFallback');
-  const resolvedDisplayName = displayName || draft.packageName || t('marketplace.editor.fields.displayNamePlaceholder');
   const manifestFile = {
     'claude-code': '.claude-plugin/plugin.json',
     codex: '.codex-plugin/plugin.json',
@@ -355,7 +354,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
             fileName="GEMINI.md"
           >
             <MarkdownEditor
-              value={providerGuidanceDraft || `# ${resolvedDisplayName}\n\n${t('marketplace.editor.packageSections.providerGuidance.defaultBody')}`}
+              value={providerGuidanceDraft}
               onChange={(value) => {
                 setProviderGuidanceDraft(value);
                 onProviderGuidanceChange(value);
@@ -374,7 +373,7 @@ export const MarketplaceEditorBasicSection: React.FC<MarketplaceEditorBasicSecti
           fileName="README.md"
         >
           <MarkdownEditor
-            value={readmeDraft || `# ${resolvedDisplayName}\n\n${draft.manifestDescription}`}
+            value={readmeDraft}
             onChange={(value) => {
               setReadmeDraft(value);
               onReadmeChange(value);

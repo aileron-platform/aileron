@@ -627,7 +627,6 @@ const marketplace = {
       providerGuidance: {
         title: 'Provider guidance',
         description: 'Gemini guidance installed with the extension.',
-        defaultBody: 'Add Gemini-specific instructions for this extension.',
         placeholder: 'Write GEMINI.md guidance...',
       },
       readme: {
@@ -705,7 +704,6 @@ const marketplace = {
       title: 'AGENTS.md',
       description: 'Workspace guidance installed with the package.',
       placeholder: 'Write AGENTS.md guidance...',
-      defaultContent: '# {{fileName}}\n\nUse this package to guide CLI behavior in the target workspace.\n\n## Review policy\n\n- Report findings before summaries.\n- Include concrete file references.\n- Prefer existing verification commands.\n',
       status: {
         loading: 'Loading AGENTS.md...',
       },
