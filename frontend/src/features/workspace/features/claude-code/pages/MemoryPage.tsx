@@ -36,6 +36,7 @@ const MemoryPageContent: React.FC = () => {
       onRefresh={memory.refresh}
       dialogComponent={MemoryDialog}
       i18nNamespace="workspace.claudeCode"
+      showSidebar={false}
       config={{
         metaKey: 'memory',
         createButtonLabel: t('workspace.claudeCode.memory.actions.create'),

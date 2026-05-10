@@ -1,7 +1,11 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight, Copy, Download, Edit, MoreHorizontal, Plus, RefreshCw, Trash2 } from 'lucide-react';
 
-import { MarkdownDocumentShell } from '@/shared/components/document-workflow';
+import {
+  MarkdownDocumentShell,
+  MultiDocumentEditorShell,
+  MultiDocumentSidebar,
+} from '@/shared/components/document-workflow';
 import { CodeTextEditor } from '@/shared/components/file-workbench/viewer-entry';
 import { MarkdownEditor } from '@/shared/components/markdown/MarkdownEditor';
 import { Badge } from '@/shared/components/ui/badge';
@@ -14,7 +18,6 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplaceProvider } from '@/shared/types/marketplace';
 import { cn } from '@/shared/utils/cn';
 
-import { MarketplaceSectionSidebarShell } from '../../components/MarketplaceSectionSidebarShell';
 import { downloadBlob } from '../../utils/downloadBlob';
 import {
   getMarketplaceItemFileName,
@@ -23,6 +26,7 @@ import {
   type MarketplaceMarkdownEditorTab,
   type MarketplaceResourceFormat,
 } from './marketplaceEditorResourceItems';
+import { useMarketplaceMarkdownEditorState } from './useMarketplaceMarkdownEditorState';
 
 export interface MarketplaceAgentsMdEditorProps {
   provider: MarketplaceProvider;
@@ -119,355 +123,220 @@ export const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditor
   onItemsChange,
 }) => {
   const { t } = useI18n();
-  const [baseItems, setBaseItems] = React.useState(items);
-  const [localItems, setLocalItems] = React.useState(items);
-  const [selectedId, setSelectedId] = React.useState(items[0]?.id ?? null);
-  const [search, setSearch] = React.useState('');
-  const [renameItem, setRenameItem] = React.useState<MarketplaceEditorResourceItem | null>(null);
-  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
-  const [drafts, setDrafts] = React.useState<Record<string, string>>(
-    () => Object.fromEntries(items.map(item => [item.id, item.content])),
-  );
-  const didMountRef = React.useRef(false);
-
-  const materializeItems = React.useCallback((
-    nextItems: MarketplaceEditorResourceItem[],
-    nextDrafts: Record<string, string>,
-  ): MarketplaceEditorResourceItem[] => (
-    nextItems.map(item => ({
-      ...item,
-      content: nextDrafts[item.id] ?? item.content,
-    }))
-  ), []);
-
-  const emitItemsChange = React.useCallback((
-    nextItems: MarketplaceEditorResourceItem[],
-    nextDrafts: Record<string, string>,
-  ) => {
-    onItemsChange?.(materializeItems(nextItems, nextDrafts));
-  }, [materializeItems, onItemsChange]);
-
-  React.useEffect(() => {
-    setBaseItems(items);
-    setLocalItems(items);
-    setDrafts(Object.fromEntries(items.map(item => [item.id, item.content])));
-    setSelectedId(items[0]?.id ?? null);
-  }, [items]);
-
-  React.useEffect(() => {
-    if (!didMountRef.current) return;
-    setBaseItems(localItems.map(item => ({
-      ...item,
-      content: drafts[item.id] ?? item.content,
-    })));
-    setLocalItems(prev => prev.map(item => ({
-      ...item,
-      content: drafts[item.id] ?? item.content,
-    })));
-  }, [commitVersion]);
-
-  React.useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
-      return;
-    }
-    setLocalItems(baseItems);
-    setDrafts(Object.fromEntries(baseItems.map(item => [item.id, item.content])));
-    setSelectedId(prev => (prev && baseItems.some(item => item.id === prev) ? prev : baseItems[0]?.id ?? null));
-  }, [discardVersion]);
-
-  const dirtyItemIds = React.useMemo(() => {
-    const baseById = new Map(baseItems.map(item => [item.id, item]));
-    return new Set(localItems.filter(item => {
-      const baseItem = baseById.get(item.id);
-      if (!baseItem) return true;
-      return baseItem.path !== item.path || baseItem.content !== (drafts[item.id] ?? item.content);
-    }).map(item => item.id));
-  }, [baseItems, drafts, localItems]);
-
-  const filteredItems = React.useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return localItems;
-    return localItems.filter(item => (
-      getMarketplaceItemFileName(item).toLowerCase().includes(query) ||
-      marketplaceEditorItemDescription(item, t).toLowerCase().includes(query) ||
-      (drafts[item.id] ?? item.content).toLowerCase().includes(query)
-    ));
-  }, [drafts, localItems, search, t]);
-
-  React.useEffect(() => {
-    if (filteredItems.length === 0) {
-      setSelectedId(null);
-      return;
-    }
-    if (!selectedId || !filteredItems.some(item => item.id === selectedId)) {
-      setSelectedId(filteredItems[0].id);
-    }
-  }, [filteredItems, selectedId]);
-
-  const selectedItem = filteredItems.find(item => item.id === selectedId) ?? null;
-  const currentIndex = selectedItem ? filteredItems.findIndex(item => item.id === selectedItem.id) : -1;
-  const canNavigatePrevious = currentIndex > 0;
-  const canNavigateNext = currentIndex >= 0 && currentIndex < filteredItems.length - 1;
-  const selectedContent = selectedItem ? (drafts[selectedItem.id] ?? selectedItem.content) : '';
-  const isSelectedDirty = selectedItem ? dirtyItemIds.has(selectedItem.id) : false;
-
-  const handleCopy = async () => {
-    if (!selectedItem) return;
-    await navigator.clipboard.writeText(selectedContent);
-  };
-
-  const handleDownload = () => {
-    if (!selectedItem) return;
-    const blob = new Blob([selectedContent], { type: format === 'toml' ? 'application/toml' : 'text/markdown' });
-    downloadBlob(blob, getMarketplaceItemFileName(selectedItem));
-  };
-
-  const handleCreate = (value: MarketplaceMarkdownCreateDialogValue) => {
-    const id = `local-${Math.random().toString(36).slice(2, 10)}`;
-    const nextItem: MarketplaceEditorResourceItem = {
-      id,
-      titleKey: 'marketplace.editor.documentViewer.create.defaultTitle',
-      descriptionKey: 'marketplace.editor.documentViewer.create.defaultDescription',
-      title: value.path,
-      description: value.path,
-      path: value.path,
-      content: value.content,
-      badge: format === 'toml' ? 'toml' : 'md',
-    };
-    const nextItems = [...localItems, nextItem];
-    const nextDrafts = { ...drafts, [id]: value.content };
-    setLocalItems(nextItems);
-    setDrafts(nextDrafts);
-    setSelectedId(id);
-    setCreateDialogOpen(false);
-    emitItemsChange(nextItems, nextDrafts);
-    onDirty();
-  };
+  const {
+    search,
+    setSearch,
+    renameItem,
+    setRenameItem,
+    createDialogOpen,
+    setCreateDialogOpen,
+    sidebarItems,
+    dirtyItemIds,
+    selectedItem,
+    selectedContent,
+    isSelectedDirty,
+    canNavigatePrevious,
+    canNavigateNext,
+    handleSelectPrevious,
+    handleSelectNext,
+    handleSelectItem,
+    handleCreate,
+    handleRenameSubmit,
+    handleContentChange,
+    handleCopy,
+    handleDownload,
+  } = useMarketplaceMarkdownEditorState({
+    format,
+    items,
+    commitVersion,
+    discardVersion,
+    t,
+    onDirty,
+    onItemsChange,
+  });
 
   return (
-    <div className="flex h-full overflow-hidden">
-      <div className="w-80 flex-shrink-0">
-        <MarketplaceSectionSidebarShell
-          title={t(`marketplace.editor.documentViewer.${tab}.title`)}
-          icon={<Icon className="h-4 w-4" />}
-          actions={(
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                title={t('marketplace.editor.documentViewer.actions.refresh')}
-                aria-label={t('marketplace.editor.documentViewer.actions.refresh')}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                title={t('marketplace.editor.documentViewer.actions.add')}
-                aria-label={t('marketplace.editor.documentViewer.actions.add')}
-                onClick={() => setCreateDialogOpen(true)}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </>
-          )}
-          searchValue={search}
-          onSearchChange={setSearch}
-          onSearchClear={() => setSearch('')}
-          searchPlaceholder={t('marketplace.editor.documentViewer.search.placeholder')}
-          body={(
-            <div className="h-full space-y-2 overflow-y-auto p-3">
-              {filteredItems.length === 0 ? (
-                <div className="py-8 text-center text-sm text-muted-foreground">
-                  {t('marketplace.editor.documentViewer.empty.filtered')}
-                </div>
-              ) : (
-                filteredItems.map(item => {
-                  const isActive = selectedItem?.id === item.id;
-                  const content = drafts[item.id] ?? item.content;
-                  const isItemDirty = dirtyItemIds.has(item.id);
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setSelectedId(item.id)}
-                      className={cn(
-                        'w-full rounded-lg border px-3 py-3 text-left transition-colors',
-                        isActive
-                          ? 'border-primary/60 bg-primary/10 shadow-sm'
-                          : 'border-transparent bg-muted/20 hover:border-primary/20 hover:bg-muted/40',
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">
-                            {isItemDirty ? (
-                              <span
-                                className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-500 align-middle"
-                                aria-label={t('marketplace.editor.documentViewer.unsavedFile')}
-                              />
-                            ) : null}
-                            {getMarketplaceItemFileName(item)}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {marketplaceEditorItemDescription(item, t)}
-                          </div>
-                        </div>
-                        <div className="text-right text-[11px] text-muted-foreground">
-                          {t('common.markdownFileViewer.units.bytes', { count: content.length })}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          )}
-        />
-      </div>
-
-      <main className="flex-1 bg-background">
-        {selectedItem ? (
-          <div className="flex h-full flex-col">
-            <div className="sticky top-0 z-10 bg-background">
-              <div className="border-b border-border bg-background p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Icon className="h-5 w-5 shrink-0 text-primary" />
-                      <h3 className="truncate font-semibold text-foreground">
-                        {getMarketplaceItemFileName(selectedItem)}
-                      </h3>
-                    </div>
-                    <p className="truncate text-sm text-muted-foreground">
-                      {marketplaceEditorItemDescription(selectedItem, t)}
-                    </p>
-                    {isSelectedDirty ? (
-                      <Badge variant="outline" className="border-amber-500/40 bg-amber-50 text-amber-700">
-                        {t('marketplace.editor.documentViewer.unsavedFile')}
-                      </Badge>
-                    ) : null}
-                  </div>
-
-                  <div className="flex shrink-0 items-center gap-2">
+    <>
+      <MultiDocumentEditorShell
+        title={t(`marketplace.editor.documentViewer.${tab}.title`)}
+        icon={Icon}
+        sidebar={(
+          <MultiDocumentSidebar
+            title={t(`marketplace.editor.documentViewer.${tab}.title`)}
+            icon={Icon}
+            items={sidebarItems}
+            selectedId={selectedItem?.id ?? null}
+            onSelect={handleSelectItem}
+            isLoading={false}
+            labels={{
+              searchPlaceholder: t('marketplace.editor.documentViewer.search.placeholder'),
+              loading: t('marketplace.editor.documentViewer.empty.filtered'),
+              empty: t('marketplace.editor.documentViewer.empty.filtered'),
+              dirty: t('marketplace.editor.documentViewer.unsavedFile'),
+            }}
+            actions={(
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title={t('marketplace.editor.documentViewer.actions.refresh')}
+                  aria-label={t('marketplace.editor.documentViewer.actions.refresh')}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  title={t('marketplace.editor.documentViewer.actions.add')}
+                  aria-label={t('marketplace.editor.documentViewer.actions.add')}
+                  onClick={() => setCreateDialogOpen(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+            showSearch
+            searchValue={search}
+            onSearchChange={setSearch}
+            getDirty={(item) => dirtyItemIds.has(item.id)}
+            renderItemMeta={(item) => (
+              <span className="text-[11px] text-muted-foreground">
+                {t('common.markdownFileViewer.units.bytes', { count: item.contentLength })}
+              </span>
+            )}
+            getSearchText={(item) => [item.searchText]}
+          />
+        )}
+        headerActions={(
+          <div className="flex items-center gap-2">
+            {selectedItem ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectPrevious}
+                  disabled={!canNavigatePrevious}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectNext}
+                  disabled={!canNavigateNext}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  {t('marketplace.editor.documentViewer.actions.delete')}
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedId(filteredItems[currentIndex - 1].id)}
-                      disabled={!canNavigatePrevious}
+                      title={t('marketplace.editor.documentViewer.actions.more')}
+                      aria-label={t('marketplace.editor.documentViewer.actions.more')}
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <MoreHorizontal className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedId(filteredItems[currentIndex + 1].id)}
-                      disabled={!canNavigateNext}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
-                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                      {t('marketplace.editor.documentViewer.actions.delete')}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          title={t('marketplace.editor.documentViewer.actions.more')}
-                          aria-label={t('marketplace.editor.documentViewer.actions.more')}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setRenameItem(selectedItem)}>
-                          <Edit className="mr-2 h-3 w-3" />
-                          {t('marketplace.editor.common.rename.action')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => void handleCopy()}>
-                          <Copy className="mr-2 h-3 w-3" />
-                          {t('marketplace.editor.documentViewer.actions.copy')}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleDownload}>
-                          <Download className="mr-2 h-3 w-3" />
-                          {t('marketplace.editor.documentViewer.actions.download')}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {format === 'toml' ? (
-                <div className="flex h-full flex-col">
-                  <CodeTextEditor
-                    fileName={selectedItem.path}
-                    content={selectedContent}
-                    originalContent={selectedItem.content}
-                    onContentChange={(value) => {
-                      const nextDrafts = { ...drafts, [selectedItem.id]: value };
-                      setDrafts(nextDrafts);
-                      emitItemsChange(localItems, nextDrafts);
-                      onDirty();
-                    }}
-                    onModifiedChange={() => undefined}
-                  />
-                  <div className="border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground">
-                    {selectedItem.path}
-                  </div>
-                </div>
-              ) : (
-                <MarkdownEditor
-                  value={selectedContent}
-                  onChange={(value) => {
-                    const nextDrafts = { ...drafts, [selectedItem.id]: value };
-                    setDrafts(nextDrafts);
-                    emitItemsChange(localItems, nextDrafts);
-                    onDirty();
-                  }}
-                  placeholder={t('marketplace.editor.documentViewer.editor.placeholder')}
-                  className="h-full min-h-0 rounded-none border-0"
-                  textareaClassName="min-h-[calc(100vh-18rem)] font-mono text-sm"
-                  statusMessage={(
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {selectedItem.path}
-                    </span>
-                  )}
-                />
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            <Icon className="h-10 w-10 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">{t(`marketplace.editor.documentViewer.${tab}.empty`)}</p>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setRenameItem(selectedItem)}>
+                      <Edit className="mr-2 h-3 w-3" />
+                      {t('marketplace.editor.common.rename.action')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void handleCopy()}>
+                      <Copy className="mr-2 h-3 w-3" />
+                      {t('marketplace.editor.documentViewer.actions.copy')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleDownload}>
+                      <Download className="mr-2 h-3 w-3" />
+                      {t('marketplace.editor.documentViewer.actions.download')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : null}
           </div>
         )}
-      </main>
+        mainArea={(
+          <main className="flex-1 min-h-0 overflow-hidden bg-background">
+            {selectedItem ? (
+              <div className="flex h-full flex-col">
+                <div className="sticky top-0 z-10 bg-background">
+                  <div className="border-b border-border bg-background p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-2">
+                          <Icon className="h-5 w-5 shrink-0 text-primary" />
+                          <h3 className="truncate font-semibold text-foreground">
+                            {getMarketplaceItemFileName(selectedItem)}
+                          </h3>
+                        </div>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {marketplaceEditorItemDescription(selectedItem, t)}
+                        </p>
+                        {isSelectedDirty ? (
+                          <Badge variant="outline" className="border-amber-500/40 bg-amber-50 text-amber-700">
+                            {t('marketplace.editor.documentViewer.unsavedFile')}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  {format === 'toml' ? (
+                    <div className="flex h-full flex-col">
+                      <CodeTextEditor
+                        fileName={selectedItem.path}
+                        content={selectedContent}
+                        originalContent={selectedItem.content}
+                        onContentChange={handleContentChange}
+                        onModifiedChange={() => undefined}
+                      />
+                      <div className="border-t border-border px-3 py-2 font-mono text-xs text-muted-foreground">
+                        {selectedItem.path}
+                      </div>
+                    </div>
+                  ) : (
+                    <MarkdownEditor
+                      value={selectedContent}
+                      onChange={handleContentChange}
+                      placeholder={t('marketplace.editor.documentViewer.editor.placeholder')}
+                      className="h-full min-h-0 rounded-none border-0"
+                      textareaClassName="min-h-[calc(100vh-18rem)] font-mono text-sm"
+                      statusMessage={(
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {selectedItem.path}
+                        </span>
+                      )}
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+                <Icon className="h-10 w-10 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">{t(`marketplace.editor.documentViewer.${tab}.empty`)}</p>
+              </div>
+            )}
+          </main>
+        )}
+        labels={{ loading: t('marketplace.editor.documentViewer.empty.filtered') }}
+      />
       <MarketplaceRenameDialog
         open={Boolean(renameItem)}
         initialPath={renameItem?.path ?? ''}
         onOpenChange={(open) => {
           if (!open) setRenameItem(null);
         }}
-        onSubmit={(nextPath) => {
-          if (!renameItem) return;
-          const nextItems = localItems.map(item => (
-            item.id === renameItem.id ? { ...item, path: nextPath } : item
-          ));
-          setLocalItems(nextItems);
-          setRenameItem(null);
-          emitItemsChange(nextItems, drafts);
-          onDirty();
-        }}
+        onSubmit={handleRenameSubmit}
       />
       <MarketplaceMarkdownCreateDialog
         open={createDialogOpen}
@@ -477,7 +346,7 @@ export const MarketplaceMarkdownEditorViewer: React.FC<MarketplaceMarkdownEditor
         onOpenChange={setCreateDialogOpen}
         onSubmit={handleCreate}
       />
-    </div>
+    </>
   );
 };
 

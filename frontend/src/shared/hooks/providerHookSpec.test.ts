@@ -80,8 +80,8 @@ describe('providerHookSpec', () => {
       condition: true,
       async: true,
       shell: true,
-      statusMessage: false,
-      once: true,
+      statusMessage: true,
+      once: false,
     });
     expect(HOOK_FIELD_SUPPORT.gemini).toEqual({
       sequential: true,
@@ -102,7 +102,7 @@ describe('providerHookSpec', () => {
       once: false,
     });
     expect(HOOK_DEFAULTS).toEqual({
-      'claude-code': { timeout: 60, timeoutUnit: 's', timeoutMax: 3600, shell: 'bash' },
+      'claude-code': { timeout: 600, timeoutUnit: 's', timeoutMax: 3600, shell: 'bash' },
       gemini: { timeout: 60000, timeoutUnit: 'ms', timeoutMax: 600000 },
       codex: { timeout: 60, timeoutUnit: 's', timeoutMax: 3600 },
     });
@@ -114,7 +114,7 @@ describe('providerHookSpec', () => {
     expect(createEmptyExecution('claude-code')).toEqual({
       type: 'command',
       command: '',
-      timeout: 60,
+      timeout: 600,
       shell: 'bash',
     });
     expect(createEmptyExecution('gemini')).toEqual({

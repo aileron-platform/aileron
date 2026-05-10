@@ -117,8 +117,8 @@ describe('CodexRulesPage', () => {
 
     render(<CodexRulesPage />);
 
-    expect(await screen.findByText('workspace.agentSettings.codex.rules.title')).toBeInTheDocument();
-    expect(screen.getByText('project.rules')).toBeInTheDocument();
+    expect((await screen.findAllByText('workspace.agentSettings.codex.rules.title')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('project.rules')).length).toBeGreaterThan(0);
     expect(screen.getByText('workspace.agentSettings.codex.rules.actions.create')).toBeInTheDocument();
     await waitFor(() => expect(apiMock.getCodexRulesFile).toHaveBeenCalledWith(
       'http://runtime.test',
@@ -161,7 +161,7 @@ describe('CodexRulesPage', () => {
 
     render(<CodexRulesPage />);
 
-    await screen.findByText('default.rules');
+    expect((await screen.findAllByText('default.rules')).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByText('workspace.agentSettings.codex.rules.actions.validate')[0]);
     fireEvent.click(await screen.findByText('workspace.agentSettings.codex.rules.validationDialog.actions.validate'));
 

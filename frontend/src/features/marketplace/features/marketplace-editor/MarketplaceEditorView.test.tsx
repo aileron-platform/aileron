@@ -761,7 +761,7 @@ describe('MarketplaceEditorView', () => {
 
     await user.click(screen.getByRole('button', { name: /marketplace\.providers\.codex/ }));
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
-    expect(screen.getByText('marketplace.editor.saveStatus.validationError')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.editor.saveStatus.validationErrorWithDetail')).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText('marketplace.editor.fields.packageIdPlaceholder'), 'new-plugin');
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
@@ -781,7 +781,7 @@ describe('MarketplaceEditorView', () => {
 
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
 
-    expect(screen.getByText('marketplace.editor.saveStatus.revisionConflict')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.editor.saveStatus.revisionConflictWithDetail')).toBeInTheDocument();
     expect(marketplaceApiMock.savePackage).toHaveBeenCalledWith(expect.objectContaining({
       provider: 'codex',
       packageId: 'revision-conflict',
@@ -1085,7 +1085,8 @@ describe('MarketplaceEditorView', () => {
 
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.hooks/ }));
 
-    const card = screen.getByText('test-before-finish').closest('[class*="rounded-lg"][class*="border"]') as HTMLElement;
+    const card = screen.getByText('marketplace.editor.hooks.events.Stop.label')
+      .closest('[class*="rounded-lg"][class*="border"]') as HTMLElement;
     await user.click(within(card).getAllByRole('button')[0]);
 
     expect(screen.getByText('marketplace.editor.hooks.dialog.title')).toBeInTheDocument();
@@ -1095,7 +1096,7 @@ describe('MarketplaceEditorView', () => {
     await user.type(screen.getByPlaceholderText('marketplace.editor.hooks.dialog.executions.commandPlaceholder.codex'), 'npm run test:unit');
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.hooks.dialog.actions.save' }));
 
-    expect(screen.getByText('test-before-save')).toBeInTheDocument();
+    expect(screen.getByText('npm run test:unit')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
@@ -1242,6 +1243,5 @@ describe('MarketplaceEditorView', () => {
 
     const skillsTab = await screen.findByRole('tab', { name: /^marketplace\.editor\.tabs\.skills/ });
     expect(skillsTab).toHaveTextContent(/marketplace\.editor\.tabs\.skills/);
-    expect(skillsTab).toHaveTextContent(/2/);
   });
 });

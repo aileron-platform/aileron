@@ -104,8 +104,8 @@ describe('CodexDocumentResourcePage', () => {
 
     render(<CodexDocumentResourcePage resource="prompts" />);
 
-    expect(await screen.findByText('workspace.agentSettings.codex.prompts.pageTitle')).toBeInTheDocument();
-    expect(screen.getByText('deploy.md')).toBeInTheDocument();
+    expect((await screen.findAllByText('workspace.agentSettings.codex.prompts.pageTitle')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('deploy.md')).length).toBeGreaterThan(0);
     expect(screen.getByText('workspace.agentSettings.codex.prompts.actions.create')).toBeInTheDocument();
     await waitFor(() => expect(apiMock.getCodexFile).toHaveBeenCalledWith(
       'http://runtime.test',
@@ -202,7 +202,7 @@ describe('CodexDocumentResourcePage', () => {
       />,
     );
 
-    expect(await screen.findByText('alpha.md')).toBeInTheDocument();
+    expect((await screen.findAllByText('alpha.md')).length).toBeGreaterThan(0);
     expect(screen.getByText('workspace.agentSettings.codex.documents.stats.total:2')).toBeInTheDocument();
     await waitFor(() => expect(apiMock.getCodexFile).toHaveBeenCalledTimes(1));
     expect(apiMock.getCodexFile).toHaveBeenCalledWith(
@@ -247,8 +247,8 @@ describe('CodexDocumentResourcePage', () => {
 
     render(<CodexDocumentResourcePage resource="subagents" />);
 
-    expect(await screen.findByText('workspace.agentSettings.codex.subagents.pageTitle')).toBeInTheDocument();
-    expect(screen.getByText('worker')).toBeInTheDocument();
+    expect((await screen.findAllByText('workspace.agentSettings.codex.subagents.pageTitle')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('worker')).length).toBeGreaterThan(0);
     expect(screen.getByText('Worker')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.codex.documents.status.effective')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.codex.subagents.registry.summary')).toBeInTheDocument();

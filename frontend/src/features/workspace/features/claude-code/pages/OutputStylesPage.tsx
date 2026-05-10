@@ -36,6 +36,7 @@ const OutputStylesPageContent: React.FC = () => {
       onRefresh={outputStyles.refresh}
       dialogComponent={WorkspaceOutputStyleDialog}
       i18nNamespace="workspace.claudeCode"
+      showSidebar={false}
       config={{
         metaKey: 'output-styles',
         createButtonLabel: t('workspace.claudeCode.outputStyles.actions.create'),

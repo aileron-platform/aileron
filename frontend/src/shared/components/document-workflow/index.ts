@@ -1,11 +1,12 @@
-export { DocumentWorkflowShell, PluginSourceBadge } from './DocumentWorkflowShell';
 export type {
   DocumentWorkflowDialogProps,
-  DocumentWorkflowDocument,
-  DocumentWorkflowShellProps,
-} from './DocumentWorkflowShell';
+} from './types';
 export { MarkdownDocumentShell } from './MarkdownDocumentShell';
 export type { MarkdownDocumentShellProps } from './MarkdownDocumentShell';
+export { MultiDocumentEditorShell } from './MultiDocumentEditorShell';
+export type { MultiDocumentEditorShellLabels, MultiDocumentEditorShellProps } from './MultiDocumentEditorShell';
+export { MultiDocumentSidebar } from './MultiDocumentSidebar';
+export type { MultiDocumentSidebarItem, MultiDocumentSidebarLabels, MultiDocumentSidebarProps } from './MultiDocumentSidebar';
 export {
   DocumentEditorDialogCore,
   ensureDocumentExtension,
@@ -16,3 +17,4 @@ export type {
   DocumentEditorDialogCoreProps,
   DocumentEditorScopeOption,
 } from './DocumentEditorDialogCore';
+export type { MultiDocumentPersistenceAdapter } from './types';

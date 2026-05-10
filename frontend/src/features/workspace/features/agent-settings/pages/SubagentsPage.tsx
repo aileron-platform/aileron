@@ -113,6 +113,7 @@ const SubagentsPage: React.FC<SubagentsPageProps> = ({
       onRefresh={loadDocuments}
       dialogComponent={DialogWrapper}
       i18nNamespace={i18nNamespace}
+      showSidebar={false}
       config={{
         metaKey: 'subagents',
         contentFormat: 'markdown',

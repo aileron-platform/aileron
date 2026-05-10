@@ -94,7 +94,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onClose: () => void;
       onSubmit: (document: AgentDocument) => Promise<void> | void;
     }> = (props) => (
-        <AgentCommandDialog
+      <AgentCommandDialog
         {...props}
         format={format}
         availableScopes={effectiveScopes.filter((scope) => scope !== 'extension' && scope !== 'plugin')}
@@ -118,6 +118,7 @@ const SlashCommandsPage: React.FC<SlashCommandsPageProps> = ({
       onRefresh={handleRefresh}
       dialogComponent={DialogWrapper}
       i18nNamespace={i18nNamespace}
+      showSidebar={false}
       config={{
         metaKey: 'slash-commands',
         contentFormat: format,

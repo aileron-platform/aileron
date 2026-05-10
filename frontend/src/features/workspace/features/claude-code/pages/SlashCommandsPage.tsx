@@ -54,6 +54,7 @@ const SlashCommandsPageContent: React.FC = () => {
       onRefresh={slashCommands.refresh}
       dialogComponent={DialogWrapper}
       i18nNamespace={I18N_NAMESPACE}
+      showSidebar={false}
       config={{
         metaKey: 'slash-commands',
         contentFormat: 'markdown',

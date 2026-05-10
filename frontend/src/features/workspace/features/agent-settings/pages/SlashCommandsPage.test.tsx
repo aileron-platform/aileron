@@ -51,9 +51,9 @@ describe('SlashCommandsPage', () => {
   it('renders parsed TOML fields without showing the raw TOML block', async () => {
     renderWithQuery(<SlashCommandsPage format="toml" />);
 
-    expect(await screen.findByText('deploy.toml')).toBeInTheDocument();
-    expect(screen.getByText('Deploy command')).toBeInTheDocument();
-    expect(screen.getByText('Run deploy')).toBeInTheDocument();
+    expect((await screen.findAllByText('deploy.toml')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Deploy command')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Run deploy')).length).toBeGreaterThan(0);
     expect(screen.queryByText('workspace.agentSettings.common.documents.toml.raw')).not.toBeInTheDocument();
     expect(screen.queryByText('description = "Deploy command"')).not.toBeInTheDocument();
   });
@@ -72,8 +72,8 @@ describe('SlashCommandsPage', () => {
 
     renderWithQuery(<SlashCommandsPage format="toml" />);
 
-    expect(await screen.findByText('legacy.toml')).toBeInTheDocument();
-    expect(screen.getByText(/title = 'Legacy command'/)).toBeInTheDocument();
+    expect((await screen.findAllByText('legacy.toml')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/title = 'Legacy command'/)).length).toBeGreaterThan(0);
     expect(screen.queryByText('workspace.agentSettings.common.documents.toml.raw')).not.toBeInTheDocument();
   });
 });

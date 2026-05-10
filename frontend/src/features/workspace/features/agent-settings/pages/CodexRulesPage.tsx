@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileCode2, Play } from 'lucide-react';
+import { ChevronDown, FileCode2, Play, Plus, RefreshCw } from 'lucide-react';
 import {
-  DocumentWorkflowShell,
+  MultiDocumentEditorShell,
+  MultiDocumentSidebar,
   formatDocumentContentSize,
   type DocumentWorkflowDialogProps,
+  type MultiDocumentSidebarItem,
 } from '@/shared/components/document-workflow';
 import { Alert, AlertDescription } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
@@ -53,6 +55,10 @@ type RulesDocument = AgentDocument & {
     exists?: boolean;
   };
 };
+
+interface RulesSidebarItem extends MultiDocumentSidebarItem {
+  document: RulesDocument;
+}
 
 const RULES_LAYERS: CodexRulesLayer[] = ['project', 'user'];
 const DEFAULT_RULE_FILE_NAME = 'default.rules';
@@ -375,6 +381,10 @@ const CodexRulesPage: React.FC<CodexRulesPageProps> = ({
   const [command, setCommand] = useState('git status');
   const [validationById, setValidationById] = useState<Record<string, CodexRulesValidationResponse | undefined>>({});
   const [validationDialogId, setValidationDialogId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [activeDocument, setActiveDocument] = useState<RulesDocument | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const selectedId = selectedIdProp !== undefined ? selectedIdProp : internalSelectedId;
   const setSelectedId = onSelectProp ?? setInternalSelectedId;
 
@@ -502,6 +512,25 @@ const CodexRulesPage: React.FC<CodexRulesPageProps> = ({
     });
   }, [baseDocuments, selectedDocumentQuery.data, selectedId]);
 
+  const selectedDocument = useMemo(
+    () => documents.find((document) => document.id === selectedId) ?? null,
+    [documents, selectedId],
+  );
+  const sidebarItems = useMemo<RulesSidebarItem[]>(
+    () => documents.map((document) => ({
+      id: document.id,
+      label: document.title,
+      description: document.metadata.fileName,
+      document,
+    })),
+    [documents],
+  );
+  const currentIndex = selectedDocument
+    ? documents.findIndex((document) => document.id === selectedDocument.id)
+    : -1;
+  const canNavigatePrevious = currentIndex > 0;
+  const canNavigateNext = currentIndex >= 0 && currentIndex < documents.length - 1;
+
   useEffect(() => {
     const selectedExists = selectedId ? documents.some((document) => document.id === selectedId) : false;
     if (documents.length > 0 && (!selectedId || !selectedExists)) {
@@ -514,74 +543,223 @@ const CodexRulesPage: React.FC<CodexRulesPageProps> = ({
     [documents, validationDialogId],
   );
 
+  const handleCreateRequest = () => {
+    setDialogMode('create');
+    setActiveDocument(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditRequest = () => {
+    if (!selectedDocument) {
+      return;
+    }
+    setDialogMode('edit');
+    setActiveDocument(selectedDocument);
+    setDialogOpen(true);
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsProcessing(true);
+      await refresh();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDialogSubmit = async (document: RulesDocument) => {
+    try {
+      setIsProcessing(true);
+      if (dialogMode === 'create') {
+        const created = await createDocument(document);
+        setSelectedId(created.id);
+      } else {
+        const updated = await updateDocument(document);
+        setSelectedId(updated.id);
+      }
+      setDialogOpen(false);
+      setActiveDocument(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedDocument) {
+      return;
+    }
+    const confirmed = window.confirm(
+      t('workspace.agentSettings.codex.rules.confirmDelete', { title: selectedDocument.title }),
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setIsProcessing(true);
+      await deleteDocument(selectedDocument.id);
+      const nextDocuments = documents.filter((document) => document.id !== selectedDocument.id);
+      setSelectedId(nextDocuments[0]?.id ?? null);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      <Badge variant="secondary" className="text-[11px]">
+        {t('workspace.agentSettings.codex.documents.stats.total', { count: documents.length })}
+      </Badge>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-7 px-2 text-xs"
+        onClick={() => void handleRefresh()}
+        disabled={isProcessing || (documentsQuery.isFetching && documents.length === 0)}
+      >
+        <RefreshCw className="mr-1 h-3 w-3" /> {t('workspace.agentSettings.codex.documents.actions.refresh')}
+      </Button>
+      <Button size="sm" className="h-7 px-2 text-xs" onClick={handleCreateRequest} disabled={isProcessing}>
+        <Plus className="mr-1 h-3 w-3" /> {t('workspace.agentSettings.codex.rules.actions.create')}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={handleEditRequest}
+        disabled={isProcessing || !selectedDocument}
+      >
+        {t('workspace.agentSettings.codex.documents.actions.edit')}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs"
+        onClick={() => selectedDocument && setValidationDialogId(selectedDocument.id)}
+        disabled={isProcessing || !selectedDocument}
+      >
+        <Play className="mr-1 h-3 w-3" />
+        {t('workspace.agentSettings.codex.rules.actions.validate')}
+      </Button>
+    </div>
+  );
+
+  const sidebar = (
+    <MultiDocumentSidebar<RulesSidebarItem>
+      title={t('workspace.agentSettings.codex.rules.title')}
+      icon={FileCode2}
+      items={sidebarItems}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+      isLoading={documentsQuery.isFetching && documents.length === 0}
+      labels={{
+        searchPlaceholder: t('workspace.agentSettings.codex.documents.sidebar.searchPlaceholder'),
+        loading: t('workspace.agentSettings.codex.rules.loading'),
+        empty: t('workspace.agentSettings.codex.rules.empty.title'),
+        dirty: t('workspace.agentSettings.codex.rules.validationDialog.title'),
+      }}
+      renderItemMeta={(item) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="text-[11px]">
+            {t(`workspace.agentSettings.codex.common.layers.${item.document.scope}`)}
+          </Badge>
+          <Badge variant="outline" className="text-[11px]">
+            {t('workspace.agentSettings.codex.rules.fileName', { fileName: item.document.metadata.fileName })}
+          </Badge>
+          <Badge variant="outline" className="text-[11px]">
+            {t('workspace.agentSettings.codex.documents.size.badge', { size: item.document.size })}
+          </Badge>
+        </div>
+      )}
+    />
+  );
+
+  const mainArea = selectedDocument ? (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-border bg-background px-4 py-3">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="truncate font-semibold text-foreground">{selectedDocument.title}</h3>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <AgentSettingsSourceBadge
+                source={{
+                  type: selectedDocument.scope as AgentScope,
+                  label: t(`workspace.agentSettings.codex.documents.scope.values.${selectedDocument.scope}`),
+                }}
+              />
+              <Badge variant="outline" className="text-[11px]">
+                {t('workspace.agentSettings.codex.rules.fileName', { fileName: selectedDocument.metadata.fileName })}
+              </Badge>
+              <Badge variant="outline" className="text-[11px]">
+                {t('workspace.agentSettings.codex.documents.size.badge', { size: selectedDocument.size })}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => canNavigatePrevious && setSelectedId(documents[currentIndex - 1].id)}
+              disabled={!canNavigatePrevious || isProcessing}
+            >
+              <ChevronDown className="h-3.5 w-3.5 rotate-90" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => canNavigateNext && setSelectedId(documents[currentIndex + 1].id)}
+              disabled={!canNavigateNext || isProcessing}
+            >
+              <ChevronDown className="h-3.5 w-3.5 -rotate-90" />
+            </Button>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        <RulesContentView content={selectedDocument.content} />
+      </div>
+    </div>
+  ) : (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+      <div className="rounded-full bg-muted p-3">
+        <FileCode2 className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <h3 className="text-base font-medium text-foreground">{t('workspace.agentSettings.codex.rules.empty.title')}</h3>
+      <p className="text-sm text-muted-foreground">{t('workspace.agentSettings.codex.rules.empty.description')}</p>
+      <Button size="sm" onClick={handleCreateRequest} disabled={isProcessing}>
+        <Plus className="mr-1 h-4 w-4" />
+        {t('workspace.agentSettings.codex.rules.actions.create')}
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <DocumentWorkflowShell<RulesDocument>
-        documents={documents}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onCreate={createDocument}
-        onUpdate={updateDocument}
-        onDelete={deleteDocument}
-        isLoading={documentsQuery.isFetching && documents.length === 0}
-        error={documentsQuery.error instanceof Error ? documentsQuery.error.message : null}
-        onRefresh={refresh}
-        dialogComponent={CodexRulesDialog}
+      {documentsQuery.error instanceof Error ? (
+        <div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive">
+          {documentsQuery.error.message}
+        </div>
+      ) : null}
+      <MultiDocumentEditorShell
         title={t('workspace.agentSettings.codex.rules.title')}
         icon={FileCode2}
-        createButtonLabel={t('workspace.agentSettings.codex.rules.actions.create')}
-        emptyStateTitle={t('workspace.agentSettings.codex.rules.empty.title')}
-        emptyStateDescription={t('workspace.agentSettings.codex.rules.empty.description')}
-        totalLabel={t('workspace.agentSettings.codex.documents.stats.total', { count: documents.length })}
-        refreshLabel={t('workspace.agentSettings.codex.documents.actions.refresh')}
-        editLabel={t('workspace.agentSettings.codex.documents.actions.edit')}
-        copyLabel={t('workspace.agentSettings.codex.documents.actions.copyContent')}
-        downloadLabel={t('workspace.agentSettings.codex.documents.actions.download')}
-        deleteLabel={t('workspace.agentSettings.codex.documents.actions.delete')}
-        loadingLabel={t('workspace.agentSettings.codex.rules.loading')}
-        confirmDelete={(document) => window.confirm(
-          t('workspace.agentSettings.codex.rules.confirmDelete', { title: document.title }),
-        )}
-        onCopyContent={async (document) => navigator.clipboard.writeText(document.content)}
-        onDownload={(document) => {
-          const blob = new Blob([document.content], { type: 'text/plain' });
-          const url = URL.createObjectURL(blob);
-          const anchor = window.document.createElement('a');
-          anchor.href = url;
-          anchor.download = document.metadata.fileName;
-          window.document.body.appendChild(anchor);
-          anchor.click();
-          window.document.body.removeChild(anchor);
-          URL.revokeObjectURL(url);
+        sidebar={sidebar}
+        headerActions={headerActions}
+        emptyState={documents.length === 0 ? mainArea : undefined}
+        isLoading={documentsQuery.isFetching && documents.length === 0}
+        labels={{ loading: t('workspace.agentSettings.codex.rules.loading') }}
+        mainArea={mainArea}
+      />
+      <CodexRulesDialog
+        open={dialogOpen}
+        mode={dialogMode}
+        initialValue={activeDocument}
+        onClose={() => {
+          setDialogOpen(false);
+          setActiveDocument(null);
         }}
-        renderSelectedActions={(document) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            onClick={() => setValidationDialogId(document.id)}
-          >
-            <Play className="mr-1 h-3 w-3" />
-            {t('workspace.agentSettings.codex.rules.actions.validate')}
-          </Button>
-        )}
-        renderMeta={(document) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <AgentSettingsSourceBadge
-              source={{
-                type: document.scope as AgentScope,
-                label: t(`workspace.agentSettings.codex.documents.scope.values.${document.scope}`),
-              }}
-            />
-            <Badge variant="outline" className="text-[11px]">
-              {t('workspace.agentSettings.codex.rules.fileName', { fileName: document.metadata.fileName })}
-            </Badge>
-            <Badge variant="outline" className="text-[11px]">
-              {t('workspace.agentSettings.codex.documents.size.badge', { size: document.size })}
-            </Badge>
-          </div>
-        )}
-        renderContent={(document) => <RulesContentView content={document.content} />}
+        onSubmit={handleDialogSubmit}
       />
       <CodexRulesValidationDialog
         open={Boolean(validationDialogId)}

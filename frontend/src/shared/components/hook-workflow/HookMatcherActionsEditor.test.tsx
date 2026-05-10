@@ -207,6 +207,7 @@ describe('HookMatcherActionsEditor', () => {
       <HookMatcherActionsEditor
         matchers={matchers}
         labels={metadataLabels}
+        provider="gemini"
         onChange={onChange}
       />,
     );

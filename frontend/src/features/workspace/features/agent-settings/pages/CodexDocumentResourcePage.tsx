@@ -369,25 +369,26 @@ const CodexDocumentResourcePage: React.FC<CodexDocumentResourcePageProps> = ({
         </div>
       ) : null}
       <AgentDocumentPage
-      documents={documents}
-      selectedId={selectedId}
-      onSelect={setSelectedId}
-      onCreate={createDocument}
-      onUpdate={updateDocument}
-      onDelete={deleteDocument}
-      isLoading={documentsQuery.isFetching && documents.length === 0}
-      error={documentsQuery.error instanceof Error ? documentsQuery.error.message : null}
-      onRefresh={refresh}
-      dialogComponent={DialogWrapper}
-      i18nNamespace="workspace.agentSettings.codex"
-      config={{
-        metaKey: defaults.metaKey,
-        contentFormat: defaults.format,
-        createButtonLabel: t(`workspace.agentSettings.codex.${resource}.actions.create`),
-        emptyStateTitle: t(`workspace.agentSettings.codex.${resource}.empty.title`),
-        emptyStateDescription: t(`workspace.agentSettings.codex.${resource}.empty.description`),
-        dialogTitle: t(`workspace.agentSettings.codex.${resource}.pageTitle`),
-      }}
+        documents={documents}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        onCreate={createDocument}
+        onUpdate={updateDocument}
+        onDelete={deleteDocument}
+        isLoading={documentsQuery.isFetching && documents.length === 0}
+        error={documentsQuery.error instanceof Error ? documentsQuery.error.message : null}
+        onRefresh={refresh}
+        dialogComponent={DialogWrapper}
+        i18nNamespace="workspace.agentSettings.codex"
+        showSidebar={false}
+        config={{
+          metaKey: defaults.metaKey,
+          contentFormat: defaults.format,
+          createButtonLabel: t(`workspace.agentSettings.codex.${resource}.actions.create`),
+          emptyStateTitle: t(`workspace.agentSettings.codex.${resource}.empty.title`),
+          emptyStateDescription: t(`workspace.agentSettings.codex.${resource}.empty.description`),
+          dialogTitle: t(`workspace.agentSettings.codex.${resource}.pageTitle`),
+        }}
       />
     </div>
   );
