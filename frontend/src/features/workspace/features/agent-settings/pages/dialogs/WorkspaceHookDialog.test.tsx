@@ -88,11 +88,18 @@ describe('WorkspaceHookDialog', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
         scope: 'project',
-        eventName: 'PreToolUse',
+        eventName: 'SessionStart',
         matchers: [
           {
             matcher: 'Write',
-            hooks: [{ type: 'command', command: 'echo write', timeout: 30 }],
+            hooks: [expect.objectContaining({
+              type: 'command',
+              command: 'echo write',
+              timeout: 600,
+              shell: 'bash',
+              async: false,
+              asyncRewake: false,
+            })],
           },
         ],
       }));
@@ -137,22 +144,24 @@ describe('WorkspaceHookDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Create hook' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        matchers: [
-          {
-            matcher: 'Write',
-            hooks: [
-              {
-                type: 'command',
-                name: 'security-check',
-                description: 'Check commands before execution',
-                command: 'echo write',
-                timeout: 30,
-              },
-            ],
-          },
-        ],
-      }));
+      expect(onSubmit).toHaveBeenCalled();
+    });
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      matchers: [
+        {
+          matcher: 'Write',
+          hooks: [
+            expect.objectContaining({
+              type: 'command',
+              name: 'security-check',
+              description: 'Check commands before execution',
+              command: 'echo write',
+              timeout: 60000,
+            }),
+          ],
+        },
+      ],
     });
   });
 
@@ -197,14 +206,22 @@ describe('WorkspaceHookDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-        matchers: [
-          {
-            matcher: 'Write',
-            hooks: [{ type: 'command', command: 'echo write', timeout: 30 }],
-          },
-        ],
-      }));
+      expect(onSubmit).toHaveBeenCalled();
+    });
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      matchers: [
+        {
+          matcher: 'Write',
+          hooks: [
+            expect.objectContaining({
+              type: 'command',
+              command: 'echo write',
+              timeout: 60000,
+            }),
+          ],
+        },
+      ],
     });
   });
 
@@ -216,9 +233,9 @@ describe('WorkspaceHookDialog', () => {
         hook={null}
         existingHooks={[
           {
-            id: 'project:PreToolUse',
+            id: 'project:SessionStart',
             scope: 'project',
-            eventName: 'PreToolUse',
+            eventName: 'SessionStart',
             matchers: [],
           },
         ]}
@@ -248,5 +265,21 @@ describe('WorkspaceHookDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('hides the scope selector when only one scope is allowed', () => {
+    render(
+      <WorkspaceHookDialog
+        open
+        mode="create"
+        provider="claude-code"
+        hook={null}
+        availableScopes={['project']}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText('Scope')).not.toBeInTheDocument();
   });
 });

@@ -4,17 +4,11 @@ import { Edit, Trash2, Workflow } from 'lucide-react';
 import { MarketplaceFeatureContentSection } from '../../components/MarketplaceFeatureContentSection';
 import { Button } from '@/shared/components/ui/button';
 import { HookCard } from '@/shared/components/hook-workflow/HookCard';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
-import { Input } from '@/shared/components/ui/input';
-import { Label } from '@/shared/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
-import WarningIcon from '@/shared/components/ui/WarningIcon';
-import { HookMatcherActionsEditor, type HookActionConfig, type HookMatcher, type HookMatcherActionsLabels } from '@/shared/components/hook-workflow';
+import { type HookActionConfig, type HookMatcher } from '@/shared/components/hook-workflow';
+import { WorkspaceHookDialog, type WorkspaceHookData } from '@/features/workspace/features/agent-settings/pages/dialogs/WorkspaceHookDialog';
 import {
-  HOOK_EVENT_MATCHER_HINTS,
   HOOK_EVENTS,
   HOOK_TYPES,
-  createEmptyExecution,
   createEmptyHookValue,
   createEmptyMatcher,
   getHookDefaults,
@@ -202,215 +196,43 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
   onSave,
 }) => {
   const { t } = useI18n();
-  const [draft, setDraft] = React.useState(value);
-  const fieldSupport = getHookFieldSupport(provider);
-  const defaults = getHookDefaults(provider);
-
-  React.useEffect(() => {
-    if (open) {
-      setDraft(value);
-    }
-  }, [open, value]);
-
-  React.useEffect(() => {
-    setDraft(prev => (
-      isValidEventForProvider(provider, prev.event)
-        ? prev
-        : { ...prev, event: HOOK_EVENTS[provider][0] }
-    ));
-  }, [provider]);
-
-  const eventOptions = React.useMemo(() => HOOK_EVENTS[provider].map(event => ({
-    value: event,
-    label: t(`marketplace.editor.hooks.events.${event}.label`),
-    description: t(`marketplace.editor.hooks.events.${event}.description`),
-  })), [provider, t]);
-  const matcherHint = HOOK_EVENT_MATCHER_HINTS[draft.event];
-  const matcherHelpKey = matcherHint?.helpKey ?? 'generic';
-  const matcherExampleKey = matcherHint?.examplesKey ?? 'generic';
-
-  const matcherLabels: HookMatcherActionsLabels = {
-    matcherSectionTitle: t('marketplace.editor.hooks.dialog.matchers.title'),
-    matcherAdd: t('marketplace.editor.hooks.dialog.matchers.add'),
-    matcherPatternLabel: t('marketplace.editor.hooks.dialog.matchers.patternLabel'),
-    matcherPatternPlaceholder: t('marketplace.editor.hooks.dialog.matchers.patternPlaceholder'),
-    matcherPatternHelp: [
-      t(`marketplace.editor.hooks.dialog.matcherHints.${matcherHelpKey}.help`),
-      `- ${t(`marketplace.editor.hooks.dialog.matcherHints.${matcherExampleKey}.example`)}`,
-    ],
-    matcherUnsupportedMessage: t('marketplace.editor.hooks.dialog.matcherHints.unsupported.message'),
-    matcherSequentialLabel: fieldSupport.sequential ? t('marketplace.editor.hooks.dialog.matchers.sequentialLabel') : undefined,
-    matcherSequentialHelp: fieldSupport.sequential ? t('marketplace.editor.hooks.dialog.matchers.sequentialHelp') : undefined,
-    matcherRemove: t('marketplace.common.actions.remove'),
-    executionSectionTitle: t('marketplace.editor.hooks.dialog.executions.title'),
-    executionAdd: t('marketplace.editor.hooks.dialog.executions.add'),
-    executionTypeLabel: t('marketplace.editor.hooks.dialog.executions.typeLabel'),
-    executionTypeOptions: HOOK_TYPES[provider].map(hookType => ({
-      value: hookType,
-      label: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.label`),
-      description: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.description`),
+  const eventOptions = React.useMemo(
+    () => HOOK_EVENTS[provider].map((eventName) => ({
+      value: eventName,
+      label: t(`marketplace.editor.hooks.events.${eventName}.label`),
     })),
-    executionNameLabel: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.nameLabel') : undefined,
-    executionNamePlaceholder: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.namePlaceholder') : undefined,
-    executionNameHelp: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.nameHelp') : undefined,
-    executionTimeoutLabel: t(`marketplace.editor.hooks.dialog.executions.timeoutLabel.${provider}`),
-    executionTimeoutPlaceholder: String(defaults.timeout),
-    executionTimeoutHelp: t(`marketplace.editor.hooks.dialog.executions.timeoutHelp.${provider}`),
-    executionTimeoutMax: defaults.timeoutMax,
-    executionConditionLabel: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionLabel') : undefined,
-    executionConditionPlaceholder: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionPlaceholder') : undefined,
-    executionConditionHelp: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionHelp') : undefined,
-    executionDescriptionLabel: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionLabel') : undefined,
-    executionDescriptionPlaceholder: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionPlaceholder') : undefined,
-    executionDescriptionHelp: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionHelp') : undefined,
-    executionCommandLabel: t(`marketplace.editor.hooks.dialog.executions.commandLabel.${provider}`),
-    executionCommandPlaceholder: t(`marketplace.editor.hooks.dialog.executions.commandPlaceholder.${provider}`),
-    executionCommandHelp: t(`marketplace.editor.hooks.dialog.executions.commandHelp.${provider}`),
-    executionStatusMessageLabel: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessageLabel') : undefined,
-    executionStatusMessagePlaceholder: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessagePlaceholder') : undefined,
-    executionStatusMessageHelp: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessageHelp') : undefined,
-    executionUrlLabel: t('marketplace.editor.hooks.dialog.executions.url.label'),
-    executionUrlPlaceholder: t('marketplace.editor.hooks.dialog.executions.url.placeholder'),
-    executionUrlHelp: t('marketplace.editor.hooks.dialog.executions.url.help'),
-    executionHeadersLabel: t('marketplace.editor.hooks.dialog.executions.headers.label'),
-    executionHeadersHelp: t('marketplace.editor.hooks.dialog.executions.headers.help'),
-    executionHeaderKeyPlaceholder: t('marketplace.editor.hooks.dialog.executions.headers.keyPlaceholder'),
-    executionHeaderValuePlaceholder: t('marketplace.editor.hooks.dialog.executions.headers.valuePlaceholder'),
-    executionHeadersAdd: t('marketplace.editor.hooks.dialog.executions.headers.add'),
-    executionHeadersRemove: t('marketplace.editor.hooks.dialog.executions.headers.remove'),
-    executionAllowedEnvVarsLabel: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.label'),
-    executionAllowedEnvVarsPlaceholder: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.placeholder'),
-    executionAllowedEnvVarsHelp: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.help'),
-    executionServerLabel: t('marketplace.editor.hooks.dialog.executions.server.label'),
-    executionServerPlaceholder: t('marketplace.editor.hooks.dialog.executions.server.placeholder'),
-    executionServerHelp: t('marketplace.editor.hooks.dialog.executions.server.help'),
-    executionToolLabel: t('marketplace.editor.hooks.dialog.executions.tool.label'),
-    executionToolPlaceholder: t('marketplace.editor.hooks.dialog.executions.tool.placeholder'),
-    executionToolHelp: t('marketplace.editor.hooks.dialog.executions.tool.help'),
-    executionInputLabel: t('marketplace.editor.hooks.dialog.executions.input.label'),
-    executionInputPlaceholder: t('marketplace.editor.hooks.dialog.executions.input.placeholder'),
-    executionInputHelp: t('marketplace.editor.hooks.dialog.executions.input.help'),
-    executionPromptLabel: t('marketplace.editor.hooks.dialog.executions.promptField.label'),
-    executionPromptPlaceholder: t('marketplace.editor.hooks.dialog.executions.promptField.placeholder'),
-    executionPromptHelp: t('marketplace.editor.hooks.dialog.executions.promptField.help'),
-    executionModelLabel: t('marketplace.editor.hooks.dialog.executions.model.label'),
-    executionModelPlaceholder: t('marketplace.editor.hooks.dialog.executions.model.placeholder'),
-    executionModelHelp: t('marketplace.editor.hooks.dialog.executions.model.help'),
-    executionAsyncLabel: fieldSupport.async ? t('marketplace.editor.hooks.dialog.executions.asyncLabel') : undefined,
-    executionAsyncRewakeLabel: fieldSupport.async ? t('marketplace.editor.hooks.dialog.executions.asyncRewakeLabel') : undefined,
-    executionOnceLabel: fieldSupport.once ? t('marketplace.editor.hooks.dialog.executions.once.label') : undefined,
-    executionOnceHelp: fieldSupport.once ? t('marketplace.editor.hooks.dialog.executions.once.help') : undefined,
-    executionShellLabel: fieldSupport.shell ? t('marketplace.editor.hooks.dialog.executions.shellLabel') : undefined,
-    executionShellPlaceholder: fieldSupport.shell ? t('marketplace.editor.hooks.dialog.executions.shellPlaceholder') : undefined,
-    executionShellOptions: fieldSupport.shell ? [
-      { value: 'bash', label: t('marketplace.editor.hooks.dialog.executions.shellOptions.bash') },
-      { value: 'powershell', label: t('marketplace.editor.hooks.dialog.executions.shellOptions.powershell') },
-    ] : undefined,
-    executionRemove: t('marketplace.editor.hooks.dialog.executions.remove'),
-  };
-
-  const hasValidHooks = draft.matchers.every(matcher => (
-    matcher.hooks.some(hookAction => isMarketplaceHookActionValid(hookAction))
-  ));
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!hasValidHooks) return;
-
-    onSave({
-      ...draft,
-      matchers: draft.matchers
-        .map(matcher => ({
-          matcher: matcher.matcher.trim() || '*',
-          sequential: fieldSupport.sequential ? Boolean(matcher.sequential) : undefined,
-          hooks: matcher.hooks
-            .filter(hookAction => isMarketplaceHookActionValid(hookAction))
-            .map(hookAction => sanitizeMarketplaceHookAction(hookAction, provider, fieldSupport, defaults)),
-        }))
-        .filter(matcher => matcher.hooks.length > 0),
-    });
-  };
+    [provider, t],
+  );
+  const hook = React.useMemo<WorkspaceHookData | null>(() => ({
+    id: value.name || value.event,
+    name: value.name,
+    scope: 'project',
+    eventName: value.event,
+    matchers: value.matchers,
+  }), [value]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[85vh] max-h-[85vh] max-w-4xl flex-col p-0">
-        <DialogHeader className="flex-shrink-0 px-6 pt-6">
-          <DialogTitle className="flex items-center gap-2">
-            <Workflow className="h-5 w-5 text-primary" />
-            {t(mode === 'create' ? 'marketplace.editor.hooks.dialog.titleCreate' : 'marketplace.editor.hooks.dialog.title')}
-          </DialogTitle>
-          <DialogDescription>
-            {t(`marketplace.editor.hooks.dialog.description.${provider}`)}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="marketplace-hook-name">{t('marketplace.editor.hooks.dialog.fields.name.label')}</Label>
-                <Input
-                  id="marketplace-hook-name"
-                  value={draft.name}
-                  onChange={event => setDraft(prev => ({ ...prev, name: event.target.value }))}
-                  placeholder={t('marketplace.editor.hooks.dialog.fields.name.placeholder')}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{t('marketplace.editor.hooks.dialog.fields.event.label')}</Label>
-                <Select value={draft.event} onValueChange={event => setDraft(prev => ({ ...prev, event }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t('marketplace.editor.hooks.dialog.fields.event.placeholder')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {eventOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!hasValidHooks ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <WarningIcon />
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm text-amber-800">
-                          {t('marketplace.editor.hooks.dialog.validation.commandRequired')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <HookMatcherActionsEditor
-              matchers={draft.matchers}
-              provider={provider}
-              eventName={draft.event}
-              labels={matcherLabels}
-              matcherCardClassName="bg-background"
-              commandClassName="font-mono text-sm"
-              createEmptyMatcher={() => createEmptyMatcher(provider)}
-              createEmptyExecution={() => createEmptyExecution(provider)}
-              onChange={matchers => setDraft(prev => ({ ...prev, matchers }))}
-            />
-          </form>
-        </div>
-
-        <DialogFooter className="flex-shrink-0 px-6 pb-6">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {t('marketplace.common.actions.cancel')}
-          </Button>
-          <Button type="submit" onClick={handleSubmit} disabled={!hasValidHooks}>
-            {t(`marketplace.editor.hooks.dialog.actions.${mode === 'create' ? 'create' : 'save'}`)}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <WorkspaceHookDialog
+      open={open}
+      mode={mode}
+      provider={provider}
+      dialogVariant="marketplace"
+      hook={mode === 'edit' ? hook : null}
+      eventOptions={eventOptions}
+      availableScopes={['project']}
+      showNameField
+      showScopeField={false}
+      i18nNamespace="marketplace.editor"
+      onClose={() => onOpenChange(false)}
+      onSubmit={(payload) => {
+        onSave({
+          name: payload.name ?? '',
+          event: payload.eventName,
+          matchers: payload.matchers,
+        });
+        onOpenChange(false);
+      }}
+    />
   );
 };
 
