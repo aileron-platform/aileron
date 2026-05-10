@@ -9,7 +9,6 @@ import {
   Puzzle,
   RefreshCw,
   Search,
-  Terminal,
   Trash2,
   User,
   Webhook,
@@ -17,6 +16,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import { HookCard } from '@/shared/components/hook-workflow/HookCard';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { useToast } from '@/shared/components/ui/use-toast';
@@ -421,8 +421,6 @@ const CodexHooksPage: React.FC = () => {
           ) : null}
 
           {filteredHooks.map((hook) => {
-            const totalMatchers = hook.matchers.length;
-            const totalCommands = hook.matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
             const readOnly = hook.readOnly;
             const badgeClass = getAgentSettingsSourceBadgeClassName(hook.layer);
 
@@ -448,62 +446,18 @@ const CodexHooksPage: React.FC = () => {
                     />
                   </div>
 
-                  <div className="mb-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Terminal className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium text-muted-foreground">
-                        {t('workspace.agentSettings.codex.hooks.matchers.title')}
-                      </span>
-                    </div>
-                    <div className="space-y-2">
-                      {hook.matchers.map((matcher, matcherIndex) => (
-                        <div key={`${hook.id}-matcher-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-muted-foreground">
-                                {t('workspace.agentSettings.codex.hooks.matchers.matcherLabel')}
-                              </span>
-                              <code className="rounded bg-muted px-1 text-xs">{matcher.matcher}</code>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {t('workspace.agentSettings.codex.hooks.matchers.actionsCount', { count: matcher.hooks.length })}
-                            </span>
-                          </div>
-                          {matcher.hooks.slice(0, 2).map((action, actionIndex) => (
-                            <div key={`${hook.id}-action-${matcherIndex}-${actionIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
-                              <div className="mb-1 flex items-center gap-2">
-                                <Badge variant="outline" className="px-1 py-0 text-xs">
-                                  {t('workspace.agentSettings.codex.hooks.matchers.commandLabel')}
-                                </Badge>
-                                {action.timeout ? (
-                                  <span className="text-muted-foreground">
-                                    {t('workspace.agentSettings.codex.hooks.matchers.timeoutValue', { value: action.timeout })}
-                                  </span>
-                                ) : null}
-                              </div>
-                              <p className="truncate font-mono text-muted-foreground">
-                                {action.command?.trim() || t('workspace.agentSettings.codex.hooks.matchers.noCommand')}
-                              </p>
-                              {action.statusMessage ? (
-                                <p className="truncate text-muted-foreground">
-                                  {t('workspace.agentSettings.codex.hooks.matchers.statusMessageValue', { value: action.statusMessage })}
-                                </p>
-                              ) : null}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <HookCard
+                    provider="codex"
+                    hook={{
+                      event: t(`workspace.agentSettings.codex.hooks.events.${hook.eventName}.name`, { defaultValue: hook.eventName }),
+                      matchers: hook.matchers,
+                    }}
+                    i18nKeyPrefix="workspace.agentSettings.codex.hooks.card"
+                  />
 
                   {readOnly && hook.rawContent ? (
                     <pre className="mb-4 max-h-28 overflow-auto rounded bg-muted/40 p-3 text-xs">{hook.rawContent}</pre>
                   ) : null}
-
-                  <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                    <span>{t('workspace.agentSettings.codex.hooks.matchers.summary.matchers', { count: totalMatchers })}</span>
-                    <span>{t('workspace.agentSettings.codex.hooks.matchers.summary.commands', { count: totalCommands })}</span>
-                  </div>
                 </div>
 
                 <div className="absolute right-4 top-4 flex items-center gap-2">

@@ -77,6 +77,42 @@ describe('agentSettingsApi hook mapping', () => {
     });
   });
 
+  it('groups plugin hook rules by event type with source metadata', () => {
+    const hooks = mapHookScopeDocumentToAgentHooks({
+      scope: 'plugin',
+      hooks: {
+        SessionStart: [
+          {
+            matcher: 'm1',
+            pluginName: 'asdf',
+            marketplaceName: 'local-marketplace',
+            hooks: [{ type: 'command', command: 'echo "m1"', timeout: 600 }],
+          },
+          {
+            matcher: 'm2',
+            pluginName: 'other',
+            marketplaceName: 'local-marketplace',
+            hooks: [{ type: 'http', url: 'http://m2', timeout: 30 }],
+          },
+        ],
+      },
+    });
+
+    expect(hooks).toEqual([
+      expect.objectContaining({
+        id: 'plugin:SessionStart',
+        scope: 'plugin',
+        eventName: 'SessionStart',
+        pluginName: 'asdf',
+        marketplaceName: 'local-marketplace',
+        matchers: [
+          expect.objectContaining({ matcher: 'm1' }),
+          expect.objectContaining({ matcher: 'm2' }),
+        ],
+      }),
+    ]);
+  });
+
   it('persists non-empty hook action metadata and omits blank metadata when saving', () => {
     expect(buildHookRulesFromAgentHook({
       id: 'project:PreToolUse',

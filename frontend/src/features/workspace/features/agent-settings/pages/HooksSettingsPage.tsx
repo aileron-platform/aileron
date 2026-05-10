@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Zap, Search, RefreshCw, Plus, Edit, Trash2, Terminal, Puzzle, Layers, FolderGit, User, HardDrive } from 'lucide-react';
+import { Zap, Search, RefreshCw, Plus, Edit, Trash2, Puzzle, Layers, FolderGit, User, HardDrive } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
+import { HookCard } from '@/shared/components/hook-workflow/HookCard';
 import { Input } from '@/shared/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import { Button } from '@/shared/components/ui/button';
@@ -18,7 +19,6 @@ import {
   type AgentHookScopeDocument,
   type AgentHookRuleMap,
   type AgentHookWithEvent,
-  type AgentHookMatcher,
 } from '../services/agentSettingsApi';
 import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
@@ -100,6 +100,9 @@ const SCOPE_FILTER_ICONS: Record<string, React.ReactNode> = {
   extension: <Puzzle className="h-3 w-3" />,
 };
 
+const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
+const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
+
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
   availableScopes?: AgentScope[];
@@ -127,26 +130,30 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
 
   const eventLabels = useMemo<Record<string, string>>(
     () => {
-      const providerI18nNamespace =
-        provider === 'claude-code'
-          ? 'workspace.agentSettings.claude'
-          : provider === 'gemini'
-            ? 'workspace.agentSettings.gemini'
-            : i18nNamespace;
       if (hookEvents) {
         return Object.fromEntries(
-          hookEvents.map((e) => [e.value, t(e.labelKey)])
+          hookEvents.map((e) => [e.value, t(marketplaceHookEventLabelKey(e.value))])
         );
       }
       return Object.fromEntries(HOOK_EVENTS[provider].map((eventName) => [
         eventName,
-        t(`${providerI18nNamespace}.hooks.events.${eventName}.name`),
+        t(marketplaceHookEventLabelKey(eventName)),
       ]));
     },
-    [t, hookEvents, i18nNamespace, provider],
+    [t, hookEvents, provider],
   );
 
   const describeEvent = useCallback((eventName: string) => eventLabels[eventName] ?? eventName, [eventLabels]);
+  const describeEventDescription = useCallback(
+    (eventName: string) => t(marketplaceHookEventDescriptionKey(eventName)),
+    [t],
+  );
+  const hookCardI18nNamespace =
+    provider === 'claude-code'
+      ? 'workspace.agentSettings.claude'
+      : provider === 'gemini'
+        ? 'workspace.agentSettings.gemini'
+        : i18nNamespace;
 
   const dialogEventOptions = useMemo<EventOption[] | undefined>(() => {
     if (hookEvents) {
@@ -494,17 +501,11 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
             emptyDescription: `${i18nNamespace}.hooks.list.empty`,
           }}
           card={(hook) => {
-            const totalMatchers = hook.matchers.length;
-            const totalCommands = hook.matchers.reduce((acc, matcher) => acc + matcher.hooks.length, 0);
-
             return (
               <div key={hook.id} className="relative rounded-lg border border-border bg-background p-6">
                 <div className="flex items-start">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-3 flex items-center gap-3">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {describeEvent(hook.eventName)}
-                      </h3>
+                  <div className="min-w-0 flex-1 pr-16">
+                    <div className="mb-3 flex flex-wrap items-center gap-3">
                       <Badge
                         variant="outline"
                         className={`text-xs ${getAgentSettingsSourceBadgeClassName(hook.scope)}`}
@@ -525,79 +526,15 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
                       )}
                     </div>
 
-                    <div className="mb-4">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Terminal className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-muted-foreground">
-                          {t(`${i18nNamespace}.hooks.matchers.title`)}
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {hook.matchers.map((matcher: AgentHookMatcher, matcherIndex) => (
-                          <div key={`${hook.id}-matcher-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
-                            <div className="mb-2 flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-muted-foreground">
-                                  {t(`${i18nNamespace}.hooks.matchers.matcherLabel`)}
-                                </span>
-                                <code className="rounded bg-muted px-1 text-xs">{matcher.matcher}</code>
-                              </div>
-                              <span className="text-xs text-muted-foreground">
-                                {t(`${i18nNamespace}.hooks.matchers.actionsCount`, {
-                                  count: matcher.hooks.length,
-                                })}
-                              </span>
-                            </div>
-                            {matcher.hooks.slice(0, 2).map((exec, execIndex) => (
-                              <div key={`${hook.id}-exec-${matcherIndex}-${execIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
-                                <div className="mb-1 flex items-center gap-2">
-                                  <Badge variant="outline" className="px-1 py-0 text-xs">
-                                    {exec.name?.trim()
-                                      ? exec.name
-                                      : t(`${i18nNamespace}.hooks.matchers.commandLabel`)}
-                                  </Badge>
-                                  {exec.timeout && (
-                                    <span className="text-muted-foreground">
-                                      {t(`${i18nNamespace}.hooks.matchers.timeoutValue`, {
-                                        value: exec.timeout,
-                                      })}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="truncate font-mono text-muted-foreground">
-                                  {exec.command?.trim()
-                                    ? exec.command
-                                    : t(`${i18nNamespace}.hooks.matchers.noCommand`)}
-                                </p>
-                                {exec.description?.trim() ? (
-                                  <p className="truncate text-muted-foreground">{exec.description}</p>
-                                ) : null}
-                              </div>
-                            ))}
-                            {matcher.hooks.length > 2 && (
-                              <div className="text-xs italic text-muted-foreground">
-                                {t(`${i18nNamespace}.hooks.matchers.moreActions`, {
-                                  count: matcher.hooks.length - 2,
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                      <span>
-                        {t(`${i18nNamespace}.hooks.matchers.summary.matchers`, {
-                          count: totalMatchers,
-                        })}
-                      </span>
-                      <span>
-                        {t(`${i18nNamespace}.hooks.matchers.summary.commands`, {
-                          count: totalCommands,
-                        })}
-                      </span>
-                    </div>
+                    <HookCard
+                      provider={provider}
+                      hook={{
+                        event: describeEvent(hook.eventName),
+                        description: describeEventDescription(hook.eventName),
+                        matchers: hook.matchers,
+                      }}
+                      i18nKeyPrefix={`${hookCardI18nNamespace}.hooks.card`}
+                    />
                   </div>
                 </div>
 

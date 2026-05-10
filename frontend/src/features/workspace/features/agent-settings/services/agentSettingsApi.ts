@@ -615,9 +615,13 @@ export const buildHookRulesFromAgentHook = (hook: AgentHookWithEvent): AgentHook
           if (nextAction.type === 'prompt' || nextAction.type === 'agent') nextAction.prompt = nextAction.prompt.trim();
           if (action.name?.trim()) {
             nextAction.name = action.name.trim();
+          } else {
+            delete nextAction.name;
           }
           if (action.description?.trim()) {
             nextAction.description = action.description.trim();
+          } else {
+            delete nextAction.description;
           }
           if (action.statusMessage?.trim()) {
             nextAction.statusMessage = action.statusMessage.trim();

@@ -252,6 +252,25 @@ class TestMarketplaceInstallExecution:
         assert "shell" not in mock_run.call_args.kwargs
 
     @pytest.mark.asyncio
+    async def test_execute_claude_marketplace_install_clears_plugin_cache(self, internal_service, tmp_path):
+        """Test Claude plugin cache is cleared after successful marketplace install."""
+        loader = MagicMock()
+        with patch("app.modules.internal.service.subprocess.run") as mock_run:
+            with patch("app.modules.internal.service.get_plugin_loader", return_value=loader):
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+
+                result = await internal_service.execute_marketplace_install(
+                    MarketplaceInstallExecutionRequest(
+                        provider="claude-code",
+                        argv=["claude", "plugin", "install", "demo"],
+                        cwd=str(tmp_path),
+                    )
+                )
+
+        assert result.status == "success"
+        loader.clear_cache.assert_called_once_with("test-workspace")
+
+    @pytest.mark.asyncio
     async def test_execute_marketplace_install_maps_timeout_and_invalid_cwd(self, internal_service, tmp_path):
         """Test timeout and invalid cwd result mapping."""
         invalid = await internal_service.execute_marketplace_install(

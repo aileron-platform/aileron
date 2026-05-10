@@ -11,7 +11,6 @@ import {
   Network,
   Server,
   Sparkles,
-  Terminal,
   Wand2,
   Zap,
   Bot,
@@ -22,15 +21,16 @@ import { Button } from '@/shared/components/ui/button';
 import { Badge } from '@/shared/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
 import { Separator } from '@/shared/components/ui/separator';
+import { HookCard } from '@/shared/components/hook-workflow/HookCard';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
-import { getHookDefaults, getHookFieldSupport } from '@/shared/hooks/providerHookSpec';
 import {
   SettingsWorkflowActionButton,
   SettingsWorkflowCountBadge,
   SettingsWorkflowShell,
 } from '@/shared/components/settings-workflow';
+import type { HookActionConfig, HookCardMatcher } from '@/shared/components/hook-workflow';
 import type {
   MarketplaceFeatureContentItem,
   MarketplacePackageDetail,
@@ -127,7 +127,15 @@ interface MarketplaceHookData {
 
 interface MarketplaceHookCardProps {
   provider: MarketplaceProvider;
+  entry: MarketplaceHookCardEntry;
+}
+
+interface MarketplaceHookCardEntry {
+  id: string;
   hook: MarketplaceFeatureContentItem;
+  eventName: string;
+  matchers: HookCardMatcher[];
+  sourceDescription?: string;
 }
 
 interface MarketplaceMcpData {
@@ -146,6 +154,61 @@ interface MarketplaceMcpServerCardProps {
 
 const toFeatureData = <T extends Record<string, unknown>>(item: MarketplaceFeatureContentItem): T =>
   (item.data ?? {}) as T;
+
+const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
+const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
+
+const marketplaceHookCardEntriesFromItem = (hook: MarketplaceFeatureContentItem): MarketplaceHookCardEntry[] => {
+  const data = toFeatureData<MarketplaceHookData>(hook);
+
+  if (Array.isArray(data.matchers)) {
+    const eventName = data.event ?? hook.name;
+    return [
+      {
+        id: `${hook.id}:${eventName}`,
+        hook,
+        eventName,
+        sourceDescription: hook.description ?? data.description,
+        matchers: data.matchers.map((matcher) => ({
+          event: matcher.event ?? eventName,
+          matcher: matcher.matcher ?? '*',
+          sequential: matcher.sequential,
+          hooks: (matcher.hooks ?? []).map(normalizeMarketplaceHookAction),
+        })),
+      },
+    ];
+  }
+
+  const nativeHookEntries = Object.entries(data.hooks ?? {}).flatMap(([eventName, eventMatchers], index) => (
+    Array.isArray(eventMatchers)
+      ? [{
+        id: `${hook.id}:${eventName}`,
+        hook,
+        eventName,
+        sourceDescription: index === 0 ? hook.description ?? data.description : undefined,
+        matchers: eventMatchers.map((matcher) => ({
+          event: matcher.event ?? eventName,
+          matcher: matcher.matcher ?? '*',
+          sequential: matcher.sequential,
+          hooks: (matcher.hooks ?? []).map(normalizeMarketplaceHookAction),
+        })),
+      }]
+      : []
+  ));
+
+  if (nativeHookEntries.length > 0) {
+    return nativeHookEntries;
+  }
+
+  const eventName = data.event ?? hook.name;
+  return [{
+    id: `${hook.id}:${eventName}`,
+    hook,
+    eventName,
+    sourceDescription: hook.description ?? data.description,
+    matchers: [],
+  }];
+};
 
 export const getMarketplaceDetailFeatureItems = (
   detail: MarketplacePackageDetail,
@@ -387,6 +450,10 @@ export const MarketplaceAgentsMdPanel: React.FC<MarketplaceAgentsMdPanelProps> =
 export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> = ({ provider, hooks }) => {
   const { t } = useI18n();
   const { toast } = useToast();
+  const hookCardEntries = React.useMemo(
+    () => hooks.flatMap(marketplaceHookCardEntriesFromItem),
+    [hooks],
+  );
 
   const handleDownload = () => {
     const blob = new Blob([JSON.stringify(hooks, null, 2)], { type: 'application/json' });
@@ -404,179 +471,103 @@ export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> =
           {t('marketplace.detail.hooks.actions.download')}
         </SettingsWorkflowActionButton>
       )}
-      summary={<SettingsWorkflowCountBadge label={t('marketplace.detail.hooks.badge', { count: hooks.length })} />}
+      summary={<SettingsWorkflowCountBadge label={t('marketplace.detail.hooks.badge', { count: hookCardEntries.length })} />}
       singleHeader
-      hasItems={hooks.length > 0}
+      hasItems={hookCardEntries.length > 0}
       emptyIcon={<Zap className="h-6 w-6 text-muted-foreground" />}
       emptyTitle={t('marketplace.detail.hooks.empty.title')}
       emptyDescription={t('marketplace.detail.hooks.empty.description')}
       contentClassName="space-y-4 p-4"
     >
-      {hooks.map(hook => (
-        <MarketplaceHookCard key={hook.id} provider={provider} hook={hook} />
+      {hookCardEntries.map(entry => (
+        <MarketplaceHookCard key={entry.id} provider={provider} entry={entry} />
       ))}
     </SettingsWorkflowShell>
   );
 };
 
-const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hook }) => {
+const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, entry }) => {
   const { t } = useI18n();
-  const fieldSupport = getHookFieldSupport(provider);
-  const defaults = getHookDefaults(provider);
-  const data = toFeatureData<MarketplaceHookData>(hook);
-  const matchers = data.matchers ?? Object.entries(data.hooks ?? {}).flatMap(([event, eventMatchers]) => (
-    Array.isArray(eventMatchers)
-      ? eventMatchers.map(matcher => ({ ...matcher, event: matcher.event ?? event }))
-      : []
-  ));
-  const totalMatchers = matchers.length;
-  const totalCommands = matchers.reduce((acc, matcher) => acc + (matcher.hooks?.length ?? 0), 0);
-  const description = hook.description ?? data.description;
+  const { hook } = entry;
 
   return (
     <div className="relative rounded-lg border border-border bg-background p-6">
       <div className="flex items-start">
         <div className="min-w-0 flex-1">
-          <div className="mb-3">
-            <div className="flex items-center gap-3">
-              <h3 className="text-lg font-semibold text-foreground">{data.event ?? hook.name}</h3>
-              {hook.path ? <Badge variant="outline" className="text-xs">{hook.path}</Badge> : null}
-            </div>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {hook.path ? <Badge variant="outline" className="text-xs">{hook.path}</Badge> : null}
           </div>
 
-          {description ? (
-            <p className="mb-4 text-sm text-muted-foreground">{description}</p>
+          <HookCard
+            provider={provider}
+            hook={{
+              event: t(marketplaceHookEventLabelKey(entry.eventName)),
+              description: t(marketplaceHookEventDescriptionKey(entry.eventName)),
+              matchers: entry.matchers,
+            }}
+            i18nKeyPrefix="marketplace.detail.hooks.card"
+            showHookDescription
+          />
+          {entry.sourceDescription ? (
+            <p className="mt-4 text-sm text-muted-foreground">{entry.sourceDescription}</p>
           ) : null}
-
-          <div className="mb-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Terminal className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">
-                {t('marketplace.detail.hooks.card.matchersTitle')}
-              </span>
-            </div>
-            <div className="space-y-2">
-              {matchers.map((matcher, matcherIndex) => {
-                const matcherHooks = matcher.hooks ?? [];
-                return (
-                  <div key={`${hook.id}-${matcherIndex}`} className="rounded-lg bg-muted/50 p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {matcher.event ? (
-                          <Badge variant="outline" className="px-1 py-0 text-xs">
-                            {matcher.event}
-                          </Badge>
-                        ) : null}
-                        <span className="text-xs text-muted-foreground">
-                          {t('marketplace.detail.hooks.card.matcherLabel')}
-                        </span>
-                        <code className="rounded bg-muted px-1 text-xs">{matcher.matcher ?? '*'}</code>
-                        {fieldSupport.sequential && matcher.sequential ? (
-                          <Badge variant="outline" className="px-1 py-0 text-xs">
-                            {t('marketplace.detail.hooks.card.sequential')}
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {t('marketplace.detail.hooks.card.actionsCount', { count: matcherHooks.length })}
-                      </span>
-                    </div>
-                    {matcherHooks.slice(0, 2).map((action, actionIndex) => (
-                      <div key={`${hook.id}-${matcherIndex}-${actionIndex}`} className="mb-1 rounded bg-muted px-2 py-1 text-xs">
-                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline" className="px-1 py-0 text-xs">
-                            {t(`marketplace.detail.hooks.card.executionTypes.${action.type ?? 'command'}`)}
-                          </Badge>
-                          {fieldSupport.actionMetadata && action.name ? (
-                            <span className="text-muted-foreground">{action.name}</span>
-                          ) : null}
-                          {action.timeout ? (
-                            <span className="text-muted-foreground">
-                              {defaults.timeoutUnit === 'ms'
-                                ? t('marketplace.detail.hooks.card.timeoutMilliseconds', { count: action.timeout })
-                                : t('marketplace.detail.hooks.card.timeoutSeconds', { count: action.timeout })}
-                            </span>
-                          ) : null}
-                          {fieldSupport.statusMessage && action.statusMessage ? (
-                            <span className="text-muted-foreground">
-                              {t('marketplace.detail.hooks.card.statusMessage', { value: action.statusMessage })}
-                            </span>
-                          ) : null}
-                          {fieldSupport.shell && action.shell ? (
-                            <span className="text-muted-foreground">
-                              {t('marketplace.detail.hooks.card.shell', { value: action.shell })}
-                            </span>
-                          ) : null}
-                          {action.type === 'http' && action.headers ? (
-                            <span className="text-muted-foreground">
-                              {t('marketplace.detail.hooks.card.headersCount', { count: Object.keys(action.headers).length })}
-                            </span>
-                          ) : null}
-                          {action.type === 'http' && action.allowedEnvVars ? (
-                            <span className="text-muted-foreground">
-                              {t('marketplace.detail.hooks.card.envVarsCount', { count: action.allowedEnvVars.length })}
-                            </span>
-                          ) : null}
-                          {(action.type === 'prompt' || action.type === 'agent') && action.model ? (
-                            <span className="text-muted-foreground">{action.model}</span>
-                          ) : null}
-                          {fieldSupport.async && action.async ? (
-                            <Badge variant="outline" className="px-1 py-0 text-xs">
-                              {t('marketplace.detail.hooks.card.async')}
-                            </Badge>
-                          ) : null}
-                          {fieldSupport.async && action.asyncRewake ? (
-                            <Badge variant="outline" className="px-1 py-0 text-xs">
-                              {t('marketplace.detail.hooks.card.asyncRewake')}
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <p className="truncate font-mono text-muted-foreground">{marketplaceDetailHookActionSummary(action, t)}</p>
-                        {fieldSupport.condition && action.if ? (
-                          <div className="mt-1 flex min-w-0 items-center gap-2 text-muted-foreground">
-                            <span>{t('marketplace.detail.hooks.card.ifLabel')}</span>
-                            <code className="truncate rounded bg-background px-1 py-0.5 font-mono">
-                              {action.if}
-                            </code>
-                          </div>
-                        ) : null}
-                        {fieldSupport.actionMetadata && action.description ? (
-                          <p className="mt-1 truncate text-muted-foreground">{action.description}</p>
-                        ) : null}
-                      </div>
-                    ))}
-                    {matcherHooks.length > 2 ? (
-                      <div className="text-xs italic text-muted-foreground">
-                        {t('marketplace.detail.hooks.card.moreActions', { count: matcherHooks.length - 2 })}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            <span>{t('marketplace.detail.hooks.card.summary.matchers', { count: totalMatchers })}</span>
-            <span>{t('marketplace.detail.hooks.card.summary.commands', { count: totalCommands })}</span>
-          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const marketplaceDetailHookActionSummary = (
-  action: MarketplaceHookAction,
-  t: (key: string, params?: Record<string, unknown>) => string,
-): string => {
-  if (action.type === 'http') return action.url?.trim() || t('marketplace.detail.hooks.card.emptyUrl');
-  if (action.type === 'mcp_tool') return [action.server, action.tool].filter(Boolean).join('.') || t('marketplace.detail.hooks.card.emptyCommand');
-  if (action.type === 'prompt' || action.type === 'agent') {
-    const prompt = action.prompt?.trim() || t('marketplace.detail.hooks.card.emptyCommand');
-    return prompt.length > 80 ? `${prompt.slice(0, 80)}...` : prompt;
+const normalizeMarketplaceHookAction = (action: MarketplaceHookAction): HookActionConfig => {
+  if (action.type === 'http') {
+    return {
+      type: 'http',
+      name: action.name,
+      description: action.description,
+      url: action.url ?? '',
+      headers: action.headers,
+      allowedEnvVars: action.allowedEnvVars,
+      timeout: action.timeout,
+      statusMessage: action.statusMessage,
+      if: action.if,
+    };
   }
-  return action.command?.trim() || t('marketplace.detail.hooks.card.emptyCommand');
+  if (action.type === 'mcp_tool') {
+    return {
+      type: 'mcp_tool',
+      name: action.name,
+      description: action.description,
+      server: action.server ?? '',
+      tool: action.tool ?? '',
+      input: action.input,
+      timeout: action.timeout,
+      statusMessage: action.statusMessage,
+      if: action.if,
+    };
+  }
+  if (action.type === 'prompt' || action.type === 'agent') {
+    return {
+      type: action.type,
+      name: action.name,
+      description: action.description,
+      prompt: action.prompt ?? '',
+      model: action.model,
+      timeout: action.timeout,
+      statusMessage: action.statusMessage,
+      if: action.if,
+    };
+  }
+  return {
+    type: 'command',
+    name: action.name,
+    description: action.description,
+    command: action.command ?? '',
+    timeout: action.timeout,
+    statusMessage: action.statusMessage,
+    if: action.if,
+    shell: action.shell === 'powershell' ? 'powershell' : action.shell === 'bash' ? 'bash' : undefined,
+    async: action.async,
+    asyncRewake: action.asyncRewake,
+  };
 };
 
 export const MarketplaceMcpWorkflow: React.FC<MarketplaceMcpWorkflowProps> = ({ servers }) => {

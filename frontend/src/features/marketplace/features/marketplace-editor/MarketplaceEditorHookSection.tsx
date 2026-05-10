@@ -1,15 +1,15 @@
 import React from 'react';
-import { Edit, Terminal, Trash2, Workflow } from 'lucide-react';
+import { Edit, Trash2, Workflow } from 'lucide-react';
 
 import { MarketplaceFeatureContentSection } from '../../components/MarketplaceFeatureContentSection';
-import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
+import { HookCard } from '@/shared/components/hook-workflow/HookCard';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/shared/components/ui/dialog';
 import { Input } from '@/shared/components/ui/input';
 import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import WarningIcon from '@/shared/components/ui/WarningIcon';
-import { HookMatcherActionsEditor, type HookMatcher, type HookMatcherActionsLabels } from '@/shared/components/hook-workflow';
+import { HookMatcherActionsEditor, type HookActionConfig, type HookMatcher, type HookMatcherActionsLabels } from '@/shared/components/hook-workflow';
 import {
   HOOK_EVENT_MATCHER_HINTS,
   HOOK_EVENTS,
@@ -25,6 +25,9 @@ import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplaceProvider } from '@/shared/types/marketplace';
 
 import { marketplaceEditorItemTitle, type MarketplaceEditorResourceItem } from './marketplaceEditorResourceItems';
+
+const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
+const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
 
 export interface MarketplaceEditorHookSectionProps {
   provider: MarketplaceProvider;
@@ -131,64 +134,21 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
   const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [hook, setHook] = React.useState<MarketplaceHookDialogValue>(() => marketplaceHookDialogValueFromItem(item, provider, t));
-  const primaryMatcher = hook.matchers[0];
-  const primaryAction = primaryMatcher?.hooks[0];
-  const timeoutLabel = formatMarketplaceHookTimeout(provider, primaryAction?.timeout);
 
   return (
     <>
       <div className="relative rounded-lg border border-border bg-background p-6">
         <div className="flex items-start">
-          <div className="min-w-0 flex-1">
-            <div className="mb-3">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-semibold text-foreground">{hook.name}</h3>
-                <Badge variant="outline" className="text-xs">
-                  {hook.event}
-                </Badge>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Terminal className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">
-                  {t('marketplace.editor.hooks.card.matchersTitle')}
-                </span>
-              </div>
-              <div className="rounded-lg bg-muted/50 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {t('marketplace.editor.hooks.card.matcherLabel')}
-                    </span>
-                    <code className="rounded bg-muted px-1 text-xs">{primaryMatcher?.matcher ?? '*'}</code>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {t('marketplace.editor.hooks.card.actionsCount', { count: 1 })}
-                  </span>
-                </div>
-                <div className="mb-1 rounded bg-muted px-2 py-1 text-xs">
-                  <div className="mb-1 flex items-center gap-2">
-                    <Badge variant="outline" className="px-1 py-0 text-xs">
-                      {t(`marketplace.editor.hooks.dialog.executions.types.${primaryAction?.type ?? 'command'}.label`)}
-                    </Badge>
-                    {primaryAction?.timeout ? <span className="text-muted-foreground">{timeoutLabel}</span> : null}
-                    {primaryMatcher?.sequential ? (
-                      <span className="text-muted-foreground">
-                        {t('marketplace.editor.hooks.card.sequential')}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="truncate font-mono text-muted-foreground">{marketplaceHookActionSummary(primaryAction)}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-4 rounded bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span>{t('marketplace.editor.hooks.card.summary.matchers', { count: 1 })}</span>
-              <span>{t('marketplace.editor.hooks.card.summary.commands', { count: 1 })}</span>
-            </div>
+          <div className="min-w-0 flex-1 pr-16">
+            <HookCard
+              provider={provider}
+              hook={{
+                event: t(marketplaceHookEventLabelKey(hook.event)),
+                description: t(marketplaceHookEventDescriptionKey(hook.event)),
+                matchers: hook.matchers,
+              }}
+              i18nKeyPrefix="marketplace.editor.hooks.card"
+            />
           </div>
         </div>
 
@@ -476,18 +436,131 @@ const marketplaceHookDialogValueFromItem = (
   t: (key: string) => string,
 ): MarketplaceHookDialogValue => {
   const data = item.data;
+  const nativeContent = marketplaceHookDialogValueFromNativeContent(item.content, provider);
   const event = typeof data?.event === 'string' && isValidEventForProvider(provider, data.event)
     ? data.event
-    : HOOK_EVENTS[provider][0];
+    : nativeContent?.event ?? HOOK_EVENTS[provider][0];
   const matchers = Array.isArray(data?.matchers)
     ? data.matchers as HookMatcher[]
-    : [createEmptyMatcher(provider)];
+    : nativeContent?.matchers ?? [createEmptyMatcher(provider)];
 
   return {
     name: typeof data?.name === 'string' ? data.name : marketplaceEditorItemTitle(item, t),
     event,
     matchers,
   };
+};
+
+const marketplaceHookDialogValueFromNativeContent = (
+  content: string,
+  provider: MarketplaceProvider,
+): Pick<MarketplaceHookDialogValue, 'event' | 'matchers'> | null => {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!isMarketplaceRecord(parsed) || !isMarketplaceRecord(parsed.hooks)) return null;
+
+    const hookEntry = Object.entries(parsed.hooks)
+      .find(([event, value]) => isValidEventForProvider(provider, event) && Array.isArray(value));
+    if (!hookEntry) return null;
+
+    const [event, rawMatchers] = hookEntry;
+    const matchers = (rawMatchers as unknown[])
+      .map(rawMatcher => marketplaceHookMatcherFromNativeValue(rawMatcher, provider))
+      .filter((matcher): matcher is HookMatcher => Boolean(matcher));
+
+    return {
+      event,
+      matchers: matchers.length > 0 ? matchers : [createEmptyMatcher(provider)],
+    };
+  } catch {
+    return null;
+  }
+};
+
+const marketplaceHookMatcherFromNativeValue = (
+  rawMatcher: unknown,
+  provider: MarketplaceProvider,
+): HookMatcher | null => {
+  if (!isMarketplaceRecord(rawMatcher) || !Array.isArray(rawMatcher.hooks)) return null;
+
+  const hooks = rawMatcher.hooks
+    .map(rawAction => marketplaceHookActionFromNativeValue(rawAction, provider))
+    .filter((action): action is HookActionConfig => Boolean(action));
+  if (hooks.length === 0) return null;
+
+  return {
+    matcher: typeof rawMatcher.matcher === 'string' ? rawMatcher.matcher : '*',
+    sequential: typeof rawMatcher.sequential === 'boolean' ? rawMatcher.sequential : undefined,
+    hooks,
+  };
+};
+
+const marketplaceHookActionFromNativeValue = (
+  rawAction: unknown,
+  provider: MarketplaceProvider,
+): HookActionConfig | null => {
+  if (!isMarketplaceRecord(rawAction)) return null;
+
+  const actionType = typeof rawAction.type === 'string' && HOOK_TYPES[provider].includes(rawAction.type as HookActionConfig['type'])
+    ? rawAction.type as HookActionConfig['type']
+    : 'command';
+  const timeout = typeof rawAction.timeout === 'number' ? rawAction.timeout : undefined;
+  const common = {
+    timeout,
+    name: typeof rawAction.name === 'string' ? rawAction.name : undefined,
+    description: typeof rawAction.description === 'string' ? rawAction.description : undefined,
+    statusMessage: typeof rawAction.statusMessage === 'string' ? rawAction.statusMessage : undefined,
+    if: typeof rawAction.if === 'string' ? rawAction.if : undefined,
+    once: typeof rawAction.once === 'boolean' ? rawAction.once : undefined,
+  };
+
+  if (actionType === 'http') {
+    return {
+      ...common,
+      type: 'http',
+      url: typeof rawAction.url === 'string' ? rawAction.url : '',
+      headers: marketplaceStringRecordFromValue(rawAction.headers),
+      allowedEnvVars: Array.isArray(rawAction.allowedEnvVars)
+        ? rawAction.allowedEnvVars.filter((value): value is string => typeof value === 'string')
+        : undefined,
+    };
+  }
+  if (actionType === 'mcp_tool') {
+    return {
+      ...common,
+      type: 'mcp_tool',
+      server: typeof rawAction.server === 'string' ? rawAction.server : '',
+      tool: typeof rawAction.tool === 'string' ? rawAction.tool : '',
+      input: isMarketplaceRecord(rawAction.input) ? rawAction.input : undefined,
+    };
+  }
+  if (actionType === 'prompt' || actionType === 'agent') {
+    return {
+      ...common,
+      type: actionType,
+      prompt: typeof rawAction.prompt === 'string' ? rawAction.prompt : '',
+      model: typeof rawAction.model === 'string' ? rawAction.model : undefined,
+    };
+  }
+
+  return {
+    ...common,
+    type: 'command',
+    command: typeof rawAction.command === 'string' ? rawAction.command : '',
+    shell: rawAction.shell === 'bash' || rawAction.shell === 'powershell' ? rawAction.shell : undefined,
+    async: typeof rawAction.async === 'boolean' ? rawAction.async : undefined,
+    asyncRewake: typeof rawAction.asyncRewake === 'boolean' ? rawAction.asyncRewake : undefined,
+  };
+};
+
+const isMarketplaceRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const marketplaceStringRecordFromValue = (value: unknown): Record<string, string> | undefined => {
+  if (!isMarketplaceRecord(value)) return undefined;
+  const entries = Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string');
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 };
 
 export const marketplaceHookResourceItemFromValue = (

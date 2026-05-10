@@ -24,6 +24,7 @@ from jinja2 import Template
 
 from app.config.settings import get_settings, get_workspace_path
 from app.modules.claude_code.common import DocumentScope
+from app.modules.claude_code.plugins.loader import get_plugin_loader
 from app.modules.claude_code.settings import (
     ClaudeCodeSettingsUpdateRequest,
     SettingsService,
@@ -185,6 +186,8 @@ class InternalService:
                 stderr_limit_bytes=request.stderr_limit_bytes,
                 redact_patterns=request.redact_patterns,
             )
+            if result.returncode == 0 and request.provider == "claude-code":
+                get_plugin_loader(self._claude_settings_service).clear_cache(self._workspace_id)
             return MarketplaceInstallExecutionResult(
                 status="success" if result.returncode == 0 else "failed",
                 exitCode=result.returncode,

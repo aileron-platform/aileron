@@ -36,8 +36,8 @@ class HookService:
     """File service for managing Claude Code Hooks"""
 
     _SETTINGS_FILE = {
-        DocumentScope.USER: "settings.json",
-        DocumentScope.PROJECT: "settings.json",
+        DocumentScope.USER: "hooks.json",
+        DocumentScope.PROJECT: "hooks.json",
         DocumentScope.LOCAL: "settings.local.json",
     }
 

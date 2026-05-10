@@ -132,4 +132,84 @@ describe('HooksSettingsPage', () => {
       'project',
     ));
   });
+
+  it('renders every matcher and action in hook cards', async () => {
+    apiMock.listHookScopes.mockResolvedValue({
+      workspaceId: 'ws-1',
+      scopes: [
+        {
+          scope: 'project',
+          hooks: {
+            PreToolUse: [
+              {
+                matcher: 'Bash',
+                hooks: [
+                  { type: 'command', command: 'echo one', timeout: 30 },
+                  { type: 'command', command: 'echo two', timeout: 30 },
+                ],
+              },
+              {
+                matcher: 'Write',
+                hooks: [
+                  { type: 'command', command: 'write one', timeout: 30 },
+                  { type: 'command', command: 'write two', timeout: 30 },
+                ],
+              },
+            ],
+          },
+        },
+        { scope: 'user', hooks: {} },
+      ],
+    });
+
+    render(<HooksSettingsPage availableScopes={['project', 'user']} />);
+
+    expect(await screen.findByText('echo one')).toBeInTheDocument();
+    expect(screen.getByText('echo two')).toBeInTheDocument();
+    expect(screen.getByText('write one')).toBeInTheDocument();
+    expect(screen.getByText('write two')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.claude.hooks.card.summary.matchers:2')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.claude.hooks.card.summary.commands:4')).toBeInTheDocument();
+  });
+
+  it('renders installed plugin hooks grouped by event type as read-only hook cards', async () => {
+    apiMock.listHookScopes.mockResolvedValue({
+      workspaceId: 'ws-1',
+      scopes: [
+        { scope: 'project', hooks: {} },
+        { scope: 'user', hooks: {} },
+        { scope: 'local', hooks: {} },
+        {
+          scope: 'plugin',
+          hooks: {
+            SessionStart: [
+              {
+                matcher: 'm1',
+                pluginName: 'asdf',
+                marketplaceName: 'local-marketplace',
+                hooks: [{ type: 'command', command: 'echo "m1"', timeout: 600 }],
+              },
+              {
+                matcher: 'm2',
+                pluginName: 'asdf',
+                marketplaceName: 'local-marketplace',
+                hooks: [{ type: 'http', url: 'http://m2', timeout: 30 }],
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    render(<HooksSettingsPage availableScopes={['project', 'user', 'local', 'plugin']} />);
+
+    expect(await screen.findByText('echo "m1"')).toBeInTheDocument();
+    expect(screen.getByText('http://m2')).toBeInTheDocument();
+    expect(screen.getByText('marketplace.editor.hooks.events.SessionStart.description')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.common.hooks.stats.hooks:1')).toBeInTheDocument();
+    expect(screen.getByText('asdf@local-marketplace')).toBeInTheDocument();
+    expect(screen.getByText('workspace.agentSettings.claude.hooks.card.summary.matchers:2')).toBeInTheDocument();
+    expect(screen.queryByLabelText('workspace.agentSettings.common.hooks.actions.edit')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('workspace.agentSettings.common.hooks.actions.delete')).not.toBeInTheDocument();
+  });
 });

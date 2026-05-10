@@ -376,6 +376,16 @@ class TestServiceInitialization:
 
 
 class TestHookServiceInternals:
+    @patch("app.modules.claude_code.hooks.service.resolve_scope_root")
+    def test_scope_file_uses_hooks_json_for_writable_claude_scopes(
+        self, mock_resolve, hook_service, tmp_path
+    ):
+        mock_resolve.return_value = tmp_path
+
+        assert hook_service._scope_file("test-workspace", DocumentScope.PROJECT) == tmp_path / "hooks.json"
+        assert hook_service._scope_file("test-workspace", DocumentScope.USER) == tmp_path / "hooks.json"
+        assert hook_service._scope_file("test-workspace", DocumentScope.LOCAL) == tmp_path / "settings.local.json"
+
     def test_scope_file_rejects_plugin_scope(self, hook_service):
         with pytest.raises(HTTPException) as exc:
             hook_service._scope_file("test-workspace", DocumentScope.PLUGIN)
