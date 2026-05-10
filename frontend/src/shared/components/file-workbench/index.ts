@@ -104,5 +104,3 @@ export { useFileTreeContextMenu } from './hooks/useFileTreeContextMenu';
 export type { FileTreeContextMenuConfig } from './hooks/useFileTreeContextMenu';
 
 export { FileTreeSearchBar } from './primitives/FileTreeSearchBar';
-
-export { useManagedDocumentWorkbenchTabs } from './viewer';

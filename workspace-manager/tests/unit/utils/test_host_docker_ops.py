@@ -155,6 +155,8 @@ def _stub_up_dependencies(
     monkeypatch.setattr(ops, "build_compose_env", lambda _profile: compose_env)
     monkeypatch.setattr(ops, "print_startup_profile", lambda _profile, *, action: None)
     monkeypatch.setattr(ops, "compose_pull", lambda repo_root, *, env: pull_calls.append((repo_root, env)))
+    monkeypatch.setattr(ops, "load_workspace_images", lambda _repo_root, _profile: [])
+    monkeypatch.setattr(ops, "pull_workspace_images", lambda _repo_root, _images: None)
     monkeypatch.setattr(
         ops,
         "compose_up",
