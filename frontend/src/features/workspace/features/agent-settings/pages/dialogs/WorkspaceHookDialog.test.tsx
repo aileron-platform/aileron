@@ -122,8 +122,8 @@ describe('WorkspaceHookDialog', () => {
       <WorkspaceHookDialog
         open
         mode="create"
+        provider="gemini"
         hook={null}
-        supportsActionMetadata
         onClose={vi.fn()}
         onSubmit={onSubmit}
       />,
@@ -164,10 +164,11 @@ describe('WorkspaceHookDialog', () => {
       <WorkspaceHookDialog
         open
         mode="edit"
+        provider="gemini"
         hook={{
-          id: 'project:PreToolUse',
+          id: 'project:BeforeTool',
           scope: 'project',
-          eventName: 'PreToolUse',
+          eventName: 'BeforeTool',
           matchers: [
             {
               matcher: 'Write',
@@ -177,13 +178,12 @@ describe('WorkspaceHookDialog', () => {
                   name: 'security-check',
                   description: 'Check commands before execution',
                   command: 'echo write',
-                  timeout: 30,
+                  timeout: 60000,
                 },
               ],
             },
           ],
         }}
-        supportsActionMetadata
         onClose={vi.fn()}
         onSubmit={onSubmit}
       />,

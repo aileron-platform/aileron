@@ -56,6 +56,164 @@ const agentSettings = {
           name: 'SessionEnd：當 Claude Code 會話結束時執行',
           option: 'SessionEnd：當 Claude Code 會話結束時執行',
         },
+        Setup: {
+          name: 'Setup：Claude Code 啟動流程（--init / --maintenance）期間執行',
+          option: 'Setup：Claude Code setup 期間執行',
+        },
+        UserPromptExpansion: {
+          name: 'UserPromptExpansion：使用者輸入指令展開成 prompt 時執行',
+          option: 'UserPromptExpansion：Claude 展開 user prompt 時執行',
+        },
+        PostToolUseFailure: {
+          name: 'PostToolUseFailure：Tool call 失敗後執行',
+          option: 'PostToolUseFailure：Tool call 失敗後執行',
+        },
+        PostToolBatch: {
+          name: 'PostToolBatch：一批平行 tool call 完成後執行',
+          option: 'PostToolBatch：Tool batch 完成後執行',
+        },
+        PermissionRequest: {
+          name: 'PermissionRequest：權限對話框出現前執行',
+          option: 'PermissionRequest：Claude Code 請求權限時執行',
+        },
+        PermissionDenied: {
+          name: 'PermissionDenied：Auto-mode 拒絕 tool call 時執行',
+          option: 'PermissionDenied：Permission 被拒絕時執行',
+        },
+        StopFailure: {
+          name: 'StopFailure：因 API 錯誤而中止對話時執行',
+          option: 'StopFailure：Stop handling 失敗時執行',
+        },
+        SubagentStart: {
+          name: 'SubagentStart：Subagent 被啟動時執行',
+          option: 'SubagentStart：Subagent 開始時執行',
+        },
+        TeammateIdle: {
+          name: 'TeammateIdle：Agent team 成員進入 idle 時執行',
+          option: 'TeammateIdle：Teammate idle 時執行',
+        },
+        TaskCreated: {
+          name: 'TaskCreated：Task 被建立時執行',
+          option: 'TaskCreated：Task 建立時執行',
+        },
+        TaskCompleted: {
+          name: 'TaskCompleted：Task 被標記完成時執行',
+          option: 'TaskCompleted：Task 完成時執行',
+        },
+        ConfigChange: {
+          name: 'ConfigChange：Session 期間設定檔變更時執行',
+          option: 'ConfigChange：設定變更時執行',
+        },
+        CwdChanged: {
+          name: 'CwdChanged：工作目錄變更時執行',
+          option: 'CwdChanged：工作目錄變更時執行',
+        },
+        FileChanged: {
+          name: 'FileChanged：監看的檔案在磁碟變更時執行',
+          option: 'FileChanged：監看檔案變更時執行',
+        },
+        InstructionsLoaded: {
+          name: 'InstructionsLoaded：CLAUDE.md 或 .claude/rules/*.md 載入時執行',
+          option: 'InstructionsLoaded：Instructions 載入時執行',
+        },
+        PostCompact: {
+          name: 'PostCompact：Context compaction 完成後執行',
+          option: 'PostCompact：Context compaction 後執行',
+        },
+        WorktreeCreate: {
+          name: 'WorktreeCreate：Worktree 被建立時執行',
+          option: 'WorktreeCreate：Worktree 建立時執行',
+        },
+        WorktreeRemove: {
+          name: 'WorktreeRemove：Worktree 被移除時執行',
+          option: 'WorktreeRemove：Worktree 移除時執行',
+        },
+        Elicitation: {
+          name: 'Elicitation：MCP server 請求使用者輸入時執行',
+          option: 'Elicitation：MCP elicitation 期間執行',
+        },
+        ElicitationResult: {
+          name: 'ElicitationResult：使用者回應 MCP elicitation 後執行',
+          option: 'ElicitationResult：MCP elicitation 完成後執行',
+        },
+      },
+      eventGroups: {
+        lifecycle: { label: '生命週期' },
+        session: { label: 'Session' },
+        tools: { label: 'Tools' },
+        permissions: { label: 'Permissions' },
+        prompts: { label: 'Prompts' },
+        agents: { label: 'Agents' },
+        tasks: { label: 'Tasks' },
+        files: { label: 'Files' },
+        mcp: { label: 'MCP' },
+        notifications: { label: 'Notifications' },
+      },
+      dialog: {
+        types: {
+          command: { label: 'Command', description: '執行 shell command。' },
+          http: { label: 'HTTP', description: '呼叫 HTTP endpoint。' },
+          mcp_tool: { label: 'MCP tool', description: '呼叫 MCP server tool。' },
+          prompt: { label: 'Prompt', description: '執行 prompt hook。' },
+          agent: { label: 'Agent', description: '執行 agent hook。' },
+        },
+        execution: {
+          url: { label: 'URL', placeholder: 'https://example.com/hook', help: '此 hook 要呼叫的 HTTP endpoint。' },
+          headers: { label: 'Headers', help: '選填 HTTP headers。', keyPlaceholder: 'Header 名稱', valuePlaceholder: 'Header 值', add: '新增 header', remove: '移除' },
+          allowedEnvVars: { label: '允許的環境變數', placeholder: 'ENV_TOKEN, API_KEY', help: '環境變數名稱，以逗號分隔。' },
+          server: { label: 'MCP server', placeholder: 'security', help: 'MCP server 名稱。' },
+          tool: { label: 'MCP tool', placeholder: 'scan', help: 'MCP server 上的 tool 名稱。' },
+          input: { label: 'Input JSON', placeholder: '{\\n  "file_path": "${tool_input.file_path}"\\n}', help: '傳給 MCP tool 的 JSON input。' },
+          promptField: { label: 'Prompt', placeholder: 'Review this action before it runs.', help: '此 hook 送出的 prompt 內容。' },
+          model: { label: 'Model', placeholder: 'sonnet', help: '選填 model override。' },
+          once: { label: '只執行一次', help: '只有 skill 或 agent frontmatter 會採用此設定。' },
+          if: {
+            label: '條件',
+            placeholder: 'Bash(git *)',
+            help: '執行此 hook action 前，根據 tool 名稱與參數評估的選用 permission rule 條件。',
+          },
+          async: {
+            label: '非同步執行',
+          },
+          asyncRewake: {
+            label: '非同步完成後喚醒',
+          },
+          shell: {
+            label: 'Shell',
+            placeholder: 'bash',
+            help: '執行此 command 時使用的選用 shell。',
+            options: {
+              bash: 'Bash',
+              powershell: 'PowerShell',
+            },
+          },
+        },
+        matcherHints: {
+          generic: {
+            help: '使用 matcher 限制此 hook 適用的事件目標。',
+            example: '範例：startup、resume、clear、compact',
+          },
+          tool: {
+            help: '使用明確字串或 regex 匹配 Claude Code tool 名稱。',
+            example: '範例：Bash、Edit|Write、mcp__.*',
+          },
+          SessionStart: { example: '範例：startup、resume、clear、compact' },
+          Setup: { example: '範例：install、update、project' },
+          SessionEnd: { example: '範例：quit、timeout、interrupt' },
+          UserPromptExpansion: { example: '範例：command、memory、template' },
+          StopFailure: { example: '範例：timeout、blocked、failed' },
+          SubagentStart: { example: '範例：reviewer、planner、security' },
+          SubagentStop: { example: '範例：reviewer、planner、security' },
+          ConfigChange: { example: '範例：settings.json、permissions、hooks' },
+          FileChanged: { example: '範例：**/*.ts、README.md、src/.*' },
+          InstructionsLoaded: { example: '範例：CLAUDE.md、AGENTS.md、policy' },
+          PreCompact: { example: '範例：manual、auto、token_limit' },
+          PostCompact: { example: '範例：manual、auto、token_limit' },
+          Notification: { example: '範例：permission、idle、reminder' },
+          Elicitation: { example: '範例：mcp__server__tool、approval、input' },
+          ElicitationResult: { example: '範例：accepted、rejected、cancelled' },
+          unsupported: { message: '此事件不使用 matcher。' },
+        },
       },
     },
     plugins: {
@@ -152,6 +310,14 @@ const agentSettings = {
   gemini: {
     instructionFile: 'GEMINI.md',
     hooks: {
+      dialog: {
+        matcher: {
+          sequential: {
+            label: '依序執行 actions',
+            help: '讓符合條件的 actions 依序執行，而不是並行執行。',
+          },
+        },
+      },
       events: {
         BeforeTool: {
           name: 'BeforeTool：工具執行前觸發',
@@ -503,7 +669,7 @@ const agentSettings = {
           sectionTitle: 'Hook execution',
           add: '新增 action',
           timeoutLabel: 'Timeout（秒）',
-          timeoutPlaceholder: '30',
+          timeoutPlaceholder: '600',
           timeoutHelp: 'Command 最長執行時間，超過會被取消。',
           commandLabel: 'Command *',
           commandPlaceholder: '輸入要執行的 command',
@@ -911,6 +1077,7 @@ const agentSettings = {
           add: '新增匹配器',
           patternLabel: '匹配模式',
           patternPlaceholder: '工具名稱模式（例如 Write|Edit 或 * 代表全部）',
+          unsupported: '此事件不使用 matcher。',
           helper: {
             intro: '用於匹配工具名稱的模式（PostToolUse 會區分大小寫）',
             simple: '• 簡單字串：Write 僅匹配 Write 工具',
@@ -922,6 +1089,14 @@ const agentSettings = {
         execution: {
           sectionTitle: 'Hook 執行配置',
           add: '新增執行動作',
+          typeLabel: 'Action 類型',
+          types: {
+            command: { label: 'Command', description: '執行 shell command。' },
+            http: { label: 'HTTP', description: '呼叫 HTTP endpoint。' },
+            mcp_tool: { label: 'MCP tool', description: '呼叫 MCP server tool。' },
+            prompt: { label: 'Prompt', description: '執行 prompt hook。' },
+            agent: { label: 'Agent', description: '執行 agent hook。' },
+          },
           nameLabel: 'Hook 名稱',
           namePlaceholder: 'security-check',
           nameHelp: '選填，Gemini CLI logs 與 hook commands 會使用的友善名稱。',
@@ -934,6 +1109,26 @@ const agentSettings = {
           commandLabel: '命令 *',
           commandPlaceholder: '輸入要執行的命令',
           commandHelp: '可使用環境變數，例如 $CLAUDE_PROJECT_DIR。',
+          conditionLabel: 'Condition',
+          conditionPlaceholder: 'event.tool_name == "Bash"',
+          conditionHelp: '選填 Claude Code if expression。',
+          statusMessageLabel: '狀態訊息',
+          statusMessagePlaceholder: '正在檢查',
+          statusMessageHelp: 'Hook 執行時顯示的選填進度文字。',
+          asyncLabel: '非同步執行',
+          asyncRewakeLabel: '非同步完成後 rewake',
+          shellLabel: 'Shell',
+          shellPlaceholder: '選擇 shell',
+          shellOptions: { bash: 'Bash', powershell: 'PowerShell' },
+          once: { label: '只執行一次', help: '只有 skill frontmatter 會採用此設定。' },
+          url: { label: 'URL', placeholder: 'https://example.com/hook', help: '此 hook 要呼叫的 HTTP endpoint。' },
+          headers: { label: 'Headers', help: '選填 HTTP headers。', keyPlaceholder: 'Header 名稱', valuePlaceholder: 'Header 值', add: '新增 header', remove: '移除' },
+          allowedEnvVars: { label: '允許的環境變數', placeholder: 'ENV_TOKEN, API_KEY', help: '環境變數名稱，以逗號分隔。' },
+          server: { label: 'MCP server', placeholder: 'security', help: 'MCP server 名稱。' },
+          tool: { label: 'MCP tool', placeholder: 'scan', help: 'MCP server 上的 tool 名稱。' },
+          input: { label: 'Input JSON', placeholder: '{\\n  "file_path": "${tool_input.file_path}"\\n}', help: '傳給 MCP tool 的 JSON input。' },
+          promptField: { label: 'Prompt', placeholder: 'Review this action before it runs.', help: '此 hook 送出的 prompt 內容。' },
+          model: { label: 'Model', placeholder: 'sonnet', help: '選填 model override。' },
           remove: '移除執行動作',
         },
         actions: { cancel: '取消', save: '儲存變更', create: '新增 Hook' },

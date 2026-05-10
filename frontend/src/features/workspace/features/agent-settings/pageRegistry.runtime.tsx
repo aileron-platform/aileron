@@ -71,7 +71,7 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
             availableScopes={config.availableScopes}
             hookEvents={config.hookEvents}
             i18nNamespace={config.i18nNamespace}
-            supportsActionMetadata={config.capabilities.hooks?.supportsActionMetadata}
+            provider="claude-code"
           />,
         ),
       requiresCapability: 'hooks',
@@ -149,7 +149,7 @@ export const PAGE_REGISTRY: Record<AgentToolType, Partial<Record<SubViewId, Page
             availableScopes={config.availableScopes}
             hookEvents={config.hookEvents}
             i18nNamespace={config.i18nNamespace}
-            supportsActionMetadata={config.capabilities.hooks?.supportsActionMetadata}
+            provider="gemini"
           />,
         ),
       requiresCapability: 'hooks',

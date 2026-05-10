@@ -1,4 +1,5 @@
 import { Bot, Building, Globe, Sparkles, User } from 'lucide-react';
+import { HOOK_EVENTS } from '@/shared/hooks/providerHookSpec';
 import type {
   AgentToolType,
   AgentToolConfig,
@@ -12,40 +13,25 @@ const projectUserScopes: AgentToolScopeOption[] = [
   { value: 'user', labelKey: 'workspace.agentSettings.common.scope.user', icon: User },
 ];
 
-const claudeHookEvents: HookEventOption[] = [
-  { value: 'PreToolUse', labelKey: 'workspace.agentSettings.claude.hooks.events.PreToolUse.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PreToolUse.option' },
-  { value: 'PostToolUse', labelKey: 'workspace.agentSettings.claude.hooks.events.PostToolUse.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PostToolUse.option' },
-  { value: 'UserPromptSubmit', labelKey: 'workspace.agentSettings.claude.hooks.events.UserPromptSubmit.name', optionKey: 'workspace.agentSettings.claude.hooks.events.UserPromptSubmit.option' },
-  { value: 'Notification', labelKey: 'workspace.agentSettings.claude.hooks.events.Notification.name', optionKey: 'workspace.agentSettings.claude.hooks.events.Notification.option' },
-  { value: 'Stop', labelKey: 'workspace.agentSettings.claude.hooks.events.Stop.name', optionKey: 'workspace.agentSettings.claude.hooks.events.Stop.option' },
-  { value: 'SubagentStop', labelKey: 'workspace.agentSettings.claude.hooks.events.SubagentStop.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SubagentStop.option' },
-  { value: 'PreCompact', labelKey: 'workspace.agentSettings.claude.hooks.events.PreCompact.name', optionKey: 'workspace.agentSettings.claude.hooks.events.PreCompact.option' },
-  { value: 'SessionStart', labelKey: 'workspace.agentSettings.claude.hooks.events.SessionStart.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SessionStart.option' },
-  { value: 'SessionEnd', labelKey: 'workspace.agentSettings.claude.hooks.events.SessionEnd.name', optionKey: 'workspace.agentSettings.claude.hooks.events.SessionEnd.option' },
-];
+const buildNamedHookEvents = (providerKey: 'claude' | 'gemini', events: readonly string[]): HookEventOption[] => (
+  events.map(value => ({
+    value,
+    labelKey: `workspace.agentSettings.${providerKey}.hooks.events.${value}.name`,
+    optionKey: `workspace.agentSettings.${providerKey}.hooks.events.${value}.option`,
+  }))
+);
 
-const geminiHookEvents: HookEventOption[] = [
-  { value: 'BeforeTool', labelKey: 'workspace.agentSettings.gemini.hooks.events.BeforeTool.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.BeforeTool.option' },
-  { value: 'AfterTool', labelKey: 'workspace.agentSettings.gemini.hooks.events.AfterTool.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.AfterTool.option' },
-  { value: 'BeforeAgent', labelKey: 'workspace.agentSettings.gemini.hooks.events.BeforeAgent.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.BeforeAgent.option' },
-  { value: 'AfterAgent', labelKey: 'workspace.agentSettings.gemini.hooks.events.AfterAgent.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.AfterAgent.option' },
-  { value: 'BeforeModel', labelKey: 'workspace.agentSettings.gemini.hooks.events.BeforeModel.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.BeforeModel.option' },
-  { value: 'AfterModel', labelKey: 'workspace.agentSettings.gemini.hooks.events.AfterModel.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.AfterModel.option' },
-  { value: 'BeforeToolSelection', labelKey: 'workspace.agentSettings.gemini.hooks.events.BeforeToolSelection.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.BeforeToolSelection.option' },
-  { value: 'SessionStart', labelKey: 'workspace.agentSettings.gemini.hooks.events.SessionStart.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.SessionStart.option' },
-  { value: 'SessionEnd', labelKey: 'workspace.agentSettings.gemini.hooks.events.SessionEnd.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.SessionEnd.option' },
-  { value: 'PreCompress', labelKey: 'workspace.agentSettings.gemini.hooks.events.PreCompress.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.PreCompress.option' },
-  { value: 'Notification', labelKey: 'workspace.agentSettings.gemini.hooks.events.Notification.name', optionKey: 'workspace.agentSettings.gemini.hooks.events.Notification.option' },
-];
+const buildCodexHookEvents = (events: readonly string[]): HookEventOption[] => (
+  events.map(value => ({
+    value,
+    labelKey: `workspace.agentSettings.codex.hooks.events.${value}`,
+    optionKey: `workspace.agentSettings.codex.hooks.events.${value}`,
+  }))
+);
 
-const codexHookEvents: HookEventOption[] = [
-  { value: 'SessionStart', labelKey: 'workspace.agentSettings.codex.hooks.events.SessionStart', optionKey: 'workspace.agentSettings.codex.hooks.events.SessionStart' },
-  { value: 'PreToolUse', labelKey: 'workspace.agentSettings.codex.hooks.events.PreToolUse', optionKey: 'workspace.agentSettings.codex.hooks.events.PreToolUse' },
-  { value: 'PostToolUse', labelKey: 'workspace.agentSettings.codex.hooks.events.PostToolUse', optionKey: 'workspace.agentSettings.codex.hooks.events.PostToolUse' },
-  { value: 'PermissionRequest', labelKey: 'workspace.agentSettings.codex.hooks.events.PermissionRequest', optionKey: 'workspace.agentSettings.codex.hooks.events.PermissionRequest' },
-  { value: 'UserPromptSubmit', labelKey: 'workspace.agentSettings.codex.hooks.events.UserPromptSubmit', optionKey: 'workspace.agentSettings.codex.hooks.events.UserPromptSubmit' },
-  { value: 'Stop', labelKey: 'workspace.agentSettings.codex.hooks.events.Stop', optionKey: 'workspace.agentSettings.codex.hooks.events.Stop' },
-];
+const claudeHookEvents: HookEventOption[] = buildNamedHookEvents('claude', HOOK_EVENTS['claude-code']);
+const geminiHookEvents: HookEventOption[] = buildNamedHookEvents('gemini', HOOK_EVENTS.gemini);
+const codexHookEvents: HookEventOption[] = buildCodexHookEvents(HOOK_EVENTS.codex);
 
 const buildAvailableSubViews = (instructionSubView: string, capabilities: AgentToolCapabilities, extra: string[] = []) => [
   instructionSubView,
@@ -92,7 +78,7 @@ const geminiCapabilities: AgentToolCapabilities = {
     endpoint: 'agents-md',
   },
   mcp: { supported: true, scopes: ['project', 'user', 'extension'], supportsToggle: false },
-  hooks: { supported: true, scopes: ['project', 'user', 'extension'], events: geminiHookEvents, supportsActionMetadata: true },
+  hooks: { supported: true, scopes: ['project', 'user', 'extension'], events: geminiHookEvents },
   slashCommands: { supported: true, scopes: ['project', 'user', 'extension'], format: 'toml', supportsNamespace: true },
   skills: { supported: true, collection: 'skills', scopes: ['project', 'user', 'extension'], supportsPlugin: true, readOnlyScopes: ['extension'] },
   scripts: { supported: false, collection: 'scripts', scopes: [], supportsPlugin: false },

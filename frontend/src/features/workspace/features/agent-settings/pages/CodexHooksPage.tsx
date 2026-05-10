@@ -36,15 +36,13 @@ import {
 import {
   createAgentSettingsApi,
   type CodexHookEntry,
-  type CodexHookEventMetadata,
   type CodexHookSource,
 } from '../services/agentSettingsApi';
+import { HOOK_DEFAULTS, HOOK_EVENTS } from '@/shared/hooks/providerHookSpec';
 
 type CodexLayer = 'user' | 'project';
 type CodexHookScope = CodexLayer | 'plugin' | 'built_in';
 type CodexHookAction = { type: 'command'; command?: string; timeout?: number | null; statusMessage?: string | null; raw?: Record<string, unknown> };
-
-const hookEvents = ['SessionStart', 'PreToolUse', 'PostToolUse', 'PermissionRequest', 'UserPromptSubmit', 'Stop'] as const;
 
 const editableLayers: CodexLayer[] = ['project', 'user'];
 const matcherEvents = new Set<string>(['PreToolUse', 'PostToolUse', 'PermissionRequest']);
@@ -133,7 +131,7 @@ const mapHookToJsonEntries = (hook: WorkspaceHookData): Record<string, unknown>[
         ...raw,
         type: 'command',
         command: action.command ?? '',
-        timeout: action.timeout ?? 30,
+        timeout: action.timeout ?? HOOK_DEFAULTS.codex.timeout,
       };
       if (action.statusMessage?.trim()) {
         nextAction.statusMessage = action.statusMessage.trim();
@@ -293,43 +291,11 @@ const CodexHooksPage: React.FC = () => {
   }, [scopeFilter, scopeFilterOptions]);
 
   const dialogEventOptions = useMemo<EventOption[]>(() => (
-    hookEvents.map((eventName) => ({
+    HOOK_EVENTS.codex.map((eventName) => ({
       value: eventName,
       label: t(`workspace.agentSettings.codex.hooks.events.${eventName}.option`),
     }))
   ), [t]);
-
-  const eventMetadata = useMemo(() => {
-    const metadata = hooksQuery.data?.project.eventMetadata ?? hooksQuery.data?.user.eventMetadata ?? [];
-    return new Map<string, CodexHookEventMetadata>(metadata.map((item) => [item.event, item]));
-  }, [hooksQuery.data]);
-
-  const getMatcherHelp = (eventName: string) => {
-    const metadata = eventMetadata.get(eventName);
-    if (!metadata) {
-      return [
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.intro'),
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.simple'),
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.regex'),
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.wildcard'),
-      ];
-    }
-    if (!metadata.matcherSupported) {
-      return [t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.ignored')];
-    }
-    if (metadata.matcherTarget === 'source') {
-      return [
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.sessionSource'),
-        t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.sessionExamples'),
-      ];
-    }
-    return [
-      t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.toolName'),
-      t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.toolExamples'),
-      t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.regex'),
-      t('workspace.agentSettings.codex.hooks.dialog.matcher.helper.wildcard'),
-    ];
-  };
 
   const featureEnabled = Boolean(hooksQuery.data?.project.featureEnabled || hooksQuery.data?.user.featureEnabled);
   const isRuntimeReady = Boolean(runtimeBaseUrl && workspaceId);
@@ -587,8 +553,7 @@ const CodexHooksPage: React.FC = () => {
         availableScopes={['project', 'user']}
         eventOptions={dialogEventOptions}
         i18nNamespace="workspace.agentSettings.codex"
-        matcherHelp={getMatcherHelp}
-        supportsStatusMessage
+        provider="codex"
         onClose={() => {
           setDialogOpen(false);
           setActiveHook(null);

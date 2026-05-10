@@ -56,6 +56,164 @@ const agentSettings = {
           name: 'SessionEnd: Runs when Claude Code session ends',
           option: 'SessionEnd: Run when a session ends',
         },
+        Setup: {
+          name: 'Setup: Runs during Claude Code setup (--init / --maintenance)',
+          option: 'Setup: Run during Claude Code setup',
+        },
+        UserPromptExpansion: {
+          name: 'UserPromptExpansion: Runs when a user-typed command expands into a prompt',
+          option: 'UserPromptExpansion: Run when Claude expands a user prompt',
+        },
+        PostToolUseFailure: {
+          name: 'PostToolUseFailure: Runs after a tool call fails',
+          option: 'PostToolUseFailure: Run after a tool call fails',
+        },
+        PostToolBatch: {
+          name: 'PostToolBatch: Runs after a batch of parallel tool calls resolves',
+          option: 'PostToolBatch: Run after a tool batch completes',
+        },
+        PermissionRequest: {
+          name: 'PermissionRequest: Runs before a permission dialog appears',
+          option: 'PermissionRequest: Run when Claude Code requests permission',
+        },
+        PermissionDenied: {
+          name: 'PermissionDenied: Runs when a tool call is denied by auto-mode',
+          option: 'PermissionDenied: Run when permission is denied',
+        },
+        StopFailure: {
+          name: 'StopFailure: Runs when a turn ends due to API error',
+          option: 'StopFailure: Run when stop handling fails',
+        },
+        SubagentStart: {
+          name: 'SubagentStart: Runs when a subagent is spawned',
+          option: 'SubagentStart: Run when a subagent starts',
+        },
+        TeammateIdle: {
+          name: 'TeammateIdle: Runs when an agent team teammate becomes idle',
+          option: 'TeammateIdle: Run when a teammate becomes idle',
+        },
+        TaskCreated: {
+          name: 'TaskCreated: Runs when a task is being created',
+          option: 'TaskCreated: Run when a task is created',
+        },
+        TaskCompleted: {
+          name: 'TaskCompleted: Runs when a task is marked completed',
+          option: 'TaskCompleted: Run when a task completes',
+        },
+        ConfigChange: {
+          name: 'ConfigChange: Runs when a configuration file changes during a session',
+          option: 'ConfigChange: Run when configuration changes',
+        },
+        CwdChanged: {
+          name: 'CwdChanged: Runs when the working directory changes',
+          option: 'CwdChanged: Run when the working directory changes',
+        },
+        FileChanged: {
+          name: 'FileChanged: Runs when watched files change on disk',
+          option: 'FileChanged: Run when watched files change',
+        },
+        InstructionsLoaded: {
+          name: 'InstructionsLoaded: Runs when CLAUDE.md or .claude/rules/*.md are loaded',
+          option: 'InstructionsLoaded: Run when instructions are loaded',
+        },
+        PostCompact: {
+          name: 'PostCompact: Runs after context compaction completes',
+          option: 'PostCompact: Run after context compaction',
+        },
+        WorktreeCreate: {
+          name: 'WorktreeCreate: Runs when a worktree is being created',
+          option: 'WorktreeCreate: Run when a worktree is created',
+        },
+        WorktreeRemove: {
+          name: 'WorktreeRemove: Runs when a worktree is being removed',
+          option: 'WorktreeRemove: Run when a worktree is removed',
+        },
+        Elicitation: {
+          name: 'Elicitation: Runs when an MCP server requests user input',
+          option: 'Elicitation: Run during MCP elicitation',
+        },
+        ElicitationResult: {
+          name: 'ElicitationResult: Runs after the user responds to MCP elicitation',
+          option: 'ElicitationResult: Run after MCP elicitation completes',
+        },
+      },
+      eventGroups: {
+        lifecycle: { label: 'Lifecycle' },
+        session: { label: 'Session' },
+        tools: { label: 'Tools' },
+        permissions: { label: 'Permissions' },
+        prompts: { label: 'Prompts' },
+        agents: { label: 'Agents' },
+        tasks: { label: 'Tasks' },
+        files: { label: 'Files' },
+        mcp: { label: 'MCP' },
+        notifications: { label: 'Notifications' },
+      },
+      dialog: {
+        types: {
+          command: { label: 'Command', description: 'Run a shell command.' },
+          http: { label: 'HTTP', description: 'Call an HTTP endpoint.' },
+          mcp_tool: { label: 'MCP tool', description: 'Call an MCP server tool.' },
+          prompt: { label: 'Prompt', description: 'Run a prompt hook.' },
+          agent: { label: 'Agent', description: 'Run an agent hook.' },
+        },
+        execution: {
+          url: { label: 'URL', placeholder: 'https://example.com/hook', help: 'HTTP endpoint called by this hook.' },
+          headers: { label: 'Headers', help: 'Optional HTTP headers.', keyPlaceholder: 'Header name', valuePlaceholder: 'Header value', add: 'Add header', remove: 'Remove' },
+          allowedEnvVars: { label: 'Allowed environment variables', placeholder: 'ENV_TOKEN, API_KEY', help: 'Comma-separated environment variable names.' },
+          server: { label: 'MCP server', placeholder: 'security', help: 'MCP server name.' },
+          tool: { label: 'MCP tool', placeholder: 'scan', help: 'Tool name on the MCP server.' },
+          input: { label: 'Input JSON', placeholder: '{\\n  "file_path": "${tool_input.file_path}"\\n}', help: 'JSON input passed to the MCP tool.' },
+          promptField: { label: 'Prompt', placeholder: 'Review this action before it runs.', help: 'Prompt content sent by this hook.' },
+          model: { label: 'Model', placeholder: 'sonnet', help: 'Optional model override.' },
+          once: { label: 'Run once', help: 'Only honored in skill or agent frontmatter.' },
+          if: {
+            label: 'Condition',
+            placeholder: 'Bash(git *)',
+            help: 'Optional permission rule condition evaluated against the tool name and arguments before this hook action runs.',
+          },
+          async: {
+            label: 'Run asynchronously',
+          },
+          asyncRewake: {
+            label: 'Rewake after async completion',
+          },
+          shell: {
+            label: 'Shell',
+            placeholder: 'bash',
+            help: 'Optional shell used to execute this command.',
+            options: {
+              bash: 'Bash',
+              powershell: 'PowerShell',
+            },
+          },
+        },
+        matcherHints: {
+          generic: {
+            help: 'Use a matcher to limit which event target runs this hook.',
+            example: 'Examples: startup, resume, clear, compact',
+          },
+          tool: {
+            help: 'Match Claude Code tool names with exact strings or regular expressions.',
+            example: 'Examples: Bash, Edit|Write, mcp__.*',
+          },
+          SessionStart: { example: 'Examples: startup, resume, clear, compact' },
+          Setup: { example: 'Examples: install, update, project' },
+          SessionEnd: { example: 'Examples: quit, timeout, interrupt' },
+          UserPromptExpansion: { example: 'Examples: command, memory, template' },
+          StopFailure: { example: 'Examples: timeout, blocked, failed' },
+          SubagentStart: { example: 'Examples: reviewer, planner, security' },
+          SubagentStop: { example: 'Examples: reviewer, planner, security' },
+          ConfigChange: { example: 'Examples: settings.json, permissions, hooks' },
+          FileChanged: { example: 'Examples: **/*.ts, README.md, src/.*' },
+          InstructionsLoaded: { example: 'Examples: CLAUDE.md, AGENTS.md, policy' },
+          PreCompact: { example: 'Examples: manual, auto, token_limit' },
+          PostCompact: { example: 'Examples: manual, auto, token_limit' },
+          Notification: { example: 'Examples: permission, idle, reminder' },
+          Elicitation: { example: 'Examples: mcp__server__tool, approval, input' },
+          ElicitationResult: { example: 'Examples: accepted, rejected, cancelled' },
+          unsupported: { message: 'This event does not use a matcher.' },
+        },
       },
     },
     plugins: {
@@ -152,6 +310,14 @@ const agentSettings = {
   gemini: {
     instructionFile: 'GEMINI.md',
     hooks: {
+      dialog: {
+        matcher: {
+          sequential: {
+            label: 'Run actions sequentially',
+            help: 'Run matched actions in order instead of concurrently.',
+          },
+        },
+      },
       events: {
         BeforeTool: {
           name: 'BeforeTool: Runs before tool execution',
@@ -502,8 +668,16 @@ const agentSettings = {
         execution: {
           sectionTitle: 'Hook execution',
           add: 'Add action',
+          typeLabel: 'Action type',
+          types: {
+            command: { label: 'Command', description: 'Run a shell command.' },
+            http: { label: 'HTTP', description: 'Call an HTTP endpoint.' },
+            mcp_tool: { label: 'MCP tool', description: 'Call an MCP server tool.' },
+            prompt: { label: 'Prompt', description: 'Run a prompt hook.' },
+            agent: { label: 'Agent', description: 'Run an agent hook.' },
+          },
           timeoutLabel: 'Timeout (seconds)',
-          timeoutPlaceholder: '30',
+          timeoutPlaceholder: '600',
           timeoutHelp: 'Maximum command execution time. Commands are cancelled when exceeding the limit.',
           commandLabel: 'Command *',
           commandPlaceholder: 'Enter the command to execute',
@@ -911,6 +1085,7 @@ const agentSettings = {
           add: 'Add matcher',
           patternLabel: 'Match pattern',
           patternPlaceholder: 'Tool name pattern (e.g. Write|Edit or * for all)',
+          unsupported: 'This event does not use a matcher.',
           helper: {
             intro: 'Pattern for matching tool names (case sensitive for PostToolUse)',
             simple: '• Simple string: Write matches only the Write tool',
@@ -934,6 +1109,26 @@ const agentSettings = {
           commandLabel: 'Command *',
           commandPlaceholder: 'Enter the command to execute',
           commandHelp: 'Environment variables such as $CLAUDE_PROJECT_DIR are supported.',
+          conditionLabel: 'Condition',
+          conditionPlaceholder: 'event.tool_name == "Bash"',
+          conditionHelp: 'Optional Claude Code if expression.',
+          statusMessageLabel: 'Status message',
+          statusMessagePlaceholder: 'Running checks',
+          statusMessageHelp: 'Optional progress text shown while the hook runs.',
+          asyncLabel: 'Run asynchronously',
+          asyncRewakeLabel: 'Rewake after async completion',
+          shellLabel: 'Shell',
+          shellPlaceholder: 'Select shell',
+          shellOptions: { bash: 'Bash', powershell: 'PowerShell' },
+          once: { label: 'Run once', help: 'Only honored in skill frontmatter.' },
+          url: { label: 'URL', placeholder: 'https://example.com/hook', help: 'HTTP endpoint called by this hook.' },
+          headers: { label: 'Headers', help: 'Optional HTTP headers.', keyPlaceholder: 'Header name', valuePlaceholder: 'Header value', add: 'Add header', remove: 'Remove' },
+          allowedEnvVars: { label: 'Allowed environment variables', placeholder: 'ENV_TOKEN, API_KEY', help: 'Comma-separated environment variable names.' },
+          server: { label: 'MCP server', placeholder: 'security', help: 'MCP server name.' },
+          tool: { label: 'MCP tool', placeholder: 'scan', help: 'Tool name on the MCP server.' },
+          input: { label: 'Input JSON', placeholder: '{\\n  "file_path": "${tool_input.file_path}"\\n}', help: 'JSON input passed to the MCP tool.' },
+          promptField: { label: 'Prompt', placeholder: 'Review this action before it runs.', help: 'Prompt content sent by this hook.' },
+          model: { label: 'Model', placeholder: 'sonnet', help: 'Optional model override.' },
           remove: 'Remove action',
         },
         actions: { cancel: 'Cancel', save: 'Save changes', create: 'Add hook' },

@@ -57,7 +57,7 @@ const ClaudeCodeFeature: React.FC<Partial<ClaudeCodeFeatureProps>> = ({
           availableScopes={AGENT_TOOL_CONFIGS.claude.availableScopes}
           hookEvents={AGENT_TOOL_CONFIGS.claude.hookEvents}
           i18nNamespace={AGENT_TOOL_CONFIGS.claude.i18nNamespace}
-          supportsActionMetadata={AGENT_TOOL_CONFIGS.claude.capabilities.hooks?.supportsActionMetadata}
+          provider="claude-code"
         />
       );
     case 'settings':

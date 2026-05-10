@@ -10,6 +10,17 @@ import { Label } from '@/shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/shared/components/ui/select';
 import WarningIcon from '@/shared/components/ui/WarningIcon';
 import { HookMatcherActionsEditor, type HookMatcher, type HookMatcherActionsLabels } from '@/shared/components/hook-workflow';
+import {
+  HOOK_EVENT_MATCHER_HINTS,
+  HOOK_EVENTS,
+  HOOK_TYPES,
+  createEmptyExecution,
+  createEmptyHookValue,
+  createEmptyMatcher,
+  getHookDefaults,
+  getHookFieldSupport,
+  isValidEventForProvider,
+} from '@/shared/hooks/providerHookSpec';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplaceProvider } from '@/shared/types/marketplace';
 
@@ -32,17 +43,7 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
     setItems(initialItems);
   }, [initialItems]);
 
-  const emptyHook: MarketplaceHookDialogValue = {
-    name: '',
-    event: provider === 'gemini' ? 'BeforeTool' : 'PreToolUse',
-    matchers: [
-      {
-        matcher: '*',
-        sequential: provider === 'gemini',
-        hooks: [{ type: 'command', command: '', timeout: provider === 'gemini' ? 60000 : 120 }],
-      },
-    ],
-  };
+  const emptyHook: MarketplaceHookDialogValue = createEmptyHookValue(provider);
 
   const addHook = (value: MarketplaceHookDialogValue) => {
     const id = `local-${Math.random().toString(36).slice(2, 10)}`;
@@ -57,9 +58,10 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
         title: value.name || value.event,
         description: value.event,
         path: `hooks/${value.name || id}.json`,
-        content: JSON.stringify(value, null, 2),
+        content: marketplaceHookNativeContent(value),
+        data: marketplaceHookDataFromValue(value),
         badge: value.event,
-        code: firstAction?.command ?? '',
+        code: marketplaceHookActionSummary(firstAction),
         meta: [
           { labelKey: 'marketplace.editor.featureMeta.labels.type', value: firstAction?.type ?? 'command' },
           { labelKey: 'marketplace.editor.featureMeta.labels.matcher', value: firstMatcher?.matcher ?? '*' },
@@ -91,6 +93,12 @@ export const MarketplaceEditorHookSection: React.FC<MarketplaceEditorHookSection
             provider={provider}
             item={item}
             onDirty={onDirty}
+            onRemove={(itemId) => {
+              const nextItems = items.filter(current => current.id !== itemId);
+              setItems(nextItems);
+              onItemsChange?.(nextItems);
+              onDirty?.();
+            }}
             onChange={(nextItem) => {
               const nextItems = items.map(current => (current.id === nextItem.id ? nextItem : current));
               setItems(nextItems);
@@ -115,28 +123,14 @@ interface MarketplaceHookCardProps {
   provider: MarketplaceProvider;
   item: MarketplaceEditorResourceItem;
   onDirty?: () => void;
+  onRemove: (id: string) => void;
   onChange: (item: MarketplaceEditorResourceItem) => void;
 }
 
-const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, item, onDirty, onChange }) => {
+const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, item, onDirty, onRemove, onChange }) => {
   const { t } = useI18n();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const parsedTimeout = Number(item.meta?.find(meta => meta.labelKey === 'marketplace.editor.featureMeta.labels.timeout')?.value.replace(/[^0-9]/g, '') ?? (provider === 'gemini' ? 60000 : 120));
-  const [hook, setHook] = React.useState({
-    name: marketplaceEditorItemTitle(item, t),
-    event: item.badge ?? (provider === 'gemini' ? 'BeforeTool' : 'PreToolUse'),
-    matchers: [
-      {
-        matcher: item.meta?.find(meta => meta.labelKey === 'marketplace.editor.featureMeta.labels.matcher')?.value ?? '*',
-        sequential: provider === 'gemini',
-        hooks: [{
-          type: (item.meta?.find(meta => meta.labelKey === 'marketplace.editor.featureMeta.labels.type')?.value ?? 'command') as HookMatcher['hooks'][number]['type'],
-          command: item.code ?? '',
-          timeout: parsedTimeout,
-        }],
-      },
-    ] satisfies HookMatcher[],
-  });
+  const [hook, setHook] = React.useState<MarketplaceHookDialogValue>(() => marketplaceHookDialogValueFromItem(item, provider, t));
   const primaryMatcher = hook.matchers[0];
   const primaryAction = primaryMatcher?.hooks[0];
   const timeoutLabel = formatMarketplaceHookTimeout(provider, primaryAction?.timeout);
@@ -186,9 +180,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
                       </span>
                     ) : null}
                   </div>
-                  <p className="truncate font-mono text-muted-foreground">
-                    {primaryAction?.command ?? ''}
-                  </p>
+                  <p className="truncate font-mono text-muted-foreground">{marketplaceHookActionSummary(primaryAction)}</p>
                 </div>
               </div>
             </div>
@@ -204,7 +196,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
           <button type="button" className="rounded-md p-2 transition-colors hover:bg-muted" onClick={() => setDialogOpen(true)}>
             <Edit className="h-4 w-4 text-muted-foreground" />
           </button>
-          <button type="button" className="rounded-md p-2 transition-colors hover:bg-muted">
+          <button type="button" className="rounded-md p-2 transition-colors hover:bg-muted" onClick={() => onRemove(item.id)}>
             <Trash2 className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
@@ -251,6 +243,8 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
 }) => {
   const { t } = useI18n();
   const [draft, setDraft] = React.useState(value);
+  const fieldSupport = getHookFieldSupport(provider);
+  const defaults = getHookDefaults(provider);
 
   React.useEffect(() => {
     if (open) {
@@ -258,11 +252,22 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
     }
   }, [open, value]);
 
-  const eventOptions = React.useMemo(() => getMarketplaceHookEvents(provider).map(event => ({
+  React.useEffect(() => {
+    setDraft(prev => (
+      isValidEventForProvider(provider, prev.event)
+        ? prev
+        : { ...prev, event: HOOK_EVENTS[provider][0] }
+    ));
+  }, [provider]);
+
+  const eventOptions = React.useMemo(() => HOOK_EVENTS[provider].map(event => ({
     value: event,
     label: t(`marketplace.editor.hooks.events.${event}.label`),
     description: t(`marketplace.editor.hooks.events.${event}.description`),
   })), [provider, t]);
+  const matcherHint = HOOK_EVENT_MATCHER_HINTS[draft.event];
+  const matcherHelpKey = matcherHint?.helpKey ?? 'generic';
+  const matcherExampleKey = matcherHint?.examplesKey ?? 'generic';
 
   const matcherLabels: HookMatcherActionsLabels = {
     matcherSectionTitle: t('marketplace.editor.hooks.dialog.matchers.title'),
@@ -270,40 +275,74 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
     matcherPatternLabel: t('marketplace.editor.hooks.dialog.matchers.patternLabel'),
     matcherPatternPlaceholder: t('marketplace.editor.hooks.dialog.matchers.patternPlaceholder'),
     matcherPatternHelp: [
-      t(`marketplace.editor.hooks.dialog.matchers.patternHelp.${provider}.overview`),
-      `- ${t(`marketplace.editor.hooks.dialog.matchers.patternHelp.${provider}.literal`)}`,
-      `- ${t(`marketplace.editor.hooks.dialog.matchers.patternHelp.${provider}.regex`)}`,
-      `- ${t(`marketplace.editor.hooks.dialog.matchers.patternHelp.${provider}.wildcard`)}`,
+      t(`marketplace.editor.hooks.dialog.matcherHints.${matcherHelpKey}.help`),
+      `- ${t(`marketplace.editor.hooks.dialog.matcherHints.${matcherExampleKey}.example`)}`,
     ],
-    matcherSequentialLabel: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.matchers.sequentialLabel') : undefined,
-    matcherSequentialHelp: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.matchers.sequentialHelp') : undefined,
+    matcherUnsupportedMessage: t('marketplace.editor.hooks.dialog.matcherHints.unsupported.message'),
+    matcherSequentialLabel: fieldSupport.sequential ? t('marketplace.editor.hooks.dialog.matchers.sequentialLabel') : undefined,
+    matcherSequentialHelp: fieldSupport.sequential ? t('marketplace.editor.hooks.dialog.matchers.sequentialHelp') : undefined,
     matcherRemove: t('marketplace.common.actions.remove'),
     executionSectionTitle: t('marketplace.editor.hooks.dialog.executions.title'),
     executionAdd: t('marketplace.editor.hooks.dialog.executions.add'),
-    executionNameLabel: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.nameLabel') : undefined,
-    executionNamePlaceholder: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.namePlaceholder') : undefined,
-    executionNameHelp: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.nameHelp') : undefined,
+    executionTypeLabel: t('marketplace.editor.hooks.dialog.executions.typeLabel'),
+    executionTypeOptions: HOOK_TYPES[provider].map(hookType => ({
+      value: hookType,
+      label: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.label`),
+      description: t(`marketplace.editor.hooks.dialog.executions.types.${hookType}.description`),
+    })),
+    executionNameLabel: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.nameLabel') : undefined,
+    executionNamePlaceholder: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.namePlaceholder') : undefined,
+    executionNameHelp: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.nameHelp') : undefined,
     executionTimeoutLabel: t(`marketplace.editor.hooks.dialog.executions.timeoutLabel.${provider}`),
-    executionTimeoutPlaceholder: provider === 'gemini' ? '60000' : '120',
+    executionTimeoutPlaceholder: String(defaults.timeout),
     executionTimeoutHelp: t(`marketplace.editor.hooks.dialog.executions.timeoutHelp.${provider}`),
-    executionTimeoutMax: provider === 'gemini' ? 600000 : 3600,
-    executionConditionLabel: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.conditionLabel') : undefined,
-    executionConditionPlaceholder: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.conditionPlaceholder') : undefined,
-    executionConditionHelp: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.conditionHelp') : undefined,
-    executionDescriptionLabel: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.descriptionLabel') : undefined,
-    executionDescriptionPlaceholder: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.descriptionPlaceholder') : undefined,
-    executionDescriptionHelp: provider === 'gemini' ? t('marketplace.editor.hooks.dialog.executions.descriptionHelp') : undefined,
+    executionTimeoutMax: defaults.timeoutMax,
+    executionConditionLabel: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionLabel') : undefined,
+    executionConditionPlaceholder: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionPlaceholder') : undefined,
+    executionConditionHelp: fieldSupport.condition ? t('marketplace.editor.hooks.dialog.executions.conditionHelp') : undefined,
+    executionDescriptionLabel: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionLabel') : undefined,
+    executionDescriptionPlaceholder: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionPlaceholder') : undefined,
+    executionDescriptionHelp: fieldSupport.actionMetadata ? t('marketplace.editor.hooks.dialog.executions.descriptionHelp') : undefined,
     executionCommandLabel: t(`marketplace.editor.hooks.dialog.executions.commandLabel.${provider}`),
     executionCommandPlaceholder: t(`marketplace.editor.hooks.dialog.executions.commandPlaceholder.${provider}`),
     executionCommandHelp: t(`marketplace.editor.hooks.dialog.executions.commandHelp.${provider}`),
-    executionStatusMessageLabel: provider === 'codex' || provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.statusMessageLabel') : undefined,
-    executionStatusMessagePlaceholder: provider === 'codex' || provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.statusMessagePlaceholder') : undefined,
-    executionStatusMessageHelp: provider === 'codex' || provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.statusMessageHelp') : undefined,
-    executionAsyncLabel: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.asyncLabel') : undefined,
-    executionAsyncRewakeLabel: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.asyncRewakeLabel') : undefined,
-    executionShellLabel: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.shellLabel') : undefined,
-    executionShellPlaceholder: provider === 'claude-code' ? t('marketplace.editor.hooks.dialog.executions.shellPlaceholder') : undefined,
-    executionShellOptions: provider === 'claude-code' ? [
+    executionStatusMessageLabel: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessageLabel') : undefined,
+    executionStatusMessagePlaceholder: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessagePlaceholder') : undefined,
+    executionStatusMessageHelp: fieldSupport.statusMessage ? t('marketplace.editor.hooks.dialog.executions.statusMessageHelp') : undefined,
+    executionUrlLabel: t('marketplace.editor.hooks.dialog.executions.url.label'),
+    executionUrlPlaceholder: t('marketplace.editor.hooks.dialog.executions.url.placeholder'),
+    executionUrlHelp: t('marketplace.editor.hooks.dialog.executions.url.help'),
+    executionHeadersLabel: t('marketplace.editor.hooks.dialog.executions.headers.label'),
+    executionHeadersHelp: t('marketplace.editor.hooks.dialog.executions.headers.help'),
+    executionHeaderKeyPlaceholder: t('marketplace.editor.hooks.dialog.executions.headers.keyPlaceholder'),
+    executionHeaderValuePlaceholder: t('marketplace.editor.hooks.dialog.executions.headers.valuePlaceholder'),
+    executionHeadersAdd: t('marketplace.editor.hooks.dialog.executions.headers.add'),
+    executionHeadersRemove: t('marketplace.editor.hooks.dialog.executions.headers.remove'),
+    executionAllowedEnvVarsLabel: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.label'),
+    executionAllowedEnvVarsPlaceholder: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.placeholder'),
+    executionAllowedEnvVarsHelp: t('marketplace.editor.hooks.dialog.executions.allowedEnvVars.help'),
+    executionServerLabel: t('marketplace.editor.hooks.dialog.executions.server.label'),
+    executionServerPlaceholder: t('marketplace.editor.hooks.dialog.executions.server.placeholder'),
+    executionServerHelp: t('marketplace.editor.hooks.dialog.executions.server.help'),
+    executionToolLabel: t('marketplace.editor.hooks.dialog.executions.tool.label'),
+    executionToolPlaceholder: t('marketplace.editor.hooks.dialog.executions.tool.placeholder'),
+    executionToolHelp: t('marketplace.editor.hooks.dialog.executions.tool.help'),
+    executionInputLabel: t('marketplace.editor.hooks.dialog.executions.input.label'),
+    executionInputPlaceholder: t('marketplace.editor.hooks.dialog.executions.input.placeholder'),
+    executionInputHelp: t('marketplace.editor.hooks.dialog.executions.input.help'),
+    executionPromptLabel: t('marketplace.editor.hooks.dialog.executions.promptField.label'),
+    executionPromptPlaceholder: t('marketplace.editor.hooks.dialog.executions.promptField.placeholder'),
+    executionPromptHelp: t('marketplace.editor.hooks.dialog.executions.promptField.help'),
+    executionModelLabel: t('marketplace.editor.hooks.dialog.executions.model.label'),
+    executionModelPlaceholder: t('marketplace.editor.hooks.dialog.executions.model.placeholder'),
+    executionModelHelp: t('marketplace.editor.hooks.dialog.executions.model.help'),
+    executionAsyncLabel: fieldSupport.async ? t('marketplace.editor.hooks.dialog.executions.asyncLabel') : undefined,
+    executionAsyncRewakeLabel: fieldSupport.async ? t('marketplace.editor.hooks.dialog.executions.asyncRewakeLabel') : undefined,
+    executionOnceLabel: fieldSupport.once ? t('marketplace.editor.hooks.dialog.executions.once.label') : undefined,
+    executionOnceHelp: fieldSupport.once ? t('marketplace.editor.hooks.dialog.executions.once.help') : undefined,
+    executionShellLabel: fieldSupport.shell ? t('marketplace.editor.hooks.dialog.executions.shellLabel') : undefined,
+    executionShellPlaceholder: fieldSupport.shell ? t('marketplace.editor.hooks.dialog.executions.shellPlaceholder') : undefined,
+    executionShellOptions: fieldSupport.shell ? [
       { value: 'bash', label: t('marketplace.editor.hooks.dialog.executions.shellOptions.bash') },
       { value: 'powershell', label: t('marketplace.editor.hooks.dialog.executions.shellOptions.powershell') },
     ] : undefined,
@@ -311,7 +350,7 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
   };
 
   const hasValidHooks = draft.matchers.every(matcher => (
-    matcher.hooks.some(hookAction => hookAction.command?.trim())
+    matcher.hooks.some(hookAction => isMarketplaceHookActionValid(hookAction))
   ));
 
   const handleSubmit = (event: React.FormEvent) => {
@@ -323,22 +362,10 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
       matchers: draft.matchers
         .map(matcher => ({
           matcher: matcher.matcher.trim() || '*',
-          sequential: provider === 'gemini' ? Boolean(matcher.sequential) : undefined,
+          sequential: fieldSupport.sequential ? Boolean(matcher.sequential) : undefined,
           hooks: matcher.hooks
-            .filter(hookAction => hookAction.command?.trim())
-            .map(hookAction => ({
-              ...hookAction,
-              type: 'command' as const,
-              command: hookAction.command?.trim() ?? '',
-              name: hookAction.name?.trim() || undefined,
-              description: hookAction.description?.trim() || undefined,
-              statusMessage: hookAction.statusMessage?.trim() || undefined,
-              if: hookAction.if?.trim() || undefined,
-              shell: provider === 'claude-code' ? (hookAction.shell ?? 'bash') : undefined,
-              async: provider === 'claude-code' ? Boolean(hookAction.async) : undefined,
-              asyncRewake: provider === 'claude-code' ? Boolean(hookAction.asyncRewake) : undefined,
-              timeout: hookAction.timeout,
-            })),
+            .filter(hookAction => isMarketplaceHookActionValid(hookAction))
+            .map(hookAction => sanitizeMarketplaceHookAction(hookAction, provider, fieldSupport, defaults)),
         }))
         .filter(matcher => matcher.hooks.length > 0),
     });
@@ -359,12 +386,6 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {provider === 'codex' ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                {t('marketplace.editor.hooks.dialog.codexFeatureFlag')}
-              </div>
-            ) : null}
-
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="marketplace-hook-name">{t('marketplace.editor.hooks.dialog.fields.name.label')}</Label>
@@ -384,10 +405,7 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
                   <SelectContent>
                     {eventOptions.map(option => (
                       <SelectItem key={option.value} value={option.value}>
-                        <div>
-                          <div className="font-medium">{option.label}</div>
-                          <div className="text-xs text-muted-foreground">{option.description}</div>
-                        </div>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -411,9 +429,13 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
 
             <HookMatcherActionsEditor
               matchers={draft.matchers}
+              provider={provider}
+              eventName={draft.event}
               labels={matcherLabels}
               matcherCardClassName="bg-background"
               commandClassName="font-mono text-sm"
+              createEmptyMatcher={() => createEmptyMatcher(provider)}
+              createEmptyExecution={() => createEmptyExecution(provider)}
               onChange={matchers => setDraft(prev => ({ ...prev, matchers }))}
             />
           </form>
@@ -424,7 +446,7 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
             {t('marketplace.common.actions.cancel')}
           </Button>
           <Button type="submit" onClick={handleSubmit} disabled={!hasValidHooks}>
-            {t('marketplace.editor.hooks.dialog.actions.save')}
+            {t(`marketplace.editor.hooks.dialog.actions.${mode === 'create' ? 'create' : 'save'}`)}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -432,44 +454,41 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
   );
 };
 
-const getMarketplaceHookEvents = (provider: MarketplaceProvider): string[] => {
-  if (provider === 'codex') {
-    return [
-      'SessionStart',
-      'PreToolUse',
-      'PostToolUse',
-      'PermissionRequest',
-      'UserPromptSubmit',
-      'Stop',
-    ];
-  }
-  if (provider === 'gemini') {
-    return [
-      'BeforeTool',
-      'AfterTool',
-      'BeforeAgent',
-      'AfterAgent',
-      'BeforeModel',
-      'SessionStart',
-      'PreCompress',
-    ];
-  }
-  return [
-    'PreToolUse',
-    'PostToolUse',
-    'UserPromptSubmit',
-    'Notification',
-    'Stop',
-    'SubagentStop',
-    'PreCompact',
-    'SessionStart',
-    'SessionEnd',
-  ];
-};
-
 export const formatMarketplaceHookTimeout = (provider: MarketplaceProvider, timeout?: number): string => (
-  provider === 'gemini' ? `${timeout ?? 60000}ms` : `${timeout ?? 120}s`
+  getHookDefaults(provider).timeoutUnit === 'ms'
+    ? `${timeout ?? getHookDefaults(provider).timeout}ms`
+    : `${timeout ?? getHookDefaults(provider).timeout}s`
 );
+
+const marketplaceHookDataFromValue = (value: MarketplaceHookDialogValue): Record<string, unknown> => ({
+  name: value.name,
+  event: value.event,
+  matchers: value.matchers,
+});
+
+const marketplaceHookNativeContent = (value: MarketplaceHookDialogValue): string => (
+  JSON.stringify({ hooks: { [value.event]: value.matchers } }, null, 2)
+);
+
+const marketplaceHookDialogValueFromItem = (
+  item: MarketplaceEditorResourceItem,
+  provider: MarketplaceProvider,
+  t: (key: string) => string,
+): MarketplaceHookDialogValue => {
+  const data = item.data;
+  const event = typeof data?.event === 'string' && isValidEventForProvider(provider, data.event)
+    ? data.event
+    : HOOK_EVENTS[provider][0];
+  const matchers = Array.isArray(data?.matchers)
+    ? data.matchers as HookMatcher[]
+    : [createEmptyMatcher(provider)];
+
+  return {
+    name: typeof data?.name === 'string' ? data.name : marketplaceEditorItemTitle(item, t),
+    event,
+    matchers,
+  };
+};
 
 export const marketplaceHookResourceItemFromValue = (
   item: MarketplaceEditorResourceItem,
@@ -486,14 +505,67 @@ export const marketplaceHookResourceItemFromValue = (
     title: name,
     description: value.event,
     path: item.path,
-    content: JSON.stringify(value, null, 2),
+    content: marketplaceHookNativeContent(value),
+    data: marketplaceHookDataFromValue(value),
     badge: value.event,
-    code: firstAction?.command ?? '',
+    code: marketplaceHookActionSummary(firstAction),
     meta: [
       { labelKey: 'marketplace.editor.featureMeta.labels.type', value: firstAction?.type ?? 'command' },
       { labelKey: 'marketplace.editor.featureMeta.labels.matcher', value: firstMatcher?.matcher ?? '*' },
       { labelKey: 'marketplace.editor.featureMeta.labels.timeout', value: formatMarketplaceHookTimeout(provider, firstAction?.timeout) },
       ...(firstMatcher?.sequential ? [{ labelKey: 'marketplace.editor.featureMeta.labels.sequential', value: t('marketplace.common.labels.enabled') }] : []),
     ],
+  };
+};
+
+const isMarketplaceHookActionValid = (action: HookMatcher['hooks'][number]): boolean => {
+  if (action.type === 'http') return Boolean(action.url.trim());
+  if (action.type === 'mcp_tool') return Boolean(action.server.trim() && action.tool.trim());
+  if (action.type === 'prompt' || action.type === 'agent') return Boolean(action.prompt.trim());
+  return Boolean(action.command.trim());
+};
+
+const marketplaceHookActionSummary = (action?: HookMatcher['hooks'][number]): string => {
+  if (!action) return '';
+  if (action.type === 'http') return action.url;
+  if (action.type === 'mcp_tool') return [action.server, action.tool].filter(Boolean).join('.');
+  if (action.type === 'prompt' || action.type === 'agent') return action.prompt;
+  return action.command;
+};
+
+const sanitizeMarketplaceHookAction = (
+  action: HookMatcher['hooks'][number],
+  provider: MarketplaceProvider,
+  fieldSupport: ReturnType<typeof getHookFieldSupport>,
+  defaults: ReturnType<typeof getHookDefaults>,
+): HookMatcher['hooks'][number] => {
+  const common = {
+    type: action.type,
+    timeout: action.timeout,
+    name: fieldSupport.actionMetadata ? (action.name?.trim() || undefined) : undefined,
+    description: fieldSupport.actionMetadata ? (action.description?.trim() || undefined) : undefined,
+    statusMessage: fieldSupport.statusMessage ? (action.statusMessage?.trim() || undefined) : undefined,
+    if: fieldSupport.condition ? (action.if?.trim() || undefined) : undefined,
+    once: fieldSupport.once ? Boolean(action.once) : undefined,
+  };
+  if (action.type === 'http') {
+    return { ...common, type: 'http', url: action.url.trim(), headers: action.headers, allowedEnvVars: action.allowedEnvVars };
+  }
+  if (action.type === 'mcp_tool') {
+    return { ...common, type: 'mcp_tool', server: action.server.trim(), tool: action.tool.trim(), input: action.input };
+  }
+  if (action.type === 'prompt') {
+    return { ...common, type: 'prompt', prompt: action.prompt.trim(), model: action.model?.trim() || undefined };
+  }
+  if (action.type === 'agent') {
+    return { ...common, type: 'agent', prompt: action.prompt.trim(), model: action.model?.trim() || undefined };
+  }
+  return {
+    ...common,
+    type: 'command',
+    command: action.command.trim(),
+    shell: fieldSupport.shell ? (action.shell ?? defaults.shell) : undefined,
+    async: fieldSupport.async ? Boolean(action.async) : undefined,
+    asyncRewake: fieldSupport.async ? Boolean(action.asyncRewake) : undefined,
   };
 };

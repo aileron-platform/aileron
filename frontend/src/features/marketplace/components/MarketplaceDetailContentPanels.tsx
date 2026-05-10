@@ -25,6 +25,7 @@ import { Separator } from '@/shared/components/ui/separator';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
+import { getHookDefaults, getHookFieldSupport } from '@/shared/hooks/providerHookSpec';
 import {
   SettingsWorkflowActionButton,
   SettingsWorkflowCountBadge,
@@ -95,6 +96,13 @@ interface MarketplaceHookAction {
   description?: string;
   command?: string;
   url?: string;
+  headers?: Record<string, string>;
+  allowedEnvVars?: string[];
+  server?: string;
+  tool?: string;
+  input?: Record<string, unknown>;
+  prompt?: string;
+  model?: string;
   timeout?: number;
   statusMessage?: string;
   if?: string;
@@ -413,6 +421,8 @@ export const MarketplaceHooksWorkflow: React.FC<MarketplaceHooksWorkflowProps> =
 
 const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hook }) => {
   const { t } = useI18n();
+  const fieldSupport = getHookFieldSupport(provider);
+  const defaults = getHookDefaults(provider);
   const data = toFeatureData<MarketplaceHookData>(hook);
   const matchers = data.matchers ?? Object.entries(data.hooks ?? {}).flatMap(([event, eventMatchers]) => (
     Array.isArray(eventMatchers)
@@ -461,7 +471,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
                           {t('marketplace.detail.hooks.card.matcherLabel')}
                         </span>
                         <code className="rounded bg-muted px-1 text-xs">{matcher.matcher ?? '*'}</code>
-                        {provider === 'gemini' && matcher.sequential ? (
+                        {fieldSupport.sequential && matcher.sequential ? (
                           <Badge variant="outline" className="px-1 py-0 text-xs">
                             {t('marketplace.detail.hooks.card.sequential')}
                           </Badge>
@@ -477,43 +487,52 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
                           <Badge variant="outline" className="px-1 py-0 text-xs">
                             {t(`marketplace.detail.hooks.card.executionTypes.${action.type ?? 'command'}`)}
                           </Badge>
-                          {provider === 'gemini' && action.name ? (
+                          {fieldSupport.actionMetadata && action.name ? (
                             <span className="text-muted-foreground">{action.name}</span>
                           ) : null}
                           {action.timeout ? (
                             <span className="text-muted-foreground">
-                              {provider === 'gemini'
+                              {defaults.timeoutUnit === 'ms'
                                 ? t('marketplace.detail.hooks.card.timeoutMilliseconds', { count: action.timeout })
                                 : t('marketplace.detail.hooks.card.timeoutSeconds', { count: action.timeout })}
                             </span>
                           ) : null}
-                          {(provider === 'codex' || provider === 'claude-code') && action.statusMessage ? (
+                          {fieldSupport.statusMessage && action.statusMessage ? (
                             <span className="text-muted-foreground">
                               {t('marketplace.detail.hooks.card.statusMessage', { value: action.statusMessage })}
                             </span>
                           ) : null}
-                          {provider === 'claude-code' && action.shell ? (
+                          {fieldSupport.shell && action.shell ? (
                             <span className="text-muted-foreground">
                               {t('marketplace.detail.hooks.card.shell', { value: action.shell })}
                             </span>
                           ) : null}
-                          {provider === 'claude-code' && action.async ? (
+                          {action.type === 'http' && action.headers ? (
+                            <span className="text-muted-foreground">
+                              {t('marketplace.detail.hooks.card.headersCount', { count: Object.keys(action.headers).length })}
+                            </span>
+                          ) : null}
+                          {action.type === 'http' && action.allowedEnvVars ? (
+                            <span className="text-muted-foreground">
+                              {t('marketplace.detail.hooks.card.envVarsCount', { count: action.allowedEnvVars.length })}
+                            </span>
+                          ) : null}
+                          {(action.type === 'prompt' || action.type === 'agent') && action.model ? (
+                            <span className="text-muted-foreground">{action.model}</span>
+                          ) : null}
+                          {fieldSupport.async && action.async ? (
                             <Badge variant="outline" className="px-1 py-0 text-xs">
                               {t('marketplace.detail.hooks.card.async')}
                             </Badge>
                           ) : null}
-                          {provider === 'claude-code' && action.asyncRewake ? (
+                          {fieldSupport.async && action.asyncRewake ? (
                             <Badge variant="outline" className="px-1 py-0 text-xs">
                               {t('marketplace.detail.hooks.card.asyncRewake')}
                             </Badge>
                           ) : null}
                         </div>
-                        <p className="truncate font-mono text-muted-foreground">
-                          {action.type === 'http'
-                            ? (action.url?.trim() ? action.url : t('marketplace.detail.hooks.card.emptyUrl'))
-                            : (action.command?.trim() ? action.command : t('marketplace.detail.hooks.card.emptyCommand'))}
-                        </p>
-                        {provider === 'claude-code' && action.if ? (
+                        <p className="truncate font-mono text-muted-foreground">{marketplaceDetailHookActionSummary(action, t)}</p>
+                        {fieldSupport.condition && action.if ? (
                           <div className="mt-1 flex min-w-0 items-center gap-2 text-muted-foreground">
                             <span>{t('marketplace.detail.hooks.card.ifLabel')}</span>
                             <code className="truncate rounded bg-background px-1 py-0.5 font-mono">
@@ -521,7 +540,7 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
                             </code>
                           </div>
                         ) : null}
-                        {provider === 'gemini' && action.description ? (
+                        {fieldSupport.actionMetadata && action.description ? (
                           <p className="mt-1 truncate text-muted-foreground">{action.description}</p>
                         ) : null}
                       </div>
@@ -545,6 +564,19 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, hoo
       </div>
     </div>
   );
+};
+
+const marketplaceDetailHookActionSummary = (
+  action: MarketplaceHookAction,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string => {
+  if (action.type === 'http') return action.url?.trim() || t('marketplace.detail.hooks.card.emptyUrl');
+  if (action.type === 'mcp_tool') return [action.server, action.tool].filter(Boolean).join('.') || t('marketplace.detail.hooks.card.emptyCommand');
+  if (action.type === 'prompt' || action.type === 'agent') {
+    const prompt = action.prompt?.trim() || t('marketplace.detail.hooks.card.emptyCommand');
+    return prompt.length > 80 ? `${prompt.slice(0, 80)}...` : prompt;
+  }
+  return action.command?.trim() || t('marketplace.detail.hooks.card.emptyCommand');
 };
 
 export const MarketplaceMcpWorkflow: React.FC<MarketplaceMcpWorkflowProps> = ({ servers }) => {

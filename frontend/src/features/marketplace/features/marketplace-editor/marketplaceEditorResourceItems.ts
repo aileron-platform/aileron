@@ -8,6 +8,7 @@ export interface MarketplaceEditorResourceItem {
   description?: string;
   badge?: string;
   code?: string;
+  data?: Record<string, unknown>;
   meta?: Array<{ labelKey: string; value: string }>;
 }
 

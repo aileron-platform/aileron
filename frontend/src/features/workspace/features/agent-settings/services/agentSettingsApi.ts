@@ -598,13 +598,21 @@ export const buildHookRulesFromAgentHook = (hook: AgentHookWithEvent): AgentHook
     .map((matcher) => ({
       matcher: matcher.matcher.trim() || '*',
       hooks: matcher.hooks
-        .filter((action) => Boolean(action.command?.trim()))
+        .filter((action) => {
+          if (action.type === 'http') return Boolean(action.url.trim());
+          if (action.type === 'mcp_tool') return Boolean(action.server.trim() && action.tool.trim());
+          if (action.type === 'prompt' || action.type === 'agent') return Boolean(action.prompt.trim());
+          return Boolean(action.command.trim());
+        })
         .map((action) => {
-          const nextAction: AgentHookActionConfig = {
-            type: 'command',
-            command: action.command?.trim() ?? '',
-            timeout: typeof action.timeout === 'number' ? action.timeout : null,
-          };
+          const nextAction: AgentHookActionConfig = { ...action, timeout: typeof action.timeout === 'number' ? action.timeout : undefined } as AgentHookActionConfig;
+          if (nextAction.type === 'command') nextAction.command = nextAction.command.trim();
+          if (nextAction.type === 'http') nextAction.url = nextAction.url.trim();
+          if (nextAction.type === 'mcp_tool') {
+            nextAction.server = nextAction.server.trim();
+            nextAction.tool = nextAction.tool.trim();
+          }
+          if (nextAction.type === 'prompt' || nextAction.type === 'agent') nextAction.prompt = nextAction.prompt.trim();
           if (action.name?.trim()) {
             nextAction.name = action.name.trim();
           }
@@ -630,12 +638,8 @@ export const mapHookScopeDocumentToAgentHooks = (
       matchers: rules.map((rule) => ({
         matcher: rule.matcher,
         hooks: rule.hooks.map((action) => ({
-          type: 'command' as const,
-          name: action.name ?? undefined,
-          command: action.command ?? '',
+          ...action,
           timeout: typeof action.timeout === 'number' ? action.timeout : undefined,
-          description: action.description ?? undefined,
-          statusMessage: action.statusMessage ?? undefined,
         })),
       })),
       pluginName: rules.find((rule) => rule.pluginName)?.pluginName ?? undefined,

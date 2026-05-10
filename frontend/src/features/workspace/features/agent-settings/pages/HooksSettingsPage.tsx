@@ -22,6 +22,8 @@ import {
 } from '../services/agentSettingsApi';
 import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
+import type { MarketplaceProvider } from '@/shared/types/marketplace';
+import { HOOK_EVENTS } from '@/shared/hooks/providerHookSpec';
 import { createLogger } from '@/shared/services/logger';
 import {
   SettingsListWorkbench,
@@ -103,7 +105,7 @@ export interface HooksSettingsPageProps {
   availableScopes?: AgentScope[];
   hookEvents?: HookEventOption[];
   i18nNamespace?: string;
-  supportsActionMetadata?: boolean;
+  provider?: MarketplaceProvider;
 }
 
 const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
@@ -111,7 +113,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
   availableScopes = DEFAULT_HOOK_SCOPES,
   hookEvents,
   i18nNamespace = 'workspace.agentSettings.common',
-  supportsActionMetadata = false,
+  provider = 'claude-code',
 }) => {
   const [scopeDocuments, setScopeDocuments] = useState<HookScopeState>(() => createEmptyScopeDocuments());
   const [loading, setLoading] = useState(false);
@@ -125,35 +127,45 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
 
   const eventLabels = useMemo<Record<string, string>>(
     () => {
+      const providerI18nNamespace =
+        provider === 'claude-code'
+          ? 'workspace.agentSettings.claude'
+          : provider === 'gemini'
+            ? 'workspace.agentSettings.gemini'
+            : i18nNamespace;
       if (hookEvents) {
         return Object.fromEntries(
           hookEvents.map((e) => [e.value, t(e.labelKey)])
         );
       }
-      return {
-        PostToolUse: t(`${i18nNamespace}.hooks.events.PostToolUse.name`),
-        PreToolUse: t(`${i18nNamespace}.hooks.events.PreToolUse.name`),
-        Notification: t(`${i18nNamespace}.hooks.events.Notification.name`),
-        SessionStart: t(`${i18nNamespace}.hooks.events.SessionStart.name`),
-        Stop: t(`${i18nNamespace}.hooks.events.Stop.name`),
-        UserPromptSubmit: t(`${i18nNamespace}.hooks.events.UserPromptSubmit.name`),
-        SubagentStop: t(`${i18nNamespace}.hooks.events.SubagentStop.name`),
-        PreCompact: t(`${i18nNamespace}.hooks.events.PreCompact.name`),
-        SessionEnd: t(`${i18nNamespace}.hooks.events.SessionEnd.name`),
-      };
+      return Object.fromEntries(HOOK_EVENTS[provider].map((eventName) => [
+        eventName,
+        t(`${providerI18nNamespace}.hooks.events.${eventName}.name`),
+      ]));
     },
-    [t, hookEvents, i18nNamespace],
+    [t, hookEvents, i18nNamespace, provider],
   );
 
   const describeEvent = useCallback((eventName: string) => eventLabels[eventName] ?? eventName, [eventLabels]);
 
   const dialogEventOptions = useMemo<EventOption[] | undefined>(() => {
-    if (!hookEvents) return undefined;
-    return hookEvents.map((e) => ({
-      value: e.value,
-      label: t(e.optionKey),
+    if (hookEvents) {
+      return hookEvents.map((e) => ({
+        value: e.value,
+        label: t(e.optionKey),
+      }));
+    }
+    const providerI18nNamespace =
+      provider === 'claude-code'
+        ? 'workspace.agentSettings.claude'
+        : provider === 'gemini'
+          ? 'workspace.agentSettings.gemini'
+          : i18nNamespace;
+    return HOOK_EVENTS[provider].map((eventName) => ({
+      value: eventName,
+      label: t(`${providerI18nNamespace}.hooks.events.${eventName}.option`),
     }));
-  }, [hookEvents, t]);
+  }, [hookEvents, i18nNamespace, provider, t]);
 
   const hooks = useMemo(
     () =>
@@ -620,6 +632,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
           }}
           dialog={(
             <WorkspaceHookDialog
+              provider={provider}
               open={dialogOpen}
               mode={dialogMode}
               hook={activeHook}
@@ -627,7 +640,6 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
               availableScopes={effectiveScopes.filter((scope) => scope !== 'extension')}
               eventOptions={dialogEventOptions}
               i18nNamespace={i18nNamespace}
-              supportsActionMetadata={supportsActionMetadata}
               onClose={closeEditor}
               onSubmit={(hook) => {
                 void handleSubmit(hook);

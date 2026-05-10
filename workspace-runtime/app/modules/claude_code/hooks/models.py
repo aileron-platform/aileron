@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -15,8 +15,10 @@ class HookActionType(str, Enum):
     """Hook action type"""
 
     COMMAND = "command"
-    WEBHOOK = "webhook"
-    MCP_CALL = "mcp_call"
+    HTTP = "http"
+    MCP_TOOL = "mcp_tool"
+    PROMPT = "prompt"
+    AGENT = "agent"
 
 
 class HookAction(BaseModel):
@@ -25,8 +27,24 @@ class HookAction(BaseModel):
     type: HookActionType = Field(..., description="Action type")
     name: str | None = Field(None, description="Action name")
     command: str | None = Field(None, description="Command or instruction")
+    url: str | None = Field(None, description="HTTP endpoint URL")
+    headers: Dict[str, str] | None = Field(None, description="HTTP headers")
+    allowed_env_vars: List[str] | None = Field(None, alias="allowedEnvVars", description="Allowed environment variables")
+    server: str | None = Field(None, description="MCP server name")
+    tool: str | None = Field(None, description="MCP tool name")
+    input: Dict[str, Any] | None = Field(None, description="MCP tool input")
+    prompt: str | None = Field(None, description="Prompt content")
+    model: str | None = Field(None, description="Model override")
     timeout: int | None = Field(None, description="Timeout in seconds")
     description: str | None = Field(None, description="Action description")
+    status_message: str | None = Field(None, alias="statusMessage", description="Status message")
+    if_condition: str | None = Field(None, alias="if", description="Conditional expression")
+    once: bool | None = Field(None, description="Run once")
+    async_: bool | None = Field(None, alias="async", description="Run asynchronously")
+    async_rewake: bool | None = Field(None, alias="asyncRewake", description="Rewake after async completion")
+    shell: str | None = Field(None, description="Shell")
+
+    model_config = {"populate_by_name": True}
 
 
 class HookRule(BaseModel):

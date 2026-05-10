@@ -1064,7 +1064,7 @@ describe('MarketplaceEditorView', () => {
     expect(screen.getByText('package.json')).toBeInTheDocument();
   });
 
-  it('opens Codex hook creation with provider-specific validation and feature-flag messaging', async () => {
+  it('opens Codex hook creation with provider-specific validation', async () => {
     const user = userEvent.setup();
     renderCodexEditor();
 
@@ -1072,7 +1072,7 @@ describe('MarketplaceEditorView', () => {
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.featureSections.actions.add' }));
 
     expect(screen.getByText('marketplace.editor.hooks.dialog.titleCreate')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.dialog.codexFeatureFlag')).toBeInTheDocument();
+    expect(screen.queryByText('marketplace.editor.hooks.dialog.codexFeatureFlag')).not.toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.hooks.dialog.validation.commandRequired')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'marketplace.editor.hooks.dialog.actions.save' })).toBeDisabled();
   });

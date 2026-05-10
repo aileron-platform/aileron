@@ -84,6 +84,51 @@ describe('HookMatcherActionsEditor', () => {
     ]);
   });
 
+  it('uses injected factories for new matcher and execution rows', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <HookMatcherActionsEditor
+        matchers={matchers}
+        labels={labels}
+        createEmptyMatcher={() => ({
+          matcher: 'Bash',
+          hooks: [{ type: 'command', command: 'echo injected', timeout: 60, shell: 'bash' }],
+        })}
+        createEmptyExecution={() => ({
+          type: 'command',
+          command: 'gemini context load',
+          timeout: 60000,
+        })}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Add matcher' }));
+
+    expect(onChange).toHaveBeenCalledWith([
+      matchers[0],
+      {
+        matcher: 'Bash',
+        hooks: [{ type: 'command', command: 'echo injected', timeout: 60, shell: 'bash' }],
+      },
+    ]);
+
+    onChange.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Add execution' }));
+
+    expect(onChange).toHaveBeenCalledWith([
+      {
+        matcher: '*',
+        hooks: [
+          { type: 'command', command: 'echo test', timeout: 30 },
+          { type: 'command', command: 'gemini context load', timeout: 60000 },
+        ],
+      },
+    ]);
+  });
+
   it('updates matcher, timeout, and command fields through shared row mutations', () => {
     const onChange = vi.fn();
 

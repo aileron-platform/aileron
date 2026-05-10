@@ -8,6 +8,7 @@ interface MarketplacePackageHeaderProps {
   mode: 'create' | 'edit';
   isDirty: boolean;
   saveStatus: 'idle' | 'success' | 'error' | 'conflict';
+  saveErrorDetail?: string | null;
   onDiscard: () => void;
   onSave: () => void | Promise<unknown>;
   onBack: () => void;
@@ -17,6 +18,7 @@ export const MarketplacePackageHeader: React.FC<MarketplacePackageHeaderProps> =
   mode,
   isDirty,
   saveStatus,
+  saveErrorDetail,
   onDiscard,
   onSave,
   onBack,
@@ -31,8 +33,20 @@ export const MarketplacePackageHeader: React.FC<MarketplacePackageHeaderProps> =
         <div className="flex items-center gap-2 text-xs">
           {isDirty ? <span className="text-amber-600">{t('marketplace.editor.dirty')}</span> : null}
           {saveStatus === 'success' ? <span className="text-emerald-600">{t('marketplace.editor.saveStatus.success')}</span> : null}
-          {saveStatus === 'error' ? <span className="text-destructive">{t('marketplace.editor.saveStatus.validationError')}</span> : null}
-          {saveStatus === 'conflict' ? <span className="text-destructive">{t('marketplace.editor.saveStatus.revisionConflict')}</span> : null}
+          {saveStatus === 'error' ? (
+            <span className="text-destructive">
+              {saveErrorDetail
+                ? t('marketplace.editor.saveStatus.validationErrorWithDetail', { detail: saveErrorDetail })
+                : t('marketplace.editor.saveStatus.validationError')}
+            </span>
+          ) : null}
+          {saveStatus === 'conflict' ? (
+            <span className="text-destructive">
+              {saveErrorDetail
+                ? t('marketplace.editor.saveStatus.revisionConflictWithDetail', { detail: saveErrorDetail })
+                : t('marketplace.editor.saveStatus.revisionConflict')}
+            </span>
+          ) : null}
         </div>
       )}
       actions={(

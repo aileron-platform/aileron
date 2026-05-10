@@ -126,6 +126,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
   const [resourceDiscardVersion, setResourceDiscardVersion] = React.useState(0);
   const [activeTab, setActiveTab] = React.useState<MarketplaceEditorTab>('basic');
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'success' | 'error' | 'conflict'>('idle');
+  const [saveErrorDetail, setSaveErrorDetail] = React.useState<string | null>(null);
   const [showLeaveDialog, setShowLeaveDialog] = React.useState(false);
   const [revision, setRevision] = React.useState('');
   const [loadedDetail, setLoadedDetail] = React.useState<MarketplacePackageDetail | null>(null);
@@ -165,6 +166,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
   const markDirty = () => {
     setIsDirty(true);
     setSaveStatus('idle');
+    setSaveErrorDetail(null);
   };
   const handleMcpItemsChange = React.useCallback((items: MarketplaceEditorResourceItem[]) => {
     setPackageFiles(prev => marketplaceApplyMcpItemsToPackageFiles(prev, items));
@@ -187,14 +189,22 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
   const savePackage = async (): Promise<boolean> => {
     if (!provider) {
       setSaveStatus('error');
+      setSaveErrorDetail(t('marketplace.editor.saveStatus.details.providerRequired'));
       return false;
     }
     if (!packageId.trim()) {
       setSaveStatus('error');
+      setSaveErrorDetail(t('marketplace.editor.saveStatus.details.packageIdRequired'));
       return false;
     }
-    if (requiredDraft?.listingJsonError || requiredDraft?.manifestJsonError) {
+    if (requiredDraft?.listingJsonError) {
       setSaveStatus('error');
+      setSaveErrorDetail(t('marketplace.editor.saveStatus.details.listingJsonInvalid', { reason: requiredDraft.listingJsonError }));
+      return false;
+    }
+    if (requiredDraft?.manifestJsonError) {
+      setSaveStatus('error');
+      setSaveErrorDetail(t('marketplace.editor.saveStatus.details.manifestJsonInvalid', { reason: requiredDraft.manifestJsonError }));
       return false;
     }
     try {
@@ -226,10 +236,13 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
       setResourceCommitVersion(version => version + 1);
       setIsDirty(false);
       setSaveStatus('success');
+      setSaveErrorDetail(null);
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setSaveStatus(message.includes('revision_conflict') ? 'conflict' : 'error');
+      const conflict = message.includes('revision_conflict');
+      setSaveStatus(conflict ? 'conflict' : 'error');
+      setSaveErrorDetail(conflict ? t('marketplace.editor.saveStatus.details.revisionConflict') : message);
       return false;
     }
   };
@@ -237,6 +250,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
     setResourceDiscardVersion(version => version + 1);
     setIsDirty(false);
     setSaveStatus('idle');
+    setSaveErrorDetail(null);
   };
   const navigateBack = () => {
     if (isDirty) {
@@ -304,6 +318,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
         mode={mode}
         isDirty={isDirty}
         saveStatus={saveStatus}
+        saveErrorDetail={saveErrorDetail}
         onDiscard={discardPackageDrafts}
         onSave={savePackage}
         onBack={navigateBack}
