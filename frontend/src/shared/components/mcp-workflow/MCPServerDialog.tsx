@@ -64,8 +64,15 @@ export interface MCPServerDialogLabels {
   saveFailed: string;
 }
 
+export interface MCPServerDialogDescriptionField {
+  label: string;
+  placeholder: string;
+  requiredMessage?: string;
+}
+
 interface MCPFormState<TScope extends string> {
   name: string;
+  description: string;
   scope: TScope;
   transport: MCPTransport;
   command: string;
@@ -82,7 +89,8 @@ export interface MCPServerDialogProps<TScope extends string = string> {
   scopeOptions: MCPServerScopeOption<TScope>[];
   transportOptions: MCPServerTransportOption[];
   labels: MCPServerDialogLabels;
-  transportFieldLabels: MCPTransportFieldsLabels;
+  transportFieldLabels: MCPTransportFieldsLabels | ((transport: MCPTransport) => MCPTransportFieldsLabels);
+  descriptionField?: MCPServerDialogDescriptionField;
   onClose: () => void;
   onSubmit: (server: MCPServerDialogData<TScope>) => Promise<void>;
 }
@@ -95,12 +103,15 @@ export const MCPServerDialog = <TScope extends string = string>({
   transportOptions,
   labels,
   transportFieldLabels,
+  descriptionField,
   onClose,
   onSubmit,
 }: MCPServerDialogProps<TScope>) => {
   const defaultScope = scopeOptions[0]?.value ?? ('' as TScope);
+  const hasScopeOptions = scopeOptions.length > 0;
   const defaultForm = useMemo<MCPFormState<TScope>>(() => ({
     name: '',
+    description: '',
     scope: defaultScope,
     transport: 'stdio',
     command: '',
@@ -121,6 +132,7 @@ export const MCPServerDialog = <TScope extends string = string>({
     if (mode === 'edit' && server) {
       setForm({
         name: server.name,
+        description: server.description ?? '',
         scope: server.scope as TScope,
         transport: server.transport ?? 'stdio',
         command: server.command ?? '',
@@ -155,6 +167,11 @@ export const MCPServerDialog = <TScope extends string = string>({
       return;
     }
 
+    if (descriptionField?.requiredMessage && !form.description.trim()) {
+      setSubmitError(descriptionField.requiredMessage);
+      return;
+    }
+
     if (form.transport === 'stdio' && !form.command.trim()) {
       setSubmitError(labels.commandRequired);
       return;
@@ -168,11 +185,13 @@ export const MCPServerDialog = <TScope extends string = string>({
     const sanitizedEnv = toMCPKeyValueRecord(form.env);
     const sanitizedHeaders = toMCPKeyValueRecord(form.headers);
     const sanitizedArgs = form.args.map((arg) => arg.trim()).filter(Boolean);
+    const resolvedScope = (hasScopeOptions ? form.scope : (server?.scope as TScope | undefined)) ?? defaultScope;
 
     const payload: MCPServerDialogData<TScope> = {
-      id: server?.id ?? `${form.scope}:${name}`,
+      id: server?.id ?? (hasScopeOptions && resolvedScope ? `${resolvedScope}:${name}` : name),
       name,
-      scope: form.scope,
+      description: form.description.trim() || undefined,
+      scope: resolvedScope,
       transport: form.transport,
       command: form.transport === 'stdio' ? form.command.trim() : undefined,
       args: form.transport === 'stdio' ? sanitizedArgs : [],
@@ -198,6 +217,11 @@ export const MCPServerDialog = <TScope extends string = string>({
       setSubmitting(false);
     }
   };
+
+  const resolvedTransportFieldLabels = useMemo<MCPTransportFieldsLabels>(
+    () => (typeof transportFieldLabels === 'function' ? transportFieldLabels(form.transport) : transportFieldLabels),
+    [form.transport, transportFieldLabels],
+  );
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -227,28 +251,30 @@ export const MCPServerDialog = <TScope extends string = string>({
                 <p className="text-xs text-muted-foreground">{labels.nameHint}</p>
               </div>
 
-              <div className="space-y-2">
-                <Label>{labels.scopeLabel}</Label>
-                <Select
-                  value={form.scope}
-                  onValueChange={(value) => handleChange('scope', value as TScope)}
-                  disabled={isEdit}
-                >
-                  <SelectTrigger className={cn(isEdit && 'bg-muted text-muted-foreground')}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {scopeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div>
-                          <div className="font-medium">{option.title}</div>
-                          <div className="text-xs text-muted-foreground">{option.description}</div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {hasScopeOptions ? (
+                <div className="space-y-2">
+                  <Label>{labels.scopeLabel}</Label>
+                  <Select
+                    value={form.scope}
+                    onValueChange={(value) => handleChange('scope', value as TScope)}
+                    disabled={isEdit}
+                  >
+                    <SelectTrigger className={cn(isEdit && 'bg-muted text-muted-foreground')}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scopeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div>
+                            <div className="font-medium">{option.title}</div>
+                            <div className="text-xs text-muted-foreground">{option.description}</div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <Label>{labels.transportLabel}</Label>
@@ -273,6 +299,18 @@ export const MCPServerDialog = <TScope extends string = string>({
               </div>
             </div>
 
+            {descriptionField ? (
+              <div className="space-y-2">
+                <Label htmlFor="mcp-description">{descriptionField.label}</Label>
+                <Input
+                  id="mcp-description"
+                  value={form.description}
+                  onChange={(event) => handleChange('description', event.target.value)}
+                  placeholder={descriptionField.placeholder}
+                />
+              </div>
+            ) : null}
+
             <MCPTransportFieldsEditor
               transport={form.transport}
               command={form.command}
@@ -281,7 +319,7 @@ export const MCPServerDialog = <TScope extends string = string>({
               env={form.env}
               headers={form.headers}
               submitting={submitting}
-              labels={transportFieldLabels}
+              labels={resolvedTransportFieldLabels}
               onCommandChange={(command) => handleChange('command', command)}
               onArgsChange={(args) => handleChange('args', args)}
               onUrlChange={(url) => handleChange('url', url)}

@@ -4,11 +4,11 @@ import {
   marketplaceApplyMcpItemsToPackageFiles,
   marketplaceMcpResourceItemFromValue,
   marketplaceMcpServerContentFromValue,
-  type MarketplaceMcpServerDialogValue,
-} from './MarketplaceEditorMcpSection';
+  type MarketplaceMCPServerValue,
+} from './marketplaceMcpServerDialogSchema';
 import type { MarketplaceEditorResourceItem } from './marketplaceEditorResourceItems';
 
-const value: MarketplaceMcpServerDialogValue = {
+const value: MarketplaceMCPServerValue = {
   name: 'repo-context',
   description: 'Repository context',
   transport: 'stdio',

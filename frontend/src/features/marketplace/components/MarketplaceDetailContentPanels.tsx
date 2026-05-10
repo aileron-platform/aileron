@@ -1,10 +1,7 @@
 import React from 'react';
 import {
   Copy,
-  Database,
   Download,
-  Eye,
-  EyeOff,
   FileArchive,
   FileText,
   Info,
@@ -23,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Separator } from '@/shared/components/ui/separator';
 import { HookCard } from '@/shared/components/hook-workflow/HookCard';
 import { MarkdownContent } from '@/shared/components/markdown/MarkdownContent';
+import { MCPServerCard, type MCPServerCardLabels } from '@/shared/components/mcp-workflow';
 import { useToast } from '@/shared/components/ui/use-toast';
 import { useI18n } from '@/shared/hooks/useI18n';
 import {
@@ -148,7 +146,7 @@ interface MarketplaceMcpData {
   headers?: Record<string, string>;
 }
 
-interface MarketplaceMcpServerCardProps {
+interface MarketplaceDetailMCPCardProps {
   server: MarketplaceFeatureContentItem;
 }
 
@@ -599,15 +597,29 @@ export const MarketplaceMcpWorkflow: React.FC<MarketplaceMcpWorkflowProps> = ({ 
       contentClassName="space-y-4 p-4"
     >
       {servers.map(server => (
-        <MarketplaceMcpServerCard key={server.id} server={server} />
+        <MarketplaceDetailMCPCard key={server.id} server={server} />
       ))}
     </SettingsWorkflowShell>
   );
 };
 
-const MarketplaceMcpServerCard: React.FC<MarketplaceMcpServerCardProps> = ({ server }) => {
+const buildDetailMCPCardLabels = (t: (key: string) => string): MCPServerCardLabels => ({
+  enabled: t('marketplace.detail.mcp.card.status.enabled'),
+  disabled: t('marketplace.detail.mcp.card.status.disabled'),
+  transportType: t('marketplace.detail.mcp.card.sections.transport'),
+  serverUrl: t('marketplace.detail.mcp.card.sections.url'),
+  headers: t('marketplace.detail.mcp.card.sections.headers'),
+  command: t('marketplace.detail.mcp.card.sections.command'),
+  commandArgs: t('marketplace.detail.mcp.card.sections.arguments'),
+  env: t('marketplace.detail.mcp.card.sections.env'),
+  showEnvValues: t('marketplace.detail.mcp.card.showEnvValues'),
+  hideEnvValues: t('marketplace.detail.mcp.card.hideEnvValues'),
+});
+
+const MarketplaceDetailMCPCard: React.FC<MarketplaceDetailMCPCardProps> = ({ server }) => {
   const { t } = useI18n();
   const { toast } = useToast();
+  const labels = React.useMemo(() => buildDetailMCPCardLabels(t), [t]);
   const [showEnvValues, setShowEnvValues] = React.useState(false);
   const data = toFeatureData<MarketplaceMcpData>(server);
   const serverType = data.type ?? data.transport ?? 'stdio';
@@ -629,116 +641,32 @@ const MarketplaceMcpServerCard: React.FC<MarketplaceMcpServerCardProps> = ({ ser
     toast({ title: t('marketplace.detail.mcp.toasts.copySuccess') });
   };
 
-  const typeClassName = (() => {
-    switch (serverType) {
-      case 'http':
-        return 'bg-primary/10 text-primary border-primary/20';
-      case 'sse':
-        return 'bg-orange-50 text-orange-700 border-orange-200';
-      default:
-        return 'bg-gray-50 text-gray-600 border-gray-200';
-    }
-  })();
-
   return (
-    <div className="rounded-lg border border-border bg-background p-4 transition-shadow hover:shadow-sm">
-      <div className="mb-3 flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <Database className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <div className="mb-1 flex items-center gap-2">
-              <h3 className="font-semibold text-foreground">{server.name}</h3>
-              <Badge variant="outline" className={`text-xs ${typeClassName}`}>
-                {serverType.toUpperCase()}
-              </Badge>
-            </div>
-            {server.path ? <p className="text-xs text-muted-foreground">{server.path}</p> : null}
-          </div>
-        </div>
+    <MCPServerCard
+      server={{
+        id: server.id,
+        name: server.name,
+        description: server.description,
+        scope: server.path ?? '',
+        transport: serverType === 'http' || serverType === 'sse' || serverType === 'stdio' ? serverType : 'stdio',
+        command: data.command,
+        args: data.args,
+        url: data.url,
+        env: data.env,
+        headers: data.headers,
+      }}
+      scopeBadge={server.path ? <Badge variant="outline" className="font-mono text-xs">{server.path}</Badge> : null}
+      labels={labels}
+      supportsToggle={false}
+      canEdit={false}
+      canDelete={false}
+      envVisible={showEnvValues}
+      readOnlyIndicator={(
         <Button variant="ghost" size="sm" type="button" onClick={handleCopyConfig} title={t('marketplace.detail.mcp.card.copyTooltip')}>
           <Copy className="h-4 w-4" />
         </Button>
-      </div>
-
-      {server.description ? (
-        <p className="mb-4 text-sm text-muted-foreground">{server.description}</p>
-      ) : null}
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div>
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {serverType === 'http' || serverType === 'sse'
-              ? t('marketplace.detail.mcp.card.sections.url')
-              : t('marketplace.detail.mcp.card.sections.command')}
-          </h4>
-          <div className="rounded-md bg-muted/50 p-3">
-            {serverType === 'http' || serverType === 'sse' ? (
-              <code className="break-all font-mono text-sm text-foreground">{data.url}</code>
-            ) : (
-              <>
-                <code className="break-all font-mono text-sm text-foreground">{data.command}</code>
-                {data.args?.length ? (
-                  <div className="mt-2 break-all text-xs text-muted-foreground">{data.args.join(' ')}</div>
-                ) : null}
-              </>
-            )}
-          </div>
-        </div>
-
-        {envEntries.length > 0 ? (
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {t('marketplace.detail.mcp.card.sections.env')}
-              </h4>
-              <Button
-                variant="ghost"
-                size="sm"
-                type="button"
-                onClick={() => setShowEnvValues(value => !value)}
-                className="h-6 px-2"
-                title={showEnvValues
-                  ? t('marketplace.detail.mcp.card.hideEnvValues')
-                  : t('marketplace.detail.mcp.card.showEnvValues')}
-              >
-                {showEnvValues ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-              </Button>
-            </div>
-            <div className="space-y-1 rounded-md bg-muted/50 p-3">
-              {envEntries.map(([key, value]) => (
-                <div key={key} className="rounded bg-muted/30 px-2 py-1">
-                  <span className="break-all font-mono text-xs">
-                    <span className="font-semibold text-primary">{key}</span>
-                    <span className="mx-1 text-muted-foreground">=</span>
-                    <span className="text-foreground">{showEnvValues ? value : '***'}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {headerEntries.length > 0 ? (
-        <div className="mt-4">
-          <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {t('marketplace.detail.mcp.card.sections.headers')}
-          </h4>
-          <div className="space-y-1 rounded-md bg-muted/50 p-3">
-            {headerEntries.map(([key, value]) => (
-              <div key={key} className="rounded bg-muted/30 px-2 py-1">
-                <span className="break-all font-mono text-xs">
-                  <span className="font-semibold text-primary">{key}</span>
-                  <span className="mx-1 text-muted-foreground">:</span>
-                  <span className="text-foreground">{value}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      )}
+      onToggleEnvVisibility={() => setShowEnvValues(value => !value)}
+    />
   );
 };

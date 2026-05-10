@@ -14,6 +14,7 @@ export interface MCPServerCardData {
   id: string;
   name: string;
   scope: string;
+  description?: string;
   transport?: MCPTransport;
   command?: string;
   args?: string[];

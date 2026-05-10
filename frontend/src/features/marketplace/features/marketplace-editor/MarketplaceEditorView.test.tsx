@@ -871,16 +871,16 @@ describe('MarketplaceEditorView', () => {
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.featureSections.actions.add' }));
 
     expect(screen.getByText('marketplace.editor.mcp.dialog.titleCreate')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'marketplace.editor.mcp.dialog.actions.save' }));
+    expect(screen.queryByText('marketplace.editor.mcp.dialog.fields.scope.label')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.mcp.dialog.actions.create' }));
     expect(screen.getByText('marketplace.editor.mcp.dialog.validation.nameRequired')).toBeInTheDocument();
 
     await user.type(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.name.label'), 'local-context');
     await user.type(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.description.label'), 'Local context server');
     await user.type(screen.getByPlaceholderText('marketplace.editor.mcp.dialog.fields.command.placeholder'), 'npx');
-    await user.click(screen.getByRole('button', { name: 'marketplace.editor.mcp.dialog.actions.save' }));
+    await user.click(screen.getByRole('button', { name: 'marketplace.editor.mcp.dialog.actions.create' }));
 
     expect(screen.getByText('local-context')).toBeInTheDocument();
-    expect(screen.getByText('Local context server')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
   });
 
@@ -894,17 +894,19 @@ describe('MarketplaceEditorView', () => {
     await user.click(within(card).getAllByRole('button')[0]);
 
     expect(screen.getByText('marketplace.editor.mcp.dialog.title')).toBeInTheDocument();
-    await user.clear(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.name.label'));
-    await user.type(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.name.label'), 'figma-design-context');
+    expect(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.name.label')).toBeDisabled();
+    await user.clear(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.description.label'));
+    await user.type(screen.getByLabelText('marketplace.editor.mcp.dialog.fields.description.label'), 'Updated Figma MCP server');
 
     const httpUrlInput = screen.queryByPlaceholderText('marketplace.editor.mcp.dialog.fields.url.placeholderHttp');
     if (httpUrlInput) {
-      await user.type(httpUrlInput, 'https://api.figma.com/mcp');
+      await user.clear(httpUrlInput);
+      await user.type(httpUrlInput, 'https://api.figma.com/mcp/v2');
     }
 
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.mcp.dialog.actions.save' }));
 
-    expect(screen.getByText('figma-design-context')).toBeInTheDocument();
+    expect(screen.getByText('figma-context')).toBeInTheDocument();
     expect(screen.getByText('marketplace.editor.dirty')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'marketplace.editor.actions.save' }));
@@ -913,7 +915,7 @@ describe('MarketplaceEditorView', () => {
       packageFiles: expect.arrayContaining([
         expect.objectContaining({
           path: 'mcp/figma-context.json',
-          content: expect.stringContaining('figma-design-context'),
+          content: expect.stringContaining('Updated Figma MCP server'),
         }),
       ]),
     }));

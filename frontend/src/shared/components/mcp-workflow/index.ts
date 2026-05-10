@@ -19,6 +19,7 @@ export {
 } from './MCPServerCard';
 export {
   MCPServerDialog,
+  type MCPServerDialogDescriptionField,
   type MCPServerDialogData,
   type MCPServerDialogLabels,
   type MCPServerDialogProps,
