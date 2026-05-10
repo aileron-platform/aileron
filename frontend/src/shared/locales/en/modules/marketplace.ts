@@ -65,7 +65,6 @@ const marketplace = {
       info: 'Info',
       none: 'Valid',
     },
-    required_manifest_missing: 'Required provider manifest is missing.',
     invalid_manifest_shape: 'Provider manifest shape is invalid.',
     package_identity_mismatch: 'Package identity does not match the provider manifest.',
     metadata_conflict: 'Catalog metadata differs from package manifest metadata.',

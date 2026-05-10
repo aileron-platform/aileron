@@ -938,19 +938,27 @@ def test_get_package_detail_exposes_catalog_and_manifest_metadata_conflict(marke
     assert detail.validation_results[0].severity == "warning"
 
 
-def test_list_packages_marks_missing_provider_manifest_as_error(marketplace_service):
+def test_list_packages_tolerates_missing_provider_manifest(marketplace_service):
+    """Marketplace listings can carry full plugin metadata directly, so a
+    package directory without plugin.json must still surface in listings
+    without an error severity (e.g. csharp-lsp from claude-plugins-official)."""
     root = marketplace_service.get_registry_root("user-1")
     marketplace_service.initialize_registry("user-1", _metadata())
     manifest_path = root / "codex" / ".agents" / "plugins" / "marketplace.json"
     manifest = json.loads(manifest_path.read_text())
-    manifest["plugins"] = [{"name": "broken-plugin", "source": {"source": "local", "path": "./plugins/broken-plugin"}}]
+    manifest["plugins"] = [{
+        "name": "listing-only-plugin",
+        "source": {"source": "local", "path": "./plugins/listing-only-plugin"},
+        "description": "Listing-only plugin",
+        "version": "1.0.0",
+    }]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    (root / "codex" / "plugins" / "broken-plugin").mkdir(parents=True)
+    (root / "codex" / "plugins" / "listing-only-plugin").mkdir(parents=True)
 
     result = marketplace_service.list_packages("user-1")
 
     assert result.total == 1
-    assert result.items[0].validation_severity == "error"
+    assert result.items[0].validation_severity == "none"
 
 
 def test_package_index_refreshes_when_registry_fingerprint_changes(marketplace_service):
@@ -1274,14 +1282,17 @@ def test_export_package_blocks_error_validation_but_allows_warning_validation(ma
 
     detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
     warning_archive = marketplace_service.export_package("user-1", "codex", "figma-context", detail.revision)
-    plugin_manifest_path.unlink()
+    # Corrupt the manifest with invalid JSON to trigger an error-level
+    # validation result. Missing manifest no longer blocks export because
+    # marketplace listings may declare the metadata in lieu of plugin.json.
+    plugin_manifest_path.write_text("{not valid json", encoding="utf-8")
     broken_detail = marketplace_service.get_package_detail("user-1", "codex", "figma-context")
 
     with pytest.raises(MarketplaceValidationError) as exc_info:
         marketplace_service.export_package("user-1", "codex", "figma-context", broken_detail.revision)
 
     assert warning_archive
-    assert exc_info.value.results[0]["code"] == "marketplace.validation.required_manifest_missing"
+    assert exc_info.value.results[0]["code"] == "marketplace.validation.invalid_manifest_shape"
 
 
 def test_delete_package_checks_revision_and_removes_marketplace_entry(marketplace_service):
@@ -2802,6 +2813,58 @@ def test_import_candidates_imports_duplicate_as_new_id(marketplace_service):
     assert imported_manifest["sourceType"] == "imported"
     assert imported_manifest["importSource"]["packageId"] == "figma-context"
     assert imported_manifest["importSource"]["targetPackageId"] == "figma-context-copy"
+
+
+def test_import_candidates_synthesizes_manifest_when_listing_only(marketplace_service):
+    """Anthropic's official Claude Code marketplace ships listings without
+    per-package plugin.json (e.g. csharp-lsp). The import flow must seed a
+    self-contained plugin.json from the marketplace listing entry."""
+    user_root = marketplace_service.get_registry_root("user-1").parent
+    source_root = user_root / "import-sources" / "claude-listing-only"
+    manifest_path = source_root / ".claude-plugin" / "marketplace.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({
+            "plugins": [{
+                "name": "csharp-lsp",
+                "source": "./plugins/csharp-lsp",
+                "description": "C# language server for code intelligence",
+                "version": "1.0.0",
+                "category": "development",
+                "author": {"name": "Anthropic", "email": "support@anthropic.com"},
+                "lspServers": {"csharp-ls": {"command": "csharp-ls"}},
+            }],
+        }),
+        encoding="utf-8",
+    )
+    (source_root / "plugins" / "csharp-lsp").mkdir(parents=True)
+    (source_root / "plugins" / "csharp-lsp" / "README.md").write_text("# csharp-lsp", encoding="utf-8")
+    (source_root / "plugins" / "csharp-lsp" / "LICENSE").write_text("MIT", encoding="utf-8")
+
+    source = MarketplaceImportSource(provider="claude-code", sourceKind="local", source=str(source_root))
+    candidates = marketplace_service.scan_import_source("user-1", source)
+
+    assert len(candidates) == 1
+    assert candidates[0].validation_severity == "none"
+
+    result = marketplace_service.import_candidates(
+        "user-1",
+        MarketplaceImportRequest(source=source, candidates=candidates),
+    )
+
+    assert result.failed == []
+    assert [item.package_id for item in result.imported] == ["csharp-lsp"]
+
+    registry_root = marketplace_service.get_registry_root("user-1")
+    seeded_manifest = json.loads(
+        (registry_root / "claude-code" / "plugins" / "csharp-lsp" / ".claude-plugin" / "plugin.json").read_text()
+    )
+    assert seeded_manifest["name"] == "csharp-lsp"
+    assert seeded_manifest["description"] == "C# language server for code intelligence"
+    assert seeded_manifest["version"] == "1.0.0"
+    assert seeded_manifest["category"] == "development"
+    assert seeded_manifest["lspServers"] == {"csharp-ls": {"command": "csharp-ls"}}
+    assert seeded_manifest["sourceType"] == "imported"
 
 
 def test_import_candidates_rolls_back_failed_candidate_after_success(marketplace_service):

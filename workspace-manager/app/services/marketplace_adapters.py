@@ -387,10 +387,11 @@ class BaseMarketplaceProviderAdapter:
                 file_path=str(manifest_path),
             )]
         if not manifest_path.exists():
-            return [self.validation_result(
-                code="marketplace.validation.required_manifest_missing",
-                file_path=str(manifest_path.relative_to(package_path)),
-            )]
+            # Per-package plugin manifest is optional: marketplace listing
+            # entries are allowed to declare full plugin metadata. Validation
+            # only applies when a manifest file is present; the import flow
+            # synthesizes one from the listing entry when missing.
+            return []
         manifest, read_error = self.read_json_with_error(manifest_path)
         if read_error:
             return [self.validation_result(

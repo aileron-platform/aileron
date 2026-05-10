@@ -873,17 +873,18 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{candidate.displayName}</span>
                         <span className="font-mono text-xs text-muted-foreground">{candidate.packageId}</span>
-                        <Badge variant="outline">{t(`marketplace.providers.${candidate.provider}`)}</Badge>
-                        <Badge variant={candidate.variantStatus === 'invalid' || candidate.variantStatus === 'unrelated-duplicate' ? 'destructive' : candidate.variantStatus === 'duplicate-variant' ? 'secondary' : 'outline'}>
-                          {t(`marketplace.import.variantStatuses.${candidate.variantStatus}`)}
-                        </Badge>
+                        {candidate.variantStatus === 'invalid' || candidate.variantStatus === 'unrelated-duplicate' ? (
+                          <Badge variant="destructive">
+                            {t(`marketplace.import.variantStatuses.${candidate.variantStatus}`)}
+                          </Badge>
+                        ) : null}
                         {candidate.duplicate ? (
                           <span className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
                             {t('marketplace.import.candidates.duplicate')}
                           </span>
                         ) : null}
                       </div>
-                      {candidate.familyDisplayName || candidate.sourceIdentity || candidate.variants.length > 0 ? (
+                      {candidate.familyDisplayName || candidate.sourceIdentity ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           {candidate.familyDisplayName ? (
                             <span>{t('marketplace.import.candidates.family', { family: candidate.familyDisplayName })}</span>
@@ -891,11 +892,6 @@ const MarketplaceImportDialog: React.FC<MarketplaceImportDialogProps> = ({ open,
                           {candidate.sourceIdentity ? (
                             <span className="font-mono">{candidate.sourceIdentity}</span>
                           ) : null}
-                          {candidate.variants.map(variant => (
-                            <Badge key={`${variant.provider}:${variant.packageId}`} variant="secondary" className="text-[11px]">
-                              {t(`marketplace.providers.${variant.provider}`)}
-                            </Badge>
-                          ))}
                         </div>
                       ) : null}
                       <div className="mt-1 font-mono text-xs text-muted-foreground">{candidate.sourcePath}</div>

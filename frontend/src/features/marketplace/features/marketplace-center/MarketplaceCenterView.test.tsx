@@ -419,8 +419,8 @@ describe('MarketplaceCenterView', () => {
 
     expect(await screen.findByText('Review Assistant')).toBeInTheDocument();
     expect(screen.getByText('Existing Package')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.import.variantStatuses.new-family')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.import.variantStatuses.duplicate-variant')).toBeInTheDocument();
+    expect(screen.queryByText('marketplace.import.variantStatuses.new-family')).not.toBeInTheDocument();
+    expect(screen.queryByText('marketplace.import.variantStatuses.duplicate-variant')).not.toBeInTheDocument();
     expect(screen.getByText('marketplace.import.candidates.duplicate')).toBeInTheDocument();
     expect(screen.queryByText('marketplace.validation.metadata_conflict')).not.toBeInTheDocument();
     expect(screen.getByText('marketplace.import.validation.duplicate')).toBeInTheDocument();

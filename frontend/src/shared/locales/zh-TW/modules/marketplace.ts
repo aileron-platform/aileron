@@ -65,7 +65,6 @@ const marketplace = {
       info: '資訊',
       none: '有效',
     },
-    required_manifest_missing: '缺少必要的 provider manifest。',
     invalid_manifest_shape: 'Provider manifest 結構無效。',
     package_identity_mismatch: '套件識別與 provider manifest 不一致。',
     metadata_conflict: 'Catalog 中繼資料與套件 manifest 中繼資料不一致。',

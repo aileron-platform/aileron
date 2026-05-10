@@ -636,7 +636,12 @@ def test_marketplace_package_export_returns_validation_blocking_detail(test_app)
         "source": {"source": "local", "path": "./plugins/broken-plugin"},
     }]
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    (root / "codex" / "plugins" / "broken-plugin").mkdir(parents=True)
+    package_root = root / "codex" / "plugins" / "broken-plugin" / ".codex-plugin"
+    package_root.mkdir(parents=True)
+    # Corrupt manifest JSON to trigger an error-severity validation result.
+    # Missing manifest no longer blocks export because marketplace listings
+    # are allowed to declare plugin metadata in lieu of plugin.json.
+    (package_root / "plugin.json").write_text("{not valid json", encoding="utf-8")
 
     detail_response = client.get("/api/v1/marketplace/packages/codex/broken-plugin")
     assert detail_response.status_code == 200
@@ -648,7 +653,7 @@ def test_marketplace_package_export_returns_validation_blocking_detail(test_app)
 
     assert export_response.status_code == 400
     body = export_response.json()["detail"]
-    assert body["code"] == "marketplace.validation.required_manifest_missing"
+    assert body["code"] == "marketplace.validation.invalid_manifest_shape"
     assert body["message"]
     assert body["validationResults"][0]["severity"] == "error"
 

@@ -629,31 +629,27 @@ class MarketplaceService:
         if not source_identity:
             return candidates
 
-        peer_variants: list[MarketplaceProviderVariant] = []
-        seen: set[tuple[str, str]] = set()
+        # Group peer candidates by package_id: cross-provider builds of the same
+        # logical package are real variants. Distinct package_ids from the same
+        # scan source are unrelated and must not become each other's variants.
+        peers_by_package_id: dict[str, list[MarketplaceProviderVariant]] = {}
         for candidate in candidates:
-            key = (candidate.provider, candidate.package_id)
-            if key in seen:
+            bucket = peers_by_package_id.setdefault(candidate.package_id, [])
+            if any(item.provider == candidate.provider for item in bucket):
                 continue
-            seen.add(key)
-            peer_variants.append(MarketplaceProviderVariant(
+            bucket.append(MarketplaceProviderVariant(
                 provider=candidate.provider,
                 package_id=candidate.package_id,
                 display_name=candidate.display_name,
             ))
-        if len(peer_variants) <= 1:
-            return candidates
 
-        family_display_name = next(
-            (candidate.family_display_name for candidate in candidates if candidate.family_display_name),
-            candidates[0].display_name if candidates else source_identity,
-        )
         merged: list[MarketplaceImportCandidate] = []
         for candidate in candidates:
+            peer_variants = peers_by_package_id.get(candidate.package_id, [])
             variants = self._merge_provider_variants(candidate.variants, peer_variants)
             merged.append(candidate.model_copy(update={
                 "family_id": candidate.family_id or source_identity,
-                "family_display_name": candidate.family_display_name or family_display_name,
+                "family_display_name": candidate.family_display_name or candidate.display_name,
                 "source_identity": candidate.source_identity or source_identity,
                 "variants": variants,
             }))
@@ -841,6 +837,7 @@ class MarketplaceService:
                 symlinks=False,
                 ignore=shutil.ignore_patterns(".git"),
             )
+            self._seed_manifest_from_listing(adapter, source_root, staging_path, candidate, target_package_id)
             self._rewrite_imported_manifest_name(adapter, staging_path, target_package_id)
             self._write_import_source_metadata(adapter, staging_path, source, candidate, target_package_id)
             self._raise_if_validation_blocks(adapter.validate_package(staging_path), "importCopy")
@@ -1115,6 +1112,44 @@ class MarketplaceService:
         manifest = self._read_json(manifest_path)
         manifest["name"] = package_id
         self._atomic_write_json(manifest_path, manifest)
+
+    def _seed_manifest_from_listing(
+        self,
+        adapter: MarketplaceProviderAdapter,
+        source_root: Path,
+        package_path: Path,
+        candidate: MarketplaceImportCandidate,
+        target_package_id: str,
+    ) -> None:
+        """Synthesize a per-package plugin manifest from the marketplace listing
+        entry when the source package has no plugin.json. Anthropic's official
+        marketplace ships listings (e.g. csharp-lsp) without a per-package
+        plugin.json, relying on marketplace.json to carry metadata. The local
+        registry stores a self-contained manifest, so we materialize one here
+        before the regular import rewrite + validation steps run."""
+        manifest_path = adapter.manifest_path(package_path)
+        if manifest_path.exists():
+            return
+        listing = adapter.import_listing_entry(source_root, candidate.package_id, target_package_id) or {}
+        seeded: dict[str, Any] = {"name": target_package_id}
+        for key in (
+            "displayName",
+            "description",
+            "version",
+            "author",
+            "category",
+            "tags",
+            "keywords",
+            "homepage",
+            "repository",
+            "license",
+            "lspServers",
+            "strict",
+        ):
+            value = listing.get(key)
+            if value is not None:
+                seeded[key] = value
+        self._atomic_write_json(manifest_path, seeded)
 
     def _write_import_source_metadata(
         self,
@@ -2206,11 +2241,18 @@ class MarketplaceService:
             if family is None:
                 enriched.append(item)
                 continue
+            # Only cross-provider builds of the same package are real variants.
+            # Other packages persisted under the same source-scoped family are
+            # unrelated peers and must be excluded from this summary's variants.
+            same_package_variants = [
+                variant for variant in family.variants
+                if variant.package_id == item.package_id
+            ]
             enriched.append(item.model_copy(update={
                 "family_id": family.family_id,
                 "family_display_name": family.display_name,
                 "source_identity": family.source.normalized_url or family.source.source,
-                "variants": family.variants,
+                "variants": same_package_variants,
             }))
         return enriched
 
