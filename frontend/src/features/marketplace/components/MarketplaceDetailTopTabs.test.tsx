@@ -38,10 +38,10 @@ describe('MarketplaceDetailTopTabs', () => {
     expect(screen.getByText('tools')).toBeInTheDocument();
     expect(screen.getByText('1.2.3')).toBeInTheDocument();
     expect(screen.getByText('marketplace.providers.codex')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Basic/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Basic/ })).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Guidance/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /Guidance/ }));
 
     expect(onChange).toHaveBeenCalledWith('agents-md');
   });

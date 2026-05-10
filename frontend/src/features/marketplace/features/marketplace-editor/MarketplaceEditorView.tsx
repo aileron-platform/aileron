@@ -47,6 +47,7 @@ import { createPackage, getPackage, savePackage as saveMarketplacePackage } from
 import {
   createMarketplacePackageFileTree,
 } from '../../adapters/marketplaceFileTreeAdapter';
+import { getMarketplaceFeatureCountByDirectory } from '../../utils/marketplaceFeatureCounts';
 
 export interface MarketplaceEditorViewProps {
   mode: 'create' | 'edit';
@@ -320,7 +321,7 @@ export const MarketplaceEditorView: React.FC<MarketplaceEditorViewProps> = ({ mo
                 ? 0
                 : tab === 'files'
                   ? countMarketplaceFileNodes(packageFileTree)
-                  : (featureItems?.[tab].length ?? 0),
+                  : getMarketplaceFeatureCountByDirectory[tab === 'outputStyle' ? 'outputStyles' : tab](featureItems[tab]),
             ])) as Partial<Record<MarketplaceEditorTab, number>>}
             getLabelKey={getMarketplaceEditorTabLabelKey}
           />

@@ -1218,4 +1218,28 @@ describe('MarketplaceEditorView', () => {
       }));
     });
   });
+
+  it('counts skills tab by top-level folder in editor mode', async () => {
+    const user = userEvent.setup();
+    const provider = 'codex' as const;
+    const packageId = 'grouped-skill-package';
+    const baseDetail = createMockDetail(provider, packageId) as MarketplacePackageDetail;
+    marketplaceApiMock.getPackage.mockResolvedValueOnce({
+      ...baseDetail,
+      featureContent: {
+        ...baseDetail.featureContent,
+        skills: [
+          { id: 'review-main', name: 'Review Main', path: 'skills/review/README.md', content: '# Review Main' },
+          { id: 'review-config', name: 'Review Config', path: 'skills/review/config.toml', content: 'title = \"Review config\"' },
+          { id: 'auth', name: 'Auth', path: 'skills/auth/SKILL.md', content: '# Auth' },
+        ],
+      },
+    });
+
+    renderCodexEditorForPackage(packageId);
+
+    const skillsTab = await screen.findByRole('tab', { name: /^marketplace\.editor\.tabs\.skills/ });
+    expect(skillsTab).toHaveTextContent(/marketplace\.editor\.tabs\.skills/);
+    expect(skillsTab).toHaveTextContent(/2/);
+  });
 });

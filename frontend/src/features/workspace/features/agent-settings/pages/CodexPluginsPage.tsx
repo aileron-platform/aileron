@@ -491,13 +491,15 @@ const CodexPluginCard: React.FC<{
         </Alert>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        {resourceKeys.map((key) => (
-          <ResourceBadge
-            key={key}
-            icon={resourceIcons[key]}
-            label={t(`${I18N_PREFIX}.counts.${key}`, { count: plugin.resourceCounts?.[key] ?? 0 })}
-          />
-        ))}
+        {resourceKeys
+          .filter((key) => (plugin.resourceCounts?.[key] ?? 0) > 0)
+          .map((key) => (
+            <ResourceBadge
+              key={key}
+              icon={resourceIcons[key]}
+              label={t(`${I18N_PREFIX}.counts.${key}`, { count: plugin.resourceCounts?.[key] ?? 0 })}
+            />
+          ))}
       </div>
     </PluginCard>
   );
@@ -587,13 +589,22 @@ const CodexPluginOverview: React.FC<{ detail: CodexPluginDetail }> = ({ detail }
 
 const CodexPluginResources: React.FC<{ detail: CodexPluginDetail }> = ({ detail }) => {
   const { t } = useI18n();
+  const summaries: Array<{ key: string; label: string; count: number }> = [
+    { key: 'skills', label: t(`${I18N_PREFIX}.detail.skills`), count: detail.skills.length },
+    { key: 'mcpServers', label: t(`${I18N_PREFIX}.detail.mcpServers`), count: detail.mcpServers.length },
+    { key: 'apps', label: t(`${I18N_PREFIX}.detail.apps`), count: detail.apps.length },
+    { key: 'hooks', label: t(`${I18N_PREFIX}.detail.hooks`), count: detail.hooks.length },
+  ].filter((item) => item.count > 0);
+
+  if (summaries.length === 0) {
+    return <span className="text-xs text-muted-foreground">{t(`${I18N_PREFIX}.detail.noResources`)}</span>;
+  }
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.skills`)} count={detail.skills.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.mcpServers`)} count={detail.mcpServers.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.apps`)} count={detail.apps.length} />
-      <ResourceSummary label={t(`${I18N_PREFIX}.detail.hooks`)} count={detail.hooks.length} />
+      {summaries.map((item) => (
+        <ResourceSummary key={item.key} label={item.label} count={item.count} />
+      ))}
     </div>
   );
 };

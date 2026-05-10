@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { downloadBlob } from './downloadBlob';
+import { getMarketplaceDetailFeatureItems } from '../components/MarketplaceDetailContentPanels';
 import { getMarketplaceFeatureLabelKey } from './featureLabels';
+import { getMarketplaceFeatureItemCount } from './marketplaceFeatureCounts';
 import {
   loadMarketplaceCenterFilters,
   loadMarketplaceCenterViewMode,
@@ -102,5 +106,80 @@ describe('marketplace utils', () => {
     remove.mockRestore();
     createObjectURL.mockRestore();
     revokeObjectURL.mockRestore();
+  });
+
+  it('counts feature items by top-level folder when grouped', () => {
+    expect(
+      getMarketplaceFeatureItemCount([
+        { id: 'review-main', path: 'skills/review/README.md' },
+        { id: 'review-config', path: 'skills/review/config.toml' },
+        { id: 'auth', path: 'skills/auth/SKILL.md' },
+      ], 'skills'),
+    ).toBe(2);
+  });
+
+  it('groups by first path segment when resource prefix is omitted', () => {
+    expect(
+      getMarketplaceFeatureItemCount([
+        { id: 'review-main', path: 'review/README.md' },
+        { id: 'review-config', path: 'review/config.toml' },
+        { id: 'auth', path: 'auth/SKILL.md' },
+      ], 'skills'),
+    ).toBe(2);
+  });
+
+  it('falls back to item identifiers when path is not under the expected folder', () => {
+    expect(
+      getMarketplaceFeatureItemCount([
+        { id: 'discord', path: '.mcp.json' },
+        { id: 'playwright', path: '.mcp.json' },
+      ], 'mcp'),
+    ).toBe(2);
+  });
+
+  it('computes detail skills count by top-level folder instead of flat item length', () => {
+    const detail = {
+      provider: 'codex',
+      packageFiles: [],
+      featureContent: {
+        hooks: [],
+        mcpServers: [],
+        agents: [],
+        commands: [],
+        outputStyles: [],
+        skills: [
+          { id: 'review-main', name: 'Review Main', path: 'skills/review/README.md' },
+          { id: 'review-config', name: 'Review Config', path: 'skills/review/config.toml' },
+          { id: 'auth', name: 'Auth', path: 'skills/auth/SKILL.md' },
+        ],
+      },
+    } as const;
+
+    const items = getMarketplaceDetailFeatureItems(detail as any, key => key);
+
+    expect(items.find(item => item.id === 'skills')?.count).toBe(2);
+  });
+
+  it('uses shared feature count helpers for feature tab counts and does not hardcode .length in detail panel source', () => {
+    const detailPanelPath = path.resolve(__dirname, '../components/MarketplaceDetailContentPanels.tsx');
+    const editorPath = path.resolve(__dirname, '../features/marketplace-editor/MarketplaceEditorView.tsx');
+    const detailPanelSource = fs.readFileSync(detailPanelPath, 'utf8');
+    const editorSource = fs.readFileSync(editorPath, 'utf8');
+
+    expect(detailPanelSource).toContain('getMarketplaceFeatureItemCount(detail.featureContent.hooks, \'hooks\')');
+    expect(detailPanelSource).toContain('getMarketplaceFeatureItemCount(detail.featureContent.skills, \'skills\')');
+    expect(editorSource).toContain('getMarketplaceFeatureCountByDirectory');
+
+    const detailFeatureItemsMatch = /export const getMarketplaceDetailFeatureItems[\s\S]*?return items\.filter\(/.exec(detailPanelSource);
+    const detailFeatureItemsBlock = detailFeatureItemsMatch?.[0] ?? '';
+    const detailManualCountLines = detailFeatureItemsBlock
+      .split('\n')
+      .filter(line => /count:\s*.*\.length/.test(line) && !line.includes('detail.packageFiles.length'));
+    const editorManualCountLines = editorSource
+      .split('\n')
+      .filter(line => /count[s]?:/.test(line) && line.includes('.length'));
+
+    expect(detailManualCountLines).toEqual([]);
+    expect(editorManualCountLines).toEqual([]);
   });
 });

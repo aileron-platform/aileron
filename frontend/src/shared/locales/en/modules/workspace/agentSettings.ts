@@ -113,6 +113,7 @@ const agentSettings = {
         noDependencies: 'No dependencies declared.',
         errors: 'CLI errors',
         noErrors: 'No CLI errors reported.',
+        noResources: 'This plugin does not provide any resources.',
         manifest: 'Registry metadata',
         registryMetadata: 'Registry metadata',
         metadata: {
@@ -580,6 +581,7 @@ const agentSettings = {
         hooks: 'Hooks',
         readme: 'README',
         noReadme: 'No README available.',
+        noResources: 'This extension does not provide any resources.',
       },
       notifications: {
         enabled: { title: 'Extension enabled' },

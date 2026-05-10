@@ -1,7 +1,6 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
-import { Button } from '@/shared/components/ui/button';
 import { useI18n } from '@/shared/hooks/useI18n';
 import type { MarketplacePackageDetail } from '@/shared/types/marketplace';
 
@@ -54,16 +53,24 @@ export const MarketplaceDetailTopTabs = <TTab extends string>({
 
             <section>
               <h4 className="mb-3 font-medium text-foreground">{t('marketplace.detail.sidebar.features.title')}</h4>
-              <div className="space-y-1">
+              <div className="space-y-1" role="tablist">
                 {tabs.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
-                    <Button
+                    <button
                       key={tab.id}
-                      variant={isActive ? 'default' : 'ghost'}
-                      className="h-8 w-full justify-start px-2 text-xs"
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      tabIndex={isActive ? 0 : -1}
                       onClick={() => onChange(tab.id)}
+                      className={[
+                        'inline-flex h-8 w-full items-center justify-start rounded-md px-2 text-xs',
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'bg-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                      ].join(' ')}
                     >
                       <Icon className="mr-2 h-4 w-4" />
                       <span className="flex-1 text-left">{tab.name}</span>
@@ -75,7 +82,7 @@ export const MarketplaceDetailTopTabs = <TTab extends string>({
                           {tab.count}
                         </Badge>
                       )}
-                    </Button>
+                    </button>
                   );
                 })}
               </div>

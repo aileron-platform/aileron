@@ -35,6 +35,7 @@ import type {
   MarketplacePackageDetail,
   MarketplaceProvider,
 } from '@/shared/types/marketplace';
+import { getMarketplaceFeatureItemCount } from '../utils/marketplaceFeatureCounts';
 import { downloadBlob } from '../utils/downloadBlob';
 import { getMarketplaceFeatureLabelKey } from '../utils/featureLabels';
 
@@ -144,12 +145,12 @@ export const getMarketplaceDetailFeatureItems = (
 ): MarketplaceDetailFeatureItem[] => {
   const items: MarketplaceDetailFeatureItem[] = [
     { id: 'agents-md', name: t(getMarketplaceFeatureLabelKey(detail.provider, 'agentsMd')), icon: FileText, count: detail.featureContent.agentsMd ? 1 : 0 },
-    { id: 'hooks', name: t('marketplace.features.hooks'), icon: Zap, count: detail.featureContent.hooks.length },
-    { id: 'mcp', name: t('marketplace.features.mcp'), icon: Network, count: detail.featureContent.mcpServers.length },
-    { id: 'agent', name: t('marketplace.features.subagents'), icon: Bot, count: detail.featureContent.agents.length },
-    { id: 'commands', name: t('marketplace.features.slashCommands'), icon: Command, count: detail.featureContent.commands.length },
-    { id: 'output-style', name: t('marketplace.features.outputStyle'), icon: Wand2, count: detail.featureContent.outputStyles.length },
-    { id: 'skills', name: t('marketplace.features.skills'), icon: Sparkles, count: detail.featureContent.skills.length },
+    { id: 'hooks', name: t('marketplace.features.hooks'), icon: Zap, count: getMarketplaceFeatureItemCount(detail.featureContent.hooks, 'hooks') },
+    { id: 'mcp', name: t('marketplace.features.mcp'), icon: Network, count: getMarketplaceFeatureItemCount(detail.featureContent.mcpServers, 'mcp') },
+    { id: 'agent', name: t('marketplace.features.subagents'), icon: Bot, count: getMarketplaceFeatureItemCount(detail.featureContent.agents, 'agents') },
+    { id: 'commands', name: t('marketplace.features.slashCommands'), icon: Command, count: getMarketplaceFeatureItemCount(detail.featureContent.commands, 'commands') },
+    { id: 'output-style', name: t('marketplace.features.outputStyle'), icon: Wand2, count: getMarketplaceFeatureItemCount(detail.featureContent.outputStyles, 'output-styles') },
+    { id: 'skills', name: t('marketplace.features.skills'), icon: Sparkles, count: getMarketplaceFeatureItemCount(detail.featureContent.skills, 'skills') },
     { id: 'files', name: t('marketplace.detail.tabs.files'), icon: FileArchive, count: detail.packageFiles.length },
   ];
 

@@ -113,6 +113,7 @@ const agentSettings = {
         noDependencies: '未宣告 dependencies。',
         errors: 'CLI errors',
         noErrors: '沒有 CLI errors。',
+        noResources: '此 plugin 沒有提供任何資源。',
         manifest: 'Registry 中繼資料',
         registryMetadata: 'Registry 中繼資料',
         metadata: {
@@ -580,6 +581,7 @@ const agentSettings = {
         hooks: 'Hooks',
         readme: 'README',
         noReadme: '沒有 README。',
+        noResources: '此擴充套件沒有提供任何資源。',
       },
       notifications: {
         enabled: { title: '擴充套件已啟用' },

@@ -481,13 +481,15 @@ const ClaudePluginCard: React.FC<{
         {plugin.category ? <Badge variant="outline">{plugin.category}</Badge> : null}
       </div>
       <div className="flex flex-wrap gap-2">
-        {resourceKeys.map((key) => (
-          <ResourceBadge
-            key={key}
-            icon={resourceIcons[key]}
-            label={t(`${I18N_PREFIX}.counts.${key}`, { count: plugin.resourceCounts?.[key] ?? 0 })}
-          />
-        ))}
+        {resourceKeys
+          .filter((key) => (plugin.resourceCounts?.[key] ?? 0) > 0)
+          .map((key) => (
+            <ResourceBadge
+              key={key}
+              icon={resourceIcons[key]}
+              label={t(`${I18N_PREFIX}.counts.${key}`, { count: plugin.resourceCounts?.[key] ?? 0 })}
+            />
+          ))}
       </div>
     </PluginCard>
   );
@@ -601,10 +603,15 @@ const ClaudePluginOverview: React.FC<{ detail: ClaudePluginDetail }> = ({ detail
 
 const ClaudePluginResources: React.FC<{ detail: ClaudePluginDetail }> = ({ detail }) => {
   const { t } = useI18n();
+  const visibleKeys = resourceKeys.filter((key) => (detail.resourceCounts?.[key] ?? 0) > 0);
+
+  if (visibleKeys.length === 0) {
+    return <span className="text-xs text-muted-foreground">{t(`${I18N_PREFIX}.detail.noResources`)}</span>;
+  }
 
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      {resourceKeys.map((key) => (
+      {visibleKeys.map((key) => (
         <ResourceSummary
           key={key}
           label={t(`${I18N_PREFIX}.detail.${key}`)}

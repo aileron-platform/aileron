@@ -215,7 +215,7 @@ describe('MarketplaceDetailView', () => {
     renderDetail();
 
     await screen.findByText('Review Tools');
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.skills/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.skills/ }));
     await user.dblClick(screen.getByText('review'));
     await user.click(screen.getByText('config.toml'));
 
@@ -242,7 +242,7 @@ describe('MarketplaceDetailView', () => {
     renderDetail();
 
     await screen.findByText('Review Tools');
-    await user.click(screen.getByRole('button', { name: /marketplace\.detail\.tabs\.files/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.detail\.tabs\.files/ }));
 
     expect(screen.getByText('marketplace.editor.fileManager.packageFiles.rootLabel')).toBeInTheDocument();
     expect(screen.getByText('codex/plugins/review-tools')).toBeInTheDocument();
@@ -554,11 +554,11 @@ describe('MarketplaceDetailView', () => {
 
     await screen.findByText('Review Tools');
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.claudeMd/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.claudeMd/ }));
     expect(screen.getByText('# Claude guidance')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'marketplace.detail.agentsMd.actions.copy' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.hooks/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.hooks/ }));
     expect(screen.getByText('PreToolUse')).toBeInTheDocument();
     expect(screen.getByText('npm test')).toBeInTheDocument();
     expect(screen.getByText('https://hooks.example.local')).toBeInTheDocument();
@@ -569,25 +569,46 @@ describe('MarketplaceDetailView', () => {
     expect(screen.getByText('Stop')).toBeInTheDocument();
     expect(screen.getByText('node "${CLAUDE_PLUGIN_ROOT}/scripts/stop-review-gate-hook.mjs"')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.mcp/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.mcp/ }));
     expect(screen.getByText('design-context')).toBeInTheDocument();
     expect(screen.getByText('FIGMA_TOKEN')).toBeInTheDocument();
     expect(screen.getByText('***')).toBeInTheDocument();
     await user.click(screen.getByTitle('marketplace.detail.mcp.card.showEnvValues'));
     expect(screen.getByText('secret-token')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.subagents/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.subagents/ }));
     expect(screen.getAllByText('review.md').length).toBeGreaterThanOrEqual(1);
     await user.type(screen.getByPlaceholderText('marketplace.center.filters.searchPlaceholder'), 'qa');
     expect(screen.getAllByText('qa.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('review.md')).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.slashCommands/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.slashCommands/ }));
     expect(screen.getAllByText('review.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('# Review command')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /marketplace\.features\.outputStyle/ }));
+    await user.click(screen.getByRole('tab', { name: /marketplace\.features\.outputStyle/ }));
     expect(screen.getAllByText('concise.md').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('# Concise output')).toBeInTheDocument();
+  });
+
+  it('renders grouped skills count on the detail sidebar tab', async () => {
+    const user = userEvent.setup();
+    mockGetPackage.mockResolvedValue({
+      ...mockDetail,
+      featureContent: {
+        ...mockDetail.featureContent,
+        skills: [
+          { id: 'review-main', name: 'Review Main', path: 'skills/review/README.md', content: '# Review Main' },
+          { id: 'review-config', name: 'Review Config', path: 'skills/review/config.toml', content: 'title = "Review config"' },
+          { id: 'auth', name: 'Auth', path: 'skills/auth/SKILL.md', content: '# Auth' },
+        ],
+      },
+    });
+
+    renderDetail();
+
+    const skillsTab = await screen.findByRole('tab', { name: /marketplace\.features\.skills/ });
+    expect(skillsTab).toHaveTextContent(/marketplace\.features\.skills/);
+    expect(skillsTab).toHaveTextContent('2');
   });
 });
