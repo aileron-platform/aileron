@@ -9,6 +9,7 @@ import {
   HOOK_TYPES,
   HOOK_TYPE_FIELDS,
   HOOK_FIELD_SUPPORT,
+  getHookEventI18nKey,
   isConditionSupportedForEvent,
   migrateActionToType,
   createEmptyExecution,
@@ -177,5 +178,10 @@ describe('providerHookSpec', () => {
     for (const event of ['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionRequest', 'PermissionDenied']) {
       expect(HOOK_EVENT_MATCHER_HINTS[event].supportsMatcher).toBe(true);
     }
+  });
+
+  it('builds shared hook event i18n keys', () => {
+    expect(getHookEventI18nKey('PreToolUse', 'label')).toBe('common.hookEvents.PreToolUse.label');
+    expect(getHookEventI18nKey('Stop', 'description')).toBe('common.hookEvents.Stop.description');
   });
 });

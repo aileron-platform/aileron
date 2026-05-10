@@ -11,6 +11,7 @@ import {
   HOOK_TYPES,
   createEmptyHookValue,
   createEmptyMatcher,
+  getHookEventI18nKey,
   getHookDefaults,
   getHookFieldSupport,
   isValidEventForProvider,
@@ -20,8 +21,8 @@ import type { MarketplaceProvider } from '@/shared/types/marketplace';
 
 import { marketplaceEditorItemTitle, type MarketplaceEditorResourceItem } from './marketplaceEditorResourceItems';
 
-const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
-const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
+const commonHookEventLabelKey = (eventName: string) => getHookEventI18nKey(eventName, 'label');
+const commonHookEventDescriptionKey = (eventName: string) => getHookEventI18nKey(eventName, 'description');
 
 export interface MarketplaceEditorHookSectionProps {
   provider: MarketplaceProvider;
@@ -137,8 +138,8 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ite
             <HookCard
               provider={provider}
               hook={{
-                event: t(marketplaceHookEventLabelKey(hook.event)),
-                description: t(marketplaceHookEventDescriptionKey(hook.event)),
+                event: t(commonHookEventLabelKey(hook.event)),
+                description: t(commonHookEventDescriptionKey(hook.event)),
                 matchers: hook.matchers,
               }}
               i18nKeyPrefix="marketplace.editor.hooks.card"
@@ -199,7 +200,7 @@ const MarketplaceHookDialog: React.FC<MarketplaceHookDialogProps> = ({
   const eventOptions = React.useMemo(
     () => HOOK_EVENTS[provider].map((eventName) => ({
       value: eventName,
-      label: t(`marketplace.editor.hooks.events.${eventName}.label`),
+      label: t(commonHookEventLabelKey(eventName)),
     })),
     [provider, t],
   );

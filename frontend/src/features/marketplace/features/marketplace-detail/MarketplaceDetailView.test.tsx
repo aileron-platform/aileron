@@ -565,8 +565,8 @@ describe('MarketplaceDetailView', () => {
     expect(screen.getByRole('button', { name: 'marketplace.detail.agentsMd.actions.copy' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /marketplace\.features\.hooks/ }));
-    expect(screen.getByText('marketplace.editor.hooks.events.PreToolUse.label')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.PreToolUse.description')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.PreToolUse.label')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.PreToolUse.description')).toBeInTheDocument();
     expect(screen.getByText('npm test')).toBeInTheDocument();
     expect(screen.getByText('https://hooks.example.local')).toBeInTheDocument();
     expect(screen.getByText('X-Auth: abc123')).toBeInTheDocument();
@@ -576,11 +576,11 @@ describe('MarketplaceDetailView', () => {
     expect(screen.getByText('BUILD_ID')).toBeInTheDocument();
     expect(screen.getByText('marketplace.detail.hooks.card.moreActions')).toBeInTheDocument();
     expect(screen.getByText('Optional stop-time review gate for Codex Companion.')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.SessionStart.label')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.SessionStart.description')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.SessionStart.label')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.SessionStart.description')).toBeInTheDocument();
     expect(screen.getByText('node "${CLAUDE_PLUGIN_ROOT}/scripts/session-lifecycle-hook.mjs" SessionStart')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.Stop.label')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.Stop.description')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.Stop.label')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.Stop.description')).toBeInTheDocument();
     expect(screen.getByText('node "${CLAUDE_PLUGIN_ROOT}/scripts/stop-review-gate-hook.mjs"')).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /marketplace\.features\.mcp/ }));

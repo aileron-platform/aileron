@@ -3,6 +3,7 @@ import type { MarketplaceProvider } from '@/shared/types/marketplace';
 
 export type HookEventValue = string;
 export type HookType = 'command' | 'http' | 'mcp_tool' | 'prompt' | 'agent';
+export type HookEventI18nKind = 'label' | 'description';
 
 export interface HookTypeFieldSupport {
   command: boolean;
@@ -183,6 +184,10 @@ export const getHookTimeoutDefault = (provider: MarketplaceProvider, type: HookT
 
 export const isValidEventForProvider = (provider: MarketplaceProvider, event: string): boolean => (
   HOOK_EVENTS[provider].includes(event)
+);
+
+export const getHookEventI18nKey = (eventName: string, kind: HookEventI18nKind): string => (
+  `common.hookEvents.${eventName}.${kind}`
 );
 
 export const createEmptyExecution = (provider: MarketplaceProvider, type: HookType = 'command'): HookActionConfig => {

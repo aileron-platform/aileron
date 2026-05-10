@@ -23,7 +23,7 @@ import {
 import { getAgentSettingsSourceBadgeClassName, sortAgentSettingsScopeValues } from '../components/SettingsSourcePrimitives';
 import type { AgentScope, HookEventOption } from '../types';
 import type { MarketplaceProvider } from '@/shared/types/marketplace';
-import { HOOK_EVENTS } from '@/shared/hooks/providerHookSpec';
+import { HOOK_EVENTS, getHookEventI18nKey } from '@/shared/hooks/providerHookSpec';
 import { createLogger } from '@/shared/services/logger';
 import {
   SettingsListWorkbench,
@@ -100,8 +100,8 @@ const SCOPE_FILTER_ICONS: Record<string, React.ReactNode> = {
   extension: <Puzzle className="h-3 w-3" />,
 };
 
-const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
-const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
+const commonHookEventLabelKey = (eventName: string) => getHookEventI18nKey(eventName, 'label');
+const commonHookEventDescriptionKey = (eventName: string) => getHookEventI18nKey(eventName, 'description');
 
 export interface HooksSettingsPageProps {
   apiPrefix?: string;
@@ -132,12 +132,12 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
     () => {
       if (hookEvents) {
         return Object.fromEntries(
-          hookEvents.map((e) => [e.value, t(marketplaceHookEventLabelKey(e.value))])
+          hookEvents.map((e) => [e.value, t(commonHookEventLabelKey(e.value))])
         );
       }
       return Object.fromEntries(HOOK_EVENTS[provider].map((eventName) => [
         eventName,
-        t(marketplaceHookEventLabelKey(eventName)),
+        t(commonHookEventLabelKey(eventName)),
       ]));
     },
     [t, hookEvents, provider],
@@ -145,7 +145,7 @@ const HooksSettingsPage: React.FC<HooksSettingsPageProps> = ({
 
   const describeEvent = useCallback((eventName: string) => eventLabels[eventName] ?? eventName, [eventLabels]);
   const describeEventDescription = useCallback(
-    (eventName: string) => t(marketplaceHookEventDescriptionKey(eventName)),
+    (eventName: string) => t(commonHookEventDescriptionKey(eventName)),
     [t],
   );
   const hookCardI18nNamespace =

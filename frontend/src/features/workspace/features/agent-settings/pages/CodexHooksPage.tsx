@@ -38,7 +38,7 @@ import {
   type CodexHookEntry,
   type CodexHookSource,
 } from '../services/agentSettingsApi';
-import { HOOK_DEFAULTS, HOOK_EVENTS } from '@/shared/hooks/providerHookSpec';
+import { HOOK_DEFAULTS, HOOK_EVENTS, getHookEventI18nKey } from '@/shared/hooks/providerHookSpec';
 
 type CodexLayer = 'user' | 'project';
 type CodexHookScope = CodexLayer | 'plugin' | 'built_in';
@@ -429,7 +429,7 @@ const CodexHooksPage: React.FC = () => {
                 <div className="min-w-0">
                   <div className="mb-3 flex flex-wrap items-center gap-3">
                     <h3 className="text-lg font-semibold text-foreground">
-                      {t(`workspace.agentSettings.codex.hooks.events.${hook.eventName}.name`, { defaultValue: hook.eventName })}
+                      {t(getHookEventI18nKey(hook.eventName, 'label'), { defaultValue: hook.eventName })}
                     </h3>
                     <Badge
                       variant="outline"
@@ -449,7 +449,7 @@ const CodexHooksPage: React.FC = () => {
                   <HookCard
                     provider="codex"
                     hook={{
-                      event: t(`workspace.agentSettings.codex.hooks.events.${hook.eventName}.name`, { defaultValue: hook.eventName }),
+                      event: t(getHookEventI18nKey(hook.eventName, 'label'), { defaultValue: hook.eventName }),
                       matchers: hook.matchers,
                     }}
                     i18nKeyPrefix="workspace.agentSettings.codex.hooks.card"

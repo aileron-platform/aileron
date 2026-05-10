@@ -207,8 +207,8 @@ describe('MarketplaceEditorHookSection helpers', () => {
 
     expect(screen.getByText('npm test')).toBeInTheDocument();
     expect(screen.getByText('Bash')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.Stop.label')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.Stop.description')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.Stop.label')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.Stop.description')).toBeInTheDocument();
 
     const buttons = Array.from(container.querySelectorAll('button'));
     fireEvent.click(buttons[1]);

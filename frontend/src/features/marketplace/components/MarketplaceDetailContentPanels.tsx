@@ -37,6 +37,7 @@ import type {
 import { getMarketplaceFeatureItemCount } from '../utils/marketplaceFeatureCounts';
 import { downloadBlob } from '../utils/downloadBlob';
 import { getMarketplaceFeatureLabelKey } from '../utils/featureLabels';
+import { getHookEventI18nKey } from '@/shared/hooks/providerHookSpec';
 
 export type MarketplaceDetailFeatureTab =
   | 'agents-md'
@@ -153,8 +154,8 @@ interface MarketplaceDetailMCPCardProps {
 const toFeatureData = <T extends Record<string, unknown>>(item: MarketplaceFeatureContentItem): T =>
   (item.data ?? {}) as T;
 
-const marketplaceHookEventLabelKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.label`;
-const marketplaceHookEventDescriptionKey = (eventName: string) => `marketplace.editor.hooks.events.${eventName}.description`;
+const commonHookEventLabelKey = (eventName: string) => getHookEventI18nKey(eventName, 'label');
+const commonHookEventDescriptionKey = (eventName: string) => getHookEventI18nKey(eventName, 'description');
 
 const marketplaceHookCardEntriesFromItem = (hook: MarketplaceFeatureContentItem): MarketplaceHookCardEntry[] => {
   const data = toFeatureData<MarketplaceHookData>(hook);
@@ -499,8 +500,8 @@ const MarketplaceHookCard: React.FC<MarketplaceHookCardProps> = ({ provider, ent
           <HookCard
             provider={provider}
             hook={{
-              event: t(marketplaceHookEventLabelKey(entry.eventName)),
-              description: t(marketplaceHookEventDescriptionKey(entry.eventName)),
+              event: t(commonHookEventLabelKey(entry.eventName)),
+              description: t(commonHookEventDescriptionKey(entry.eventName)),
               matchers: entry.matchers,
             }}
             i18nKeyPrefix="marketplace.detail.hooks.card"

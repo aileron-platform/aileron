@@ -37,6 +37,29 @@ vi.mock('../services/agentSettingsApi', async (importOriginal) => {
   };
 });
 
+vi.mock('./dialogs/WorkspaceHookDialog', () => ({
+  WorkspaceHookDialog: ({
+    open,
+    mode,
+    hook,
+    onClose,
+  }: {
+    open: boolean;
+    mode: 'create' | 'edit';
+    hook: { eventName: string } | null;
+    onClose: () => void;
+  }) => (open ? (
+    <div>
+      <p data-testid="hook-dialog-state">
+        {mode}:{hook?.eventName ?? 'none'}
+      </p>
+      <button type="button" onClick={onClose}>
+        workspace.agentSettings.common.hooks.dialog.actions.cancel
+      </button>
+    </div>
+  ) : null),
+}));
+
 const installSelectPolyfills = () => {
   Object.defineProperty(HTMLElement.prototype, 'hasPointerCapture', {
     configurable: true,
@@ -111,11 +134,12 @@ describe('HooksSettingsPage', () => {
 
     expect(await screen.findByText('echo project')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /workspace\.agentSettings\.common\.hooks\.actions\.create/ }));
-    expect(await screen.findByText('workspace.agentSettings.common.hooks.dialog.title.create')).toBeInTheDocument();
+    expect(await screen.findByTestId('hook-dialog-state')).toHaveTextContent('create:none');
     await user.click(screen.getByRole('button', { name: 'workspace.agentSettings.common.hooks.dialog.actions.cancel' }));
+    await waitFor(() => expect(screen.queryByTestId('hook-dialog-state')).not.toBeInTheDocument());
 
     await user.click(screen.getAllByLabelText('workspace.agentSettings.common.hooks.actions.edit')[0]);
-    expect(await screen.findByText('workspace.agentSettings.common.hooks.dialog.title.edit')).toBeInTheDocument();
+    expect(await screen.findByTestId('hook-dialog-state')).toHaveTextContent('edit:PreToolUse');
   });
 
   it('deletes hooks from the page callback', async () => {
@@ -205,7 +229,7 @@ describe('HooksSettingsPage', () => {
 
     expect(await screen.findByText('echo "m1"')).toBeInTheDocument();
     expect(screen.getByText('http://m2')).toBeInTheDocument();
-    expect(screen.getByText('marketplace.editor.hooks.events.SessionStart.description')).toBeInTheDocument();
+    expect(screen.getByText('common.hookEvents.SessionStart.description')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.common.hooks.stats.hooks:1')).toBeInTheDocument();
     expect(screen.getByText('asdf@local-marketplace')).toBeInTheDocument();
     expect(screen.getByText('workspace.agentSettings.claude.hooks.card.summary.matchers:2')).toBeInTheDocument();

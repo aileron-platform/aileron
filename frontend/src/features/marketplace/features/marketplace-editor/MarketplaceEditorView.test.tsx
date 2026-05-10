@@ -1271,7 +1271,7 @@ describe('MarketplaceEditorView', () => {
 
     await user.click(screen.getByRole('tab', { name: /^marketplace\.editor\.tabs\.hooks/ }));
 
-    const card = screen.getByText('marketplace.editor.hooks.events.Stop.label')
+    const card = screen.getByText('common.hookEvents.Stop.label')
       .closest('[class*="rounded-lg"][class*="border"]') as HTMLElement;
     await user.click(within(card).getAllByRole('button')[0]);
 
